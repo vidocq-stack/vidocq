@@ -143,17 +143,17 @@ public class ConfigPropertiesSyntheticCreator implements SyntheticBeanCreator<Ob
         }
         if (rawType == OptionalInt.class) {
             return config.getOptionalValue(name, Integer.class)
-                    .map(v -> (Object) OptionalInt.of((Integer) v))
+                    .map(v -> (Object) OptionalInt.of(v))
                     .orElse(OptionalInt.empty());
         }
         if (rawType == OptionalLong.class) {
             return config.getOptionalValue(name, Long.class)
-                    .map(v -> (Object) OptionalLong.of((Long) v))
+                    .map(v -> (Object) OptionalLong.of(v))
                     .orElse(OptionalLong.empty());
         }
         if (rawType == OptionalDouble.class) {
             return config.getOptionalValue(name, Double.class)
-                    .map(v -> (Object) OptionalDouble.of((Double) v))
+                    .map(v -> (Object) OptionalDouble.of(v))
                     .orElse(OptionalDouble.empty());
         }
         Optional<?> v = config.getOptionalValue(name, rawType);

@@ -56,7 +56,7 @@ public final class SystemPropertiesConfigSource implements ConfigSource {
     public Map<String, String> getProperties() {
         // Defensive snapshot: do not return mutable system Properties directly.
         Properties sys = System.getProperties();
-        var copy = new HashMap<String, String>(sys.size());
+        var copy = HashMap.<String, String>newHashMap(sys.size());
         for (String name : sys.stringPropertyNames()) {
             String value = sys.getProperty(name);
             if (value != null) {
@@ -78,7 +78,7 @@ public final class SystemPropertiesConfigSource implements ConfigSource {
         if (override != null) {
             try {
                 return Integer.parseInt(override.trim());
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException _) {
                 // Non-parsable value: keep default ordinal.
             }
         }

@@ -46,6 +46,8 @@ public final class Ravel {
     /** Version of the MicroProfile Config spec implemented. */
     public static final String SPEC_VERSION = "3.1";
 
+    private static final String UNKNOWN_VERSION = "unknown";
+
     private Ravel() {
         // utility class
     }
@@ -53,13 +55,13 @@ public final class Ravel {
     private static String loadVersion() {
         try (InputStream in = Ravel.class.getResourceAsStream("version.properties")) {
             if (in == null) {
-                return "unknown";
+                return UNKNOWN_VERSION;
             }
             Properties props = new Properties();
             props.load(in);
-            return props.getProperty("version", "unknown");
-        } catch (IOException e) {
-            return "unknown";
+            return props.getProperty("version", UNKNOWN_VERSION);
+        } catch (IOException _) {
+            return UNKNOWN_VERSION;
         }
     }
 }

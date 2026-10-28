@@ -53,6 +53,8 @@ public final class RavelConfig implements Config, java.io.Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    private static final String PROPERTY_NAME = "propertyName";
+
     /**
      * Serialization hook: Config is required to be Serializable by MP Config 3.1
      * §6.1. A lightweight proxy is serialized and resolves the current
@@ -102,12 +104,12 @@ public final class RavelConfig implements Config, java.io.Serializable {
 
     @Override
     public <T> T getValue(String propertyName, Class<T> propertyType) {
-        Objects.requireNonNull(propertyName, "propertyName");
+        Objects.requireNonNull(propertyName, PROPERTY_NAME);
         Objects.requireNonNull(propertyType, "propertyType");
         String raw;
         try {
             raw = lookupRaw(propertyName);
-        } catch (UnresolvedExpressionException e) {
+        } catch (UnresolvedExpressionException _) {
             // §7.2: unresolved expression without default means missing property.
             throw new NoSuchElementException("Property '" + propertyName + "' not found");
         }
@@ -127,13 +129,13 @@ public final class RavelConfig implements Config, java.io.Serializable {
 
     @Override
     public ConfigValue getConfigValue(String propertyName) {
-        Objects.requireNonNull(propertyName, "propertyName");
+        Objects.requireNonNull(propertyName, PROPERTY_NAME);
         RawLookup raw = lookupRawWithSource(propertyName);
         if (raw != null) {
             String resolved;
             try {
                 resolved = resolveRawValue(propertyName, raw.value());
-            } catch (UnresolvedExpressionException e) {
+            } catch (UnresolvedExpressionException _) {
                 // §7.2: unresolved expression keeps null value but preserves raw value
                 // and source metadata.
                 // (TCK PropertyExpressionsTest.noExpressionButConfigValue).
@@ -148,12 +150,12 @@ public final class RavelConfig implements Config, java.io.Serializable {
 
     @Override
     public <T> Optional<T> getOptionalValue(String propertyName, Class<T> propertyType) {
-        Objects.requireNonNull(propertyName, "propertyName");
+        Objects.requireNonNull(propertyName, PROPERTY_NAME);
         Objects.requireNonNull(propertyType, "propertyType");
         String raw;
         try {
             raw = lookupRaw(propertyName);
-        } catch (UnresolvedExpressionException e) {
+        } catch (UnresolvedExpressionException _) {
             // §7.2: unresolved expression without default means missing property.
             return Optional.empty();
         }
@@ -371,10 +373,10 @@ public final class RavelConfig implements Config, java.io.Serializable {
             Converter<?> elem;
             try {
                 elem = findConverter(component);
-            } catch (IllegalArgumentException e) {
+            } catch (IllegalArgumentException _) {
                 return null;
             }
-            return (Converter<T>) new ArrayConverter(component, elem);
+            return new ArrayConverter(component, elem);
         }
         return ImplicitConverter.create(type);
     }

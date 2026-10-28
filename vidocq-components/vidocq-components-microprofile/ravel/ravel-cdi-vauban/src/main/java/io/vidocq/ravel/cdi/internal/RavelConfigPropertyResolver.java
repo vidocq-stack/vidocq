@@ -32,6 +32,7 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -240,8 +241,8 @@ public final class RavelConfigPropertyResolver {
                 .orElseThrow(() -> new DeploymentException("No converter for " + elementType.getName() + "[]"))
                 .convert(raw);
         if (arr == null) return asSet ? new LinkedHashSet<>() : new ArrayList<>();
-        Collection<Object> out = asSet ? new LinkedHashSet<>(arr.length) : new ArrayList<>(arr.length);
-        for (Object e : arr) out.add(e);
+        Collection<Object> out = asSet ? LinkedHashSet.newLinkedHashSet(arr.length) : new ArrayList<>(arr.length);
+        Collections.addAll(out, arr);
         return out;
     }
 

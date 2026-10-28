@@ -107,7 +107,7 @@ public final class MicroprofilePropertiesConfigSource implements ConfigSource {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to load " + url, e);
         }
-        var data = new HashMap<String, String>(props.size());
+        var data = HashMap.<String, String>newHashMap(props.size());
         for (var name : props.stringPropertyNames()) {
             data.put(name, props.getProperty(name));
         }
@@ -145,7 +145,7 @@ public final class MicroprofilePropertiesConfigSource implements ConfigSource {
         if (override != null) {
             try {
                 return Integer.parseInt(override.trim());
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException _) {
                 // unparseable value → fall back to default ordinal
             }
         }

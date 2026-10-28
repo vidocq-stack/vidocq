@@ -81,7 +81,7 @@ final class ImplicitConverter {
         try {
             Constructor<T> ctor = type.getConstructor(String.class);
             return new ConstructorConverter<>(ctor);
-        } catch (NoSuchMethodException ignored) {
+        } catch (NoSuchMethodException _) {
             // fall through
         }
 
@@ -95,7 +95,7 @@ final class ImplicitConverter {
             if (!Modifier.isStatic(mods)) return null;
             if (!type.isAssignableFrom(m.getReturnType())) return null;
             return m;
-        } catch (NoSuchMethodException e) {
+        } catch (NoSuchMethodException _) {
             return null;
         }
     }

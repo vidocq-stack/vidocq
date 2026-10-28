@@ -125,7 +125,7 @@ public final class RavelConfigBuilder implements ConfigBuilder {
     @Override
     public Config build() {
         // Aplatir Map<Class<?>, PrioritizedConverter> → Map<Class<?>, Converter<?>>
-        Map<Class<?>, Converter<?>> resolved = new HashMap<>(converters.size());
+        Map<Class<?>, Converter<?>> resolved = HashMap.newHashMap(converters.size());
         for (var e : converters.entrySet()) {
             resolved.put(e.getKey(), e.getValue().converter());
         }

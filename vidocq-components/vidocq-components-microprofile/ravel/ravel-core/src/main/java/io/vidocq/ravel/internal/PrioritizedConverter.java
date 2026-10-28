@@ -59,7 +59,7 @@ record PrioritizedConverter(int priority, Converter<?> converter) {
                     if (v instanceof Integer i) {
                         return i;
                     }
-                } catch (ReflectiveOperationException ignored) {
+                } catch (ReflectiveOperationException _) {
                     // No value() accessor: fallback to default priority.
                 }
             }

@@ -26,7 +26,6 @@ import jakarta.enterprise.inject.Vetoed;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
-import jakarta.enterprise.inject.build.compatible.spi.Discovery;
 import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
 import jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo;
 import jakarta.enterprise.inject.build.compatible.spi.Messages;
@@ -190,7 +189,6 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
                 configPropertiesTypes.putIfAbsent(ipType.toString(),
                     new ConfigPropertiesEntry(ipType, fieldPrefix));
                 validateConfigPropertiesDeployment(ct, fieldPrefix, injectionPoint.declaration(), messages);
-                continue;
             }
         }
     }
@@ -422,7 +420,7 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
             var ctor = beanClass.getDeclaredConstructor();
             ctor.setAccessible(true);
             return ctor.newInstance();
-        } catch (Exception e) {
+        } catch (Exception _) {
             return null;
         }
     }
@@ -643,7 +641,7 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     private static boolean runsAtBuildTime() {
         try {
             return io.vidocq.vauban.api.ExtensionPhase.isBuildTime();
-        } catch (NoClassDefFoundError absent) {
+        } catch (NoClassDefFoundError _) {
             return false;
         }
     }
@@ -664,7 +662,7 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     private static Class<?> toRuntimeClassOrNull(Type type) {
         try {
             return toRuntimeClass(type);
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException _) {
             return null;
         }
     }
@@ -698,10 +696,10 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     private static Class<?> loadClass(String name) {
         try {
             return Class.forName(name, false, Thread.currentThread().getContextClassLoader());
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException _) {
             try {
                 return Class.forName(name);
-            } catch (ClassNotFoundException ignored) {
+            } catch (ClassNotFoundException _) {
                 return null;
             }
         }

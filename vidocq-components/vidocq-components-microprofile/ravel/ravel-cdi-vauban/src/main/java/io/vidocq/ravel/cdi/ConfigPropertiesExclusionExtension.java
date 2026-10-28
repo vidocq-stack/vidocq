@@ -116,7 +116,7 @@ public class ConfigPropertiesExclusionExtension implements Extension {
             var ctor = beanClass.getDeclaredConstructor();
             ctor.setAccessible(true);
             return ctor.newInstance();
-        } catch (Exception e) {
+        } catch (Exception _) {
             return null;
         }
     }

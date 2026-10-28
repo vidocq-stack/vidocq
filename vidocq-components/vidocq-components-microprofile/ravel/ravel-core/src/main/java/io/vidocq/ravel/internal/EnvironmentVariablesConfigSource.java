@@ -24,7 +24,7 @@ import org.eclipse.microprofile.config.spi.ConfigSource;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 /**
  * {@link ConfigSource} backed by {@link System#getenv()} with default ordinal 300
@@ -74,7 +74,7 @@ public final class EnvironmentVariablesConfigSource implements ConfigSource {
         if (override != null) {
             try {
                 return Integer.parseInt(override.trim());
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException _) {
                 // Non-parsable value: keep default ordinal.
             }
         }
@@ -82,10 +82,10 @@ public final class EnvironmentVariablesConfigSource implements ConfigSource {
     }
 
     /**
-     * Testable §7.6 mapping implementation using the {@link Function} lookup.
+     * Testable §7.6 mapping implementation using the {@link UnaryOperator} lookup.
      * Package-private for unit tests without relying on real process environment.
      */
-    static String lookup(String propertyName, Function<String, String> env) {
+    static String lookup(String propertyName, UnaryOperator<String> env) {
         // Form 1: exact
         String value = env.apply(propertyName);
         if (value != null) {
