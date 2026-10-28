@@ -207,45 +207,39 @@ public final class SchemaGenerator {
     // ------------------ Scalars ------------------
 
     private Schema scalarSchema(Class<?> clazz) {
-        if (clazz == String.class || clazz == char.class || clazz == Character.class
-                || clazz == CharSequence.class) {
-            return stringSchema(null);
-        }
+        Schema schema = booleanOrNumberSchema(clazz);
+        return schema != null ? schema : textualSchema(clazz);
+    }
+
+    private static Schema booleanOrNumberSchema(Class<?> clazz) {
         if (clazz == boolean.class || clazz == Boolean.class) {
-            Schema s = OASFactory.createObject(Schema.class);
-            s.addType(Schema.SchemaType.BOOLEAN);
-            return s;
+            return typedSchema(Schema.SchemaType.BOOLEAN, null);
         }
         if (clazz == byte.class || clazz == Byte.class
                 || clazz == short.class || clazz == Short.class
                 || clazz == int.class || clazz == Integer.class) {
-            Schema s = OASFactory.createObject(Schema.class);
-            s.addType(Schema.SchemaType.INTEGER);
-            s.setFormat("int32");
-            return s;
+            return typedSchema(Schema.SchemaType.INTEGER, "int32");
         }
         if (clazz == long.class || clazz == Long.class || clazz == BigInteger.class) {
-            Schema s = OASFactory.createObject(Schema.class);
-            s.addType(Schema.SchemaType.INTEGER);
-            s.setFormat("int64");
-            return s;
+            return typedSchema(Schema.SchemaType.INTEGER, "int64");
         }
         if (clazz == float.class || clazz == Float.class) {
-            Schema s = OASFactory.createObject(Schema.class);
-            s.addType(Schema.SchemaType.NUMBER);
-            s.setFormat("float");
-            return s;
+            return typedSchema(Schema.SchemaType.NUMBER, "float");
         }
         if (clazz == double.class || clazz == Double.class) {
-            Schema s = OASFactory.createObject(Schema.class);
-            s.addType(Schema.SchemaType.NUMBER);
-            s.setFormat("double");
-            return s;
+            return typedSchema(Schema.SchemaType.NUMBER, "double");
         }
         if (clazz == BigDecimal.class || clazz == Number.class) {
-            Schema s = OASFactory.createObject(Schema.class);
-            s.addType(Schema.SchemaType.NUMBER);
-            return s;
+            return typedSchema(Schema.SchemaType.NUMBER, null);
+        }
+        return null;
+    }
+
+    /** Strings, the string-formatted JDK types and {@code Object}; {@code null} for anything else, void included. */
+    private Schema textualSchema(Class<?> clazz) {
+        if (clazz == String.class || clazz == char.class || clazz == Character.class
+                || clazz == CharSequence.class) {
+            return stringSchema(null);
         }
         if (clazz == UUID.class) {
             return stringSchema("uuid");
@@ -263,10 +257,16 @@ public final class SchemaGenerator {
         if (clazz == Object.class) {
             return objectSchema();
         }
-        if (clazz == void.class || clazz == Void.class) {
-            return null;
-        }
         return null;
+    }
+
+    private static Schema typedSchema(Schema.SchemaType type, String format) {
+        Schema s = OASFactory.createObject(Schema.class);
+        s.addType(type);
+        if (format != null) {
+            s.setFormat(format);
+        }
+        return s;
     }
 
     private Schema stringSchema(String format) {
@@ -354,64 +354,66 @@ public final class SchemaGenerator {
         // Walk class hierarchy (skip Object).
         for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
             for (Field f : c.getDeclaredFields()) {
-                int mods = f.getModifiers();
-                if (Modifier.isStatic(mods) || f.isSynthetic()) {
-                    continue;
-                }
-                var fieldAnn = f.getAnnotation(
-                        org.eclipse.microprofile.openapi.annotations.media.Schema.class);
-                if (fieldAnn != null && fieldAnn.hidden()) {
-                    continue;
-                }
-                String name = f.getName();
-                if (properties.containsKey(name)) {
-                    continue;
-                }
-                Schema propSchema = generate(f.getGenericType(), fieldAnn);
-                BeanValidationMapper.apply(propSchema, f.getDeclaredAnnotations());
-                properties.put(name, propSchema);
-                if ((fieldAnn != null && fieldAnn.required()) || BeanValidationMapper.hasNotNull(f.getDeclaredAnnotations())) {
-                    addRequired(required, name);
-                }
+                addFieldProperty(f, properties, required);
             }
             // Also pick up bean-style getters not backed by a field.
             for (Method m : c.getDeclaredMethods()) {
-                if (!isGetter(m)) {
-                    continue;
-                }
-                String derivedPropertyName = propertyNameOf(m);
-                if (derivedPropertyName == null) {
-                    continue;
-                }
-                var ann = m.getAnnotation(
-                        org.eclipse.microprofile.openapi.annotations.media.Schema.class);
-                if (ann != null && ann.hidden()) {
-                    continue;
-                }
-                Field backingField = findFieldInHierarchy(c, derivedPropertyName);
-                if (backingField != null) {
-                    var fieldSchema = backingField.getAnnotation(org.eclipse.microprofile.openapi.annotations.media.Schema.class);
-                    if (fieldSchema != null && fieldSchema.hidden()) {
-                        continue;
-                    }
-                }
-                String prop = (ann != null && !ann.name().isEmpty()) ? ann.name() : derivedPropertyName;
-                Schema existing = properties.get(prop);
-                if (existing != null) {
-                    if (ann != null) {
-                        properties.put(prop, applyAnnotationOverrides(existing, ann));
-                    }
-                    BeanValidationMapper.apply(properties.get(prop), m.getDeclaredAnnotations());
-                } else {
-                    Schema propSchema = generate(m.getGenericReturnType(), ann);
-                    BeanValidationMapper.apply(propSchema, m.getDeclaredAnnotations());
-                    properties.put(prop, propSchema);
-                }
-                if ((ann != null && ann.required()) || BeanValidationMapper.hasNotNull(m.getDeclaredAnnotations())) {
-                    addRequired(required, prop);
+                if (isGetter(m)) {
+                    addGetterProperty(c, m, properties, required);
                 }
             }
         }
+    }
+
+    private void addFieldProperty(Field f, Map<String, Schema> properties, List<String> required) {
+        int mods = f.getModifiers();
+        var fieldAnn = f.getAnnotation(org.eclipse.microprofile.openapi.annotations.media.Schema.class);
+        String name = f.getName();
+        if (Modifier.isStatic(mods) || f.isSynthetic() || isHidden(fieldAnn) || properties.containsKey(name)) {
+            return;
+        }
+        Schema propSchema = generate(f.getGenericType(), fieldAnn);
+        BeanValidationMapper.apply(propSchema, f.getDeclaredAnnotations());
+        properties.put(name, propSchema);
+        if ((fieldAnn != null && fieldAnn.required()) || BeanValidationMapper.hasNotNull(f.getDeclaredAnnotations())) {
+            addRequired(required, name);
+        }
+    }
+
+    private void addGetterProperty(Class<?> c, Method m, Map<String, Schema> properties, List<String> required) {
+        String derivedPropertyName = propertyNameOf(m);
+        var ann = m.getAnnotation(org.eclipse.microprofile.openapi.annotations.media.Schema.class);
+        if (derivedPropertyName == null || isHidden(ann) || isHidden(backingFieldSchema(c, derivedPropertyName))) {
+            return;
+        }
+        String prop = (ann != null && !ann.name().isEmpty()) ? ann.name() : derivedPropertyName;
+        Schema existing = properties.get(prop);
+        Schema propSchema;
+        if (existing == null) {
+            propSchema = generate(m.getGenericReturnType(), ann);
+        } else if (ann != null) {
+            propSchema = applyAnnotationOverrides(existing, ann);
+        } else {
+            propSchema = existing;
+        }
+        BeanValidationMapper.apply(propSchema, m.getDeclaredAnnotations());
+        properties.put(prop, propSchema);
+        if ((ann != null && ann.required()) || BeanValidationMapper.hasNotNull(m.getDeclaredAnnotations())) {
+            addRequired(required, prop);
+        }
+    }
+
+    private static boolean isHidden(org.eclipse.microprofile.openapi.annotations.media.Schema ann) {
+        return ann != null && ann.hidden();
+    }
+
+    /** The {@code @Schema} of the field backing a bean property, or {@code null}. */
+    private static org.eclipse.microprofile.openapi.annotations.media.Schema backingFieldSchema(Class<?> type,
+            String propertyName) {
+        Field backingField = findFieldInHierarchy(type, propertyName);
+        return backingField == null
+                ? null
+                : backingField.getAnnotation(org.eclipse.microprofile.openapi.annotations.media.Schema.class);
     }
 
     private void addRequired(List<String> required, String propertyName) {
@@ -468,43 +470,53 @@ public final class SchemaGenerator {
         }
         applyAttributes(base, SchemaAttributes.of(ann));
         if (ann.properties().length > 0) {
-            Map<String, Schema> mergedProperties = base.getProperties() == null
-                    ? new LinkedHashMap<>()
-                    : new LinkedHashMap<>(base.getProperties());
-            List<String> mergedRequired = base.getRequired() == null
-                    ? new ArrayList<>()
-                    : new ArrayList<>(base.getRequired());
-            for (org.eclipse.microprofile.openapi.annotations.media.SchemaProperty property : ann.properties()) {
-                String propertyName = property.name();
-                if (propertyName.isEmpty()) {
-                    continue;
-                }
+            applySchemaProperties(base, ann.properties());
+        }
+        return base;
+    }
+
+    private void applySchemaProperties(Schema base,
+            org.eclipse.microprofile.openapi.annotations.media.SchemaProperty[] properties) {
+        Map<String, Schema> mergedProperties = base.getProperties() == null
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(base.getProperties());
+        List<String> mergedRequired = base.getRequired() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(base.getRequired());
+        for (org.eclipse.microprofile.openapi.annotations.media.SchemaProperty property : properties) {
+            String propertyName = property.name();
+            if (!propertyName.isEmpty()) {
                 if (property.hidden()) {
                     mergedProperties.remove(propertyName);
                     mergedRequired.remove(propertyName);
-                    continue;
+                } else {
+                    mergedProperties.put(propertyName,
+                            propertySchema(mergedProperties.get(propertyName), property));
                 }
-                Schema propertySchema = mergedProperties.get(propertyName);
-                if (propertySchema == null) {
-                    Type baseType = property.implementation() != Void.class ? property.implementation() : Object.class;
-                    propertySchema = generate(baseType);
-                }
-                if (!property.ref().isEmpty()) {
-                    propertySchema.setRef(property.ref());
-                }
-                // The property declared here is applied after the field's own @Schema (if any), so the
-                // attributes it sets win and the others of the field are kept.
-                applyAttributes(propertySchema, SchemaAttributes.of(property));
-                mergedProperties.put(propertyName, propertySchema);
-            }
-            if (!mergedProperties.isEmpty()) {
-                base.setProperties(mergedProperties);
-            }
-            if (!mergedRequired.isEmpty()) {
-                base.setRequired(mergedRequired);
             }
         }
-        return base;
+        if (!mergedProperties.isEmpty()) {
+            base.setProperties(mergedProperties);
+        }
+        if (!mergedRequired.isEmpty()) {
+            base.setRequired(mergedRequired);
+        }
+    }
+
+    private Schema propertySchema(Schema existing,
+            org.eclipse.microprofile.openapi.annotations.media.SchemaProperty property) {
+        Schema propertySchema = existing;
+        if (propertySchema == null) {
+            Type baseType = property.implementation() != Void.class ? property.implementation() : Object.class;
+            propertySchema = generate(baseType);
+        }
+        if (!property.ref().isEmpty()) {
+            propertySchema.setRef(property.ref());
+        }
+        // The property declared here is applied after the field's own @Schema (if any), so the
+        // attributes it sets win and the others of the field are kept.
+        applyAttributes(propertySchema, SchemaAttributes.of(property));
+        return propertySchema;
     }
 
     /**
@@ -512,6 +524,25 @@ public final class SchemaGenerator {
      * (BUG-20261004-07): each attribute left at its default leaves {@code base} untouched.
      */
     private void applyAttributes(Schema base, SchemaAttributes ann) {
+        applyType(base, ann);
+        applyTextAttributes(base, ann);
+        applySizeLimits(base, ann);
+        applyNumericLimits(base, ann);
+        applyFlagsAndContent(base, ann);
+        applyRequiredProperties(base, ann);
+        applyCombinators(base, ann);
+        applyContainsAndItems(base, ann);
+        applyPatternProperties(base, ann);
+        applyDependentRequired(base, ann);
+        applyDependentSchemas(base, ann);
+        applyAdditionalProperties(base, ann);
+        if (!ann.externalDocs().url().isEmpty()) {
+            base.setExternalDocs(AnnotationModelMappings.toModelExternalDocs(ann.externalDocs()));
+        }
+        AnnotationModelMappings.applyExtensions(base, ann.extensions());
+    }
+
+    private void applyType(Schema base, SchemaAttributes ann) {
         if (ann.type() != SchemaType.DEFAULT) {
             if (ann.type() == SchemaType.ARRAY && base.getRef() != null && base.getItems() == null) {
                 Schema itemRef = OASFactory.createObject(Schema.class);
@@ -521,6 +552,9 @@ public final class SchemaGenerator {
             }
             base.setType(new ArrayList<>(List.of(mapAnnotationType(ann.type()))));
         }
+    }
+
+    private void applyTextAttributes(Schema base, SchemaAttributes ann) {
         if (!ann.format().isEmpty()) base.setFormat(ann.format());
         if (!ann.title().isEmpty()) base.setTitle(ann.title());
         if (!ann.description().isEmpty()) base.setDescription(ann.description());
@@ -539,6 +573,9 @@ public final class SchemaGenerator {
             base.setExamples(examples);
         }
         if (!ann.defaultValue().isEmpty()) base.setDefaultValue(ann.defaultValue());
+    }
+
+    private void applySizeLimits(Schema base, SchemaAttributes ann) {
         if (ann.minLength() > 0) base.setMinLength(ann.minLength());
         if (ann.maxLength() != Integer.MAX_VALUE) base.setMaxLength(ann.maxLength());
         if (ann.minProperties() > 0) base.setMinProperties(ann.minProperties());
@@ -547,6 +584,9 @@ public final class SchemaGenerator {
         if (ann.minItems() != Integer.MAX_VALUE) base.setMinItems(ann.minItems());
         if (ann.maxItems() != Integer.MIN_VALUE) base.setMaxItems(ann.maxItems());
         if (ann.uniqueItems()) base.setUniqueItems(Boolean.TRUE);
+    }
+
+    private void applyNumericLimits(Schema base, SchemaAttributes ann) {
         BigDecimal minimum = ann.minimum().isEmpty() ? null : new BigDecimal(ann.minimum());
         BigDecimal maximum = ann.maximum().isEmpty() ? null : new BigDecimal(ann.maximum());
         if (minimum != null) base.setMinimum(minimum);
@@ -554,6 +594,9 @@ public final class SchemaGenerator {
         if (ann.exclusiveMinimum() && minimum != null) base.setExclusiveMinimum(minimum);
         if (ann.exclusiveMaximum() && maximum != null) base.setExclusiveMaximum(maximum);
         if (ann.multipleOf() != 0d) base.setMultipleOf(BigDecimal.valueOf(ann.multipleOf()));
+    }
+
+    private void applyFlagsAndContent(Schema base, SchemaAttributes ann) {
         if (ann.deprecated()) base.setDeprecated(true);
         if (ann.readOnly()) base.setReadOnly(true);
         if (ann.writeOnly()) base.setWriteOnly(true);
@@ -570,6 +613,9 @@ public final class SchemaGenerator {
         if (!ann.contentMediaType().isEmpty()) base.setContentMediaType(ann.contentMediaType());
         if (ann.contentSchema() != Void.class) base.setContentSchema(schemaOfClass(ann.contentSchema()));
         if (!ann.constValue().isEmpty()) base.setConstValue(constValueOf(base, ann.constValue()));
+    }
+
+    private void applyRequiredProperties(Schema base, SchemaAttributes ann) {
         if (ann.requiredProperties().length > 0) {
             List<String> mergedRequired = base.getRequired() == null
                     ? new ArrayList<>()
@@ -583,9 +629,12 @@ public final class SchemaGenerator {
                 base.setRequired(mergedRequired);
             }
         }
+    }
+
+    private void applyCombinators(Schema base, SchemaAttributes ann) {
         if (ann.enumeration().length > 0) {
             List<Object> values = new ArrayList<>(ann.enumeration().length);
-            for (String v : ann.enumeration()) values.add(v);
+            Collections.addAll(values, ann.enumeration());
             base.setEnumeration(values);
         }
         if (ann.allOf().length > 0) base.setAllOf(schemasOfClasses(ann.allOf()));
@@ -596,11 +645,17 @@ public final class SchemaGenerator {
         if (ann.ifSchema() != Void.class) base.setIfSchema(schemaOfClass(ann.ifSchema()));
         if (ann.thenSchema() != Void.class) base.setThenSchema(schemaOfClass(ann.thenSchema()));
         if (ann.elseSchema() != Void.class) base.setElseSchema(schemaOfClass(ann.elseSchema()));
+    }
+
+    private void applyContainsAndItems(Schema base, SchemaAttributes ann) {
         if (ann.contains() != Void.class) base.setContains(schemaOfClass(ann.contains()));
         if (ann.minContains() > 0) base.setMinContains(ann.minContains());
         if (ann.maxContains() != Integer.MAX_VALUE) base.setMaxContains(ann.maxContains());
         if (ann.prefixItems().length > 0) base.setPrefixItems(schemasOfClasses(ann.prefixItems()));
         if (ann.propertyNames() != Void.class) base.setPropertyNames(schemaOfClass(ann.propertyNames()));
+    }
+
+    private void applyPatternProperties(Schema base, SchemaAttributes ann) {
         if (ann.patternProperties().length > 0) {
             Map<String, Schema> patternProperties = base.getPatternProperties() == null
                     ? new LinkedHashMap<>()
@@ -613,6 +668,9 @@ public final class SchemaGenerator {
                 base.setPatternProperties(patternProperties);
             }
         }
+    }
+
+    private void applyDependentRequired(Schema base, SchemaAttributes ann) {
         if (ann.dependentRequired().length > 0) {
             Map<String, List<String>> dependentRequired = base.getDependentRequired() == null
                     ? new LinkedHashMap<>()
@@ -625,6 +683,9 @@ public final class SchemaGenerator {
                 base.setDependentRequired(dependentRequired);
             }
         }
+    }
+
+    private void applyDependentSchemas(Schema base, SchemaAttributes ann) {
         if (ann.dependentSchemas().length > 0) {
             Map<String, Schema> dependentSchemas = base.getDependentSchemas() == null
                     ? new LinkedHashMap<>()
@@ -637,6 +698,9 @@ public final class SchemaGenerator {
                 base.setDependentSchemas(dependentSchemas);
             }
         }
+    }
+
+    private void applyAdditionalProperties(Schema base, SchemaAttributes ann) {
         Class<?> additionalProperties = ann.additionalProperties();
         if (additionalProperties == org.eclipse.microprofile.openapi.annotations.media.Schema.True.class) {
             base.setAdditionalPropertiesBoolean(Boolean.TRUE);
@@ -645,10 +709,6 @@ public final class SchemaGenerator {
         } else if (additionalProperties != Void.class) {
             base.setAdditionalPropertiesSchema(generate(additionalProperties));
         }
-        if (!ann.externalDocs().url().isEmpty()) {
-            base.setExternalDocs(AnnotationModelMappings.toModelExternalDocs(ann.externalDocs()));
-        }
-        AnnotationModelMappings.applyExtensions(base, ann.extensions());
     }
 
     private void applyDiscriminator(Schema base, SchemaAttributes ann) {

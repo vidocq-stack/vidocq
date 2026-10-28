@@ -62,6 +62,21 @@ import java.util.function.Consumer;
 
 final class OpenApiModelMapper {
 
+    private static final String EXTERNAL_DOCS = "externalDocs";
+    private static final String SERVERS = "servers";
+    private static final String SUMMARY = "summary";
+    private static final String DESCRIPTION = "description";
+    private static final String PARAMETERS = "parameters";
+    private static final String DEPRECATED = "deprecated";
+    private static final String CONTENT = "content";
+    private static final String HEADERS = "headers";
+    private static final String EXAMPLES = "examples";
+    private static final String REQUIRED = "required";
+    private static final String STYLE = "style";
+    private static final String EXPLODE = "explode";
+    private static final String SCHEMA = "schema";
+    private static final String EXAMPLE = "example";
+
     private OpenApiModelMapper() {
     }
 
@@ -77,8 +92,8 @@ final class OpenApiModelMapper {
             switch (key) {
                 case "openapi" -> openAPI.setOpenapi(asString(value));
                 case "info" -> openAPI.setInfo(toInfo(value));
-                case "externalDocs" -> openAPI.setExternalDocs(toExternalDocs(value));
-                case "servers" -> openAPI.setServers(toServers(value));
+                case EXTERNAL_DOCS -> openAPI.setExternalDocs(toExternalDocs(value));
+                case SERVERS -> openAPI.setServers(toServers(value));
                 case "security" -> openAPI.setSecurity(toSecurity(value));
                 case "tags" -> openAPI.setTags(toTags(value));
                 case "paths" -> openAPI.setPaths(toPaths(value));
@@ -105,8 +120,8 @@ final class OpenApiModelMapper {
             switch (key) {
                 case "title" -> info.setTitle(asString(value));
                 case "version" -> info.setVersion(asString(value));
-                case "summary" -> info.setSummary(asString(value));
-                case "description" -> info.setDescription(asString(value));
+                case SUMMARY -> info.setSummary(asString(value));
+                case DESCRIPTION -> info.setDescription(asString(value));
                 case "termsOfService" -> info.setTermsOfService(asString(value));
                 case "contact" -> info.setContact(toContact(value));
                 case "license" -> info.setLicense(toLicense(value));
@@ -209,7 +224,7 @@ final class OpenApiModelMapper {
             Object value = entry.getValue();
             switch (key) {
                 case "url" -> externalDocs.setUrl(asString(value));
-                case "description" -> externalDocs.setDescription(asString(value));
+                case DESCRIPTION -> externalDocs.setDescription(asString(value));
                 default -> {
                     if (key.startsWith("x-")) {
                         externalDocs.addExtension(key, value);
@@ -244,7 +259,7 @@ final class OpenApiModelMapper {
             Object value = entry.getValue();
             switch (key) {
                 case "url" -> server.setUrl(asString(value));
-                case "description" -> server.setDescription(asString(value));
+                case DESCRIPTION -> server.setDescription(asString(value));
                 case "variables" -> server.setVariables(toServerVariables(value));
                 default -> {
                     if (key.startsWith("x-")) {
@@ -313,8 +328,8 @@ final class OpenApiModelMapper {
             Object value = entry.getValue();
             switch (key) {
                 case "name" -> tag.setName(asString(value));
-                case "description" -> tag.setDescription(asString(value));
-                case "externalDocs" -> tag.setExternalDocs(toExternalDocs(value));
+                case DESCRIPTION -> tag.setDescription(asString(value));
+                case EXTERNAL_DOCS -> tag.setExternalDocs(toExternalDocs(value));
                 default -> {
                     if (key.startsWith("x-")) {
                         tag.addExtension(key, value);
@@ -334,11 +349,11 @@ final class OpenApiModelMapper {
             String key = String.valueOf(entry.getKey());
             Object value = entry.getValue();
             switch (key) {
-                case "summary" -> pathItem.setSummary(asString(value));
-                case "description" -> pathItem.setDescription(asString(value));
+                case SUMMARY -> pathItem.setSummary(asString(value));
+                case DESCRIPTION -> pathItem.setDescription(asString(value));
                 case "$ref" -> AbstractExtensibleRef.setVerbatimRef(pathItem, asString(value));
-                case "servers" -> pathItem.setServers(toServers(value));
-                case "parameters" -> pathItem.setParameters(toParameters(value));
+                case SERVERS -> pathItem.setServers(toServers(value));
+                case PARAMETERS -> pathItem.setParameters(toParameters(value));
                 case "get" -> pathItem.setGET(toOperation(value));
                 case "put" -> pathItem.setPUT(toOperation(value));
                 case "post" -> pathItem.setPOST(toOperation(value));
@@ -367,16 +382,16 @@ final class OpenApiModelMapper {
             Object value = entry.getValue();
             switch (key) {
                 case "operationId" -> operation.setOperationId(asString(value));
-                case "summary" -> operation.setSummary(asString(value));
-                case "description" -> operation.setDescription(asString(value));
-                case "parameters" -> operation.setParameters(toParameters(value));
+                case SUMMARY -> operation.setSummary(asString(value));
+                case DESCRIPTION -> operation.setDescription(asString(value));
+                case PARAMETERS -> operation.setParameters(toParameters(value));
                 case "requestBody" -> operation.setRequestBody(toRequestBody(value));
                 case "responses" -> operation.setResponses(toApiResponses(value));
                 case "callbacks" -> operation.setCallbacks(toCallbacks(value));
                 case "tags" -> operation.setTags(toStringList(value));
-                case "deprecated" -> operation.setDeprecated(asBoolean(value));
-                case "servers" -> operation.setServers(toServers(value));
-                case "externalDocs" -> operation.setExternalDocs(toExternalDocs(value));
+                case DEPRECATED -> operation.setDeprecated(asBoolean(value));
+                case SERVERS -> operation.setServers(toServers(value));
+                case EXTERNAL_DOCS -> operation.setExternalDocs(toExternalDocs(value));
                 case "security" -> operation.setSecurity(toSecurity(value));
                 default -> {
                     if (key.startsWith("x-")) {
@@ -413,13 +428,13 @@ final class OpenApiModelMapper {
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             String key = String.valueOf(entry.getKey());
             Object value = entry.getValue();
-            if ("description".equals(key)) {
+            if (DESCRIPTION.equals(key)) {
                 response.setDescription(asString(value));
             } else if ("$ref".equals(key)) {
                 AbstractExtensibleRef.setVerbatimRef(response, asString(value));
-            } else if ("content".equals(key)) {
+            } else if (CONTENT.equals(key)) {
                 response.setContent(toContent(value));
-            } else if ("headers".equals(key)) {
+            } else if (HEADERS.equals(key)) {
                 response.setHeaders(toHeaders(value));
             } else if ("links".equals(key)) {
                 response.setLinks(toLinks(value));
@@ -443,12 +458,12 @@ final class OpenApiModelMapper {
             String key = String.valueOf(entry.getKey());
             Object value = entry.getValue();
             switch (key) {
-                case "headers" -> components.setHeaders(toHeaders(value));
+                case HEADERS -> components.setHeaders(toHeaders(value));
                 case "schemas" -> components.setSchemas(toSchemas(value));
-                case "parameters" -> components.setParameters(toParametersMap(value));
+                case PARAMETERS -> components.setParameters(toParametersMap(value));
                 case "requestBodies" -> components.setRequestBodies(toRequestBodies(value));
                 case "responses" -> components.setResponses(toResponsesMap(value));
-                case "examples" -> components.setExamples(toExamples(value));
+                case EXAMPLES -> components.setExamples(toExamples(value));
                 case "securitySchemes" -> components.setSecuritySchemes(toSecuritySchemes(value));
                 case "links" -> components.setLinks(toLinks(value));
                 case "callbacks" -> components.setCallbacks(toCallbacks(value));
@@ -486,7 +501,7 @@ final class OpenApiModelMapper {
             String key = String.valueOf(entry.getKey());
             Object value = entry.getValue();
             switch (key) {
-                case "description" -> variable.setDescription(asString(value));
+                case DESCRIPTION -> variable.setDescription(asString(value));
                 case "default" -> variable.setDefaultValue(asString(value));
                 case "enum" -> variable.setEnumeration(toStringList(value));
                 default -> {
@@ -524,17 +539,17 @@ final class OpenApiModelMapper {
             switch (key) {
                 case "name" -> parameter.setName(asString(value));
                 case "in" -> parameter.setIn(toParameterIn(asString(value)));
-                case "required" -> parameter.setRequired(asBoolean(value));
-                case "description" -> parameter.setDescription(asString(value));
-                case "deprecated" -> parameter.setDeprecated(asBoolean(value));
+                case REQUIRED -> parameter.setRequired(asBoolean(value));
+                case DESCRIPTION -> parameter.setDescription(asString(value));
+                case DEPRECATED -> parameter.setDeprecated(asBoolean(value));
                 case "allowEmptyValue" -> parameter.setAllowEmptyValue(asBoolean(value));
-                case "style" -> parameter.setStyle(toParameterStyle(asString(value)));
-                case "explode" -> parameter.setExplode(asBoolean(value));
+                case STYLE -> parameter.setStyle(toParameterStyle(asString(value)));
+                case EXPLODE -> parameter.setExplode(asBoolean(value));
                 case "allowReserved" -> parameter.setAllowReserved(asBoolean(value));
-                case "schema" -> parameter.setSchema(toSchema(value));
-                case "example" -> parameter.setExample(value);
-                case "examples" -> parameter.setExamples(toExamples(value));
-                case "content" -> parameter.setContent(toContent(value));
+                case SCHEMA -> parameter.setSchema(toSchema(value));
+                case EXAMPLE -> parameter.setExample(value);
+                case EXAMPLES -> parameter.setExamples(toExamples(value));
+                case CONTENT -> parameter.setContent(toContent(value));
                 case "$ref" -> AbstractExtensibleRef.setVerbatimRef(parameter, asString(value));
                 default -> {
                     if (key.startsWith("x-")) {
@@ -584,9 +599,9 @@ final class OpenApiModelMapper {
             String key = String.valueOf(entry.getKey());
             Object value = entry.getValue();
             switch (key) {
-                case "description" -> requestBody.setDescription(asString(value));
-                case "required" -> requestBody.setRequired(asBoolean(value));
-                case "content" -> requestBody.setContent(toContent(value));
+                case DESCRIPTION -> requestBody.setDescription(asString(value));
+                case REQUIRED -> requestBody.setRequired(asBoolean(value));
+                case CONTENT -> requestBody.setContent(toContent(value));
                 case "$ref" -> AbstractExtensibleRef.setVerbatimRef(requestBody, asString(value));
                 default -> {
                     if (key.startsWith("x-")) {
@@ -655,9 +670,9 @@ final class OpenApiModelMapper {
             String key = String.valueOf(entry.getKey());
             Object value = entry.getValue();
             switch (key) {
-                case "schema" -> mediaType.setSchema(toSchema(value));
-                case "example" -> mediaType.setExample(value);
-                case "examples" -> mediaType.setExamples(toExamples(value));
+                case SCHEMA -> mediaType.setSchema(toSchema(value));
+                case EXAMPLE -> mediaType.setExample(value);
+                case EXAMPLES -> mediaType.setExamples(toExamples(value));
                 case "encoding" -> mediaType.setEncoding(toEncodingMap(value));
                 default -> {
                     if (key.startsWith("x-")) {
@@ -693,16 +708,16 @@ final class OpenApiModelMapper {
             String key = String.valueOf(entry.getKey());
             Object value = entry.getValue();
             switch (key) {
-                case "description" -> header.setDescription(asString(value));
-                case "required" -> header.setRequired(asBoolean(value));
-                case "deprecated" -> header.setDeprecated(asBoolean(value));
+                case DESCRIPTION -> header.setDescription(asString(value));
+                case REQUIRED -> header.setRequired(asBoolean(value));
+                case DEPRECATED -> header.setDeprecated(asBoolean(value));
                 case "allowEmptyValue" -> header.setAllowEmptyValue(asBoolean(value));
-                case "style" -> header.setStyle(toHeaderStyle(asString(value)));
-                case "explode" -> header.setExplode(asBoolean(value));
-                case "content" -> header.setContent(toContent(value));
-                case "example" -> header.setExample(value);
-                case "examples" -> header.setExamples(toExamples(value));
-                case "schema" -> header.setSchema(toSchema(value));
+                case STYLE -> header.setStyle(toHeaderStyle(asString(value)));
+                case EXPLODE -> header.setExplode(asBoolean(value));
+                case CONTENT -> header.setContent(toContent(value));
+                case EXAMPLE -> header.setExample(value);
+                case EXAMPLES -> header.setExamples(toExamples(value));
+                case SCHEMA -> header.setSchema(toSchema(value));
                 case "$ref" -> AbstractExtensibleRef.setVerbatimRef(header, asString(value));
                 default -> {
                     if (key.startsWith("x-")) {
@@ -784,8 +799,8 @@ final class OpenApiModelMapper {
             String key = String.valueOf(entry.getKey());
             Object value = entry.getValue();
             switch (key) {
-                case "summary" -> example.setSummary(asString(value));
-                case "description" -> example.setDescription(asString(value));
+                case SUMMARY -> example.setSummary(asString(value));
+                case DESCRIPTION -> example.setDescription(asString(value));
                 case "value" -> example.setValue(value);
                 case "externalValue" -> example.setExternalValue(asString(value));
                 case "$ref" -> AbstractExtensibleRef.setVerbatimRef(example, asString(value));
@@ -823,9 +838,9 @@ final class OpenApiModelMapper {
             Object value = entry.getValue();
             switch (key) {
                 case "contentType" -> encoding.setContentType(asString(value));
-                case "headers" -> encoding.setHeaders(toHeaders(value));
-                case "style" -> encoding.setStyle(toEncodingStyle(asString(value)));
-                case "explode" -> encoding.setExplode(asBoolean(value));
+                case HEADERS -> encoding.setHeaders(toHeaders(value));
+                case STYLE -> encoding.setStyle(toEncodingStyle(asString(value)));
+                case EXPLODE -> encoding.setExplode(asBoolean(value));
                 case "allowReserved" -> encoding.setAllowReserved(asBoolean(value));
                 default -> {
                     if (key.startsWith("x-")) {
@@ -864,16 +879,8 @@ final class OpenApiModelMapper {
                 case "operationRef" -> link.setOperationRef(asString(value));
                 case "operationId" -> link.setOperationId(asString(value));
                 case "requestBody" -> link.setRequestBody(asString(value));
-                case "description" -> link.setDescription(asString(value));
-                case "parameters" -> {
-                    if (value instanceof Map<?, ?> params) {
-                        for (Map.Entry<?, ?> p : params.entrySet()) {
-                            if (p.getKey() != null) {
-                                link.addParameter(String.valueOf(p.getKey()), asString(p.getValue()));
-                            }
-                        }
-                    }
-                }
+                case DESCRIPTION -> link.setDescription(asString(value));
+                case PARAMETERS -> addLinkParameters(link, value);
                 case "server" -> link.setServer(toServer(value));
                 default -> {
                     if (key.startsWith("x-")) {
@@ -883,6 +890,16 @@ final class OpenApiModelMapper {
             }
         }
         return link;
+    }
+
+    private static void addLinkParameters(Link link, Object value) {
+        if (value instanceof Map<?, ?> params) {
+            for (Map.Entry<?, ?> p : params.entrySet()) {
+                if (p.getKey() != null) {
+                    link.addParameter(String.valueOf(p.getKey()), asString(p.getValue()));
+                }
+            }
+        }
     }
 
     private static Map<String, SecurityScheme> toSecuritySchemes(Object raw) {
@@ -909,7 +926,7 @@ final class OpenApiModelMapper {
             Object value = entry.getValue();
             switch (key) {
                 case "type" -> scheme.setType(toSecuritySchemeType(asString(value)));
-                case "description" -> scheme.setDescription(asString(value));
+                case DESCRIPTION -> scheme.setDescription(asString(value));
                 case "name" -> scheme.setName(asString(value));
                 case "in" -> scheme.setIn(toSecuritySchemeIn(asString(value)));
                 case "scheme" -> scheme.setScheme(asString(value));
@@ -1055,98 +1072,133 @@ final class OpenApiModelMapper {
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             String key = String.valueOf(entry.getKey());
             Object value = entry.getValue();
-            switch (key) {
-                case "description" -> schema.setDescription(asString(value));
-                case "format" -> schema.setFormat(asString(value));
-                case "type" -> setTyped(schema, key, value, toSchemaTypes(value), schema::setType);
-                case "required" -> schema.setRequired(toStringList(value));
-                case "properties" -> schema.setProperties(toSchemas(value));
-                case "items" -> schema.setItems(toSchema(value));
-                case "multipleOf" -> setTyped(schema, key, value, asBigDecimal(value), schema::setMultipleOf);
-                case "maximum" -> setTyped(schema, key, value, asBigDecimal(value), schema::setMaximum);
-                case "exclusiveMaximum" -> setTyped(schema, key, value, asBigDecimal(value), schema::setExclusiveMaximum);
-                case "minimum" -> setTyped(schema, key, value, asBigDecimal(value), schema::setMinimum);
-                case "exclusiveMinimum" -> setTyped(schema, key, value, asBigDecimal(value), schema::setExclusiveMinimum);
-                case "maxLength" -> setTyped(schema, key, value, asInteger(value), schema::setMaxLength);
-                case "minLength" -> setTyped(schema, key, value, asInteger(value), schema::setMinLength);
-                case "maxItems" -> setTyped(schema, key, value, asInteger(value), schema::setMaxItems);
-                case "minItems" -> setTyped(schema, key, value, asInteger(value), schema::setMinItems);
-                case "maxProperties" -> setTyped(schema, key, value, asInteger(value), schema::setMaxProperties);
-                case "minProperties" -> setTyped(schema, key, value, asInteger(value), schema::setMinProperties);
-                case "maxContains" -> setTyped(schema, key, value, asInteger(value), schema::setMaxContains);
-                case "minContains" -> setTyped(schema, key, value, asInteger(value), schema::setMinContains);
-                case "uniqueItems" -> setTyped(schema, key, value,
-                        value instanceof Boolean b ? b : null, schema::setUniqueItems);
-                case "not" -> setTyped(schema, key, value, toSchema(value), schema::setNot);
-                case "if" -> setTyped(schema, key, value, toSchema(value), schema::setIfSchema);
-                case "then" -> setTyped(schema, key, value, toSchema(value), schema::setThenSchema);
-                case "else" -> setTyped(schema, key, value, toSchema(value), schema::setElseSchema);
-                case "contains" -> setTyped(schema, key, value, toSchema(value), schema::setContains);
-                case "propertyNames" -> setTyped(schema, key, value, toSchema(value), schema::setPropertyNames);
-                case "unevaluatedItems" -> setTyped(schema, key, value, toSchema(value), schema::setUnevaluatedItems);
-                case "unevaluatedProperties" -> setTyped(schema, key, value, toSchema(value),
-                        schema::setUnevaluatedProperties);
-                case "contentSchema" -> setTyped(schema, key, value, toSchema(value), schema::setContentSchema);
-                case "allOf" -> setTyped(schema, key, value, toSchemaList(value), schema::setAllOf);
-                case "anyOf" -> setTyped(schema, key, value, toSchemaList(value), schema::setAnyOf);
-                case "oneOf" -> setTyped(schema, key, value, toSchemaList(value), schema::setOneOf);
-                case "prefixItems" -> setTyped(schema, key, value, toSchemaList(value), schema::setPrefixItems);
-                case "dependentSchemas" -> setTyped(schema, key, value, toSchemas(value), schema::setDependentSchemas);
-                case "patternProperties" -> setTyped(schema, key, value, toSchemas(value),
-                        schema::setPatternProperties);
-                case "dependentRequired" -> setTyped(schema, key, value, toDependentRequired(value),
-                        schema::setDependentRequired);
-                case "discriminator" -> setTyped(schema, key, value, toDiscriminator(value), schema::setDiscriminator);
-                case "xml" -> setTyped(schema, key, value, toXml(value), schema::setXml);
-                case "externalDocs" -> setTyped(schema, key, value, toExternalDocs(value), schema::setExternalDocs);
-                case "contentEncoding" -> setTyped(schema, key, value,
-                        value instanceof String s ? s : null, schema::setContentEncoding);
-                case "contentMediaType" -> setTyped(schema, key, value,
-                        value instanceof String s ? s : null, schema::setContentMediaType);
-                case "const" -> schema.setConstValue(value);
-                case "example" -> schema.setExample(value);
-                case "$ref" -> AbstractExtensibleRef.setVerbatimRef(schema, asString(value));
-                case "$schema" -> schema.setSchemaDialect(asString(value));
-                case "$comment" -> schema.setComment(asString(value));
-                case "title" -> schema.setTitle(asString(value));
-                case "default" -> schema.setDefaultValue(value);
-                case "pattern" -> schema.setPattern(asString(value));
-                case "deprecated" -> schema.setDeprecated(asBoolean(value));
-                case "readOnly" -> schema.setReadOnly(asBoolean(value));
-                case "writeOnly" -> schema.setWriteOnly(asBoolean(value));
-                case "nullable" -> {
-                    if (Boolean.TRUE.equals(asBoolean(value))) {
-                        schema.addType(Schema.SchemaType.NULL);
-                    }
-                }
-                case "enum" -> {
-                    if (value instanceof List<?> list) {
-                        schema.setEnumeration(new ArrayList<>(list));
-                    }
-                }
-                case "additionalProperties" -> {
-                    if (value instanceof Map<?, ?>) {
-                        schema.setAdditionalPropertiesSchema(toSchema(value));
-                    } else if (value instanceof Boolean b) {
-                        schema.setAdditionalPropertiesBoolean(b);
-                    }
-                }
-                case "examples" -> {
-                    if (value instanceof List<?> list) {
-                        schema.setExamples(new ArrayList<>(list));
-                    }
-                }
-                default -> {
-                    if (key.startsWith("x-")) {
-                        schema.addExtension(key, value);
-                    } else {
-                        // Preserve unknown / custom-dialect schema keywords.
-                        schema.set(key, value);
-                    }
-                }
+            if (!applyValidationKeyword(schema, key, value) && !applySubschemaKeyword(schema, key, value)) {
+                applyOtherKeyword(schema, key, value);
             }
         }
         return schema;
+    }
+
+    /** Maps a JSON Schema validation keyword; {@code false} when {@code key} is not one. */
+    private static boolean applyValidationKeyword(Schema schema, String key, Object value) {
+        switch (key) {
+            case "type" -> setTyped(schema, key, value, toSchemaTypes(value), schema::setType);
+            case REQUIRED -> schema.setRequired(toStringList(value));
+            case "enum" -> setEnumeration(schema, value);
+            case "const" -> schema.setConstValue(value);
+            case "multipleOf" -> setTyped(schema, key, value, asBigDecimal(value), schema::setMultipleOf);
+            case "maximum" -> setTyped(schema, key, value, asBigDecimal(value), schema::setMaximum);
+            case "exclusiveMaximum" -> setTyped(schema, key, value, asBigDecimal(value), schema::setExclusiveMaximum);
+            case "minimum" -> setTyped(schema, key, value, asBigDecimal(value), schema::setMinimum);
+            case "exclusiveMinimum" -> setTyped(schema, key, value, asBigDecimal(value), schema::setExclusiveMinimum);
+            case "maxLength" -> setTyped(schema, key, value, asInteger(value), schema::setMaxLength);
+            case "minLength" -> setTyped(schema, key, value, asInteger(value), schema::setMinLength);
+            case "pattern" -> schema.setPattern(asString(value));
+            case "maxItems" -> setTyped(schema, key, value, asInteger(value), schema::setMaxItems);
+            case "minItems" -> setTyped(schema, key, value, asInteger(value), schema::setMinItems);
+            case "uniqueItems" -> setTyped(schema, key, value,
+                    value instanceof Boolean b ? b : null, schema::setUniqueItems);
+            case "maxContains" -> setTyped(schema, key, value, asInteger(value), schema::setMaxContains);
+            case "minContains" -> setTyped(schema, key, value, asInteger(value), schema::setMinContains);
+            case "maxProperties" -> setTyped(schema, key, value, asInteger(value), schema::setMaxProperties);
+            case "minProperties" -> setTyped(schema, key, value, asInteger(value), schema::setMinProperties);
+            case "dependentRequired" -> setTyped(schema, key, value, toDependentRequired(value),
+                    schema::setDependentRequired);
+            case "nullable" -> setNullable(schema, value);
+            default -> {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Maps a keyword whose value holds subschemas; {@code false} when {@code key} is not one. */
+    private static boolean applySubschemaKeyword(Schema schema, String key, Object value) {
+        switch (key) {
+            case "properties" -> schema.setProperties(toSchemas(value));
+            case "items" -> schema.setItems(toSchema(value));
+            case "not" -> setTyped(schema, key, value, toSchema(value), schema::setNot);
+            case "if" -> setTyped(schema, key, value, toSchema(value), schema::setIfSchema);
+            case "then" -> setTyped(schema, key, value, toSchema(value), schema::setThenSchema);
+            case "else" -> setTyped(schema, key, value, toSchema(value), schema::setElseSchema);
+            case "contains" -> setTyped(schema, key, value, toSchema(value), schema::setContains);
+            case "propertyNames" -> setTyped(schema, key, value, toSchema(value), schema::setPropertyNames);
+            case "unevaluatedItems" -> setTyped(schema, key, value, toSchema(value), schema::setUnevaluatedItems);
+            case "unevaluatedProperties" -> setTyped(schema, key, value, toSchema(value),
+                    schema::setUnevaluatedProperties);
+            case "contentSchema" -> setTyped(schema, key, value, toSchema(value), schema::setContentSchema);
+            case "allOf" -> setTyped(schema, key, value, toSchemaList(value), schema::setAllOf);
+            case "anyOf" -> setTyped(schema, key, value, toSchemaList(value), schema::setAnyOf);
+            case "oneOf" -> setTyped(schema, key, value, toSchemaList(value), schema::setOneOf);
+            case "prefixItems" -> setTyped(schema, key, value, toSchemaList(value), schema::setPrefixItems);
+            case "dependentSchemas" -> setTyped(schema, key, value, toSchemas(value), schema::setDependentSchemas);
+            case "patternProperties" -> setTyped(schema, key, value, toSchemas(value),
+                    schema::setPatternProperties);
+            case "additionalProperties" -> setAdditionalProperties(schema, value);
+            default -> {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Maps the annotation, reference and OpenAPI keywords, then the extensions and unknown keywords. */
+    private static void applyOtherKeyword(Schema schema, String key, Object value) {
+        switch (key) {
+            case DESCRIPTION -> schema.setDescription(asString(value));
+            case "format" -> schema.setFormat(asString(value));
+            case "discriminator" -> setTyped(schema, key, value, toDiscriminator(value), schema::setDiscriminator);
+            case "xml" -> setTyped(schema, key, value, toXml(value), schema::setXml);
+            case EXTERNAL_DOCS -> setTyped(schema, key, value, toExternalDocs(value), schema::setExternalDocs);
+            case "contentEncoding" -> setTyped(schema, key, value,
+                    value instanceof String s ? s : null, schema::setContentEncoding);
+            case "contentMediaType" -> setTyped(schema, key, value,
+                    value instanceof String s ? s : null, schema::setContentMediaType);
+            case EXAMPLE -> schema.setExample(value);
+            case "$ref" -> AbstractExtensibleRef.setVerbatimRef(schema, asString(value));
+            case "$schema" -> schema.setSchemaDialect(asString(value));
+            case "$comment" -> schema.setComment(asString(value));
+            case "title" -> schema.setTitle(asString(value));
+            case "default" -> schema.setDefaultValue(value);
+            case DEPRECATED -> schema.setDeprecated(asBoolean(value));
+            case "readOnly" -> schema.setReadOnly(asBoolean(value));
+            case "writeOnly" -> schema.setWriteOnly(asBoolean(value));
+            case EXAMPLES -> setSchemaExamples(schema, value);
+            default -> {
+                if (key.startsWith("x-")) {
+                    schema.addExtension(key, value);
+                } else {
+                    // Preserve unknown / custom-dialect schema keywords.
+                    schema.set(key, value);
+                }
+            }
+        }
+    }
+
+    private static void setNullable(Schema schema, Object value) {
+        if (Boolean.TRUE.equals(asBoolean(value))) {
+            schema.addType(Schema.SchemaType.NULL);
+        }
+    }
+
+    private static void setEnumeration(Schema schema, Object value) {
+        if (value instanceof List<?> list) {
+            schema.setEnumeration(new ArrayList<>(list));
+        }
+    }
+
+    private static void setAdditionalProperties(Schema schema, Object value) {
+        if (value instanceof Map<?, ?>) {
+            schema.setAdditionalPropertiesSchema(toSchema(value));
+        } else if (value instanceof Boolean b) {
+            schema.setAdditionalPropertiesBoolean(b);
+        }
+    }
+
+    private static void setSchemaExamples(Schema schema, Object value) {
+        if (value instanceof List<?> list) {
+            schema.setExamples(new ArrayList<>(list));
+        }
     }
 
     /**
@@ -1227,13 +1279,7 @@ final class OpenApiModelMapper {
             Object value = entry.getValue();
             switch (key) {
                 case "propertyName" -> discriminator.setPropertyName(asString(value));
-                case "mapping" -> {
-                    if (value instanceof Map<?, ?> mapping) {
-                        for (Map.Entry<?, ?> m : mapping.entrySet()) {
-                            discriminator.addMapping(String.valueOf(m.getKey()), asString(m.getValue()));
-                        }
-                    }
-                }
+                case "mapping" -> addDiscriminatorMappings(discriminator, value);
                 default -> {
                     if (key.startsWith("x-") && discriminator instanceof DiscriminatorImpl impl) {
                         impl.putStaticExtension(key, value);
@@ -1242,6 +1288,14 @@ final class OpenApiModelMapper {
             }
         }
         return discriminator;
+    }
+
+    private static void addDiscriminatorMappings(Discriminator discriminator, Object value) {
+        if (value instanceof Map<?, ?> mapping) {
+            for (Map.Entry<?, ?> m : mapping.entrySet()) {
+                discriminator.addMapping(String.valueOf(m.getKey()), asString(m.getValue()));
+            }
+        }
     }
 
     private static XML toXml(Object raw) {
