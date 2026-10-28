@@ -19,6 +19,7 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +27,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -184,6 +186,16 @@ class YamlDeserializerTest {
         assertEquals(".", map.get("dotOnly"));
         assertEquals("1e", map.get("badExp"));
         assertEquals("--1.0", map.get("twoSigns"));
+    }
+
+    @Test
+    void longDigitRunThatIsNotANumberIsRejectedWithoutBacktracking() {
+        String digits = "1".repeat(50_000);
+
+        Object value = assertTimeoutPreemptively(Duration.ofSeconds(2), () -> value("k: " + digits + "x"));
+
+        assertEquals(digits + "x", value);
+        assertEquals(Double.valueOf(digits + ".5"), value("k: " + digits + ".5"));
     }
 
     @Test

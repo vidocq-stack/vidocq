@@ -449,3 +449,15 @@ Track reproducible bugs with:
 - **status**: FIXED — 2026-10-28. Other characters below U+0020 are written as `\uXXXX`; the YAML serializer
   reuses the JSON escape (valid in a YAML double-quoted scalar) instead of a copy. Regression test:
   `SerializationRoundTripTest`.
+
+### BUG-20261028-24 — A long digit run in a static YAML file takes quadratic time to read
+
+- **id**: BUG-20261028-24
+- **date**: 2026-10-28
+- **symptom**: a plain scalar made of a long run of digits followed by a non-numeric character (for
+  example 50,000 digits then `x`) in `META-INF/openapi.yaml` takes seconds to read (SonarQube java:S5852).
+- **minimal repro**: `YamlDeserializerTest#longDigitRunThatIsNotANumberIsRejectedWithoutBacktracking`.
+- **hypothesis (confirmed)**: the float pattern `\d+\.?\d*` lets the two digit runs share the digits when
+  the dot is absent, so a failed match retries every split point (quadratic backtracking).
+- **status**: FIXED — 2026-10-28. The pattern is `\d+(?:\.\d*)?`, which accepts the same language (the
+  YAML 1.2 core-schema float) with a single way to match the digits. Regression test: `YamlDeserializerTest`.
