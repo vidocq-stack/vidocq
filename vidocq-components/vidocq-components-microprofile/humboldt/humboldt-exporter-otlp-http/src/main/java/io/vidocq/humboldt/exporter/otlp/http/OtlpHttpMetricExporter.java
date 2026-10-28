@@ -25,11 +25,7 @@ import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import io.vidocq.humboldt.sdk.metric.data.MetricData;
 import io.vidocq.humboldt.sdk.metric.export.MetricExporter;
 
-import java.net.URI;
-import java.time.Duration;
 import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -89,29 +85,19 @@ public final class OtlpHttpMetricExporter implements MetricExporter {
         return CompletableResultCode.ofSuccess();
     }
 
-    public static final class Builder {
-        private URI endpoint = URI.create("http://localhost:4318/v1/metrics");
-        private final Map<String, String> headers = new LinkedHashMap<>();
-        private Duration requestTimeout = Duration.ofSeconds(10);
-        private Duration connectTimeout = Duration.ofSeconds(10);
-        private int maxRetries = 3;
+    /** Builder of {@link OtlpHttpMetricExporter}; default endpoint {@code http://localhost:4318/v1/metrics}. */
+    public static final class Builder extends OtlpHttpExporterBuilder<Builder> {
+        private Builder() {
+            super("http://localhost:4318/v1/metrics", "metrics");
+        }
 
-        public Builder setEndpoint(String url) { this.endpoint = URI.create(url); return this; }
-        public Builder addHeader(String n, String v) { if (n != null && v != null) headers.put(n, v); return this; }
-        public Builder setRequestTimeout(Duration t) { if (t != null && !t.isNegative() && !t.isZero()) requestTimeout = t; return this; }
-        public Builder setConnectTimeout(Duration t) { if (t != null && !t.isNegative() && !t.isZero()) connectTimeout = t; return this; }
-        public Builder setMaxRetries(int n) { if (n >= 0) maxRetries = n; return this; }
+        @Override
+        Builder self() {
+            return this;
+        }
 
         public OtlpHttpMetricExporter build() {
-            OtlpHttpJsonSender sender = OtlpHttpJsonSender.builder()
-                    .setEndpoint(endpoint)
-                    .addAllHeaders(headers)
-                    .setRequestTimeout(requestTimeout)
-                    .setConnectTimeout(connectTimeout)
-                    .setMaxRetries(maxRetries)
-                    .setSignalLabel("metrics")
-                    .build();
-            return new OtlpHttpMetricExporter(sender);
+            return new OtlpHttpMetricExporter(newSender());
         }
     }
 }

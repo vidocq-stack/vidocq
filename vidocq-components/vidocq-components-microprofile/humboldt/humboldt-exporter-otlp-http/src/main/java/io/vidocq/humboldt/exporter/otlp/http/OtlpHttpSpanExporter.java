@@ -25,11 +25,7 @@ import io.vidocq.humboldt.sdk.common.CompletableResultCode;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
 import io.vidocq.humboldt.sdk.trace.export.SpanExporter;
 
-import java.net.URI;
-import java.time.Duration;
 import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -77,52 +73,19 @@ public final class OtlpHttpSpanExporter implements SpanExporter {
         return OtlpHttpJsonSender.computeBackoffMillis(attempt);
     }
 
-    public static final class Builder {
-        private URI endpoint = URI.create("http://localhost:4318/v1/traces");
-        private final Map<String, String> headers = new LinkedHashMap<>();
-        private Duration requestTimeout = Duration.ofSeconds(10);
-        private Duration connectTimeout = Duration.ofSeconds(10);
-        private int maxRetries = 3;
-
-        public Builder setEndpoint(String url) {
-            this.endpoint = URI.create(url);
-            return this;
+    /** Builder of {@link OtlpHttpSpanExporter}; default endpoint {@code http://localhost:4318/v1/traces}. */
+    public static final class Builder extends OtlpHttpExporterBuilder<Builder> {
+        private Builder() {
+            super("http://localhost:4318/v1/traces", "traces");
         }
 
-        public Builder addHeader(String name, String value) {
-            if (name != null && value != null) headers.put(name, value);
-            return this;
-        }
-
-        public Builder setRequestTimeout(Duration timeout) {
-            if (timeout != null && !timeout.isNegative() && !timeout.isZero()) {
-                this.requestTimeout = timeout;
-            }
-            return this;
-        }
-
-        public Builder setConnectTimeout(Duration timeout) {
-            if (timeout != null && !timeout.isNegative() && !timeout.isZero()) {
-                this.connectTimeout = timeout;
-            }
-            return this;
-        }
-
-        public Builder setMaxRetries(int n) {
-            if (n >= 0) this.maxRetries = n;
+        @Override
+        Builder self() {
             return this;
         }
 
         public OtlpHttpSpanExporter build() {
-            OtlpHttpJsonSender sender = OtlpHttpJsonSender.builder()
-                    .setEndpoint(endpoint)
-                    .addAllHeaders(headers)
-                    .setRequestTimeout(requestTimeout)
-                    .setConnectTimeout(connectTimeout)
-                    .setMaxRetries(maxRetries)
-                    .setSignalLabel("traces")
-                    .build();
-            return new OtlpHttpSpanExporter(sender);
+            return new OtlpHttpSpanExporter(newSender());
         }
     }
 }
