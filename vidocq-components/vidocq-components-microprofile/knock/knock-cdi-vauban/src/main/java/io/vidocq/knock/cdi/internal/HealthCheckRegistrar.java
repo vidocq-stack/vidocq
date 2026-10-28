@@ -24,7 +24,6 @@ import io.vidocq.knock.spi.ProbeType;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.Initialized;
 import jakarta.enterprise.event.Observes;
-import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.health.HealthCheck;
@@ -52,21 +51,37 @@ import org.eclipse.microprofile.health.Startup;
 @ApplicationScoped
 class HealthCheckRegistrar {
 
-    // Package-private (not private): Vauban injects these statically via the generated
-    // _VaubanComponents.injectField (in-module putfield). A private field is excluded from that
-    // generation and would force `opens … to io.vidocq.vauban.core` (runtime reflection), which this
-    // module forbids by design — hence package-private, eligible for zero-reflection field injection.
+    private HealthCheckRegistry registry;
+    private Instance<HealthCheck> livenessChecks;
+    private Instance<HealthCheck> readinessChecks;
+    private Instance<HealthCheck> startupChecks;
+
+    /**
+     * No-args constructor required by CDI to proxy an {@code @ApplicationScoped} bean; the
+     * container always creates the contextual instance through the injection constructor.
+     */
+    HealthCheckRegistrar() {
+        // client proxy only: the dependencies are set by the injection constructor
+    }
+
+    /**
+     * Injection constructor.
+     *
+     * @param registry        the registry the discovered checks are added to
+     * @param livenessChecks  the {@code @Liveness} checks
+     * @param readinessChecks the {@code @Readiness} checks
+     * @param startupChecks   the {@code @Startup} checks
+     */
     @Inject
-    HealthCheckRegistry registry;
-
-    @Inject @Liveness
-    Instance<HealthCheck> livenessChecks;
-
-    @Inject @Readiness
-    Instance<HealthCheck> readinessChecks;
-
-    @Inject @Startup
-    Instance<HealthCheck> startupChecks;
+    HealthCheckRegistrar(HealthCheckRegistry registry,
+                         @Liveness Instance<HealthCheck> livenessChecks,
+                         @Readiness Instance<HealthCheck> readinessChecks,
+                         @Startup Instance<HealthCheck> startupChecks) {
+        this.registry = registry;
+        this.livenessChecks = livenessChecks;
+        this.readinessChecks = readinessChecks;
+        this.startupChecks = startupChecks;
+    }
 
     /**
      * Registers all checks discovered when the application context starts.

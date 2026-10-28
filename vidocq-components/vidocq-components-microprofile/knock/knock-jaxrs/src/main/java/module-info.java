@@ -45,17 +45,17 @@ module io.vidocq.knock.jaxrs {
     // pre-generated adapter stays dormant unless a Cassini runtime is present.
     requires static io.vidocq.cassini.api;
 
-    // In-module instantiation AND field injection of the JAX-RS resource bean (generated as
-    // _VaubanComponents): the container creates it with `new KnockHealthResource()` and writes its
-    // @Inject field with an in-package `putfield` through this provider, so it needs no reflection
-    // and no `opens … to io.vidocq.vauban.core` into this package.
+    // In-module instantiation of the JAX-RS resource bean (generated as _VaubanComponents): the
+    // container creates it with `new KnockHealthResource(registry)`, its @Inject constructor, through
+    // this provider, so it needs no reflection and no `opens … to io.vidocq.vauban.core` into this
+    // package.
     provides io.vidocq.vauban.api.VaubanComponentProvider
             with io.vidocq.knock.jaxrs._VaubanComponents;
 
     // Exposed JAX-RS resource — discovered as a CDI bean (Vauban index) and mounted by the runtime
     exports io.vidocq.knock.jaxrs;
 
-    // No `opens … to io.vidocq.vauban.core`: KnockHealthResource is instantiated and field-injected
-    // in-module by the generated _VaubanComponents provider (declared above). Its @Inject field is
-    // package-private, so the co-located provider can assign it without deep reflection.
+    // No `opens … to io.vidocq.vauban.core`: KnockHealthResource is instantiated through its @Inject
+    // constructor in-module by the generated _VaubanComponents provider (declared above), without
+    // deep reflection.
 }

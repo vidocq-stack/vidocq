@@ -51,22 +51,22 @@ import jakarta.ws.rs.core.Response;
 @Produces(MediaType.APPLICATION_JSON)
 public class KnockHealthResource {
 
-    @Inject
-    HealthCheckRegistry registry;
+    private HealthCheckRegistry registry;
 
     /**
      * No-args constructor required by CDI for {@code @ApplicationScoped} beans
      * (client proxy instantiation).
      */
     public KnockHealthResource() {
-        // CDI proxy; the {@code registry} field will be injected later.
+        // client proxy only: the registry is set by the injection constructor
     }
 
     /**
-     * Injection / test constructor — direct instantiation with a given registry.
+     * Injection constructor, also used for direct instantiation with a given registry.
      *
      * @param registry the registry to query (non-null)
      */
+    @Inject
     public KnockHealthResource(HealthCheckRegistry registry) {
         this.registry = registry;
     }

@@ -41,11 +41,11 @@ module io.vidocq.knock.cdi.vauban {
     // service type.
     requires io.vidocq.vauban.api;
 
-    // In-module instantiation, field injection AND method invocation of this package's beans
+    // In-module instantiation AND method invocation of this package's beans
     // (HealthCheckRegistrar, KnockCdiHealthCheckRegistry), generated as _VaubanComponents co-located
-    // in io.vidocq.knock.cdi.internal: the container creates them, injects their package-private
-    // @Inject fields and fires the @Observes @Initialized observer through this provider — so it
-    // needs no deep reflection and no `opens … to io.vidocq.vauban.core`.
+    // in io.vidocq.knock.cdi.internal: the container creates them through their package-private
+    // @Inject constructors and fires the @Observes @Initialized observer through this provider — so
+    // it needs no deep reflection and no `opens … to io.vidocq.vauban.core`.
     provides io.vidocq.vauban.api.VaubanComponentProvider
             with io.vidocq.knock.cdi.internal._VaubanComponents;
 }

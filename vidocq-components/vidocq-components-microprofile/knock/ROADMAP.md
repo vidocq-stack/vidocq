@@ -169,7 +169,7 @@ correct aggregation; JSON serialization compliant with §3.1.
 | `ProbeType` ↔ JAX-RS path mapping | `ALL` → `/health`, `LIVENESS` → `/health/live`, `READINESS` → `/health/ready`, `STARTUP` → `/health/started` | ✅ |
 | Code HTTP 200 / 503 via `jakarta.ws.rs.core.Response` | `Response.status(report.httpStatus()).type(APPLICATION_JSON_TYPE).entity(json).build()` | ✅ |
 | Content-Type `application/json` | `@Produces(MediaType.APPLICATION_JSON)` on the resource | ✅ |
-| `@Inject HealthCheckRegistry` in the resource | Field injection + public ctor for direct tests | ✅ |
+| `@Inject HealthCheckRegistry` in the resource | Constructor injection (public ctor, also used by direct tests) | ✅ |
 | TDD tests `KnockHealthResourceTest` | 7/7 PASS (empty 200, 503 down, probe isolation, exception → DOWN, content-type) | ✅ |
 | Exported runtime SPI `io.vidocq.knock.runtime.{HealthCheckRegistries, KnockHealthService, HealthReport}` | Java Modules boundary: `internal.*` remains non-exported; adapters go through this SPI | ✅ |
 
