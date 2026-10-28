@@ -44,15 +44,26 @@ final class TestJwe {
 
     /** Encrypts {@code nestedJws} for recipient {@code recipientPublic} (RSA-OAEP-256 / A256GCM). */
     static String encrypt(String nestedJws, PublicKey recipientPublic) throws Exception {
-        String protectedHeader = "{\"alg\":\"RSA-OAEP-256\",\"enc\":\"A256GCM\",\"cty\":\"JWT\"}";
+        return encrypt(nestedJws, recipientPublic,
+                "{\"alg\":\"RSA-OAEP-256\",\"enc\":\"A256GCM\",\"cty\":\"JWT\"}", true);
+    }
+
+    /**
+     * Encrypts {@code nestedJws} with an arbitrary protected header; the content key is wrapped with
+     * RSA-OAEP-256 when {@code oaepSha256}, RSA-OAEP (SHA-1) otherwise, and the content is always
+     * AES-256-GCM (whatever the header claims, so that header checks can be exercised).
+     */
+    static String encrypt(String nestedJws, PublicKey recipientPublic, String protectedHeader, boolean oaepSha256)
+            throws Exception {
         String b64Header = B64URL.encodeToString(protectedHeader.getBytes(StandardCharsets.US_ASCII));
 
         //CEK 256 bits, wrapped RSA-OAEP-256
         byte[] cek = new byte[32];
         RANDOM.nextBytes(cek);
         Cipher rsa = Cipher.getInstance("RSA/ECB/OAEPPadding");
-        rsa.init(Cipher.ENCRYPT_MODE, recipientPublic,
-                new OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT));
+        rsa.init(Cipher.ENCRYPT_MODE, recipientPublic, oaepSha256
+                ? new OAEPParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, PSource.PSpecified.DEFAULT)
+                : new OAEPParameterSpec("SHA-1", "MGF1", MGF1ParameterSpec.SHA1, PSource.PSpecified.DEFAULT));
         byte[] encryptedKey = rsa.doFinal(cek);
 
         // Contenu AES-256-GCM, IV 96 bits, AAD = ASCII(base64url(header))
