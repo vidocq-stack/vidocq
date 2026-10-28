@@ -54,7 +54,6 @@ import java.util.function.Function;
  */
 final class JdqlValues {
 
-    /** The numeric types, boxed, that a number or a text converts to exactly. */
     /** The types read from their ISO text form, with the parser of each. */
     private static final Map<Class<?>, Function<String, Object>> TEXT_PARSERS = Map.of(
             LocalDate.class, LocalDate::parse,
@@ -65,6 +64,7 @@ final class JdqlValues {
             Instant.class, Instant::parse,
             UUID.class, UUID::fromString);
 
+    /** The numeric types, boxed, that a number or a text converts to exactly. */
     private static final Set<Class<?>> NUMBERS = Set.of(Byte.class, Short.class, Integer.class, Long.class,
             Float.class, Double.class, BigDecimal.class, BigInteger.class);
 

@@ -177,7 +177,8 @@ public final class JdqlExecutor {
             case SELECT -> new JdqlResult.Entities((List<?>) result);
             case COUNT, UPDATE, DELETE -> new JdqlResult.Count(((Number) result).longValue());
             case AGGREGATE -> new JdqlResult.Value(result);
-            case PROJECT -> new JdqlResult.Rows(List.of(stmt.scalarAttr()), columnRows((List<?>) result));
+            case PROJECT -> new JdqlResult.Rows(List.of(stmt.scalarAttr()),
+                    columnRows((List<?>) java.util.Objects.requireNonNull(result)));
             case PROJECT_MULTI -> new JdqlResult.Rows(stmt.projectAttrs(), projectedRows(result));
         };
     }
@@ -445,24 +446,6 @@ public final class JdqlExecutor {
         return new SetClause(setSql.toString(), bound);
     }
 
-    /** The rows {@code limit} keeps of {@code rows} (all of them without a limit), in a new list. */
-    private static <E> List<E> applyLimit(List<E> rows, jakarta.data.Limit limit) {
-        if (limit == null) return rows;
-        int from = Math.max(0, (int) (limit.startAt() - 1));
-        int to = Math.min(rows.size(), from + limit.maxResults());
-        return from >= rows.size() ? new ArrayList<>() : new ArrayList<>(rows.subList(from, to));
-    }
-
-    /** The value of an empty-IN query (no row can match), as the return type asks for it. */
-    private static Object noMatch(Class<?> rt) {
-        if (rt == java.util.Optional.class) return java.util.Optional.empty();
-        if (rt == java.util.stream.Stream.class) return java.util.stream.Stream.empty();
-        if (isListLike(rt)) return java.util.List.of();
-        if (rt == long.class || rt == Long.class) return 0L;
-        if (rt == boolean.class || rt == Boolean.class) return false;
-        throw new MansartDataException("@Query empty IN with single-entity return");
-    }
-
     /** One run of a statement: the call's shape, arguments, ordering and page, against one entity model. */
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static final class Execution {
@@ -472,6 +455,24 @@ public final class JdqlExecutor {
         private final Object[] args;
         private final OrderBy orderBy;
         private final Pagination pagination;
+
+        /** The rows {@code limit} keeps of {@code rows} (all of them without a limit), in a new list. */
+        private static <E> List<E> applyLimit(List<E> rows, jakarta.data.Limit limit) {
+            if (limit == null) return rows;
+            int from = Math.max(0, (int) (limit.startAt() - 1));
+            int to = Math.min(rows.size(), from + limit.maxResults());
+            return from >= rows.size() ? new ArrayList<>() : new ArrayList<>(rows.subList(from, to));
+        }
+
+        /** The value of an empty-IN query (no row can match), as the return type asks for it. */
+        private static Object noMatch(Class<?> rt) {
+            if (rt == java.util.Optional.class) return java.util.Optional.empty();
+            if (rt == java.util.stream.Stream.class) return java.util.stream.Stream.empty();
+            if (isListLike(rt)) return java.util.List.of();
+            if (rt == long.class || rt == Long.class) return 0L;
+            if (rt == boolean.class || rt == Boolean.class) return false;
+            throw new MansartDataException("@Query empty IN with single-entity return");
+        }
 
         Execution(CallShape shape, EntityModel<?> model, RepositoryRuntime runtime, Object[] args,
                   OrderBy orderBy, Pagination pagination) {
@@ -951,19 +952,25 @@ public final class JdqlExecutor {
             return isRecordTarget ? mapRowsToRecords(rows, elem, attrs).stream() : rows.stream();
         }
         if (rt.isArray()) return multiProjectionArray(rt, rows, attrs);
-        if (rt == java.util.Optional.class) {
-            if (rows.isEmpty()) return java.util.Optional.empty();
-            return isRecordTarget ? java.util.Optional.of(mapRowToRecord(rows.get(0), elem, attrs))
-                                  : java.util.Optional.of(rows.get(0));
-        }
-        if (rt.isRecord()) {
-            if (rows.isEmpty()) {
-                throw new jakarta.data.exceptions.EmptyResultException(
-                        "Multi-projection returned no result for " + rt.getSimpleName());
-            }
-            return mapRowToRecord(rows.get(0), rt, attrs);
-        }
+        if (rt == java.util.Optional.class) return firstRow(rows, isRecordTarget ? elem : null, attrs);
+        if (rt.isRecord()) return singleRecord(rt, rows, attrs);
         throw new MansartDataException("Unsupported multi-projection return type: " + rt);
+    }
+
+    /** The first row, mapped to {@code recordType} unless it is {@code null}; empty without rows. */
+    private static java.util.Optional<Object> firstRow(List<Object[]> rows, Class<?> recordType,
+                                                       java.util.List<Attribute<?, ?>> attrs) {
+        if (rows.isEmpty()) return java.util.Optional.empty();
+        return java.util.Optional.of(recordType == null ? rows.get(0) : mapRowToRecord(rows.get(0), recordType, attrs));
+    }
+
+    /** The first row as a {@code recordType}; an {@link jakarta.data.exceptions.EmptyResultException} without rows. */
+    private static Object singleRecord(Class<?> recordType, List<Object[]> rows, java.util.List<Attribute<?, ?>> attrs) {
+        if (rows.isEmpty()) {
+            throw new jakarta.data.exceptions.EmptyResultException(
+                    "Multi-projection returned no result for " + recordType.getSimpleName());
+        }
+        return mapRowToRecord(rows.get(0), recordType, attrs);
     }
 
     /** {@code Object[][]} holding the rows, or {@code R[]} holding one record per row. */
