@@ -176,13 +176,8 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
                 System.setProperty("vidocq.chappe.listener.default.host", config.getHost());
                 System.setProperty("vidocq.chappe.listener.default.port", String.valueOf(port));
                 bootstrap = VidocqBootstrap.create();
-                try {
-                    bootstrap.configure(beanClassNames);
-                    bootstrap.start();
+                if (started(bootstrap, beanClassNames, attempt)) {
                     break;
-                } catch (RuntimeException e) {
-                    if (config.getPort() != 0 || attempt == BIND_ATTEMPTS || !isBindFailure(e)) throw e;
-                    shutdownQuietly(bootstrap);
                 }
             }
 
@@ -215,6 +210,22 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             DeploymentApplicationLayer.clear();
             deleteQuietly(pagesWork.remove(archive));
             throw new DeploymentException("Failed to deploy Vidocq application", e);
+        }
+    }
+
+    /**
+     * Configures and starts {@code bootstrap}: {@code false} when the port it probed was taken in between and another
+     * attempt may follow, its failure rethrown otherwise.
+     */
+    private boolean started(VidocqBootstrap bootstrap, List<String> beanClassNames, int attempt) {
+        try {
+            bootstrap.configure(beanClassNames);
+            bootstrap.start();
+            return true;
+        } catch (RuntimeException e) {
+            if (config.getPort() != 0 || attempt == BIND_ATTEMPTS || !isBindFailure(e)) throw e;
+            shutdownQuietly(bootstrap);
+            return false;
         }
     }
 

@@ -69,6 +69,8 @@ final class WarJspPages {
     private static final System.Logger LOG = System.getLogger(WarJspPages.class.getName());
     static final String MODULE = "vidocq.tck.pages";
     private static final String ENGINE = MODULE + ".engine.Engine";
+    private static final String META_INF = "META-INF/";
+    private static final String MODULE_INFO = "module-info.class";
 
     private static final Set<String> COMPILE_MODULES = Set.of("io.vidocq.ibarra.api", "io.vidocq.ibarra.core",
             "io.vidocq.peano.api", "io.vidocq.peano.core", "io.vidocq.foy.api", "jakarta.servlet",
@@ -175,7 +177,7 @@ final class WarJspPages {
         }
         for (Path jar : libraries) {
             try (var file = new JarFile(jar.toFile())) {
-                if (file.stream().anyMatch(e -> e.getName().startsWith("META-INF/") && e.getName().endsWith(".tld"))) {
+                if (file.stream().anyMatch(e -> e.getName().startsWith(META_INF) && e.getName().endsWith(".tld"))) {
                     return true;
                 }
             }
@@ -184,11 +186,11 @@ final class WarJspPages {
     }
 
     /** The war's class files, materialized at {@code root} next to {@code META-INF} and {@code WEB-INF}. */
-    private static void copyClasses(Path root, Path target) throws IOException {
+    static void copyClasses(Path root, Path target) throws IOException {
         try (Stream<Path> files = Files.walk(root)) {
             for (Path file : files.filter(Files::isRegularFile).filter(f -> f.toString().endsWith(".class")).toList()) {
                 String relative = root.relativize(file).toString().replace(File.separatorChar, '/');
-                if (relative.startsWith("META-INF/") || relative.startsWith("WEB-INF/")) continue;
+                if (relative.startsWith(META_INF) || relative.startsWith("WEB-INF/")) continue;
                 Path out = target.resolve(relative);
                 Files.createDirectories(out.getParent());
                 Files.copy(file, out, StandardCopyOption.REPLACE_EXISTING);
@@ -197,28 +199,45 @@ final class WarJspPages {
     }
 
     /** The classes of the lib jars, and their tag library descriptors, each jar's in a {@code META-INF} directory of its own. */
-    private static void unpackLibraries(List<Path> libraries, Path target) throws IOException {
+    static void unpackLibraries(List<Path> libraries, Path target) throws IOException {
         int index = 0;
         for (Path jar : libraries) {
             String tlds = "META-INF/war-libraries/" + String.format(java.util.Locale.ROOT, "%04d", index++) + "/";
             try (var in = new JarInputStream(Files.newInputStream(jar))) {
                 for (JarEntry entry; (entry = in.getNextJarEntry()) != null; ) {
-                    String name = entry.getName();
-                    if (entry.isDirectory() || name.equals("module-info.class") || name.startsWith("META-INF/versions/")) continue;
-                    if (name.startsWith("META-INF/") && !name.endsWith(".tld")) continue;
-                    Path out = target.resolve(name.startsWith("META-INF/") ? tlds + name : name).normalize();
-                    if (!out.startsWith(target)) continue;
-                    Files.createDirectories(out.getParent());
-                    Files.write(out, in.readAllBytes());
+                    if (unpacked(entry)) {
+                        unpack(in, entry.getName(), target, tlds);
+                    }
                 }
             }
+        }
+    }
+
+    /**
+     * Whether a lib jar's entry is unpacked: every file outside {@code META-INF} but the module descriptor, and the
+     * tag library descriptors.
+     */
+    private static boolean unpacked(JarEntry entry) {
+        String name = entry.getName();
+        if (entry.isDirectory() || name.equals(MODULE_INFO) || name.startsWith("META-INF/versions/")) {
+            return false;
+        }
+        return !name.startsWith(META_INF) || name.endsWith(".tld");
+    }
+
+    /** Writes the current entry of {@code in}, a tag library descriptor under {@code tlds}, never outside {@code target}. */
+    private static void unpack(JarInputStream in, String name, Path target, String tlds) throws IOException {
+        Path out = target.resolve(name.startsWith(META_INF) ? tlds + name : name).normalize();
+        if (out.startsWith(target)) {
+            Files.createDirectories(out.getParent());
+            Files.write(out, in.readAllBytes());
         }
     }
 
     private static ModuleLayer define(Path output, Set<String> warPackages, List<Path> modulePath, ClassLoader loader)
             throws IOException {
         ModuleDescriptor compiled;
-        try (var input = Files.newInputStream(output.resolve("module-info.class"))) {
+        try (var input = Files.newInputStream(output.resolve(MODULE_INFO))) {
             compiled = ModuleDescriptor.read(input);
         }
         ModuleLayer boot = ModuleLayer.boot();
@@ -263,7 +282,7 @@ final class WarJspPages {
     private static Set<String> packagesOf(Path root) throws IOException {
         var packages = new TreeSet<String>();
         try (Stream<Path> files = Files.walk(root)) {
-            files.filter(file -> file.toString().endsWith(".class") && !file.getFileName().toString().equals("module-info.class"))
+            files.filter(file -> file.toString().endsWith(".class") && !file.getFileName().toString().equals(MODULE_INFO))
                     .map(file -> root.relativize(file.getParent()))
                     .map(dir -> dir.toString().replace(File.separatorChar, '.'))
                     .filter(pn -> !pn.isEmpty())
@@ -282,22 +301,28 @@ final class WarJspPages {
         }
     }
 
-    private static List<Path> compileModulePath() throws IOException {
+    static List<Path> compileModulePath() throws IOException {
         var candidates = new ArrayList<Path>();
         String classPath = System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
         for (String item : classPath.split(File.pathSeparator)) {
-            if (!item.endsWith(".jar")) continue;
-            Path jar = Path.of(item);
-            if (!Files.isRegularFile(jar)) continue;
-            try (var file = new JarFile(jar.toFile())) {
-                if (file.getJarEntry("module-info.class") != null) candidates.add(jar);
-            }
+            Path jar = item.endsWith(".jar") ? Path.of(item) : null;
+            if (jar != null && isModularJar(jar)) candidates.add(jar);
         }
         return ModuleFinder.of(candidates.toArray(Path[]::new)).findAll().stream()
                 .filter(reference -> COMPILE_MODULES.contains(reference.descriptor().name()))
                 .map(reference -> Path.of(reference.location().orElseThrow()))
                 .sorted(Comparator.naturalOrder())
                 .toList();
+    }
+
+    /** Whether {@code jar} is a jar file on disk that carries a module descriptor at its root. */
+    private static boolean isModularJar(Path jar) throws IOException {
+        if (!Files.isRegularFile(jar)) {
+            return false;
+        }
+        try (var file = new JarFile(jar.toFile())) {
+            return file.getJarEntry(MODULE_INFO) != null;
+        }
     }
 
     private static String join(List<Path> paths) {

@@ -66,6 +66,7 @@ import java.util.stream.Stream;
 final class MaterializedDeployment implements AutoCloseable {
 
     private static final String CLASS_SUFFIX = ".class";
+    private static final String WEB_INF_CLASSES = "WEB-INF/classes/";
 
     private final Path root;
     private final List<Path> libraries;
@@ -88,40 +89,11 @@ final class MaterializedDeployment implements AutoCloseable {
 
         for (var entry : archive.getContent().entrySet()) {
             Node node = entry.getValue();
-            if (node == null || node.getAsset() == null) {
-                continue;
-            }
-            String path = entry.getKey().get();
-            if (path == null) {
-                continue;
-            }
-            String relative = path.startsWith("/") ? path.substring(1) : path;
-            if (web && isWebResource(relative)) {
-                // A runtime application serves its web resources from META-INF/resources/ on its
-                // class path (Foy's ClassPathResourceProvider): the document root goes there too.
-                copy(node, root, "META-INF/resources/" + relative);
-            }
-            if (relative.startsWith("WEB-INF/classes/")) {
-                relative = relative.substring("WEB-INF/classes/".length());
-                if (web && relative.equals("META-INF/web-fragment.xml")) {
-                    // Only WEB-INF/lib jars carry web fragments (Servlet 6.1 §8.2.1): at the
-                    // class path root, this file would pass for one.
-                    continue;
+            if (node != null && node.getAsset() != null) {
+                Path library = materialize(node, entry.getKey().get(), root, web);
+                if (library != null) {
+                    libraries.add(library);
                 }
-            }
-            if (relative.isEmpty()) {
-                continue;
-            }
-            Path target = root.resolve(relative).normalize();
-            if (!target.startsWith(root)) {
-                continue; // defensive: never materialize outside the deployment root
-            }
-            Files.createDirectories(target.getParent());
-            try (InputStream in = node.getAsset().openStream()) {
-                Files.copy(in, target);
-            }
-            if (relative.startsWith("WEB-INF/lib/") && relative.endsWith(".jar")) {
-                libraries.add(target);
             }
         }
 
@@ -135,6 +107,47 @@ final class MaterializedDeployment implements AutoCloseable {
                 urls.toArray(URL[]::new),
                 MaterializedDeployment.class.getClassLoader());
         return new MaterializedDeployment(root, List.copyOf(libraries), classLoader);
+    }
+
+    /**
+     * Writes one archive entry under {@code root}, and a web resource of a war under {@code META-INF/resources/} too.
+     *
+     * @return the file written when it is a {@code WEB-INF/lib} jar, {@code null} otherwise
+     */
+    private static Path materialize(Node node, String path, Path root, boolean web) throws IOException {
+        if (path == null) {
+            return null;
+        }
+        String relative = path.startsWith("/") ? path.substring(1) : path;
+        if (web && isWebResource(relative)) {
+            // A runtime application serves its web resources from META-INF/resources/ on its
+            // class path (Foy's ClassPathResourceProvider): the document root goes there too.
+            copy(node, root, "META-INF/resources/" + relative);
+        }
+        relative = classPathName(relative, web);
+        if (relative.isEmpty()) {
+            return null;
+        }
+        Path target = root.resolve(relative).normalize();
+        if (!target.startsWith(root)) {
+            return null; // defensive: never materialize outside the deployment root
+        }
+        Files.createDirectories(target.getParent());
+        try (InputStream in = node.getAsset().openStream()) {
+            Files.copy(in, target);
+        }
+        return relative.startsWith("WEB-INF/lib/") && relative.endsWith(".jar") ? target : null;
+    }
+
+    /** Where an entry goes: a {@code WEB-INF/classes/} one at the class path root, {@code ""} for none at all. */
+    private static String classPathName(String relative, boolean web) {
+        if (!relative.startsWith(WEB_INF_CLASSES)) {
+            return relative;
+        }
+        String name = relative.substring(WEB_INF_CLASSES.length());
+        // Only WEB-INF/lib jars carry web fragments (Servlet 6.1 §8.2.1): at the
+        // class path root, this file would pass for one.
+        return web && name.equals("META-INF/web-fragment.xml") ? "" : name;
     }
 
     /**
