@@ -119,8 +119,9 @@ class VidocqTestMojoTest {
                     return true;
                 }
             };
-        }, since -> SurefireReports.Reports.NONE, () -> false, dir.resolve("r.json"), "log", result -> {},
-                warning -> {}, Clock.systemUTC());
+        }, since -> SurefireReports.Reports.NONE, () -> false,
+                new ContinuousTesting.Results(dir.resolve("r.json"), "log"), result -> {}, warning -> {},
+                Clock.systemUTC());
         testing.start();
         testing.changed(TestResults.Trigger.RUN_ALL, TestControl.ReadyGate.NOW);
         running.await();

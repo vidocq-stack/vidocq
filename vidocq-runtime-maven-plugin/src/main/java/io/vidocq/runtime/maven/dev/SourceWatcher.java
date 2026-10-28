@@ -160,44 +160,47 @@ final class SourceWatcher implements AutoCloseable {
             try {
                 key = missing.isEmpty() ? service.take()
                         : service.poll(MISSING_ROOT_POLL_MILLIS, TimeUnit.MILLISECONDS);
-            } catch (ClosedWatchServiceException e) {
+            } catch (ClosedWatchServiceException _) {
                 return null;
             }
             Touched touched = new Touched();
             if (key == null) {
                 registerAppearedRoots(touched);
-                if (touched.any()) {
-                    return touched.change();
-                }
-                continue;
+            } else {
+                drainAndReset(key, touched);
             }
-            drainKey(key, touched);
-            if (!key.reset()) {
-                registered.remove((Path) key.watchable());
+            if (touched.any()) {
+                return key == null ? touched.change() : debounce(touched);
             }
-            if (!touched.any()) {
-                continue;
+        }
+    }
+
+    /**
+     * Keeps draining events for {@code debounceMillis} so a burst of editor saves collapses into one reload cycle.
+     */
+    private Change debounce(Touched touched) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(debounceMillis);
+        long remaining;
+        while ((remaining = deadline - System.nanoTime()) > 0) {
+            WatchKey more;
+            try {
+                more = service.poll(remaining, TimeUnit.NANOSECONDS);
+            } catch (ClosedWatchServiceException _) {
+                return touched.change();
             }
-            // Debounce: keep draining events for `debounceMillis` so a burst
-            // of editor saves collapses into one reload cycle.
-            long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(debounceMillis);
-            long remaining;
-            while ((remaining = deadline - System.nanoTime()) > 0) {
-                WatchKey more;
-                try {
-                    more = service.poll(remaining, TimeUnit.NANOSECONDS);
-                } catch (ClosedWatchServiceException e) {
-                    return touched.change();
-                }
-                if (more == null) {
-                    break;
-                }
-                drainKey(more, touched);
-                if (!more.reset()) {
-                    registered.remove((Path) more.watchable());
-                }
+            if (more == null) {
+                return touched.change();
             }
-            return touched.change();
+            drainAndReset(more, touched);
+        }
+        return touched.change();
+    }
+
+    /** {@link #drainKey}, then resets the key; one that is no longer valid forgets its directory. */
+    private void drainAndReset(WatchKey key, Touched touched) {
+        drainKey(key, touched);
+        if (!key.reset()) {
+            registered.remove(key.watchable());
         }
     }
 
@@ -226,28 +229,29 @@ final class SourceWatcher implements AutoCloseable {
             if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
                 touched.main = true;
                 touched.test = !testRoots.isEmpty();
-                continue;
+            } else if (event.context() instanceof Path child) {
+                noteEvent(parent, child, event.kind(), touched);
             }
-            Object ctx = event.context();
-            if (!(ctx instanceof Path child)) {
-                continue;
+        }
+    }
+
+    /** Notes one event on {@code child} of {@code parent}, registering a newly created sub-directory. */
+    private void noteEvent(Path parent, Path child, WatchEvent.Kind<?> kind, Touched touched) {
+        Path resolved = parent.resolve(child);
+        if (Files.isDirectory(resolved)
+                && kind == StandardWatchEventKinds.ENTRY_CREATE
+                && !registered.contains(resolved)) {
+            try {
+                registerRecursive(resolved);
+            } catch (IOException _) {
+                // a new subdir we cannot register is not fatal
             }
-            Path resolved = parent.resolve(child);
-            if (Files.isDirectory(resolved)
-                    && event.kind() == StandardWatchEventKinds.ENTRY_CREATE
-                    && !registered.contains(resolved)) {
-                try {
-                    registerRecursive(resolved);
-                } catch (IOException ignored) {
-                    // a new subdir we cannot register is not fatal
-                }
-            }
-            if (isWatchedExtension(child.toString())) {
-                if (under(resolved, testRoots)) {
-                    touched.test = true;
-                } else {
-                    touched.main = true;
-                }
+        }
+        if (isWatchedExtension(child.toString())) {
+            if (under(resolved, testRoots)) {
+                touched.test = true;
+            } else {
+                touched.main = true;
             }
         }
     }

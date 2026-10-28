@@ -45,6 +45,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
  */
 class SourceWatcherTest {
 
+    private static final String BURST_MAIN = "burst/main";
+    private static final String BURST_TEST = "burst/test";
+
     @Test
     @Timeout(value = 20, unit = TimeUnit.SECONDS)
     void awaitChange_detects_a_relevant_file_modification(@TempDir Path tmp) throws Exception {
@@ -174,6 +177,28 @@ class SourceWatcherTest {
             t.join(TimeUnit.SECONDS.toMillis(20));
             assertFalse(t.isAlive(), "the new test directory was never seen");
             assertEquals(new SourceWatcher.Change(false, true), change.get());
+        }
+    }
+
+    /** The events of a burst, a main and a test edit and a new package, collapse into one change of both kinds. */
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void a_burst_within_the_debounce_window_is_one_change(@TempDir Path tmp) throws Exception {
+        Path main = Files.createDirectories(tmp.resolve(BURST_MAIN));
+        Path test = Files.createDirectories(tmp.resolve(BURST_TEST));
+        Path mainFile = main.resolve("Hello.java");
+        Path testFile = test.resolve("HelloTest.java");
+        Files.writeString(mainFile, "class Hello { /* before the burst */ }");
+        Files.writeString(testFile, "class HelloTest { /* before the burst */ }");
+
+        try (SourceWatcher watcher = SourceWatcher.on(List.of(main), List.of(test), Duration.ofSeconds(4))) {
+            // The directories are registered: the events queue up until awaitChanges takes them.
+            Files.writeString(mainFile, "class Hello { /* burst */ }");
+            Files.createDirectories(main.resolve("pkg"));
+            Files.writeString(main.resolve("pkg/World.java"), "package pkg; class World {}");
+            Files.writeString(testFile, "class HelloTest { /* burst */ }");
+
+            assertEquals(new SourceWatcher.Change(true, true), watcher.awaitChanges());
         }
     }
 

@@ -299,6 +299,49 @@ public class VidocqDevMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException {
+        LayerSplit.Mode mode = layerSplitMode();
+        Path projectDir = baseDir.toPath();
+        ensureCompiled(projectDir);
+        List<Path> watch = parseDirs(projectDir, watchDirs);
+        ApplicationLaunch.Layered layered = buildLaunch(mode);
+        List<Path> modulePath = layered.modulePath();
+        Map<String, String> sysProps = buildSystemProperties();
+        if (mode == LayerSplit.Mode.ALL) {
+            logLayerSplit(layered, sysProps);
+        }
+        List<String> jvmArgs = buildJvmArgs();
+
+        // In-JVM hot reload: the child watches this file's mtime and swaps its
+        // application layer when we touch it (after a successful recompile).
+        boolean inJvmReload = layerMode && hotReload;
+        Path reloadFile = buildDir.toPath().resolve(".vidocq-dev-reload");
+        if (inJvmReload) {
+            createReloadSignal(reloadFile, sysProps);
+        }
+        jvmArgs = withPatchModuleArgs(jvmArgs);
+        logStartup(watch, modulePath);
+
+        // devToolsOnPath: the keys of the jars added below, beyond the project's own, shared by the dev services, the
+        // console and the companions so that none of them puts a module on the path twice (the dev services and the
+        // console both need the SPI).
+        Set<String> devToolsOnPath = new HashSet<>();
+        Function<String, Optional<String>> applicationFiles = ApplicationFiles.of(classesDir.toPath());
+        DevServicesSession devs = devServicesEnabled(applicationFiles)
+                ? openDevServices(projectDir, sysProps, applicationFiles, layered, devToolsOnPath)
+                : null;
+
+        // Dev tools (Vidocq/vidocq#143): the console, then each extension's -dev companion, on the child's module
+        // path only. No binary ever contains them.
+        modulePath.addAll(devTools(project.getArtifacts(), this::resolveDevConsole, this::resolveRuntime,
+                getLog()::warn, getLog()::info, devToolsOnPath));
+
+        Testing testing = startContinuousTesting(projectDir, sysProps, applicationFiles, devs);
+        ChildLaunch launch = new ChildLaunch(modulePath, layered.appPath(), jvmArgs, sysProps, projectDir);
+        runSession(launch, watch, testing, devs, reloadFile, inJvmReload);
+    }
+
+    /** {@code vidocq.app.layer}, checked against {@code vidocq.dev.layer}. */
+    private LayerSplit.Mode layerSplitMode() throws MojoExecutionException {
         LayerSplit.Mode mode;
         try {
             mode = LayerSplit.Mode.of(appLayer);
@@ -308,54 +351,60 @@ public class VidocqDevMojo extends AbstractMojo {
         if (mode == LayerSplit.Mode.ALL && !layerMode) {
             throw new MojoExecutionException("vidocq.app.layer=all needs vidocq.dev.layer=true");
         }
-        Path projectDir = baseDir.toPath();
+        return mode;
+    }
+
+    /** Builds the project when nobody did, and again when an IDE compiled it without the annotation processors. */
+    private void ensureCompiled(Path projectDir) throws MojoExecutionException {
         // Nobody built the project (right after "mvn clean"): build it once, as every reload does.
         CompilerOutput.ensureBuilt(classesDir.toPath(), new RecompileRunner(projectDir)::run, getLog()::warn);
         // An IDE build may have compiled target/classes without the annotation processors (Vidocq/vidocq#237).
         CompilerOutput.ensureComplete(buildDirPath(), classesDir.toPath(), new RecompileRunner(projectDir)::run,
                 getLog()::warn);
-        List<Path> watch = parseDirs(projectDir, watchDirs);
-        ApplicationLaunch.Layered layered = buildLaunch(mode);
-        List<Path> modulePath = layered.modulePath();
-        List<Path> appPath = layered.appPath();
-        Map<String, String> sysProps = buildSystemProperties();
-        if (mode == LayerSplit.Mode.ALL) {
-            getLog().info(ApplicationLaunch.layerSummary(appPath.size() - 1, layered.pinned().size()));
-            layered.pinned().forEach((m, why) -> getLog().info("  parent layer: " + m + " (" + why + ")"));
-            sysProps.putAll(ApplicationLaunch.layerProperties(layered.pinned()));
-        }
-        List<String> jvmArgs = buildJvmArgs();
+    }
 
-        // In-JVM hot reload: the child watches this file's mtime and swaps its
-        // application layer when we touch it (after a successful recompile).
-        boolean inJvmReload = layerMode && hotReload;
-        Path reloadFile = buildDir.toPath().resolve(".vidocq-dev-reload");
-        if (inJvmReload) {
-            try {
-                Files.createDirectories(reloadFile.getParent());
-                Files.writeString(reloadFile, "0\n");
-            } catch (IOException e) {
-                throw new MojoExecutionException("Cannot create the reload signal file "
-                        + reloadFile, e);
-            }
-            sysProps.put("vidocq.dev.reload.file", reloadFile.toString());
-        }
+    /** Under {@code vidocq.app.layer=all}: logs the split and hands the pinned modules to the child. */
+    private void logLayerSplit(ApplicationLaunch.Layered layered, Map<String, String> sysProps) {
+        getLog().info(ApplicationLaunch.layerSummary(layered.appPath().size() - 1, layered.pinned().size()));
+        layered.pinned().forEach((m, why) -> getLog().info("  parent layer: " + m + " (" + why + ")"));
+        sysProps.putAll(ApplicationLaunch.layerProperties(layered.pinned()));
+    }
 
-        // The dev module path uses the original dependency jars: re-attach the classes
-        // that vidocq:generate parked for scanned dependencies (target/vidocq-patches)
-        // to their owning module, exactly like the packaging goals do by enrichment.
+    /** Writes the reload signal file the child watches, and tells the child where it is. */
+    private static void createReloadSignal(Path reloadFile, Map<String, String> sysProps)
+            throws MojoExecutionException {
+        try {
+            Files.createDirectories(reloadFile.getParent());
+            Files.writeString(reloadFile, "0\n");
+        } catch (IOException e) {
+            throw new MojoExecutionException("Cannot create the reload signal file "
+                    + reloadFile, e);
+        }
+        sysProps.put("vidocq.dev.reload.file", reloadFile.toString());
+    }
+
+    /**
+     * The dev module path uses the original dependency jars: re-attach the classes that vidocq:generate parked for
+     * scanned dependencies (target/vidocq-patches) to their owning module, exactly like the packaging goals do by
+     * enrichment.
+     */
+    private List<String> withPatchModuleArgs(List<String> jvmArgs) throws MojoExecutionException {
         try {
             List<String> patchArgs = ApplicationLaunch.patchModuleArgs(project, buildDirPath());
-            if (!patchArgs.isEmpty()) {
-                jvmArgs = new ArrayList<>(jvmArgs);
-                jvmArgs.addAll(patchArgs);
-                getLog().info("JPMS: " + patchArgs.size() / 2
-                        + " --patch-module option(s) added for generated classes");
+            if (patchArgs.isEmpty()) {
+                return jvmArgs;
             }
+            List<String> args = new ArrayList<>(jvmArgs);
+            args.addAll(patchArgs);
+            getLog().info("JPMS: " + patchArgs.size() / 2
+                    + " --patch-module option(s) added for generated classes");
+            return args;
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to compute --patch-module options", e);
         }
+    }
 
+    private void logStartup(List<Path> watch, List<Path> modulePath) {
         getLog().info("Vidocq dev — main module : " + mainModule
                 + (mainClass != null && !mainClass.isBlank() ? ("/" + mainClass) : ""));
         if (layerMode) {
@@ -365,153 +414,174 @@ public class VidocqDevMojo extends AbstractMojo {
         getLog().info("Watching: " + watch);
         getLog().info("Module path entries: " + modulePath.size());
         logDebugAgent();
+    }
 
-        // Provision dev-mode services (Postgres, Keycloak, …) ONCE, before the first fork. Their
-        // connection coordinates are folded into the child's system properties; an explicit -D or a
-        // vidocq.dev.systemProperties entry always wins (putIfAbsent), and each key the child does get from
-        // a provider is marked vidocq.dev.provided.<key>=<id>. The containers live for the whole session —
-        // source reloads respawn the child but never touch them.
-        // devToolsOnPath: the keys of the jars added below, beyond the project's own, shared by the dev services, the
-        // console and the companions so that none of them puts a module on the path twice (the dev services and the
-        // console both need the SPI).
-        Set<String> devToolsOnPath = new HashSet<>();
-        DevServicesSession devs = null;
-        Function<String, Optional<String>> applicationFiles = ApplicationFiles.of(classesDir.toPath());
-        if (devServicesEnabled(applicationFiles)) {
-            // Resolved before open(): a missing extension/devconsole-spi jar must abort before any
-            // container is started, never leave a running session with nothing left to close it.
-            List<Path> extensionJars = DevServicesExtensionJar.resolve(pluginArtifactMap, project.getArtifacts(),
-                    devToolsOnPath);
-            // What the child will see, taken before the dev services extension and the dev tools join the module
-            // path (spec 2026-09-29-devservice-postgres-kind §5).
-            ApplicationClasspath classpath =
-                    new ApplicationClasspath(ApplicationLaunch.classpathOf(
-                            java.util.stream.Stream.concat(modulePath.stream(), appPath.stream()).toList(),
-                            classesDir.toPath()));
-            try {
-                devs = DevServicesSession.open("vidocq:dev", projectDir, sysProps, applicationFiles,
-                        ApplicationFiles.allOf(classesDir.toPath(), projectDir.resolve("src/main/resources")),
-                        classpath::contains,
-                        System.getLogger("vidocq.dev.devservices"));
-            } catch (DevServicesException e) {
-                throw new MojoExecutionException(e.getMessage(), e);
-            }
-            foldDevServiceProperties(sysProps, devs.injected(), devs.providers());
-            sysProps.putIfAbsent(StateFile.PROPERTY, devs.stateFile().toAbsolutePath().toString());
-            modulePath.addAll(extensionJars);
+    /**
+     * Provisions dev-mode services (Postgres, Keycloak, …) ONCE, before the first fork. Their connection coordinates
+     * are folded into the child's system properties; an explicit -D or a vidocq.dev.systemProperties entry always wins
+     * (putIfAbsent), and each key the child does get from a provider is marked vidocq.dev.provided.<key>=<id>. The
+     * containers live for the whole session — source reloads respawn the child but never touch them.
+     */
+    private DevServicesSession openDevServices(Path projectDir, Map<String, String> sysProps,
+            Function<String, Optional<String>> applicationFiles, ApplicationLaunch.Layered layered,
+            Set<String> devToolsOnPath) throws MojoExecutionException {
+        // Resolved before open(): a missing extension/devconsole-spi jar must abort before any
+        // container is started, never leave a running session with nothing left to close it.
+        List<Path> extensionJars = DevServicesExtensionJar.resolve(pluginArtifactMap, project.getArtifacts(),
+                devToolsOnPath);
+        // What the child will see, taken before the dev services extension and the dev tools join the module
+        // path (spec 2026-09-29-devservice-postgres-kind §5).
+        ApplicationClasspath classpath =
+                new ApplicationClasspath(ApplicationLaunch.classpathOf(
+                        java.util.stream.Stream.concat(layered.modulePath().stream(), layered.appPath().stream())
+                                .toList(),
+                        classesDir.toPath()));
+        DevServicesSession devs;
+        try {
+            devs = DevServicesSession.open("vidocq:dev", projectDir, sysProps, applicationFiles,
+                    ApplicationFiles.allOf(classesDir.toPath(), projectDir.resolve("src/main/resources")),
+                    classpath::contains,
+                    System.getLogger("vidocq.dev.devservices"));
+        } catch (DevServicesException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
         }
-        final DevServicesSession devServicesRef = devs;
+        foldDevServiceProperties(sysProps, devs.injected(), devs.providers());
+        sysProps.putIfAbsent(StateFile.PROPERTY, devs.stateFile().toAbsolutePath().toString());
+        layered.modulePath().addAll(extensionJars);
+        return devs;
+    }
 
-        // Dev tools (Vidocq/vidocq#143): the console, then each extension's -dev companion, on the child's module
-        // path only. No binary ever contains them.
-        modulePath.addAll(devTools(project.getArtifacts(), this::resolveDevConsole, this::resolveRuntime,
-                getLog()::warn, getLog()::info, devToolsOnPath));
+    /**
+     * Continuous testing of a session: the run worker and the request polling, both {@code null} when off, and the
+     * test directories to watch.
+     */
+    private record Testing(ContinuousTesting testing, TestRequestFile requests, List<Path> watch) {}
 
-        // Continuous testing (#122): the test directories are watched too, the child's dev console learns where
-        // the results are, and every run gets the dev session's keys, so the tests use its containers.
-        boolean testsOn = continuousTestingEnabled(projectDir, applicationFiles);
-        List<Path> testWatch = testsOn ? parseDirs(projectDir, testWatchDirs) : List.of();
-        ContinuousTesting testing = null;
-        TestRequestFile requests = null;
-        if (testsOn) {
-            Path results = buildDirPath().resolve(TestResultsFile.FILE_NAME);
-            sysProps.put(TestResultsFile.PROPERTY, results.toAbsolutePath().toString());
-            Map<String, String> testProps = new LinkedHashMap<>();
-            if (devs != null) {
-                devs.foldInto(testProps);
-            }
-            ContinuousTesting started = ContinuousTesting.forProject(projectDir, buildDirPath(), testProps,
-                    result -> getLog().info(TestSummaryPrinter.headline(result)), getLog()::warn);
-            testing = started;
-            try {
-                requests = TestRequestFile.poll(results.resolveSibling(TestRequestFile.FILE_NAME), trigger -> {
-                    String outcome = started.request(trigger);
-                    if (!ContinuousTesting.QUEUED.equals(outcome)) {
-                        getLog().info("Tests: " + outcome);
-                    }
-                }, getLog()::warn);
-            } catch (IOException e) {
-                closeDevServices(devServicesRef);
-                throw new MojoExecutionException("Cannot watch the test request file", e);
-            }
-            getLog().info("Continuous testing: on, watching " + testWatch
-                    + " (-D" + CONTINUOUS_TESTING_KEY + "=false to turn it off)");
+    /**
+     * Continuous testing (#122): the test directories are watched too, the child's dev console learns where the
+     * results are, and every run gets the dev session's keys, so the tests use its containers.
+     */
+    private Testing startContinuousTesting(Path projectDir, Map<String, String> sysProps,
+            Function<String, Optional<String>> applicationFiles, DevServicesSession devs)
+            throws MojoExecutionException {
+        if (!continuousTestingEnabled(projectDir, applicationFiles)) {
+            return new Testing(null, null, List.of());
         }
-        final ContinuousTesting testingRef = testing;
-        final TestRequestFile requestsRef = requests;
+        List<Path> testWatch = parseDirs(projectDir, testWatchDirs);
+        Path results = buildDirPath().resolve(TestResultsFile.FILE_NAME);
+        sysProps.put(TestResultsFile.PROPERTY, results.toAbsolutePath().toString());
+        Map<String, String> testProps = new LinkedHashMap<>();
+        if (devs != null) {
+            devs.foldInto(testProps);
+        }
+        ContinuousTesting started = ContinuousTesting.forProject(projectDir, buildDirPath(), testProps,
+                result -> getLog().info(TestSummaryPrinter.headline(result)), getLog()::warn);
+        TestRequestFile requests;
+        try {
+            requests = TestRequestFile.poll(results.resolveSibling(TestRequestFile.FILE_NAME), trigger -> {
+                String outcome = started.request(trigger);
+                if (!ContinuousTesting.QUEUED.equals(outcome)) {
+                    getLog().info("Tests: " + outcome);
+                }
+            }, getLog()::warn);
+        } catch (IOException e) {
+            closeDevServices(devs);
+            throw new MojoExecutionException("Cannot watch the test request file", e);
+        }
+        getLog().info("Continuous testing: on, watching " + testWatch
+                + " (-D" + CONTINUOUS_TESTING_KEY + "=false to turn it off)");
+        return new Testing(started, requests, testWatch);
+    }
 
+    /** Starts the child, then reloads it on every source change until the watcher closes or Ctrl+C. */
+    private void runSession(ChildLaunch launch, List<Path> watch, Testing testing, DevServicesSession devs,
+            Path reloadFile, boolean inJvmReload) throws MojoExecutionException {
         // The atomic reference lets the shutdown hook (running on a separate
         // thread) see the latest spawned child, no matter how many reload
         // cycles we have been through.
         AtomicReference<ChildJvm> currentChild = new AtomicReference<>();
-        Thread mainThread = Thread.currentThread();
-
-        Thread hook = new Thread(() -> {
-            mainThread.interrupt();
-            closeTesting(testingRef, requestsRef);
-            ChildJvm c = currentChild.get();
-            if (c != null) {
-                try {
-                    c.stop(Duration.ofMillis(gracePeriodMillis));
-                } catch (InterruptedException ignored) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-            closeDevServices(devServicesRef);
-        }, "vidocq-dev-shutdown");
+        Thread hook = shutdownHook(Thread.currentThread(), testing, currentChild, devs);
         Runtime.getRuntime().addShutdownHook(hook);
 
-        RecompileRunner recompile = new RecompileRunner(projectDir);
-        ChildLaunch launch = new ChildLaunch(modulePath, appPath, jvmArgs, sysProps, projectDir);
-
-        try (SourceWatcher watcher = SourceWatcher.on(watch, testWatch, Duration.ofMillis(debounceMillis))) {
+        RecompileRunner recompile = new RecompileRunner(launch.projectDir());
+        try (SourceWatcher watcher = SourceWatcher.on(watch, testing.watch(), Duration.ofMillis(debounceMillis))) {
             ChildJvm child = newChild(launch);
             long pid = child.start();
             currentChild.set(child);
             getLog().info("Child JVM started, pid=" + pid + ". Listening for changes (Ctrl+C to stop).");
-            if (testingRef != null) {
-                // The first run, once the first boot completed (spec §7: the panel shows a result at once).
-                testingRef.start();
-                testingRef.changed(Trigger.RUN_ALL, inJvmReload
-                        ? ReloadAck.gate(reloadFile, ReloadAck.stamp(reloadFile), RELOAD_ACK_TIMEOUT,
-                                child::isAlive, getLog()::warn)
-                        : TestControl.ReadyGate.NOW);
-            }
+            startFirstTestRun(testing.testing(), child, reloadFile, inJvmReload);
 
             while (!Thread.currentThread().isInterrupted()) {
                 SourceWatcher.Change change = watcher.awaitChanges();
                 if (change == null) {
                     break; // watcher closed
                 }
-                onChange(change, testingRef,
+                onChange(change, testing.testing(),
                         () -> recompileAndReload(recompile, launch, currentChild, reloadFile, inJvmReload));
             }
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             getLog().info("Dev mode interrupted — shutting down.");
         } catch (IOException e) {
             throw new MojoExecutionException("Dev mode initialisation failed", e);
         } finally {
-            closeTesting(testingRef, requestsRef);
-            // The shutdown hook will have done it already on Ctrl+C, but if we
-            // fell through because the watcher closed normally we still need to
-            // tear the child down here.
-            ChildJvm c = currentChild.getAndSet(null);
-            if (c != null && c.isAlive()) {
+            endSession(testing, currentChild, devs, hook);
+        }
+    }
+
+    /** What Ctrl+C runs: stops the source loop, the tests, the child, then the dev services. */
+    private Thread shutdownHook(Thread mainThread, Testing testing, AtomicReference<ChildJvm> currentChild,
+            DevServicesSession devs) {
+        return new Thread(() -> {
+            mainThread.interrupt();
+            closeTesting(testing.testing(), testing.requests());
+            ChildJvm c = currentChild.get();
+            if (c != null) {
                 try {
                     c.stop(Duration.ofMillis(gracePeriodMillis));
-                } catch (InterruptedException ignored) {
+                } catch (InterruptedException _) {
                     Thread.currentThread().interrupt();
                 }
             }
-            // Stop the dev-mode containers (idempotent — the hook may already have run on Ctrl+C).
-            closeDevServices(devServicesRef);
-            // Avoid IllegalStateException if the JVM is mid-shutdown.
+            closeDevServices(devs);
+        }, "vidocq-dev-shutdown");
+    }
+
+    /** The first run, once the first boot completed (spec §7: the panel shows a result at once). */
+    private void startFirstTestRun(ContinuousTesting testing, ChildJvm child, Path reloadFile, boolean inJvmReload)
+            throws IOException {
+        if (testing == null) {
+            return;
+        }
+        testing.start();
+        testing.changed(Trigger.RUN_ALL, inJvmReload
+                ? ReloadAck.gate(reloadFile, ReloadAck.stamp(reloadFile), RELOAD_ACK_TIMEOUT,
+                        child::isAlive, getLog()::warn)
+                : TestControl.ReadyGate.NOW);
+    }
+
+    /** Ends the session, whether the watcher closed or Ctrl+C: what the shutdown hook may already have done. */
+    private void endSession(Testing testing, AtomicReference<ChildJvm> currentChild, DevServicesSession devs,
+            Thread hook) {
+        closeTesting(testing.testing(), testing.requests());
+        // The shutdown hook will have done it already on Ctrl+C, but if we
+        // fell through because the watcher closed normally we still need to
+        // tear the child down here.
+        ChildJvm c = currentChild.getAndSet(null);
+        if (c != null && c.isAlive()) {
             try {
-                Runtime.getRuntime().removeShutdownHook(hook);
-            } catch (IllegalStateException ignored) {
-                // shutdown already in progress
+                c.stop(Duration.ofMillis(gracePeriodMillis));
+            } catch (InterruptedException _) {
+                Thread.currentThread().interrupt();
             }
+        }
+        // Stop the dev-mode containers (idempotent — the hook may already have run on Ctrl+C).
+        closeDevServices(devs);
+        // Avoid IllegalStateException if the JVM is mid-shutdown.
+        try {
+            Runtime.getRuntime().removeShutdownHook(hook);
+        } catch (IllegalStateException _) {
+            // shutdown already in progress
         }
     }
 
@@ -947,5 +1017,8 @@ public class VidocqDevMojo extends AbstractMojo {
         this.debugSuspend = suspend;
     }
     void setDebugHost(String debugHost) { this.debugHost = debugHost; }
+    void setWatchDirs(String watchDirs) { this.watchDirs = watchDirs; }
+    void setTestWatchDirs(String testWatchDirs) { this.testWatchDirs = testWatchDirs; }
+    void setHotReload(boolean hotReload) { this.hotReload = hotReload; }
     List<String> debugJvmArgs() { return buildJvmArgs(); }
 }

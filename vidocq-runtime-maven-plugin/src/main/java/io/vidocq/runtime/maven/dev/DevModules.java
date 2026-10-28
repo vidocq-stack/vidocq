@@ -119,55 +119,73 @@ final class DevModules {
         List<Path> added = new ArrayList<>();
         List<String> names = new ArrayList<>();
         for (Artifact artifact : projectArtifacts) {
-            if (artifact.getFile() == null) {
-                continue;
-            }
-            Optional<String> companion = companionOf(artifact.getFile().toPath(), warn);
-            if (companion.isEmpty()) {
-                continue;
-            }
-            String key = artifact.getGroupId() + ":" + companion.get();
-            if (onPath.contains(key)) {
-                continue;
-            }
-            // The base version: a remote snapshot resolves at its timestamp, and the companion has a build number
-            // of its own.
-            String coordinates = key + ":" + artifact.getBaseVersion();
-            List<Resolved> resolved;
-            try {
-                resolved = resolver.resolve(coordinates);
-            } catch (Exception unresolvable) {
-                warn.accept(DEV_TOOLS + coordinates + " not found (" + unresolvable.getClass().getSimpleName()
-                        + "); the " + artifact.getArtifactId() + " panel shows its boot facts only. Run the build"
-                        + " once online, or mvn -U");
-                continue;
-            }
-            List<Resolved> toAdd = new ArrayList<>();
-            String foreign = null;
-            for (Resolved jar : resolved) {
-                if (onPath.contains(jar.key())) {
-                    continue;
-                }
-                if (!DevConsoleJars.SPI_KEY.equals(jar.key()) && !DevOnlyJars.isDevOnly(jar.file())) {
-                    foreign = jar.key();
-                    break;
-                }
-                toAdd.add(jar);
-            }
-            if (foreign != null) {
-                warn.accept(DEV_TOOLS + coordinates + " needs " + foreign
-                        + ", which the application does not have; its panel shows its boot facts only");
-                continue;
-            }
-            for (Resolved jar : toAdd) {
-                onPath.add(jar.key());
-                added.add(jar.file());
-            }
-            names.add(companion.get());
+            addCompanion(artifact, resolver, warn, onPath, added).ifPresent(names::add);
         }
         if (!names.isEmpty()) {
             info.accept(DEV_TOOLS + String.join(", ", names));
         }
         return added;
+    }
+
+    /**
+     * Adds to {@code added} the jars of the companion of {@code artifact} that are not {@code onPath} yet.
+     *
+     * @return the companion's artifactId, or empty when it has none or it cannot be added
+     */
+    private static Optional<String> addCompanion(Artifact artifact, Resolver resolver, Consumer<String> warn,
+            Set<String> onPath, List<Path> added) {
+        if (artifact.getFile() == null) {
+            return Optional.empty();
+        }
+        Optional<String> companion = companionOf(artifact.getFile().toPath(), warn);
+        if (companion.isEmpty()) {
+            return companion;
+        }
+        String key = artifact.getGroupId() + ":" + companion.get();
+        if (onPath.contains(key)) {
+            return Optional.empty();
+        }
+        // The base version: a remote snapshot resolves at its timestamp, and the companion has a build number
+        // of its own.
+        String coordinates = key + ":" + artifact.getBaseVersion();
+        List<Resolved> resolved;
+        try {
+            resolved = resolver.resolve(coordinates);
+        } catch (Exception unresolvable) {
+            warn.accept(DEV_TOOLS + coordinates + " not found (" + unresolvable.getClass().getSimpleName()
+                    + "); the " + artifact.getArtifactId() + " panel shows its boot facts only. Run the build"
+                    + " once online, or mvn -U");
+            return Optional.empty();
+        }
+        List<Resolved> toAdd = new ArrayList<>();
+        String foreign = foreignJar(resolved, onPath, toAdd);
+        if (foreign != null) {
+            warn.accept(DEV_TOOLS + coordinates + " needs " + foreign
+                    + ", which the application does not have; its panel shows its boot facts only");
+            return Optional.empty();
+        }
+        for (Resolved jar : toAdd) {
+            onPath.add(jar.key());
+            added.add(jar.file());
+        }
+        return companion;
+    }
+
+    /**
+     * Collects in {@code toAdd} the resolved jars not {@code onPath} yet, up to the first one that is neither the SPI
+     * nor dev-only.
+     *
+     * @return the key of that foreign jar, or {@code null} when there is none
+     */
+    private static String foreignJar(List<Resolved> resolved, Set<String> onPath, List<Resolved> toAdd) {
+        for (Resolved jar : resolved) {
+            if (!onPath.contains(jar.key())) {
+                if (!DevConsoleJars.SPI_KEY.equals(jar.key()) && !DevOnlyJars.isDevOnly(jar.file())) {
+                    return jar.key();
+                }
+                toAdd.add(jar);
+            }
+        }
+        return null;
     }
 }

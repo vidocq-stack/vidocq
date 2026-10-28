@@ -448,7 +448,8 @@ class VidocqRunMojoTest {
 
     /** A child JVM that is a real JVM, and whose exit code the arguments choose. */
     private static ChildJvm javac(Path tmp, String argument) {
-        return ChildJvm.of(List.of(tmp), List.of(), "jdk.compiler", "com.sun.tools.javac.Main",
+        return ChildJvm.of(
+                new ChildJvm.Application(List.of(tmp), List.of(), "jdk.compiler", "com.sun.tools.javac.Main"),
                 List.of(), Map.of(), tmp, List.of(argument));
     }
 

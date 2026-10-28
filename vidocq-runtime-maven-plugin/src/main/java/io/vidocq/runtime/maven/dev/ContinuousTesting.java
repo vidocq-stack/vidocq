@@ -100,19 +100,25 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
     private Thread worker;
 
     /**
+     * Where the results go: the results file, and the log file as the results show it, such as
+     * {@code target/vidocq-dev-tests.log}.
+     */
+    record Results(Path file, String log) {}
+
+    /**
      * @param reports        the reports of the run that started at the given instant
      * @param compilerFailed whether the log of the run that just ended shows a compiler failure (#138)
-     * @param log        the log file as the results show it, such as {@code target/vidocq-dev-tests.log}
+     * @param results        the results file and the log file
      * @param onResult   called on the worker with each run's outcome, never with {@code running}
      */
     ContinuousTesting(Launcher launcher, Function<Instant, SurefireReports.Reports> reports,
-            BooleanSupplier compilerFailed, Path resultsFile, String log, Consumer<TestResults> onResult,
+            BooleanSupplier compilerFailed, Results results, Consumer<TestResults> onResult,
             Consumer<String> warn, Clock clock) {
         this.launcher = launcher;
         this.reports = reports;
         this.compilerFailed = compilerFailed;
-        this.resultsFile = resultsFile;
-        this.log = log;
+        this.resultsFile = results.file();
+        this.log = results.log();
         this.onResult = onResult;
         this.warn = warn;
         this.clock = clock;
@@ -132,7 +138,8 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
         TestRunner runner = new TestRunner(projectDir, RecompileRunner.detectMavenExecutable(projectDir),
                 testProperties, logFile, reportsDir);
         return new ContinuousTesting(runner, since -> SurefireReports.read(reportsDir, since),
-                () -> TestRunner.compilationFailed(logFile), buildDir.resolve(TestResultsFile.FILE_NAME), shown(projectDir, logFile), onResult, warn,
+                () -> TestRunner.compilationFailed(logFile),
+                new Results(buildDir.resolve(TestResultsFile.FILE_NAME), shown(projectDir, logFile)), onResult, warn,
                 Clock.systemUTC());
     }
 
@@ -276,43 +283,61 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
     }
 
     private void work() {
-        while (true) {
-            Pending next;
-            long taken;
-            synchronized (lock) {
-                while ((pending == null || held && !pending.change()) && !closed) {
-                    try {
-                        lock.wait();
-                    } catch (InterruptedException stopping) {
-                        Thread.currentThread().interrupt();
-                        return;
-                    }
-                }
-                if (closed) {
-                    return;
-                }
-                next = pending;
-                pending = null;
-                taken = generation;
-                waiting = next.change() ? next : null;
-            }
-            try {
-                boolean open = next.gate().await(() -> abandoned(taken));
-                synchronized (lock) {
-                    if (waiting == next) {
-                        waiting = null;
-                    }
-                }
-                if (open) {
-                    runOnce(next.trigger(), taken);
-                }
-            } catch (InterruptedException stopping) {
-                Thread.currentThread().interrupt();
+        for (Taken taken = take(); taken != null; taken = take()) {
+            if (!runTaken(taken)) {
                 return;
-            } catch (RuntimeException failed) {
-                warn.accept("Tests: the run failed: " + failed.getClass().getName());
             }
         }
+    }
+
+    /** The run the worker took, and the generation it was taken under. */
+    private record Taken(Pending next, long generation) {}
+
+    /** Waits for the next run; {@code null} once closed, or when the worker is interrupted. */
+    private Taken take() {
+        synchronized (lock) {
+            while ((pending == null || held && !pending.change()) && !closed) {
+                try {
+                    lock.wait();
+                } catch (InterruptedException _) {
+                    Thread.currentThread().interrupt();
+                    return null;
+                }
+            }
+            if (closed) {
+                return null;
+            }
+            Pending next = pending;
+            pending = null;
+            waiting = next.change() ? next : null;
+            return new Taken(next, generation);
+        }
+    }
+
+    /**
+     * Waits for the taken run's gate, then runs it unless it was abandoned meanwhile.
+     *
+     * @return {@code false} when the worker was interrupted and must stop
+     */
+    private boolean runTaken(Taken taken) {
+        Pending next = taken.next();
+        try {
+            boolean open = next.gate().await(() -> abandoned(taken.generation()));
+            synchronized (lock) {
+                if (waiting == next) {
+                    waiting = null;
+                }
+            }
+            if (open) {
+                runOnce(next.trigger(), taken.generation());
+            }
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (RuntimeException failed) {
+            warn.accept("Tests: the run failed: " + failed.getClass().getName());
+        }
+        return true;
     }
 
     private void runOnce(Trigger trigger, long taken) throws InterruptedException {
@@ -336,11 +361,7 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
         synchronized (lock) {
             abandonedBeforeLaunch = closed || generation != taken;
             if (!abandonedBeforeLaunch) {
-                try {
-                    launched = launcher.launch(tests);
-                } catch (IOException cannotStart) {
-                    warn.accept("Tests: cannot start Maven: " + cannotStart.getMessage());
-                }
+                launched = launch(tests);
                 current = launched;
             }
         }
@@ -348,6 +369,22 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
             write(TestResults.cancelled(trigger, startedAt, 0, log, previous));
             return;
         }
+        finish(trigger, tests, startedAt, t0, launched, previous);
+    }
+
+    /** Guarded by lock: starts the run, or warns and returns {@code null} when Maven cannot start. */
+    private Launched launch(List<String> tests) {
+        try {
+            return launcher.launch(tests);
+        } catch (IOException cannotStart) {
+            warn.accept("Tests: cannot start Maven: " + cannotStart.getMessage());
+            return null;
+        }
+    }
+
+    /** Waits for the launched run (none when Maven could not start), then records and publishes its outcome. */
+    private void finish(Trigger trigger, List<String> tests, Instant startedAt, long t0, Launched launched,
+            TestResults previous) throws InterruptedException {
         int exit = launched == null ? -1 : launched.waitFor();
         synchronized (lock) {
             current = null;
@@ -370,11 +407,16 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
             // -Dtest matched none of the failed tests, whose names it cannot express (a @DisplayName, a phrased
             // report): run them all rather than lose the failures (#138).
             warn.accept("Tests: the rerun of " + tests.size() + " failed test(s) matched no test; running every test");
-            synchronized (lock) {
-                if (pending == null && !closed) {
-                    pending = new Pending(Trigger.RUN_ALL, ReadyGate.NOW, false);
-                    lock.notifyAll();
-                }
+            queueRunAll();
+        }
+    }
+
+    /** Queues a run of every test, unless a run is already pending. */
+    private void queueRunAll() {
+        synchronized (lock) {
+            if (pending == null && !closed) {
+                pending = new Pending(Trigger.RUN_ALL, ReadyGate.NOW, false);
+                lock.notifyAll();
             }
         }
     }

@@ -110,7 +110,8 @@ class ContinuousTestingTest {
             FakeRun run = new FakeRun(tests);
             launches.add(run);
             return run;
-        }, since -> reports.get(), () -> true, resultsFile, "target/vidocq-dev-tests.log", results::add, warnings::add,
+        }, since -> reports.get(), () -> true,
+                new ContinuousTesting.Results(resultsFile, "target/vidocq-dev-tests.log"), results::add, warnings::add,
                 Clock.systemUTC());
         testing.start();
     }
@@ -272,7 +273,8 @@ class ContinuousTestingTest {
         testing.close();
         testing = new ContinuousTesting(tests -> {
             throw new java.io.IOException("mvn: not found");
-        }, since -> SurefireReports.Reports.NONE, () -> false, dir.resolve("r.json"), "log", results::add, warnings::add,
+        }, since -> SurefireReports.Reports.NONE, () -> false,
+                new ContinuousTesting.Results(dir.resolve("r.json"), "log"), results::add, warnings::add,
                 Clock.systemUTC());
         testing.start();
 

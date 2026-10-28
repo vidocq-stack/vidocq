@@ -73,21 +73,29 @@ public final class ChildJvm {
                               List<String> extraJvmArgs,
                               Map<String, String> systemProps,
                               Path workingDir) {
-        return of(modulePath, appPath, mainModule, mainClass, extraJvmArgs, systemProps, workingDir, List.of());
+        return of(new Application(modulePath, appPath, mainModule, mainClass), extraJvmArgs, systemProps, workingDir,
+                List.of());
     }
+
+    /**
+     * What the child runs: the module path, the application path ({@code null} or empty for the legacy shape), the
+     * main module and the main class ({@code null} or blank for the module's own).
+     */
+    public record Application(List<Path> modulePath, List<Path> appPath, String mainModule, String mainClass) {}
 
     /**
      * Same launch, with {@code appArgs} appended after the main module reference: they reach the
      * application's {@code main(String[])} exactly as they would on a command line.
      */
-    public static ChildJvm of(List<Path> modulePath,
-                              List<Path> appPath,
-                              String mainModule,
-                              String mainClass,
+    public static ChildJvm of(Application application,
                               List<String> extraJvmArgs,
                               Map<String, String> systemProps,
                               Path workingDir,
                               List<String> appArgs) {
+        List<Path> modulePath = application.modulePath();
+        List<Path> appPath = application.appPath();
+        String mainModule = application.mainModule();
+        String mainClass = application.mainClass();
         boolean layerMode = appPath != null && !appPath.isEmpty();
         List<String> command = new ArrayList<>();
         command.add(JAVA_BIN);

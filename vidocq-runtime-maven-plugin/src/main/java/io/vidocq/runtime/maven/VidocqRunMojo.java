@@ -283,8 +283,8 @@ public class VidocqRunMojo extends AbstractMojo {
         logDebugAgent();
 
         try {
-            await(ChildJvm.of(modulePath, appPath, mainModule, mainClass, jvmArgs, systemProperties,
-                    projectDir, splitArgs(appArgs)));
+            await(ChildJvm.of(new ChildJvm.Application(modulePath, appPath, mainModule, mainClass), jvmArgs,
+                    systemProperties, projectDir, splitArgs(appArgs)));
         } finally {
             closeDevServices();
         }
