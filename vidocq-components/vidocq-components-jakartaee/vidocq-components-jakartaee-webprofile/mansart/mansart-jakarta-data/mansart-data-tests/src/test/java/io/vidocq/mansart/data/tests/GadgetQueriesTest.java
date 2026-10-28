@@ -60,6 +60,8 @@ class GadgetQueriesTest {
     private static final String TOOLS = "tools";
     private static final String TOYS = "toys";
     private static final String NAME = "name";
+    private static final String FAN = "Fan";
+    private static final String ZED = "Zed";
 
     private static DataSource dataSource;
     private static MansartData mansartData;
@@ -147,7 +149,7 @@ class GadgetQueriesTest {
         assertThat(repo.countByNameIn(List.of(ANVIL, BOLT))).isEqualTo(2);
         assertThat(repo.countByNameIn(List.of())).isZero();
         assertThat(repo.existsByNameIn(List.of(BOLT))).isTrue();
-        assertThat(repo.existsByNameIn(List.of("Zed"))).isFalse();
+        assertThat(repo.existsByNameIn(List.of(ZED))).isFalse();
         assertThat(repo.existsByNameIn(List.of())).isFalse();
         assertThat(repo.deleteByNameIn(List.of())).isZero();
         assertThat(repo.deleteByNameIn(List.of(ANVIL))).isEqualTo(1);
@@ -222,7 +224,7 @@ class GadgetQueriesTest {
         assertThat(repo.exactlyNamed(ANVIL).getPrice()).isEqualTo(30.0);
         assertThat(repo.countByFlag(true)).isEqualTo(3);
         assertThat(repo.nameTaken(BOLT)).isTrue();
-        assertThat(repo.nameTaken("Zed")).isFalse();
+        assertThat(repo.nameTaken(ZED)).isFalse();
         assertThat(repo.countActive(false)).isEqualTo(2);
 
         Page<Gadget> page = repo.activePage(true, PageRequest.ofSize(2));
@@ -239,7 +241,7 @@ class GadgetQueriesTest {
         assertThat(repo.activeNames(false)).containsExactly(COMPASS, EASEL);
         assertThat(repo.namesInStockAbove(4)).containsExactly(ANVIL, BOLT, EASEL);
         assertThat(repo.categoryOf(DRONE)).contains(TOYS);
-        assertThat(repo.categoryOf("Zed")).isEmpty();
+        assertThat(repo.categoryOf(ZED)).isEmpty();
         assertThat(repo.stockOf(BOLT)).isEqualTo(500);
         assertThat(repo.priceOf(DRONE)).isEqualTo(250.0);
         assertThat(repo.nameAndStock(true)).containsExactly(
@@ -275,7 +277,7 @@ class GadgetQueriesTest {
         assertThat(names(repo.inCategory(TOOLS))).containsExactly(BOLT, ANVIL);
         assertThat(names(repo.allByActivityThenPrice())).containsExactly(EASEL, COMPASS, DRONE, ANVIL, BOLT);
         assertThat(repo.named(EASEL)).get().extracting(Gadget::getStock).isEqualTo(12);
-        assertThat(repo.named("Zed")).isEmpty();
+        assertThat(repo.named(ZED)).isEmpty();
     }
 
     /* ---- lifecycle and built-in methods ---- */
@@ -283,18 +285,18 @@ class GadgetQueriesTest {
     @ParameterizedTest
     @MethodSource("repositories")
     void lifecycleAnnotations(GadgetRepository repo) {
-        Gadget fan = repo.add(new Gadget("Fan", TOYS, 20.0, 4, true, null));
+        Gadget fan = repo.add(new Gadget(FAN, TOYS, 20.0, 4, true, null));
         assertThat(fan.getId()).isNotNull();
         assertThat(repo.addAll(List.of(new Gadget("Gong", TOYS, 9.0, 1, true, null))))
                 .singleElement().extracting(Gadget::getId).isNotNull();
 
         fan.setStock(40);
         repo.store(fan);
-        assertThat(repo.stockOf("Fan")).isEqualTo(40);
+        assertThat(repo.stockOf(FAN)).isEqualTo(40);
 
         fan.setPrice(25.0);
         assertThat(repo.change(fan).getPrice()).isEqualTo(25.0);
-        assertThat(repo.priceOf("Fan")).isEqualTo(25.0);
+        assertThat(repo.priceOf(FAN)).isEqualTo(25.0);
 
         repo.drop(fan);
         assertThat(repo.findById(fan.getId())).isEmpty();

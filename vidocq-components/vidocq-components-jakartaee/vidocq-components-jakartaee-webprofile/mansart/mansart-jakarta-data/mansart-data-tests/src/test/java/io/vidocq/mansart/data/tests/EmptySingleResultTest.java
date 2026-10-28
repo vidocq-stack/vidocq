@@ -42,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class EmptySingleResultTest {
 
+    private static final String SOLO = "Solo";
     private static DataSource dataSource;
     private static MansartData generatedData;
     private static MansartData runtimeData;
@@ -72,17 +73,17 @@ class EmptySingleResultTest {
                     + ")");
         }
         Author a = new Author();
-        a.setName("Solo");
+        a.setName(SOLO);
         generatedData.repository(AuthorRepository.class).save(a);
     }
 
     @ParameterizedTest
     @MethodSource("repositories")
     void singleResultsAreReturned(AuthorRepository repo) {
-        Author solo = repo.jdqlOneNamed("Solo");
+        Author solo = repo.jdqlOneNamed(SOLO);
 
-        assertThat(repo.findByIdGreaterThan(solo.getId() - 1)).extracting(Author::getName).isEqualTo("Solo");
-        assertThat(repo.jdqlNameOfId(solo.getId())).isEqualTo("Solo");
+        assertThat(repo.findByIdGreaterThan(solo.getId() - 1)).extracting(Author::getName).isEqualTo(SOLO);
+        assertThat(repo.jdqlNameOfId(solo.getId())).isEqualTo(SOLO);
     }
 
     @ParameterizedTest
@@ -97,9 +98,9 @@ class EmptySingleResultTest {
     @ParameterizedTest
     @MethodSource("repositories")
     void projectsToPrimitives(AuthorRepository repo) {
-        long id = repo.jdqlOneNamed("Solo").getId();
+        long id = repo.jdqlOneNamed(SOLO).getId();
 
-        assertThat(repo.jdqlIdOf("Solo")).isEqualTo(id);
+        assertThat(repo.jdqlIdOf(SOLO)).isEqualTo(id);
         assertThat(repo.jdqlAllIds()).containsExactly(id);
     }
 }

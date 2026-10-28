@@ -47,6 +47,7 @@ import java.util.stream.Stream;
  */
 final class InProcessCompilation {
 
+    private static final String JAVA = ".java";
     /** The outcome of one compilation. */
     record Result(boolean success, List<Diagnostic<? extends JavaFileObject>> diagnostics, Path classes,
                   Path generated) {
@@ -69,7 +70,7 @@ final class InProcessCompilation {
         /** The text of a generated source, by fully qualified type name. */
         String generatedSource(String fqn) {
             try {
-                return Files.readString(generated.resolve(fqn.replace('.', '/') + ".java"), StandardCharsets.UTF_8);
+                return Files.readString(generated.resolve(fqn.replace('.', '/') + JAVA), StandardCharsets.UTF_8);
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -83,7 +84,7 @@ final class InProcessCompilation {
     static Result compileTree(Path sourceRoot, Path out) throws IOException {
         List<Path> sources;
         try (Stream<Path> walk = Files.walk(sourceRoot)) {
-            sources = walk.filter(p -> p.toString().endsWith(".java")).sorted().toList();
+            sources = walk.filter(p -> p.toString().endsWith(JAVA)).sorted().toList();
         }
         return compile(sources, out);
     }
@@ -92,7 +93,7 @@ final class InProcessCompilation {
     static Result compileSources(Path out, String... fqnAndSourcePairs) throws IOException {
         List<Path> sources = new ArrayList<>();
         for (int i = 0; i < fqnAndSourcePairs.length; i += 2) {
-            Path file = out.resolve("src").resolve(fqnAndSourcePairs[i].replace('.', '/') + ".java");
+            Path file = out.resolve("src").resolve(fqnAndSourcePairs[i].replace('.', '/') + JAVA);
             Files.createDirectories(file.getParent());
             Files.writeString(file, fqnAndSourcePairs[i + 1], StandardCharsets.UTF_8);
             sources.add(file);
