@@ -32,14 +32,17 @@ public class MeteredService {
 
     @Counted
     public MeteredService() {
+        // metric target only
     }
 
     @Timed(name = "t1", tags = {"region=eu"}, description = "d1", unit = "milliseconds")
     public void process() {
+        // metric target only
     }
 
     @Counted(absolute = true, name = "hits")
     public void hit() {
+        // metric target only
     }
 
     @Gauge(unit = "celsius", tags = {"room=lab"})

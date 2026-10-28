@@ -25,6 +25,7 @@ import io.vidocq.dirac.cdi.internal.MetricRegistryProducerBean;
 import io.vidocq.dirac.cdi.internal.TimedInterceptor;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.eclipse.microprofile.metrics.MetricID;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.jboss.weld.environment.se.Weld;
 import org.jboss.weld.environment.se.WeldContainer;
@@ -78,6 +79,6 @@ class TwoContainersOneJvmTest {
 
     private static Set<String> applicationGauges(WeldContainer container) {
         MetricRegistry registry = container.select(MetricRegistryProducerBean.class).get().registry(MetricRegistry.APPLICATION_SCOPE);
-        return registry.getGauges().keySet().stream().map(id -> id.getName()).collect(Collectors.toSet());
+        return registry.getGauges().keySet().stream().map(MetricID::getName).collect(Collectors.toSet());
     }
 }

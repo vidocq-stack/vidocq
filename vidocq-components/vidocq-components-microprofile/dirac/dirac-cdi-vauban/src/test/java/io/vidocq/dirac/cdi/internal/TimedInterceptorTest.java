@@ -49,10 +49,7 @@ class TimedInterceptorTest {
         var method = SampleService.class.getDeclaredMethod("work");
         interceptor.preRegisterTimers(SampleService.class);
 
-        var result = interceptor.aroundInvoke(new FakeInvocationContext(target, method, new Object[0], () -> {
-            Thread.sleep(2);
-            return "ok";
-        }));
+        var result = interceptor.aroundInvoke(new FakeInvocationContext(target, method, new Object[0], () -> "ok"));
 
         assertEquals("ok", result);
         var metricId = new MetricID(MetricRegistry.name(SampleService.class, "work"), new Tag("kind", "sync"));
@@ -94,8 +91,8 @@ class TimedInterceptorTest {
         var target = new MalformedTagService();
         var method = MalformedTagService.class.getDeclaredMethod("boom");
 
-        assertThrows(DiracException.class,
-                () -> interceptor.aroundInvoke(new FakeInvocationContext(target, method, new Object[0], () -> null)));
+        var context = new FakeInvocationContext(target, method, new Object[0], () -> null);
+        assertThrows(DiracException.class, () -> interceptor.aroundInvoke(context));
     }
 
     static final class FakeInvocationContext implements InvocationContext {
@@ -168,18 +165,21 @@ class TimedInterceptorTest {
     static class AbsoluteService {
         @Timed(name = "absolute.timing", absolute = true)
         void ping() {
+            // metric target only
         }
     }
 
     static class MalformedTagService {
         @Timed(tags = {"missing-separator"})
         void boom() {
+            // metric target only
         }
     }
 
     static class VendorScopedService {
         @Timed(name = "vendor.timing", absolute = true, scope = MetricRegistry.VENDOR_SCOPE)
         void emit() {
+            // metric target only
         }
     }
 }

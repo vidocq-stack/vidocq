@@ -78,7 +78,8 @@ class TimerImplTest {
     void rejectsNegativeDuration() {
         var timer = new TimerImpl();
 
-        assertThrows(IllegalArgumentException.class, () -> timer.update(Duration.ofNanos(-1)));
+        var negative = Duration.ofNanos(-1);
+        assertThrows(IllegalArgumentException.class, () -> timer.update(negative));
     }
 
     @Test

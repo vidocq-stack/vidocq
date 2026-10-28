@@ -43,7 +43,8 @@ class MetricsCompanionTest {
         var spec = new MetricsCompanion.MetricSpec("a.b.count", "desc", "none", tags, "application");
         tags.clear();
         assertEquals(List.of("region=eu"), spec.tags());
-        assertThrows(UnsupportedOperationException.class, () -> spec.tags().add("x=y"));
+        var specTags = spec.tags();
+        assertThrows(UnsupportedOperationException.class, () -> specTags.add("x=y"));
     }
 
     @Test

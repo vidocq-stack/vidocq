@@ -25,7 +25,6 @@ import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 

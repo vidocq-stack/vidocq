@@ -88,8 +88,8 @@ class CountedInterceptorTest {
         var target = new MalformedTagService();
         var method = MalformedTagService.class.getDeclaredMethod("boom");
 
-        assertThrows(DiracException.class,
-                () -> interceptor.aroundInvoke(new FakeInvocationContext(target, method, new Object[0], () -> null)));
+        var context = new FakeInvocationContext(target, method, new Object[0], () -> null);
+        assertThrows(DiracException.class, () -> interceptor.aroundInvoke(context));
     }
 
     static final class FakeInvocationContext implements InvocationContext {
@@ -162,18 +162,21 @@ class CountedInterceptorTest {
     static class AbsoluteService {
         @Counted(name = "absolute.calls", absolute = true)
         void ping() {
+            // metric target only
         }
     }
 
     static class MalformedTagService {
         @Counted(tags = {"missing-separator"})
         void boom() {
+            // metric target only
         }
     }
 
     static class VendorScopedService {
         @Counted(name = "vendor.calls", absolute = true, scope = MetricRegistry.VENDOR_SCOPE)
         void emit() {
+            // metric target only
         }
     }
 }

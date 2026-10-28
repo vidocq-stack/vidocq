@@ -31,6 +31,7 @@ public class MeteredService {
 
     @Counted(name = "orders.placed", absolute = true)
     public void placeOrder() {
+        // metric target only
     }
 
     @Timed(name = "orders.priced", absolute = true)

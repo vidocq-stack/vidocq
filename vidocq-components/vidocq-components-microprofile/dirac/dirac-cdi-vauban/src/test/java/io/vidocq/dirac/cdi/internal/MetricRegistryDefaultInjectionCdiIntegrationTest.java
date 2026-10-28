@@ -19,13 +19,9 @@
  */
 package io.vidocq.dirac.cdi.internal;
 
-import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.se.SeContainer;
 import jakarta.enterprise.inject.se.SeContainerInitializer;
-import jakarta.inject.Inject;
-import org.eclipse.microprofile.metrics.Gauge;
 import org.eclipse.microprofile.metrics.MetricRegistry;
-import org.eclipse.microprofile.metrics.annotation.Metric;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

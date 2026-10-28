@@ -154,7 +154,9 @@ class MetricRegistryImplTest {
 
         var counters = registry.getCounters();
         assertEquals(new ArrayList<>(Set.of(alpha, beta)).stream().sorted().toList(), new ArrayList<>(counters.keySet()));
-        assertThrows(UnsupportedOperationException.class, () -> counters.put(new MetricID("gamma.total"), new CounterImpl()));
+        var gammaId = new MetricID("gamma.total");
+        var gamma = new CounterImpl();
+        assertThrows(UnsupportedOperationException.class, () -> counters.put(gammaId, gamma));
     }
 
     @Test

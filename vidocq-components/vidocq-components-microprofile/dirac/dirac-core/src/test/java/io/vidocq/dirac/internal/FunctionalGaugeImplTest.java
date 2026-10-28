@@ -46,7 +46,7 @@ class FunctionalGaugeImplTest {
         var counter = new AtomicInteger(40);
         var gauge = new FunctionalGaugeImpl<Number>(
                 counter::incrementAndGet,
-                bean -> (Integer) bean);
+                Integer.class::cast);
         assertEquals(41, gauge.getValue());
         assertEquals(42, gauge.getValue(), "supplier must be consulted on every read");
     }

@@ -57,22 +57,26 @@ class DiracExtensionTest {
 
     @Test
     void rejectsGaugeWithParameters() {
-        assertThrows(DiracException.class, () -> new DiscoveredMetrics().scanGaugeMethods(InvalidParamGaugeService.class));
+        var discovered = new DiscoveredMetrics();
+        assertThrows(DiracException.class, () -> discovered.scanGaugeMethods(InvalidParamGaugeService.class));
     }
 
     @Test
     void rejectsGaugeReturningVoid() {
-        assertThrows(DiracException.class, () -> new DiscoveredMetrics().scanGaugeMethods(InvalidVoidGaugeService.class));
+        var discovered = new DiscoveredMetrics();
+        assertThrows(DiracException.class, () -> discovered.scanGaugeMethods(InvalidVoidGaugeService.class));
     }
 
     @Test
     void rejectsGaugeReturningNonNumericType() {
-        assertThrows(DiracException.class, () -> new DiscoveredMetrics().scanGaugeMethods(InvalidTypeGaugeService.class));
+        var discovered = new DiscoveredMetrics();
+        assertThrows(DiracException.class, () -> discovered.scanGaugeMethods(InvalidTypeGaugeService.class));
     }
 
     @Test
     void rejectsMalformedGaugeTags() {
-        assertThrows(DiracException.class, () -> new DiscoveredMetrics().scanGaugeMethods(InvalidTagGaugeService.class));
+        var discovered = new DiscoveredMetrics();
+        assertThrows(DiracException.class, () -> discovered.scanGaugeMethods(InvalidTagGaugeService.class));
     }
 
     /** DRC-007: the same metric discovered twice is kept once (records compare tag contents). */
@@ -167,6 +171,7 @@ class DiracExtensionTest {
     static class InvalidVoidGaugeService {
         @Gauge(unit = MetricUnits.NONE)
         void current() {
+            // invalid gauge: returns nothing
         }
     }
 
