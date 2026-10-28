@@ -123,15 +123,7 @@ public final class MansartTransactionsIntegrationExtension implements VidocqExte
                 DataSource ds = resolve(bm, DataSource.class, bean);
                 XADataSource xaDs = xaCapable(ds);
                 if (xaDs == null) continue;
-                try {
-                    XAConnection xaConnection = xaDs.getXAConnection();
-                    xaConnections.add(xaConnection);
-                    resources.add(xaConnection.getXAResource());
-                } catch (SQLException e) {
-                    LOG.log(System.Logger.Level.WARNING,
-                            "Recovery scan: cannot open an XAConnection on " + bean.getName()
-                                    + " — its branches stay in doubt", e);
-                }
+                openForRecovery(xaDs, bean.getName(), xaConnections, resources);
             }
             RecoveryReport report = tm.recover(resources.toArray(XAResource[]::new));
             if (report.committed().isEmpty() && report.rolledBack().isEmpty()
@@ -150,6 +142,23 @@ public final class MansartTransactionsIntegrationExtension implements VidocqExte
             for (XAConnection xaConnection : xaConnections) {
                 try { xaConnection.close(); } catch (SQLException _) { /* best effort */ }
             }
+        }
+    }
+
+    /**
+     * Opens an XAConnection on {@code xaDs}, added with its XAResource to the scan; when it cannot be opened, the
+     * branches of that data source stay in doubt, and the scan goes on.
+     */
+    static void openForRecovery(XADataSource xaDs, String beanName, List<XAConnection> xaConnections,
+                                List<XAResource> resources) {
+        try {
+            XAConnection xaConnection = xaDs.getXAConnection();
+            xaConnections.add(xaConnection);
+            resources.add(xaConnection.getXAResource());
+        } catch (SQLException e) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "Recovery scan: cannot open an XAConnection on " + beanName
+                            + " — its branches stay in doubt", e);
         }
     }
 
