@@ -54,7 +54,7 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
 
     private static final System.Logger LOG = System.getLogger(DevConsoleExtension.LOGGER_NAME);
     /** How a log line names a panel, its id following. */
-    private static final String PANEL = "Dev console panel '";
+    private static final String PANEL_PREFIX = "Dev console panel '";
 
     PanelEntry {
         charts = List.copyOf(charts);
@@ -121,7 +121,7 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
         try {
             panel.contribute(new ConsoleReportContext(mode), section);
         } catch (RuntimeException | LinkageError failed) {
-            LOG.log(System.Logger.Level.DEBUG, PANEL + id + "' failed to write its boot facts",
+            LOG.log(System.Logger.Level.DEBUG, PANEL_PREFIX + id + "' failed to write its boot facts",
                     failed);
         }
         return new PanelEntry(id, title, section.toSection(), panel, charts(panel, id),
@@ -147,7 +147,7 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
             List<Chart> charts = panel.charts();
             return charts == null ? List.of() : charts.stream().filter(Objects::nonNull).toList();
         } catch (RuntimeException | LinkageError failed) {
-            LOG.log(System.Logger.Level.DEBUG, PANEL + id + "' has no charts: its charts() failed",
+            LOG.log(System.Logger.Level.DEBUG, PANEL_PREFIX + id + "' has no charts: its charts() failed",
                     failed);
             return List.of();
         }
@@ -170,12 +170,12 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
             List<PanelAction> kept = declared.stream().filter(Objects::nonNull).filter(a -> ids.add(a.id()))
                     .limit(MAX_ACTIONS).toList();
             if (kept.size() < declared.size()) {
-                LOG.log(System.Logger.Level.DEBUG, PANEL + id + "' offers " + declared.size()
+                LOG.log(System.Logger.Level.DEBUG, PANEL_PREFIX + id + "' offers " + declared.size()
                         + " actions, the console keeps " + kept.size());
             }
             return kept;
         } catch (RuntimeException | LinkageError failed) {
-            LOG.log(System.Logger.Level.DEBUG, PANEL + id + "' has no actions: its actions() failed",
+            LOG.log(System.Logger.Level.DEBUG, PANEL_PREFIX + id + "' has no actions: its actions() failed",
                     failed);
             return List.of();
         }
@@ -198,14 +198,14 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
             Set<String> ids = new HashSet<>();
             for (PanelLanguage language : kept) {
                 if (!ids.add(language.id())) {
-                    LOG.log(System.Logger.Level.WARNING, PANEL + Texts.clean(id)
+                    LOG.log(System.Logger.Level.WARNING, PANEL_PREFIX + Texts.clean(id)
                             + "' offers the language '" + language.id() + "' twice: it is shown without languages");
                     return List.of();
                 }
             }
             return kept;
         } catch (RuntimeException | LinkageError failed) {
-            LOG.log(System.Logger.Level.DEBUG, PANEL + id + "' has no languages: its languages() "
+            LOG.log(System.Logger.Level.DEBUG, PANEL_PREFIX + id + "' has no languages: its languages() "
                     + "failed", failed);
             return List.of();
         }

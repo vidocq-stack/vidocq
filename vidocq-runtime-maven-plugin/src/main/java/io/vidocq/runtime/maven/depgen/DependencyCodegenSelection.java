@@ -204,13 +204,13 @@ public final class DependencyCodegenSelection {
             }
             return ordered;
         }
-    }
 
-    /** The first of {@code needles} found in {@code bytes}. */
-    private static Optional<String> firstNeedle(byte[] bytes, List<String> needles) {
-        return needles.stream()
-                .filter(needle -> indexOf(bytes, needle.getBytes(StandardCharsets.UTF_8)) >= 0)
-                .findFirst();
+        /** The first of {@code needles} found in {@code bytes}. */
+        private static Optional<String> firstNeedle(byte[] bytes, List<String> needles) {
+            return needles.stream()
+                    .filter(needle -> indexOf(bytes, needle.getBytes(StandardCharsets.UTF_8)) >= 0)
+                    .findFirst();
+        }
     }
 
     /**

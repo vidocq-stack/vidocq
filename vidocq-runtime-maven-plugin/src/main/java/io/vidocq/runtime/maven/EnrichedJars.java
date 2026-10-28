@@ -406,8 +406,9 @@ public final class EnrichedJars {
         }
         if (!providers.isEmpty()) {
             Set<String> services = new LinkedHashSet<>();
-            if (entries.containsKey(SERVICE_FILE)) {
-                services.addAll(lines(entries.get(SERVICE_FILE)));
+            byte[] declared = entries.get(SERVICE_FILE);
+            if (declared != null) {
+                services.addAll(lines(declared));
             }
             services.addAll(providers);
             entries.put(SERVICE_FILE, (String.join("\n", services) + "\n").getBytes(StandardCharsets.UTF_8));

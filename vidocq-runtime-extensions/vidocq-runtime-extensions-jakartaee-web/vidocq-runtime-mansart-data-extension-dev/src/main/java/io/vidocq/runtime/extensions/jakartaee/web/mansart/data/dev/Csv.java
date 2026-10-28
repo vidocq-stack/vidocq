@@ -102,7 +102,7 @@ final class Csv {
         List<Record> records = new ArrayList<>();
         Reader reader = new Reader(text, separator);
         while (reader.at < reader.length) {
-            records.add(reader.record());
+            records.add(reader.nextRecord());
         }
         return records;
     }
@@ -123,7 +123,7 @@ final class Csv {
             this.at = length > 0 && text.charAt(0) == '\uFEFF' ? 1 : 0;
         }
 
-        Record record() throws Malformed {
+        Record nextRecord() throws Malformed {
             int first = line;
             List<String> fields = new ArrayList<>();
             boolean more = true;
