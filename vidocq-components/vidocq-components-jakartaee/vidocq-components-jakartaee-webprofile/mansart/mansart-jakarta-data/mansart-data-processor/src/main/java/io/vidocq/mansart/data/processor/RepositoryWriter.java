@@ -749,7 +749,7 @@ final class RepositoryWriter {
         if (rt.startsWith("java.lang.Iterable"))         return "return " + list + ";";
         // Single-entity return → use queryOne and unwrap (throws if missing per Jakarta Data semantics)
         return "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args
-                + ").orElseThrow(() -> new io.vidocq.mansart.data.core.MansartDataException(\"No result\"));";
+                + ").orElseThrow(() -> new jakarta.data.exceptions.EmptyResultException(\"No result\"));";
     }
 
     private String deleteBody(TypeMirror returnType, String metamodel, String where, String args) {

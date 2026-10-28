@@ -167,7 +167,7 @@ final class JdqlParser {
             sb.append("var _list = runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
               .append(attrRef(metamodel, stmt.scalarAttr))
               .append(", ").append(boxed).append(".class, _w, _ob, _xs); ");
-            sb.append("if (_list.isEmpty()) throw new io.vidocq.mansart.data.core.MansartDataException("
+            sb.append("if (_list.isEmpty()) throw new jakarta.data.exceptions.EmptyResultException("
                     + "\"Projection returned no result\"); return _list.get(0);");
         }
         return sb.toString();
@@ -696,7 +696,7 @@ final class JdqlParser {
         }
         // Single-entity return → fetch one, throw if absent.
         return "return runtime.queryOne(" + metamodel + ".$MODEL, _w, _xs).orElseThrow("
-                + "() -> new io.vidocq.mansart.data.core.MansartDataException(\"@Query returned no result\"));";
+                + "() -> new jakarta.data.exceptions.EmptyResultException(\"@Query returned no result\"));";
     }
 
     /* ---------- AST ---------- */

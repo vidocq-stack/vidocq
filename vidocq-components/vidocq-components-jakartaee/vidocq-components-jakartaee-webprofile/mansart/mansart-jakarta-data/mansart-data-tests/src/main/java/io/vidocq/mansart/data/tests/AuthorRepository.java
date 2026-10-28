@@ -219,4 +219,15 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
 
     /** {@code findFirst} with a single-entity return (MANSART-013). */
     Author findFirstByNameStartsWithOrderByNameAsc(String prefix);
+
+    /** A single-entity derived query without a result throws {@code EmptyResultException} (MANSART-014). */
+    Author findByIdGreaterThan(Long id);
+
+    /** A single-entity {@code @Query} without a result throws {@code EmptyResultException} (MANSART-014). */
+    @jakarta.data.repository.Query("WHERE name = ?1")
+    Author jdqlOneNamed(String name);
+
+    /** A single-value projection without a result throws {@code EmptyResultException} (MANSART-014). */
+    @jakarta.data.repository.Query("SELECT name WHERE id = ?1")
+    String jdqlNameOfId(Long id);
 }

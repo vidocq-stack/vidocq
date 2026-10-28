@@ -567,3 +567,23 @@ and emitted `runtime.queryOne(…)` for `findFirstBy`/`findOneBy`: one result or
 `OrderBy` order and keeps its first result(s), shaped as the method returns them (`Optional`, `Stream`, `List`, or the
 entity, `EmptyResultException` when there is none), as the runtime proxy does. `writeMethod` is split
 (`signature`, `appendTypeVariables`, `derivedBody`, `firstResults`). Regression test: `DerivedFirstTest`.
+
+## MANSART-014 — Annotation processor: a missing single result threw `MansartDataException`
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: low (the exception type differs from the specification; the runtime proxy was right)
+- **Module**: `mansart-data-processor` (`RepositoryWriter`, `JdqlParser`)
+
+### Symptom
+A generated method returning one entity (derived query or `@Query`) or one projected value threw
+`MansartDataException` ("No result", "@Query returned no result", "Projection returned no result") when nothing
+matched. Jakarta Data 1.0 specifies `jakarta.data.exceptions.EmptyResultException`, which `MansartDataException`
+does not extend, so a caller catching it missed the case.
+
+### Minimal repro
+`EmptySingleResultTest` (`mansart-data-tests`): `AuthorRepository.findByIdGreaterThan`, `jdqlOneNamed` and
+`jdqlNameOfId` without a match, through both implementations.
+
+### Fix
+The three generated `throw`s use `EmptyResultException`. Regression test: `EmptySingleResultTest`.
