@@ -295,15 +295,15 @@ final class ConsoleActions {
                     + outcome.text());
             LOG.log(System.Logger.Level.DEBUG, "Dev console action " + name + " failed", failure);
             if (failure instanceof VirtualMachineError fatal) {
-                record(panelId, action.id(), outcome);
+                recordOutcome(panelId, action.id(), outcome);
                 throw fatal;
             }
         }
-        record(panelId, action.id(), outcome);
+        recordOutcome(panelId, action.id(), outcome);
         return outcome;
     }
 
-    private void record(String panelId, String actionId, Outcome outcome) {
+    private void recordOutcome(String panelId, String actionId, Outcome outcome) {
         outcomes.put(panelId + KEY_SEPARATOR + actionId, outcome);
         running.remove(panelId, actionId);
     }

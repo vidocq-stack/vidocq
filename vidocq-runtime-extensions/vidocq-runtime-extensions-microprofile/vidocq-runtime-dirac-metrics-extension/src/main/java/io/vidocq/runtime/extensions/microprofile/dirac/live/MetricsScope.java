@@ -43,12 +43,13 @@ import java.util.stream.Collectors;
 public record MetricsScope(String scope, List<Entry> sampled, List<MetricID> gauges) {
 
     /** Each group writes these keys itself: no metric takes them. */
-    public static final String COUNTERS = "counters";
-    public static final String TIMERS = "timers";
-    public static final String HISTOGRAMS = "histograms";
-    public static final String GAUGES = "gauges";
-    public static final String OMITTED = "omitted";
-    public static final Set<String> RESERVED = Set.of(COUNTERS, TIMERS, HISTOGRAMS, GAUGES, OMITTED);
+    public static final String COUNTERS_KEY = "counters";
+    public static final String TIMERS_KEY = "timers";
+    public static final String HISTOGRAMS_KEY = "histograms";
+    public static final String GAUGES_KEY = "gauges";
+    public static final String OMITTED_KEY = "omitted";
+    public static final Set<String> RESERVED =
+            Set.of(COUNTERS_KEY, TIMERS_KEY, HISTOGRAMS_KEY, GAUGES_KEY, OMITTED_KEY);
 
     /** The suffix of a timer's mean, after its key, which holds its count. */
     public static final String MEAN = ".mean";
@@ -59,10 +60,10 @@ public record MetricsScope(String scope, List<Entry> sampled, List<MetricID> gau
         TIMER(2),
         HISTOGRAM(1);
 
-        public final int values;
+        public final int valueCount;
 
-        Kind(int values) {
-            this.values = values;
+        Kind(int valueCount) {
+            this.valueCount = valueCount;
         }
     }
 

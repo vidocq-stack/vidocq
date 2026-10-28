@@ -69,7 +69,7 @@ public class ProductResource {
     @Transactional
     public Response create(Product input) {
         Product saved = products.save(new Product(input.getName(), input.getPrice()));
-        audit.record("created product id=" + saved.getId());
+        audit.recordOperation("created product id=" + saved.getId());
         LOG.log(System.Logger.Level.INFO, () -> "TX audit: " + audit.entries());
         return Response.status(Response.Status.CREATED).entity(saved).build();
     }
@@ -82,7 +82,7 @@ public class ProductResource {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
         products.deleteById(id);
-        audit.record("deleted product id=" + id);
+        audit.recordOperation("deleted product id=" + id);
         LOG.log(System.Logger.Level.INFO, () -> "TX audit: " + audit.entries());
         return Response.noContent().build();
     }

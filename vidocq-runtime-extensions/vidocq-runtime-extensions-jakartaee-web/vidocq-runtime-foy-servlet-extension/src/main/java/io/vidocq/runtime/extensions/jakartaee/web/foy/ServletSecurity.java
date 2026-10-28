@@ -48,7 +48,7 @@ import java.util.TreeSet;
  */
 record ServletSecurity(List<User> users, OptionalInt confidentialPort, Optional<Boolean> rotateSessionIdOnLogin) {
 
-    static final String USERS = "vidocq.servlet.users.";
+    static final String USERS_PREFIX = "vidocq.servlet.users.";
     static final String CONFIDENTIAL_PORT = "vidocq.servlet.confidential-port";
     static final String ROTATE_SESSION_ID = "vidocq.servlet.rotate-session-id-on-login";
 
@@ -76,22 +76,22 @@ record ServletSecurity(List<User> users, OptionalInt confidentialPort, Optional<
     static ServletSecurity from(VidocqConfig config) {
         Set<String> names = new TreeSet<>();
         for (String key : config.getPropertyNames()) {
-            if (!key.startsWith(USERS)) continue;
-            String rest = key.substring(USERS.length());
+            if (!key.startsWith(USERS_PREFIX)) continue;
+            String rest = key.substring(USERS_PREFIX.length());
             int dot = rest.lastIndexOf('.');
             String property = dot < 0 ? "" : rest.substring(dot + 1);
             if (dot <= 0 || !(property.equals("password") || property.equals("roles"))) {
                 throw new IllegalArgumentException("unknown key " + key + ": a user is configured with "
-                        + USERS + "<name>.password and " + USERS + "<name>.roles");
+                        + USERS_PREFIX + "<name>.password and " + USERS_PREFIX + "<name>.roles");
             }
             names.add(rest.substring(0, dot));
         }
         List<User> users = new ArrayList<>();
         for (String name : names) {
-            String passwordKey = USERS + name + ".password";
+            String passwordKey = USERS_PREFIX + name + ".password";
             String password = config.getValue(passwordKey).orElseThrow(() -> new IllegalArgumentException(
                     "user '" + name + "' has no password: set " + passwordKey));
-            List<String> roles = config.getValue(USERS + name + ".roles")
+            List<String> roles = config.getValue(USERS_PREFIX + name + ".roles")
                     .map(r -> Arrays.stream(r.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList())
                     .orElse(List.of());
             users.add(new User(name, password.toCharArray(), roles));
@@ -111,7 +111,7 @@ record ServletSecurity(List<User> users, OptionalInt confidentialPort, Optional<
     void applyTo(FoyChappeBoot.Builder builder, Optional<IdentityStore> bean) {
         if (bean.isPresent() && !users.isEmpty()) {
             throw new IllegalStateException("the application has an IdentityStore bean and configures "
-                    + USERS + "*: keep one user base");
+                    + USERS_PREFIX + "*: keep one user base");
         }
         bean.ifPresent(builder::identityStore);
         for (User user : users) {

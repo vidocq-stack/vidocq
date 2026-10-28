@@ -74,22 +74,22 @@ final class MetricsPanel {
     }
 
     private static void write(MetricsScope scope, PanelSample group) {
-        group.gauge(MetricsScope.COUNTERS, scope.count(Kind.COUNTER), Unit.COUNT)
-                .gauge(MetricsScope.TIMERS, scope.count(Kind.TIMER), Unit.COUNT)
-                .gauge(MetricsScope.HISTOGRAMS, scope.count(Kind.HISTOGRAM), Unit.COUNT)
-                .gauge(MetricsScope.GAUGES, scope.gauges().size(), Unit.COUNT);
+        group.gauge(MetricsScope.COUNTERS_KEY, scope.count(Kind.COUNTER), Unit.COUNT)
+                .gauge(MetricsScope.TIMERS_KEY, scope.count(Kind.TIMER), Unit.COUNT)
+                .gauge(MetricsScope.HISTOGRAMS_KEY, scope.count(Kind.HISTOGRAM), Unit.COUNT)
+                .gauge(MetricsScope.GAUGES_KEY, scope.gauges().size(), Unit.COUNT);
         int written = 0;
         int omitted = 0;
         for (Entry entry : scope.sampled()) {
-            if (omitted > 0 || written + entry.kind().values > METRIC_VALUES) {
+            if (omitted > 0 || written + entry.kind().valueCount > METRIC_VALUES) {
                 omitted++;
                 continue;
             }
             write(entry, group);
-            written += entry.kind().values;
+            written += entry.kind().valueCount;
         }
         if (omitted > 0) {
-            group.text(MetricsScope.OMITTED, omitted + (omitted == 1 ? " metric" : " metrics")
+            group.text(MetricsScope.OMITTED_KEY, omitted + (omitted == 1 ? " metric" : " metrics")
                     + " left out: the console shows " + VALUES_PER_GROUP + " values per group");
         }
     }

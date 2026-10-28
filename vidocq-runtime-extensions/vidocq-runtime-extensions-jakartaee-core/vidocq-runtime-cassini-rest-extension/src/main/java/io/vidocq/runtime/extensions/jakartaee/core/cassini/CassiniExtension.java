@@ -143,7 +143,7 @@ public final class CassiniExtension implements VidocqExtension, StartupReportCon
         }
         String mountPrefix = "/".equals(effectiveContextPath) ? "" : effectiveContextPath;
         ChappeMountPoint.instance().mount(listener, mountPrefix, bridge);
-        RestMounts.record(RestMount.of(AUTO_MOUNT, listener, mountPrefix, true, resourceClasses, stack.routes(),
+        RestMounts.register(RestMount.of(AUTO_MOUNT, listener, mountPrefix, true, resourceClasses, stack.routes(),
                 stack.statistics().orElse(null)));
 
         LOG.log(System.Logger.Level.INFO,

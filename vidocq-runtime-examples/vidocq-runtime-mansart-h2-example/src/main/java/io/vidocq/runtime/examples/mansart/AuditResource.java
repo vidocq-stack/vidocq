@@ -62,7 +62,7 @@ public class AuditResource {
 
     @POST
     @Transactional
-    public Response record(AuditEntry input) {
+    public Response create(AuditEntry input) {
         AuditEntry saved = auditLog.save(new AuditEntry(input.getAction()));
         return Response.status(Response.Status.CREATED).entity(saved).build();
     }

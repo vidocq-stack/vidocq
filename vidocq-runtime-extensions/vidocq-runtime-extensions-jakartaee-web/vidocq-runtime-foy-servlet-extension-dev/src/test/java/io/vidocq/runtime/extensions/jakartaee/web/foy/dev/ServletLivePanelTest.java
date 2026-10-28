@@ -49,7 +49,7 @@ class ServletLivePanelTest {
     @Test
     void samplesTheActiveSessionsOfThisBoot() {
         AtomicInteger sessions = new AtomicInteger(3);
-        ServletMounts.record(boot, new ServletMount("vidocq.servlet", "default", "/shop", sessions::get));
+        ServletMounts.register(boot, new ServletMount("vidocq.servlet", "default", "/shop", sessions::get));
         ServletLivePanel panel = new ServletLivePanel(boot);
         RecordingSample sample = new RecordingSample();
 
@@ -64,7 +64,7 @@ class ServletLivePanelTest {
 
     @Test
     void anotherBootsMountsAreNotSampled() {
-        ServletMounts.record(new Object(), new ServletMount("vidocq.servlet", "default", "/", () -> 9));
+        ServletMounts.register(new Object(), new ServletMount("vidocq.servlet", "default", "/", () -> 9));
         RecordingSample sample = new RecordingSample();
 
         new ServletLivePanel(boot).sample(sample);

@@ -208,7 +208,7 @@ public final class StartupBanner {
             case NONE -> "";
         };
         EMITTED.set(identity);
-        debuggerRecord(launch, identity, shown).ifPresent(record -> LOG.log(System.Logger.Level.INFO, record));
+        debuggerRecord(launch, identity, shown).ifPresent(line -> LOG.log(System.Logger.Level.INFO, line));
         Optional<String> bricks = identity.bricksLine();
         if (bricks.isPresent()) {
             LOG.log(System.Logger.Level.INFO, bricks.get());

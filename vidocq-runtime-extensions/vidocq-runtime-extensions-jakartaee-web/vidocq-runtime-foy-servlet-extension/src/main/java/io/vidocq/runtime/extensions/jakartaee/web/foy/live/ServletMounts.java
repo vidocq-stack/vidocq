@@ -36,7 +36,7 @@ public final class ServletMounts {
     private ServletMounts() {}
 
     /** Adds a mount of {@code boot}, after those already recorded. */
-    public static synchronized void record(Object boot, ServletMount mount) {
+    public static synchronized void register(Object boot, ServletMount mount) {
         BY_BOOT.computeIfAbsent(boot, b -> new ArrayList<>()).add(mount);
     }
 

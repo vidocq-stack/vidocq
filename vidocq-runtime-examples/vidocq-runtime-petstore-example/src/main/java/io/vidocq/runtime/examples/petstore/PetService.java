@@ -74,7 +74,7 @@ public class PetService {
                 ? DEFAULT_STATUS : input.status();
         Pet saved = pets.save(new Pet(input.name(), categoryId, status, input.price()));
         linkTags(saved.getId(), input.tags());
-        audit.record("created pet id=" + saved.getId());
+        audit.recordOperation("created pet id=" + saved.getId());
         LOG.log(System.Logger.Level.INFO, () -> "TX audit: " + audit.entries());
         return toView(saved);
     }
@@ -95,7 +95,7 @@ public class PetService {
         // Resync the join table: drop the old links, recreate from the new tag list.
         unlinkTags(id);
         linkTags(id, input.tags());
-        audit.record("updated pet id=" + id);
+        audit.recordOperation("updated pet id=" + id);
         return Optional.of(toView(saved));
     }
 
@@ -106,7 +106,7 @@ public class PetService {
         }
         unlinkTags(id);
         pets.deleteById(id);
-        audit.record("deleted pet id=" + id);
+        audit.recordOperation("deleted pet id=" + id);
         LOG.log(System.Logger.Level.INFO, () -> "TX audit: " + audit.entries());
         return true;
     }

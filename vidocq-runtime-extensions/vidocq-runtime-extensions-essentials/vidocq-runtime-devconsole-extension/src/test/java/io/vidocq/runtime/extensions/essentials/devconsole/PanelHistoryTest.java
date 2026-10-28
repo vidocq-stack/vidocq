@@ -54,7 +54,7 @@ class PanelHistoryTest {
     private void tick(long time, String panel, Consumer<RecordingSample> what) {
         RecordingSample sample = new RecordingSample();
         what.accept(sample);
-        history.record(time, panel, sample);
+        history.append(time, panel, sample);
     }
 
     @Test

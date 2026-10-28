@@ -210,7 +210,7 @@ final class AttributedProcessors implements AutoCloseable {
             this.elements = elements;
         }
 
-        private void record(Diagnostic.Kind kind, CharSequence message, Element element) {
+        private void recordDiagnostic(Diagnostic.Kind kind, CharSequence message, Element element) {
             Diagnostic.Kind recorded = switch (kind) {
                 case ERROR -> Diagnostic.Kind.ERROR;
                 case WARNING, MANDATORY_WARNING -> Diagnostic.Kind.WARNING;
@@ -223,27 +223,27 @@ final class AttributedProcessors implements AutoCloseable {
 
         @Override
         public void printMessage(Diagnostic.Kind kind, CharSequence message) {
-            record(kind, message, null);
+            recordDiagnostic(kind, message, null);
             delegate.printMessage(kind, message);
         }
 
         @Override
         public void printMessage(Diagnostic.Kind kind, CharSequence message, Element element) {
-            record(kind, message, element);
+            recordDiagnostic(kind, message, element);
             delegate.printMessage(kind, message, element);
         }
 
         @Override
         public void printMessage(Diagnostic.Kind kind, CharSequence message, Element element,
                                  AnnotationMirror annotation) {
-            record(kind, message, element);
+            recordDiagnostic(kind, message, element);
             delegate.printMessage(kind, message, element, annotation);
         }
 
         @Override
         public void printMessage(Diagnostic.Kind kind, CharSequence message, Element element,
                                  AnnotationMirror annotation, AnnotationValue value) {
-            record(kind, message, element);
+            recordDiagnostic(kind, message, element);
             delegate.printMessage(kind, message, element, annotation, value);
         }
     }

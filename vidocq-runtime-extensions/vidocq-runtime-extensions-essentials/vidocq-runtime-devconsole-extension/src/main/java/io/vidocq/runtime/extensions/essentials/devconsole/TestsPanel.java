@@ -95,7 +95,7 @@ final class TestsPanel implements DevConsolePanel {
     private final Path results;
     private final Path request;
     private final AtomicReference<View> view = new AtomicReference<>();
-    private volatile boolean unreadable;
+    private volatile boolean resultsUnreadable;
     private final AtomicReference<Thread> reader = new AtomicReference<>();
     /** Guarded by this: the modification time last read, or -1. */
     private long lastModified = -1;
@@ -174,9 +174,9 @@ final class TestsPanel implements DevConsolePanel {
         lastSize = size;
         try {
             view.set(parse(Files.readString(results, StandardCharsets.UTF_8)));
-            unreadable = false;
+            resultsUnreadable = false;
         } catch (IOException | RuntimeException failed) {
-            unreadable = true;
+            resultsUnreadable = true;
             LOG.log(System.Logger.Level.DEBUG, "Dev console panel 'tests' cannot read " + results + ": "
                     + failed.getClass().getName());
         }
@@ -280,10 +280,10 @@ final class TestsPanel implements DevConsolePanel {
     public void sample(PanelSample sample) {
         View current = view.get();
         if (current == null) {
-            sample.text(STATE, unreadable ? UNREADABLE : "no run yet");
+            sample.text(STATE, resultsUnreadable ? UNREADABLE : "no run yet");
             return;
         }
-        sample.text(STATE, unreadable ? UNREADABLE : stateText(current))
+        sample.text(STATE, resultsUnreadable ? UNREADABLE : stateText(current))
                 .gauge("run", current.counts().run(), Unit.COUNT)
                 .gauge(FAILURES, current.counts().failures(), Unit.COUNT)
                 .gauge(ERRORS, current.counts().errors(), Unit.COUNT)

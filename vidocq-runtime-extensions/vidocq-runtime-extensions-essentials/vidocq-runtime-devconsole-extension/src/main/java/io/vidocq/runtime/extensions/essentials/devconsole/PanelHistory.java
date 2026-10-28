@@ -89,7 +89,7 @@ final class PanelHistory {
      * @param panel the id of the panel
      * @param taken what it wrote this tick
      */
-    void record(long time, String panel, RecordingSample taken) {
+    void append(long time, String panel, RecordingSample taken) {
         Map<String, Series> keys = byPanel.computeIfAbsent(panel, id -> new ConcurrentHashMap<>());
         taken.forEachMeasure((group, key, kind, unit, value, max) -> {
             String at = group + SEPARATOR + key;

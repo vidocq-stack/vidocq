@@ -83,9 +83,9 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
 
     @Override
     public Set<String> configKeys() {
-        return Set.of(ServletSettings.CONTEXT_PATH, ServletSettings.LISTENER, ServletSettings.SESSION_TIMEOUT,
-                ServletSettings.RESPONSE_CHARACTER_ENCODING,
-                ServletSecurity.USERS + "*", ServletSecurity.CONFIDENTIAL_PORT, ServletSecurity.ROTATE_SESSION_ID);
+        return Set.of(ServletSettings.CONTEXT_PATH, ServletSettings.LISTENER_KEY, ServletSettings.SESSION_TIMEOUT,
+                ServletSettings.RESPONSE_CHARACTER_ENCODING, ServletSecurity.USERS_PREFIX + "*",
+                ServletSecurity.CONFIDENTIAL_PORT, ServletSecurity.ROTATE_SESSION_ID);
     }
 
     @Override

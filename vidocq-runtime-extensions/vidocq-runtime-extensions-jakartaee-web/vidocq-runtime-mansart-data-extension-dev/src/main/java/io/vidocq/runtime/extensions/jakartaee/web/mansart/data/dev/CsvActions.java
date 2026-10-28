@@ -148,7 +148,8 @@ final class CsvActions {
      */
     static String exportSchema() {
         return Json.write(Scalars.object("type", "object", "properties", Scalars.object(
-                        QUERY_MEMBER, JdqlActions.query("FROM Product ORDER BY id, or SELECT name, price FROM Product"),
+                        QUERY_MEMBER,
+                        JdqlActions.queryProperty("FROM Product ORDER BY id, or SELECT name, price FROM Product"),
                         PARAMS_MEMBER, JdqlActions.params(),
                         SEPARATOR_MEMBER, separatorSchema()),
                 "required", List.of(QUERY_MEMBER)));

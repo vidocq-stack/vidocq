@@ -77,7 +77,7 @@ final class JdqlActions {
     private final TransactionRunner transactions;
     private final JdqlRunner runner;
     private final CallHistory history;
-    private final String group;
+    private final String tabGroup;
 
     /**
      * @param entities     the catalogue's entities, those a statement may name
@@ -101,7 +101,7 @@ final class JdqlActions {
         this.transactions = Objects.requireNonNull(transactions, "transactions");
         this.runner = Objects.requireNonNull(runner, "runner");
         this.history = Objects.requireNonNull(history, "history");
-        this.group = Objects.requireNonNull(group, "group");
+        this.tabGroup = Objects.requireNonNull(group, "group");
     }
 
     /** The two actions, {@value #QUERY} then {@value #WRITE}. */
@@ -109,12 +109,12 @@ final class JdqlActions {
         String names = entityNames();
         PanelAction.Argument statement = PanelAction.Argument.json(STATEMENT, "Statement", schema());
         PanelAction query = new PanelAction(QUERY, QUERY_LABEL, null, List.of(statement),
-                given -> call(false, given), group, description("A JDQL query: FROM …, SELECT a, b FROM …, "
+                given -> call(false, given), tabGroup, description("A JDQL query: FROM …, SELECT a, b FROM …, "
                         + "SELECT COUNT(this) FROM … or an aggregate such as SELECT MAX(price) FROM …; at most 100 "
                         + "rows are shown.", names));
         PanelAction write = new PanelAction(WRITE, WRITE_LABEL, CONFIRMATION, List.of(statement,
                 new PanelAction.Argument(RepositoryActions.TRANSACTION, "Transaction", transactions.modes(), null,
-                        null)), given -> call(true, given), group, description("A JDQL UPDATE … SET … or DELETE "
+                        null)), given -> call(true, given), tabGroup, description("A JDQL UPDATE … SET … or DELETE "
                         + "FROM …, rolled back unless commit is asked. JDQL has no INSERT: use a repository's save.",
                         names));
         return List.of(query, write);
@@ -126,13 +126,13 @@ final class JdqlActions {
      */
     static String schema() {
         return Json.write(Scalars.object("type", "object", "properties", Scalars.object(
-                        QUERY_MEMBER, query("FROM Product WHERE price > :min ORDER BY name"),
+                        QUERY_MEMBER, queryProperty("FROM Product WHERE price > :min ORDER BY name"),
                         PARAMS_MEMBER, params()),
                 "required", List.of(QUERY_MEMBER)));
     }
 
     /** A query property of the tab's actions: a text of several lines, JDQL, its example as {@code description}. */
-    static Map<String, Object> query(String example) {
+    static Map<String, Object> queryProperty(String example) {
         return Scalars.object("type", "string", "format", "textarea", "contentMediaType", JdqlLanguage.MEDIA_TYPE,
                 "x-language", JdqlLanguage.ID, "description", example);
     }
@@ -170,7 +170,7 @@ final class JdqlActions {
             result = new PanelAction.ActionResult(Failures.line(refused.getMessage()), null, null, true,
                     details(entity, statement, mode));
         }
-        history.add(group, System.currentTimeMillis(), write ? WRITE_LABEL : QUERY_LABEL,
+        history.add(tabGroup, System.currentTimeMillis(), write ? WRITE_LABEL : QUERY_LABEL,
                 (result.error() ? "error: " : "") + result.summary(), millis(start),
                 parsed == null ? sent : Json.write(parsed), replay(write, parsed, mode));
         return result;

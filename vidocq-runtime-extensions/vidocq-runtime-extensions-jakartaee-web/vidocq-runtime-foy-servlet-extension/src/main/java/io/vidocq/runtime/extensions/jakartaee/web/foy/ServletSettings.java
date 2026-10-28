@@ -41,7 +41,7 @@ record ServletSettings(String contextPath, String listener, int sessionTimeoutSe
                        String responseCharacterEncoding) {
 
     static final String CONTEXT_PATH = "vidocq.servlet.context-path";
-    static final String LISTENER = "vidocq.servlet.listener";
+    static final String LISTENER_KEY = "vidocq.servlet.listener";
     static final String SESSION_TIMEOUT = "vidocq.servlet.session-timeout";
     static final String RESPONSE_CHARACTER_ENCODING = "vidocq.servlet.response-character-encoding";
     static final int DEFAULT_SESSION_TIMEOUT_SECONDS = 30 * 60;
@@ -51,7 +51,7 @@ record ServletSettings(String contextPath, String listener, int sessionTimeoutSe
     static ServletSettings from(VidocqConfiguration config) {
         String timeout = config.property(SESSION_TIMEOUT).orElse(null);
         return new ServletSettings(config.property(CONTEXT_PATH).orElse(null),
-                config.property(LISTENER, ChappeListener.DEFAULT), seconds(timeout),
+                config.property(LISTENER_KEY, ChappeListener.DEFAULT), seconds(timeout),
                 encoding(config.property(RESPONSE_CHARACTER_ENCODING).orElse(null)));
     }
 

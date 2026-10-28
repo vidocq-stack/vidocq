@@ -109,7 +109,7 @@ final class FoyDeployments {
         live.add(new Live(name, listener, mounted));
         if (boot != null) {
             String contextPath = mounted.servletContext().getContextPath();
-            ServletMounts.record(boot, new ServletMount(name, listener, contextPath.isEmpty() ? "/" : contextPath,
+            ServletMounts.register(boot, new ServletMount(name, listener, contextPath.isEmpty() ? "/" : contextPath,
                     mounted::activeSessions));
         }
     }

@@ -282,15 +282,15 @@ final class Snapshot implements Handler {
         Contributed panels = view().map(this::contributed).orElse(null);
         if (panels != null) {
             for (PanelEntry panel : panels.panels()) {
-                record(time, panel);
+                recordSample(time, panel);
             }
         }
         for (PanelEntry panel : builtIns) {
-            record(time, panel);
+            recordSample(time, panel);
         }
     }
 
-    private void record(long time, PanelEntry panel) {
+    private void recordSample(long time, PanelEntry panel) {
         if (panel.panel() == null) {
             return;
         }
@@ -300,7 +300,7 @@ final class Snapshot implements Handler {
         } catch (RuntimeException | LinkageError _) {
             return;
         }
-        history.record(time, panel.id(), sample);
+        history.append(time, panel.id(), sample);
     }
 
     /** The history this snapshot keeps, for the tests and for the extension that stops it. */

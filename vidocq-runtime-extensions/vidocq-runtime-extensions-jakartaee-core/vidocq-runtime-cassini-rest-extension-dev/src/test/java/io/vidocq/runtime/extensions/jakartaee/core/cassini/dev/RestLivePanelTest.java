@@ -48,7 +48,7 @@ class RestLivePanelTest {
     @Test
     void samplesTheMountsOfThisBoot() {
         var stats = new RestPanelTest.FixedStatistics(3, 0, new long[] {0, 3, 0, 0, 0}, 3, 1);
-        RestMounts.record(RestMount.of("vidocq.rest", "default", "", true, Set.of(), List.of(), stats));
+        RestMounts.register(RestMount.of("vidocq.rest", "default", "", true, Set.of(), List.of(), stats));
         RecordingSample sample = new RecordingSample();
 
         new RestLivePanel().sample(sample);

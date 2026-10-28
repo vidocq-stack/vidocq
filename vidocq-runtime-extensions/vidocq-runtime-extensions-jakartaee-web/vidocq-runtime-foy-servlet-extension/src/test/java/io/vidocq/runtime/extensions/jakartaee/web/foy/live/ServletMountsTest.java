@@ -33,7 +33,7 @@ class ServletMountsTest {
         Object second = new Object();
         ServletMount web = new ServletMount("vidocq.servlet", "default", "/", () -> 2);
 
-        ServletMounts.record(first, web);
+        ServletMounts.register(first, web);
 
         assertEquals(List.of(web), ServletMounts.of(first));
         assertEquals(List.of(), ServletMounts.of(second));
@@ -44,10 +44,10 @@ class ServletMountsTest {
     @Test
     void theListReadIsACopy() {
         Object boot = new Object();
-        ServletMounts.record(boot, new ServletMount("a", "default", "/", () -> 0));
+        ServletMounts.register(boot, new ServletMount("a", "default", "/", () -> 0));
         List<ServletMount> read = ServletMounts.of(boot);
 
-        ServletMounts.record(boot, new ServletMount("b", "default", "/b", () -> 0));
+        ServletMounts.register(boot, new ServletMount("b", "default", "/b", () -> 0));
 
         assertEquals(1, read.size());
         assertThrows(UnsupportedOperationException.class, () -> read.add(null));

@@ -41,7 +41,7 @@ public class OperationAudit implements Serializable {
 
     private final List<String> entries = new ArrayList<>();
 
-    public void record(String op) {
+    public void recordOperation(String op) {
         entries.add(op);
     }
 

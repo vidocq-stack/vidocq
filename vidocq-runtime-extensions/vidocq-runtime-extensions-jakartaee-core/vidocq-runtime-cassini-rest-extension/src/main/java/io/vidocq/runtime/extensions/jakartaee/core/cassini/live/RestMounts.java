@@ -40,7 +40,7 @@ public final class RestMounts {
     private RestMounts() {}
 
     /** Adds a mount, after those already recorded. */
-    public static synchronized void record(RestMount mount) {
+    public static synchronized void register(RestMount mount) {
         List<RestMount> next = new ArrayList<>(MOUNTS.get());
         next.add(mount);
         MOUNTS.set(List.copyOf(next));
