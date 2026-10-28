@@ -60,7 +60,7 @@ class AsynchronousEngineFutureTest {
     }
 
     @Test
-    void nestedFutureFailureIsUnwrapped() throws Exception {
+    void nestedFutureFailureIsUnwrapped() {
         IOException cause = new IOException("nested failure");
         CompletableFuture<Object> future = AsynchronousEngine
                 .executeAsync(() -> CompletableFuture.failedFuture(cause), THREAD).toCompletableFuture();
@@ -69,7 +69,7 @@ class AsynchronousEngineFutureTest {
     }
 
     @Test
-    void nestedExecutionExceptionWithoutCauseIsKept() throws Exception {
+    void nestedExecutionExceptionWithoutCauseIsKept() {
         Future<Object> broken = new FutureTask<>(() -> null) {
             @Override
             public Object get() throws ExecutionException {
@@ -86,7 +86,7 @@ class AsynchronousEngineFutureTest {
     }
 
     @Test
-    void nestedFutureRuntimeFailureCompletesExceptionally() throws Exception {
+    void nestedFutureRuntimeFailureCompletesExceptionally() {
         IllegalStateException cause = new IllegalStateException("get failed");
         Future<Object> broken = new FutureTask<>(() -> null) {
             @Override
@@ -101,7 +101,7 @@ class AsynchronousEngineFutureTest {
     }
 
     @Test
-    void interruptedWhileWaitingForTheNestedFutureCompletesExceptionally() throws Exception {
+    void interruptedWhileWaitingForTheNestedFutureCompletesExceptionally() {
         Future<Object> interrupted = new FutureTask<>(() -> null) {
             @Override
             public Object get() throws InterruptedException {

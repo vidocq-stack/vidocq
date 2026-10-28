@@ -23,6 +23,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -43,7 +44,7 @@ public final class AsynchronousEngine {
     public static CompletionStage<Object> executeAsync(
             PolicyComposer.Invocation invocation,
             String threadName
-    ) throws Exception {
+    ) {
         return executeAsync(invocation, threadName, null);
     }
 
@@ -55,55 +56,38 @@ public final class AsynchronousEngine {
      *
      * @param invocation  the invocation to execute (with all policies)
      * @param threadName  base for the virtual-thread name (e.g., "myMethod")
-     * @return a {@code CompletionStage<Object>} completing with the result or exception
-     * @throws Exception never thrown directly — errors are propagated in the stage
+     * @return a {@code CompletionStage<Object>} completing with the result or exception; errors are
+     *         propagated in the stage, never thrown directly
      */
     public static CompletionStage<Object> executeAsync(
             PolicyComposer.Invocation invocation,
             String threadName,
-            java.util.concurrent.atomic.AtomicBoolean invocationStarted
-    ) throws Exception {
-        AtomicReference<Thread> workerRef = new AtomicReference<>();
-        CompletableFuture<Object> future = new CompletableFuture<>() {
-            @Override
-            public boolean cancel(boolean mayInterruptIfRunning) {
-                boolean cancelled = super.cancel(mayInterruptIfRunning);
-                boolean shouldInterrupt = mayInterruptIfRunning
-                        || (invocationStarted != null && !invocationStarted.get());
-                if (cancelled && shouldInterrupt) {
-                    Thread worker = workerRef.get();
-                    if (worker != null) {
-                        worker.interrupt();
-                    }
-                }
-                return cancelled;
-            }
-        };
-
+            AtomicBoolean invocationStarted
+    ) {
+        InterruptingFuture future = new InterruptingFuture(invocationStarted);
         Thread worker = Thread.ofVirtual()
                 .name("heisenberg-async-" + threadName)
-                .start(() -> {
-                    try {
-                        Object result = invocation.proceed();
-                        if (result instanceof Future<?> nestedFuture) {
-                            completeFromFuture(future, nestedFuture);
-                            return;
-                        }
-                        if (!future.isDone()) {
-                            future.complete(result);
-                        }
-                    } catch (Throwable e) {
-                        if (!future.isDone()) {
-                            future.completeExceptionally(e);
-                        }
-                    }
-                });
-        workerRef.set(worker);
-        if (future.isCancelled()) {
-            worker.interrupt();
-        }
-
+                .start(() -> runInto(invocation, future));
+        future.workerStarted(worker);
         return future;
+    }
+
+    /** Runs the invocation on the worker thread and completes {@code future} with its outcome. */
+    private static void runInto(PolicyComposer.Invocation invocation, CompletableFuture<Object> future) {
+        try {
+            Object result = invocation.proceed();
+            if (result instanceof Future<?> nestedFuture) {
+                completeFromFuture(future, nestedFuture);
+                return;
+            }
+            if (!future.isDone()) {
+                future.complete(result);
+            }
+        } catch (Throwable e) {
+            if (!future.isDone()) {
+                future.completeExceptionally(e);
+            }
+        }
     }
 
     private static void completeFromFuture(CompletableFuture<Object> outer, Future<?> nested) {
@@ -126,6 +110,41 @@ public final class AsynchronousEngine {
             if (!outer.isDone()) {
                 outer.completeExceptionally(failure);
             }
+        }
+    }
+
+    /**
+     * The stage handed to the caller: cancelling it interrupts the worker when asked to, or when the
+     * invocation has not started yet.
+     */
+    private static final class InterruptingFuture extends CompletableFuture<Object> {
+        private final AtomicBoolean invocationStarted;
+        private final AtomicReference<Thread> workerRef = new AtomicReference<>();
+
+        InterruptingFuture(AtomicBoolean invocationStarted) {
+            this.invocationStarted = invocationStarted;
+        }
+
+        /** Records the worker, interrupting it at once when the stage was cancelled before it started. */
+        void workerStarted(Thread worker) {
+            workerRef.set(worker);
+            if (isCancelled()) {
+                worker.interrupt();
+            }
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            boolean cancelled = super.cancel(mayInterruptIfRunning);
+            boolean shouldInterrupt = mayInterruptIfRunning
+                    || (invocationStarted != null && !invocationStarted.get());
+            if (cancelled && shouldInterrupt) {
+                Thread worker = workerRef.get();
+                if (worker != null) {
+                    worker.interrupt();
+                }
+            }
+            return cancelled;
         }
     }
 }

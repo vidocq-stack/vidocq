@@ -282,20 +282,28 @@ public final class ConfigResolver {
         try {
             Enumeration<java.net.URL> resources = cl.getResources("META-INF/microprofile-config.properties");
             while (resources.hasMoreElements()) {
-                java.net.URL resource = resources.nextElement();
-                try (InputStream in = resource.openStream()) {
-                    Properties props = new Properties();
-                    props.load(in);
-                    String raw = props.getProperty(PRIORITY_KEY);
-                    if (raw != null && !raw.trim().isEmpty()) {
-                        return Optional.of(Integer.parseInt(raw.trim()));
-                    }
-                } catch (Exception _) {
-                    // Ignore malformed resources and continue scanning the classpath.
+                Optional<Integer> priority = priorityIn(resources.nextElement());
+                if (priority.isPresent()) {
+                    return priority;
                 }
             }
         } catch (Exception _) {
             return Optional.empty();
+        }
+        return Optional.empty();
+    }
+
+    /** The interceptor priority one properties resource sets, or empty when it sets none or is malformed. */
+    private static Optional<Integer> priorityIn(java.net.URL resource) {
+        try (InputStream in = resource.openStream()) {
+            Properties props = new Properties();
+            props.load(in);
+            String raw = props.getProperty(PRIORITY_KEY);
+            if (raw != null && !raw.trim().isEmpty()) {
+                return Optional.of(Integer.parseInt(raw.trim()));
+            }
+        } catch (Exception _) {
+            // Ignore malformed resources and continue scanning the classpath.
         }
         return Optional.empty();
     }
@@ -362,7 +370,7 @@ public final class ConfigResolver {
     private static Config loadConfig() {
         try {
             return ConfigProvider.getConfig();
-        } catch (Throwable ignored) {
+        } catch (Throwable _) {
             return null;
         }
     }

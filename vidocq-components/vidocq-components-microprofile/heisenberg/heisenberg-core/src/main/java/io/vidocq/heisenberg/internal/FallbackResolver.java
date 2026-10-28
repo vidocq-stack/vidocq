@@ -31,6 +31,7 @@ import java.lang.reflect.WildcardType;
 import java.lang.reflect.GenericArrayType;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.eclipse.microprofile.faulttolerance.ExecutionContext;
@@ -299,26 +300,21 @@ public final class FallbackResolver {
             return true;
         }
         if (type instanceof ParameterizedType p) {
-            for (Type arg : p.getActualTypeArguments()) {
-                if (containsTypeVariable(arg)) {
-                    return true;
-                }
-            }
-            return false;
+            return anyContainsTypeVariable(p.getActualTypeArguments());
         }
         if (type instanceof GenericArrayType g) {
             return containsTypeVariable(g.getGenericComponentType());
         }
         if (type instanceof WildcardType w) {
-            for (Type bound : w.getUpperBounds()) {
-                if (containsTypeVariable(bound)) {
-                    return true;
-                }
-            }
-            for (Type bound : w.getLowerBounds()) {
-                if (containsTypeVariable(bound)) {
-                    return true;
-                }
+            return anyContainsTypeVariable(w.getUpperBounds()) || anyContainsTypeVariable(w.getLowerBounds());
+        }
+        return false;
+    }
+
+    private boolean anyContainsTypeVariable(Type[] types) {
+        for (Type type : types) {
+            if (containsTypeVariable(type)) {
+                return true;
             }
         }
         return false;
@@ -450,15 +446,15 @@ public final class FallbackResolver {
         return Void.class;
     }
 
-    private static final class DefaultExecutionContext implements ExecutionContext {
-        private final Method method;
-        private final Object[] parameters;
-        private final Throwable failure;
+    /**
+     * The context handed to a {@link FallbackHandler}. The parameters are a view of the invocation's
+     * array, and {@link #getParameters()} returns a fresh copy of them on each call.
+     */
+    private record DefaultExecutionContext(Method method, List<Object> parameters, Throwable failure)
+            implements ExecutionContext {
 
         private DefaultExecutionContext(Method method, Object[] parameters, Throwable failure) {
-            this.method = method;
-            this.parameters = parameters;
-            this.failure = failure;
+            this(method, parameters == null ? List.of() : Arrays.asList(parameters), failure);
         }
 
         @Override
@@ -468,7 +464,7 @@ public final class FallbackResolver {
 
         @Override
         public Object[] getParameters() {
-            return parameters == null ? new Object[0] : parameters.clone();
+            return parameters.toArray();
         }
 
         @Override
