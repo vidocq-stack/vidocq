@@ -474,10 +474,6 @@ public final class MetricRegistryImpl implements MetricRegistry {
                 + existing.getClass().getSimpleName() + " and cannot be reused as " + expectedType.getSimpleName());
     }
 
-    private static UnsupportedOperationException unsupportedMetricType(String type, String name) {
-        return new UnsupportedOperationException(type + " support will be introduced in a later milestone for metric '" + name + "'");
-    }
-
     private record SupplierGauge<T extends Number>(Supplier<T> supplier) implements Gauge<T> {
         @Override
         public T getValue() {

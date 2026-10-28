@@ -256,4 +256,222 @@ class DiracMetricsProcessorTest {
         assertThrows(ClassNotFoundException.class,
                 () -> compilation.loader().loadClass("t.Plain$$DiracMetrics"));
     }
+
+    @Test
+    void namingRulesMatchTheRuntimeScan() throws Exception {
+        var compilation = compile(writeSource("t/Names.java", """
+                package t;
+                import org.eclipse.microprofile.metrics.annotation.Counted;
+                import org.eclipse.microprofile.metrics.annotation.Gauge;
+                import org.eclipse.microprofile.metrics.annotation.Timed;
+
+                @Counted(name = "grp", tags = {" ", "k=v"})
+                public class Names {
+                    @Timed(name = "ctor", absolute = true, scope = " ")
+                    public Names() {}
+
+                    @Timed(name = "rel")
+                    Names(int ignored) {}
+
+                    @Timed(absolute = true, scope = "vendor")
+                    protected Names(long ignored) {}
+
+                    private Names(String ignored) {}
+
+                    @Timed(name = "named")
+                    public void a() {}
+
+                    @Timed(absolute = true)
+                    public void b() {}
+
+                    @Gauge(name = "g1", unit = "none")
+                    public Integer boxed() { return 1; }
+
+                    @Gauge(absolute = true, unit = "none")
+                    public double ratio() { return 0.5d; }
+                }
+                """));
+        MetricsCompanion companion = compilation.companionOf("t.Names");
+
+        assertEquals(List.of(
+                        new MetricsCompanion.MetricSpec("t.Names.named", "", "nanoseconds", List.of(), "application"),
+                        new MetricsCompanion.MetricSpec("b", "", "nanoseconds", List.of(), "application"),
+                        new MetricsCompanion.MetricSpec("ctor", "", "nanoseconds", List.of(), "application"),
+                        new MetricsCompanion.MetricSpec("t.Names.rel", "", "nanoseconds", List.of(), "application"),
+                        new MetricsCompanion.MetricSpec("Names", "", "nanoseconds", List.of(), "vendor")),
+                companion.timers());
+        var counterNames = companion.counters().stream().map(MetricsCompanion.MetricSpec::name).toList();
+        assertEquals(List.of("t.grp.a", "t.grp.b", "t.grp.boxed", "t.grp.ratio",
+                "t.grp.Names", "t.grp.Names", "t.grp.Names"), counterNames);
+        assertEquals(List.of("k=v"), companion.counters().get(0).tags());
+        assertEquals(List.of("t.Names.g1", "ratio"),
+                companion.gauges().stream().map(MetricsCompanion.GaugeSpec::name).toList());
+    }
+
+    @Test
+    void absoluteClassLevelNameAndMetaAnnotations() throws Exception {
+        var compilation = compile(writeSource("t/Meta.java", """
+                package t;
+                import java.lang.annotation.ElementType;
+                import java.lang.annotation.Retention;
+                import java.lang.annotation.RetentionPolicy;
+                import java.lang.annotation.Target;
+                import org.eclipse.microprofile.metrics.annotation.Counted;
+                import org.eclipse.microprofile.metrics.annotation.Timed;
+
+                @Timed(name = "abs", absolute = true)
+                public class Meta {
+                    @Retention(RetentionPolicy.RUNTIME)
+                    @Target(ElementType.METHOD)
+                    @Counted(name = "meta.count", absolute = true)
+                    public @interface Hit {}
+
+                    @Retention(RetentionPolicy.RUNTIME)
+                    @Target(ElementType.METHOD)
+                    @Timed(name = "meta.time", absolute = true)
+                    public @interface Slow {}
+
+                    @Hit
+                    public void hit() {}
+
+                    @Slow
+                    public void slow() {}
+                }
+                """));
+        MetricsCompanion companion = compilation.companionOf("t.Meta");
+
+        assertEquals(List.of("abs", "meta.time", "abs.Meta"),
+                companion.timers().stream().map(MetricsCompanion.MetricSpec::name).toList());
+        assertEquals(List.of("meta.count"),
+                companion.counters().stream().map(MetricsCompanion.MetricSpec::name).toList());
+    }
+
+    @Test
+    void defaultPackageBeanGetsACompanion() throws Exception {
+        var compilation = compile(writeSource("Root.java", """
+                import org.eclipse.microprofile.metrics.annotation.Timed;
+
+                @Timed(name = "grp")
+                public class Root {
+                    public void a() {}
+                }
+                """));
+        MetricsCompanion companion = compilation.companionOf("Root");
+
+        assertEquals(List.of("grp.a", "grp.Root"),
+                companion.timers().stream().map(MetricsCompanion.MetricSpec::name).toList());
+    }
+
+    @Test
+    void literalsAreEscapedInTheGeneratedSource() throws Exception {
+        var compilation = compile(writeSource("t/Esc.java", """
+                package t;
+                import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                public class Esc {
+                    @Counted(name = "esc", absolute = true, description = "q\\"x\\" b\\\\ n\\n t\\t r\\r c\\001")
+                    public void hit() {}
+                }
+                """));
+        MetricsCompanion companion = compilation.companionOf("t.Esc");
+
+        assertEquals("q\"x\" b\\ n\n t\t r\r c\001", companion.counters().get(0).description());
+    }
+
+    @Test
+    void valve_reservedTagParameterGaugeAndNonNumericPrimitive() throws Exception {
+        var compilation = compile(
+                writeSource("t/Reserved.java", """
+                        package t;
+                        import org.eclipse.microprofile.metrics.annotation.Timed;
+
+                        public class Reserved {
+                            @Timed(tags = {"mp_scope=x"})
+                            public void a() {}
+                        }
+                        """),
+                writeSource("t/ParamGauge.java", """
+                        package t;
+                        import org.eclipse.microprofile.metrics.annotation.Gauge;
+
+                        public class ParamGauge {
+                            @Gauge(unit = "none")
+                            public int value(int factor) { return factor; }
+                        }
+                        """),
+                writeSource("t/BoolGauge.java", """
+                        package t;
+                        import org.eclipse.microprofile.metrics.annotation.Gauge;
+
+                        public class BoolGauge {
+                            @Gauge(unit = "none")
+                            public boolean up() { return true; }
+                        }
+                        """),
+                writeSource("t/EmptyValueTag.java", """
+                        package t;
+                        import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                        public class EmptyValueTag {
+                            @Counted(tags = {"k="})
+                            public void a() {}
+                        }
+                        """));
+        for (String bean : List.of("t.Reserved", "t.ParamGauge", "t.BoolGauge", "t.EmptyValueTag")) {
+            assertThrows(ClassNotFoundException.class,
+                    () -> compilation.loader().loadClass(bean + "$$DiracMetrics"), bean);
+        }
+    }
+
+    @Test
+    void interceptorsAndInterfacesGetNoCompanion() throws Exception {
+        var compilation = compile(
+                writeSource("t/Icpt.java", """
+                        package t;
+                        import org.eclipse.microprofile.metrics.annotation.Timed;
+
+                        @jakarta.interceptor.Interceptor
+                        @Timed
+                        public class Icpt {
+                            public void a() {}
+                        }
+                        """),
+                writeSource("t/Api.java", """
+                        package t;
+                        import org.eclipse.microprofile.metrics.annotation.Timed;
+
+                        public interface Api {
+                            @Timed
+                            void a();
+                        }
+                        """));
+        assertThrows(ClassNotFoundException.class, () -> compilation.loader().loadClass("t.Icpt$$DiracMetrics"));
+        assertThrows(ClassNotFoundException.class, () -> compilation.loader().loadClass("t.Api$$DiracMetrics"));
+        assertFalse(Files.exists(compilation.outputDir().toPath()
+                .resolve("META-INF/services/io.vidocq.dirac.spi.gen.MetricsCompanion")));
+    }
+
+    @Test
+    void existingCompanionSourceIsKept() throws Exception {
+        var compilation = compile(
+                writeSource("t/Dup.java", """
+                        package t;
+                        import org.eclipse.microprofile.metrics.annotation.Timed;
+
+                        public class Dup {
+                            @Timed
+                            public void a() {}
+                        }
+                        """),
+                writeSource("t/Dup$$DiracMetrics.java", """
+                        package t;
+
+                        public class Dup$$DiracMetrics {
+                            public static final String MARKER = "hand-written";
+                        }
+                        """));
+        Class<?> kept = compilation.loader().loadClass("t.Dup$$DiracMetrics");
+
+        assertEquals("hand-written", kept.getField("MARKER").get(null));
+    }
 }
