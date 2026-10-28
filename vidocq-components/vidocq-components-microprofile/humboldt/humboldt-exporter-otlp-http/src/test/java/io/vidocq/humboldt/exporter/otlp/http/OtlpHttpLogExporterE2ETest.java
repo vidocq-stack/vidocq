@@ -37,6 +37,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -46,6 +47,8 @@ class OtlpHttpLogExporterE2ETest {
 
     private HttpServer server;
     private final List<String> receivedBodies = new CopyOnWriteArrayList<>();
+    /** One permit per body received, so that tests wait for arrivals instead of polling. */
+    private final Semaphore bodyArrivals = new Semaphore(0);
     private final AtomicInteger callCount = new AtomicInteger();
 
     @BeforeEach
@@ -55,6 +58,7 @@ class OtlpHttpLogExporterE2ETest {
             callCount.incrementAndGet();
             String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             receivedBodies.add(body);
+            bodyArrivals.release();
             byte[] resp = "OK".getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(200, resp.length);
             try (OutputStream os = ex.getResponseBody()) {
@@ -107,10 +111,13 @@ class OtlpHttpLogExporterE2ETest {
 
     private void waitForReceivedBodies(int expected) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        while (System.nanoTime() < deadline && receivedBodies.size() < expected) {
-            try { Thread.sleep(20); } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt(); return;
+        try {
+            boolean arrived = true;
+            while (arrived && receivedBodies.size() < expected) {
+                arrived = bodyArrivals.tryAcquire(deadline - System.nanoTime(), TimeUnit.NANOSECONDS);
             }
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
         }
     }
 }

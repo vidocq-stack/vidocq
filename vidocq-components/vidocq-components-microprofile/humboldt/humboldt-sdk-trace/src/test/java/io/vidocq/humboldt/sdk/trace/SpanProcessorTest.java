@@ -20,11 +20,16 @@
 package io.vidocq.humboldt.sdk.trace;
 
 import io.opentelemetry.api.trace.Tracer;
+import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+import io.vidocq.humboldt.sdk.trace.data.SpanData;
 import io.vidocq.humboldt.sdk.trace.export.InMemorySpanExporter;
+import io.vidocq.humboldt.sdk.trace.export.SpanExporter;
 import io.vidocq.humboldt.sdk.trace.samplers.Sampler;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.Collection;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,7 +56,26 @@ class SpanProcessorTest {
     @Test
     void batch_processor_exports_after_threshold() throws Exception {
         InMemorySpanExporter exporter = InMemorySpanExporter.create();
-        BatchSpanProcessor batch = BatchSpanProcessor.builder(exporter)
+        CountDownLatch exported = new CountDownLatch(12);
+        SpanExporter counting = new SpanExporter() {
+            @Override
+            public CompletableResultCode export(Collection<SpanData> spans) {
+                CompletableResultCode result = exporter.export(spans);
+                spans.forEach(_ -> exported.countDown());
+                return result;
+            }
+
+            @Override
+            public CompletableResultCode flush() {
+                return exporter.flush();
+            }
+
+            @Override
+            public CompletableResultCode shutdown() {
+                return exporter.shutdown();
+            }
+        };
+        BatchSpanProcessor batch = BatchSpanProcessor.builder(counting)
                 .setMaxExportBatchSize(5)
                 .setScheduleDelay(Duration.ofMillis(50))
                 .build();
@@ -64,10 +88,7 @@ class SpanProcessorTest {
                 t.spanBuilder("span-" + i).startSpan().end();
             }
             // Wait for scheduleDelay-based flush (50ms) — allow a few cycles
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
-            while (System.nanoTime() < deadline && exporter.getFinishedSpans().size() < 12) {
-                Thread.sleep(20);
-            }
+            assertTrue(exported.await(3, TimeUnit.SECONDS), "12 spans exported by the scheduled flushes");
             assertEquals(12, exporter.getFinishedSpans().size(),
                     "BatchSpanProcessor must export 12 spans within a few cycles");
         }

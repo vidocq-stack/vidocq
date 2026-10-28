@@ -39,6 +39,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -50,6 +51,8 @@ class OtlpHttpSpanExporterE2ETest {
 
     private HttpServer server;
     private final List<String> receivedBodies = new CopyOnWriteArrayList<>();
+    /** One permit per body received, so that tests wait for arrivals instead of polling. */
+    private final Semaphore bodyArrivals = new Semaphore(0);
     private final List<String> receivedAuthHeaders = new CopyOnWriteArrayList<>();
     private final AtomicInteger callCount = new AtomicInteger();
     private volatile int[] responseCodesPerCall = new int[]{200};
@@ -64,6 +67,7 @@ class OtlpHttpSpanExporterE2ETest {
             if (auth != null) receivedAuthHeaders.add(auth);
             String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             receivedBodies.add(body);
+            bodyArrivals.release();
             byte[] resp = ("status=" + sc).getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(sc, resp.length);
             try (OutputStream os = ex.getResponseBody()) {
@@ -169,13 +173,13 @@ class OtlpHttpSpanExporterE2ETest {
 
     private void waitForReceivedBodies(int expected) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        while (System.nanoTime() < deadline && receivedBodies.size() < expected) {
-            try {
-                Thread.sleep(20);
-            } catch (InterruptedException _) {
-                Thread.currentThread().interrupt();
-                return;
+        try {
+            boolean arrived = true;
+            while (arrived && receivedBodies.size() < expected) {
+                arrived = bodyArrivals.tryAcquire(deadline - System.nanoTime(), TimeUnit.NANOSECONDS);
             }
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
         }
     }
 }
