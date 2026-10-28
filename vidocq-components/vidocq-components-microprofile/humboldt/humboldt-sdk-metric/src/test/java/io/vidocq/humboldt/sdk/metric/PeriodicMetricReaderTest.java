@@ -130,8 +130,9 @@ class PeriodicMetricReaderTest {
         reader.register(() -> List.of(METRIC));
         assertTrue(reader.shutdown().isSuccess());
         assertTrue(reader.shutdown().isSuccess(), "a second shutdown is a successful no-op");
-        assertFalse(exporter.exports.isEmpty(), "shutdown must export a final collection");
-        assertEquals(List.of(METRIC), exporter.exports.getLast());
+        // Exactly one final collection (BUG-20261028-03): the wake-up of the worker by
+        // shutdown() must not export on top of the final drain.
+        assertEquals(List.of(List.of(METRIC)), exporter.exports);
         assertEquals(1, exporter.shutdowns.get());
     }
 

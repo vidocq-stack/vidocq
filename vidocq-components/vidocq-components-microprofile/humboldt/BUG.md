@@ -526,3 +526,18 @@
   observed value per attribute set; the exported shape (sum, monotonicity, cumulative temporality) is unchanged.
 - **Regression test**: `SdkMeterInstrumentsTest.observable_counters_report_the_observed_value_on_every_collection`,
   `observable_counter_observer_keeps_the_last_observed_value`.
+
+## BUG-20261028-03 — `PeriodicMetricReader.shutdown()` exports the final collection twice
+
+- **Date**: 2026-10-28
+- **Status**: FIXED (branch `fix/sdk-metric-observable-counters`, 2026-10-28)
+- **Component**: humboldt-sdk-metric
+- **Affected**: 0.4.0-SNAPSHOT and earlier
+- **Symptom**: shutting a `PeriodicMetricReader` down sends two identical exports: one when `shutdown()` wakes the
+  worker up, then the final drain.
+- **Minimal reproduction**: `PeriodicMetricReaderTest.shutdown_exports_a_final_collection_then_shuts_the_exporter_down_once`
+  (two exports recorded instead of one).
+- **Cause**: the worker loop collected and exported after every wake-up, including the one triggered by
+  `shutdown()`, before leaving the loop for the final drain.
+- **Fix**: a wake-up without a pending flush once the reader is stopped leaves the loop; the final drain exports once.
+- **Regression test**: `PeriodicMetricReaderTest.shutdown_exports_a_final_collection_then_shuts_the_exporter_down_once`.

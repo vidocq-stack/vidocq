@@ -110,6 +110,8 @@ public final class PeriodicMetricReader implements MetricReader {
                 requested = pendingFlush;
                 pendingFlush = null;
             }
+            // Woken up by shutdown(): leave the export to the final drain below.
+            if (requested == null && !running.get()) break;
             doCollectAndExport(requested);
             lastCollectNanos = System.nanoTime();
         }
