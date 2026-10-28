@@ -457,6 +457,9 @@ final class RepositoryWriter {
         if (!m.getEnclosingElement().equals(repo)) return null;
         if (m.getParameters().size() != 1) return null;
         boolean isVoid = returnType.getKind() == javax.lang.model.type.TypeKind.VOID;
+        if (isBatch(m.getParameters().get(0).asType())) {
+            return batchLifecycleBody(m, returnType, metamodel, entityFqn);
+        }
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Insert")) {
             return wrapReturn("runtime.insertStrict(" + metamodel + ".$MODEL, ("
                     + entityFqn + ") " + p(0) + ")", isVoid);
@@ -476,6 +479,38 @@ final class RepositoryWriter {
             return isVoid ? call + ";" : call + "; return null;";
         }
         return null;
+    }
+
+    /** {@code true} for an array or an {@code Iterable} parameter: a lifecycle method on several entities. */
+    private boolean isBatch(TypeMirror param) {
+        if (param.getKind() == javax.lang.model.type.TypeKind.ARRAY) return true;
+        TypeElement iterable = elements.getTypeElement(ITERABLE);
+        return iterable != null && types.isAssignable(types.erasure(param), types.erasure(iterable.asType()));
+    }
+
+    /**
+     * A lifecycle method on several entities (MANSART-016): the strict operation on each one, in order, returning
+     * nothing, a list or an array of the results. {@code null} for a {@code @Delete} that returns a value.
+     */
+    private String batchLifecycleBody(ExecutableElement m, TypeMirror returnType, String metamodel,
+                                      String entityFqn) {
+        boolean isVoid = returnType.getKind() == javax.lang.model.type.TypeKind.VOID;
+        String loop = "for (" + entityFqn + " _e : " + p(0) + ") ";
+        if (hasJakartaAnnotation(m, "jakarta.data.repository.Delete")) {
+            return isVoid ? loop + "runtime.deleteStrict(" + metamodel + ".$MODEL, _e);" : null;
+        }
+        String op;
+        if (hasJakartaAnnotation(m, "jakarta.data.repository.Insert")) op = "insertStrict";
+        else if (hasJakartaAnnotation(m, "jakarta.data.repository.Update")) op = "updateStrict";
+        else if (hasJakartaAnnotation(m, "jakarta.data.repository.Save")) op = "save";
+        else return null;
+        String call = "runtime." + op + "(" + metamodel + ".$MODEL, _e)";
+        if (isVoid) return loop + call + ";";
+        String collect = "var _out = new java.util.ArrayList<" + entityFqn + ">(); " + loop + "_out.add(" + call + "); ";
+        if (returnType.getKind() == javax.lang.model.type.TypeKind.ARRAY) {
+            return collect + "return _out.toArray(new " + entityFqn + "[0]);";
+        }
+        return collect + "return _out;";
     }
 
     private String wrapReturn(String call, boolean isVoid) {

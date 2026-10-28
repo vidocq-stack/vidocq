@@ -612,3 +612,22 @@ drivers only support for reference types; the processor had no array branch for 
 ### Fix
 `JdqlExecutor.projectionElement` boxes the element type; `JdqlParser.emitProject` reads an array's column as the
 boxed component type and copies it into the array. Regression test: `EmptySingleResultTest.projectsToPrimitives`.
+
+## MANSART-016 — Annotation processor: lifecycle methods on several entities did not compile
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: medium (a repository declaring one fails the build; the runtime proxy was right)
+- **Module**: `mansart-data-processor` (`RepositoryWriter`)
+
+### Symptom
+`@Insert List<E> createAll(List<E>)`, `@Insert E[] createArray(E[])`, `@Update`/`@Save` on a list and
+`@Delete void removeAll(List<E>)` generated `runtime.insertStrict(_E.$MODEL, (E) arg0)`, a cast of the list or
+array to the entity: the generated class did not compile (`incompatible types`).
+
+### Minimal repro
+`ArticleBatchRepository` + `LifecycleBatchTest` (`mansart-data-tests`), through both implementations.
+
+### Fix
+`RepositoryWriter.lifecycleBody` recognises an array or `Iterable` parameter and `batchLifecycleBody` applies the
+strict operation to each entity in order, returning nothing, a list or an array. Regression test: `LifecycleBatchTest`.
