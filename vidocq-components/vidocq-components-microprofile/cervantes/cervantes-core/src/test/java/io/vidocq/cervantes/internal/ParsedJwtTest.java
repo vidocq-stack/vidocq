@@ -51,8 +51,15 @@ class ParsedJwtTest {
     }
 
     @Test
-    void differentSignatureBytes_areNotEqual() {
-        assertNotEquals(parsed("sig"), parsed("other"));
+    void anyDifferentComponent_breaksEquality() {
+        ParsedJwt base = parsed("sig");
+        byte[] input = base.signingInput();
+        byte[] signature = base.signature();
+        assertNotEquals(base, parsed("other"));
+        assertNotEquals(base, new ParsedJwt(CLAIMS, CLAIMS, input, signature, RAW));
+        assertNotEquals(base, new ParsedJwt(HEADER, HEADER, input, signature, RAW));
+        assertNotEquals(base, new ParsedJwt(HEADER, CLAIMS, signature, signature, RAW));
+        assertNotEquals(base, new ParsedJwt(HEADER, CLAIMS, input, signature, "other.raw.token"));
     }
 
     @Test

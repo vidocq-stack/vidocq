@@ -52,6 +52,8 @@ class JwtClaimsValidatorTest {
     private static final String EXP = "exp";
     private static final String IAT = "iat";
     private static final String AUD_CLAIM = "aud";
+    private static final String AUDIENCE_MISMATCH = "audience mismatch";
+    private static final String SUBJECT = "alice";
 
     private final JwtClaimsValidator validator = new JwtClaimsValidator();
 
@@ -65,7 +67,7 @@ class JwtClaimsValidatorTest {
     }
 
     private static JsonObjectBuilder claims() {
-        return Json.createObjectBuilder().add("sub", "alice").add(EXP, NOW_S + 3600);
+        return Json.createObjectBuilder().add("sub", SUBJECT).add(EXP, NOW_S + 3600);
     }
 
     private String rejection(JsonObject claims, JwtConfig config) {
@@ -82,20 +84,20 @@ class JwtClaimsValidatorTest {
 
     @Test
     void missingExp_isRejectedOnlyWhenRequired() {
-        JsonObject claims = Json.createObjectBuilder().add("sub", "alice").build();
+        JsonObject claims = Json.createObjectBuilder().add("sub", SUBJECT).build();
         assertTrue(rejection(claims, config(Optional.empty(), Set.of(), true, Optional.empty())).contains(EXP));
         assertDoesNotThrow(() -> validator.validate(claims, lenient(), CLOCK));
     }
 
     @Test
     void nullExp_isTreatedAsAbsent() {
-        JsonObject claims = Json.createObjectBuilder().add("sub", "alice").addNull(EXP).build();
+        JsonObject claims = Json.createObjectBuilder().add("sub", SUBJECT).addNull(EXP).build();
         assertDoesNotThrow(() -> validator.validate(claims, lenient(), CLOCK));
     }
 
     @Test
     void nonNumericExp_isRejected() {
-        JsonObject claims = Json.createObjectBuilder().add("sub", "alice").add(EXP, "tomorrow").build();
+        JsonObject claims = Json.createObjectBuilder().add("sub", SUBJECT).add(EXP, "tomorrow").build();
         assertTrue(rejection(claims, lenient()).contains("must be a number"));
     }
 
@@ -115,7 +117,7 @@ class JwtClaimsValidatorTest {
 
     @Test
     void iatWithoutExp_isAccepted() {
-        JsonObject claims = Json.createObjectBuilder().add("sub", "alice").add(IAT, NOW_S).build();
+        JsonObject claims = Json.createObjectBuilder().add("sub", SUBJECT).add(IAT, NOW_S).build();
         assertDoesNotThrow(() -> validator.validate(claims, lenient(), CLOCK));
     }
 
@@ -158,9 +160,9 @@ class JwtClaimsValidatorTest {
     @Test
     void audienceMismatchOrMissing_isRejected() {
         JwtConfig config = config(Optional.empty(), Set.of(AUD), false, Optional.empty());
-        assertTrue(rejection(claims().add(AUD_CLAIM, "other").build(), config).contains("audience mismatch"));
-        assertTrue(rejection(claims().build(), config).contains("audience mismatch"));
-        assertTrue(rejection(claims().add(AUD_CLAIM, 42).build(), config).contains("audience mismatch"));
+        assertTrue(rejection(claims().add(AUD_CLAIM, "other").build(), config).contains(AUDIENCE_MISMATCH));
+        assertTrue(rejection(claims().build(), config).contains(AUDIENCE_MISMATCH));
+        assertTrue(rejection(claims().add(AUD_CLAIM, 42).build(), config).contains(AUDIENCE_MISMATCH));
     }
 
     @Test
@@ -169,7 +171,7 @@ class JwtClaimsValidatorTest {
         assertTrue(rejection(none, lenient()).contains("upn"));
         JsonObject upnOnly = Json.createObjectBuilder().add("upn", "alice@vidocq.dev").build();
         assertDoesNotThrow(() -> validator.validate(upnOnly, lenient(), CLOCK));
-        JsonObject preferredOnly = Json.createObjectBuilder().add("preferred_username", "alice").build();
+        JsonObject preferredOnly = Json.createObjectBuilder().add("preferred_username", SUBJECT).build();
         assertDoesNotThrow(() -> validator.validate(preferredOnly, lenient(), CLOCK));
     }
 }
