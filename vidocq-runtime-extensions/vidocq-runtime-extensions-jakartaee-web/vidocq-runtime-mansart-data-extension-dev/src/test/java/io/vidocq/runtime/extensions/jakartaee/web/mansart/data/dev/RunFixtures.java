@@ -111,6 +111,10 @@ final class RunFixtures {
             // the entity constructor Mansart calls; fields are set through method handles
         }
 
+        Long id() {
+            return id;
+        }
+
         Gizmo gizmo() {
             return gizmo;
         }

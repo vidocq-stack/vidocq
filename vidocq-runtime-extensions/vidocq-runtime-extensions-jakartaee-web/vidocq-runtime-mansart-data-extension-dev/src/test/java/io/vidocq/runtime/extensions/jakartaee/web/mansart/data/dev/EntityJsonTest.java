@@ -113,6 +113,7 @@ class EntityJsonTest {
     void aReferenceIsBuiltFromItsId() throws Exception {
         Part part = (Part) entities.fromJson(Part.class, Json.parse("{\"gizmo\":7,\"label\":\"left\"}"), "part");
 
+        assertNull(part.id(), "an absent id stays unset, for the store to generate");
         assertEquals(7L, part.gizmo().id());
         assertEquals("left", part.label());
     }
