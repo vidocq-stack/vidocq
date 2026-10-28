@@ -448,6 +448,33 @@ class GrimmModelProcessorOracleTest {
         assertFragmentMatchesScan(compilation, "t.Scalars");
     }
 
+    /**
+     * BUG-20261028-02: a method {@code @Path} keeps its trailing slash in the runtime scan
+     * ({@code /a/b/}) and {@code @Path("/")} adds nothing ({@code /a}); the companion must
+     * document the same templates.
+     */
+    @Test
+    void methodPathSlashes_matchScan() throws Exception {
+        var compilation = compile(writeSource("t/Slashes.java", """
+                package t;
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.POST;
+                import jakarta.ws.rs.Path;
+
+                @Path("/a/")
+                public class Slashes {
+                    @GET
+                    @Path("b/")
+                    public String trailing() { return ""; }
+
+                    @POST
+                    @Path("/")
+                    public void root() { }
+                }
+                """));
+        assertFragmentMatchesScan(compilation, "t.Slashes");
+    }
+
     @Test
     void rootPathResourceInTheUnnamedPackage_matchesScan() throws Exception {
         var compilation = compile(writeSource("Root.java", """

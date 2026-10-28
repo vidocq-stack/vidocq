@@ -150,37 +150,56 @@ public final class GrimmModelProcessor extends AbstractProcessor {
         boolean hasOperation = false;
 
         for (ExecutableElement method : ElementFilter.methodsIn(type.getEnclosedElements())) {
-            if (method.getModifiers().contains(Modifier.STATIC)
-                    || method.getModifiers().contains(Modifier.PRIVATE)) {
-                continue;
-            }
-            rejectMpOpenApiAnnotations(method);
-            String verb = httpVerbOf(method);
-            boolean hasPath = method.getAnnotation(Path.class) != null;
-            if (verb == null) {
-                if (hasPath) {
-                    throw new SkipGeneration("sub-resource locator " + method.getSimpleName()
-                            + " is outside the M1 subset");
-                }
-                continue;
-            }
-            String template = joinPath(basePath, normalize(pathValue(method)));
-            Operation operation = buildOperation(type, method, schemaGenerator,
-                    producesOf(method) != null ? producesOf(method) : classProduces);
-
-            PathItem item = paths.getPathItem(template);
-            if (item == null) {
-                item = OASFactory.createObject(PathItem.class);
-                paths.addPathItem(template, item);
-            }
-            setOperation(item, verb, operation);
-            hasOperation = true;
+            hasOperation |= addOperation(type, method, basePath, classProduces, schemaGenerator, paths);
         }
 
         if (!hasOperation) {
             throw new SkipGeneration("no HTTP verb method in the M1 subset");
         }
         emit(type, OpenApiSerializers.toJson(fragment));
+    }
+
+    /** Adds the operation of {@code method} to {@code paths}; {@code false} when it is not one. */
+    private boolean addOperation(TypeElement type, ExecutableElement method, String basePath,
+                                 String[] classProduces, SchemaGenerator schemaGenerator, Paths paths)
+            throws SkipGeneration {
+        if (method.getModifiers().contains(Modifier.STATIC)
+                || method.getModifiers().contains(Modifier.PRIVATE)) {
+            return false;
+        }
+        rejectMpOpenApiAnnotations(method);
+        String verb = httpVerbOf(method);
+        if (verb == null) {
+            if (method.getAnnotation(Path.class) != null) {
+                throw new SkipGeneration("sub-resource locator " + method.getSimpleName()
+                        + " is outside the M1 subset");
+            }
+            return false;
+        }
+        String template = joinPath(basePath, methodSubPath(method));
+        String[] methodProduces = producesOf(method);
+        Operation operation = buildOperation(type, method, schemaGenerator,
+                methodProduces != null ? methodProduces : classProduces);
+
+        PathItem item = paths.getPathItem(template);
+        if (item == null) {
+            item = OASFactory.createObject(PathItem.class);
+            paths.addPathItem(template, item);
+        }
+        setOperation(item, verb, operation);
+        return true;
+    }
+
+    /**
+     * The method {@code @Path} as the runtime scan joins it (BUG-20261028-02): a leading slash
+     * added, a trailing slash kept, {@code "/"} adding nothing.
+     */
+    private static String methodSubPath(ExecutableElement method) {
+        String value = pathValue(method);
+        if (value.isEmpty() || value.equals("/")) {
+            return "";
+        }
+        return value.startsWith("/") ? value : "/" + value;
     }
 
     private Operation buildOperation(TypeElement type, ExecutableElement method,

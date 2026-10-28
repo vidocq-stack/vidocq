@@ -374,3 +374,18 @@ Track reproducible bugs with:
   `description` or some `content`; `addComponentPathItems` is split into smaller helpers (path item,
   operation, tags, security, request body, responses, callback). Regression test:
   `AnnotationScannerPathItemsTest.operationWithoutRequestBodyDeclaresNone`.
+
+### BUG-20261028-02 — grimm-processor companions document other path templates than the runtime scan
+
+- **id**: BUG-20261028-02
+- **date**: 2026-10-28
+- **symptom**: for a resource whose method `@Path` ends with a slash, or is `"/"`, the `$$GrimmModel`
+  companion documents another template than the runtime scan (the behavioural oracle): class
+  `@Path("/a/")` with `@GET @Path("b/")` and `@POST @Path("/")` gives `/a/b` and `/a/` in the companion,
+  `/a/b/` and `/a` in the scan. The served `/openapi` document depends on whether the processor ran.
+- **minimal repro**: `GrimmModelProcessorOracleTest.methodPathSlashes_matchScan`.
+- **hypothesis (confirmed)**: the processor normalised the method path like the class path (trailing slash
+  stripped, `"/"` kept), while `JaxRsResourceScanner.methodSubPath` keeps a trailing slash and drops `"/"`.
+- **status**: FIXED — 2026-10-28. `GrimmModelProcessor.methodSubPath` applies the scanner's rule; the
+  per-method part of `generate` moved to `addOperation`. Regression test:
+  `GrimmModelProcessorOracleTest.methodPathSlashes_matchScan`.
