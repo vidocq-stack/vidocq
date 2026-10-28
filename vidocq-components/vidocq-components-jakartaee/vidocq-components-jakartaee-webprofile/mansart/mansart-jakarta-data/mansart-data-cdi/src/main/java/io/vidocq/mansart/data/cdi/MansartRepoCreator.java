@@ -22,7 +22,6 @@ package io.vidocq.mansart.data.cdi;
 import io.vidocq.mansart.data.core.MansartDataException;
 import io.vidocq.mansart.data.core.RepositoryRuntime;
 import jakarta.enterprise.inject.Instance;
-import jakarta.enterprise.invoke.Invoker;
 import jakarta.enterprise.inject.build.compatible.spi.Parameters;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 

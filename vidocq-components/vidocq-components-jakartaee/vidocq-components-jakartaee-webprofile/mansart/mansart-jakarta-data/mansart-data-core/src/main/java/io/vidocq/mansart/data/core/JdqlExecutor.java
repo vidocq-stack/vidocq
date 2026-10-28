@@ -283,8 +283,8 @@ public final class JdqlExecutor {
         switch (p) {
             case JdqlAst.Cmp c -> out.add(c.arg());
             case JdqlAst.FnCmp c -> out.add(c.arg());
-            case JdqlAst.IsNull ignored -> { /* no value */ }
-            case JdqlAst.FnIsNull ignored -> { /* no value */ }
+            case JdqlAst.IsNull _ -> { /* no value */ }
+            case JdqlAst.FnIsNull _ -> { /* no value */ }
             case JdqlAst.Between b -> {
                 out.add(b.lo());
                 out.add(b.hi());
@@ -304,7 +304,7 @@ public final class JdqlExecutor {
     private static void collectArgs(JdqlAst.Expr e, List<JdqlAst.ArgRef> out) {
         switch (e) {
             case JdqlAst.ExprArg(var arg) -> out.add(arg);
-            case JdqlAst.ExprAttr ignored -> { /* an attribute, no value */ }
+            case JdqlAst.ExprAttr _ -> { /* an attribute, no value */ }
             case JdqlAst.ExprBin bin -> {
                 collectArgs(bin.left(), out);
                 collectArgs(bin.right(), out);

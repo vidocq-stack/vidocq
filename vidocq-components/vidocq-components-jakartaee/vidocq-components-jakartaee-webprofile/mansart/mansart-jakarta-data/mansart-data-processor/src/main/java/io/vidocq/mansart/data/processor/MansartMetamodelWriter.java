@@ -24,7 +24,6 @@ import io.vidocq.mansart.data.processor.EntityScanner.EntityDescriptor;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.Writer;
 
 /**
  * Writes the Mansart-rich metamodel class {@code _Book} for an entity {@code Book}.

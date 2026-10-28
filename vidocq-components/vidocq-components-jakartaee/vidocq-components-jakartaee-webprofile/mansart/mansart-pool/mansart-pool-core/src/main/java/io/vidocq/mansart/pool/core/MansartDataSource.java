@@ -161,7 +161,7 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
             try {
                 type.getMethod(name, String.class).invoke(instance, value);
                 return;
-            } catch (NoSuchMethodException tryNext) {
+            } catch (NoSuchMethodException _) {
                 // driver naming differs (setURL vs setUrl) — try the next candidate
             }
         }

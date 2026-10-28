@@ -270,7 +270,7 @@ public final class RuntimeEntityModelBuilder {
                 if (v == null) return defaultValue;
                 if (type.isInstance(v)) return type.cast(v);
                 return defaultValue;
-            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ignored) {
+            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException _) {
                 return defaultValue;
             }
         }

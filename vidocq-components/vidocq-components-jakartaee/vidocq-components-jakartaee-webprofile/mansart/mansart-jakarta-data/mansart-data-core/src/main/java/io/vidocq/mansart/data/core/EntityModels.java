@@ -92,7 +92,7 @@ public final class EntityModels {
             Class<?> meta = Class.forName(generatedName, true, entityType.getClassLoader());
             Field model = meta.getField("$MODEL");
             return (EntityModel<?>) model.get(null);
-        } catch (ClassNotFoundException ignored) {
+        } catch (ClassNotFoundException _) {
             // Fall through to runtime builder.
         } catch (NoSuchFieldException | IllegalAccessException e) {
             throw new MansartDataException(

@@ -216,11 +216,6 @@ public final class QueryMethodParser {
         return pathResolver.resolve(camelChunk, attributeNames);
     }
 
-    /** Convert {@code "Name"} → {@code "name"} if "name" is in {@code attributeNames}. Flat-only. */
-    private static String matchAttribute(String camelChunk, Set<String> attributeNames) {
-        return matchAttributeOrPath(camelChunk, attributeNames, FLAT_ONLY);
-    }
-
     private static List<Order> parseOrders(String clause, Set<String> attributeNames, PathResolver pathResolver) {
         // OrderBy clause: NameAsc, AgeDesc, NameAscAgeDesc, … (or just Name with implicit Asc).
         // Eat one attribute at a time from the LEFT, greedy on the largest matching prefix,

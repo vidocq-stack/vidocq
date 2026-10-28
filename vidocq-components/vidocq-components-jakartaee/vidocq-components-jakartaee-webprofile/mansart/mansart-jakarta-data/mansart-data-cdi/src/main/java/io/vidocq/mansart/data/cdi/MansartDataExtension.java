@@ -156,7 +156,7 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         Class<?> impl;
         try {
             impl = currentClassLoader().loadClass(clazz.info().name());
-        } catch (ClassNotFoundException | LinkageError ex) {
+        } catch (ClassNotFoundException | LinkageError _) {
             return;
         }
         for (Class<?> itf : impl.getInterfaces()) {
@@ -180,7 +180,7 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
             try {
                 itf  = cl.loadClass(e.itfFqn());
                 impl = cl.loadClass(e.implFqn());
-            } catch (ClassNotFoundException ex) {
+            } catch (ClassNotFoundException _) {
                 // Compile-time: the impl/interface aren't loadable yet from the APT classloader.
                 // Skip silently — the runtime container will register the bean correctly when it
                 // re-runs this BCE with a classloader that can see the user module.
@@ -203,7 +203,7 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
             Class<?> itf;
             try {
                 itf = cl.loadClass(fqn);
-            } catch (ClassNotFoundException ex) {
+            } catch (ClassNotFoundException _) {
                 // Same compile-time tolerance as above: defer to runtime.
                 continue;
             }
@@ -234,7 +234,7 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         try {
             Class<?> impl = cl.loadClass(itfFqn + "Impl");
             return isAlreadyManagedBean(impl);
-        } catch (ClassNotFoundException ex) {
+        } catch (ClassNotFoundException _) {
             return false;
         }
     }

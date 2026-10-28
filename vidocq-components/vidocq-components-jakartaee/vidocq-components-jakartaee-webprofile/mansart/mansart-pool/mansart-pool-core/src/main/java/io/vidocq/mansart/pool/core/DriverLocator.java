@@ -65,7 +65,7 @@ final class DriverLocator {
                 }
                 driver = providers.next();
                 consecutiveErrors = 0;
-            } catch (ServiceConfigurationError broken) {
+            } catch (ServiceConfigurationError _) {
                 // Usually the JDK's lazy iterator has already advanced past the failing entry, so looping again
                 // reaches the next provider and a provider that cannot be loaded does not hide the next one.
                 // But when the lookup itself fails, the iterator fails again on every call: give up on the
@@ -79,7 +79,7 @@ final class DriverLocator {
                 if (driver.acceptsURL(jdbcUrl)) {
                     return driver;
                 }
-            } catch (SQLException | RuntimeException | LinkageError refused) {
+            } catch (SQLException | RuntimeException | LinkageError _) {
                 // this driver cannot even judge the URL: try the next one
             }
         }

@@ -79,7 +79,7 @@ final class JdqlParser {
                     && hasComplexSet(runtimeStmt)) {
                 return emitRuntimeFallback(jdql, method, metamodel, returnType);
             }
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException _) {
             // Fall through — let the local parser produce the precise compile-time error message.
         }
 
@@ -450,7 +450,7 @@ final class JdqlParser {
             case And(var children) -> { for (Pred c : children) declareInCollections(sb, c, nameToIdx, m, ctx); }
             case Or(var children) -> { for (Pred c : children) declareInCollections(sb, c, nameToIdx, m, ctx); }
             case Not(var child) -> declareInCollections(sb, child, nameToIdx, m, ctx);
-            default    -> {}
+            default    -> { /* no IN collection to declare */ }
         }
     }
 
@@ -853,8 +853,8 @@ final class JdqlParser {
             case FnCmp c      -> out.add(c.arg);
             case Between b    -> { out.add(b.lo); out.add(b.hi); }
             case FnBetween b  -> { out.add(b.lo); out.add(b.hi); }
-            case IsNull ign   -> {}
-            case FnIsNull ign -> {}
+            case IsNull _   -> { /* no argument */ }
+            case FnIsNull _ -> { /* no argument */ }
             case In in        -> out.addAll(in.args);   // works for non-collection literal IN
             case FnIn in      -> out.addAll(in.args);
             case And(var children)        -> { for (Pred c : children) collectArgs(c, out); }

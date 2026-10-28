@@ -53,8 +53,8 @@ final class WhereBinder {
                     psIdx = bindOne(dialect, ps, psIdx, args, argCursor, attr);
                 }
             }
-            case Where.IsNull ignored1 -> { /* no bind */ }
-            case Where.IsNotNull ignored2 -> { /* no bind */ }
+            case Where.IsNull _ -> { /* no bind */ }
+            case Where.IsNotNull _ -> { /* no bind */ }
             case Where.And(var children) -> {
                 for (Where child : children) psIdx = bind(dialect, ps, child, args, psIdx, argCursor);
             }
@@ -70,8 +70,8 @@ final class WhereBinder {
             // character count, so the bound parameter must be Integer instead of the column's
             // declared Java type.
             case Where.Func w -> psIdx = bindFunc(dialect, ps, w, args, psIdx, argCursor);
-            case Where.AlwaysTrue ignored3  -> { /* no bind */ }
-            case Where.AlwaysFalse ignored4 -> { /* no bind */ }
+            case Where.AlwaysTrue _  -> { /* no bind */ }
+            case Where.AlwaysFalse _ -> { /* no bind */ }
         }
         return psIdx;
     }
@@ -109,14 +109,14 @@ final class WhereBinder {
                                         Object[] args, int psIdx, int[] argCursor,
                                         Class<?> overrideType) throws SQLException {
         return switch (inner) {
-            case Where.Eq ignored      -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
-            case Where.NotEq ignored   -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
-            case Where.Lt ignored      -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
-            case Where.Lte ignored     -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
-            case Where.Gt ignored      -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
-            case Where.Gte ignored     -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
-            case Where.Like ignored    -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
-            case Where.Between ignored -> bindOne(dialect, ps,
+            case Where.Eq _      -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.NotEq _   -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.Lt _      -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.Lte _     -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.Gt _      -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.Gte _     -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.Like _    -> bindOne(dialect, ps, psIdx, args, argCursor, overrideType);
+            case Where.Between _ -> bindOne(dialect, ps,
                     bindOne(dialect, ps, psIdx, args, argCursor, overrideType),
                     args, argCursor, overrideType);
             case Where.In w            -> {
@@ -126,8 +126,8 @@ final class WhereBinder {
                 }
                 yield p;
             }
-            case Where.IsNull ignored    -> psIdx;
-            case Where.IsNotNull ignored -> psIdx;
+            case Where.IsNull _    -> psIdx;
+            case Where.IsNotNull _ -> psIdx;
             case Where.Not(var child)             -> bindFuncWithType(dialect, ps, child, args, psIdx, argCursor, overrideType);
             default -> throw new IllegalArgumentException(
                     "Func wraps Eq/NotEq/Lt/Lte/Gt/Gte/Like/Between/In/IsNull/IsNotNull/Not only, got: " + inner);

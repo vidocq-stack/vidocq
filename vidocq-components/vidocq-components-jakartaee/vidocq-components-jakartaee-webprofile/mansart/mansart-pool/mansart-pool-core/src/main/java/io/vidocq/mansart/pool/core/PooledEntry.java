@@ -84,7 +84,7 @@ final class PooledEntry {
     }
 
     void closeUnderlying() {
-        try { delegate.close(); } catch (SQLException ignored) { /* best-effort */ }
+        try { delegate.close(); } catch (SQLException _) { /* best-effort */ }
     }
 
     boolean expired(long maxLifetimeNanos, long idleTimeoutNanos, long nowNanos) {

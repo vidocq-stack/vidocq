@@ -141,7 +141,7 @@ public final class ConnectionXAResource
             if (!connection.isClosed() && originalAutoCommit) {
                 connection.setAutoCommit(true);
             }
-        } catch (SQLException ignored) { /* best effort */ }
+        } catch (SQLException _) { /* best effort */ }
     }
 
     private static XAException xa(int errorCode, SQLException cause) {

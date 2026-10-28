@@ -169,7 +169,7 @@ public class TransactionalInterceptor {
     }
 
     private void safeRollback() {
-        try { tm.rollback(); } catch (Exception ignored) { /* best effort */ }
+        try { tm.rollback(); } catch (Exception _) { /* best effort */ }
     }
 
     private boolean isActive() throws Exception {

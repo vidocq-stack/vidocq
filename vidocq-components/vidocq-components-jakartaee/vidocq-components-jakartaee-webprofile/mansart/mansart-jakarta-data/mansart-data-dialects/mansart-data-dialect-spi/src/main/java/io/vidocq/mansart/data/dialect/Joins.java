@@ -91,8 +91,8 @@ public final class Joins {
             case Where.Not(var child)       -> walkWhere(child, sink);
             case Where.IgnoreCase(var inner) -> walkWhere(inner, sink);
             case Where.Func x      -> walkWhere(x.inner(), sink);
-            case Where.AlwaysTrue ignored -> {}
-            case Where.AlwaysFalse ignored -> {}
+            case Where.AlwaysTrue _ -> { /* no attribute to visit */ }
+            case Where.AlwaysFalse _ -> { /* no attribute to visit */ }
         }
     }
 

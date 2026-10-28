@@ -97,7 +97,7 @@ final class JtaTransactionBridge implements TransactionBridge {
                 @Override public void afterCompletion(int status) {
                     try {
                         enlisted.closer().close();
-                    } catch (Exception ignored) {
+                    } catch (Exception _) {
                         // Best effort — the TM already committed/rolled back through the XAResource.
                     }
                 }
@@ -126,7 +126,7 @@ final class JtaTransactionBridge implements TransactionBridge {
         if (ds instanceof XADataSource xa) return xa;
         try {
             if (ds.isWrapperFor(XADataSource.class)) return ds.unwrap(XADataSource.class);
-        } catch (SQLException notAWrapper) {
+        } catch (SQLException _) {
             // JDBC allows isWrapperFor/unwrap to throw — treat as not XA-capable.
         }
         return null;
@@ -139,7 +139,7 @@ final class JtaTransactionBridge implements TransactionBridge {
             tx.enlistResource(xaConnection.getXAResource());
         } catch (RuntimeException | jakarta.transaction.RollbackException
                  | jakarta.transaction.SystemException e) {
-            try { xaConnection.close(); } catch (SQLException ignored) { /* best effort */ }
+            try { xaConnection.close(); } catch (SQLException _) { /* best effort */ }
             throw e;
         }
         return new Enlisted(xaConnection.getConnection(), xaConnection::close);
@@ -152,7 +152,7 @@ final class JtaTransactionBridge implements TransactionBridge {
             tx.enlistResource(new ConnectionXAResource(connection));
         } catch (RuntimeException | jakarta.transaction.RollbackException
                  | jakarta.transaction.SystemException e) {
-            try { connection.close(); } catch (SQLException ignored) { /* best effort */ }
+            try { connection.close(); } catch (SQLException _) { /* best effort */ }
             throw e;
         }
         Integer count = (Integer) tsr.getResource(LOCAL_COUNT_KEY);

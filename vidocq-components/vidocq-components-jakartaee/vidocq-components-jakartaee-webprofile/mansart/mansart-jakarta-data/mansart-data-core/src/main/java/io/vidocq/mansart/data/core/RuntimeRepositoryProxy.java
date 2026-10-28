@@ -71,7 +71,7 @@ public final class RuntimeRepositoryProxy {
         // still get a working table. M7-23 also bootstraps tables for any secondary entity that
         // method signatures reveal (e.g. MultipleEntityRepo touches both Box and Coordinate).
         try { runtime.ensureTable(primary); }
-        catch (RuntimeException ignored) { /* table may already exist or be user-managed */ }
+        catch (RuntimeException _) { /* table may already exist or be user-managed */ }
         Map<Class<?>, EntityModel<?>> models = buildSecondaryModels(repoInterface, primary, runtime);
         return create(repoInterface, primary, models, runtime);
     }
@@ -91,7 +91,7 @@ public final class RuntimeRepositoryProxy {
         // while we ship and validate the bytecode emitter.
         try {
             return (R) createGenerated(repoInterface, methodModel, dispatchers, primary, runtime);
-        } catch (Throwable generationFailure) {
+        } catch (Throwable _) {
             // Swallow and fall through to the Proxy path. The generator is the canonical
             // runtime impl; java.lang.reflect.Proxy stays as a safety net for shapes not yet
             // supported by RuntimeRepositoryClassGenerator.
@@ -166,8 +166,8 @@ public final class RuntimeRepositoryProxy {
             EntityModel<?> em = RuntimeEntityModelBuilder.build(entityClass);
             out.put(entityClass, em);
             try { runtime.ensureTable(em); }
-            catch (RuntimeException ignored) { /* schema may already exist */ }
-        } catch (RuntimeException ignored) {
+            catch (RuntimeException _) { /* schema may already exist */ }
+        } catch (RuntimeException _) {
             // Not a Mansart-mappable entity (e.g. value object) — skip silently.
         }
     }
@@ -335,30 +335,6 @@ public final class RuntimeRepositoryProxy {
     @FunctionalInterface
     private interface Dispatcher {
         Object invoke(RepositoryRuntime runtime, EntityModel<?> model, Object[] args);
-    }
-
-    private static Map<Method, Dispatcher> buildDispatchers(Class<?> repoInterface, EntityModel<?> model) {
-        // HashMap (not IdentityHashMap): java.lang.reflect.Proxy may invoke with a different
-        // Method instance than the one we cached from getDeclaredMethods.
-        Map<Method, Dispatcher> out = new HashMap<>();
-        java.util.Set<String> attributeNames = new java.util.LinkedHashSet<>();
-        for (Attribute<?, ?> a : model.attributes()) attributeNames.add(a.name());
-
-        for (Method m : allInterfaceMethods(repoInterface)) {
-            if (m.isDefault() || m.getDeclaringClass() == Object.class) continue;
-            Dispatcher d = jdqlDispatcher(m, model, attributeNames);
-            if (d == null) d = findAnnotationDispatcher(m, model, attributeNames);
-            if (d == null) d = lifecycleDispatcher(m, model);
-            if (d == null) d = inheritedDispatcher(m);
-            if (d == null) d = derivedDispatcher(m, model, attributeNames);
-            if (d == null) {
-                d = (rt, em, args) -> { throw unsupported(m,
-                        "compile-time Impl missing AND not handled by runtime fallback (no @Query, no lifecycle, "
-                      + "no inherited match, no parseable derived name)."); };
-            }
-            out.put(m, d);
-        }
-        return out;
     }
 
     private static List<Method> allInterfaceMethods(Class<?> itf) {

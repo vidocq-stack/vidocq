@@ -150,7 +150,7 @@ public class GenerateExternalRepositoriesMojo extends AbstractMojo {
         } catch (IOException e) {
             throw new MojoExecutionException("Mansart codegen I/O error", e);
         } finally {
-            try { fm.close(); } catch (IOException ignored) { /* best effort */ }
+            try { fm.close(); } catch (IOException _) { /* best effort */ }
         }
     }
 

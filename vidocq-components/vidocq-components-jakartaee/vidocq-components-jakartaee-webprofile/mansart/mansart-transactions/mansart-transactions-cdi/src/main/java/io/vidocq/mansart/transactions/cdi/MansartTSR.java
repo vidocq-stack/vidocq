@@ -57,7 +57,7 @@ final class MansartTSR implements TransactionSynchronizationRegistry {
     public Object getTransactionKey() {
         try {
             return tm.getTransaction();
-        } catch (SystemException e) {
+        } catch (SystemException _) {
             return null;
         }
     }
@@ -72,7 +72,7 @@ final class MansartTSR implements TransactionSynchronizationRegistry {
                     @Override public void beforeCompletion() { /* no-op */ }
                     @Override public void afterCompletion(int status) { perTxResources.remove(t); }
                 });
-            } catch (Exception ignored) {
+            } catch (Exception _) {
                 // The TX may already be committing/rolling back — accept the leak ; the entry
                 // becomes weakly reachable when the Transaction is garbage-collected.
             }
@@ -103,7 +103,7 @@ final class MansartTSR implements TransactionSynchronizationRegistry {
     public int getTransactionStatus() {
         try {
             return tm.getStatus();
-        } catch (SystemException e) {
+        } catch (SystemException _) {
             return Status.STATUS_NO_TRANSACTION;
         }
     }

@@ -442,7 +442,7 @@ public final class H2Dialect implements Dialect {
 
     private void appendPagination(StringBuilder sb, Pagination p) {
         switch (p) {
-            case Pagination.None ignored -> {}
+            case Pagination.None _ -> { /* no pagination clause */ }
             case Pagination.Offset(var offset, var limit)     -> sb.append(" LIMIT ").append(limit).append(" OFFSET ").append(offset);
             case Pagination.Keyset k     -> sb.append(" LIMIT ").append(k.limit()); // M3b refines
         }

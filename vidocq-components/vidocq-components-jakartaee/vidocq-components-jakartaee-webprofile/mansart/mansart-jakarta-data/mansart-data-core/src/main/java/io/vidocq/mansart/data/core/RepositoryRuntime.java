@@ -379,19 +379,6 @@ public final class RepositoryRuntime {
         });
     }
 
-    /** Extracts {@code WHERE …} (and optional ORDER BY) from a dialect-rendered SELECT, reused
-     *  to compose custom-projection SQL without re-implementing the predicate renderer here. */
-    private String whereOrderTail(EntityModel<?> model, Where where, OrderBy orderBy) {
-        SqlFragment selFrag = dialect.select(model, where, orderBy, Pagination.NONE);
-        String src = selFrag.sql();
-        int whereIdx = src.indexOf(" WHERE ");
-        int orderIdx = src.indexOf(" ORDER BY ");
-        int start = -1;
-        if (whereIdx >= 0 && (orderIdx < 0 || whereIdx < orderIdx)) start = whereIdx;
-        else if (orderIdx >= 0) start = orderIdx;
-        return start >= 0 ? src.substring(start) : "";
-    }
-
     public <E> boolean existsWhere(EntityModel<E> model, Where where, Object... args) {
         return countWhere(model, where, args) > 0;
     }
@@ -787,7 +774,7 @@ public final class RepositoryRuntime {
     }
 
     private Object valueToBind(Attribute<?, ?> a, Object value) {
-        if (a instanceof ReferenceAttribute<?, ?> ref && value != null) {
+        if (a instanceof ReferenceAttribute<?, ?> && value != null) {
             // Bind the FK id of the referenced entity. M3a assumes the referenced entity has a
             // public no-arg ctor and an `id` field accessible via its own _Entity model — that
             // requires inter-entity model lookup which we defer. For M3a, callers must set the

@@ -609,7 +609,7 @@ public final class JdqlAst {
         private static Object parseNumber(String s) {
             if (s.contains(".")) return Double.parseDouble(s);
             try { return Integer.parseInt(s); }
-            catch (NumberFormatException e) { return Long.parseLong(s); }
+            catch (NumberFormatException _) { return Long.parseLong(s); }
         }
 
         private boolean peekKw(String kw)    { Token t = lex.peek(); return t.kind == Tk.KW && t.text.equals(kw); }

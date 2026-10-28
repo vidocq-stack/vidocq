@@ -138,7 +138,7 @@ final class RepositoryClassScanner {
         ClassModel cm;
         try {
             cm = ClassFile.of().parse(classBytes);
-        } catch (RuntimeException malformed) {
+        } catch (RuntimeException _) {
             return; // not a parseable class file — skip
         }
         if (!cm.flags().has(AccessFlag.INTERFACE)) return;

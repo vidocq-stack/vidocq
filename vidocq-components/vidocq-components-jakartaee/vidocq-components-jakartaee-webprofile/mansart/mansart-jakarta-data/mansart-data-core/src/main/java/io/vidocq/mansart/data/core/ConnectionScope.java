@@ -158,7 +158,7 @@ public final class ConnectionScope {
             // Best-effort restore + return-to-pool. If we never committed, we already rolled back
             // above; setAutoCommit(true) is the standard contract before handing the connection
             // back to a pool that expects auto-commit by default.
-            try { c.setAutoCommit(true); } catch (SQLException ignored) {}
+            try { c.setAutoCommit(true); } catch (SQLException _) { /* best effort: the connection is closed next */ }
             closeQuietly(c);
             if (!committed) {
                 // already rolled back; no-op marker
@@ -181,10 +181,10 @@ public final class ConnectionScope {
     }
 
     private static void rollbackQuietly(Connection c) {
-        try { c.rollback(); } catch (SQLException ignored) {}
+        try { c.rollback(); } catch (SQLException _) { /* best effort: the original failure is rethrown */ }
     }
 
     private static void closeQuietly(Connection c) {
-        try { c.close(); } catch (SQLException ignored) {}
+        try { c.close(); } catch (SQLException _) { /* best effort: nothing left to release */ }
     }
 }

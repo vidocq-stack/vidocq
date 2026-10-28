@@ -92,7 +92,7 @@ final class ConnectionPool implements AutoCloseable {
         for (int i = 0; i < config.minIdle(); i++) {
             try {
                 idle.offerFirst(open());
-            } catch (SQLException e) {
+            } catch (SQLException _) {
                 break;
             }
         }
@@ -143,7 +143,7 @@ final class ConnectionPool implements AutoCloseable {
                     config.maxLifetime().toNanos(),
                     config.idleTimeout().toNanos(),
                     System.nanoTime());
-        } catch (SQLException e) {
+        } catch (SQLException _) {
             keep = false;        // reset failed → discard
         }
         inUse.remove(entry);
@@ -200,7 +200,7 @@ final class ConnectionPool implements AutoCloseable {
             try {
                 int timeoutSec = (int) Math.max(1, config.validationTimeout().toSeconds());
                 return entry.delegate.isValid(timeoutSec);
-            } catch (SQLException e) {
+            } catch (SQLException _) {
                 return false;
             }
         }

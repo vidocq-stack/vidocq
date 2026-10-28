@@ -251,7 +251,7 @@ final class MansartTransaction implements Transaction {
         status = Status.STATUS_ROLLING_BACK;
         endActiveResources(XAResource.TMFAIL);
         for (XAResource r : resources) {
-            try { r.rollback(xidFor(r)); } catch (XAException ignored) { /* best effort */ }
+            try { r.rollback(xidFor(r)); } catch (XAException _) { /* best effort */ }
         }
         status = Status.STATUS_ROLLEDBACK;
         invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
@@ -269,7 +269,7 @@ final class MansartTransaction implements Transaction {
             try {
                 r.end(xidFor(r), flag);
                 alreadyEnded.add(r);
-            } catch (XAException ignored) {
+            } catch (XAException _) {
                 // Best effort — proceed even if end() fails ; commit/rollback is what matters.
             }
         }
@@ -290,7 +290,7 @@ final class MansartTransaction implements Transaction {
         for (Synchronization s : syncs) {
             try {
                 s.afterCompletion(finalStatus);
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException _) {
                 // spec §3.3.5 — afterCompletion exceptions are swallowed
             }
         }

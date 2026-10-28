@@ -31,7 +31,6 @@ import jakarta.transaction.TransactionManager;
 import jakarta.transaction.TransactionScoped;
 
 import java.lang.annotation.Annotation;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -76,7 +75,7 @@ public final class TransactionScopedContext implements AlterableContext {
         try {
             int s = tm().getStatus();
             return s == Status.STATUS_ACTIVE || s == Status.STATUS_MARKED_ROLLBACK;
-        } catch (SystemException e) {
+        } catch (SystemException _) {
             return false;
         }
     }
@@ -124,7 +123,7 @@ public final class TransactionScopedContext implements AlterableContext {
                     dead.forEach((c, h) -> destroyHolder(c, h));
                 }
             });
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             // TX is already terminating — destroy will run via the next get() / explicit destroy().
         }
         return map;
@@ -134,7 +133,7 @@ public final class TransactionScopedContext implements AlterableContext {
     private static void destroyHolder(Contextual c, Holder h) {
         try {
             c.destroy(h.instance, h.creationalContext);
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException _) {
             // Spec §6.3.4 — destroy must not propagate ; we swallow per-bean to ensure
             // sibling beans still get a chance to release.
         }

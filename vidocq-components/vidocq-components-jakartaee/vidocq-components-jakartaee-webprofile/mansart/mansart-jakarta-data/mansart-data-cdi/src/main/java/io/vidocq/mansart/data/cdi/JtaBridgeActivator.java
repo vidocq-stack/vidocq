@@ -42,7 +42,7 @@ final class JtaBridgeActivator {
             Class.forName("jakarta.transaction.TransactionManager");
             Class.forName("io.vidocq.mansart.transactions.jdbc.ConnectionXAResource");
             return true;
-        } catch (ClassNotFoundException | LinkageError absent) {
+        } catch (ClassNotFoundException | LinkageError _) {
             return false;
         }
     }

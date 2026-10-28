@@ -59,10 +59,10 @@ final class XaBackedDataSource implements DataSource {
     private static Connection logicalConnection(XAConnection xaConnection) throws SQLException {
         xaConnection.addConnectionEventListener(new javax.sql.ConnectionEventListener() {
             @Override public void connectionClosed(javax.sql.ConnectionEvent event) {
-                try { xaConnection.close(); } catch (SQLException ignored) { /* best effort */ }
+                try { xaConnection.close(); } catch (SQLException _) { /* best effort */ }
             }
             @Override public void connectionErrorOccurred(javax.sql.ConnectionEvent event) {
-                try { xaConnection.close(); } catch (SQLException ignored) { /* best effort */ }
+                try { xaConnection.close(); } catch (SQLException _) { /* best effort */ }
             }
         });
         return xaConnection.getConnection();

@@ -750,27 +750,6 @@ final class RepositoryWriter {
         };
     }
 
-    private String inCollectionBody(QueryMethodParser.QueryDescriptor d, TypeMirror returnType, String metamodel) {
-        QueryMethodParser.Predicate pred = d.predicates().get(0);
-        // M8-3i — paths route through PathResolver at runtime; flat attrs use static field.
-        String attr = attrRef(metamodel, pred.attribute());
-        StringBuilder sb = new StringBuilder();
-        sb.append("java.util.Collection<?> col = (java.util.Collection<?>) ").append(p(0)).append("; ");
-        // Short-circuit empty In: SQL `IN ()` is invalid; return the natural empty result.
-        sb.append("if (col.isEmpty()) ").append(emptyInReturn(d.op(), returnType)).append(' ');
-        sb.append("io.vidocq.mansart.data.dialect.Where w = new io.vidocq.mansart.data.dialect.Where.In(")
-          .append(attr).append(", col.size()); ");
-        sb.append("java.lang.Object[] xs = col.toArray(); ");
-        String orderBy = renderOrderBy(d, metamodel);
-        return switch (d.op()) {
-            case FIND     -> sb.append(findBody(returnType, metamodel, "w", orderBy, "xs")).toString();
-            case FIND_ONE -> sb.append("return runtime.queryOne(").append(metamodel).append(".$MODEL, w, xs);").toString();
-            case COUNT    -> sb.append("return runtime.countWhere(").append(metamodel).append(".$MODEL, w, xs);").toString();
-            case EXISTS   -> sb.append("return runtime.existsWhere(").append(metamodel).append(".$MODEL, w, xs);").toString();
-            case DELETE   -> sb.append(deleteBody(returnType, metamodel, "w", "xs")).toString();
-        };
-    }
-
     private String emptyInReturn(QueryMethodParser.Operation op, TypeMirror rt) {
         return switch (op) {
             case FIND -> {
@@ -802,10 +781,6 @@ final class RepositoryWriter {
 
     private boolean isOrder(TypeMirror t) {
         return types.erasure(t).toString().equals("jakarta.data.Order");
-    }
-
-    private boolean isPageReturn(TypeMirror t) {
-        return t.toString().startsWith("jakarta.data.page.Page");
     }
 
     private boolean isCursoredPageReturn(TypeMirror t) {
@@ -909,15 +884,6 @@ final class RepositoryWriter {
               .append('(').append(attrRef(metamodel, o.attribute())).append(')');
         }
         sb.append("))");
-        return sb.toString();
-    }
-
-    private String argsList(int arity) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < arity; i++) {
-            if (i > 0) sb.append(", ");
-            sb.append(p(i));
-        }
         return sb.toString();
     }
 
@@ -1243,7 +1209,7 @@ final class RepositoryWriter {
     }
 
     private void collectInterfaces(TypeMirror t, List<TypeMirror> out) {
-        if (!(t instanceof DeclaredType dt)) return;
+        if (!(t instanceof DeclaredType)) return;
         out.add(t);
         for (TypeMirror s : types.directSupertypes(t)) {
             collectInterfaces(s, out);
