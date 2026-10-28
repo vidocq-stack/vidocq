@@ -124,7 +124,7 @@ INFOS: Vidocq - Started in 90.940 ms (process running for 135 ms)
 ----
 
 [#last-round-warnings]
-NOTE: The compilation prints one `[WARNING] File for type '…' created in the last round will not be subject to annotation processing.` per class Vauban generates (`HelloResource_Factory`, `HelloResource_ClientProxy`, `_VaubanComponents`). They are expected and harmless: javac compiles these classes like any other; it only says that no annotation processor reads them after it, and none needs to. The Vauban processor writes them in the last round on purpose, once the other processors and the build compatible extensions have run, so that it sees the whole application. javac gives this warning no lint category, so `-Xlint:-processing` cannot silence it, and `-nowarn` would hide every warning of your own code with it (Vidocq/vauban#216).
+NOTE: The compilation prints one `[WARNING] File for type '…' created in the last round will not be subject to annotation processing.` per class Vauban generates (`HelloResource_ClientProxy`, `_VaubanComponents`). They are expected and harmless: javac compiles these classes like any other; it only says that no annotation processor reads them after it, and none needs to. The Vauban processor writes them in the last round on purpose, once the other processors and the build compatible extensions have run, so that it sees the whole application. javac gives this warning no lint category, so `-Xlint:-processing` cannot silence it, and `-nowarn` would hide every warning of your own code with it (Vidocq/vauban#216).
 
 == Step 5 — Dev mode
 

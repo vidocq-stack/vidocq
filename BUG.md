@@ -1297,6 +1297,8 @@ where this whole bug class is invisible.
   `GET /hello`. Changing Vauban's round strategy (vauban#216, options 1 and 2) would trade a warning for a risk on the
   BCEs or on IDE builds. The getting-started page says the warnings are expected, and why
   (`getting-started.adoc#last-round-warnings`).
+- **Update** (2026-10-28): two warnings remain. Vauban no longer generates the `_Factory` classes, which nothing
+  loaded (Vidocq/vauban#244): `HelloResource_ClientProxy` and `_VaubanComponents` are the classes it writes last.
 
 ## BUG-20261024-12 — `CLI-ROADMAP.md` describes the CLI before #314
 

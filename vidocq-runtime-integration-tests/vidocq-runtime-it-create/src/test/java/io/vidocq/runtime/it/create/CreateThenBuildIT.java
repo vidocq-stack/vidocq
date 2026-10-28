@@ -96,7 +96,7 @@ class CreateThenBuildIT {
                 .filter(l -> l.startsWith("[WARNING]") && !l.contains(LAST_ROUND))
                 .toList();
         assertEquals(List.of(), warnings, "the created project builds with warnings:\n" + output);
-        assertEquals(3, output.lines().filter(l -> l.contains(LAST_ROUND)).count(), output);
+        assertEquals(2, output.lines().filter(l -> l.contains(LAST_ROUND)).count(), output);
     }
 
     /**

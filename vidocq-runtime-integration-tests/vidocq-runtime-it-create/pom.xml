@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
     Vidocq/vidocq#339 (evolution 6): what `vidocq create` writes builds, tests itself and packages, on this build's
-    vidocq-runtime-parent and BOM, with no warning but the three javac ones documented as expected (#337).
+    vidocq-runtime-parent and BOM, with no warning but the two javac ones documented as expected (#337).
     The IT writes the project with the scaffolder the CLI runs, to a temp directory outside this repository, and runs
     a real `mvn verify` there. That build resolves this build's artifacts from target/it-repo, which
     maven-invoker-plugin:install stages at pre-integration-test, and anything else from the outer local repository
