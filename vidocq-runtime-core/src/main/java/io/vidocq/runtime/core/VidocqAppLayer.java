@@ -124,7 +124,7 @@ public final class VidocqAppLayer {
             LayerSplit.Mode mode;
             try {
                 mode = LayerSplit.Mode.of(System.getProperty(LayerSplit.MODE_PROPERTY));
-            } catch (IllegalArgumentException e) {
+            } catch (IllegalArgumentException _) {
                 mode = LayerSplit.Mode.CLASSES;
             }
             LOG.log(System.Logger.Level.WARNING, leakedThreadsWarning(threads, mode));

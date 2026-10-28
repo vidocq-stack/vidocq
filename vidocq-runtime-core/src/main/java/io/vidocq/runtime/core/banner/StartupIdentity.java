@@ -198,40 +198,7 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
      * not a warning.
      */
     static List<String> bricks(BuildInfo runtime, Module core, StartupBanner.Launch launch) {
-        Map<String, BuildInfo> byBrick = new LinkedHashMap<>();
-        if (core.isNamed()) {
-            Set<ModuleLayer> layers = new LinkedHashSet<>();
-            addWithParents(core.getLayer(), layers);
-            addWithParents(ModuleLayer.boot(), layers);
-            // Vidocq.run re-layers the application and the bricks it does not keep in the boot layer
-            addWithParents(launch.appLayer(), layers);
-            if (launch.appModule() != null) {
-                addWithParents(launch.appModule().getLayer(), layers);
-            }
-            String appModule = launch.appModule() == null ? null : launch.appModule().getName();
-            layers.stream()
-                    .flatMap(layer -> layer.modules().stream())
-                    .filter(m -> m.getName() != null && !m.getName().equals(appModule))
-                    .sorted(Comparator.comparing(Module::getName))
-                    .forEach(m -> {
-                        String brick = brickOf(m.getName());
-                        if (brick != null && !byBrick.containsKey(brick)) {
-                            byBrick.put(brick, BuildInfo.of(m));
-                        }
-                    });
-        } else {
-            ClassLoader loader = StartupBanner.class.getClassLoader();
-            CLASS_PATH_ANCHORS.forEach((brick, anchors) -> {
-                for (String anchor : anchors) {
-                    try {
-                        byBrick.put(brick, BuildInfo.ofClass(Class.forName(anchor, false, loader)));
-                        break;
-                    } catch (ClassNotFoundException | LinkageError absent) {
-                        // this brick is not on the class path
-                    }
-                }
-            });
-        }
+        Map<String, BuildInfo> byBrick = core.isNamed() ? bricksOfLayers(core, launch) : bricksOfClassPath();
         List<String> worthALook = new ArrayList<>();
         byBrick.forEach((brick, info) -> {
             if (worthALook(info, runtime)) {
@@ -239,6 +206,48 @@ public record StartupIdentity(BuildInfo vidocq, String javaVersion, String javaV
             }
         });
         return worthALook;
+    }
+
+    /** The brick of each named module of the runtime's layers, application module excluded. */
+    private static Map<String, BuildInfo> bricksOfLayers(Module core, StartupBanner.Launch launch) {
+        Map<String, BuildInfo> byBrick = new LinkedHashMap<>();
+        Set<ModuleLayer> layers = new LinkedHashSet<>();
+        addWithParents(core.getLayer(), layers);
+        addWithParents(ModuleLayer.boot(), layers);
+        // Vidocq.run re-layers the application and the bricks it does not keep in the boot layer
+        addWithParents(launch.appLayer(), layers);
+        if (launch.appModule() != null) {
+            addWithParents(launch.appModule().getLayer(), layers);
+        }
+        String appModule = launch.appModule() == null ? null : launch.appModule().getName();
+        layers.stream()
+                .flatMap(layer -> layer.modules().stream())
+                .filter(m -> m.getName() != null && !m.getName().equals(appModule))
+                .sorted(Comparator.comparing(Module::getName))
+                .forEach(m -> {
+                    String brick = brickOf(m.getName());
+                    if (brick != null && !byBrick.containsKey(brick)) {
+                        byBrick.put(brick, BuildInfo.of(m));
+                    }
+                });
+        return byBrick;
+    }
+
+    /** The bricks found on the class path, through the anchor classes of each. */
+    private static Map<String, BuildInfo> bricksOfClassPath() {
+        Map<String, BuildInfo> byBrick = new LinkedHashMap<>();
+        ClassLoader loader = StartupBanner.class.getClassLoader();
+        CLASS_PATH_ANCHORS.forEach((brick, anchors) -> {
+            for (String anchor : anchors) {
+                try {
+                    byBrick.put(brick, BuildInfo.ofClass(Class.forName(anchor, false, loader)));
+                    break;
+                } catch (ClassNotFoundException | LinkageError _) {
+                    // this brick is not on the class path
+                }
+            }
+        });
+        return byBrick;
     }
 
     static boolean worthALook(BuildInfo brick, BuildInfo runtime) {

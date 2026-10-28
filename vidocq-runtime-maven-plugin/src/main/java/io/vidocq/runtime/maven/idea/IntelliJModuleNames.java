@@ -98,11 +98,10 @@ final class IntelliJModuleNames {
         Map<String, String> names = new HashMap<>();
         for (Item item : items) {
             String counterKey = item.originalName.toLowerCase(Locale.ROOT);
-            Integer counter = counters.get(counterKey);
-            if (counter != null) {
+            counters.computeIfPresent(counterKey, (_, counter) -> {
                 item.number = counter;
-                counters.put(counterKey, counter + 1);
-            }
+                return counter + 1;
+            });
             while (!taken.add(item.name())) {
                 item.number++;
                 counters.put(counterKey, item.number + 1);

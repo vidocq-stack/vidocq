@@ -333,7 +333,7 @@ final class DevMcp {
                     continue;
                 }
                 Map<String, Object> route = new LinkedHashMap<>();
-                route.put("method", cells.get(1));
+                route.put(METHOD, cells.get(1));
                 route.put("url", cells.get(2));
                 route.put("handler", cells.get(3));
                 routes.add(route);

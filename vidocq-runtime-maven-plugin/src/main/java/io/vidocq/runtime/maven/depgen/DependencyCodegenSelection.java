@@ -211,6 +211,44 @@ public final class DependencyCodegenSelection {
                     .filter(needle -> indexOf(bytes, needle.getBytes(StandardCharsets.UTF_8)) >= 0)
                     .findFirst();
         }
+
+        /** The top-level classes of the jar that a service file lists, one binary name per non-comment line. */
+        private static List<String> listedClasses(JarFile file, String resource, Set<String> names) throws IOException {
+            String text;
+            try (InputStream in = file.getInputStream(file.getEntry(resource))) {
+                text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            List<String> listed = new ArrayList<>();
+            for (String line : text.lines().toList()) {
+                int hash = line.indexOf('#');
+                String name = (hash >= 0 ? line.substring(0, hash) : line).strip();
+                if (!name.isEmpty() && names.contains(name.replace('.', '/') + CLASS_SUFFIX)) {
+                    listed.add(topLevelClass(name.replace('.', '/') + CLASS_SUFFIX));
+                }
+            }
+            return listed;
+        }
+
+        private static int indexOf(byte[] haystack, byte[] needle) {
+            if (needle.length == 0) {
+                return -1;
+            }
+            for (int i = 0; i <= haystack.length - needle.length; i++) {
+                if (startsAt(haystack, i, needle)) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        private static boolean startsAt(byte[] haystack, int at, byte[] needle) {
+            for (int j = 0; j < needle.length; j++) {
+                if (haystack[at + j] != needle[j]) {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 
     /**
@@ -231,23 +269,6 @@ public final class DependencyCodegenSelection {
         int dollar = simple.indexOf('$');
         String top = dollar > 0 ? binary.substring(0, slash + 1 + dollar) : binary;
         return top.replace('/', '.');
-    }
-
-    /** The top-level classes of the jar that a service file lists, one binary name per non-comment line. */
-    private static List<String> listedClasses(JarFile file, String resource, Set<String> names) throws IOException {
-        String text;
-        try (InputStream in = file.getInputStream(file.getEntry(resource))) {
-            text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        }
-        List<String> listed = new ArrayList<>();
-        for (String line : text.lines().toList()) {
-            int hash = line.indexOf('#');
-            String name = (hash >= 0 ? line.substring(0, hash) : line).strip();
-            if (!name.isEmpty() && names.contains(name.replace('.', '/') + CLASS_SUFFIX)) {
-                listed.add(topLevelClass(name.replace('.', '/') + CLASS_SUFFIX));
-            }
-        }
-        return listed;
     }
 
     /**
@@ -368,26 +389,5 @@ public final class DependencyCodegenSelection {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
-    }
-
-    private static int indexOf(byte[] haystack, byte[] needle) {
-        if (needle.length == 0) {
-            return -1;
-        }
-        for (int i = 0; i <= haystack.length - needle.length; i++) {
-            if (startsAt(haystack, i, needle)) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private static boolean startsAt(byte[] haystack, int at, byte[] needle) {
-        for (int j = 0; j < needle.length; j++) {
-            if (haystack[at + j] != needle[j]) {
-                return false;
-            }
-        }
-        return true;
     }
 }

@@ -461,6 +461,11 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
                 rows(section, v, dev);
             }
         }
+        anomalies(section, opened);
+    }
+
+    /** The anomalies found in {@code onStart}: a pool that prefilled nothing, a named pool without its bean. */
+    private void anomalies(StartupReportSection section, List<PoolView> opened) {
         Set<String> failed = prefillFailed.get();
         Set<String> beanless = namedWithoutBean.get();
         for (PoolView v : opened) {

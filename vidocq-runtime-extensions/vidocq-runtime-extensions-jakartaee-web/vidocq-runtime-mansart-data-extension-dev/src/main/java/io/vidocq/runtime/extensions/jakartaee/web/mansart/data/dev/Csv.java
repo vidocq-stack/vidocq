@@ -189,15 +189,15 @@ final class Csv {
             line++;
             return false;
         }
-    }
 
-    /** The length of the line end at {@code at}: 2 for {@code \r\n}, 1 for {@code \n}, 0 for none. */
-    private static int lineEnd(String text, int at) {
-        char c = text.charAt(at);
-        if (c == '\n') {
-            return 1;
+        /** The length of the line end at {@code at}: 2 for {@code \r\n}, 1 for {@code \n}, 0 for none. */
+        private static int lineEnd(String text, int at) {
+            char c = text.charAt(at);
+            if (c == '\n') {
+                return 1;
+            }
+            return c == '\r' && at + 1 < text.length() && text.charAt(at + 1) == '\n' ? 2 : 0;
         }
-        return c == '\r' && at + 1 < text.length() && text.charAt(at + 1) == '\n' ? 2 : 0;
     }
 
     /** Writes records up to a length in UTF-8 bytes; a record that would pass it is refused, the text kept whole. */
