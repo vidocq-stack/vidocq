@@ -26,10 +26,38 @@ import io.opentelemetry.api.metrics.DoubleHistogram;
 import io.opentelemetry.api.metrics.LongCounter;
 import io.opentelemetry.api.metrics.LongUpDownCounter;
 import io.opentelemetry.api.metrics.Meter;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.ACCEPTED;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.BULKHEAD_CALLS_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.BULKHEAD_EXECUTIONS_RUNNING;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.BULKHEAD_EXECUTIONS_WAITING;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.BULKHEAD_RESULT;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.BULKHEAD_RUNNING_DURATION;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.BULKHEAD_WAITING_DURATION;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.CIRCUIT_BREAKER_CALLS_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.CIRCUIT_BREAKER_OPENED_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.CIRCUIT_BREAKER_RESULT;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.CIRCUIT_BREAKER_STATE_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.EXCEPTION_THROWN;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.FALLBACK;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.INVOCATIONS_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.METHOD;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.REJECTED;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.RESULT;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.RETRIED;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.RETRY_CALLS_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.RETRY_RESULT;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.RETRY_RETRIES_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.STATE;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.TIMED_OUT;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.TIMEOUT_CALLS_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.TIMEOUT_EXECUTION_DURATION;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.VALUE_RETURNED;
+
 import io.vidocq.heisenberg.api.FtMetricsRecorder;
 import org.eclipse.microprofile.config.ConfigProvider;
 
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -69,15 +97,17 @@ import java.util.concurrent.atomic.AtomicReference;
 final class OtelFtMetrics implements FtMetricsRecorder {
 
     private static final String METER_NAME = "io.vidocq.heisenberg";
-    private static final AttributeKey<String> METHOD_KEY = AttributeKey.stringKey("method");
-    private static final AttributeKey<String> RESULT_KEY = AttributeKey.stringKey("result");
-    private static final AttributeKey<String> FALLBACK_KEY = AttributeKey.stringKey("fallback");
-    private static final AttributeKey<String> RETRIED_KEY = AttributeKey.stringKey("retried");
-    private static final AttributeKey<String> RETRY_RESULT_KEY = AttributeKey.stringKey("retryResult");
-    private static final AttributeKey<String> TIMED_OUT_KEY = AttributeKey.stringKey("timedOut");
-    private static final AttributeKey<String> CB_RESULT_KEY = AttributeKey.stringKey("circuitBreakerResult");
-    private static final AttributeKey<String> CB_STATE_KEY = AttributeKey.stringKey("state");
-    private static final AttributeKey<String> BULKHEAD_RESULT_KEY = AttributeKey.stringKey("bulkheadResult");
+    private static final String SECONDS = "seconds";
+    private static final String NANOSECONDS = "nanoseconds";
+    private static final AttributeKey<String> METHOD_KEY = AttributeKey.stringKey(METHOD);
+    private static final AttributeKey<String> RESULT_KEY = AttributeKey.stringKey(RESULT);
+    private static final AttributeKey<String> FALLBACK_KEY = AttributeKey.stringKey(FALLBACK);
+    private static final AttributeKey<String> RETRIED_KEY = AttributeKey.stringKey(RETRIED);
+    private static final AttributeKey<String> RETRY_RESULT_KEY = AttributeKey.stringKey(RETRY_RESULT);
+    private static final AttributeKey<String> TIMED_OUT_KEY = AttributeKey.stringKey(TIMED_OUT);
+    private static final AttributeKey<String> CB_RESULT_KEY = AttributeKey.stringKey(CIRCUIT_BREAKER_RESULT);
+    private static final AttributeKey<String> CB_STATE_KEY = AttributeKey.stringKey(STATE);
+    private static final AttributeKey<String> BULKHEAD_RESULT_KEY = AttributeKey.stringKey(BULKHEAD_RESULT);
     private static final AttributeKey<String> BOOTSTRAP_KEY = AttributeKey.stringKey("heisenberg.bootstrap");
 
     // Instruments cached lazily (by name)
@@ -104,24 +134,24 @@ final class OtelFtMetrics implements FtMetricsRecorder {
         Attributes global = Attributes.of(BOOTSTRAP_KEY, "global");
         // The `testMetricUnits` tests read only the metric name (not the attrs).
         // We therefore materialize an internal series to guarantee these names exist.
-        counter("ft.timeout.calls.total").add(1L, global);
-        counter("ft.circuitbreaker.calls.total").add(1L, global);
-        counter("ft.circuitbreaker.state.total", "nanoseconds").add(1L, global);
-        counter("ft.circuitbreaker.opened.total").add(1L, global);
-        counter("ft.bulkhead.calls.total").add(1L, global);
-        LongUpDownCounter running = upDown("ft.bulkhead.executionsRunning");
+        counter(TIMEOUT_CALLS_TOTAL).add(1L, global);
+        counter(CIRCUIT_BREAKER_CALLS_TOTAL).add(1L, global);
+        counter(CIRCUIT_BREAKER_STATE_TOTAL, NANOSECONDS).add(1L, global);
+        counter(CIRCUIT_BREAKER_OPENED_TOTAL).add(1L, global);
+        counter(BULKHEAD_CALLS_TOTAL).add(1L, global);
+        LongUpDownCounter running = upDown(BULKHEAD_EXECUTIONS_RUNNING);
         if (running != null) {
             running.add(1L, global);
             running.add(-1L, global);
         }
-        LongUpDownCounter waiting = upDown("ft.bulkhead.executionsWaiting");
+        LongUpDownCounter waiting = upDown(BULKHEAD_EXECUTIONS_WAITING);
         if (waiting != null) {
             waiting.add(1L, global);
             waiting.add(-1L, global);
         }
-        histogram("ft.timeout.executionDuration", "seconds").record(0.001d, global);
-        histogram("ft.bulkhead.runningDuration", "seconds").record(0.001d, global);
-        histogram("ft.bulkhead.waitingDuration", "seconds").record(0.001d, global);
+        histogram(TIMEOUT_EXECUTION_DURATION, SECONDS).record(0.001d, global);
+        histogram(BULKHEAD_RUNNING_DURATION, SECONDS).record(0.001d, global);
+        histogram(BULKHEAD_WAITING_DURATION, SECONDS).record(0.001d, global);
     }
 
     private Meter meter() {
@@ -173,8 +203,8 @@ final class OtelFtMetrics implements FtMetricsRecorder {
             if (unit != null) b.setUnit(unit);
             // MP FT 4.1 §10 : bucket boundaries explicites en secondes pour les histograms
             // de dure (ft.timeout.executionDuration, ft.bulkhead.runningDuration, etc.).
-            // Buckets standards OTel pour les units "seconds".
-            if ("seconds".equals(unit)) {
+            // Buckets standards OTel pour les units SECONDS.
+            if (SECONDS.equals(unit)) {
                 b.setExplicitBucketBoundariesAdvice(java.util.List.of(
                         0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5,
                         0.75, 1.0, 2.5, 5.0, 7.5, 10.0));
@@ -194,14 +224,6 @@ final class OtelFtMetrics implements FtMetricsRecorder {
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
-
-    /** The {@code fallback} tag value of {@code ft.invocations.total} (MP FT 4.1 §9). */
-    private static String fallbackTag(boolean fallbackDefined, boolean fallbackApplied) {
-        if (!fallbackDefined) {
-            return "notDefined";
-        }
-        return fallbackApplied ? "applied" : "notApplied";
-    }
 
     private static String methodKey(Class<?> beanClass, Method method) {
         return beanClass.getName() + "#" + method.getName();
@@ -228,88 +250,97 @@ final class OtelFtMetrics implements FtMetricsRecorder {
                          boolean hasBulkhead, boolean hasFallback, boolean asyncBulkhead) {
         if (!isMetricsEnabled() || meter() == null) return;
 
-        Attributes methodOnly = methodAttrs(beanClass, method);
         String mtag = methodTagValue(beanClass, method);
         String key = methodKey(beanClass, method);
 
-        // ft.invocations.total — toutes combinaisons (result, fallback)
-        LongCounter invocations = counter("ft.invocations.total");
-        String[] results = {"valueReturned", "exceptionThrown"};
-        String[] fallbacks = hasFallback
-                ? new String[]{"applied", "notApplied"}
-                : new String[]{"notDefined"};
-        for (String r : results) {
-            for (String fb : fallbacks) {
+        registerInvocations(mtag, hasFallback);
+        if (hasRetry) {
+            registerRetry(mtag);
+        }
+        if (hasTimeout) {
+            registerTimeout(key, mtag);
+        }
+        if (hasCircuitBreaker) {
+            registerCircuitBreaker(key, mtag);
+        }
+        if (hasBulkhead) {
+            registerBulkhead(key, mtag, asyncBulkhead);
+        }
+    }
+
+    /** ft.invocations.total — toutes combinaisons (result, fallback). */
+    private void registerInvocations(String mtag, boolean hasFallback) {
+        LongCounter invocations = counter(INVOCATIONS_TOTAL);
+        for (String r : List.of(VALUE_RETURNED, EXCEPTION_THROWN)) {
+            for (String fb : FtMetricNames.fallbackValues(hasFallback)) {
                 invocations.add(0L, Attributes.of(METHOD_KEY, mtag, RESULT_KEY, r, FALLBACK_KEY, fb));
             }
         }
+    }
 
-        if (hasRetry) {
-            LongCounter retryCalls = counter("ft.retry.calls.total");
-            for (boolean retried : new boolean[]{false, true}) {
-                String[] retryResults = retried
-                        ? new String[]{"valueReturned", "exceptionNotRetryable", "maxRetriesReached", "maxDurationReached"}
-                        : new String[]{"valueReturned", "exceptionNotRetryable"};
-                for (String rr : retryResults) {
-                    retryCalls.add(0L, Attributes.of(METHOD_KEY, mtag,
-                            RETRIED_KEY, String.valueOf(retried),
-                            RETRY_RESULT_KEY, rr));
-                }
+    private void registerRetry(String mtag) {
+        LongCounter retryCalls = counter(RETRY_CALLS_TOTAL);
+        for (boolean retried : new boolean[]{false, true}) {
+            for (RetryResult rr : FtMetricNames.retryResults(retried)) {
+                retryCalls.add(0L, Attributes.of(METHOD_KEY, mtag,
+                        RETRIED_KEY, String.valueOf(retried),
+                        RETRY_RESULT_KEY, rr.tagValue()));
             }
-            counter("ft.retry.retries.total").add(0L, methodOnly);
         }
+        counter(RETRY_RETRIES_TOTAL).add(0L, Attributes.of(METHOD_KEY, mtag));
+    }
 
-        if (hasTimeout) {
-            LongCounter timeoutCalls = counter("ft.timeout.calls.total");
-            // The TCK's OTel reader does not see synchronous instruments without a datapoint.
-            // We materialize the metric on a dedicated internal series that does not pollute
-            // the series expected by the TCK (because it lacks the `method` attribute).
-            timeoutCalls.add(1L, Attributes.of(BOOTSTRAP_KEY, key));
-            timeoutCalls.add(0L, Attributes.of(METHOD_KEY, mtag, TIMED_OUT_KEY, "false"));
-            timeoutCalls.add(0L, Attributes.of(METHOD_KEY, mtag, TIMED_OUT_KEY, "true"));
-            histogram("ft.timeout.executionDuration", "seconds");
+    private void registerTimeout(String key, String mtag) {
+        LongCounter timeoutCalls = counter(TIMEOUT_CALLS_TOTAL);
+        // The TCK's OTel reader does not see synchronous instruments without a datapoint.
+        // We materialize the metric on a dedicated internal series that does not pollute
+        // the series expected by the TCK (because it lacks the `method` attribute).
+        timeoutCalls.add(1L, Attributes.of(BOOTSTRAP_KEY, key));
+        timeoutCalls.add(0L, Attributes.of(METHOD_KEY, mtag, TIMED_OUT_KEY, "false"));
+        timeoutCalls.add(0L, Attributes.of(METHOD_KEY, mtag, TIMED_OUT_KEY, "true"));
+        histogram(TIMEOUT_EXECUTION_DURATION, SECONDS);
+    }
+
+    private void registerCircuitBreaker(String key, String mtag) {
+        LongCounter cbCalls = counter(CIRCUIT_BREAKER_CALLS_TOTAL);
+        cbCalls.add(1L, Attributes.of(BOOTSTRAP_KEY, key));
+        for (CBCallResult result : CBCallResult.values()) {
+            cbCalls.add(0L, Attributes.of(METHOD_KEY, mtag, CB_RESULT_KEY, result.tagValue()));
         }
+        counter(CIRCUIT_BREAKER_OPENED_TOTAL).add(0L, Attributes.of(METHOD_KEY, mtag));
 
-        if (hasCircuitBreaker) {
-            LongCounter cbCalls = counter("ft.circuitbreaker.calls.total");
-            cbCalls.add(1L, Attributes.of(BOOTSTRAP_KEY, key));
-            cbCalls.add(0L, Attributes.of(METHOD_KEY, mtag, CB_RESULT_KEY, "success"));
-            cbCalls.add(0L, Attributes.of(METHOD_KEY, mtag, CB_RESULT_KEY, "failure"));
-            cbCalls.add(0L, Attributes.of(METHOD_KEY, mtag, CB_RESULT_KEY, "circuitBreakerOpen"));
-            counter("ft.circuitbreaker.opened.total").add(0L, methodOnly);
-
-            // ft.circuitbreaker.state.total — cumulative nanoseconds counter per state.
-            // We use a counter plus a tracker that computes the delta between transitions.
-            cbStateTrackers.computeIfAbsent(key, k -> new CBStateTracker());
-            LongCounter cbState = counter("ft.circuitbreaker.state.total", "nanoseconds");
-            // Pre-register the 3 zero-valued series.
-            cbState.add(0L, Attributes.of(METHOD_KEY, mtag, CB_STATE_KEY, "closed"));
-            cbState.add(0L, Attributes.of(METHOD_KEY, mtag, CB_STATE_KEY, "open"));
-            cbState.add(0L, Attributes.of(METHOD_KEY, mtag, CB_STATE_KEY, "halfOpen"));
+        // ft.circuitbreaker.state.total — cumulative nanoseconds counter per state.
+        // We use a counter plus a tracker that computes the delta between transitions.
+        cbStateTrackers.computeIfAbsent(key, k -> new CBStateTracker());
+        LongCounter cbState = counter(CIRCUIT_BREAKER_STATE_TOTAL, NANOSECONDS);
+        // Pre-register the 3 zero-valued series.
+        for (CBState state : CBState.values()) {
+            cbState.add(0L, Attributes.of(METHOD_KEY, mtag, CB_STATE_KEY, state.tagValue()));
         }
+    }
 
-        if (hasBulkhead) {
-            LongCounter bhCalls = counter("ft.bulkhead.calls.total");
-            bhCalls.add(1L, Attributes.of(BOOTSTRAP_KEY, key));
-            bhCalls.add(0L, Attributes.of(METHOD_KEY, mtag, BULKHEAD_RESULT_KEY, "accepted"));
-            bhCalls.add(0L, Attributes.of(METHOD_KEY, mtag, BULKHEAD_RESULT_KEY, "rejected"));
+    private void registerBulkhead(String key, String mtag, boolean asyncBulkhead) {
+        LongCounter bhCalls = counter(BULKHEAD_CALLS_TOTAL);
+        bhCalls.add(1L, Attributes.of(BOOTSTRAP_KEY, key));
+        bhCalls.add(0L, Attributes.of(METHOD_KEY, mtag, BULKHEAD_RESULT_KEY, ACCEPTED));
+        bhCalls.add(0L, Attributes.of(METHOD_KEY, mtag, BULKHEAD_RESULT_KEY, REJECTED));
 
-            // executionsRunning gauge — modeled as an UpDownCounter (delta), tracked per method.
-            bulkheadRunning.computeIfAbsent(key, k -> new AtomicLong(0));
-            upDown("ft.bulkhead.executionsRunning");
-            histogram("ft.bulkhead.runningDuration", "seconds");
+        // executionsRunning gauge — modeled as an UpDownCounter (delta), tracked per method.
+        bulkheadRunning.computeIfAbsent(key, k -> new AtomicLong(0));
+        upDown(BULKHEAD_EXECUTIONS_RUNNING);
+        histogram(BULKHEAD_RUNNING_DURATION, SECONDS);
 
-            if (asyncBulkhead) {
-                // For async bulkheads, the TCK explicitly expects the `executionsWaiting` /
-                // `waitingDuration` metrics even when the queue is empty.
-                bulkheadWaiting.computeIfAbsent(key, k -> new AtomicLong(0));
-                LongUpDownCounter waiting = upDown("ft.bulkhead.executionsWaiting");
-                if (waiting != null) {
-                    waiting.add(1L, methodOnly);
-                    waiting.add(-1L, methodOnly);
-                }
-                histogram("ft.bulkhead.waitingDuration", "seconds");
+        if (asyncBulkhead) {
+            // For async bulkheads, the TCK explicitly expects the `executionsWaiting` /
+            // `waitingDuration` metrics even when the queue is empty.
+            bulkheadWaiting.computeIfAbsent(key, k -> new AtomicLong(0));
+            LongUpDownCounter waiting = upDown(BULKHEAD_EXECUTIONS_WAITING);
+            if (waiting != null) {
+                Attributes methodOnly = Attributes.of(METHOD_KEY, mtag);
+                waiting.add(1L, methodOnly);
+                waiting.add(-1L, methodOnly);
             }
+            histogram(BULKHEAD_WAITING_DURATION, SECONDS);
         }
     }
 
@@ -322,9 +353,9 @@ final class OtelFtMetrics implements FtMetricsRecorder {
                                  boolean succeeded, boolean fallbackApplied, boolean fallbackDefined) {
         if (!isMetricsEnabled() || meter() == null) return;
         String mtag = methodTagValue(beanClass, method);
-        String result = succeeded ? "valueReturned" : "exceptionThrown";
-        String fb = fallbackTag(fallbackDefined, fallbackApplied);
-        counter("ft.invocations.total").add(1L,
+        String result = succeeded ? VALUE_RETURNED : EXCEPTION_THROWN;
+        String fb = FtMetricNames.fallbackValue(fallbackDefined, fallbackApplied);
+        counter(INVOCATIONS_TOTAL).add(1L,
                 Attributes.of(METHOD_KEY, mtag, RESULT_KEY, result, FALLBACK_KEY, fb));
     }
 
@@ -337,12 +368,12 @@ final class OtelFtMetrics implements FtMetricsRecorder {
         if (!isMetricsEnabled() || meter() == null) return;
         String mtag = methodTagValue(beanClass, method);
         boolean retried = retryCount > 0;
-        counter("ft.retry.calls.total").add(1L,
+        counter(RETRY_CALLS_TOTAL).add(1L,
                 Attributes.of(METHOD_KEY, mtag,
                         RETRIED_KEY, String.valueOf(retried),
                         RETRY_RESULT_KEY, result.tagValue()));
         if (retryCount > 0) {
-            counter("ft.retry.retries.total").add(retryCount, methodAttrs(beanClass, method));
+            counter(RETRY_RETRIES_TOTAL).add(retryCount, methodAttrs(beanClass, method));
         }
     }
 
@@ -354,11 +385,11 @@ final class OtelFtMetrics implements FtMetricsRecorder {
     public void recordTimeout(Class<?> beanClass, Method method, boolean timedOut, long durationNanos) {
         if (!isMetricsEnabled() || meter() == null) return;
         String mtag = methodTagValue(beanClass, method);
-        counter("ft.timeout.calls.total").add(1L,
+        counter(TIMEOUT_CALLS_TOTAL).add(1L,
                 Attributes.of(METHOD_KEY, mtag, TIMED_OUT_KEY, String.valueOf(timedOut)));
         // Histogram unit = seconds
         double seconds = durationNanos / 1_000_000_000.0;
-        histogram("ft.timeout.executionDuration", "seconds").record(seconds, methodAttrs(beanClass, method));
+        histogram(TIMEOUT_EXECUTION_DURATION, SECONDS).record(seconds, methodAttrs(beanClass, method));
     }
 
     // ------------------------------------------------------------------
@@ -370,14 +401,14 @@ final class OtelFtMetrics implements FtMetricsRecorder {
         if (!isMetricsEnabled() || meter() == null) return;
         String key = methodKey(beanClass, method);
         String mtag = methodTagValue(beanClass, method);
-        counter("ft.circuitbreaker.calls.total").add(1L,
+        counter(CIRCUIT_BREAKER_CALLS_TOTAL).add(1L,
                 Attributes.of(METHOD_KEY, mtag, CB_RESULT_KEY, result.tagValue()));
 
         // §10: the time spent in the current state must advance even without a transition.
         CBStateTracker tracker = cbStateTrackers.computeIfAbsent(key, k -> new CBStateTracker());
         StateTimeSample sample = tracker.sampleCurrentStateDuration();
         if (sample.deltaNanos() > 0L) {
-            counter("ft.circuitbreaker.state.total", "nanoseconds").add(sample.deltaNanos(),
+            counter(CIRCUIT_BREAKER_STATE_TOTAL, NANOSECONDS).add(sample.deltaNanos(),
                     Attributes.of(METHOD_KEY, mtag, CB_STATE_KEY, sample.state().tagValue()));
         }
     }
@@ -390,11 +421,11 @@ final class OtelFtMetrics implements FtMetricsRecorder {
         CBStateTracker tracker = cbStateTrackers.computeIfAbsent(key, k -> new CBStateTracker());
         StateTimeSample sample = tracker.transition(to);
         if (sample.deltaNanos() > 0L && from != null) {
-            counter("ft.circuitbreaker.state.total", "nanoseconds").add(sample.deltaNanos(),
+            counter(CIRCUIT_BREAKER_STATE_TOTAL, NANOSECONDS).add(sample.deltaNanos(),
                     Attributes.of(METHOD_KEY, mtag, CB_STATE_KEY, from.tagValue()));
         }
         if (to == CBState.OPEN) {
-            counter("ft.circuitbreaker.opened.total").add(1L, methodAttrs(beanClass, method));
+            counter(CIRCUIT_BREAKER_OPENED_TOTAL).add(1L, methodAttrs(beanClass, method));
         }
     }
 
@@ -408,11 +439,11 @@ final class OtelFtMetrics implements FtMetricsRecorder {
         String key = methodKey(beanClass, method);
         Attributes attrs = methodAttrs(beanClass, method);
         String mtag = methodTagValue(beanClass, method);
-        counter("ft.bulkhead.calls.total").add(1L,
-                Attributes.of(METHOD_KEY, mtag, BULKHEAD_RESULT_KEY, "accepted"));
-        histogram("ft.bulkhead.runningDuration", "seconds").record(runNanos / 1_000_000_000.0, attrs);
+        counter(BULKHEAD_CALLS_TOTAL).add(1L,
+                Attributes.of(METHOD_KEY, mtag, BULKHEAD_RESULT_KEY, ACCEPTED));
+        histogram(BULKHEAD_RUNNING_DURATION, SECONDS).record(runNanos / 1_000_000_000.0, attrs);
         if (bulkheadWaiting.containsKey(key)) {
-            histogram("ft.bulkhead.waitingDuration", "seconds")
+            histogram(BULKHEAD_WAITING_DURATION, SECONDS)
                     .record(Math.max(0L, waitNanos) / 1_000_000_000.0, attrs);
         }
     }
@@ -420,9 +451,9 @@ final class OtelFtMetrics implements FtMetricsRecorder {
     @Override
     public void recordBulkheadRejected(Class<?> beanClass, Method method) {
         if (!isMetricsEnabled() || meter() == null) return;
-        counter("ft.bulkhead.calls.total").add(1L,
+        counter(BULKHEAD_CALLS_TOTAL).add(1L,
                 Attributes.of(METHOD_KEY, methodTagValue(beanClass, method),
-                        BULKHEAD_RESULT_KEY, "rejected"));
+                        BULKHEAD_RESULT_KEY, REJECTED));
     }
 
     @Override
@@ -430,7 +461,7 @@ final class OtelFtMetrics implements FtMetricsRecorder {
         if (!isMetricsEnabled() || meter() == null) return;
         AtomicLong tracker = bulkheadRunning.get(methodKey(beanClass, method));
         if (tracker != null) tracker.addAndGet(delta);
-        LongUpDownCounter ud = upDown("ft.bulkhead.executionsRunning");
+        LongUpDownCounter ud = upDown(BULKHEAD_EXECUTIONS_RUNNING);
         if (ud != null) ud.add(delta, methodAttrs(beanClass, method));
     }
 
@@ -439,7 +470,7 @@ final class OtelFtMetrics implements FtMetricsRecorder {
         if (!isMetricsEnabled() || meter() == null) return;
         AtomicLong tracker = bulkheadWaiting.get(methodKey(beanClass, method));
         if (tracker != null) tracker.addAndGet(delta);
-        LongUpDownCounter ud = upDown("ft.bulkhead.executionsWaiting");
+        LongUpDownCounter ud = upDown(BULKHEAD_EXECUTIONS_WAITING);
         if (ud != null) ud.add(delta, methodAttrs(beanClass, method));
     }
 

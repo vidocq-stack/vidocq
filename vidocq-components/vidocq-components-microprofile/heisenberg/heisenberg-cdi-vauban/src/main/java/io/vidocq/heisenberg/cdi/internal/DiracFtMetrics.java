@@ -19,6 +19,33 @@
  */
 package io.vidocq.heisenberg.cdi.internal;
 
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.ACCEPTED;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.BULKHEAD_CALLS_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.BULKHEAD_EXECUTIONS_RUNNING;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.BULKHEAD_EXECUTIONS_WAITING;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.BULKHEAD_RESULT;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.BULKHEAD_RUNNING_DURATION;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.BULKHEAD_WAITING_DURATION;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.CIRCUIT_BREAKER_CALLS_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.CIRCUIT_BREAKER_OPENED_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.CIRCUIT_BREAKER_RESULT;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.CIRCUIT_BREAKER_STATE_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.EXCEPTION_THROWN;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.FALLBACK;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.INVOCATIONS_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.METHOD;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.REJECTED;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.RESULT;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.RETRIED;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.RETRY_CALLS_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.RETRY_RESULT;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.RETRY_RETRIES_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.STATE;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.TIMED_OUT;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.TIMEOUT_CALLS_TOTAL;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.TIMEOUT_EXECUTION_DURATION;
+import static io.vidocq.heisenberg.cdi.internal.FtMetricNames.VALUE_RETURNED;
+
 import io.vidocq.heisenberg.api.FtMetricsRecorder;
 import jakarta.enterprise.inject.Instance;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -29,6 +56,7 @@ import org.eclipse.microprofile.metrics.MetricUnits;
 import org.eclipse.microprofile.metrics.Tag;
 
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -97,90 +125,82 @@ final class DiracFtMetrics implements FtMetricsRecorder {
         if (registered.putIfAbsent(key, Boolean.TRUE) != null) return;
 
         Tag methodTag = methodTag(beanClass, method);
-
-        // ft.invocations.total
-        String[] results = {"valueReturned", "exceptionThrown"};
-        String[] fallbacks = hasFallback
-                ? new String[]{"applied", "notApplied"}
-                : new String[]{"notDefined"};
-        for (String result : results) {
-            for (String fb : fallbacks) {
-                registry.counter("ft.invocations.total", methodTag,
-                        new Tag("result", result), new Tag("fallback", fb));
-            }
-        }
-
+        registerInvocations(methodTag, hasFallback);
         if (hasRetry) {
-            // ft.retry.calls.total — all (retried, retryResult) combinations
-            for (boolean retried : new boolean[]{false, true}) {
-                String[] retryResults = retried
-                        ? new String[]{"valueReturned", "exceptionNotRetryable", "maxRetriesReached", "maxDurationReached"}
-                        : new String[]{"valueReturned", "exceptionNotRetryable"};
-                for (String rr : retryResults) {
-                    registry.counter("ft.retry.calls.total", methodTag,
-                            new Tag("retried", String.valueOf(retried)),
-                            new Tag("retryResult", rr));
-                }
-            }
-            // ft.retry.retries.total
-            registry.counter("ft.retry.retries.total", methodTag);
+            registerRetry(methodTag);
         }
-
         if (hasTimeout) {
-            // ft.timeout.calls.total
-            registry.counter("ft.timeout.calls.total", methodTag, new Tag("timedOut", "true"));
-            registry.counter("ft.timeout.calls.total", methodTag, new Tag("timedOut", "false"));
-            // ft.timeout.executionDuration
-            Metadata durationMeta = Metadata.builder()
-                    .withName("ft.timeout.executionDuration")
-                    .withUnit(MetricUnits.NANOSECONDS)
-                    .build();
-            registry.histogram(durationMeta, methodTag);
+            registerTimeout(methodTag);
         }
-
         if (hasCircuitBreaker) {
-            // ft.circuitbreaker.calls.total
-            registry.counter("ft.circuitbreaker.calls.total", methodTag, new Tag("circuitBreakerResult", "success"));
-            registry.counter("ft.circuitbreaker.calls.total", methodTag, new Tag("circuitBreakerResult", "failure"));
-            registry.counter("ft.circuitbreaker.calls.total", methodTag, new Tag("circuitBreakerResult", "circuitBreakerOpen"));
-            // ft.circuitbreaker.opened.total
-            registry.counter("ft.circuitbreaker.opened.total", methodTag);
-            // ft.circuitbreaker.state.total — 3 gauges (one per state)
-            CBStateTracker tracker = cbStateTrackers.computeIfAbsent(key, k -> new CBStateTracker());
-            Metadata stateMeta = Metadata.builder()
-                    .withName("ft.circuitbreaker.state.total")
-                    .withUnit(MetricUnits.NANOSECONDS)
-                    .build();
-            registry.gauge(stateMeta, tracker, t -> t.nanos(FtMetricsRecorder.CBState.CLOSED), methodTag, new Tag("state", "closed"));
-            registry.gauge(stateMeta, tracker, t -> t.nanos(FtMetricsRecorder.CBState.OPEN), methodTag, new Tag("state", "open"));
-            registry.gauge(stateMeta, tracker, t -> t.nanos(FtMetricsRecorder.CBState.HALF_OPEN), methodTag, new Tag("state", "halfOpen"));
+            registerCircuitBreaker(key, methodTag);
         }
-
         if (hasBulkhead) {
-            // ft.bulkhead.calls.total
-            registry.counter("ft.bulkhead.calls.total", methodTag, new Tag("bulkheadResult", "accepted"));
-            registry.counter("ft.bulkhead.calls.total", methodTag, new Tag("bulkheadResult", "rejected"));
-            // ft.bulkhead.executionsRunning gauge
-            AtomicLong running = bulkheadRunning.computeIfAbsent(key, k -> new AtomicLong(0));
-            registry.gauge("ft.bulkhead.executionsRunning", running, AtomicLong::get, methodTag);
-            // ft.bulkhead.runningDuration histogram
-            Metadata runMeta = Metadata.builder()
-                    .withName("ft.bulkhead.runningDuration")
-                    .withUnit(MetricUnits.NANOSECONDS)
-                    .build();
-            registry.histogram(runMeta, methodTag);
+            registerBulkhead(key, methodTag, asyncBulkhead);
+        }
+    }
 
-            if (asyncBulkhead) {
-                // ft.bulkhead.executionsWaiting gauge
-                AtomicLong waiting = bulkheadWaiting.computeIfAbsent(key, k -> new AtomicLong(0));
-                registry.gauge("ft.bulkhead.executionsWaiting", waiting, AtomicLong::get, methodTag);
-                // ft.bulkhead.waitingDuration histogram
-                Metadata waitMeta = Metadata.builder()
-                        .withName("ft.bulkhead.waitingDuration")
-                        .withUnit(MetricUnits.NANOSECONDS)
-                        .build();
-                registry.histogram(waitMeta, methodTag);
+    /** ft.invocations.total — every (result, fallback) combination. */
+    private void registerInvocations(Tag methodTag, boolean hasFallback) {
+        for (String result : List.of(VALUE_RETURNED, EXCEPTION_THROWN)) {
+            for (String fb : FtMetricNames.fallbackValues(hasFallback)) {
+                registry.counter(INVOCATIONS_TOTAL, methodTag, new Tag(RESULT, result), new Tag(FALLBACK, fb));
             }
+        }
+    }
+
+    private void registerRetry(Tag methodTag) {
+        // ft.retry.calls.total — all (retried, retryResult) combinations
+        for (boolean retried : new boolean[]{false, true}) {
+            for (RetryResult rr : FtMetricNames.retryResults(retried)) {
+                registry.counter(RETRY_CALLS_TOTAL, methodTag,
+                        new Tag(RETRIED, String.valueOf(retried)),
+                        new Tag(RETRY_RESULT, rr.tagValue()));
+            }
+        }
+        // ft.retry.retries.total
+        registry.counter(RETRY_RETRIES_TOTAL, methodTag);
+    }
+
+    private void registerTimeout(Tag methodTag) {
+        // ft.timeout.calls.total
+        registry.counter(TIMEOUT_CALLS_TOTAL, methodTag, new Tag(TIMED_OUT, "true"));
+        registry.counter(TIMEOUT_CALLS_TOTAL, methodTag, new Tag(TIMED_OUT, "false"));
+        // ft.timeout.executionDuration
+        registry.histogram(nanoseconds(TIMEOUT_EXECUTION_DURATION), methodTag);
+    }
+
+    private void registerCircuitBreaker(String key, Tag methodTag) {
+        // ft.circuitbreaker.calls.total
+        for (CBCallResult result : CBCallResult.values()) {
+            registry.counter(CIRCUIT_BREAKER_CALLS_TOTAL, methodTag, new Tag(CIRCUIT_BREAKER_RESULT, result.tagValue()));
+        }
+        // ft.circuitbreaker.opened.total
+        registry.counter(CIRCUIT_BREAKER_OPENED_TOTAL, methodTag);
+        // ft.circuitbreaker.state.total — 3 gauges (one per state)
+        CBStateTracker tracker = cbStateTrackers.computeIfAbsent(key, k -> new CBStateTracker());
+        Metadata stateMeta = nanoseconds(CIRCUIT_BREAKER_STATE_TOTAL);
+        for (CBState state : CBState.values()) {
+            registry.gauge(stateMeta, tracker, t -> t.nanos(state), methodTag, new Tag(STATE, state.tagValue()));
+        }
+    }
+
+    private void registerBulkhead(String key, Tag methodTag, boolean asyncBulkhead) {
+        // ft.bulkhead.calls.total
+        registry.counter(BULKHEAD_CALLS_TOTAL, methodTag, new Tag(BULKHEAD_RESULT, ACCEPTED));
+        registry.counter(BULKHEAD_CALLS_TOTAL, methodTag, new Tag(BULKHEAD_RESULT, REJECTED));
+        // ft.bulkhead.executionsRunning gauge
+        AtomicLong running = bulkheadRunning.computeIfAbsent(key, k -> new AtomicLong(0));
+        registry.gauge(BULKHEAD_EXECUTIONS_RUNNING, running, AtomicLong::get, methodTag);
+        // ft.bulkhead.runningDuration histogram
+        registry.histogram(nanoseconds(BULKHEAD_RUNNING_DURATION), methodTag);
+
+        if (asyncBulkhead) {
+            // ft.bulkhead.executionsWaiting gauge
+            AtomicLong waiting = bulkheadWaiting.computeIfAbsent(key, k -> new AtomicLong(0));
+            registry.gauge(BULKHEAD_EXECUTIONS_WAITING, waiting, AtomicLong::get, methodTag);
+            // ft.bulkhead.waitingDuration histogram
+            registry.histogram(nanoseconds(BULKHEAD_WAITING_DURATION), methodTag);
         }
     }
 
@@ -193,10 +213,10 @@ final class DiracFtMetrics implements FtMetricsRecorder {
                                  boolean succeeded, boolean fallbackApplied, boolean fallbackDefined) {
         if (!isMetricsEnabled()) return;
         Tag methodTag = methodTag(beanClass, method);
-        String result = succeeded ? "valueReturned" : "exceptionThrown";
-        String fb = fallbackTag(fallbackDefined, fallbackApplied);
-        Counter c = registry.counter("ft.invocations.total", methodTag,
-                new Tag("result", result), new Tag("fallback", fb));
+        String result = succeeded ? VALUE_RETURNED : EXCEPTION_THROWN;
+        String fb = FtMetricNames.fallbackValue(fallbackDefined, fallbackApplied);
+        Counter c = registry.counter(INVOCATIONS_TOTAL, methodTag,
+                new Tag(RESULT, result), new Tag(FALLBACK, fb));
         c.inc();
     }
 
@@ -209,11 +229,11 @@ final class DiracFtMetrics implements FtMetricsRecorder {
         if (!isMetricsEnabled()) return;
         Tag methodTag = methodTag(beanClass, method);
         boolean retried = retryCount > 0;
-        registry.counter("ft.retry.calls.total", methodTag,
-                new Tag("retried", String.valueOf(retried)),
-                new Tag("retryResult", result.tagValue())).inc();
+        registry.counter(RETRY_CALLS_TOTAL, methodTag,
+                new Tag(RETRIED, String.valueOf(retried)),
+                new Tag(RETRY_RESULT, result.tagValue())).inc();
         if (retryCount > 0) {
-            registry.counter("ft.retry.retries.total", methodTag).inc(retryCount);
+            registry.counter(RETRY_RETRIES_TOTAL, methodTag).inc(retryCount);
         }
     }
 
@@ -225,13 +245,9 @@ final class DiracFtMetrics implements FtMetricsRecorder {
     public void recordTimeout(Class<?> beanClass, Method method, boolean timedOut, long durationNanos) {
         if (!isMetricsEnabled()) return;
         Tag methodTag = methodTag(beanClass, method);
-        registry.counter("ft.timeout.calls.total", methodTag,
-                new Tag("timedOut", String.valueOf(timedOut))).inc();
-        Metadata durationMeta = Metadata.builder()
-                .withName("ft.timeout.executionDuration")
-                .withUnit(MetricUnits.NANOSECONDS)
-                .build();
-        registry.histogram(durationMeta, methodTag).update(durationNanos);
+        registry.counter(TIMEOUT_CALLS_TOTAL, methodTag,
+                new Tag(TIMED_OUT, String.valueOf(timedOut))).inc();
+        registry.histogram(nanoseconds(TIMEOUT_EXECUTION_DURATION), methodTag).update(durationNanos);
     }
 
     // ------------------------------------------------------------------
@@ -242,8 +258,8 @@ final class DiracFtMetrics implements FtMetricsRecorder {
     public void recordCircuitBreakerCall(Class<?> beanClass, Method method, CBCallResult result) {
         if (!isMetricsEnabled()) return;
         Tag methodTag = methodTag(beanClass, method);
-        registry.counter("ft.circuitbreaker.calls.total", methodTag,
-                new Tag("circuitBreakerResult", result.tagValue())).inc();
+        registry.counter(CIRCUIT_BREAKER_CALLS_TOTAL, methodTag,
+                new Tag(CIRCUIT_BREAKER_RESULT, result.tagValue())).inc();
     }
 
     @Override
@@ -255,7 +271,7 @@ final class DiracFtMetrics implements FtMetricsRecorder {
             tracker.transition(to);
         }
         if (to == CBState.OPEN) {
-            registry.counter("ft.circuitbreaker.opened.total", methodTag(beanClass, method)).inc();
+            registry.counter(CIRCUIT_BREAKER_OPENED_TOTAL, methodTag(beanClass, method)).inc();
         }
     }
 
@@ -268,30 +284,22 @@ final class DiracFtMetrics implements FtMetricsRecorder {
         if (!isMetricsEnabled()) return;
         String key = methodKey(beanClass, method);
         Tag methodTag = methodTag(beanClass, method);
-        registry.counter("ft.bulkhead.calls.total", methodTag,
-                new Tag("bulkheadResult", "accepted")).inc();
-        Metadata runMeta = Metadata.builder()
-                .withName("ft.bulkhead.runningDuration")
-                .withUnit(MetricUnits.NANOSECONDS)
-                .build();
-        registry.histogram(runMeta, methodTag).update(runNanos);
+        registry.counter(BULKHEAD_CALLS_TOTAL, methodTag,
+                new Tag(BULKHEAD_RESULT, ACCEPTED)).inc();
+        registry.histogram(nanoseconds(BULKHEAD_RUNNING_DURATION), methodTag).update(runNanos);
         // In async bulkhead mode, waitingDuration is reported for every accepted execution,
         // including immediate acquisitions (0ns), so histogram counts stay consistent with
         // the calls.total counter. In sync mode, only emit if we actually tracked waiting.
         if (bulkheadWaiting.containsKey(key)) {
-            Metadata waitMeta = Metadata.builder()
-                    .withName("ft.bulkhead.waitingDuration")
-                    .withUnit(MetricUnits.NANOSECONDS)
-                    .build();
-            registry.histogram(waitMeta, methodTag).update(Math.max(0L, waitNanos));
+            registry.histogram(nanoseconds(BULKHEAD_WAITING_DURATION), methodTag).update(Math.max(0L, waitNanos));
         }
     }
 
     @Override
     public void recordBulkheadRejected(Class<?> beanClass, Method method) {
         if (!isMetricsEnabled()) return;
-        registry.counter("ft.bulkhead.calls.total", methodTag(beanClass, method),
-                new Tag("bulkheadResult", "rejected")).inc();
+        registry.counter(BULKHEAD_CALLS_TOTAL, methodTag(beanClass, method),
+                new Tag(BULKHEAD_RESULT, REJECTED)).inc();
     }
 
     @Override
@@ -312,12 +320,12 @@ final class DiracFtMetrics implements FtMetricsRecorder {
     // Helpers
     // ------------------------------------------------------------------
 
-    /** The {@code fallback} tag value of {@code ft.invocations.total} (MP FT 4.1 §9). */
-    private static String fallbackTag(boolean fallbackDefined, boolean fallbackApplied) {
-        if (!fallbackDefined) {
-            return "notDefined";
-        }
-        return fallbackApplied ? "applied" : "notApplied";
+    /** The metadata of a metric measured in nanoseconds. */
+    private static Metadata nanoseconds(String name) {
+        return Metadata.builder()
+                .withName(name)
+                .withUnit(MetricUnits.NANOSECONDS)
+                .build();
     }
 
     private static String methodKey(Class<?> beanClass, Method method) {
@@ -325,7 +333,7 @@ final class DiracFtMetrics implements FtMetricsRecorder {
     }
 
     private static Tag methodTag(Class<?> beanClass, Method method) {
-        return new Tag("method", beanClass.getName() + "." + method.getName());
+        return new Tag(METHOD, beanClass.getName() + "." + method.getName());
     }
 
     private boolean isMetricsEnabled() {
