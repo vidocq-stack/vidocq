@@ -61,6 +61,8 @@ final class RepositoryWriter {
     private final Types    types;
     private final EntityRegistry entityRegistry;
     private final Messager messager; // nullable — null in the Maven-plugin path
+    /** The entity of the repository {@link #emit} is writing; APT runs single-threaded. */
+    private TypeElement emittedEntity;
 
     RepositoryWriter(SourceSink sink, Elements elements, Types types, EntityRegistry entityRegistry,
                      Messager messager) {
@@ -159,6 +161,7 @@ final class RepositoryWriter {
                         String repoRef, String metamodel) throws IOException {
         String fqn = pkg.isEmpty() ? implName : pkg + "." + implName;
         TypeElement entityType = (TypeElement) args.entity.asElement();
+        emittedEntity = entityType;
         String entityFqn = entityType.getQualifiedName().toString();
         String idFqn     = args.idBoxedFqn();
 
@@ -482,7 +485,8 @@ final class RepositoryWriter {
     private TypeElement entityForRepo(ExecutableElement m) {
         TypeElement repo = (TypeElement) m.getEnclosingElement();
         TypeArgs args = findEntityAndKey(repo);
-        return args == null ? null : (TypeElement) args.entity().asElement();
+        // A method inherited from an interface that is no repository (MANSART-022): the repository being written.
+        return args == null ? emittedEntity : (TypeElement) args.entity().asElement();
     }
 
     private String lifecycleBody(ExecutableElement m, TypeMirror returnType,

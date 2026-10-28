@@ -34,7 +34,7 @@ import java.util.List;
  * the control that always worked.
  */
 @Repository
-public interface LabSeatRepository extends BasicRepository<LabSeat, Long> {
+public interface LabSeatRepository extends BasicRepository<LabSeat, Long>, LabSeatLookups {
 
     /** Control: two-condition And (always supported). */
     List<LabSeat> findByRoomIdAndReleased(String roomId, boolean released);

@@ -103,4 +103,13 @@ class FindByAndOrderByTest {
         assertThat(repo.inRoom("room")).hasSize(4);
         assertThat(repo.inRoom("other")).isEmpty();
     }
+
+    /** MANSART-022: a {@code @Find} method inherited from a plain interface binds {@code By.ID} to the entity's id. */
+    @ParameterizedTest
+    @MethodSource("repositories")
+    void bindsTheIdOfAnInheritedFindMethod(LabSeatRepository repo) {
+        LabSeat third = repo.inBlock(8).get(0);
+
+        assertThat(repo.byKey(third.getId())).get().extracting(LabSeat::getSeatRow).isEqualTo(2);
+    }
 }

@@ -743,3 +743,26 @@ The INSERT leaves out a generated id column, so the database never saw the confl
 ### Fix
 `RepositoryRuntime.insertStrict` throws `EntityExistsException` when the entity's generated id is set and a row with
 that id exists. An id set on an entity that matches no row is still replaced by the generated one.
+
+## MANSART-022 — Annotation processor: an inherited `@Find` with `@By(By.ID)` crashed the compilation
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-margin`, SonarQube java:S2259 on mansart#53)
+- **Severity**: medium (build failure)
+- **Module**: `mansart-data-processor` (`RepositoryWriter`)
+
+### Symptom
+A repository inheriting `@Find Optional<E> byKey(@By(By.ID) Long key)` from a plain interface (not a repository)
+stopped the compilation: `NullPointerException: Cannot invoke "TypeElement.getEnclosedElements()" because "entity"
+is null`.
+
+### Minimal repro
+`LabSeatLookups` + `LabSeatRepository extends BasicRepository<LabSeat, Long>, LabSeatLookups` and
+`FindByAndOrderByTest.bindsTheIdOfAnInheritedFindMethod` (`mansart-data-tests`).
+
+### Cause
+`RepositoryWriter.entityForRepo` looks the entity up on the method's declaring interface, which has none here.
+
+### Fix
+`entityForRepo` falls back to the entity of the repository being written. Regression test:
+`FindByAndOrderByTest.bindsTheIdOfAnInheritedFindMethod`.
