@@ -48,12 +48,6 @@ public final class Jwe {
         return new JweDecryptor(privateKeyFromValue(value.trim().getBytes(StandardCharsets.UTF_8)), requiredAlgorithm);
     }
 
-    /** @deprecated Use {@link #decryptorFromInlinePem(String, String)} */
-    @Deprecated(since = "0.1.1")
-    public static JweDecryptor decryptorFromInlinePem(String value) throws JwtValidationException {
-        return decryptorFromInlinePem(value, null);
-    }
-
     /**
      * Private key from {@code mp.jwt.decrypt.key.location} (classpath file, URL, or FS path).
      * Supported formats: PEM PKCS#8, JWK JSON, JWKS JSON (first character '{').
@@ -64,12 +58,6 @@ public final class Jwe {
     public static JweDecryptor decryptorFromLocation(String location, String requiredAlgorithm) throws JwtValidationException {
         byte[] bytes = JwksSource.fromLocation(location).fetch();
         return new JweDecryptor(privateKeyFromValue(bytes), requiredAlgorithm);
-    }
-
-    /** @deprecated Use {@link #decryptorFromLocation(String, String)} */
-    @Deprecated(since = "0.1.1")
-    public static JweDecryptor decryptorFromLocation(String location) throws JwtValidationException {
-        return decryptorFromLocation(location, null);
     }
 
     private static PrivateKey privateKeyFromValue(byte[] bytes) throws JwtValidationException {
