@@ -434,8 +434,8 @@ public final class JdqlAst {
             while (peekKw("OR")) {
                 lex.consume();
                 Pred r = parseAnd();
-                if (l instanceof Or o) {
-                    List<Pred> all = new ArrayList<>(o.children); all.add(r); l = new Or(all);
+                if (l instanceof Or(var children)) {
+                    List<Pred> all = new ArrayList<>(children); all.add(r); l = new Or(all);
                 } else l = new Or(List.of(l, r));
             }
             return l;
@@ -446,8 +446,8 @@ public final class JdqlAst {
             while (peekKw("AND")) {
                 lex.consume();
                 Pred r = parseUnary();
-                if (l instanceof And a) {
-                    List<Pred> all = new ArrayList<>(a.children); all.add(r); l = new And(all);
+                if (l instanceof And(var children)) {
+                    List<Pred> all = new ArrayList<>(children); all.add(r); l = new And(all);
                 } else l = new And(List.of(l, r));
             }
             return l;

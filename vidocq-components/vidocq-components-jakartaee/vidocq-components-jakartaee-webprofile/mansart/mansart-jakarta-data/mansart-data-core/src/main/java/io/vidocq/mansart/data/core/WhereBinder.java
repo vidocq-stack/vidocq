@@ -37,34 +37,34 @@ final class WhereBinder {
     static int bind(Dialect dialect, PreparedStatement ps, Where where,
                     Object[] args, int psIdx, int[] argCursor) throws SQLException {
         switch (where) {
-            case Where.Eq w        -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
-            case Where.NotEq w     -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
-            case Where.Lt w        -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
-            case Where.Lte w       -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
-            case Where.Gt w        -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
-            case Where.Gte w       -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
-            case Where.Like w      -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
-            case Where.Between w   -> {
-                psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
-                psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
+            case Where.Eq(var attr)        -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, attr);
+            case Where.NotEq(var attr)     -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, attr);
+            case Where.Lt(var attr)        -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, attr);
+            case Where.Lte(var attr)       -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, attr);
+            case Where.Gt(var attr)        -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, attr);
+            case Where.Gte(var attr)       -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, attr);
+            case Where.Like(var attr)      -> psIdx = bindOne(dialect, ps, psIdx, args, argCursor, attr);
+            case Where.Between(var attr)   -> {
+                psIdx = bindOne(dialect, ps, psIdx, args, argCursor, attr);
+                psIdx = bindOne(dialect, ps, psIdx, args, argCursor, attr);
             }
-            case Where.In w -> {
-                for (int i = 0; i < w.arity(); i++) {
-                    psIdx = bindOne(dialect, ps, psIdx, args, argCursor, w.attr());
+            case Where.In(var attr, var arity) -> {
+                for (int i = 0; i < arity; i++) {
+                    psIdx = bindOne(dialect, ps, psIdx, args, argCursor, attr);
                 }
             }
             case Where.IsNull ignored1 -> { /* no bind */ }
             case Where.IsNotNull ignored2 -> { /* no bind */ }
-            case Where.And w -> {
-                for (Where child : w.children()) psIdx = bind(dialect, ps, child, args, psIdx, argCursor);
+            case Where.And(var children) -> {
+                for (Where child : children) psIdx = bind(dialect, ps, child, args, psIdx, argCursor);
             }
-            case Where.Or w -> {
-                for (Where child : w.children()) psIdx = bind(dialect, ps, child, args, psIdx, argCursor);
+            case Where.Or(var children) -> {
+                for (Where child : children) psIdx = bind(dialect, ps, child, args, psIdx, argCursor);
             }
-            case Where.Not w -> psIdx = bind(dialect, ps, w.child(), args, psIdx, argCursor);
+            case Where.Not(var child) -> psIdx = bind(dialect, ps, child, args, psIdx, argCursor);
             // M7-27 — IgnoreCase wraps a single text comparator that consumes exactly one arg.
             // The dialect renders LOWER(col) <op> LOWER(?), so we still bind one parameter.
-            case Where.IgnoreCase w -> psIdx = bind(dialect, ps, w.inner(), args, psIdx, argCursor);
+            case Where.IgnoreCase(var inner) -> psIdx = bind(dialect, ps, inner, args, psIdx, argCursor);
             // M8-1 — Func(fn, inner) wraps a comparator with a unary scalar function on the
             // column. UPPER/LOWER/ABS preserve the bound parameter type. LENGTH returns the
             // character count, so the bound parameter must be Integer instead of the column's
@@ -128,7 +128,7 @@ final class WhereBinder {
             }
             case Where.IsNull ignored    -> psIdx;
             case Where.IsNotNull ignored -> psIdx;
-            case Where.Not w             -> bindFuncWithType(dialect, ps, w.child(), args, psIdx, argCursor, overrideType);
+            case Where.Not(var child)             -> bindFuncWithType(dialect, ps, child, args, psIdx, argCursor, overrideType);
             default -> throw new IllegalArgumentException(
                     "Func wraps Eq/NotEq/Lt/Lte/Gt/Gte/Like/Between/In/IsNull/IsNotNull/Not only, got: " + inner);
         };

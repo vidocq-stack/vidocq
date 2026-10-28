@@ -447,9 +447,9 @@ final class JdqlParser {
                       .append(" = (java.util.Collection<?>) ").append(resolveArg(in.args.get(0), nameToIdx, m)).append("; ");
                 }
             }
-            case And a -> { for (Pred c : a.children) declareInCollections(sb, c, nameToIdx, m, ctx); }
-            case Or  o -> { for (Pred c : o.children) declareInCollections(sb, c, nameToIdx, m, ctx); }
-            case Not n -> declareInCollections(sb, n.child, nameToIdx, m, ctx);
+            case And(var children) -> { for (Pred c : children) declareInCollections(sb, c, nameToIdx, m, ctx); }
+            case Or(var children) -> { for (Pred c : children) declareInCollections(sb, c, nameToIdx, m, ctx); }
+            case Not(var child) -> declareInCollections(sb, child, nameToIdx, m, ctx);
             default    -> {}
         }
     }
@@ -462,19 +462,19 @@ final class JdqlParser {
         return switch (p) {
             case Cmp c        -> cmpExpr(pkg, metamodel, c.op, c.attr);
             case FnCmp c      -> wrapFunc(pkg, c.fn, cmpExpr(pkg, metamodel, c.op, c.attr));
-            case IsNull n     -> isNullExpr(pkg, metamodel, n.negated, n.attr);
-            case FnIsNull n   -> wrapFunc(pkg, n.fn, isNullExpr(pkg, metamodel, n.negated, n.attr));
+            case IsNull(var attr, var negated)     -> isNullExpr(pkg, metamodel, negated, attr);
+            case FnIsNull(var fn, var attr, var negated)   -> wrapFunc(pkg, fn, isNullExpr(pkg, metamodel, negated, attr));
             case Between b    -> betweenExpr(pkg, metamodel, b.attr);
             case FnBetween b  -> wrapFunc(pkg, b.fn, betweenExpr(pkg, metamodel, b.attr));
             case In in        -> inExpr(pkg, metamodel, in, ctx);
             case FnIn in      -> wrapFunc(pkg, in.fn, fnInExpr(pkg, metamodel, in, ctx));
-            case And a -> pkg + ".and(" + a.children.stream()
+            case And(var children) -> pkg + ".and(" + children.stream()
                     .map(c -> buildWhereExpr(c, metamodel, nameToIdx, m, ctx))
                     .reduce((x, y) -> x + ", " + y).orElse("") + ")";
-            case Or  o -> pkg + ".or("  + o.children.stream()
+            case Or(var children) -> pkg + ".or("  + children.stream()
                     .map(c -> buildWhereExpr(c, metamodel, nameToIdx, m, ctx))
                     .reduce((x, y) -> x + ", " + y).orElse("") + ")";
-            case Not n -> "new " + pkg + ".Not(" + buildWhereExpr(n.child, metamodel, nameToIdx, m, ctx) + ")";
+            case Not(var child) -> "new " + pkg + ".Not(" + buildWhereExpr(child, metamodel, nameToIdx, m, ctx) + ")";
         };
     }
 
@@ -639,9 +639,9 @@ final class JdqlParser {
         return switch (p) {
             case In in       -> in.collection;
             case FnIn in     -> in.collection;
-            case And a       -> a.children.stream().anyMatch(JdqlParser::containsInList);
-            case Or o        -> o.children.stream().anyMatch(JdqlParser::containsInList);
-            case Not n       -> containsInList(n.child);
+            case And(var children)       -> children.stream().anyMatch(JdqlParser::containsInList);
+            case Or(var children)        -> children.stream().anyMatch(JdqlParser::containsInList);
+            case Not(var child)       -> containsInList(child);
             default          -> false;
         };
     }
@@ -767,10 +767,10 @@ final class JdqlParser {
                 emitCmpExpr(sb, pkg, metamodel, c.op, c.attr);
                 sb.append(')');
             }
-            case IsNull n -> emitIsNullExpr(sb, pkg, metamodel, n.negated, n.attr);
-            case FnIsNull n -> {
-                sb.append("new ").append(pkg).append(".Func(\"").append(n.fn).append("\", ");
-                emitIsNullExpr(sb, pkg, metamodel, n.negated, n.attr);
+            case IsNull(var attr, var negated) -> emitIsNullExpr(sb, pkg, metamodel, negated, attr);
+            case FnIsNull(var fn, var attr, var negated) -> {
+                sb.append("new ").append(pkg).append(".Func(\"").append(fn).append("\", ");
+                emitIsNullExpr(sb, pkg, metamodel, negated, attr);
                 sb.append(')');
             }
             case Between b -> emitBetweenExpr(sb, pkg, metamodel, b.attr);
@@ -779,21 +779,21 @@ final class JdqlParser {
                 emitBetweenExpr(sb, pkg, metamodel, b.attr);
                 sb.append(')');
             }
-            case In in -> {
-                if (in.collection) throw new IllegalStateException("Collection-IN must go through the dynamic path");
-                emitInExpr(sb, pkg, metamodel, in.attr, in.args.size());
+            case In(var attr, var args, var collection) -> {
+                if (collection) throw new IllegalStateException("Collection-IN must go through the dynamic path");
+                emitInExpr(sb, pkg, metamodel, attr, args.size());
             }
-            case FnIn in -> {
-                if (in.collection) throw new IllegalStateException("Collection-IN must go through the dynamic path");
-                sb.append("new ").append(pkg).append(".Func(\"").append(in.fn).append("\", ");
-                emitInExpr(sb, pkg, metamodel, in.attr, in.args.size());
+            case FnIn(var fn, var attr, var args, var collection) -> {
+                if (collection) throw new IllegalStateException("Collection-IN must go through the dynamic path");
+                sb.append("new ").append(pkg).append(".Func(\"").append(fn).append("\", ");
+                emitInExpr(sb, pkg, metamodel, attr, args.size());
                 sb.append(')');
             }
-            case And a -> emitCombinator(sb, "and", a.children, metamodel);
-            case Or  o -> emitCombinator(sb, "or",  o.children, metamodel);
-            case Not n -> {
+            case And(var children) -> emitCombinator(sb, "and", children, metamodel);
+            case Or(var children) -> emitCombinator(sb, "or",  children, metamodel);
+            case Not(var child) -> {
                 sb.append("new ").append(pkg).append(".Not(");
-                emitPredicate(sb, n.child, metamodel);
+                emitPredicate(sb, child, metamodel);
                 sb.append(')');
             }
         }
@@ -857,9 +857,9 @@ final class JdqlParser {
             case FnIsNull ign -> {}
             case In in        -> out.addAll(in.args);   // works for non-collection literal IN
             case FnIn in      -> out.addAll(in.args);
-            case And a        -> { for (Pred c : a.children) collectArgs(c, out); }
-            case Or  o        -> { for (Pred c : o.children) collectArgs(c, out); }
-            case Not n        -> collectArgs(n.child, out);
+            case And(var children)        -> { for (Pred c : children) collectArgs(c, out); }
+            case Or(var children)        -> { for (Pred c : children) collectArgs(c, out); }
+            case Not(var child)        -> collectArgs(child, out);
         }
     }
 
@@ -1087,8 +1087,8 @@ final class JdqlParser {
             while (peekKw("OR")) {
                 lex.consume();
                 Pred right = parseAnd();
-                if (left instanceof Or o) {
-                    List<Pred> all = new ArrayList<>(o.children); all.add(right); left = new Or(all);
+                if (left instanceof Or(var children)) {
+                    List<Pred> all = new ArrayList<>(children); all.add(right); left = new Or(all);
                 } else { left = new Or(List.of(left, right)); }
             }
             return left;
@@ -1099,8 +1099,8 @@ final class JdqlParser {
             while (peekKw("AND")) {
                 lex.consume();
                 Pred right = parseUnary();
-                if (left instanceof And a) {
-                    List<Pred> all = new ArrayList<>(a.children); all.add(right); left = new And(all);
+                if (left instanceof And(var children)) {
+                    List<Pred> all = new ArrayList<>(children); all.add(right); left = new And(all);
                 } else { left = new And(List.of(left, right)); }
             }
             return left;

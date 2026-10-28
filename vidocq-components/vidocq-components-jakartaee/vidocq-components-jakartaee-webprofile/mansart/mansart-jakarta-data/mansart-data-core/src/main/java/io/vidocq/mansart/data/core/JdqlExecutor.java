@@ -295,15 +295,15 @@ public final class JdqlExecutor {
             }
             case JdqlAst.In in -> out.addAll(in.args());
             case JdqlAst.FnIn in -> out.addAll(in.args());
-            case JdqlAst.And and -> and.children().forEach(c -> collectArgs(c, out));
-            case JdqlAst.Or or -> or.children().forEach(c -> collectArgs(c, out));
-            case JdqlAst.Not not -> collectArgs(not.child(), out);
+            case JdqlAst.And(var children) -> children.forEach(c -> collectArgs(c, out));
+            case JdqlAst.Or(var children) -> children.forEach(c -> collectArgs(c, out));
+            case JdqlAst.Not(var child) -> collectArgs(child, out);
         }
     }
 
     private static void collectArgs(JdqlAst.Expr e, List<JdqlAst.ArgRef> out) {
         switch (e) {
-            case JdqlAst.ExprArg a -> out.add(a.arg());
+            case JdqlAst.ExprArg(var arg) -> out.add(arg);
             case JdqlAst.ExprAttr ignored -> { /* an attribute, no value */ }
             case JdqlAst.ExprBin bin -> {
                 collectArgs(bin.left(), out);
@@ -577,56 +577,56 @@ public final class JdqlExecutor {
                                List<Object> argsOut, boolean[] alwaysFalse) {
         Attribute<?, ?> a;
         switch (p) {
-            case JdqlAst.Cmp c -> {
-                a = lookup(model, attrIndex, c.attr());
-                argsOut.add(resolveArg(c.arg(), callArgs, shape, a.javaType()));
-                return cmpOf(a, c.op());
+            case JdqlAst.Cmp(var attr, var op, var arg) -> {
+                a = lookup(model, attrIndex, attr);
+                argsOut.add(resolveArg(arg, callArgs, shape, a.javaType()));
+                return cmpOf(a, op);
             }
-            case JdqlAst.FnCmp c -> {
-                a = lookup(model, attrIndex, c.attr());
-                argsOut.add(resolveArg(c.arg(), callArgs, shape, comparedType(c.fn(), a)));
-                return new Where.Func(c.fn(), cmpOf(a, c.op()));
+            case JdqlAst.FnCmp(var fn, var attr, var op, var arg) -> {
+                a = lookup(model, attrIndex, attr);
+                argsOut.add(resolveArg(arg, callArgs, shape, comparedType(fn, a)));
+                return new Where.Func(fn, cmpOf(a, op));
             }
-            case JdqlAst.IsNull n -> {
-                a = lookup(model, attrIndex, n.attr());
-                return n.negated() ? new Where.IsNotNull(a) : new Where.IsNull(a);
+            case JdqlAst.IsNull(var attr, var negated) -> {
+                a = lookup(model, attrIndex, attr);
+                return negated ? new Where.IsNotNull(a) : new Where.IsNull(a);
             }
-            case JdqlAst.FnIsNull n -> {
-                a = lookup(model, attrIndex, n.attr());
-                return new Where.Func(n.fn(), n.negated() ? new Where.IsNotNull(a) : new Where.IsNull(a));
+            case JdqlAst.FnIsNull(var fn, var attr, var negated) -> {
+                a = lookup(model, attrIndex, attr);
+                return new Where.Func(fn, negated ? new Where.IsNotNull(a) : new Where.IsNull(a));
             }
-            case JdqlAst.Between b -> {
-                a = lookup(model, attrIndex, b.attr());
-                argsOut.add(resolveArg(b.lo(), callArgs, shape, a.javaType()));
-                argsOut.add(resolveArg(b.hi(), callArgs, shape, a.javaType()));
+            case JdqlAst.Between(var attr, var lo, var hi) -> {
+                a = lookup(model, attrIndex, attr);
+                argsOut.add(resolveArg(lo, callArgs, shape, a.javaType()));
+                argsOut.add(resolveArg(hi, callArgs, shape, a.javaType()));
                 return new Where.Between(a);
             }
-            case JdqlAst.FnBetween b -> {
-                a = lookup(model, attrIndex, b.attr());
-                argsOut.add(resolveArg(b.lo(), callArgs, shape, comparedType(b.fn(), a)));
-                argsOut.add(resolveArg(b.hi(), callArgs, shape, comparedType(b.fn(), a)));
-                return new Where.Func(b.fn(), new Where.Between(a));
+            case JdqlAst.FnBetween(var fn, var attr, var lo, var hi) -> {
+                a = lookup(model, attrIndex, attr);
+                argsOut.add(resolveArg(lo, callArgs, shape, comparedType(fn, a)));
+                argsOut.add(resolveArg(hi, callArgs, shape, comparedType(fn, a)));
+                return new Where.Func(fn, new Where.Between(a));
             }
-            case JdqlAst.In in -> {
-                a = lookup(model, attrIndex, in.attr());
-                return buildIn(a, in.args(), in.collection(), callArgs, shape, argsOut, alwaysFalse, null);
+            case JdqlAst.In(var attr, var args, var collection) -> {
+                a = lookup(model, attrIndex, attr);
+                return buildIn(a, args, collection, callArgs, shape, argsOut, alwaysFalse, null);
             }
-            case JdqlAst.FnIn in -> {
-                a = lookup(model, attrIndex, in.attr());
-                return buildIn(a, in.args(), in.collection(), callArgs, shape, argsOut, alwaysFalse, in.fn());
+            case JdqlAst.FnIn(var fn, var attr, var args, var collection) -> {
+                a = lookup(model, attrIndex, attr);
+                return buildIn(a, args, collection, callArgs, shape, argsOut, alwaysFalse, fn);
             }
-            case JdqlAst.And and -> {
-                List<Where> cs = new ArrayList<>(and.children().size());
-                for (JdqlAst.Pred c : and.children()) cs.add(build(c, model, attrIndex, callArgs, shape, argsOut, alwaysFalse));
+            case JdqlAst.And(var children) -> {
+                List<Where> cs = new ArrayList<>(children.size());
+                for (JdqlAst.Pred c : children) cs.add(build(c, model, attrIndex, callArgs, shape, argsOut, alwaysFalse));
                 return new Where.And(cs);
             }
-            case JdqlAst.Or or -> {
-                List<Where> cs = new ArrayList<>(or.children().size());
-                for (JdqlAst.Pred c : or.children()) cs.add(build(c, model, attrIndex, callArgs, shape, argsOut, alwaysFalse));
+            case JdqlAst.Or(var children) -> {
+                List<Where> cs = new ArrayList<>(children.size());
+                for (JdqlAst.Pred c : children) cs.add(build(c, model, attrIndex, callArgs, shape, argsOut, alwaysFalse));
                 return new Where.Or(cs);
             }
-            case JdqlAst.Not n -> {
-                return new Where.Not(build(n.child(), model, attrIndex, callArgs, shape, argsOut, alwaysFalse));
+            case JdqlAst.Not(var child) -> {
+                return new Where.Not(build(child, model, attrIndex, callArgs, shape, argsOut, alwaysFalse));
             }
         }
     }
@@ -764,32 +764,31 @@ public final class JdqlExecutor {
                                    List<Object> outVals, List<Class<?>> outTypes,
                                    Class<?> targetType) {
         switch (expr) {
-            case JdqlAst.ExprAttr a -> {
-                Attribute<?, ?> attr = attrIndex.get(a.attr());
-                if (attr == null) throw new MansartDataException("Unknown attribute in SET: " + a.attr());
+            case JdqlAst.ExprAttr(var name) -> {
+                Attribute<?, ?> attr = attrIndex.get(name);
+                if (attr == null) throw new MansartDataException("Unknown attribute in SET: " + name);
                 sb.append('"').append(attr.columnName()).append('"');
             }
-            case JdqlAst.ExprArg ar -> {
-                outVals.add(resolveArg(ar.arg(), callArgs, shape, targetType));
+            case JdqlAst.ExprArg(var arg) -> {
+                outVals.add(resolveArg(arg, callArgs, shape, targetType));
                 outTypes.add(targetType);
                 sb.append('?');
             }
-            case JdqlAst.ExprBin bin -> {
+            case JdqlAst.ExprBin(var left, var op, var right) -> {
                 sb.append('(');
-                renderExpr(sb, bin.left(), attrIndex, callArgs, shape, outVals, outTypes, targetType);
-                sb.append(' ').append(bin.op()).append(' ');
-                renderExpr(sb, bin.right(), attrIndex, callArgs, shape, outVals, outTypes, targetType);
+                renderExpr(sb, left, attrIndex, callArgs, shape, outVals, outTypes, targetType);
+                sb.append(' ').append(op).append(' ');
+                renderExpr(sb, right, attrIndex, callArgs, shape, outVals, outTypes, targetType);
                 sb.append(')');
             }
             // M8-1 — render scalar functions in SET RHS. LENGTH → CHAR_LENGTH (SQL-portable).
             // CONCAT renders as fn(arg1, arg2, ...) per SQL standard (works on H2 and PG).
             // Bound parameters in fn args inherit the SET column's targetType — sufficient for
             // the common case where all CONCAT pieces are strings.
-            case JdqlAst.ExprFunc fn -> {
-                String sqlFn = "LENGTH".equals(fn.name()) ? "CHAR_LENGTH" : fn.name();
-                Class<?> innerType = "LENGTH".equals(fn.name()) ? Integer.class : targetType;
+            case JdqlAst.ExprFunc(var name, var args) -> {
+                String sqlFn = "LENGTH".equals(name) ? "CHAR_LENGTH" : name;
+                Class<?> innerType = "LENGTH".equals(name) ? Integer.class : targetType;
                 sb.append(sqlFn).append('(');
-                List<JdqlAst.Expr> args = fn.args();
                 for (int i = 0; i < args.size(); i++) {
                     if (i > 0) sb.append(", ");
                     renderExpr(sb, args.get(i), attrIndex, callArgs, shape, outVals, outTypes, innerType);

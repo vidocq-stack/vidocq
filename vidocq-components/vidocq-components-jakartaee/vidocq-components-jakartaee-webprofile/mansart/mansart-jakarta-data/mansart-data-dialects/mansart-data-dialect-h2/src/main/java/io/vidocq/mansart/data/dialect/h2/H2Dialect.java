@@ -78,8 +78,8 @@ public final class H2Dialect implements Dialect {
         for (int i = 0; i < columns.size(); i++) {
             if (i > 0) sb.append(", ");
             switch (columns.get(i)) {
-                case ProjectedColumn.Leaf leaf -> sb.append(col(leaf.attr(), plan));
-                case ProjectedColumn.Expr exp  -> sb.append(exp.sqlFragment());
+                case ProjectedColumn.Leaf(var attr) -> sb.append(col(attr, plan));
+                case ProjectedColumn.Expr(var sqlFragment)  -> sb.append(sqlFragment);
             }
         }
         sb.append(" FROM ").append(qualified(model));
@@ -371,22 +371,22 @@ public final class H2Dialect implements Dialect {
 
     private void renderIgnoreCase(StringBuilder sb, Where inner, Joins.Plan plan) {
         switch (inner) {
-            case Where.Eq w      -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") = LOWER(?)");
-            case Where.NotEq w   -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") <> LOWER(?)");
-            case Where.Like w    -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") LIKE LOWER(?)");
-            case Where.Lt w      -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") < LOWER(?)");
-            case Where.Lte w     -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") <= LOWER(?)");
-            case Where.Gt w      -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") > LOWER(?)");
-            case Where.Gte w     -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") >= LOWER(?)");
-            case Where.Between w -> sb.append("LOWER(").append(col(w.attr(), plan)).append(") BETWEEN LOWER(?) AND LOWER(?)");
-            case Where.In w -> {
-                sb.append("LOWER(").append(col(w.attr(), plan)).append(") IN (");
-                for (int i = 0; i < w.arity(); i++) { if (i > 0) sb.append(", "); sb.append("LOWER(?)"); }
+            case Where.Eq(var attr)      -> sb.append("LOWER(").append(col(attr, plan)).append(") = LOWER(?)");
+            case Where.NotEq(var attr)   -> sb.append("LOWER(").append(col(attr, plan)).append(") <> LOWER(?)");
+            case Where.Like(var attr)    -> sb.append("LOWER(").append(col(attr, plan)).append(") LIKE LOWER(?)");
+            case Where.Lt(var attr)      -> sb.append("LOWER(").append(col(attr, plan)).append(") < LOWER(?)");
+            case Where.Lte(var attr)     -> sb.append("LOWER(").append(col(attr, plan)).append(") <= LOWER(?)");
+            case Where.Gt(var attr)      -> sb.append("LOWER(").append(col(attr, plan)).append(") > LOWER(?)");
+            case Where.Gte(var attr)     -> sb.append("LOWER(").append(col(attr, plan)).append(") >= LOWER(?)");
+            case Where.Between(var attr) -> sb.append("LOWER(").append(col(attr, plan)).append(") BETWEEN LOWER(?) AND LOWER(?)");
+            case Where.In(var attr, var arity) -> {
+                sb.append("LOWER(").append(col(attr, plan)).append(") IN (");
+                for (int i = 0; i < arity; i++) { if (i > 0) sb.append(", "); sb.append("LOWER(?)"); }
                 sb.append(')');
             }
-            case Where.Not w -> {
+            case Where.Not(var child) -> {
                 sb.append("NOT (");
-                renderIgnoreCase(sb, w.child(), plan);
+                renderIgnoreCase(sb, child, plan);
                 sb.append(')');
             }
             default -> throw new IllegalArgumentException(
@@ -401,24 +401,24 @@ public final class H2Dialect implements Dialect {
     private void renderFunc(StringBuilder sb, String fn, Where inner, Joins.Plan plan) {
         String sqlFn = "LENGTH".equals(fn) ? "CHAR_LENGTH" : fn;
         switch (inner) {
-            case Where.Eq w      -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " = ?");
-            case Where.NotEq w   -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " <> ?");
-            case Where.Like w    -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " LIKE ?");
-            case Where.Lt w      -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " < ?");
-            case Where.Lte w     -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " <= ?");
-            case Where.Gt w      -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " > ?");
-            case Where.Gte w     -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " >= ?");
-            case Where.Between w -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " BETWEEN ? AND ?");
-            case Where.IsNull w    -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " IS NULL");
-            case Where.IsNotNull w -> appendFnLhs(sb, sqlFn, col(w.attr(), plan), " IS NOT NULL");
-            case Where.In w -> {
-                appendFnLhs(sb, sqlFn, col(w.attr(), plan), " IN (");
-                for (int i = 0; i < w.arity(); i++) { if (i > 0) sb.append(", "); sb.append('?'); }
+            case Where.Eq(var attr)      -> appendFnLhs(sb, sqlFn, col(attr, plan), " = ?");
+            case Where.NotEq(var attr)   -> appendFnLhs(sb, sqlFn, col(attr, plan), " <> ?");
+            case Where.Like(var attr)    -> appendFnLhs(sb, sqlFn, col(attr, plan), " LIKE ?");
+            case Where.Lt(var attr)      -> appendFnLhs(sb, sqlFn, col(attr, plan), " < ?");
+            case Where.Lte(var attr)     -> appendFnLhs(sb, sqlFn, col(attr, plan), " <= ?");
+            case Where.Gt(var attr)      -> appendFnLhs(sb, sqlFn, col(attr, plan), " > ?");
+            case Where.Gte(var attr)     -> appendFnLhs(sb, sqlFn, col(attr, plan), " >= ?");
+            case Where.Between(var attr) -> appendFnLhs(sb, sqlFn, col(attr, plan), " BETWEEN ? AND ?");
+            case Where.IsNull(var attr)    -> appendFnLhs(sb, sqlFn, col(attr, plan), " IS NULL");
+            case Where.IsNotNull(var attr) -> appendFnLhs(sb, sqlFn, col(attr, plan), " IS NOT NULL");
+            case Where.In(var attr, var arity) -> {
+                appendFnLhs(sb, sqlFn, col(attr, plan), " IN (");
+                for (int i = 0; i < arity; i++) { if (i > 0) sb.append(", "); sb.append('?'); }
                 sb.append(')');
             }
-            case Where.Not w -> {
+            case Where.Not(var child) -> {
                 sb.append("NOT (");
-                renderFunc(sb, fn, w.child(), plan);
+                renderFunc(sb, fn, child, plan);
                 sb.append(')');
             }
             default -> throw new IllegalArgumentException(
@@ -443,7 +443,7 @@ public final class H2Dialect implements Dialect {
     private void appendPagination(StringBuilder sb, Pagination p) {
         switch (p) {
             case Pagination.None ignored -> {}
-            case Pagination.Offset o     -> sb.append(" LIMIT ").append(o.limit()).append(" OFFSET ").append(o.offset());
+            case Pagination.Offset(var offset, var limit)     -> sb.append(" LIMIT ").append(limit).append(" OFFSET ").append(offset);
             case Pagination.Keyset k     -> sb.append(" LIMIT ").append(k.limit()); // M3b refines
         }
     }

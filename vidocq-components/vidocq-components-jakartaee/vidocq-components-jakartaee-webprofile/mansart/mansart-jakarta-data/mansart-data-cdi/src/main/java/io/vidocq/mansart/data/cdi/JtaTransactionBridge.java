@@ -70,7 +70,7 @@ final class JtaTransactionBridge implements TransactionBridge {
     /** Identity key: datasource beans are singletons, two keys match iff same instance. */
     private record Key(DataSource dataSource) {
         @Override public boolean equals(Object o) {
-            return o instanceof Key k && k.dataSource == dataSource;
+            return o instanceof Key(var other) && other == dataSource;
         }
         @Override public int hashCode() {
             return System.identityHashCode(dataSource);

@@ -75,21 +75,21 @@ public final class Joins {
     private static void walkWhere(Where w, Consumer<Attribute<?, ?>> sink) {
         if (w == null) return;
         switch (w) {
-            case Where.Eq x        -> sink.accept(x.attr());
-            case Where.NotEq x     -> sink.accept(x.attr());
-            case Where.Lt x        -> sink.accept(x.attr());
-            case Where.Lte x       -> sink.accept(x.attr());
-            case Where.Gt x        -> sink.accept(x.attr());
-            case Where.Gte x       -> sink.accept(x.attr());
-            case Where.Like x      -> sink.accept(x.attr());
+            case Where.Eq(var attr)        -> sink.accept(attr);
+            case Where.NotEq(var attr)     -> sink.accept(attr);
+            case Where.Lt(var attr)        -> sink.accept(attr);
+            case Where.Lte(var attr)       -> sink.accept(attr);
+            case Where.Gt(var attr)        -> sink.accept(attr);
+            case Where.Gte(var attr)       -> sink.accept(attr);
+            case Where.Like(var attr)      -> sink.accept(attr);
             case Where.In x        -> sink.accept(x.attr());
-            case Where.Between x   -> sink.accept(x.attr());
-            case Where.IsNull x    -> sink.accept(x.attr());
-            case Where.IsNotNull x -> sink.accept(x.attr());
-            case Where.And x       -> { for (Where c : x.children()) walkWhere(c, sink); }
-            case Where.Or x        -> { for (Where c : x.children()) walkWhere(c, sink); }
-            case Where.Not x       -> walkWhere(x.child(), sink);
-            case Where.IgnoreCase x -> walkWhere(x.inner(), sink);
+            case Where.Between(var attr)   -> sink.accept(attr);
+            case Where.IsNull(var attr)    -> sink.accept(attr);
+            case Where.IsNotNull(var attr) -> sink.accept(attr);
+            case Where.And(var children)       -> { for (Where c : children) walkWhere(c, sink); }
+            case Where.Or(var children)        -> { for (Where c : children) walkWhere(c, sink); }
+            case Where.Not(var child)       -> walkWhere(child, sink);
+            case Where.IgnoreCase(var inner) -> walkWhere(inner, sink);
             case Where.Func x      -> walkWhere(x.inner(), sink);
             case Where.AlwaysTrue ignored -> {}
             case Where.AlwaysFalse ignored -> {}
