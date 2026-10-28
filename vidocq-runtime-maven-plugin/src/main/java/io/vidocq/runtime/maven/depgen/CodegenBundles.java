@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /** Finds the codegen bundles of a project on the compiler's annotationProcessorPaths. */
 public final class CodegenBundles {
@@ -48,23 +49,29 @@ public final class CodegenBundles {
                 throw new MojoExecutionException("annotationProcessorPaths entry " + path.groupId() + ":"
                         + path.artifactId() + " has no version and the project's dependencyManagement has none");
             }
-            String coordinates = path.groupId() + ":" + path.artifactId() + ":" + version;
-            try {
-                Path own = resolver.resolve(path.groupId(), path.artifactId(), version, path.type(),
-                        path.classifier());
-                var hints = DependencyCodegenHints.read(own);
-                if (hints.isEmpty()) continue;
-                bricks.add(new Brick(hints.get(), coordinates, resolver.resolveWithDependencies(path.groupId(),
-                        path.artifactId(), version, path.type(), path.classifier())));
-            } catch (IOException e) {
-                throw new MojoExecutionException("Cannot read the codegen bundle " + coordinates + ": "
-                        + e.getMessage(), e);
-            } catch (IllegalArgumentException e) {
-                throw new MojoExecutionException("The codegen bundle " + coordinates + " declares malformed hints: "
-                        + e.getMessage(), e);
-            }
+            brick(path, version, resolver).ifPresent(bricks::add);
         }
         return bricks;
+    }
+
+    /** The brick of one versioned processor path, or empty when its own artifact holds no hints file. */
+    private static Optional<Brick> brick(ProcessorPath path, String version, ArtifactResolver resolver)
+            throws MojoExecutionException {
+        String coordinates = path.groupId() + ":" + path.artifactId() + ":" + version;
+        try {
+            Path own = resolver.resolve(path.groupId(), path.artifactId(), version, path.type(),
+                    path.classifier());
+            var hints = DependencyCodegenHints.read(own);
+            if (hints.isEmpty()) return Optional.empty();
+            return Optional.of(new Brick(hints.get(), coordinates, resolver.resolveWithDependencies(path.groupId(),
+                    path.artifactId(), version, path.type(), path.classifier())));
+        } catch (IOException e) {
+            throw new MojoExecutionException("Cannot read the codegen bundle " + coordinates + ": "
+                    + e.getMessage(), e);
+        } catch (IllegalArgumentException e) {
+            throw new MojoExecutionException("The codegen bundle " + coordinates + " declares malformed hints: "
+                    + e.getMessage(), e);
+        }
     }
 
     private static String managedVersion(MavenProject project, ProcessorPath path) {

@@ -51,22 +51,25 @@ public final class ProcessorPaths {
         Stream.concat(
                 Stream.ofNullable(compiler.getConfiguration()),
                 compiler.getExecutions().stream().map(PluginExecution::getConfiguration)
-        ).filter(Objects::nonNull).forEach(cfg -> {
-            if (!(cfg instanceof Xpp3Dom dom)) return;
-            Xpp3Dom paths = dom.getChild("annotationProcessorPaths");
-            if (paths == null) return;
-            for (Xpp3Dom path : paths.getChildren("path")) {
-                String artifactId = text(path, "artifactId");
-                if (artifactId == null) continue;
-                String type = text(path, "type");
-                ProcessorPath p = new ProcessorPath(text(path, "groupId"), artifactId, text(path, "version"),
-                        type == null ? "jar" : type, text(path, "classifier"));
-                if (seen.add(p.groupId() + ":" + p.artifactId() + ":" + p.type() + ":" + p.classifier())) {
-                    result.add(p);
-                }
-            }
-        });
+        ).filter(Objects::nonNull).forEach(cfg -> addPaths(cfg, seen, result));
         return result;
+    }
+
+    /** Adds the annotationProcessorPaths of one configuration not already {@code seen} to {@code result}. */
+    private static void addPaths(Object cfg, Set<String> seen, List<ProcessorPath> result) {
+        if (!(cfg instanceof Xpp3Dom dom)) return;
+        Xpp3Dom paths = dom.getChild("annotationProcessorPaths");
+        if (paths == null) return;
+        for (Xpp3Dom path : paths.getChildren("path")) {
+            String artifactId = text(path, "artifactId");
+            if (artifactId == null) continue;
+            String type = text(path, "type");
+            ProcessorPath p = new ProcessorPath(text(path, "groupId"), artifactId, text(path, "version"),
+                    type == null ? "jar" : type, text(path, "classifier"));
+            if (seen.add(p.groupId() + ":" + p.artifactId() + ":" + p.type() + ":" + p.classifier())) {
+                result.add(p);
+            }
+        }
     }
 
     private static String text(Xpp3Dom node, String name) {

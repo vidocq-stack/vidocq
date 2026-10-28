@@ -79,6 +79,8 @@ public final class DependencyCodegen {
         }
     }
 
+    private static final String CANNOT_PROCESS_JAR = "cannot process the jar";
+
     private DependencyCodegen() {
     }
 
@@ -106,20 +108,51 @@ public final class DependencyCodegen {
         }
         var problem = new Problem(jar, coordinates, logDisplay);
         String allBricks = bricks.stream().map(b -> b.hints().brick()).distinct().collect(Collectors.joining(", "));
-        var javacOutput = new StringBuilder();
-        Path tmp = ownerOnlyTempDirectory("vidocq-depgen-");
-        Output output;
-        try {
-            Path src = Files.createDirectories(tmp.resolve("src"));
-            Path res = Files.createDirectories(tmp.resolve("res"));
-            Path classes = Files.createDirectories(tmp.resolve("classes"));
+        // Whatever ends the run, an Error included, the temporary directory goes; its deletion must not hide why the
+        // run failed: try-with-resources adds it as suppressed.
+        try (var tmp = new TempDirectory(ownerOnlyTempDirectory("vidocq-depgen-"))) {
+            Path src = Files.createDirectories(tmp.path().resolve("src"));
+            Path res = Files.createDirectories(tmp.path().resolve("res"));
+            Path classes = Files.createDirectories(tmp.path().resolve("classes"));
             JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
             if (javac == null) {
                 throw new IllegalStateException("vidocq:generate needs a JDK: no system Java compiler");
             }
+            var job = new Job(javac, problem, allBricks, classpath, Integer.toString(release));
+            job.process(bricks, classNames, src, res);
+            if (job.lines.isEmpty()) {
+                job.compileGenerated(src, classes);
+            }
+            Files.createDirectories(log.toAbsolutePath().getParent());
+            Files.writeString(log, job.javacOutput, StandardCharsets.UTF_8);
+            if (!job.lines.isEmpty()) {
+                throw new Failure(job.lines);
+            }
+            return new Output(readFiles(res, classes), job.warnings);
+        }
+    }
 
-            List<String> lines = new ArrayList<>();
-            List<String> warnings = new ArrayList<>();
+    /** One jar's two javac passes, and the failure and warning lines they produce. */
+    private static final class Job {
+        private final JavaCompiler javac;
+        private final Problem problem;
+        private final String allBricks;
+        private final List<Path> classpath;
+        private final String release;
+        private final StringBuilder javacOutput = new StringBuilder();
+        private final List<String> lines = new ArrayList<>();
+        private final List<String> warnings = new ArrayList<>();
+
+        Job(JavaCompiler javac, Problem problem, String allBricks, List<Path> classpath, String release) {
+            this.javac = javac;
+            this.problem = problem;
+            this.allBricks = allBricks;
+            this.classpath = classpath;
+            this.release = release;
+        }
+
+        /** Runs the bricks' processors over {@code classNames}, generating into {@code src} and {@code res}. */
+        void process(List<Brick> bricks, List<String> classNames, Path src, Path res) throws IOException {
             var diagnostics = new DiagnosticCollector<JavaFileObject>();
             try (var processors = new AttributedProcessors(bricks);
                  StandardJavaFileManager fm = javac.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8)) {
@@ -127,123 +160,134 @@ public final class DependencyCodegen {
                 fm.setLocationFromPaths(StandardLocation.SOURCE_OUTPUT, List.of(src));
                 fm.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, List.of(res));
                 Result result = processors.reports().isEmpty()
-                        ? compile(javac, fm, diagnostics, javacOutput, "annotation processing",
-                                List.of("-proc:only", "-implicit:none", "--release", Integer.toString(release),
-                                        "-Xlint:none"),
+                        ? compile(fm, diagnostics, "annotation processing",
+                                List.of("-proc:only", "-implicit:none", "--release", release, "-Xlint:none"),
                                 classNames, null, processors.processors())
                         : new Result(false, null);
-                // What a processor reported names its brick and the element; javac shows it again as a diagnostic
-                // without a source, so those diagnostics are skipped once each.
-                List<String> reported = new ArrayList<>();
-                for (AttributedProcessors.Report report : processors.reports()) {
-                    if (report.isError()) {
-                        reported.add(report.message());
-                        lines.add(problem.line(report.brick(), "cannot process " + report.what(),
-                                firstLine(report.message())));
-                    } else {
-                        warnings.add(problem.warning(report.brick(), report.what(), firstLine(report.message())));
-                    }
-                }
-                for (Diagnostic<? extends JavaFileObject> d : diagnostics.getDiagnostics()) {
-                    if (d.getKind() == Diagnostic.Kind.ERROR && !reported.remove(d.getMessage(Locale.ROOT))) {
-                        lines.add(problem.line(allBricks, "cannot process the jar", message(d)));
-                    }
-                }
+                List<String> reported = addReports(processors.reports());
+                addUnreportedErrors(diagnostics, reported);
                 if (result.thrown() != null) {
                     String brick = processors.thrownBy() != null ? processors.thrownBy() : allBricks;
-                    lines.add(problem.line(brick, "cannot process the jar", "a processor threw " + result.thrown()));
+                    lines.add(problem.line(brick, CANNOT_PROCESS_JAR, "a processor threw " + result.thrown()));
                 }
                 if (!result.ok() && lines.isEmpty()) {
-                    lines.add(problem.line(allBricks, "cannot process the jar", "javac failed"));
+                    lines.add(problem.line(allBricks, CANNOT_PROCESS_JAR, "javac failed"));
                 }
             }
-            if (lines.isEmpty()) {
-                List<Path> generated = files(src).stream().filter(p -> p.toString().endsWith(".java")).toList();
-                if (!generated.isEmpty()) {
-                    var second = new DiagnosticCollector<JavaFileObject>();
-                    try (StandardJavaFileManager fm = javac.getStandardFileManager(second, null, StandardCharsets.UTF_8)) {
-                        fm.setLocationFromPaths(StandardLocation.CLASS_PATH, classpath);
-                        fm.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, List.of(classes));
-                        Result result = compile(javac, fm, second, javacOutput, "compilation of the generated sources",
-                                List.of("-proc:none", "--release", Integer.toString(release), "-Xlint:none"),
-                                null, fm.getJavaFileObjectsFromPaths(generated), null);
-                        if (!result.ok()) {
-                            String first = second.getDiagnostics().stream()
-                                    .filter(d -> d.getKind() == Diagnostic.Kind.ERROR)
-                                    .map(DependencyCodegen::message)
-                                    .findFirst()
-                                    .orElse(result.thrown() != null ? "javac threw " + result.thrown() : "javac failed");
-                            lines.add(problem.line(allBricks, "generated code that does not compile", first));
-                        }
-                    }
-                }
-            }
-            Files.createDirectories(log.toAbsolutePath().getParent());
-            Files.writeString(log, javacOutput, StandardCharsets.UTF_8);
-            if (!lines.isEmpty()) {
-                throw new Failure(lines);
-            }
-            Map<String, byte[]> files = new TreeMap<>();
-            for (Path root : List.of(res, classes)) {
-                for (Path file : files(root)) {
-                    files.put(root.relativize(file).toString().replace('\\', '/'), Files.readAllBytes(file));
-                }
-            }
-            output = new Output(files, warnings);
-        } catch (Throwable e) {
-            // Whatever ends the run, an Error included, the temporary directory goes; its deletion must not hide
-            // why the run failed.
-            try {
-                delete(tmp);
-            } catch (IOException | RuntimeException cleanup) {
-                e.addSuppressed(cleanup);
-            }
-            throw e;
         }
-        delete(tmp);
-        return output;
+
+        /**
+         * Words what the processors reported, an error as a failure line and a warning as a warning line.
+         *
+         * @return the messages of the errors: javac shows each again as a diagnostic without a source
+         */
+        private List<String> addReports(List<AttributedProcessors.Report> reports) {
+            List<String> reported = new ArrayList<>();
+            for (AttributedProcessors.Report report : reports) {
+                if (report.isError()) {
+                    reported.add(report.message());
+                    lines.add(problem.line(report.brick(), "cannot process " + report.what(),
+                            firstLine(report.message())));
+                } else {
+                    warnings.add(problem.warning(report.brick(), report.what(), firstLine(report.message())));
+                }
+            }
+            return reported;
+        }
+
+        /** Adds a failure line per javac error, skipping once each error a processor already reported. */
+        private void addUnreportedErrors(DiagnosticCollector<JavaFileObject> diagnostics, List<String> reported) {
+            for (Diagnostic<? extends JavaFileObject> d : diagnostics.getDiagnostics()) {
+                if (d.getKind() == Diagnostic.Kind.ERROR && !reported.remove(d.getMessage(Locale.ROOT))) {
+                    lines.add(problem.line(allBricks, CANNOT_PROCESS_JAR, message(d)));
+                }
+            }
+        }
+
+        /** Compiles the sources the processors generated in {@code src} into {@code classes}, if any. */
+        void compileGenerated(Path src, Path classes) throws IOException {
+            List<Path> generated = files(src).stream().filter(p -> p.toString().endsWith(".java")).toList();
+            if (generated.isEmpty()) {
+                return;
+            }
+            var second = new DiagnosticCollector<JavaFileObject>();
+            try (StandardJavaFileManager fm = javac.getStandardFileManager(second, null, StandardCharsets.UTF_8)) {
+                fm.setLocationFromPaths(StandardLocation.CLASS_PATH, classpath);
+                fm.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, List.of(classes));
+                Result result = compile(fm, second, "compilation of the generated sources",
+                        List.of("-proc:none", "--release", release, "-Xlint:none"),
+                        null, fm.getJavaFileObjectsFromPaths(generated), null);
+                if (!result.ok()) {
+                    String first = second.getDiagnostics().stream()
+                            .filter(d -> d.getKind() == Diagnostic.Kind.ERROR)
+                            .map(DependencyCodegen::message)
+                            .findFirst()
+                            .orElse(result.thrown() != null ? "javac threw " + result.thrown() : "javac failed");
+                    lines.add(problem.line(allBricks, "generated code that does not compile", first));
+                }
+            }
+        }
+
+        /**
+         * Runs one javac task and appends its whole output to the javac output.
+         *
+         * @param processors the processors to run, or {@code null} for none
+         */
+        private Result compile(StandardJavaFileManager fm, DiagnosticCollector<JavaFileObject> diagnostics,
+                               String phase, List<String> options, List<String> classNames,
+                               Iterable<? extends JavaFileObject> sources, List<Processor> processors) {
+            StringBuilder log = javacOutput;
+            var out = new StringWriter();
+            Result result;
+            try {
+                JavaCompiler.CompilationTask task = javac.getTask(out, fm, diagnostics, options, classNames, sources);
+                if (processors != null) {
+                    task.setProcessors(processors);
+                }
+                result = new Result(task.call(), null);
+            } catch (RuntimeException e) {
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
+                out.append("threw ").append(cause.toString()).append('\n');
+                result = new Result(false, cause);
+            }
+            log.append("== ").append(phase).append(": javac ").append(String.join(" ", options));
+            if (classNames != null) {
+                log.append(' ').append(String.join(" ", classNames));
+            }
+            log.append('\n');
+            for (Diagnostic<? extends JavaFileObject> d : diagnostics.getDiagnostics()) {
+                log.append(d.getKind()).append(": ");
+                if (d.getSource() != null) {
+                    log.append(d.getSource().getName()).append(": ");
+                }
+                log.append(d.getMessage(Locale.ROOT)).append('\n');
+            }
+            log.append(out);
+            return result;
+        }
+    }
+
+    /** The generated resources and class files, relative path → bytes. */
+    private static Map<String, byte[]> readFiles(Path res, Path classes) throws IOException {
+        Map<String, byte[]> files = new TreeMap<>();
+        for (Path root : List.of(res, classes)) {
+            for (Path file : files(root)) {
+                files.put(root.relativize(file).toString().replace('\\', '/'), Files.readAllBytes(file));
+            }
+        }
+        return files;
+    }
+
+    /** A temporary directory deleted on close. */
+    private record TempDirectory(Path path) implements AutoCloseable {
+        @Override
+        public void close() throws IOException {
+            delete(path);
+        }
     }
 
     /** How one javac task ended: whether it succeeded, and what a processor (or javac) threw, if anything. */
     private record Result(boolean ok, Throwable thrown) {
-    }
-
-    /**
-     * Runs one javac task and appends its whole output to {@code log}.
-     *
-     * @param processors the processors to run, or {@code null} for none
-     */
-    private static Result compile(JavaCompiler javac, StandardJavaFileManager fm,
-                                  DiagnosticCollector<JavaFileObject> diagnostics, StringBuilder log, String phase,
-                                  List<String> options, List<String> classNames,
-                                  Iterable<? extends JavaFileObject> sources, List<Processor> processors) {
-        var out = new StringWriter();
-        Result result;
-        try {
-            JavaCompiler.CompilationTask task = javac.getTask(out, fm, diagnostics, options, classNames, sources);
-            if (processors != null) {
-                task.setProcessors(processors);
-            }
-            result = new Result(task.call(), null);
-        } catch (RuntimeException e) {
-            Throwable cause = e.getCause() != null ? e.getCause() : e;
-            out.append("threw ").append(cause.toString()).append('\n');
-            result = new Result(false, cause);
-        }
-        log.append("== ").append(phase).append(": javac ").append(String.join(" ", options));
-        if (classNames != null) {
-            log.append(' ').append(String.join(" ", classNames));
-        }
-        log.append('\n');
-        for (Diagnostic<? extends JavaFileObject> d : diagnostics.getDiagnostics()) {
-            log.append(d.getKind()).append(": ");
-            if (d.getSource() != null) {
-                log.append(d.getSource().getName()).append(": ");
-            }
-            log.append(d.getMessage(Locale.ROOT)).append('\n');
-        }
-        log.append(out);
-        return result;
     }
 
     private static String message(Diagnostic<?> d) {

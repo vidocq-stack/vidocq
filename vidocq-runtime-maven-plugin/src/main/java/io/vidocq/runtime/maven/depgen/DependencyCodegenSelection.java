@@ -39,6 +39,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
@@ -110,70 +111,106 @@ public final class DependencyCodegenSelection {
         if (Files.isDirectory(jar)) {
             return new Decision(jar, List.of(), List.of(), false);
         }
-        var skips = new ArrayList<Skip>();
-        boolean signed = false;
-        var names = new LinkedHashSet<String>();
-        var resourceReasons = new LinkedHashMap<DependencyCodegenHints, String>();
-        var needles = new LinkedHashMap<DependencyCodegenHints, List<String>>();
-        var classReasons = new LinkedHashMap<DependencyCodegenHints, String>();
-        var classes = new LinkedHashMap<DependencyCodegenHints, TreeSet<String>>();
+        var search = new Search();
         try (var file = new JarFile(jar.toFile())) {
+            search.index(file);
+            for (var brick : bricks) {
+                search.hint(file, brick);
+            }
+            if (!search.needles.isEmpty()) {
+                search.searchClassBytes(file);
+            }
+        }
+        return new Decision(jar, search.matches(bricks), search.skips, search.signed);
+    }
+
+    /** What {@link #decide(Path, List)} gathers while it reads one jar. */
+    private static final class Search {
+        private final List<Skip> skips = new ArrayList<>();
+        private boolean signed;
+        private final Set<String> names = new LinkedHashSet<>();
+        private final Map<DependencyCodegenHints, String> resourceReasons = new LinkedHashMap<>();
+        private final Map<DependencyCodegenHints, List<String>> needles = new LinkedHashMap<>();
+        private final Map<DependencyCodegenHints, String> classReasons = new LinkedHashMap<>();
+        private final Map<DependencyCodegenHints, TreeSet<String>> classes = new LinkedHashMap<>();
+
+        /** Reads the entry names, and whether the jar is signed. */
+        void index(JarFile file) {
             for (var e : Collections.list(file.entries())) {
                 names.add(e.getName());
                 signed |= EnrichedJars.isSignature(e.getName());
             }
-            for (var brick : bricks) {
-                String marker = brick.markers().stream().filter(names::contains).findFirst().orElse(null);
-                if (marker != null) {
-                    skips.add(new Skip(brick, marker));
-                    continue;
-                }
-                classes.put(brick, new TreeSet<>());
-                brick.resources().stream().filter(names::contains).findFirst()
-                        .ifPresent(resource -> resourceReasons.put(brick, "resource " + resource));
-                for (String resource : brick.resources()) {
-                    if (names.contains(resource) && resource.startsWith(SERVICES)) {
-                        classes.get(brick).addAll(listedClasses(file, resource, names));
-                    }
-                }
-                List<String> own = brick.classBytes().stream()
-                        .filter(hint -> names.stream().noneMatch(n -> n.startsWith(hint))).toList();
-                if (!own.isEmpty()) {
-                    needles.put(brick, own);
+        }
+
+        /**
+         * Applies the hints of one brick that can be decided from the names: its marker, its resources and the classes
+         * their service files list; keeps the {@code class-bytes} hints the jar does not define for the byte search.
+         */
+        void hint(JarFile file, DependencyCodegenHints brick) throws IOException {
+            String marker = brick.markers().stream().filter(names::contains).findFirst().orElse(null);
+            if (marker != null) {
+                skips.add(new Skip(brick, marker));
+                return;
+            }
+            var listed = new TreeSet<String>();
+            classes.put(brick, listed);
+            brick.resources().stream().filter(names::contains).findFirst()
+                    .ifPresent(resource -> resourceReasons.put(brick, "resource " + resource));
+            for (String resource : brick.resources()) {
+                if (names.contains(resource) && resource.startsWith(SERVICES)) {
+                    listed.addAll(listedClasses(file, resource, names));
                 }
             }
-            if (!needles.isEmpty()) {
-                for (var e : Collections.list(file.entries())) {
-                    String name = e.getName();
-                    String topLevel = topLevelClass(name);
-                    if (e.isDirectory() || topLevel == null) {
-                        continue;
-                    }
+            List<String> own = brick.classBytes().stream()
+                    .filter(hint -> names.stream().noneMatch(n -> n.startsWith(hint))).toList();
+            if (!own.isEmpty()) {
+                needles.put(brick, own);
+            }
+        }
+
+        /** Searches every base class file of the jar for the {@code class-bytes} hints. */
+        void searchClassBytes(JarFile file) throws IOException {
+            for (var e : Collections.list(file.entries())) {
+                String topLevel = topLevelClass(e.getName());
+                if (!e.isDirectory() && topLevel != null) {
                     byte[] bytes;
                     try (InputStream in = file.getInputStream(e)) {
                         bytes = in.readAllBytes();
                     }
-                    for (var n : needles.entrySet()) {
-                        for (String needle : n.getValue()) {
-                            if (indexOf(bytes, needle.getBytes(StandardCharsets.UTF_8)) >= 0) {
-                                classReasons.putIfAbsent(n.getKey(), "class bytes " + needle + " in " + name);
-                                classes.get(n.getKey()).add(topLevel);
-                                break;
-                            }
-                        }
-                    }
+                    matchClassBytes(e.getName(), topLevel, bytes);
                 }
             }
         }
-        // keep the bricks' declaration order whatever the kind of hint that matched
-        var ordered = new ArrayList<Match>();
-        for (var brick : bricks) {
-            String reason = resourceReasons.containsKey(brick) ? resourceReasons.get(brick) : classReasons.get(brick);
-            if (reason != null) {
-                ordered.add(new Match(brick, reason, List.copyOf(classes.get(brick))));
+
+        /** Records, for each brick, the first of its hints that the class file {@code name} holds. */
+        private void matchClassBytes(String name, String topLevel, byte[] bytes) {
+            for (var n : needles.entrySet()) {
+                firstNeedle(bytes, n.getValue()).ifPresent(needle -> {
+                    classReasons.putIfAbsent(n.getKey(), "class bytes " + needle + " in " + name);
+                    classes.get(n.getKey()).add(topLevel);
+                });
             }
         }
-        return new Decision(jar, ordered, skips, signed);
+
+        /** The matches, in the bricks' declaration order whatever the kind of hint that matched. */
+        List<Match> matches(List<DependencyCodegenHints> bricks) {
+            var ordered = new ArrayList<Match>();
+            for (var brick : bricks) {
+                String reason = resourceReasons.containsKey(brick) ? resourceReasons.get(brick)
+                        : classReasons.get(brick);
+                if (reason != null) {
+                    ordered.add(new Match(brick, reason, List.copyOf(classes.get(brick))));
+                }
+            }
+            return ordered;
+        }
+    }
+
+    /** The first of {@code needles} found in {@code bytes}. */
+    private static Optional<String> firstNeedle(byte[] bytes, List<String> needles) {
+        return needles.stream()
+                .filter(needle -> indexOf(bytes, needle.getBytes(StandardCharsets.UTF_8)) >= 0)
+                .findFirst();
     }
 
     /**

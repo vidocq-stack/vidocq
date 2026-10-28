@@ -184,16 +184,20 @@ public final class DependencyCodegenCache {
             // The marker goes in before the move: the rename publishes a finished entry, so a concurrent get never
             // sees a marker-less directory it would discard.
             Files.writeString(temp.resolve(COMPLETE), "");
-            try {
-                move(temp, target);
-            } catch (FileAlreadyExistsException | java.nio.file.DirectoryNotEmptyException _) {
-                // Another build stored the same content-keyed entry meanwhile; ours is redundant.
-                deleteTree(temp);
-                return;
-            }
+            publish(temp, target);
         } catch (IOException | RuntimeException e) {
             deleteTree(temp);
             throw e;
+        }
+    }
+
+    /** Moves the finished entry into place, unless another build already published the same one. */
+    private static void publish(Path temp, Path target) throws IOException {
+        try {
+            move(temp, target);
+        } catch (FileAlreadyExistsException | java.nio.file.DirectoryNotEmptyException _) {
+            // Another build stored the same content-keyed entry meanwhile; ours is redundant.
+            deleteTree(temp);
         }
     }
 
@@ -202,16 +206,21 @@ public final class DependencyCodegenCache {
         java.time.Instant limit = java.time.Instant.now().minus(STALE_TEMP);
         try (Stream<Path> children = Files.list(directory)) {
             for (Path child : (Iterable<Path>) children.filter(c -> c.getFileName().toString().contains(".tmp"))::iterator) {
-                try {
-                    if (Files.getLastModifiedTime(child).toInstant().isBefore(limit)) {
-                        deleteTree(child);
-                    }
-                } catch (IOException | RuntimeException _) {
-                    // another build may be sweeping the same directory
-                }
+                deleteIfStale(child, limit);
             }
         } catch (IOException | RuntimeException _) {
             // nothing to sweep
+        }
+    }
+
+    /** Best effort: removes {@code child} when it was last modified before {@code limit}. */
+    private static void deleteIfStale(Path child, java.time.Instant limit) {
+        try {
+            if (Files.getLastModifiedTime(child).toInstant().isBefore(limit)) {
+                deleteTree(child);
+            }
+        } catch (IOException | RuntimeException _) {
+            // another build may be sweeping the same directory
         }
     }
 

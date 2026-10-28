@@ -84,20 +84,25 @@ final class AttributedProcessors implements AutoCloseable {
                 }
                 var loader = new URLClassLoader("vidocq-depgen-" + name, urls, ClassLoader.getPlatformClassLoader());
                 loaders.add(loader);
-                try {
-                    for (Processor processor : ServiceLoader.load(Processor.class, loader)) {
-                        if (seen.add(processor.getClass().getName())) {
-                            processors.add(new Attributed(name, processor));
-                        }
-                    }
-                } catch (ServiceConfigurationError e) {
-                    reports.add(new Report(name, Diagnostic.Kind.ERROR, "the jar",
-                            "its processors cannot be loaded: " + e.getMessage()));
-                }
+                load(name, loader, seen);
             }
         } catch (IOException | RuntimeException e) {
             close();
             throw e;
+        }
+    }
+
+    /** Wraps the processors of one brick not already seen; a brick whose processors cannot load gets an error. */
+    private void load(String name, ClassLoader loader, Set<String> seen) {
+        try {
+            for (Processor processor : ServiceLoader.load(Processor.class, loader)) {
+                if (seen.add(processor.getClass().getName())) {
+                    processors.add(new Attributed(name, processor));
+                }
+            }
+        } catch (ServiceConfigurationError e) {
+            reports.add(new Report(name, Diagnostic.Kind.ERROR, "the jar",
+                    "its processors cannot be loaded: " + e.getMessage()));
         }
     }
 
