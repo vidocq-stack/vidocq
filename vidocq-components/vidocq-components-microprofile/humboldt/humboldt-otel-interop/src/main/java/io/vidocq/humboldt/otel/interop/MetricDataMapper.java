@@ -115,7 +115,7 @@ public final class MetricDataMapper {
             List<? extends PointData> points) {
         var out = new ArrayList<io.opentelemetry.sdk.metrics.data.HistogramPointData>(points.size());
         for (PointData p : points) {
-            if (p instanceof HistogramPointData(var start, var epoch, var attributes, var sum, var _,
+            if (p instanceof HistogramPointData(var start, var epoch, var attributes, var sum, _,
                     var min, var max, var boundaries, var bucketCounts)) {
                 out.add(ImmutableHistogramPointData.create(start, epoch, attributes,
                         sum, !Double.isNaN(min), min, !Double.isNaN(max), max, boundaries, bucketCounts));

@@ -28,7 +28,6 @@ import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
-import io.opentelemetry.context.Scope;
 import io.opentelemetry.instrumentation.annotations.SpanAttribute;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import jakarta.annotation.Priority;
@@ -98,7 +97,7 @@ public class WithSpanInterceptor {
         Context parent = detached ? Context.root() : Context.current();
         Span span = builder.setParent(parent).startSpan();
         applySpanAttributes(span, method, ctx.getParameters());
-        try (Scope _ = parent.with(span).makeCurrent()) {
+        try (var _ = parent.with(span).makeCurrent()) {
             return ctx.proceed();
         } catch (Throwable th) {
             span.recordException(th);
