@@ -118,24 +118,22 @@ final class OtlpJsonCommon {
      * {@link AttributeType#VALUE} attributes (see {@link #writeValue}).
      */
     static void writeAnyValue(StringBuilder sb, AttributeType type, Object v) {
-        if (type == AttributeType.VALUE) {
-            writeValue(sb, (Value<?>) v);
-            return;
-        }
-        sb.append('{');
         switch (type) {
+            case VALUE -> writeValue(sb, (Value<?>) v);
             case STRING -> {
-                sb.append("\"stringValue\":");
+                sb.append("{\"stringValue\":");
                 appendString(sb, (String) v);
+                sb.append('}');
             }
-            case BOOLEAN -> sb.append("\"boolValue\":").append((boolean) v);
-            case LONG -> sb.append("\"intValue\":\"").append((long) v).append('"');
+            case BOOLEAN -> sb.append("{\"boolValue\":").append((boolean) v).append('}');
+            case LONG -> sb.append("{\"intValue\":\"").append((long) v).append("\"}");
             case DOUBLE -> {
-                sb.append("\"doubleValue\":");
+                sb.append("{\"doubleValue\":");
                 appendDouble(sb, (double) v);
+                sb.append('}');
             }
             case STRING_ARRAY, BOOLEAN_ARRAY, LONG_ARRAY, DOUBLE_ARRAY -> {
-                sb.append("\"arrayValue\":{\"values\":[");
+                sb.append("{\"arrayValue\":{\"values\":[");
                 List<?> list = (List<?>) v;
                 AttributeType elementType = switch (type) {
                     case STRING_ARRAY -> AttributeType.STRING;
@@ -150,10 +148,9 @@ final class OtlpJsonCommon {
                     first = false;
                     writeAnyValue(sb, elementType, item);
                 }
-                sb.append("]}");
+                sb.append("]}}");
             }
         }
-        sb.append('}');
     }
 
     /**

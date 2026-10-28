@@ -69,7 +69,8 @@ public final class SpanDataMapper {
 
         InstrumentationScope scope = src.instrumentationScope();
         InstrumentationScopeInfo scopeInfo = scope.version() != null
-                ? InstrumentationScopeInfo.create(scope.name(), scope.version(), scope.schemaUrl())
+                ? InstrumentationScopeInfo.builder(scope.name())
+                        .setVersion(scope.version()).setSchemaUrl(scope.schemaUrl()).build()
                 : InstrumentationScopeInfo.create(scope.name());
 
         return TestSpanData.builder()

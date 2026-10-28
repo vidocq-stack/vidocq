@@ -75,21 +75,6 @@ public final class HumboldtContextStorage implements ContextStorage {
         return c != null ? c : Context.root();
     }
 
-    private static void detach(Context expected, Context previous) {
-        Context actual = THREAD_LOCAL.get();
-        if (actual != expected) {
-            LOG.log(Level.WARNING,
-                    "Context attach/detach order mismatch — expected {0}, found {1}. "
-                            + "Possible cause: out-of-order Scope.close(), or context captured via an uninstrumented third-party library.",
-                    expected, actual);
-        }
-        if (previous == null || previous == Context.root()) {
-            THREAD_LOCAL.remove();
-        } else {
-            THREAD_LOCAL.set(previous);
-        }
-    }
-
     private static final class HumboldtScope implements Scope {
 
         private final Context previous;
@@ -108,6 +93,21 @@ public final class HumboldtContextStorage implements ContextStorage {
             }
             closed = true;
             detach(attached, previous);
+        }
+
+        private static void detach(Context expected, Context previous) {
+            Context actual = THREAD_LOCAL.get();
+            if (actual != expected) {
+                LOG.log(Level.WARNING,
+                        "Context attach/detach order mismatch — expected {0}, found {1}. "
+                                + "Possible cause: out-of-order Scope.close(), or context captured via an uninstrumented third-party library.",
+                        expected, actual);
+            }
+            if (previous == null || previous == Context.root()) {
+                THREAD_LOCAL.remove();
+            } else {
+                THREAD_LOCAL.set(previous);
+            }
         }
     }
 }

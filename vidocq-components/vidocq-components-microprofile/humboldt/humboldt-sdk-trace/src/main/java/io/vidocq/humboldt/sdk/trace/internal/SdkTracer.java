@@ -37,12 +37,9 @@ import java.util.List;
  */
 public final class SdkTracer implements Tracer {
 
-    private final InstrumentationScope scope;
-    private final Resource resource;
+    private final TracerSharedState shared;
     private final Sampler sampler;
     private final IdGenerator idGenerator;
-    private final Clock clock;
-    private final List<SpanProcessor> processors;
 
     public SdkTracer(
             InstrumentationScope scope,
@@ -51,18 +48,14 @@ public final class SdkTracer implements Tracer {
             IdGenerator idGenerator,
             Clock clock,
             List<SpanProcessor> processors) {
-        this.scope = scope;
-        this.resource = resource;
+        this.shared = new TracerSharedState(resource, scope, clock, processors);
         this.sampler = sampler;
         this.idGenerator = idGenerator;
-        this.clock = clock;
-        this.processors = processors;
     }
 
     @Override
     public SpanBuilder spanBuilder(String spanName) {
         String safeName = (spanName == null || spanName.isEmpty()) ? "<unnamed>" : spanName;
-        return new SdkSpanBuilder(
-                safeName, scope, resource, sampler, idGenerator, clock, processors);
+        return new SdkSpanBuilder(safeName, shared, sampler, idGenerator);
     }
 }

@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintStream;
+import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -95,7 +96,7 @@ public final class LoggingLogRecordExporter implements LogRecordExporter {
             BufferedWriter bw = Files.newBufferedWriter(path, StandardCharsets.UTF_8, opts);
             return new LoggingLogRecordExporter(bw, true);
         } catch (IOException e) {
-            throw new RuntimeException("Cannot open log file " + path, e);
+            throw new UncheckedIOException("Cannot open log file " + path, e);
         }
     }
 

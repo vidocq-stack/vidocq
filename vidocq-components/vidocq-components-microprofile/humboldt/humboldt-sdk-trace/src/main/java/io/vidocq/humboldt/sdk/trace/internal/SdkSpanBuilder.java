@@ -30,8 +30,6 @@ import io.opentelemetry.api.trace.TraceFlags;
 import io.opentelemetry.context.Context;
 import io.vidocq.humboldt.sdk.common.Clock;
 import io.vidocq.humboldt.sdk.common.IdGenerator;
-import io.vidocq.humboldt.sdk.common.Resource;
-import io.vidocq.humboldt.sdk.common.InstrumentationScope;
 import io.vidocq.humboldt.sdk.trace.data.LinkData;
 import io.vidocq.humboldt.sdk.trace.export.SpanProcessor;
 import io.vidocq.humboldt.sdk.trace.samplers.Sampler;
@@ -49,8 +47,7 @@ import java.util.concurrent.TimeUnit;
 public final class SdkSpanBuilder implements SpanBuilder {
 
     private final String name;
-    private final InstrumentationScope scope;
-    private final Resource resource;
+    private final TracerSharedState shared;
     private final Sampler sampler;
     private final IdGenerator idGenerator;
     private final Clock clock;
@@ -63,21 +60,13 @@ public final class SdkSpanBuilder implements SpanBuilder {
     private final AttributesBuilder attributes = Attributes.builder();
     private final List<LinkData> links = new ArrayList<>();
 
-    public SdkSpanBuilder(
-            String name,
-            InstrumentationScope scope,
-            Resource resource,
-            Sampler sampler,
-            IdGenerator idGenerator,
-            Clock clock,
-            List<SpanProcessor> processors) {
+    SdkSpanBuilder(String name, TracerSharedState shared, Sampler sampler, IdGenerator idGenerator) {
         this.name = name;
-        this.scope = scope;
-        this.resource = resource;
+        this.shared = shared;
         this.sampler = sampler;
         this.idGenerator = idGenerator;
-        this.clock = clock;
-        this.processors = processors;
+        this.clock = shared.clock();
+        this.processors = shared.processors();
     }
 
     @Override
@@ -195,8 +184,7 @@ public final class SdkSpanBuilder implements SpanBuilder {
                 name, kind, start,
                 merged.build(),
                 List.copyOf(links),
-                resource, scope, clock,
-                processors);
+                shared);
 
         for (SpanProcessor p : processors) {
             if (p.isStartRequired()) p.onStart(parentCtx, span);

@@ -35,6 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.UndeclaredThrowableException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -121,12 +122,13 @@ class WithSpanInterceptorAttributesTest {
     }
 
     @Test
-    void other_throwables_are_wrapped_in_a_runtime_exception() {
+    void other_throwables_are_wrapped_in_an_undeclared_throwable_exception() {
         OddThrowable odd = new OddThrowable();
         TestInvocationContext ctx = new TestInvocationContext(method(FAILS), new Object[0], () -> {
             throw WithSpanInterceptorAttributesTest.<RuntimeException>sneaky(odd);
         });
-        RuntimeException thrown = assertThrows(RuntimeException.class, () -> interceptor.aroundInvoke(ctx));
+        UndeclaredThrowableException thrown =
+                assertThrows(UndeclaredThrowableException.class, () -> interceptor.aroundInvoke(ctx));
 
         assertSame(odd, thrown.getCause());
         assertEquals("OddThrowable: odd", exporter.getFinishedSpans().getFirst().status().description());

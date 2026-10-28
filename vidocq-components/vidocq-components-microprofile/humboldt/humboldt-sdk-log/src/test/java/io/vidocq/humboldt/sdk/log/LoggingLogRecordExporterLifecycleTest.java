@@ -32,6 +32,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -92,7 +93,8 @@ class LoggingLogRecordExporterLifecycleTest {
     @Test
     void a_file_in_a_missing_directory_cannot_be_opened(@TempDir Path dir) {
         Path file = dir.resolve("missing").resolve(LOG_FILE);
-        RuntimeException e = assertThrows(RuntimeException.class, () -> LoggingLogRecordExporter.toFile(file));
+        UncheckedIOException e =
+                assertThrows(UncheckedIOException.class, () -> LoggingLogRecordExporter.toFile(file));
         assertTrue(e.getMessage().contains(file.toString()), e.getMessage());
     }
 

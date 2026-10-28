@@ -74,10 +74,7 @@ public final class SdkSpan implements Span, ReadableSpan {
             long startEpochNanos,
             Attributes initialAttributes,
             List<LinkData> links,
-            Resource resource,
-            InstrumentationScope scope,
-            Clock clock,
-            List<SpanProcessor> processors) {
+            TracerSharedState shared) {
         this.context = context;
         this.parentContext = parentContext;
         this.name = name;
@@ -85,10 +82,10 @@ public final class SdkSpan implements Span, ReadableSpan {
         this.startEpochNanos = startEpochNanos;
         this.attributes = initialAttributes.toBuilder();
         this.links = links;
-        this.resource = resource;
-        this.scope = scope;
-        this.clock = clock;
-        this.processors = processors;
+        this.resource = shared.resource();
+        this.scope = shared.scope();
+        this.clock = shared.clock();
+        this.processors = shared.processors();
     }
 
     @Override

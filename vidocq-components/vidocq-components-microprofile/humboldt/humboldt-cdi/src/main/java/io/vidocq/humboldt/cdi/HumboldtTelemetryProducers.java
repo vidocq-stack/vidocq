@@ -49,6 +49,9 @@ import java.lang.reflect.Proxy;
 @ApplicationScoped
 public class HumboldtTelemetryProducers {
 
+    /** Instrumentation scope used when the injection point does not name a declaring class. */
+    private static final String DEFAULT_SCOPE = "io.vidocq.humboldt.cdi";
+
     /**
      * Producer for {@link OpenTelemetry} — the global instance configured by
      * {@link io.vidocq.humboldt.runtime.HumboldtAutoConfigure} (or
@@ -66,10 +69,7 @@ public class HumboldtTelemetryProducers {
      */
     @Produces
     public Tracer produceTracer(InjectionPoint ip) {
-        String scope = ip != null && ip.getMember() != null
-                ? ip.getMember().getDeclaringClass().getName()
-                : "io.vidocq.humboldt.cdi";
-        return GlobalOpenTelemetry.get().getTracer(scope);
+        return GlobalOpenTelemetry.get().getTracer(scopeName(ip));
     }
 
     /**
@@ -107,10 +107,7 @@ public class HumboldtTelemetryProducers {
      */
     @Produces
     public Meter produceMeter(InjectionPoint ip) {
-        String scope = ip != null && ip.getMember() != null
-                ? ip.getMember().getDeclaringClass().getName()
-                : "io.vidocq.humboldt.cdi";
-        return GlobalOpenTelemetry.get().getMeter(scope);
+        return GlobalOpenTelemetry.get().getMeter(scopeName(ip));
     }
 
     /**
@@ -119,9 +116,13 @@ public class HumboldtTelemetryProducers {
      */
     @Produces
     public Logger produceLogger(InjectionPoint ip) {
-        String scope = ip != null && ip.getMember() != null
+        return GlobalOpenTelemetry.get().getLogsBridge().get(scopeName(ip));
+    }
+
+    /** The declaring class of the injection point's member, or {@link #DEFAULT_SCOPE} when there is none. */
+    private static String scopeName(InjectionPoint ip) {
+        return ip != null && ip.getMember() != null
                 ? ip.getMember().getDeclaringClass().getName()
-                : "io.vidocq.humboldt.cdi";
-        return GlobalOpenTelemetry.get().getLogsBridge().get(scope);
+                : DEFAULT_SCOPE;
     }
 }

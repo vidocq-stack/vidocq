@@ -38,6 +38,7 @@ import jakarta.interceptor.InvocationContext;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.UndeclaredThrowableException;
 
 /**
  * CDI interceptor that wraps each method annotated with
@@ -97,7 +98,7 @@ public class WithSpanInterceptor {
         Context parent = detached ? Context.root() : Context.current();
         Span span = builder.setParent(parent).startSpan();
         applySpanAttributes(span, method, ctx.getParameters());
-        try (Scope ignored = parent.with(span).makeCurrent()) {
+        try (Scope _ = parent.with(span).makeCurrent()) {
             return ctx.proceed();
         } catch (Throwable th) {
             span.recordException(th);
@@ -105,7 +106,7 @@ public class WithSpanInterceptor {
                     th.getClass().getSimpleName() + ": " + (th.getMessage() != null ? th.getMessage() : ""));
             if (th instanceof Exception ex) throw ex;
             if (th instanceof Error er) throw er;
-            throw new RuntimeException(th);
+            throw new UndeclaredThrowableException(th);
         } finally {
             span.end();
         }
@@ -149,11 +150,11 @@ public class WithSpanInterceptor {
         Parameter[] params = method.getParameters();
         for (int i = 0; i < params.length && i < args.length; i++) {
             SpanAttribute attr = params[i].getAnnotation(SpanAttribute.class);
-            if (attr == null) continue;
             Object value = args[i];
-            if (value == null) continue;
-            String key = attr.value().isEmpty() ? params[i].getName() : attr.value();
-            span.setAttribute(key, String.valueOf(value));
+            if (attr != null && value != null) {
+                String key = attr.value().isEmpty() ? params[i].getName() : attr.value();
+                span.setAttribute(key, String.valueOf(value));
+            }
         }
     }
 }
