@@ -175,7 +175,8 @@ public final class JdqlExecutor {
                 pagination);
         return switch (stmt.kind()) {
             case SELECT -> new JdqlResult.Entities((List<?>) result);
-            case COUNT, UPDATE, DELETE -> new JdqlResult.Count(((Number) result).longValue());
+            case COUNT, UPDATE, DELETE -> new JdqlResult.Count(
+                    ((Number) java.util.Objects.requireNonNull(result)).longValue());
             case AGGREGATE -> new JdqlResult.Value(result);
             case PROJECT -> new JdqlResult.Rows(List.of(stmt.scalarAttr()),
                     columnRows((List<?>) java.util.Objects.requireNonNull(result)));
@@ -474,6 +475,36 @@ public final class JdqlExecutor {
             throw new MansartDataException("@Query empty IN with single-entity return");
         }
 
+        private static Object wrapLongResult(Class<?> rt, long n) {
+            if (rt == void.class) return null;
+            if (rt == boolean.class || rt == Boolean.class) return n > 0;
+            if (rt == int.class || rt == Integer.class) return (int) n;
+            return n;
+        }
+
+        /** The {@code PageRequest} among a call's arguments {@code values} (empty for none), or {@code null}. */
+        private static jakarta.data.page.PageRequest findPageRequest(Object[] values) {
+            for (Object a : values) {
+                if (a instanceof jakarta.data.page.PageRequest pr) return pr;
+            }
+            return null;
+        }
+
+        /** The {@code Limit} among a call's arguments {@code values} (empty for none), or {@code null}. */
+        private static jakarta.data.Limit findLimit(Object[] values) {
+            for (Object a : values) {
+                if (a instanceof jakarta.data.Limit l) return l;
+            }
+            return null;
+        }
+
+        private static Object zeroFor(Class<?> c) {
+            if (c == long.class)   return 0L;
+            if (c == double.class) return 0.0;
+            if (c == float.class)  return 0.0f;
+            return 0;
+        }
+
         Execution(CallShape shape, EntityModel<?> model, RepositoryRuntime runtime, Object[] args,
                   OrderBy orderBy, Pagination pagination) {
             this.shape = shape;
@@ -574,13 +605,6 @@ public final class JdqlExecutor {
         Object delete(BuiltWhere bw) {
             return wrapLongResult(shape.returnType(), runtime.deleteWhere(model, bw.where, bw.args));
         }
-    }
-
-    private static Object wrapLongResult(Class<?> rt, long n) {
-        if (rt == void.class) return null;
-        if (rt == boolean.class || rt == Boolean.class) return n > 0;
-        if (rt == int.class || rt == Integer.class) return (int) n;
-        return n;
     }
 
     private static OrderBy buildOrderBy(List<JdqlAst.Order> orders, EntityModel<?> model,
@@ -841,14 +865,6 @@ public final class JdqlExecutor {
         }
     }
 
-    private static jakarta.data.page.PageRequest findPageRequest(Object[] args) {
-        if (args == null) return null;
-        for (Object a : args) {
-            if (a instanceof jakarta.data.page.PageRequest pr) return pr;
-        }
-        return null;
-    }
-
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static OrderBy appendRuntimeSorts(OrderBy base, Object[] args,
                                               Map<String, Attribute<?, ?>> attrIndex) {
@@ -873,14 +889,6 @@ public final class JdqlExecutor {
             throw new MansartDataException("Sort references unknown attribute: " + s.property());
         }
         out.add(s.isAscending() ? OrderBy.Order.asc(a) : OrderBy.Order.desc(a));
-    }
-
-    private static jakarta.data.Limit findLimit(Object[] args) {
-        if (args == null) return null;
-        for (Object a : args) {
-            if (a instanceof jakarta.data.Limit l) return l;
-        }
-        return null;
     }
 
     /**
@@ -918,13 +926,6 @@ public final class JdqlExecutor {
         if (c == float.class)   return Float.class;
         if (c == double.class)  return Double.class;
         return c;
-    }
-
-    private static Object zeroFor(Class<?> c) {
-        if (c == long.class)   return 0L;
-        if (c == double.class) return 0.0;
-        if (c == float.class)  return 0.0f;
-        return 0;
     }
 
     /**

@@ -53,6 +53,8 @@ class RuntimeQueryControlsTest {
     private static final String CYD = "Cyd";
     private static final String NAME = "name";
     private static final String ANY = "%";
+    private static final String NOBODY = "nobody";
+    private static final String BOB_B = "Bob B.";
 
     /** Not annotated {@code @Repository}: only the runtime engine implements it. */
     public interface QueryAuthors extends BasicRepository<Author, Long> {
@@ -110,6 +112,24 @@ class RuntimeQueryControlsTest {
 
         @Query("DELETE FROM Author WHERE name = ?1")
         int remove(String name);
+
+        @Query("UPDATE Author SET name = ?1 WHERE name = ?2")
+        void renameQuietly(String newName, String oldName);
+
+        @Query("UPDATE Author SET name = ?1 WHERE name = ?2")
+        Boolean renamedBoxed(String newName, String oldName);
+
+        @Query("DELETE FROM Author WHERE name = ?1")
+        Integer removeBoxed(String name);
+
+        @Query("SELECT AVG(id) WHERE name = ?1")
+        double averageIdOf(String name);
+
+        @Query("SELECT MAX(id) WHERE name = ?1")
+        float maxIdAsFloat(String name);
+
+        @Query("SELECT MAX(id) WHERE name = ?1")
+        int maxIdAsInt(String name);
     }
 
     private static DataSource dataSource;
@@ -190,5 +210,16 @@ class RuntimeQueryControlsTest {
         assertThat(repo.rename("x", "nobody")).isFalse();
         assertThat(repo.remove(BOB)).isEqualTo(1);
         assertThat(repo.findAll()).hasSize(2);
+    }
+
+    @Test
+    void writesAndEmptyAggregatesFollowTheDeclaredReturnType() {
+        repo.renameQuietly(BOB_B, BOB);
+        assertThat(repo.renamedBoxed("Cyd C.", CYD)).isTrue();
+        assertThat(repo.removeBoxed(BOB_B)).isEqualTo(1);
+        assertThat(names(repo.findAll().toList())).containsExactlyInAnyOrder(ADA, "Cyd C.");
+        assertThat(repo.averageIdOf(NOBODY)).isZero();
+        assertThat(repo.maxIdAsFloat(NOBODY)).isZero();
+        assertThat(repo.maxIdAsInt(NOBODY)).isZero();
     }
 }
