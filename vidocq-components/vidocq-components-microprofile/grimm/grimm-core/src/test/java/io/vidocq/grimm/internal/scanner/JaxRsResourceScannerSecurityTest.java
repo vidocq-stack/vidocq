@@ -33,7 +33,6 @@ import org.eclipse.microprofile.openapi.annotations.security.OAuthScope;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirementsSet;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme;
-import org.eclipse.microprofile.openapi.annotations.security.SecuritySchemes;
 import org.eclipse.microprofile.openapi.annotations.servers.Server;
 import org.eclipse.microprofile.openapi.annotations.servers.ServerVariable;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
@@ -80,26 +79,24 @@ class JaxRsResourceScannerSecurityTest {
         return requirement.getSchemes() == null || requirement.getSchemes().isEmpty();
     }
 
-    @SecuritySchemes({
-            @SecurityScheme(securitySchemeName = API_KEY, type = SecuritySchemeType.APIKEY, apiKeyName = "X-Key",
-                    in = SecuritySchemeIn.QUERY, description = "Key in the query"),
-            @SecurityScheme(securitySchemeName = COOKIE_KEY, type = SecuritySchemeType.APIKEY, apiKeyName = "k",
-                    in = SecuritySchemeIn.COOKIE),
-            @SecurityScheme(securitySchemeName = BEARER, type = SecuritySchemeType.HTTP, scheme = BEARER,
-                    bearerFormat = "JWT"),
-            @SecurityScheme(securitySchemeName = "oidc", type = SecuritySchemeType.OPENIDCONNECT,
-                    openIdConnectUrl = "https://auth.example/.well-known/openid-configuration"),
-            @SecurityScheme(securitySchemeName = "tls", type = SecuritySchemeType.MUTUALTLS),
-            @SecurityScheme(securitySchemeName = SHARED, ref = "#/components/securitySchemes/Shared"),
-            @SecurityScheme(securitySchemeName = OAUTH, type = SecuritySchemeType.OAUTH2, flows = @OAuthFlows(
-                    password = @OAuthFlow(tokenUrl = TOKEN_URL, refreshUrl = "https://auth.example/refresh"),
-                    clientCredentials = @OAuthFlow(tokenUrl = TOKEN_URL,
-                            scopes = {@OAuthScope(name = READ, description = "Read"), @OAuthScope(description = "nameless")}),
-                    authorizationCode = @OAuthFlow(authorizationUrl = "https://auth.example/authorize",
-                            tokenUrl = TOKEN_URL))),
-            @SecurityScheme(securitySchemeName = NO_FLOWS, type = SecuritySchemeType.OAUTH2),
-            @SecurityScheme(description = "nameless")
-    })
+    @SecurityScheme(securitySchemeName = API_KEY, type = SecuritySchemeType.APIKEY, apiKeyName = "X-Key",
+            in = SecuritySchemeIn.QUERY, description = "Key in the query")
+    @SecurityScheme(securitySchemeName = COOKIE_KEY, type = SecuritySchemeType.APIKEY, apiKeyName = "k",
+            in = SecuritySchemeIn.COOKIE)
+    @SecurityScheme(securitySchemeName = BEARER, type = SecuritySchemeType.HTTP, scheme = BEARER,
+            bearerFormat = "JWT")
+    @SecurityScheme(securitySchemeName = "oidc", type = SecuritySchemeType.OPENIDCONNECT,
+            openIdConnectUrl = "https://auth.example/.well-known/openid-configuration")
+    @SecurityScheme(securitySchemeName = "tls", type = SecuritySchemeType.MUTUALTLS)
+    @SecurityScheme(securitySchemeName = SHARED, ref = "#/components/securitySchemes/Shared")
+    @SecurityScheme(securitySchemeName = OAUTH, type = SecuritySchemeType.OAUTH2, flows = @OAuthFlows(
+            password = @OAuthFlow(tokenUrl = TOKEN_URL, refreshUrl = "https://auth.example/refresh"),
+            clientCredentials = @OAuthFlow(tokenUrl = TOKEN_URL,
+                    scopes = {@OAuthScope(name = READ, description = "Read"), @OAuthScope(description = "nameless")}),
+            authorizationCode = @OAuthFlow(authorizationUrl = "https://auth.example/authorize",
+                    tokenUrl = TOKEN_URL)))
+    @SecurityScheme(securitySchemeName = NO_FLOWS, type = SecuritySchemeType.OAUTH2)
+    @SecurityScheme(description = "nameless")
     static class SchemesOnly {
         @Override
         public String toString() {

@@ -155,9 +155,10 @@ class StaticFileReaderSourcesTest {
     @Test
     void unreadableFileIsReported() {
         StaticFileReader reader = new StaticFileReader();
+        ClassLoader failing = new FailingLoader();
 
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> withContextClassLoader(new FailingLoader(), reader::readOpenAPI));
+                () -> withContextClassLoader(failing, reader::readOpenAPI));
         assertTrue(error.getMessage().contains(YAML_PATH), error.getMessage());
     }
 
@@ -165,8 +166,9 @@ class StaticFileReaderSourcesTest {
     void unreadableFileOfAKnownTypeLoaderIsReported() {
         StaticFileReader reader = new StaticFileReader();
         List<Class<?>> types = List.of(StaticFileReaderSourcesTest.class);
+        ClassLoader failing = new FailingLoader();
 
         assertThrows(IllegalArgumentException.class,
-                () -> withContextClassLoader(new FailingLoader(), () -> reader.readOpenAPI(types)));
+                () -> withContextClassLoader(failing, () -> reader.readOpenAPI(types)));
     }
 }

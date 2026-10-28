@@ -180,7 +180,7 @@ class SchemaRegistryTest {
         assertEquals(3, merged.getMaxItems());
         assertEquals(2, merged.getMinProperties());
         assertEquals(List.of("v"), merged.getEnumeration());
-        assertEquals(Boolean.FALSE, merged.getAdditionalPropertiesBoolean());
+        assertEquals(Boolean.FALSE, merged.getAdditionalPropertiesSchema().getBooleanSchema());
         assertEquals("note", merged.getComment());
         assertEquals("v", merged.getExtensions().get("x-k"));
         assertEquals(1, merged.getAllOf().size());

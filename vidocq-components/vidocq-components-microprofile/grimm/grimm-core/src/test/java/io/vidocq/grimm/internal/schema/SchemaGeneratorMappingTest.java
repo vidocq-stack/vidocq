@@ -48,7 +48,6 @@ import static org.eclipse.microprofile.openapi.models.media.Schema.SchemaType.OB
 import static org.eclipse.microprofile.openapi.models.media.Schema.SchemaType.STRING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -456,8 +455,8 @@ class SchemaGeneratorMappingTest {
 
     @Test
     void additionalPropertiesBooleanOrSchema() throws Exception {
-        assertEquals(Boolean.TRUE, site("openMap").getAdditionalPropertiesBoolean());
-        assertEquals(Boolean.FALSE, site("closedMap").getAdditionalPropertiesBoolean());
+        assertEquals(Boolean.TRUE, site("openMap").getAdditionalPropertiesSchema().getBooleanSchema());
+        assertEquals(Boolean.FALSE, site("closedMap").getAdditionalPropertiesSchema().getBooleanSchema());
         assertEquals("int32", site("typedMap").getAdditionalPropertiesSchema().getFormat());
     }
 
