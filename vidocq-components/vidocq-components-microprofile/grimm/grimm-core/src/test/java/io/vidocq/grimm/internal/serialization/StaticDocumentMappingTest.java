@@ -56,7 +56,7 @@ class StaticDocumentMappingTest {
     private static final String BEARER = "bearer";
     private static final String JSON_MEDIA = "application/json";
 
-    private static final String DOCUMENT = """
+    static final String DOCUMENT = """
             {
               "openapi": "3.1.0", "x-top": "t", "unknownTop": 1,
               "info": {"title": "T", "version": "1", "summary": "S", "description": "D",

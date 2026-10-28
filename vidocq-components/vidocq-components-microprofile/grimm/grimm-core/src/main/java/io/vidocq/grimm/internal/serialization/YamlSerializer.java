@@ -125,19 +125,8 @@ public final class YamlSerializer {
     }
 
     private String escapeString(String raw) {
-        StringBuilder escaped = new StringBuilder(raw.length());
-        for (int i = 0; i < raw.length(); i++) {
-            char c = raw.charAt(i);
-            switch (c) {
-                case '\\' -> escaped.append("\\\\");
-                case '"' -> escaped.append("\\\"");
-                case '\n' -> escaped.append("\\n");
-                case '\r' -> escaped.append("\\r");
-                case '\t' -> escaped.append("\\t");
-                default -> escaped.append(c);
-            }
-        }
-        return escaped.toString();
+        // A JSON string escape is a valid YAML double-quoted escape.
+        return JsonSerializer.escapeJson(raw);
     }
 
     private void appendIndent(StringBuilder builder, int indent) {

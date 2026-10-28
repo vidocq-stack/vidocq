@@ -435,3 +435,17 @@ Track reproducible bugs with:
   integer token, while RFC 8259 §6 sets no range on numbers.
 - **status**: FIXED — 2026-10-28. An integer beyond a `long` is read as a `BigInteger` (as the YAML
   reader does), which the schema mapper turns into a `BigDecimal`. Regression test: `JsonDeserializerTest`.
+
+### BUG-20261028-23 — Control characters are written raw in the JSON and YAML documents
+
+- **id**: BUG-20261028-23
+- **date**: 2026-10-28
+- **symptom**: a string of the model holding a C0 control character other than `\n`, `\r`, `\t` (for
+  example `\b`, `\f`, `\0`, BEL from a description) is written as is inside the quoted string of
+  `/openapi`: the JSON output is not valid RFC 8259 JSON and the YAML output is not valid YAML 1.2.
+- **minimal repro**: `SerializationRoundTripTest#controlCharactersAreEscaped`.
+- **hypothesis (confirmed)**: `JsonSerializer.escapeJson` and its copy `YamlSerializer.escapeString` only
+  escaped backslash, quote, `\n`, `\r` and `\t`.
+- **status**: FIXED — 2026-10-28. Other characters below U+0020 are written as `\uXXXX`; the YAML serializer
+  reuses the JSON escape (valid in a YAML double-quoted scalar) instead of a copy. Regression test:
+  `SerializationRoundTripTest`.

@@ -89,7 +89,7 @@ public final class JsonSerializer {
         return builder.toString();
     }
 
-    private String escapeJson(String raw) {
+    static String escapeJson(String raw) {
         StringBuilder escaped = new StringBuilder(raw.length());
         for (int i = 0; i < raw.length(); i++) {
             char c = raw.charAt(i);
@@ -99,7 +99,14 @@ public final class JsonSerializer {
                 case '\n' -> escaped.append("\\n");
                 case '\r' -> escaped.append("\\r");
                 case '\t' -> escaped.append("\\t");
-                default -> escaped.append(c);
+                default -> {
+                    // RFC 8259 §7 / YAML 1.2 §5.7: no raw control character inside a quoted string
+                    if (c < 0x20) {
+                        escaped.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        escaped.append(c);
+                    }
+                }
             }
         }
         return escaped.toString();
