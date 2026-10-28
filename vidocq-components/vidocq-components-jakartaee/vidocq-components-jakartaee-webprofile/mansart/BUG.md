@@ -473,3 +473,26 @@ the pool's loader cannot see the application's driver.
 ### Fix
 The pool resolves the driver itself at its first connection: `java.sql.Driver` providers of the context class loader
 captured at construction first, then `DriverManager`, and keeps it (`DriverLocator`, `ConnectionPool.driver()`).
+
+## MANSART-010 — Transactions: recovered Xids compare by array identity
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `fix/sonar-reliability-security`)
+- **Severity**: low (the transaction manager matches journal records through `XidKey`, by content)
+- **Module**: `mansart-transactions-core` (`FileRecoveryLog.ScannedXid`)
+
+### Symptom
+Two scans of the same recovery journal line return `Xid`s that are not `equals` and have different hash codes, so a
+caller of `MansartTransactionManager.recover()` cannot match a recovered `Xid` against another one (in a set, a map, or
+an `XAResource.recover` result held as `Xid`s). `toString()` prints array identities instead of the identifiers.
+
+### Minimal repro
+`RecoveryLogTest.scannedXidsCompareByContent`: write one journal line, scan twice, compare the two `xid()`s.
+
+### Cause
+`ScannedXid` is a record holding `byte[]` components: the generated `equals`/`hashCode`/`toString` use the array
+references (SonarQube java:S6218).
+
+### Fix
+`ScannedXid` overrides `equals`, `hashCode` and `toString` on the format id and the contents of both arrays, as
+`MansartXid` already does. Regression test: `RecoveryLogTest.scannedXidsCompareByContent`.

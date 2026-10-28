@@ -27,6 +27,7 @@ import java.nio.file.OpenOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 
@@ -114,5 +115,26 @@ public final class FileRecoveryLog implements RecoveryLog {
         @Override public int    getFormatId()             { return format; }
         @Override public byte[] getGlobalTransactionId()  { return gtrid.clone(); }
         @Override public byte[] getBranchQualifier()      { return bqual.clone(); }
+
+        /** By content (MANSART-010): the record default would compare the arrays by identity. */
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof ScannedXid x
+                    && format == x.format
+                    && Arrays.equals(gtrid, x.gtrid)
+                    && Arrays.equals(bqual, x.bqual);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * (31 * format + Arrays.hashCode(gtrid)) + Arrays.hashCode(bqual);
+        }
+
+        @Override
+        public String toString() {
+            return "Xid{format=" + Integer.toHexString(format)
+                    + ", gtrid=" + HEX.formatHex(gtrid)
+                    + ", bqual=" + HEX.formatHex(bqual) + "}";
+        }
     }
 }

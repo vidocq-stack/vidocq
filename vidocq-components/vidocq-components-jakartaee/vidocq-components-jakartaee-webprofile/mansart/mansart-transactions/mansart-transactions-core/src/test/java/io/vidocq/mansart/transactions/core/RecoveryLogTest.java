@@ -179,4 +179,25 @@ class RecoveryLogTest {
             assertThat(records.get(0).type()).isEqualTo(RecoveryLog.Type.PREPARED);
         }
     }
+
+    /** MANSART-010: two scans of the same journal line describe the same transaction branch. */
+    @Test
+    void scannedXidsCompareByContent(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve("tx.log");
+        java.nio.file.Files.writeString(file,
+                "PREPARED|4D414E53|0A0B|01\nPREPARED|4D414E53|0A0C|01\n"
+                        + "PREPARED|1234|0A0B|01\nPREPARED|4D414E53|0A0B|02\n",
+                java.nio.charset.StandardCharsets.UTF_8);
+
+        try (var log = new FileRecoveryLog(file)) {
+            Xid first = log.scan().get(0).xid();
+            Xid again = log.scan().get(0).xid();
+            List<RecoveryLog.Record> others = log.scan().subList(1, 4);
+
+            assertThat(again).isEqualTo(first).hasSameHashCodeAs(first);
+            assertThat(others).allSatisfy(r -> assertThat(r.xid()).isNotEqualTo(first));
+            assertThat(first).isNotEqualTo(new MansartXid(new byte[]{0x0A, 0x0B}, new byte[]{1}));
+            assertThat(first.toString()).contains("0a0b").contains("01");
+        }
+    }
 }
