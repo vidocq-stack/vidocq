@@ -192,16 +192,12 @@ public final class JsonDeserializer {
             if (peek('-')) {
                 index++;
             }
-            while (index < source.length() && Character.isDigit(source.charAt(index))) {
-                index++;
-            }
+            skipDigits();
             boolean decimal = false;
             if (peek('.')) {
                 decimal = true;
                 index++;
-                while (index < source.length() && Character.isDigit(source.charAt(index))) {
-                    index++;
-                }
+                skipDigits();
             }
             if (peek('e') || peek('E')) {
                 decimal = true;
@@ -209,16 +205,29 @@ public final class JsonDeserializer {
                 if (peek('+') || peek('-')) {
                     index++;
                 }
-                while (index < source.length() && Character.isDigit(source.charAt(index))) {
-                    index++;
-                }
+                skipDigits();
             }
 
             String token = source.substring(start, index);
             if (decimal) {
                 return Double.parseDouble(token);
             }
-            return Long.parseLong(token);
+            return parseInteger(token);
+        }
+
+        /** RFC 8259 §6 sets no range: an integer beyond a long is a {@code BigInteger}. */
+        private static Number parseInteger(String token) {
+            try {
+                return Long.parseLong(token);
+            } catch (NumberFormatException _) {
+                return new java.math.BigInteger(token);
+            }
+        }
+
+        private void skipDigits() {
+            while (index < source.length() && Character.isDigit(source.charAt(index))) {
+                index++;
+            }
         }
 
         private Object parseLiteral(String expected, Object value) {

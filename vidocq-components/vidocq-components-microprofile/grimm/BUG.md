@@ -422,3 +422,16 @@ Track reproducible bugs with:
   lines), joins multi-line scalars, applies block chomping, reads `---` / `...`, and rejects a stray
   indentation with an `IllegalArgumentException`. The three static files of the official TCK and Grimm's
   own test files parse to the same maps as before. Regression test: `YamlDeserializerTest`.
+
+### BUG-20261028-22 — A JSON integer beyond a `long` fails the whole static file
+
+- **id**: BUG-20261028-22
+- **date**: 2026-10-28
+- **symptom**: `META-INF/openapi.json` (or a JSON schema from `mp.openapi.schema.*`) with an integer
+  outside the `long` range, e.g. `"maximum": 99999999999999999999`, is rejected with
+  `NumberFormatException: For input string`; the YAML reader accepts the same value.
+- **minimal repro**: `JsonDeserializerTest#integerBeyondALongIsReadAsABigInteger`.
+- **hypothesis (confirmed)**: `JsonDeserializer.Parser.parseNumber` called `Long.parseLong` on every
+  integer token, while RFC 8259 §6 sets no range on numbers.
+- **status**: FIXED — 2026-10-28. An integer beyond a `long` is read as a `BigInteger` (as the YAML
+  reader does), which the schema mapper turns into a `BigDecimal`. Regression test: `JsonDeserializerTest`.
