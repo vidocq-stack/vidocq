@@ -68,9 +68,9 @@ public final class PomEditor {
             return new Result(pom, false);
         }
         // The project's own <dependencies>, never a dependencyManagement's (BUG-20261023-08).
-        int[] region = projectDependenciesRegion(pom);
+        Span region = projectDependenciesRegion(pom);
         if (region != null) {
-            int close = region[1] - DEPENDENCIES_CLOSE.length();
+            int close = region.end() - DEPENDENCIES_CLOSE.length();
             int lineStart = pom.lastIndexOf('\n', close) + 1;
             String baseIndent = pom.substring(lineStart, close);
             String childIndent = isBlank(baseIndent) ? baseIndent + "    " : TWO_INDENTS;
@@ -99,11 +99,11 @@ public final class PomEditor {
         if (!PomDependencies.contains(pom, coordinate)) {
             return new Result(pom, false);
         }
-        int[] region = projectDependenciesRegion(pom);
+        Span region = projectDependenciesRegion(pom);
         StringBuilder sb = new StringBuilder(pom);
         boolean changed = false;
-        int search = region == null ? 0 : region[0];
-        int limit = region == null ? sb.length() : region[1];
+        int search = region == null ? 0 : region.start();
+        int limit = region == null ? sb.length() : region.end();
 
         int open;
         while ((open = sb.indexOf("<dependency>", search)) >= 0 && open < limit) {
@@ -133,12 +133,13 @@ public final class PomEditor {
 
     /** The pom without its project-level {@code <dependencies>} when nothing is left in it (BUG-20261023-07). */
     private static String withoutEmptyProjectDependencies(String pom) {
-        int[] region = projectDependenciesRegion(pom);
+        Span region = projectDependenciesRegion(pom);
         if (region == null
-                || !isBlank(pom.substring(region[0] + DEPENDENCIES_OPEN.length(), region[1] - DEPENDENCIES_CLOSE.length()))) {
+                || !isBlank(pom.substring(region.start() + DEPENDENCIES_OPEN.length(),
+                        region.end() - DEPENDENCIES_CLOSE.length()))) {
             return pom;
         }
-        return withoutLines(pom, region[0], region[1]);
+        return withoutLines(pom, region.start(), region.end());
     }
 
     private static final String APT_OPEN = "<annotationProcessorPaths";
@@ -530,7 +531,7 @@ public final class PomEditor {
      * {@code <dependencyManagement>}, a {@code <build>} (a plugin's dependencies) and {@code <profiles>}.
      * Returns {@code [start, endExclusive]} or {@code null} if no project dependencies element exists.
      */
-    private static int[] projectDependenciesRegion(String pom) {
+    private static Span projectDependenciesRegion(String pom) {
         List<int[]> nested = new ArrayList<>();
         for (String element : NESTING_DEPENDENCIES) {
             String open = "<" + element + ">";
@@ -552,7 +553,7 @@ public final class PomEditor {
             int at = deps;
             if (nested.stream().noneMatch(r -> at > r[0] && at < r[1])) {
                 int end = pom.indexOf(DEPENDENCIES_CLOSE, deps);
-                return end < 0 ? null : new int[]{deps, end + DEPENDENCIES_CLOSE.length()};
+                return end < 0 ? null : new Span(deps, end + DEPENDENCIES_CLOSE.length());
             }
             from = deps + DEPENDENCIES_OPEN.length();
         }

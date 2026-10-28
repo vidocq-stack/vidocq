@@ -106,13 +106,13 @@ public class SpansResource {
     }
 
     private static AutoConfiguredHumboldt humboldt() {
-        // HumboldtHolder.INSTANCE is released by HumboldtExtension.beforeStart()
+        // HumboldtHolder.current() is published by HumboldtExtension.beforeStart()
         // — process-wide static reference, accessible from any
         // ClassLoader including isolated Arquillian Deployments.
         // GlobalOpenTelemetry.get() returns an ObfuscatedOpenTelemetry wrapper,
         // not the raw instance, therefore not usable to cast to
         // AutoConfiguredHumboldt directly.
-        return HumboldtHolder.INSTANCE;
+        return HumboldtHolder.current();
     }
 
     private static String esc(String s) {

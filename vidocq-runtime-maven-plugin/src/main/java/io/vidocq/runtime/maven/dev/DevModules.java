@@ -21,6 +21,7 @@ package io.vidocq.runtime.maven.dev;
 
 import io.vidocq.runtime.maven.DevOnlyJars;
 import org.apache.maven.artifact.Artifact;
+import org.eclipse.aether.resolution.DependencyResolutionException;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -60,7 +61,7 @@ final class DevModules {
     /** Resolves {@code groupId:artifactId:version} and its runtime dependencies. */
     @FunctionalInterface
     interface Resolver {
-        List<Resolved> resolve(String coordinates) throws Exception;
+        List<Resolved> resolve(String coordinates) throws DependencyResolutionException;
     }
 
     private DevModules() {}

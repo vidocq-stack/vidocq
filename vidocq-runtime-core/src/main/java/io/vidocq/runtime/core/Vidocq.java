@@ -209,7 +209,7 @@ public final class Vidocq {
 
     /** Re-loads {@code appClass} through the layer and instantiates it there. */
     private static VidocqApp instantiateInLayer(Class<? extends VidocqApp> appClass)
-            throws Exception {
+            throws ReflectiveOperationException {
         var tccl = Thread.currentThread().getContextClassLoader();
         Class<?> layerClass = Class.forName(appClass.getName(), true, tccl);
         // As a CDI bean when the container knows it…

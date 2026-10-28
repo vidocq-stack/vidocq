@@ -29,6 +29,7 @@ import org.apache.maven.project.MavenProject;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -198,7 +199,7 @@ public class VidocqJpackageMojo extends AbstractMojo {
         if (!Files.exists(root)) return;
         try (Stream<Path> walk = Files.walk(root)) {
             walk.sorted(Comparator.reverseOrder()).forEach(p -> {
-                try { Files.delete(p); } catch (IOException e) { throw new RuntimeException(e); }
+                try { Files.delete(p); } catch (IOException e) { throw new UncheckedIOException(e); }
             });
         }
     }

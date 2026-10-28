@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.security.CodeSource;
 
@@ -47,8 +48,8 @@ final class ComponentSources {
         String spelling = file == null ? null : file.toString();
         if (spelling != null && spelling.endsWith(resource)) {
             try {
-                return new URL(spelling.substring(0, spelling.length() - resource.length()));
-            } catch (MalformedURLException _) {
+                return URI.create(spelling.substring(0, spelling.length() - resource.length())).toURL();
+            } catch (IllegalArgumentException | MalformedURLException _) {
                 // Not a URL once cut: fall back to the code source.
             }
         }

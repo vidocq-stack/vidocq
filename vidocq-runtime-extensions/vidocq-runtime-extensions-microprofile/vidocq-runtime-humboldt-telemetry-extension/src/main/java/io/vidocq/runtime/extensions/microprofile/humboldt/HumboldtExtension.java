@@ -122,7 +122,7 @@ public final class HumboldtExtension implements VidocqExtension {
                 spi.extraMetricExporters());
 
         // Apps/tests can @Inject AutoConfiguredHumboldt through the holder bean.
-        HumboldtHolder.INSTANCE = humboldt;
+        HumboldtHolder.publish(humboldt);
 
         try {
             GlobalOpenTelemetry.set(humboldt);
@@ -156,7 +156,7 @@ public final class HumboldtExtension implements VidocqExtension {
         LOG.log(Level.INFO, "Shutting down Humboldt - flushing spans/metrics/logs");
         humboldt.flush().join(5, TimeUnit.SECONDS);
         humboldt.shutdown().join(5, TimeUnit.SECONDS);
-        HumboldtHolder.INSTANCE = null;
+        HumboldtHolder.publish(null);
     }
 
     /**

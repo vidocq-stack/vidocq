@@ -53,6 +53,7 @@ import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
 import org.eclipse.aether.resolution.ArtifactResult;
 import org.eclipse.aether.resolution.DependencyRequest;
+import org.eclipse.aether.resolution.DependencyResolutionException;
 import org.eclipse.aether.resolution.DependencyResult;
 import org.eclipse.aether.util.filter.DependencyFilterUtils;
 
@@ -763,7 +764,7 @@ public class VidocqDevMojo extends AbstractMojo {
     }
 
     /** {@code coordinates} and its runtime dependencies, through Maven's own resolution and repositories. */
-    private List<DevModules.Resolved> resolveRuntime(String coordinates) throws Exception {
+    private List<DevModules.Resolved> resolveRuntime(String coordinates) throws DependencyResolutionException {
         Dependency root = new Dependency(new DefaultArtifact(coordinates), RUNTIME_SCOPE);
         CollectRequest collect = new CollectRequest(root, remoteRepos);
         DependencyRequest request = new DependencyRequest(collect, DependencyFilterUtils.classpathFilter(RUNTIME_SCOPE));

@@ -34,6 +34,7 @@ import liquibase.changelog.RanChangeSet;
 import liquibase.database.Database;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
+import liquibase.exception.LiquibaseException;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import liquibase.resource.ResourceAccessor;
 
@@ -128,7 +129,7 @@ public final class LiquibaseSchemaMigrator implements SchemaMigrator {
     /** What Liquibase does with an open {@link Liquibase}. */
     @FunctionalInterface
     private interface Work<R> {
-        R run(Liquibase liquibase) throws Exception;
+        R run(Liquibase liquibase) throws LiquibaseException;
     }
 
     /** Runs {@code work} on a connection of its own to {@code t}, closed afterwards, analytics off by default. */

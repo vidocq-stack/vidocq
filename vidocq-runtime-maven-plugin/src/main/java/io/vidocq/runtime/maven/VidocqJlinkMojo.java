@@ -36,6 +36,7 @@ import org.eclipse.aether.repository.RemoteRepository;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.io.PrintStream;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
@@ -440,7 +441,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
         if (!Files.exists(root)) return;
         try (Stream<Path> walk = Files.walk(root)) {
             walk.sorted(Comparator.reverseOrder()).forEach(p -> {
-                try { Files.delete(p); } catch (IOException e) { throw new RuntimeException(e); }
+                try { Files.delete(p); } catch (IOException e) { throw new UncheckedIOException(e); }
             });
         }
     }

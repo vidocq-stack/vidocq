@@ -48,10 +48,7 @@ final class ModuleRequirementsCollector {
     static Set<Requirement> collect(Set<Artifact> artifacts, Log log) {
         Set<Requirement> all = new LinkedHashSet<>();
         for (Artifact artifact : artifacts) {
-            Properties props = readDescriptor(artifact.getFile(), log);
-            if (props != null) {
-                all.addAll(ModuleRequirementsDescriptor.parse(props));
-            }
+            all.addAll(ModuleRequirementsDescriptor.parse(readDescriptor(artifact.getFile(), log)));
         }
         return all;
     }
@@ -82,16 +79,17 @@ final class ModuleRequirementsCollector {
                 && new File(outputDirectory, pkg.replace('.', '/')).isDirectory();
     }
 
+    /** The descriptor of {@code artifactFile}: empty when it has none, or when it cannot be read. */
     private static Properties readDescriptor(File artifactFile, Log log) {
         if (artifactFile == null || !artifactFile.exists()) {
-            return null;
+            return new Properties();
         }
         try {
             if (artifactFile.isDirectory()) {
                 // Reactor dependency resolved to target/classes (built in the same reactor).
                 File resource = new File(artifactFile, ModuleRequirementsDescriptor.RESOURCE);
                 if (!resource.isFile()) {
-                    return null;
+                    return new Properties();
                 }
                 try (InputStream in = Files.newInputStream(resource.toPath())) {
                     return load(in);
@@ -100,7 +98,7 @@ final class ModuleRequirementsCollector {
             try (JarFile jar = new JarFile(artifactFile)) {
                 ZipEntry entry = jar.getEntry(ModuleRequirementsDescriptor.RESOURCE);
                 if (entry == null) {
-                    return null;
+                    return new Properties();
                 }
                 try (InputStream in = jar.getInputStream(entry)) {
                     return load(in);
@@ -108,7 +106,7 @@ final class ModuleRequirementsCollector {
             }
         } catch (IOException e) {
             log.debug("Vidocq: cannot read module-requirements descriptor from " + artifactFile + ": " + e);
-            return null;
+            return new Properties();
         }
     }
 

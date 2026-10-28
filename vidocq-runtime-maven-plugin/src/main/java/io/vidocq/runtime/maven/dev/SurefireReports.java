@@ -23,9 +23,11 @@ import io.vidocq.runtime.devservices.host.SecretMasking;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -109,7 +111,7 @@ final class SurefireReports {
     /** One report, counted. */
     private record Suite(TestResults.Counts counts, List<TestResults.Failure> failures) {}
 
-    private static Suite parse(Path file) throws Exception {
+    private static Suite parse(Path file) throws IOException, ParserConfigurationException, SAXException {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
