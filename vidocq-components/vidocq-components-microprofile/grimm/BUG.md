@@ -389,3 +389,17 @@ Track reproducible bugs with:
 - **status**: FIXED — 2026-10-28. `GrimmModelProcessor.methodSubPath` applies the scanner's rule; the
   per-method part of `generate` moved to `addOperation`. Regression test:
   `GrimmModelProcessorOracleTest.methodPathSlashes_matchScan`.
+
+### BUG-20261028-20 — OAuth flows of a static-file security scheme are dropped
+
+- **id**: BUG-20261028-20
+- **date**: 2026-10-28
+- **symptom**: a `securitySchemes` entry of `META-INF/openapi.yaml` / `.json` with `type: oauth2` and
+  `flows` loses its flows: the model (`SecurityScheme#getFlows()`) is `null`, so `/openapi` serves the
+  scheme without its `implicit` / `password` / `clientCredentials` / `authorizationCode` flows, scopes or URLs.
+- **minimal repro**: `StaticOAuthFlowsTest` — deserialize a YAML document whose `oauth2` scheme declares
+  the four flows, then read `getFlows()`.
+- **hypothesis (confirmed)**: `OpenApiModelMapper.toSecurityScheme` had no `flows` case; unknown keys that do
+  not start with `x-` are ignored.
+- **status**: FIXED — 2026-10-28. `toSecurityScheme` maps `flows` through `toOAuthFlows` / `toOAuthFlow`
+  (URLs, `scopes`, `x-` extensions on both levels). Regression test: `StaticOAuthFlowsTest`.

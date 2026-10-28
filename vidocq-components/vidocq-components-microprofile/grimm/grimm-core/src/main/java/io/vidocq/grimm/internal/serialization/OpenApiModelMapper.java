@@ -45,6 +45,8 @@ import org.eclipse.microprofile.openapi.models.parameters.Parameter;
 import org.eclipse.microprofile.openapi.models.parameters.RequestBody;
 import org.eclipse.microprofile.openapi.models.responses.APIResponse;
 import org.eclipse.microprofile.openapi.models.responses.APIResponses;
+import org.eclipse.microprofile.openapi.models.security.OAuthFlow;
+import org.eclipse.microprofile.openapi.models.security.OAuthFlows;
 import org.eclipse.microprofile.openapi.models.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.models.security.SecurityScheme;
 import org.eclipse.microprofile.openapi.models.servers.Server;
@@ -913,6 +915,7 @@ final class OpenApiModelMapper {
                 case "scheme" -> scheme.setScheme(asString(value));
                 case "bearerFormat" -> scheme.setBearerFormat(asString(value));
                 case "openIdConnectUrl" -> scheme.setOpenIdConnectUrl(asString(value));
+                case "flows" -> scheme.setFlows(toOAuthFlows(value));
                 case "$ref" -> AbstractExtensibleRef.setVerbatimRef(scheme, asString(value));
                 default -> {
                     if (key.startsWith("x-")) {
@@ -922,6 +925,62 @@ final class OpenApiModelMapper {
             }
         }
         return scheme;
+    }
+
+    private static OAuthFlows toOAuthFlows(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        OAuthFlows flows = OASFactory.createObject(OAuthFlows.class);
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            String key = String.valueOf(entry.getKey());
+            Object value = entry.getValue();
+            switch (key) {
+                case "implicit" -> flows.setImplicit(toOAuthFlow(value));
+                case "password" -> flows.setPassword(toOAuthFlow(value));
+                case "clientCredentials" -> flows.setClientCredentials(toOAuthFlow(value));
+                case "authorizationCode" -> flows.setAuthorizationCode(toOAuthFlow(value));
+                default -> {
+                    if (key.startsWith("x-")) {
+                        flows.addExtension(key, value);
+                    }
+                }
+            }
+        }
+        return flows;
+    }
+
+    private static OAuthFlow toOAuthFlow(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        OAuthFlow flow = OASFactory.createObject(OAuthFlow.class);
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            String key = String.valueOf(entry.getKey());
+            Object value = entry.getValue();
+            switch (key) {
+                case "authorizationUrl" -> flow.setAuthorizationUrl(asString(value));
+                case "tokenUrl" -> flow.setTokenUrl(asString(value));
+                case "refreshUrl" -> flow.setRefreshUrl(asString(value));
+                case "scopes" -> {
+                    if (value instanceof Map<?, ?> scopes) {
+                        flow.setScopes(toScopes(scopes));
+                    }
+                }
+                default -> {
+                    if (key.startsWith("x-")) {
+                        flow.addExtension(key, value);
+                    }
+                }
+            }
+        }
+        return flow;
+    }
+
+    private static Map<String, String> toScopes(Map<?, ?> map) {
+        LinkedHashMap<String, String> scopes = new LinkedHashMap<>();
+        map.forEach((name, description) -> scopes.put(String.valueOf(name), asString(description)));
+        return scopes;
     }
 
     private static SecurityScheme.Type toSecuritySchemeType(String type) {
