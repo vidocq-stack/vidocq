@@ -102,13 +102,7 @@ public final class TimeoutEngine {
         // The thread completed in time: Thread.join() provides happens-before.
         Throwable error = errorRef.get();
         if (error != null) {
-            if (error instanceof Exception exception) {
-                throw exception;
-            }
-            if (error instanceof Error err) {
-                throw err;
-            }
-            throw new RuntimeException(error);
+            throw Failures.asException(error);
         }
 
         return resultRef.get();

@@ -50,19 +50,19 @@ public final class RetryEngine {
                 Duration attemptDuration = Duration.ofNanos(System.nanoTime() - attemptStartedAt);
                 if (!shouldRetry(effectiveFailure, config)) {
                     recorder.recordRetry(beanClass, method, attempt, FtMetricsRecorder.RetryResult.EXCEPTION_NOT_RETRYABLE);
-                    throwAsException(effectiveFailure);
+                    throw Failures.asException(effectiveFailure);
                 }
 
                 // MP FT 4.1 §3.4: maxRetries = -1 means "retry indefinitely".
                 if (config.maxRetries() >= 0 && attempt >= config.maxRetries()) {
                     recorder.recordRetry(beanClass, method, attempt, FtMetricsRecorder.RetryResult.MAX_RETRIES_REACHED);
-                    throwAsException(effectiveFailure);
+                    throw Failures.asException(effectiveFailure);
                 }
 
                 Duration sleepDuration = computeBackoff(config);
                 if (exceedsMaxDuration(startedAt, config.maxDurationValue(), sleepDuration, attemptDuration)) {
                     recorder.recordRetry(beanClass, method, attempt, FtMetricsRecorder.RetryResult.MAX_DURATION_REACHED);
-                    throwAsException(effectiveFailure);
+                    throw Failures.asException(effectiveFailure);
                 }
 
                 sleep(sleepDuration);
@@ -130,7 +130,7 @@ public final class RetryEngine {
         return elapsed.plus(nextDelay).plus(estimatedAttemptDuration).compareTo(maxDuration) >= 0;
     }
 
-    private static void sleep(Duration duration) throws Exception {
+    private static void sleep(Duration duration) throws InterruptedException {
         if (duration.isZero()) {
             return;
         }
@@ -143,16 +143,6 @@ public final class RetryEngine {
             Thread.currentThread().interrupt();
             throw interrupted;
         }
-    }
-
-    private static void throwAsException(Throwable failure) throws Exception {
-        if (failure instanceof Exception exception) {
-            throw exception;
-        }
-        if (failure instanceof Error error) {
-            throw error;
-        }
-        throw new RuntimeException(failure);
     }
 
     private static Throwable unwrapInvocationFailure(Throwable failure) {

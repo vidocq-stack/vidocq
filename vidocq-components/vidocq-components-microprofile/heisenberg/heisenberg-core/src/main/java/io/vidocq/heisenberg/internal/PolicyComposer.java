@@ -345,10 +345,7 @@ public final class PolicyComposer {
             try {
                 return stage.toCompletableFuture().get();
             } catch (ExecutionException ee) {
-                Throwable cause = ee.getCause();
-                if (cause instanceof Exception ex) throw ex;
-                if (cause instanceof Error err) throw err;
-                throw new RuntimeException(cause);
+                throw Failures.asException(ee.getCause());
             }
         }
         return result;
