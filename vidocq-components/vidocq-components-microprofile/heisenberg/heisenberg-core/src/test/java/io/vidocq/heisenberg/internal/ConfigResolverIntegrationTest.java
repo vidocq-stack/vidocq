@@ -127,12 +127,12 @@ class ConfigResolverIntegrationTest {
     // @Timeout at class level → the <FQCN>/Timeout/value=3000 (class-level) key applies.
     @Timeout
     static class DemoService {
-        @Retry void retryCall() {}
-        void genericCall() {} // inherits @Timeout from the class
-        @CircuitBreaker void criticalCall() {}
-        @Bulkhead void bulkheadCall() {}
-        @Fallback(fallbackMethod = "recover") void fallbackCall() {}
-        void recover() {}
+        @Retry void retryCall() { /* annotation target only */ }
+        void genericCall() { /* annotation target only */ } // inherits @Timeout from the class
+        @CircuitBreaker void criticalCall() { /* annotation target only */ }
+        @Bulkhead void bulkheadCall() { /* annotation target only */ }
+        @Fallback(fallbackMethod = "recover") void fallbackCall() { /* annotation target only */ }
+        void recover() { /* annotation target only */ }
     }
 }
 

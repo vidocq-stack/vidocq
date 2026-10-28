@@ -67,7 +67,7 @@ class TimeoutEngineTest {
     }
 
     @Test
-    void checkedExceptionFromInvocationIsPropagatedBeforeDeadline() throws Exception {
+    void checkedExceptionFromInvocationIsPropagatedBeforeDeadline() {
         // §4: a checked exception (other than timeout) is propagated directly.
         TimeoutConfig config = new TimeoutConfig(500, ChronoUnit.MILLIS);
 

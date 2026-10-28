@@ -69,16 +69,16 @@ class AnnotationReaderTest {
     @Retry(maxRetries = 5)
     static class MethodAnnotatedService {
         @Retry(maxRetries = 1)
-        void call() {}
+        void call() { /* annotation target only */ }
     }
 
     @Timeout(250)
     static class ClassAnnotatedService {
-        void call() {}
+        void call() { /* annotation target only */ }
     }
 
     static class NoAnnotationService {
-        void call() {}
+        void call() { /* annotation target only */ }
     }
 }
 

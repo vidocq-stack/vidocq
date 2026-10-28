@@ -52,7 +52,7 @@ class ConfigResolverRetryTest {
     @Retry(maxRetries = 3)
     static class ConfiguredService {
         @Retry(maxRetries = 3)
-        void call() {}
+        void call() { /* annotation target only */ }
     }
 
     private static final class FakeConfig implements Config {

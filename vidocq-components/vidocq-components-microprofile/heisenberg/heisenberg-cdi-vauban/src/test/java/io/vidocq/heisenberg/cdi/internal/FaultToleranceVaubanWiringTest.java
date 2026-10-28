@@ -21,7 +21,6 @@ package io.vidocq.heisenberg.cdi.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import jakarta.enterprise.context.Dependent;
@@ -45,7 +44,11 @@ class FaultToleranceVaubanWiringTest {
     @AfterEach
     void closeContainer() {
         if (container != null && container.isRunning()) {
-            try { container.close(); } catch (Exception ignored) {}
+            try {
+                container.close();
+            } catch (Exception _) {
+                // best-effort cleanup: the test outcome is already decided
+            }
         }
     }
 
@@ -68,7 +71,7 @@ class FaultToleranceVaubanWiringTest {
             var mgrField = bean.getClass().getDeclaredField("$$manager");
             mgrField.setAccessible(true);
             System.err.println("[Wiring] $$manager = " + mgrField.get(bean));
-        } catch (NoSuchFieldException e) {
+        } catch (NoSuchFieldException _) {
             System.err.println("[Wiring] no $$manager field");
         } catch (IllegalAccessException e) {
             throw new RuntimeException(e);
@@ -76,7 +79,7 @@ class FaultToleranceVaubanWiringTest {
 
         try {
             bean.call();
-        } catch (RuntimeException expected) {
+        } catch (RuntimeException _) {
             // Expected: retries exhausted.
         }
 

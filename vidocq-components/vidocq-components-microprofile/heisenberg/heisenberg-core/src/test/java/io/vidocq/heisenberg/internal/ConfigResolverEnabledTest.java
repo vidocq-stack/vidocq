@@ -19,7 +19,6 @@
  */
 package io.vidocq.heisenberg.internal;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -254,33 +253,33 @@ class ConfigResolverEnabledTest {
 
     static class RetryService {
         @Retry(maxRetries = 2)
-        void method() {}
+        void method() { /* annotation target only */ }
     }
 
     @Retry(maxRetries = 2)
     static class ClassLevelRetryService {
-        void method() {}
+        void method() { /* annotation target only */ }
     }
 
     static class CBService {
         @org.eclipse.microprofile.faulttolerance.CircuitBreaker
-        void method() {}
+        void method() { /* annotation target only */ }
     }
 
     static class BulkheadService {
         @org.eclipse.microprofile.faulttolerance.Bulkhead
-        void method() {}
+        void method() { /* annotation target only */ }
     }
 
     static class TimeoutService {
         @org.eclipse.microprofile.faulttolerance.Timeout(1000)
-        void method() {}
+        void method() { /* annotation target only */ }
     }
 
     static class FallbackService {
         @org.eclipse.microprofile.faulttolerance.Fallback(fallbackMethod = "recover")
-        void method() {}
-        void recover() {}
+        void method() { /* annotation target only */ }
+        void recover() { /* annotation target only */ }
     }
 
     static class AsyncService {
@@ -295,8 +294,8 @@ class ConfigResolverEnabledTest {
         @org.eclipse.microprofile.faulttolerance.CircuitBreaker
         @org.eclipse.microprofile.faulttolerance.Bulkhead
         @org.eclipse.microprofile.faulttolerance.Fallback(fallbackMethod = "recover")
-        void method() {}
-        void recover() {}
+        void method() { /* annotation target only */ }
+        void recover() { /* annotation target only */ }
     }
 
     /** Minimal mock for Config — supports only getOptionalValue(String, Class). */

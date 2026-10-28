@@ -73,7 +73,6 @@ class FallbackResolverTest {
 
     @Test
     void rejectsIncompatibleFallbackMethodReturnType() throws Exception {
-        InvalidMethodService service = new InvalidMethodService();
         Method guardedMethod = InvalidMethodService.class.getDeclaredMethod("guarded");
         Fallback fallback = guardedMethod.getAnnotation(Fallback.class);
 
@@ -91,9 +90,12 @@ class FallbackResolverTest {
         Method guardedMethod = MissingMethodService.class.getDeclaredMethod("guarded");
         Fallback fallback = guardedMethod.getAnnotation(Fallback.class);
 
+        Object[] noParameters = new Object[0];
+        IOException failure = new IOException("fail");
+
         assertThrows(
                 FaultToleranceDefinitionException.class,
-                () -> resolver.resolve(fallback, service, guardedMethod, new Object[0], new IOException("fail"))
+                () -> resolver.resolve(fallback, service, guardedMethod, noParameters, failure)
         );
     }
 
@@ -120,9 +122,12 @@ class FallbackResolverTest {
         Method guardedMethod = PrivateSuperclassService.class.getDeclaredMethod("guarded", String.class);
         Fallback fallback = guardedMethod.getAnnotation(Fallback.class);
 
+        Object[] parameters = {"delta"};
+        IOException failure = new IOException("fail");
+
         assertThrows(
                 FaultToleranceDefinitionException.class,
-                () -> resolver.resolve(fallback, service, guardedMethod, new Object[]{"delta"}, new IOException("fail"))
+                () -> resolver.resolve(fallback, service, guardedMethod, parameters, failure)
         );
     }
 
@@ -132,9 +137,12 @@ class FallbackResolverTest {
         Method guardedMethod = OutOfPackageService.class.getDeclaredMethod("guarded", String.class);
         Fallback fallback = guardedMethod.getAnnotation(Fallback.class);
 
+        Object[] parameters = {"epsilon"};
+        IOException failure = new IOException("fail");
+
         assertThrows(
                 FaultToleranceDefinitionException.class,
-                () -> resolver.resolve(fallback, service, guardedMethod, new Object[]{"epsilon"}, new IOException("fail"))
+                () -> resolver.resolve(fallback, service, guardedMethod, parameters, failure)
         );
     }
 

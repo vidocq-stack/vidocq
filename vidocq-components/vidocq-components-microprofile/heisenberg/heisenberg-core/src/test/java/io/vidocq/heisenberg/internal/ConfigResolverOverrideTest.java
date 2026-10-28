@@ -175,7 +175,7 @@ class ConfigResolverOverrideTest {
         FallbackConfig resolved = ConfigResolver.fallbackConfig(
                 method, method.getAnnotation(Fallback.class), new TestConfig());
 
-        // Spec defaults: applyOn = {Throwable.class}, skipOn = {}
+        // Spec defaults: applyOn holds only Throwable, skipOn is empty
         assertArrayEquals(new Class[] {Throwable.class}, resolved.applyOn());
         assertEquals(0, resolved.skipOn().length);
     }
@@ -234,18 +234,18 @@ class ConfigResolverOverrideTest {
     // --- Test services ---
 
     static class Service {
-        @Retry void retryMethod() {}
-        @Timeout void timeoutMethod() {}
-        @CircuitBreaker void cbMethod() {}
-        @Bulkhead void bulkheadMethod() {}
-        @Fallback(fallbackMethod = "recover") void fallbackMethod() {}
-        void recover() {}
+        @Retry void retryMethod() { /* annotation target only */ }
+        @Timeout void timeoutMethod() { /* annotation target only */ }
+        @CircuitBreaker void cbMethod() { /* annotation target only */ }
+        @Bulkhead void bulkheadMethod() { /* annotation target only */ }
+        @Fallback(fallbackMethod = "recover") void fallbackMethod() { /* annotation target only */ }
+        void recover() { /* annotation target only */ }
     }
 
     @Retry(maxRetries = 5)
     static class ClassLevelRetryService {
         @Retry(maxRetries = 1)
-        void serviceB() {}
+        void serviceB() { /* annotation target only */ }
     }
 }
 

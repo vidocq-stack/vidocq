@@ -44,7 +44,7 @@ class CircuitBreakerEngineTest {
     }
 
     @Test
-    void openStateThrowsCircuitBreakerOpenException() throws Exception {
+    void openStateThrowsCircuitBreakerOpenException() {
         var config = new CircuitBreakerConfig(20, 0.5, 5, ChronoUnit.SECONDS, 1,
                 new Class[]{Exception.class}, new Class[0]);
         var registry = new TestRegistry();
@@ -58,7 +58,7 @@ class CircuitBreakerEngineTest {
     }
 
     @Test
-    void failureRecordingWhenInClosed() throws Exception {
+    void failureRecordingWhenInClosed() {
         var config = new CircuitBreakerConfig(1, 0.5, 5, ChronoUnit.SECONDS, 1,
                 new Class[]{RuntimeException.class}, new Class[0]);
         var registry = new TestRegistry();

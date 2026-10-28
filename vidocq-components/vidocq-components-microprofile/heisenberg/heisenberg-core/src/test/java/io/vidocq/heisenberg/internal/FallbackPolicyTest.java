@@ -58,6 +58,10 @@ class FallbackPolicyTest {
         Method guardedMethod = PolicyService.class.getDeclaredMethod("guarded");
         Fallback fallback = guardedMethod.getAnnotation(Fallback.class);
 
+        FallbackConfig config = new FallbackConfig(fallback.applyOn(), fallback.skipOn(), fallback.fallbackMethod(),
+                fallback.value());
+        Object[] noParameters = new Object[0];
+
         IllegalArgumentException error = assertThrows(
                 IllegalArgumentException.class,
                 () -> FallbackPolicy.execute(
@@ -65,10 +69,10 @@ class FallbackPolicyTest {
                             throw new IllegalArgumentException("do not fallback");
                         },
                         fallback,
-                        new FallbackConfig(fallback.applyOn(), fallback.skipOn(), fallback.fallbackMethod(), fallback.value()),
+                        config,
                         service,
                         guardedMethod,
-                        new Object[0],
+                        noParameters,
                         resolver
                 )
         );
