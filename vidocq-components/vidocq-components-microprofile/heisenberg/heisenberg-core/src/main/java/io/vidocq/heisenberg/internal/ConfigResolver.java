@@ -304,10 +304,6 @@ public final class ConfigResolver {
                 .orElse(true);
     }
 
-    private static boolean isEnabled(Method method, String annotation) {
-        return isEnabled(method, method.getDeclaringClass(), annotation, loadConfig());
-    }
-
     private static boolean isEnabled(Method method, Class<?> beanClass, String annotation) {
         return isEnabled(method, beanClass, annotation, loadConfig());
     }
@@ -365,17 +361,9 @@ public final class ConfigResolver {
         }
     }
 
-    private static <A extends Annotation> java.util.Optional<Integer> getInt(Config config, Method method, Class<A> annotationType, String parameter) {
-        return getValue(config, method, method.getDeclaringClass(), annotationType, parameter, Integer.class);
-    }
-
     private static <A extends Annotation> java.util.Optional<Integer> getInt(
             Config config, Method method, Class<?> beanClass, Class<A> annotationType, String parameter) {
         return getValue(config, method, beanClass, annotationType, parameter, Integer.class);
-    }
-
-    private static <A extends Annotation> java.util.Optional<Long> getLong(Config config, Method method, Class<A> annotationType, String parameter) {
-        return getValue(config, method, method.getDeclaringClass(), annotationType, parameter, Long.class);
     }
 
     private static <A extends Annotation> java.util.Optional<Long> getLong(
@@ -383,32 +371,14 @@ public final class ConfigResolver {
         return getValue(config, method, beanClass, annotationType, parameter, Long.class);
     }
 
-    private static <A extends Annotation> java.util.Optional<Double> getDouble(Config config, Method method, Class<A> annotationType, String parameter) {
-        return getValue(config, method, method.getDeclaringClass(), annotationType, parameter, Double.class);
-    }
-
     private static <A extends Annotation> java.util.Optional<Double> getDouble(
             Config config, Method method, Class<?> beanClass, Class<A> annotationType, String parameter) {
         return getValue(config, method, beanClass, annotationType, parameter, Double.class);
     }
 
-    private static <A extends Annotation> java.util.Optional<ChronoUnit> getChronoUnit(Config config, Method method, Class<A> annotationType, String parameter) {
-        return getValue(config, method, method.getDeclaringClass(), annotationType, parameter, String.class).map(String::trim).map(ChronoUnit::valueOf);
-    }
-
     private static <A extends Annotation> java.util.Optional<ChronoUnit> getChronoUnit(
             Config config, Method method, Class<?> beanClass, Class<A> annotationType, String parameter) {
         return getValue(config, method, beanClass, annotationType, parameter, String.class).map(String::trim).map(ChronoUnit::valueOf);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <A extends Annotation> java.util.Optional<Class<? extends Throwable>[]> getThrowableArray(
-            Config config,
-            Method method,
-            Class<A> annotationType,
-            String parameter
-    ) {
-        return getThrowableArray(config, method, method.getDeclaringClass(), annotationType, parameter);
     }
 
     @SuppressWarnings("unchecked")
@@ -502,11 +472,6 @@ public final class ConfigResolver {
 
         keys.add(globalKey);
         return keys;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static java.util.Optional<Class<? extends FallbackHandler<?>>> getFallbackHandlerClass(Config config, Method method) {
-        return getFallbackHandlerClass(config, method, method.getDeclaringClass());
     }
 
     @SuppressWarnings("unchecked")
