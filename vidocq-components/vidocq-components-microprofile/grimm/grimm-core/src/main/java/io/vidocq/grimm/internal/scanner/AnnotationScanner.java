@@ -167,45 +167,60 @@ public final class AnnotationScanner {
         }
         AnnotationModelMappings.applyExtensions(info, infoAnnotation.extensions());
 
-        Contact contactAnnotation = infoAnnotation.contact();
-        if (!contactAnnotation.name().isEmpty()
-            || !contactAnnotation.url().isEmpty()
-            || !contactAnnotation.email().isEmpty()) {
-            org.eclipse.microprofile.openapi.models.info.Contact contact = OASFactory.createObject(
-                org.eclipse.microprofile.openapi.models.info.Contact.class
-            );
-            if (!contactAnnotation.name().isEmpty()) {
-                contact.setName(contactAnnotation.name());
-            }
-            if (!contactAnnotation.url().isEmpty()) {
-                contact.setUrl(contactAnnotation.url());
-            }
-            if (!contactAnnotation.email().isEmpty()) {
-                contact.setEmail(contactAnnotation.email());
-            }
-            AnnotationModelMappings.applyExtensions(contact, contactAnnotation.extensions());
+        var contact = toModelContact(infoAnnotation.contact());
+        if (contact != null) {
             info.setContact(contact);
         }
-
-        License licenseAnnotation = infoAnnotation.license();
-        if (!licenseAnnotation.name().isEmpty()
-            || !licenseAnnotation.url().isEmpty()
-            || !licenseAnnotation.identifier().isEmpty()) {
-            org.eclipse.microprofile.openapi.models.info.License license = OASFactory.createObject(
-                org.eclipse.microprofile.openapi.models.info.License.class
-            );
-            if (!licenseAnnotation.name().isEmpty()) {
-                license.setName(licenseAnnotation.name());
-            }
-            if (!licenseAnnotation.url().isEmpty()) {
-                license.setUrl(licenseAnnotation.url());
-            }
-            if (!licenseAnnotation.identifier().isEmpty()) {
-                license.setIdentifier(licenseAnnotation.identifier());
-            }
-            AnnotationModelMappings.applyExtensions(license, licenseAnnotation.extensions());
+        var license = toModelLicense(infoAnnotation.license());
+        if (license != null) {
             info.setLicense(license);
         }
+    }
+
+    /** The Contact Object of {@code contactAnnotation}, or {@code null} when it sets no field. */
+    private static org.eclipse.microprofile.openapi.models.info.Contact toModelContact(Contact contactAnnotation) {
+        if (contactAnnotation.name().isEmpty()
+            && contactAnnotation.url().isEmpty()
+            && contactAnnotation.email().isEmpty()) {
+            return null;
+        }
+        org.eclipse.microprofile.openapi.models.info.Contact contact = OASFactory.createObject(
+            org.eclipse.microprofile.openapi.models.info.Contact.class
+        );
+        if (!contactAnnotation.name().isEmpty()) {
+            contact.setName(contactAnnotation.name());
+        }
+        if (!contactAnnotation.url().isEmpty()) {
+            contact.setUrl(contactAnnotation.url());
+        }
+        if (!contactAnnotation.email().isEmpty()) {
+            contact.setEmail(contactAnnotation.email());
+        }
+        AnnotationModelMappings.applyExtensions(contact, contactAnnotation.extensions());
+        return contact;
+    }
+
+    /** The License Object of {@code licenseAnnotation}, or {@code null} when it sets no field. */
+    private static org.eclipse.microprofile.openapi.models.info.License toModelLicense(License licenseAnnotation) {
+        if (licenseAnnotation.name().isEmpty()
+            && licenseAnnotation.url().isEmpty()
+            && licenseAnnotation.identifier().isEmpty()) {
+            return null;
+        }
+        org.eclipse.microprofile.openapi.models.info.License license = OASFactory.createObject(
+            org.eclipse.microprofile.openapi.models.info.License.class
+        );
+        if (!licenseAnnotation.name().isEmpty()) {
+            license.setName(licenseAnnotation.name());
+        }
+        if (!licenseAnnotation.url().isEmpty()) {
+            license.setUrl(licenseAnnotation.url());
+        }
+        if (!licenseAnnotation.identifier().isEmpty()) {
+            license.setIdentifier(licenseAnnotation.identifier());
+        }
+        AnnotationModelMappings.applyExtensions(license, licenseAnnotation.extensions());
+        return license;
     }
 
     private void processTags(Class<?> clazz, OpenAPI openAPI) {
@@ -254,71 +269,53 @@ public final class AnnotationScanner {
     }
 
     private void addWebhooks(OpenAPI openAPI, org.eclipse.microprofile.openapi.annotations.PathItem[] webhooks) {
-        if (webhooks == null || webhooks.length == 0) {
+        if (webhooks == null) {
             return;
         }
         for (org.eclipse.microprofile.openapi.annotations.PathItem webhookAnnotation : webhooks) {
-            if (webhookAnnotation.name().isEmpty()) {
-                continue;
+            if (!webhookAnnotation.name().isEmpty()) {
+                openAPI.addWebhook(webhookAnnotation.name(), toWebhookPathItem(webhookAnnotation));
             }
-            PathItem webhookPathItem = OASFactory.createObject(PathItem.class);
-            if (!webhookAnnotation.ref().isEmpty()) {
-                webhookPathItem.setRef(webhookAnnotation.ref());
-            }
-            if (!webhookAnnotation.description().isEmpty()) {
-                webhookPathItem.setDescription(webhookAnnotation.description());
-            }
-            if (!webhookAnnotation.summary().isEmpty()) {
-                webhookPathItem.setSummary(webhookAnnotation.summary());
-            }
-            AnnotationModelMappings.applyExtensions(webhookPathItem, webhookAnnotation.extensions());
-            for (PathItemOperation operationAnnotation : webhookAnnotation.operations()) {
-                var operation = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Operation.class);
-                if (!operationAnnotation.summary().isEmpty()) {
-                    operation.setSummary(operationAnnotation.summary());
-                }
-                if (!operationAnnotation.description().isEmpty()) {
-                    operation.setDescription(operationAnnotation.description());
-                }
-                if (!operationAnnotation.operationId().isEmpty()) {
-                    operation.setOperationId(operationAnnotation.operationId());
-                }
-                for (APIResponse responseAnnotation : operationAnnotation.responses()) {
-                    if (operation.getResponses() == null) {
-                        operation.setResponses(OASFactory.createObject(org.eclipse.microprofile.openapi.models.responses.APIResponses.class));
-                    }
-                    String code = responseAnnotation.responseCode().isEmpty() ? "default" : responseAnnotation.responseCode();
-                    var modelResponse = OASFactory.createObject(org.eclipse.microprofile.openapi.models.responses.APIResponse.class);
-                    if (!responseAnnotation.description().isEmpty()) {
-                        modelResponse.setDescription(responseAnnotation.description());
-                    }
-                    if (!responseAnnotation.ref().isEmpty()) {
-                        modelResponse.setRef(responseAnnotation.ref());
-                    }
-                    operation.getResponses().addAPIResponse(code, modelResponse);
-                }
-                if (!operationAnnotation.requestBody().ref().isEmpty()) {
-                    var modelBody = OASFactory.createObject(org.eclipse.microprofile.openapi.models.parameters.RequestBody.class);
-                    modelBody.setRef(operationAnnotation.requestBody().ref());
-                    operation.setRequestBody(modelBody);
-                }
-                AnnotationModelMappings.applyExtensions(operation, operationAnnotation.extensions());
-                switch (operationAnnotation.method().toUpperCase()) {
-                    case "GET" -> webhookPathItem.setGET(operation);
-                    case "PUT" -> webhookPathItem.setPUT(operation);
-                    case "POST" -> webhookPathItem.setPOST(operation);
-                    case "DELETE" -> webhookPathItem.setDELETE(operation);
-                    case "PATCH" -> webhookPathItem.setPATCH(operation);
-                    case "HEAD" -> webhookPathItem.setHEAD(operation);
-                    case "OPTIONS" -> webhookPathItem.setOPTIONS(operation);
-                    case "TRACE" -> webhookPathItem.setTRACE(operation);
-                    default -> {
-                        // Ignore unsupported methods.
-                    }
-                }
-            }
-            openAPI.addWebhook(webhookAnnotation.name(), webhookPathItem);
         }
+    }
+
+    private PathItem toWebhookPathItem(org.eclipse.microprofile.openapi.annotations.PathItem webhookAnnotation) {
+        PathItem webhookPathItem = OASFactory.createObject(PathItem.class);
+        if (!webhookAnnotation.ref().isEmpty()) {
+            webhookPathItem.setRef(webhookAnnotation.ref());
+        }
+        if (!webhookAnnotation.description().isEmpty()) {
+            webhookPathItem.setDescription(webhookAnnotation.description());
+        }
+        if (!webhookAnnotation.summary().isEmpty()) {
+            webhookPathItem.setSummary(webhookAnnotation.summary());
+        }
+        AnnotationModelMappings.applyExtensions(webhookPathItem, webhookAnnotation.extensions());
+        for (PathItemOperation operationAnnotation : webhookAnnotation.operations()) {
+            assignPathItemOperation(webhookPathItem, operationAnnotation.method(), toWebhookOperation(operationAnnotation));
+        }
+        return webhookPathItem;
+    }
+
+    private static org.eclipse.microprofile.openapi.models.Operation toWebhookOperation(PathItemOperation operationAnnotation) {
+        var operation = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Operation.class);
+        if (!operationAnnotation.summary().isEmpty()) {
+            operation.setSummary(operationAnnotation.summary());
+        }
+        if (!operationAnnotation.description().isEmpty()) {
+            operation.setDescription(operationAnnotation.description());
+        }
+        if (!operationAnnotation.operationId().isEmpty()) {
+            operation.setOperationId(operationAnnotation.operationId());
+        }
+        addInlineResponses(operation, operationAnnotation.responses());
+        if (!operationAnnotation.requestBody().ref().isEmpty()) {
+            var modelBody = OASFactory.createObject(org.eclipse.microprofile.openapi.models.parameters.RequestBody.class);
+            modelBody.setRef(operationAnnotation.requestBody().ref());
+            operation.setRequestBody(modelBody);
+        }
+        AnnotationModelMappings.applyExtensions(operation, operationAnnotation.extensions());
+        return operation;
     }
 
     private boolean containsTag(OpenAPI openAPI, String name) {
@@ -332,37 +329,43 @@ public final class AnnotationScanner {
     private void addServers(OpenAPI openAPI, Server[] serverAnnotations) {
         for (Server serverAnnotation : serverAnnotations) {
             String url = serverAnnotation.url();
-            if (url.isEmpty() || containsServer(openAPI, url)) {
-                continue;
+            if (!url.isEmpty() && !containsServer(openAPI, url)) {
+                openAPI.addServer(toModelServer(serverAnnotation));
             }
-            org.eclipse.microprofile.openapi.models.servers.Server server = OASFactory.createObject(
-                org.eclipse.microprofile.openapi.models.servers.Server.class
-            );
-            server.setUrl(url);
-            if (!serverAnnotation.description().isEmpty()) {
-                server.setDescription(serverAnnotation.description());
-            }
-            AnnotationModelMappings.applyExtensions(server, serverAnnotation.extensions());
-            for (ServerVariable variableAnnotation : serverAnnotation.variables()) {
-                String variableName = variableAnnotation.name();
-                if (variableName.isEmpty()) {
-                    continue;
-                }
-                var variable = OASFactory.createObject(org.eclipse.microprofile.openapi.models.servers.ServerVariable.class);
-                if (!variableAnnotation.description().isEmpty()) {
-                    variable.setDescription(variableAnnotation.description());
-                }
-                if (!variableAnnotation.defaultValue().isEmpty()) {
-                    variable.setDefaultValue(variableAnnotation.defaultValue());
-                }
-                if (variableAnnotation.enumeration().length > 0) {
-                    variable.setEnumeration(List.of(variableAnnotation.enumeration()));
-                }
-                AnnotationModelMappings.applyExtensions(variable, variableAnnotation.extensions());
-                server.addVariable(variableName, variable);
-            }
-            openAPI.addServer(server);
         }
+    }
+
+    private static org.eclipse.microprofile.openapi.models.servers.Server toModelServer(Server serverAnnotation) {
+        org.eclipse.microprofile.openapi.models.servers.Server server = OASFactory.createObject(
+            org.eclipse.microprofile.openapi.models.servers.Server.class
+        );
+        server.setUrl(serverAnnotation.url());
+        if (!serverAnnotation.description().isEmpty()) {
+            server.setDescription(serverAnnotation.description());
+        }
+        AnnotationModelMappings.applyExtensions(server, serverAnnotation.extensions());
+        for (ServerVariable variableAnnotation : serverAnnotation.variables()) {
+            String variableName = variableAnnotation.name();
+            if (!variableName.isEmpty()) {
+                server.addVariable(variableName, toModelServerVariable(variableAnnotation));
+            }
+        }
+        return server;
+    }
+
+    private static org.eclipse.microprofile.openapi.models.servers.ServerVariable toModelServerVariable(ServerVariable variableAnnotation) {
+        var variable = OASFactory.createObject(org.eclipse.microprofile.openapi.models.servers.ServerVariable.class);
+        if (!variableAnnotation.description().isEmpty()) {
+            variable.setDescription(variableAnnotation.description());
+        }
+        if (!variableAnnotation.defaultValue().isEmpty()) {
+            variable.setDefaultValue(variableAnnotation.defaultValue());
+        }
+        if (variableAnnotation.enumeration().length > 0) {
+            variable.setEnumeration(List.of(variableAnnotation.enumeration()));
+        }
+        AnnotationModelMappings.applyExtensions(variable, variableAnnotation.extensions());
+        return variable;
     }
 
     private void addComponents(OpenAPI openAPI, Components componentsAnnotation) {
@@ -396,34 +399,38 @@ public final class AnnotationScanner {
         if (schemas == null || schemas.length == 0 || schemaGenerator == null) {
             return;
         }
-        org.eclipse.microprofile.openapi.models.Components components = openAPI.getComponents();
-        if (components == null) {
-            components = getOrCreateComponents(openAPI);
-        }
+        org.eclipse.microprofile.openapi.models.Components components = getOrCreateComponents(openAPI);
         for (org.eclipse.microprofile.openapi.annotations.media.Schema schemaAnnotation : schemas) {
-            if (schemaAnnotation.hidden()) {
-                continue;
+            String schemaName = componentSchemaName(schemaAnnotation);
+            if (!schemaAnnotation.hidden() && schemaName != null && !schemaName.isEmpty()) {
+                components.addSchema(schemaName, toComponentSchema(schemaAnnotation));
             }
-            Class<?> implementation = schemaAnnotation.implementation();
-            String schemaName = !schemaAnnotation.name().isEmpty()
-                    ? schemaAnnotation.name()
-                    : (implementation != Void.class ? implementation.getSimpleName() : null);
-            if (schemaName == null || schemaName.isEmpty()) {
-                continue;
-            }
-            org.eclipse.microprofile.openapi.models.media.Schema modelSchema;
-            if (!schemaAnnotation.ref().isEmpty()) {
-                modelSchema = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Schema.class);
-                modelSchema.setRef(schemaAnnotation.ref());
-            } else if (implementation != Void.class) {
-                modelSchema = schemaGenerator.generate(implementation, schemaAnnotation);
-            } else {
-                // Named scalar/object schemas declared in @OpenAPIDefinition.components.schemas
-                // still carry schema keywords (type, format, description, ...).
-                modelSchema = schemaGenerator.generate(Object.class, schemaAnnotation);
-            }
-            components.addSchema(schemaName, modelSchema);
         }
+    }
+
+    /** The explicit name, else the simple name of the implementation, else {@code null}. */
+    private static String componentSchemaName(org.eclipse.microprofile.openapi.annotations.media.Schema schemaAnnotation) {
+        if (!schemaAnnotation.name().isEmpty()) {
+            return schemaAnnotation.name();
+        }
+        Class<?> implementation = schemaAnnotation.implementation();
+        return implementation != Void.class ? implementation.getSimpleName() : null;
+    }
+
+    private org.eclipse.microprofile.openapi.models.media.Schema toComponentSchema(
+            org.eclipse.microprofile.openapi.annotations.media.Schema schemaAnnotation) {
+        Class<?> implementation = schemaAnnotation.implementation();
+        if (!schemaAnnotation.ref().isEmpty()) {
+            var modelSchema = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Schema.class);
+            modelSchema.setRef(schemaAnnotation.ref());
+            return modelSchema;
+        }
+        if (implementation != Void.class) {
+            return schemaGenerator.generate(implementation, schemaAnnotation);
+        }
+        // Named scalar/object schemas declared in @OpenAPIDefinition.components.schemas
+        // still carry schema keywords (type, format, description, ...).
+        return schemaGenerator.generate(Object.class, schemaAnnotation);
     }
 
     @SuppressWarnings("removal")
@@ -467,35 +474,56 @@ public final class AnnotationScanner {
         }
         var components = getOrCreateComponents(openAPI);
         for (APIResponse responseAnnotation : responses) {
-            if (responseAnnotation.name().isEmpty()) {
-                continue;
+            if (!responseAnnotation.name().isEmpty()) {
+                components.addResponse(responseAnnotation.name(), toComponentResponse(responseAnnotation));
             }
-            var modelResponse = OASFactory.createObject(org.eclipse.microprofile.openapi.models.responses.APIResponse.class);
-            if (!responseAnnotation.description().isEmpty()) {
-                modelResponse.setDescription(responseAnnotation.description());
-            }
-            if (!responseAnnotation.ref().isEmpty()) {
-                modelResponse.setRef(responseAnnotation.ref());
-            }
-            if (responseAnnotation.content().length > 0) {
-                var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
-                for (Content contentAnnotation : responseAnnotation.content()) {
-                    String mediaTypeName = contentAnnotation.mediaType().isEmpty() ? "*/*" : contentAnnotation.mediaType();
-                    var mediaType = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.MediaType.class);
-                    if (schemaGenerator != null && hasSchemaContent(contentAnnotation.schema())) {
-                        mediaType.setSchema(schemaGenerator.generate(Object.class, contentAnnotation.schema()));
-                    }
-                    if (!contentAnnotation.example().isEmpty()) {
-                        mediaType.setExample(contentAnnotation.example());
-                    }
-                    AnnotationModelMappings.applyExtensions(mediaType, contentAnnotation.extensions());
-                    content.addMediaType(mediaTypeName, mediaType);
-                }
-                modelResponse.setContent(content);
-            }
-            AnnotationModelMappings.applyExtensions(modelResponse, responseAnnotation.extensions());
-            components.addResponse(responseAnnotation.name(), modelResponse);
         }
+    }
+
+    private org.eclipse.microprofile.openapi.models.responses.APIResponse toComponentResponse(APIResponse responseAnnotation) {
+        var modelResponse = OASFactory.createObject(org.eclipse.microprofile.openapi.models.responses.APIResponse.class);
+        if (!responseAnnotation.description().isEmpty()) {
+            modelResponse.setDescription(responseAnnotation.description());
+        }
+        if (!responseAnnotation.ref().isEmpty()) {
+            modelResponse.setRef(responseAnnotation.ref());
+        }
+        if (responseAnnotation.content().length > 0) {
+            modelResponse.setContent(toComponentContent(responseAnnotation.content(), true));
+        }
+        AnnotationModelMappings.applyExtensions(modelResponse, responseAnnotation.extensions());
+        return modelResponse;
+    }
+
+    /**
+     * The Content Object of a component: each media type with its schema and example, and with its
+     * extensions when {@code withExtensions}.
+     */
+    private org.eclipse.microprofile.openapi.models.media.Content toComponentContent(Content[] contentAnnotations, boolean withExtensions) {
+        var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
+        for (Content contentAnnotation : contentAnnotations) {
+            var mediaType = toComponentMediaType(contentAnnotation);
+            if (withExtensions) {
+                AnnotationModelMappings.applyExtensions(mediaType, contentAnnotation.extensions());
+            }
+            content.addMediaType(mediaTypeName(contentAnnotation), mediaType);
+        }
+        return content;
+    }
+
+    private org.eclipse.microprofile.openapi.models.media.MediaType toComponentMediaType(Content contentAnnotation) {
+        var mediaType = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.MediaType.class);
+        if (schemaGenerator != null && hasSchemaContent(contentAnnotation.schema())) {
+            mediaType.setSchema(schemaGenerator.generate(Object.class, contentAnnotation.schema()));
+        }
+        if (!contentAnnotation.example().isEmpty()) {
+            mediaType.setExample(contentAnnotation.example());
+        }
+        return mediaType;
+    }
+
+    private static String mediaTypeName(Content contentAnnotation) {
+        return contentAnnotation.mediaType().isEmpty() ? "*/*" : contentAnnotation.mediaType();
     }
 
     private void addComponentParameters(OpenAPI openAPI, Parameter[] parameters) {
@@ -504,41 +532,32 @@ public final class AnnotationScanner {
         }
         var components = getOrCreateComponents(openAPI);
         for (Parameter parameterAnnotation : parameters) {
-            if (parameterAnnotation.name().isEmpty()) {
-                continue;
+            if (!parameterAnnotation.name().isEmpty()) {
+                components.addParameter(parameterAnnotation.name(), toComponentParameter(parameterAnnotation));
             }
-            var parameter = OASFactory.createObject(org.eclipse.microprofile.openapi.models.parameters.Parameter.class);
-            parameter.setName(parameterAnnotation.name());
-            if (!parameterAnnotation.ref().isEmpty()) {
-                parameter.setRef(parameterAnnotation.ref());
-            }
-            if (!parameterAnnotation.description().isEmpty()) {
-                parameter.setDescription(parameterAnnotation.description());
-            }
-            if (parameterAnnotation.required()) {
-                parameter.setRequired(Boolean.TRUE);
-            }
-            if (schemaGenerator != null && hasSchemaContent(parameterAnnotation.schema())) {
-                parameter.setSchema(schemaGenerator.generate(Object.class, parameterAnnotation.schema()));
-            }
-            if (parameterAnnotation.content().length > 0) {
-                var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
-                for (Content contentAnnotation : parameterAnnotation.content()) {
-                    String mediaTypeName = contentAnnotation.mediaType().isEmpty() ? "*/*" : contentAnnotation.mediaType();
-                    var mediaType = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.MediaType.class);
-                    if (schemaGenerator != null && hasSchemaContent(contentAnnotation.schema())) {
-                        mediaType.setSchema(schemaGenerator.generate(Object.class, contentAnnotation.schema()));
-                    }
-                    if (!contentAnnotation.example().isEmpty()) {
-                        mediaType.setExample(contentAnnotation.example());
-                    }
-                    content.addMediaType(mediaTypeName, mediaType);
-                }
-                parameter.setContent(content);
-            }
-            AnnotationModelMappings.applyExtensions(parameter, parameterAnnotation.extensions());
-            components.addParameter(parameterAnnotation.name(), parameter);
         }
+    }
+
+    private org.eclipse.microprofile.openapi.models.parameters.Parameter toComponentParameter(Parameter parameterAnnotation) {
+        var parameter = OASFactory.createObject(org.eclipse.microprofile.openapi.models.parameters.Parameter.class);
+        parameter.setName(parameterAnnotation.name());
+        if (!parameterAnnotation.ref().isEmpty()) {
+            parameter.setRef(parameterAnnotation.ref());
+        }
+        if (!parameterAnnotation.description().isEmpty()) {
+            parameter.setDescription(parameterAnnotation.description());
+        }
+        if (parameterAnnotation.required()) {
+            parameter.setRequired(Boolean.TRUE);
+        }
+        if (schemaGenerator != null && hasSchemaContent(parameterAnnotation.schema())) {
+            parameter.setSchema(schemaGenerator.generate(Object.class, parameterAnnotation.schema()));
+        }
+        if (parameterAnnotation.content().length > 0) {
+            parameter.setContent(toComponentContent(parameterAnnotation.content(), false));
+        }
+        AnnotationModelMappings.applyExtensions(parameter, parameterAnnotation.extensions());
+        return parameter;
     }
 
     private void addComponentExamples(OpenAPI openAPI, ExampleObject[] examples) {
@@ -561,58 +580,62 @@ public final class AnnotationScanner {
         }
         var components = getOrCreateComponents(openAPI);
         for (RequestBody requestBodyAnnotation : requestBodies) {
-            if (requestBodyAnnotation.name().isEmpty()) {
-                continue;
+            if (!requestBodyAnnotation.name().isEmpty()) {
+                components.addRequestBody(requestBodyAnnotation.name(), toComponentRequestBody(requestBodyAnnotation));
             }
-            var requestBody = OASFactory.createObject(org.eclipse.microprofile.openapi.models.parameters.RequestBody.class);
-            if (!requestBodyAnnotation.description().isEmpty()) {
-                requestBody.setDescription(requestBodyAnnotation.description());
-            }
-            if (requestBodyAnnotation.required()) {
-                requestBody.setRequired(Boolean.TRUE);
-            } else if (requestBodyAnnotation.content().length > 0) {
-                requestBody.setRequired(Boolean.FALSE);
-            }
-            if (!requestBodyAnnotation.ref().isEmpty()) {
-                requestBody.setRef(requestBodyAnnotation.ref());
-            }
-            if (requestBodyAnnotation.content().length > 0) {
-                var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
-                for (Content contentAnnotation : requestBodyAnnotation.content()) {
-                    String mediaTypeName = contentAnnotation.mediaType().isEmpty() ? "*/*" : contentAnnotation.mediaType();
-                    var mediaType = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.MediaType.class);
-                    if (schemaGenerator != null && hasSchemaContent(contentAnnotation.schema())) {
-                        mediaType.setSchema(schemaGenerator.generate(Object.class, contentAnnotation.schema()));
-                    }
-                    if (!contentAnnotation.example().isEmpty()) {
-                        mediaType.setExample(contentAnnotation.example());
-                    }
-                    for (Encoding encodingAnnotation : contentAnnotation.encoding()) {
-                        if (encodingAnnotation.name().isEmpty()) {
-                            continue;
-                        }
-                        var encoding = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Encoding.class);
-                        if (!encodingAnnotation.contentType().isEmpty()) {
-                            encoding.setContentType(encodingAnnotation.contentType());
-                        }
-                        if (encodingAnnotation.explode()) {
-                            encoding.setExplode(Boolean.TRUE);
-                        }
-                        for (Header headerAnnotation : encodingAnnotation.headers()) {
-                            String headerName = resolveHeaderName(headerAnnotation);
-                            if (headerName != null && !headerName.isEmpty()) {
-                                encoding.addHeader(headerName, toModelHeader(headerAnnotation));
-                            }
-                        }
-                        mediaType.addEncoding(encodingAnnotation.name(), encoding);
-                    }
-                    content.addMediaType(mediaTypeName, mediaType);
-                }
-                requestBody.setContent(content);
-            }
-            AnnotationModelMappings.applyExtensions(requestBody, requestBodyAnnotation.extensions());
-            components.addRequestBody(requestBodyAnnotation.name(), requestBody);
         }
+    }
+
+    private org.eclipse.microprofile.openapi.models.parameters.RequestBody toComponentRequestBody(RequestBody requestBodyAnnotation) {
+        var requestBody = OASFactory.createObject(org.eclipse.microprofile.openapi.models.parameters.RequestBody.class);
+        if (!requestBodyAnnotation.description().isEmpty()) {
+            requestBody.setDescription(requestBodyAnnotation.description());
+        }
+        if (requestBodyAnnotation.required()) {
+            requestBody.setRequired(Boolean.TRUE);
+        } else if (requestBodyAnnotation.content().length > 0) {
+            requestBody.setRequired(Boolean.FALSE);
+        }
+        if (!requestBodyAnnotation.ref().isEmpty()) {
+            requestBody.setRef(requestBodyAnnotation.ref());
+        }
+        if (requestBodyAnnotation.content().length > 0) {
+            requestBody.setContent(toRequestBodyContent(requestBodyAnnotation.content()));
+        }
+        AnnotationModelMappings.applyExtensions(requestBody, requestBodyAnnotation.extensions());
+        return requestBody;
+    }
+
+    /** The Content Object of a component request body: each media type with its schema, example and encodings. */
+    private org.eclipse.microprofile.openapi.models.media.Content toRequestBodyContent(Content[] contentAnnotations) {
+        var content = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Content.class);
+        for (Content contentAnnotation : contentAnnotations) {
+            var mediaType = toComponentMediaType(contentAnnotation);
+            for (Encoding encodingAnnotation : contentAnnotation.encoding()) {
+                if (!encodingAnnotation.name().isEmpty()) {
+                    mediaType.addEncoding(encodingAnnotation.name(), toModelEncoding(encodingAnnotation));
+                }
+            }
+            content.addMediaType(mediaTypeName(contentAnnotation), mediaType);
+        }
+        return content;
+    }
+
+    private org.eclipse.microprofile.openapi.models.media.Encoding toModelEncoding(Encoding encodingAnnotation) {
+        var encoding = OASFactory.createObject(org.eclipse.microprofile.openapi.models.media.Encoding.class);
+        if (!encodingAnnotation.contentType().isEmpty()) {
+            encoding.setContentType(encodingAnnotation.contentType());
+        }
+        if (encodingAnnotation.explode()) {
+            encoding.setExplode(Boolean.TRUE);
+        }
+        for (Header headerAnnotation : encodingAnnotation.headers()) {
+            String headerName = resolveHeaderName(headerAnnotation);
+            if (headerName != null && !headerName.isEmpty()) {
+                encoding.addHeader(headerName, toModelHeader(headerAnnotation));
+            }
+        }
+        return encoding;
     }
 
     private void addComponentSecuritySchemes(OpenAPI openAPI, SecurityScheme[] schemes) {
@@ -621,39 +644,43 @@ public final class AnnotationScanner {
         }
         var components = getOrCreateComponents(openAPI);
         for (SecurityScheme schemeAnnotation : schemes) {
-            if (schemeAnnotation.securitySchemeName().isEmpty()) {
-                continue;
+            if (!schemeAnnotation.securitySchemeName().isEmpty()) {
+                components.addSecurityScheme(schemeAnnotation.securitySchemeName(),
+                        toComponentSecurityScheme(schemeAnnotation));
             }
-            var scheme = OASFactory.createObject(org.eclipse.microprofile.openapi.models.security.SecurityScheme.class);
-            if (!schemeAnnotation.ref().isEmpty()) {
-                scheme.setRef(schemeAnnotation.ref());
-            }
-            if (!schemeAnnotation.description().isEmpty()) {
-                scheme.setDescription(schemeAnnotation.description());
-            }
-            if (!schemeAnnotation.apiKeyName().isEmpty()) {
-                scheme.setName(schemeAnnotation.apiKeyName());
-            }
-            if (!schemeAnnotation.scheme().isEmpty()) {
-                scheme.setScheme(schemeAnnotation.scheme());
-            }
-            if (schemeAnnotation.type() != org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeType.DEFAULT) {
-                try {
-                    scheme.setType(org.eclipse.microprofile.openapi.models.security.SecurityScheme.Type.valueOf(schemeAnnotation.type().name()));
-                } catch (IllegalArgumentException ignored) {
-                    // Ignore incompatible enum values.
-                }
-            }
-            if (schemeAnnotation.in() != org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeIn.DEFAULT) {
-                try {
-                    scheme.setIn(org.eclipse.microprofile.openapi.models.security.SecurityScheme.In.valueOf(schemeAnnotation.in().name()));
-                } catch (IllegalArgumentException ignored) {
-                    // Ignore incompatible enum values.
-                }
-            }
-            AnnotationModelMappings.applyExtensions(scheme, schemeAnnotation.extensions());
-            components.addSecurityScheme(schemeAnnotation.securitySchemeName(), scheme);
         }
+    }
+
+    private static org.eclipse.microprofile.openapi.models.security.SecurityScheme toComponentSecurityScheme(SecurityScheme schemeAnnotation) {
+        var scheme = OASFactory.createObject(org.eclipse.microprofile.openapi.models.security.SecurityScheme.class);
+        if (!schemeAnnotation.ref().isEmpty()) {
+            scheme.setRef(schemeAnnotation.ref());
+        }
+        if (!schemeAnnotation.description().isEmpty()) {
+            scheme.setDescription(schemeAnnotation.description());
+        }
+        if (!schemeAnnotation.apiKeyName().isEmpty()) {
+            scheme.setName(schemeAnnotation.apiKeyName());
+        }
+        if (!schemeAnnotation.scheme().isEmpty()) {
+            scheme.setScheme(schemeAnnotation.scheme());
+        }
+        if (schemeAnnotation.type() != org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeType.DEFAULT) {
+            try {
+                scheme.setType(org.eclipse.microprofile.openapi.models.security.SecurityScheme.Type.valueOf(schemeAnnotation.type().name()));
+            } catch (IllegalArgumentException _) {
+                // Ignore incompatible enum values.
+            }
+        }
+        if (schemeAnnotation.in() != org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeIn.DEFAULT) {
+            try {
+                scheme.setIn(org.eclipse.microprofile.openapi.models.security.SecurityScheme.In.valueOf(schemeAnnotation.in().name()));
+            } catch (IllegalArgumentException _) {
+                // Ignore incompatible enum values.
+            }
+        }
+        AnnotationModelMappings.applyExtensions(scheme, schemeAnnotation.extensions());
+        return scheme;
     }
 
     private void addComponentLinks(OpenAPI openAPI, Link[] links) {
@@ -662,27 +689,30 @@ public final class AnnotationScanner {
         }
         var components = getOrCreateComponents(openAPI);
         for (Link linkAnnotation : links) {
-            if (linkAnnotation.name().isEmpty()) {
-                continue;
+            if (!linkAnnotation.name().isEmpty()) {
+                components.addLink(linkAnnotation.name(), toComponentLink(linkAnnotation));
             }
-            var link = OASFactory.createObject(org.eclipse.microprofile.openapi.models.links.Link.class);
-            if (!linkAnnotation.ref().isEmpty()) {
-                link.setRef(linkAnnotation.ref());
-            }
-            if (!linkAnnotation.description().isEmpty()) {
-                link.setDescription(linkAnnotation.description());
-            }
-            if (!linkAnnotation.operationId().isEmpty()) {
-                link.setOperationId(linkAnnotation.operationId());
-            }
-            for (LinkParameter parameter : linkAnnotation.parameters()) {
-                if (!parameter.name().isEmpty() && !parameter.expression().isEmpty()) {
-                    link.addParameter(parameter.name(), parameter.expression());
-                }
-            }
-            AnnotationModelMappings.applyExtensions(link, linkAnnotation.extensions());
-            components.addLink(linkAnnotation.name(), link);
         }
+    }
+
+    private static org.eclipse.microprofile.openapi.models.links.Link toComponentLink(Link linkAnnotation) {
+        var link = OASFactory.createObject(org.eclipse.microprofile.openapi.models.links.Link.class);
+        if (!linkAnnotation.ref().isEmpty()) {
+            link.setRef(linkAnnotation.ref());
+        }
+        if (!linkAnnotation.description().isEmpty()) {
+            link.setDescription(linkAnnotation.description());
+        }
+        if (!linkAnnotation.operationId().isEmpty()) {
+            link.setOperationId(linkAnnotation.operationId());
+        }
+        for (LinkParameter parameter : linkAnnotation.parameters()) {
+            if (!parameter.name().isEmpty() && !parameter.expression().isEmpty()) {
+                link.addParameter(parameter.name(), parameter.expression());
+            }
+        }
+        AnnotationModelMappings.applyExtensions(link, linkAnnotation.extensions());
+        return link;
     }
 
     private void addComponentCallbacks(OpenAPI openAPI, Callback[] callbacks) {
@@ -691,48 +721,44 @@ public final class AnnotationScanner {
         }
         var components = getOrCreateComponents(openAPI);
         for (Callback callbackAnnotation : callbacks) {
-            if (callbackAnnotation.name().isEmpty()) {
-                continue;
+            if (!callbackAnnotation.name().isEmpty()) {
+                components.addCallback(callbackAnnotation.name(), toComponentCallback(callbackAnnotation));
             }
-            var callback = OASFactory.createObject(org.eclipse.microprofile.openapi.models.callbacks.Callback.class);
-            if (!callbackAnnotation.ref().isEmpty()) {
-                callback.setRef(callbackAnnotation.ref());
-            }
-            if (!callbackAnnotation.callbackUrlExpression().isEmpty() && callbackAnnotation.operations().length > 0) {
-                var pathItem = OASFactory.createObject(PathItem.class);
-                for (CallbackOperation operationAnnotation : callbackAnnotation.operations()) {
-                    var operation = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Operation.class);
-                    if (!operationAnnotation.summary().isEmpty()) {
-                        operation.setSummary(operationAnnotation.summary());
-                    }
-                    if (!operationAnnotation.description().isEmpty()) {
-                        operation.setDescription(operationAnnotation.description());
-                    }
-                    for (APIResponse responseAnnotation : operationAnnotation.responses()) {
-                        if (operation.getResponses() == null) {
-                            operation.setResponses(OASFactory.createObject(org.eclipse.microprofile.openapi.models.responses.APIResponses.class));
-                        }
-                        String code = responseAnnotation.responseCode().isEmpty() ? "default" : responseAnnotation.responseCode();
-                        var response = OASFactory.createObject(org.eclipse.microprofile.openapi.models.responses.APIResponse.class);
-                        if (!responseAnnotation.description().isEmpty()) {
-                            response.setDescription(responseAnnotation.description());
-                        }
-                        if (!responseAnnotation.ref().isEmpty()) {
-                            response.setRef(responseAnnotation.ref());
-                        }
-                        operation.getResponses().addAPIResponse(code, response);
-                    }
-                    assignPathItemOperation(pathItem, operationAnnotation.method(), operation);
-                }
-                callback.addPathItem(callbackAnnotation.callbackUrlExpression(), pathItem);
-            } else if (!callbackAnnotation.callbackUrlExpression().isEmpty() && !callbackAnnotation.pathItemRef().isEmpty()) {
-                var pathItem = OASFactory.createObject(PathItem.class);
-                pathItem.setRef(callbackAnnotation.pathItemRef());
-                callback.addPathItem(callbackAnnotation.callbackUrlExpression(), pathItem);
-            }
-            AnnotationModelMappings.applyExtensions(callback, callbackAnnotation.extensions());
-            components.addCallback(callbackAnnotation.name(), callback);
         }
+    }
+
+    private org.eclipse.microprofile.openapi.models.callbacks.Callback toComponentCallback(Callback callbackAnnotation) {
+        var callback = OASFactory.createObject(org.eclipse.microprofile.openapi.models.callbacks.Callback.class);
+        if (!callbackAnnotation.ref().isEmpty()) {
+            callback.setRef(callbackAnnotation.ref());
+        }
+        String expression = callbackAnnotation.callbackUrlExpression();
+        if (!expression.isEmpty() && callbackAnnotation.operations().length > 0) {
+            callback.addPathItem(expression, toCallbackPathItem(callbackAnnotation.operations()));
+        } else if (!expression.isEmpty() && !callbackAnnotation.pathItemRef().isEmpty()) {
+            var pathItem = OASFactory.createObject(PathItem.class);
+            pathItem.setRef(callbackAnnotation.pathItemRef());
+            callback.addPathItem(expression, pathItem);
+        }
+        AnnotationModelMappings.applyExtensions(callback, callbackAnnotation.extensions());
+        return callback;
+    }
+
+    /** The Path Item Object of the operations of a callback: summary, description and responses. */
+    private PathItem toCallbackPathItem(CallbackOperation[] operationAnnotations) {
+        var pathItem = OASFactory.createObject(PathItem.class);
+        for (CallbackOperation operationAnnotation : operationAnnotations) {
+            var operation = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Operation.class);
+            if (!operationAnnotation.summary().isEmpty()) {
+                operation.setSummary(operationAnnotation.summary());
+            }
+            if (!operationAnnotation.description().isEmpty()) {
+                operation.setDescription(operationAnnotation.description());
+            }
+            addInlineResponses(operation, operationAnnotation.responses());
+            assignPathItemOperation(pathItem, operationAnnotation.method(), operation);
+        }
+        return pathItem;
     }
 
     private void addComponentPathItems(OpenAPI openAPI, org.eclipse.microprofile.openapi.annotations.PathItem[] pathItems) {
@@ -955,19 +981,8 @@ public final class AnnotationScanner {
             callback.setRef(callbackAnnotation.ref());
         }
         if (!callbackAnnotation.callbackUrlExpression().isEmpty() && callbackAnnotation.operations().length > 0) {
-            var callbackPathItem = OASFactory.createObject(PathItem.class);
-            for (CallbackOperation callbackOperationAnnotation : callbackAnnotation.operations()) {
-                var callbackOperation = OASFactory.createObject(org.eclipse.microprofile.openapi.models.Operation.class);
-                if (!callbackOperationAnnotation.summary().isEmpty()) {
-                    callbackOperation.setSummary(callbackOperationAnnotation.summary());
-                }
-                if (!callbackOperationAnnotation.description().isEmpty()) {
-                    callbackOperation.setDescription(callbackOperationAnnotation.description());
-                }
-                addInlineResponses(callbackOperation, callbackOperationAnnotation.responses());
-                assignPathItemOperation(callbackPathItem, callbackOperationAnnotation.method(), callbackOperation);
-            }
-            callback.addPathItem(callbackAnnotation.callbackUrlExpression(), callbackPathItem);
+            callback.addPathItem(callbackAnnotation.callbackUrlExpression(),
+                    toCallbackPathItem(callbackAnnotation.operations()));
         }
         AnnotationModelMappings.applyExtensions(callback, callbackAnnotation.extensions());
         return callback;
