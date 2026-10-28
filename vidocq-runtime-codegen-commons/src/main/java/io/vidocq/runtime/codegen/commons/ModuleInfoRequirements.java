@@ -71,23 +71,7 @@ public final class ModuleInfoRequirements {
             switch (directive.getKind()) {
                 case REQUIRES -> requiresDeclared.add(
                         ((RequiresDirective) directive).getDependency().getQualifiedName().toString());
-                case OPENS -> {
-                    OpensDirective opens = (OpensDirective) directive;
-                    String pkg = opens.getPackage().getQualifiedName().toString();
-                    Set<String> targets = opens.getTargetModules() == null
-                            ? Set.of()
-                            : opens.getTargetModules().stream()
-                                    .map(m -> m.getQualifiedName().toString())
-                                    .collect(Collectors.toSet());
-                    opensDeclared.merge(pkg, new HashSet<>(targets), (a, b) -> {
-                        // Two opens of the same package: an unqualified one (empty) always wins.
-                        if (a.isEmpty() || b.isEmpty()) {
-                            return Set.of();
-                        }
-                        a.addAll(b);
-                        return a;
-                    });
-                }
+                case OPENS -> recordOpens((OpensDirective) directive, opensDeclared);
                 default -> {
                     // exports / uses / provides are not part of the requirement model.
                 }
@@ -100,6 +84,24 @@ public final class ModuleInfoRequirements {
             }
         }
         return unmet;
+    }
+
+    /** Records {@code opens} in {@code opensDeclared}: package -> target modules, empty when unqualified. */
+    private static void recordOpens(OpensDirective opens, Map<String, Set<String>> opensDeclared) {
+        String pkg = opens.getPackage().getQualifiedName().toString();
+        Set<String> targets = opens.getTargetModules() == null
+                ? Set.of()
+                : opens.getTargetModules().stream()
+                        .map(m -> m.getQualifiedName().toString())
+                        .collect(Collectors.toSet());
+        opensDeclared.merge(pkg, new HashSet<>(targets), (a, b) -> {
+            // Two opens of the same package: an unqualified one (empty) always wins.
+            if (a.isEmpty() || b.isEmpty()) {
+                return Set.of();
+            }
+            a.addAll(b);
+            return a;
+        });
     }
 
     /**

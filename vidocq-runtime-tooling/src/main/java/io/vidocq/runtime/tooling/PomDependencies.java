@@ -202,51 +202,58 @@ public final class PomDependencies {
         factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
         factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
 
-        XMLStreamReader reader = null;
+        try (QuietlyClosed pom = new QuietlyClosed(factory.createXMLStreamReader(new StringReader(pomXml)))) {
+            return readParent(pom.reader());
+        } catch (XMLStreamException e) {
+            throw new IllegalArgumentException("Invalid pom.xml: " + e.getMessage(), e);
+        }
+    }
+
+    /** The {@code <project>/<parent>} coordinates read from {@code reader}, when all three are there. */
+    private static Optional<Parent> readParent(XMLStreamReader reader) throws XMLStreamException {
         String groupId = null;
         String artifactId = null;
         String version = null;
-        try {
-            reader = factory.createXMLStreamReader(new StringReader(pomXml));
-            Deque<String> path = new ArrayDeque<>();
-            StringBuilder text = new StringBuilder();
-            while (reader.hasNext()) {
-                switch (reader.next()) {
-                    case XMLStreamConstants.START_ELEMENT -> {
-                        path.addLast(reader.getLocalName());
-                        text.setLength(0);
-                    }
-                    case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA ->
-                            text.append(reader.getText());
-                    case XMLStreamConstants.END_ELEMENT -> {
-                        if (path.size() == 3 && "parent".equals(path.toArray()[1])) {
-                            switch (reader.getLocalName()) {
-                                case GROUP_ID    -> groupId = text.toString().trim();
-                                case ARTIFACT_ID -> artifactId = text.toString().trim();
-                                case "version"    -> version = text.toString().trim();
-                                default -> { /* relativePath */ }
-                            }
+        Deque<String> path = new ArrayDeque<>();
+        StringBuilder text = new StringBuilder();
+        while (reader.hasNext()) {
+            switch (reader.next()) {
+                case XMLStreamConstants.START_ELEMENT -> {
+                    path.addLast(reader.getLocalName());
+                    text.setLength(0);
+                }
+                case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA ->
+                        text.append(reader.getText());
+                case XMLStreamConstants.END_ELEMENT -> {
+                    if (path.size() == 3 && "parent".equals(path.toArray()[1])) {
+                        switch (reader.getLocalName()) {
+                            case GROUP_ID    -> groupId = text.toString().trim();
+                            case ARTIFACT_ID -> artifactId = text.toString().trim();
+                            case "version"    -> version = text.toString().trim();
+                            default -> { /* relativePath */ }
                         }
-                        path.removeLast();
-                        text.setLength(0);
                     }
-                    default -> { /* ignore */ }
+                    path.removeLast();
+                    text.setLength(0);
                 }
-            }
-        } catch (XMLStreamException e) {
-            throw new IllegalArgumentException("Invalid pom.xml: " + e.getMessage(), e);
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (XMLStreamException ignored) {
-                    // best effort
-                }
+                default -> { /* ignore */ }
             }
         }
         return groupId == null || artifactId == null || version == null
                 ? Optional.empty()
                 : Optional.of(new Parent(groupId, artifactId, version));
+    }
+
+    /** {@code reader} closed by a try-with-resources, best effort: a failure to close is ignored. */
+    private record QuietlyClosed(XMLStreamReader reader) implements AutoCloseable {
+        @Override
+        public void close() {
+            try {
+                reader.close();
+            } catch (XMLStreamException _) {
+                // best effort
+            }
+        }
     }
 
     /**

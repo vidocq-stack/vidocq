@@ -113,6 +113,13 @@ class PomDependenciesTest {
         assertTrue(PomDependencies.parent(POM).isEmpty());
     }
 
+    @Test
+    void anUnreadableParentPomIsRejected() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> PomDependencies.parent("<project><parent><oops"));
+        assertTrue(e.getMessage().startsWith("Invalid pom.xml: "));
+    }
+
     /** Vidocq/vidocq#339 (evolution 2): who puts the codegen bundles on the processor path. */
     @Test
     void theCodegenBundlesAreWiredByTheParentFrom040OrByThePluginAsABuildExtension() {

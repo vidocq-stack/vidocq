@@ -315,23 +315,31 @@ public final class PomEditor {
         int aptOpen = plugin == null ? -1 : indexWithin(pom, APT_OPEN, plugin, skipped);
         int aptClose = aptOpen < 0 ? -1 : pom.indexOf(APT_CLOSE, aptOpen);
         String marker = artifactIdElement(codegen.artifactId());
-        int from = aptOpen;
-        while (aptClose >= 0) {
-            int open = pom.indexOf("<path>", from);
-            if (open < 0 || open > aptClose) {
-                break;
-            }
-            int close = pom.indexOf("</path>", open);
-            if (close < 0) {
-                break;
-            }
-            int end = close + "</path>".length();
+        int open = aptClose < 0 ? -1 : pathWithin(pom, aptOpen, aptClose);
+        int end = pathEnd(pom, open);
+        while (end >= 0) {
             if (pom.substring(open, end).contains(marker)) {
                 return new Result(withoutEmptyCompilerPlugin(withoutLines(pom, open, end)), true);
             }
-            from = end;
+            open = pathWithin(pom, end, aptClose);
+            end = pathEnd(pom, open);
         }
         return new Result(pom, false);
+    }
+
+    /** The index just past the {@code </path>} that closes the {@code <path>} at {@code open}, or {@code -1}. */
+    private static int pathEnd(String pom, int open) {
+        if (open < 0) {
+            return -1;
+        }
+        int close = pom.indexOf("</path>", open);
+        return close < 0 ? -1 : close + "</path>".length();
+    }
+
+    /** The next {@code <path>} from {@code from} that opens before {@code aptClose}, or {@code -1}. */
+    private static int pathWithin(String pom, int from, int aptClose) {
+        int open = pom.indexOf("<path>", from);
+        return open > aptClose ? -1 : open;
     }
 
     /**
