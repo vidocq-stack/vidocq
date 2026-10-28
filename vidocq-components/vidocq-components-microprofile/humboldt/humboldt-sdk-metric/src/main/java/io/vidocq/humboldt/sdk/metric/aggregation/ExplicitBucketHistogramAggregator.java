@@ -63,7 +63,7 @@ public final class ExplicitBucketHistogramAggregator implements Aggregator<Histo
     public void recordDouble(double value, Attributes attributes) {
         Attributes key = attributes != null ? attributes : Attributes.empty();
         accums.computeIfAbsent(key, k -> new BucketAccumulator(boundaries.length + 1))
-                .record(value, bucketIndex(value));
+                .add(value, bucketIndex(value));
     }
 
     private int bucketIndex(double value) {
@@ -98,7 +98,7 @@ public final class ExplicitBucketHistogramAggregator implements Aggregator<Histo
             this.bucketCounts = new long[nBuckets];
         }
 
-        synchronized void record(double value, int idx) {
+        synchronized void add(double value, int idx) {
             sum += value;
             count++;
             bucketCounts[idx]++;

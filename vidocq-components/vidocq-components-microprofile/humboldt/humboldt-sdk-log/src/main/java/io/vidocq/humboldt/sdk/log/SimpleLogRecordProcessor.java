@@ -49,9 +49,9 @@ public final class SimpleLogRecordProcessor implements LogRecordProcessor {
     }
 
     @Override
-    public void onEmit(LogRecordData record) {
+    public void onEmit(LogRecordData logRecord) {
         if (stopped.get()) return;
-        exporter.export(List.of(record));
+        exporter.export(List.of(logRecord));
     }
 
     @Override

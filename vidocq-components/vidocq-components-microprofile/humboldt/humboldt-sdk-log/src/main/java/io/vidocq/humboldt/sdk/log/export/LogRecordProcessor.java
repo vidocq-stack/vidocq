@@ -33,7 +33,7 @@ import io.vidocq.humboldt.sdk.log.data.LogRecordData;
  */
 public interface LogRecordProcessor extends AutoCloseable {
 
-    void onEmit(LogRecordData record);
+    void onEmit(LogRecordData logRecord);
 
     default CompletableResultCode flush() {
         return CompletableResultCode.ofSuccess();

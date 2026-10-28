@@ -184,11 +184,11 @@ public final class SdkLogRecordBuilder implements LogRecordBuilder {
         Context ctx = context != null ? context : Context.current();
         SpanContext sc = Span.fromContext(ctx).getSpanContext();
         // The record derives the string form from the body value (once); no string body is passed here.
-        LogRecordData record = new LogRecordData(
+        LogRecordData logRecord = new LogRecordData(
                 resource, scope, ts, observed, sc,
                 severity, severityText, null, attributes.build(), eventName, body);
         for (LogRecordProcessor p : processors) {
-            p.onEmit(record);
+            p.onEmit(logRecord);
         }
     }
 

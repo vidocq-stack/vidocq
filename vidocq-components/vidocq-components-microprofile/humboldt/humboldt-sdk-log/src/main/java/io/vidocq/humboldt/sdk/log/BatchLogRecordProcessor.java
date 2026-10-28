@@ -55,8 +55,8 @@ public final class BatchLogRecordProcessor extends AbstractBatchProcessor<LogRec
     }
 
     @Override
-    public void onEmit(LogRecordData record) {
-        offer(record);
+    public void onEmit(LogRecordData logRecord) {
+        offer(logRecord);
     }
 
     @Override

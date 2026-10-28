@@ -72,22 +72,22 @@ public final class HumboldtJulHandler extends Handler {
     }
 
     @Override
-    public void publish(LogRecord record) {
-        if (record == null) return;
-        if (!isLoggable(record)) return;
-        String scopeName = record.getLoggerName() != null ? record.getLoggerName() : "";
+    public void publish(LogRecord logRecord) {
+        if (logRecord == null) return;
+        if (!isLoggable(logRecord)) return;
+        String scopeName = logRecord.getLoggerName() != null ? logRecord.getLoggerName() : "";
         Logger otelLogger = loggerCache.computeIfAbsent(scopeName, loggerProvider::get);
 
-        String message = formatMessage(record);
-        Severity severity = mapSeverity(record.getLevel());
-        String severityText = severityText(record.getLevel());
+        String message = formatMessage(logRecord);
+        Severity severity = mapSeverity(logRecord.getLevel());
+        String severityText = severityText(logRecord.getLevel());
 
         LogRecordBuilder builder = otelLogger.logRecordBuilder()
                 .setBody(message)
                 .setSeverity(severity)
                 .setSeverityText(severityText)
-                .setTimestamp(record.getInstant());
-        Throwable thrown = record.getThrown();
+                .setTimestamp(logRecord.getInstant());
+        Throwable thrown = logRecord.getThrown();
         if (thrown != null) {
             // exception.type / exception.message / exception.stacktrace, derived by the logs SDK
             builder.setException(thrown);
@@ -106,10 +106,10 @@ public final class HumboldtJulHandler extends Handler {
     }
 
     /** Formats the JUL message by interpolating parameters ({@link java.text.MessageFormat} style). */
-    private static String formatMessage(LogRecord record) {
-        String raw = record.getMessage();
+    private static String formatMessage(LogRecord logRecord) {
+        String raw = logRecord.getMessage();
         if (raw == null) return "";
-        Object[] params = record.getParameters();
+        Object[] params = logRecord.getParameters();
         if (params == null || params.length == 0) return raw;
         try {
             return java.text.MessageFormat.format(raw, params);
