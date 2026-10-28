@@ -32,9 +32,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Exercises {@link ProtectedResource} end-to-end at the identity layer: an embedded Vauban container
- * resolves its {@code @Inject @Claim} fields from the current request's token, exactly as Cervantes'
- * CDI integration does at runtime behind the JAX-RS auth filter. Authorization ({@code @RolesAllowed})
- * is enforced by cervantes-jaxrs at the HTTP layer (covered end-to-end by the Vidocq
+ * resolves its {@code @Claim} constructor parameters from the current request's token, exactly as
+ * Cervantes' CDI integration does at runtime behind the JAX-RS auth filter. Authorization
+ * ({@code @RolesAllowed}) is enforced by cervantes-jaxrs at the HTTP layer (covered end-to-end by the Vidocq
  * {@code vidocq-runtime-it-cervantes-jwt} integration test); here we focus on the claim injection the
  * resource methods rely on.
  */

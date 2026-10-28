@@ -64,16 +64,14 @@ public class JwtAuthenticationFilter implements ContainerRequestFilter {
     /** MP JWT spec §9.2.3: default token header name. */
     private static final String DEFAULT_TOKEN_HEADER = "Authorization";
 
-    @Inject
-    JwtValidator validator;
-
-    @Inject
-    JsonWebTokenContext tokenContext;
+    private JwtValidator validator;
+    private JsonWebTokenContext tokenContext;
 
     public JwtAuthenticationFilter() {
-        // required by CDI (normal-scoped bean)
+        // required by CDI to proxy a normal-scoped bean; the injection constructor sets the fields
     }
 
+    @Inject
     JwtAuthenticationFilter(JwtValidator validator, JsonWebTokenContext tokenContext) {
         this.validator = validator;
         this.tokenContext = tokenContext;

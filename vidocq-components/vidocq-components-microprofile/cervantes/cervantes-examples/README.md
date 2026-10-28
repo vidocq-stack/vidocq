@@ -14,9 +14,16 @@ the spec in one resource ([`ProtectedResource`](src/main/java/io/vidocq/cervante
 @RequestScoped
 public class ProtectedResource {
 
-    @Inject @Claim(standard = Claims.upn) String upn;        // standard claim, typed
-    @Inject @Claim("groups")              Set<String> groups; // the caller's roles
-    @Inject @Claim("upn")                 ClaimValue<String> upnValue; // lazy, request-bound
+    private String upn;                   // standard claim, typed
+    private Set<String> groups;           // the caller's roles
+    private ClaimValue<String> upnValue;  // lazy, request-bound
+
+    protected ProtectedResource() { }     // client proxy of the request-scoped bean
+
+    @Inject
+    public ProtectedResource(@Claim(standard = Claims.upn) String upn,
+                             @Claim("groups") Set<String> groups,
+                             @Claim("upn") ClaimValue<String> upnValue) { ... }
 
     @GET @Path("/public") @PermitAll          public String publicInfo() { ... }   // no token
     @GET @Path("/me")     @RolesAllowed({"user","admin"}) public String whoAmI() { ... }
@@ -28,7 +35,7 @@ public class ProtectedResource {
 
 [`ProtectedResourceExampleTest`](src/test/java/io/vidocq/cervantes/examples/ProtectedResourceExampleTest.java)
 boots an **embedded Vauban container** (no HTTP server), sets a request token, and asserts the
-`@Inject @Claim` fields resolve into the resource — the identity layer the secured methods rely on.
+`@Claim` constructor parameters resolve into the resource — the identity layer the secured methods rely on.
 Full HTTP-level authorization (the `@RolesAllowed` enforcement and a 401/403 round-trip) is covered
 end-to-end by the Vidocq integration test `vidocq-runtime-it-cervantes-jwt`.
 

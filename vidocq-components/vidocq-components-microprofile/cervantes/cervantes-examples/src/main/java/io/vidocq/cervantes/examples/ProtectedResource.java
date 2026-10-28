@@ -55,19 +55,37 @@ import java.util.Set;
 public class ProtectedResource {
 
     /** The {@code upn} (user principal name) standard claim of the current token. */
-    @Inject
-    @Claim(standard = Claims.upn)
-    String upn;
+    private String upn;
 
     /** The {@code groups} claim — the caller's roles. */
-    @Inject
-    @Claim("groups")
-    Set<String> groups;
+    private Set<String> groups;
 
     /** Lazy, request-bound view of the {@code upn} claim (resolves at access time). */
+    private ClaimValue<String> upnValue;
+
+    /**
+     * No-args constructor required by CDI to proxy a normal-scoped ({@code @RequestScoped}) bean;
+     * the container creates each request's instance through the injection constructor.
+     */
+    protected ProtectedResource() {
+        // client proxy only: the claims are set by the injection constructor
+    }
+
+    /**
+     * Injection constructor: the claims of the current request's token.
+     *
+     * @param upn      the {@code upn} standard claim
+     * @param groups   the {@code groups} claim
+     * @param upnValue lazy view of the {@code upn} claim
+     */
     @Inject
-    @Claim("upn")
-    ClaimValue<String> upnValue;
+    public ProtectedResource(@Claim(standard = Claims.upn) String upn,
+                             @Claim("groups") Set<String> groups,
+                             @Claim("upn") ClaimValue<String> upnValue) {
+        this.upn = upn;
+        this.groups = groups;
+        this.upnValue = upnValue;
+    }
 
     /** Open to anyone, even without a token. */
     @GET
