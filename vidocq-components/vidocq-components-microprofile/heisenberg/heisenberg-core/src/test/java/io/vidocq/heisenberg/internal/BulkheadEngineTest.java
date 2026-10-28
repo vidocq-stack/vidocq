@@ -107,8 +107,12 @@ class BulkheadEngineTest {
         });
 
         assertTrue(started.await(1, TimeUnit.SECONDS));
-        // Let the waiter reach permits.acquire()
-        Thread.sleep(50);
+        // Wait until the waiter is queued on permits.acquire()
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!state.permits().hasQueuedThreads() && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertTrue(state.permits().hasQueuedThreads(), "the waiter must queue on the bulkhead permits");
         // Release the permit → the waiter should proceed
         state.permits().release();
 

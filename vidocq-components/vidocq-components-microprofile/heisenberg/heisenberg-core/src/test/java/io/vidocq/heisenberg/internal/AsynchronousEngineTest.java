@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -68,7 +69,7 @@ class AsynchronousEngineTest {
     }
 
     @Test
-    void propagatesExceptionAsCompletionException() throws Exception {
+    void propagatesExceptionAsCompletionException() {
         // Arrange
         PolicyComposer.Invocation invocation = () -> {
             throw new IllegalArgumentException("test error");
@@ -119,11 +120,10 @@ class AsynchronousEngineTest {
             return "ok";
         };
 
-        // Act
-        AsynchronousEngine.executeAsync(invocation, "my-custom-method");
+        // Act: wait for completion
+        AsynchronousEngine.executeAsync(invocation, "my-custom-method").toCompletableFuture().get(5, TimeUnit.SECONDS);
 
-        // Assert: wait for completion
-        Thread.sleep(200); // allow virtual thread to complete
+        // Assert
         assertTrue(capturedThreadName[0].contains("heisenberg-async"), "Should contain 'heisenberg-async' prefix");
     }
 
