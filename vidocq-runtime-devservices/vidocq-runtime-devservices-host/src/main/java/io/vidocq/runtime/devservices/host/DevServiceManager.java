@@ -79,39 +79,46 @@ public final class DevServiceManager implements AutoCloseable {
         List<DevService> ordered = new ArrayList<>(providers);
         ordered.sort(Comparator.comparingInt(DevService::order));
         for (DevService p : ordered) {
+            boolean done = false;
             try {
-                if (!p.appliesWhen(ctx)) {
-                    String reason = skipReason(p, ctx, log);
-                    if (reason == null) {
-                        log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' skipped (already configured)");
-                    } else {
-                        log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' not started: " + reason);
-                        mgr.skipped.add(new Skipped(p.id(), reason));
-                    }
-                    continue;
-                }
-                log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' starting…");
-                Map<String, String> props = p.start(ctx);
-                mgr.started.add(p);
-                mgr.outputs.add(props != null ? props : Map.of());
-                if (props != null && !props.isEmpty()) {
-                    mgr.collected.putAll(props);
-                    props.keySet().forEach(key -> mgr.providers.put(key, p.id()));
-                    ctx.merge(props);
-                }
-                log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' started");
+                mgr.startOrSkip(p, ctx);
+                done = true;
             } catch (Exception e) {
-                mgr.close(); // roll back the providers already started, in reverse order
                 throw new DevServicesException(DEV_SERVICE + p.id() + "' failed to start: "
                         + e.getMessage() + " — set -Dvidocq.dev.devServices=false to skip", e);
-            } catch (Throwable t) {
-                // An Error (e.g. a NoClassDefFoundError from a provider's dependencies) still rolls back the
-                // providers already started, then goes on as it is.
-                mgr.close();
-                throw t;
+            } finally {
+                // On an Exception, and on an Error too (e.g. a NoClassDefFoundError from a provider's dependencies),
+                // roll back the providers already started, in reverse order, before the failure goes on.
+                if (!done) {
+                    mgr.close();
+                }
             }
         }
         return mgr;
+    }
+
+    /** Starts {@code p}, or records why it does not apply. */
+    private void startOrSkip(DevService p, DefaultDevServiceContext ctx) throws Exception {
+        if (!p.appliesWhen(ctx)) {
+            String reason = skipReason(p, ctx, log);
+            if (reason == null) {
+                log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' skipped (already configured)");
+            } else {
+                log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' not started: " + reason);
+                skipped.add(new Skipped(p.id(), reason));
+            }
+            return;
+        }
+        log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' starting…");
+        Map<String, String> props = p.start(ctx);
+        started.add(p);
+        outputs.add(props != null ? props : Map.of());
+        if (props != null && !props.isEmpty()) {
+            collected.putAll(props);
+            props.keySet().forEach(key -> providers.put(key, p.id()));
+            ctx.merge(props);
+        }
+        log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' started");
     }
 
     /**

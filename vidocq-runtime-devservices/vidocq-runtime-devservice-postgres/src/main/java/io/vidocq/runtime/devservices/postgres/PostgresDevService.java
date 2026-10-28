@@ -64,6 +64,8 @@ public final class PostgresDevService implements DevService {
     // it never protects anything outside the developer's machine.
     private static final String DEFAULT_PASSWORD = "vidocq"; // NOSONAR java:S2068 - dev-only container credential
     private static final String DEFAULT_NAME     = "default";
+    /** The id of this dev service, also the name and label of its container. */
+    private static final String ID = "postgres";
     private static final String POOL_PREFIX      = "vidocq.pool.";
     private static final String JDBC_PREFIX      = "jdbc:";
 
@@ -81,7 +83,7 @@ public final class PostgresDevService implements DevService {
 
     @Override
     public String id() {
-        return "postgres";
+        return ID;
     }
 
     @Override
@@ -143,7 +145,7 @@ public final class PostgresDevService implements DevService {
         String reuseKey = reuse
                 ? String.join("\n", ds.image(), ds.db(), ds.username(), ds.password(), String.valueOf(ds.fixedPort()))
                 : null;
-        String name = DevContainers.name(ctx, "postgres", qualifier, reuseKey);
+        String name = DevContainers.name(ctx, ID, qualifier, reuseKey);
         // Configured on the instance itself, not through the fluent chain: the caller owns (and stops) this very
         // container, which a chained expression would hide behind the builder's return values.
         GenericContainer<?> c = new GenericContainer<>(DockerImageName.parse(ds.image()));
@@ -154,7 +156,7 @@ public final class PostgresDevService implements DevService {
                 .withExposedPorts(PORT)
                 .waitingFor(Wait.forLogMessage(".*database system is ready to accept connections.*\\s", 2)
                         .withStartupTimeout(Duration.ofSeconds(60)))
-                .withLabels(DevContainers.labels(ctx, "postgres"))
+                .withLabels(DevContainers.labels(ctx, ID))
                 .withCreateContainerCmdModifier(cmd -> cmd.withName(name));
         if (ds.fixedPort() != null) {
             // Pin the host port so an external tool keeps the same coordinates across restarts.
@@ -202,7 +204,7 @@ public final class PostgresDevService implements DevService {
             URI uri = URI.create(e.getValue().substring(JDBC_PREFIX.length()));
             endpoints.put(name, uri.getHost() + ":" + uri.getPort());
         }
-        return new DevServiceState("postgres", image, endpoints, List.copyOf(injected.keySet()));
+        return new DevServiceState(ID, image, endpoints, List.copyOf(injected.keySet()));
     }
 
     // ---- planning (pure; unit-testable without Docker) ----

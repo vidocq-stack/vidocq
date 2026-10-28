@@ -61,6 +61,8 @@ public final class KeycloakDevService implements DevService {
 
     private static final String DEFAULT_IMAGE = "quay.io/keycloak/keycloak:26.0";
     private static final int KC_PORT = 8080;
+    /** The id of this dev service, also the name and label of its container. */
+    private static final String ID = "keycloak";
     /** User name and password of the throwaway container's bootstrap administrator. */
     private static final String BOOTSTRAP_ADMIN = "admin";
     /** The path, and the endpoint name, of Keycloak's administration console. */
@@ -72,7 +74,7 @@ public final class KeycloakDevService implements DevService {
 
     @Override
     public String id() {
-        return "keycloak";
+        return ID;
     }
 
     @Override
@@ -130,14 +132,14 @@ public final class KeycloakDevService implements DevService {
             String realm, boolean reuse) {
         Path realmFile = realmImport.map(ctx::resolve).orElse(null);
         String reuseKey = reuse ? image + "\n" + realm + "\n" + realmDigest(realmFile) : null;
-        String name = DevContainers.name(ctx, "keycloak", null, reuseKey);
+        String name = DevContainers.name(ctx, ID, null, reuseKey);
         // Configured on the instance itself, not through the fluent chain: the caller owns (and stops) this very
         // container, which a chained expression would hide behind the builder's return values.
         GenericContainer<?> container = new GenericContainer<>(DockerImageName.parse(image));
         container.withExposedPorts(KC_PORT)
                 .withEnv("KC_BOOTSTRAP_ADMIN_USERNAME", BOOTSTRAP_ADMIN)
                 .withEnv("KC_BOOTSTRAP_ADMIN_PASSWORD", BOOTSTRAP_ADMIN)
-                .withLabels(DevContainers.labels(ctx, "keycloak"))
+                .withLabels(DevContainers.labels(ctx, ID))
                 .withCreateContainerCmdModifier(cmd -> cmd.withName(name));
 
         if (realmFile != null) {

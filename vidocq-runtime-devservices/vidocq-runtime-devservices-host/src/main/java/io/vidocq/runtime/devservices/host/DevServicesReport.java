@@ -38,6 +38,9 @@ import java.util.TreeMap;
 public final class DevServicesReport {
 
     private static final String POOL_PREFIX = "vidocq.pool.";
+    private static final String URL = "url";
+    private static final String USERNAME = "username";
+    private static final String PASSWORD = "password";
 
     /** First line of the console block — deliberately tool-neutral (not "DataGrip", not "psql"). */
     public static final String CONSOLE_HEADER = "Connection information:";
@@ -59,34 +62,41 @@ public final class DevServicesReport {
         TreeMap<String, Map<String, String>> named = new TreeMap<>();
         for (Map.Entry<String, String> e : collected.entrySet()) {
             String key = e.getKey();
-            if (!key.startsWith(POOL_PREFIX)) {
-                continue;
-            }
-            String rest = key.substring(POOL_PREFIX.length());
-            int dot = rest.lastIndexOf('.');
-            if (dot < 0) {
-                if (isField(rest)) {
-                    dflt.put(rest, e.getValue());
-                }
-            } else {
-                String name = rest.substring(0, dot);
-                String field = rest.substring(dot + 1);
-                if (name.indexOf('.') >= 0 || !isField(field)) {
-                    continue; // nested name or a tuning key (maxSize, validation, …) — not a coordinate
-                }
-                named.computeIfAbsent(name, k -> new LinkedHashMap<>()).put(field, e.getValue());
+            if (key.startsWith(POOL_PREFIX)) {
+                collect(key.substring(POOL_PREFIX.length()), e.getValue(), dflt, named);
             }
         }
         List<Coordinates> out = new ArrayList<>();
-        if (dflt.get("url") != null) {
+        if (dflt.get(URL) != null) {
             out.add(coordinatesOf("default", dflt));
         }
         for (Map.Entry<String, Map<String, String>> e : named.entrySet()) {
-            if (e.getValue().get("url") != null) {
+            if (e.getValue().get(URL) != null) {
                 out.add(coordinatesOf(e.getKey(), e.getValue()));
             }
         }
         return out;
+    }
+
+    /**
+     * Files the pool key {@code rest} (what follows {@code vidocq.pool.}) under the default datasource or a named
+     * one, when it is a coordinate.
+     */
+    private static void collect(String rest, String value, Map<String, String> dflt,
+                                Map<String, Map<String, String>> named) {
+        int dot = rest.lastIndexOf('.');
+        if (dot < 0) {
+            if (isField(rest)) {
+                dflt.put(rest, value);
+            }
+            return;
+        }
+        String name = rest.substring(0, dot);
+        String field = rest.substring(dot + 1);
+        // a nested name or a tuning key (maxSize, validation, …) is not a coordinate
+        if (name.indexOf('.') < 0 && isField(field)) {
+            named.computeIfAbsent(name, k -> new LinkedHashMap<>()).put(field, value);
+        }
     }
 
     /** The console block lines (empty when no datasource was provisioned). The host logs each one. */
@@ -123,11 +133,11 @@ public final class DevServicesReport {
         sb.append("# Rewritten on each `vidocq:dev` start.\n");
         for (Coordinates c : datasources(collected)) {
             String p = "datasource." + c.name() + ".";
-            append(sb, p, "url", c.url());
+            append(sb, p, URL, c.url());
             append(sb, p, "host", c.host());
             append(sb, p, "port", c.port());
-            append(sb, p, "username", c.username());
-            append(sb, p, "password", c.password());
+            append(sb, p, USERNAME, c.username());
+            append(sb, p, PASSWORD, c.password());
         }
         return sb.toString();
     }
@@ -139,7 +149,7 @@ public final class DevServicesReport {
     }
 
     private static Coordinates coordinatesOf(String name, Map<String, String> fields) {
-        String url = fields.get("url");
+        String url = fields.get(URL);
         String host = null;
         String port = null;
         String authority = authorityOf(url);
@@ -152,7 +162,7 @@ public final class DevServicesReport {
                 host = authority;
             }
         }
-        return new Coordinates(name, url, host, port, fields.get("username"), fields.get("password"));
+        return new Coordinates(name, url, host, port, fields.get(USERNAME), fields.get(PASSWORD));
     }
 
     /**
@@ -191,7 +201,7 @@ public final class DevServicesReport {
     }
 
     private static boolean isField(String s) {
-        return s.equals("url") || s.equals("username") || s.equals("password");
+        return s.equals(URL) || s.equals(USERNAME) || s.equals(PASSWORD);
     }
 
     private static boolean allDigits(String s) {
