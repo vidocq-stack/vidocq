@@ -361,7 +361,7 @@ public final class RuntimeRepositoryProxy {
     }
 
     private static void collectMethods(Class<?> itf, List<Method> out) {
-        for (Method m : itf.getDeclaredMethods()) out.add(m);
+        java.util.Collections.addAll(out, itf.getDeclaredMethods());
         for (Class<?> parent : itf.getInterfaces()) collectMethods(parent, out);
     }
 
@@ -685,7 +685,7 @@ public final class RuntimeRepositoryProxy {
         return switch (plan.desc().op()) {
             case FIND     -> derivedFind(plan, rt, em, callArgs, w, xs);
             case FIND_ONE -> derivedFirst(returnType, em,
-                    rt.queryList(em, w, derivedOrder(plan, rt, em, callArgs), xs));
+                    rt.queryList(em, w, derivedOrder(plan, callArgs), xs));
             case COUNT    -> rt.countWhere(em, w, xs);
             case EXISTS   -> rt.existsWhere(em, w, xs);
             case DELETE   -> {
@@ -697,7 +697,7 @@ public final class RuntimeRepositoryProxy {
     }
 
     /** The derived {@code OrderBy} extended with the Sort/Order/Sort[] control arguments. */
-    private static OrderBy derivedOrder(DerivedPlan plan, RepositoryRuntime rt, EntityModel<?> em, Object[] callArgs) {
+    private static OrderBy derivedOrder(DerivedPlan plan, Object[] callArgs) {
         return applyControlOrder(plan.baseOrderBy(), callArgs, plan.controls(), plan.attrIndex());
     }
 
@@ -711,7 +711,7 @@ public final class RuntimeRepositoryProxy {
             return emptyForReturn(returnType == java.util.stream.Stream.class,
                     returnType == java.util.Optional.class, returnsList);
         }
-        OrderBy order = derivedOrder(plan, rt, em, callArgs);
+        OrderBy order = derivedOrder(plan, callArgs);
         jakarta.data.page.PageRequest pageReq = controlPage(callArgs, plan.controls());
         if (pageReq != null) {
             return jakarta.data.page.CursoredPage.class.isAssignableFrom(returnType)
