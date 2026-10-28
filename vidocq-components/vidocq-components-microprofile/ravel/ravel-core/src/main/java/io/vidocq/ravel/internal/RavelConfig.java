@@ -73,9 +73,9 @@ public final class RavelConfig implements Config, java.io.Serializable {
 
     private static final ScopedValue<Set<String>> EXPRESSION_STACK = ScopedValue.newInstance();
 
-    private final List<ConfigSource> sources;
+    private final transient List<ConfigSource> sources;
     private final Map<Class<?>, Converter<?>> converters;
-    private final ClassLoader classLoader;
+    private final transient ClassLoader classLoader;
     private final boolean expressionsEnabled;
 
     /** Cache for derived converters (arrays, implicit), resolved on first lookup. */
@@ -247,42 +247,43 @@ public final class RavelConfig implements Config, java.io.Serializable {
 
     private String resolveTemplate(String text) {
         StringBuilder out = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
+        int i = 0;
+        while (i < text.length()) {
             char c = text.charAt(i);
             if (c == '\\' && i + 1 < text.length() && text.charAt(i + 1) == '$') {
                 out.append('$');
-                i++;
-                continue;
-            }
-            if (c == '$' && i + 1 < text.length() && text.charAt(i + 1) == '{') {
+                i += 2;
+            } else if (startsExpression(text, i)) {
                 int end = findExpressionEnd(text, i + 2);
                 if (end < 0) {
                     throw new IllegalArgumentException("Unterminated property expression in: " + text);
                 }
                 String exprBody = text.substring(i + 2, end);
                 out.append(resolveExpression(exprBody));
-                i = end;
-                continue;
+                i = end + 1;
+            } else {
+                out.append(c);
+                i++;
             }
-            out.append(c);
         }
         return out.toString();
     }
 
     private static int findExpressionEnd(String text, int from) {
         int depth = 1;
-        for (int i = from; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == '$' && i + 1 < text.length() && text.charAt(i + 1) == '{') {
+        int i = from;
+        while (i < text.length()) {
+            if (startsExpression(text, i)) {
                 depth++;
-                i++;
-                continue;
-            }
-            if (c == '}') {
-                depth--;
-                if (depth == 0) {
-                    return i;
+                i += 2;
+            } else {
+                if (text.charAt(i) == '}') {
+                    depth--;
+                    if (depth == 0) {
+                        return i;
+                    }
                 }
+                i++;
             }
         }
         return -1;
@@ -319,24 +320,27 @@ public final class RavelConfig implements Config, java.io.Serializable {
 
     private static int findTopLevelDefaultSeparator(String expression) {
         int depth = 0;
-        for (int i = 0; i < expression.length(); i++) {
+        int i = 0;
+        while (i < expression.length()) {
             char c = expression.charAt(i);
-            if (c == '$' && i + 1 < expression.length() && expression.charAt(i + 1) == '{') {
+            if (startsExpression(expression, i)) {
                 depth++;
-                i++;
-                continue;
-            }
-            if (c == '}') {
-                if (depth > 0) {
+                i += 2;
+            } else if (c == ':' && depth == 0) {
+                return i;
+            } else {
+                if (c == '}' && depth > 0) {
                     depth--;
                 }
-                continue;
-            }
-            if (c == ':' && depth == 0) {
-                return i;
+                i++;
             }
         }
         return -1;
+    }
+
+    /** Whether {@code text} opens a {@code ${} expression at {@code index}. */
+    private static boolean startsExpression(String text, int index) {
+        return text.charAt(index) == '$' && index + 1 < text.length() && text.charAt(index + 1) == '{';
     }
 
     private record RawLookup(String value, String sourceName, int sourceOrdinal) {}

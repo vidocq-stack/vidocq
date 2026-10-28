@@ -44,11 +44,13 @@ final class ArraySplitter {
         var out = new ArrayList<String>();
         var sb = new StringBuilder();
         int n = raw.length();
-        for (int i = 0; i < n; i++) {
+        int i = 0;
+        while (i < n) {
             char c = raw.charAt(i);
+            int step = 1;
             if (c == '\\' && i + 1 < n && raw.charAt(i + 1) == ',') {
                 sb.append(',');
-                i++;
+                step = 2;
             } else if (c == ',') {
                 if (!sb.isEmpty()) {
                     out.add(sb.toString());
@@ -57,6 +59,7 @@ final class ArraySplitter {
             } else {
                 sb.append(c);
             }
+            i += step;
         }
         if (!sb.isEmpty()) {
             out.add(sb.toString());
