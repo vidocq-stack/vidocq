@@ -46,12 +46,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public class CountedInterceptor {
     private final ConcurrentHashMap<CacheKey, ResolvedCounter> counters = new ConcurrentHashMap<>();
 
-    @Inject
-    MetricRegistryProducerBean registries;
+    private MetricRegistryProducerBean registries;
 
     public CountedInterceptor() {
+        // the container uses the injection constructor
     }
 
+    @Inject
     CountedInterceptor(MetricRegistryProducerBean registries) {
         this.registries = Objects.requireNonNull(registries, "registries must not be null");
     }

@@ -38,8 +38,8 @@ module io.vidocq.dirac.rest {
 
     exports io.vidocq.dirac.rest;
 
-    // In-module instantiation and field injection of MetricsResource (its package-private @Inject
-    // MetricRegistry fields are assigned by an in-package putfield) through the generated
+    // In-module instantiation of MetricsResource through its package-private @Inject constructor
+    // (an in-package `new` with the three MetricRegistry arguments) by the generated
     // _VaubanComponents — so Vauban needs no `opens … to io.vidocq.vauban.core`.
     provides io.vidocq.vauban.api.VaubanComponentProvider
             with io.vidocq.dirac.rest._VaubanComponents;

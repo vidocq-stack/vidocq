@@ -56,24 +56,20 @@ public class MetricsResource {
     /** Result of a formatting operation — body + effective media type. */
     record Formatted(String body, String mediaType) {}
 
-    // Field injection — CDI sets these; test constructor overrides them.
+    private MetricRegistry appRegistry;
+    private MetricRegistry baseRegistry;
+    private MetricRegistry vendorRegistry;
+
+    /** Client-proxy constructor: CDI creates the contextual instance through the injection constructor. */
+    public MetricsResource() {
+        // client proxy only: the registries are set by the injection constructor
+    }
+
+    /** Injection constructor (also used by unit tests) — the three registries. */
     @Inject
-    @RegistryScope
-    MetricRegistry appRegistry;
-
-    @Inject
-    @RegistryScope(scope = MetricRegistry.BASE_SCOPE)
-    MetricRegistry baseRegistry;
-
-    @Inject
-    @RegistryScope(scope = MetricRegistry.VENDOR_SCOPE)
-    MetricRegistry vendorRegistry;
-
-    /** CDI / default constructor. */
-    public MetricsResource() {}
-
-    /** Test constructor — sets all three registries without CDI. */
-    MetricsResource(MetricRegistry appRegistry, MetricRegistry baseRegistry, MetricRegistry vendorRegistry) {
+    MetricsResource(@RegistryScope MetricRegistry appRegistry,
+                    @RegistryScope(scope = MetricRegistry.BASE_SCOPE) MetricRegistry baseRegistry,
+                    @RegistryScope(scope = MetricRegistry.VENDOR_SCOPE) MetricRegistry vendorRegistry) {
         this.appRegistry = appRegistry;
         this.baseRegistry = baseRegistry;
         this.vendorRegistry = vendorRegistry;
