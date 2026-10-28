@@ -69,16 +69,18 @@ public record RetryConfig(
     /** Compares the exception-type arrays by content, as a value record should. */
     @Override
     public boolean equals(Object other) {
-        return other instanceof RetryConfig that
-                && maxRetries == that.maxRetries
-                && delay == that.delay
-                && maxDuration == that.maxDuration
-                && jitter == that.jitter
-                && delayUnit == that.delayUnit
-                && durationUnit == that.durationUnit
-                && jitterDelayUnit == that.jitterDelayUnit
-                && Arrays.equals(retryOn, that.retryOn)
-                && Arrays.equals(abortOn, that.abortOn);
+        return other instanceof RetryConfig(var otherMaxRetries, var otherDelay, var otherDelayUnit,
+                var otherMaxDuration, var otherDurationUnit, var otherJitter, var otherJitterDelayUnit,
+                var otherRetryOn, var otherAbortOn)
+                && maxRetries == otherMaxRetries
+                && delay == otherDelay
+                && maxDuration == otherMaxDuration
+                && jitter == otherJitter
+                && delayUnit == otherDelayUnit
+                && durationUnit == otherDurationUnit
+                && jitterDelayUnit == otherJitterDelayUnit
+                && Arrays.equals(retryOn, otherRetryOn)
+                && Arrays.equals(abortOn, otherAbortOn);
     }
 
     @Override

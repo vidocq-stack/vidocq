@@ -362,7 +362,7 @@ class FallbackResolverRulesTest {
         }
 
         String genericArgumentRecover(List<Integer> value) {
-            return RECOVER;
+            return RECOVER + value;
         }
 
         @Fallback(fallbackMethod = "wildcardRecover")
@@ -371,7 +371,7 @@ class FallbackResolverRulesTest {
         }
 
         String wildcardRecover(List<? super Integer> value) {
-            return RECOVER;
+            return RECOVER + value;
         }
 
         @Fallback(fallbackMethod = "rawTypeRecover")
@@ -380,7 +380,7 @@ class FallbackResolverRulesTest {
         }
 
         String rawTypeRecover(Map<String, Iterable<Integer>> value) {
-            return RECOVER;
+            return RECOVER + value;
         }
 
         @Fallback(fallbackMethod = "sameRecover")
@@ -409,7 +409,7 @@ class FallbackResolverRulesTest {
         }
 
         String parameterizedRecover(List<T> value) {
-            return RECOVER;
+            return RECOVER + value;
         }
 
         @Fallback(fallbackMethod = "arrayRecover")
@@ -418,7 +418,7 @@ class FallbackResolverRulesTest {
         }
 
         String arrayRecover(T[] value) {
-            return RECOVER;
+            return RECOVER + value.length;
         }
 
         @Fallback(fallbackMethod = "upperBoundRecover")
@@ -427,7 +427,7 @@ class FallbackResolverRulesTest {
         }
 
         String upperBoundRecover(List<? extends T> value) {
-            return RECOVER;
+            return RECOVER + value;
         }
 
         @Fallback(fallbackMethod = "lowerBoundRecover")
@@ -436,7 +436,7 @@ class FallbackResolverRulesTest {
         }
 
         String lowerBoundRecover(List<? super T> value) {
-            return RECOVER;
+            return RECOVER + value;
         }
     }
 

@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 class PolicyConfigValueSemanticsTest {
 
     private static final String IO_EXCEPTION = "java.io.IOException";
+    private static final Object NOT_A_CONFIG = new Object();
 
     @SuppressWarnings("unchecked")
     private static Class<? extends Throwable>[] types(Class<?>... types) {
@@ -80,7 +81,7 @@ class PolicyConfigValueSemanticsTest {
         assertEquals(first, second);
         assertEquals(first.hashCode(), second.hashCode());
         assertNotEquals(first, circuitBreaker(RuntimeException.class));
-        assertNotEquals(first, CircuitBreakerConfig.DEFAULT);
+        assertNotEquals(CircuitBreakerConfig.DEFAULT, first);
         assertTrue(first.toString().contains(IO_EXCEPTION), first::toString);
     }
 
@@ -104,7 +105,7 @@ class PolicyConfigValueSemanticsTest {
         Class<? extends Throwable>[] state = types(IllegalStateException.class);
 
         assertNotEquals(null, base);
-        assertNotEquals("RetryConfig", base);
+        assertNotEquals(NOT_A_CONFIG, base);
         assertNotEquals(base, new RetryConfig(3, 1, ChronoUnit.MILLIS, 1000, ChronoUnit.MILLIS, 0, ChronoUnit.MILLIS, io, state));
         assertNotEquals(base, new RetryConfig(3, 0, ChronoUnit.MILLIS, 999, ChronoUnit.MILLIS, 0, ChronoUnit.MILLIS, io, state));
         assertNotEquals(base, new RetryConfig(3, 0, ChronoUnit.MILLIS, 1000, ChronoUnit.MILLIS, 1, ChronoUnit.MILLIS, io, state));
@@ -121,7 +122,7 @@ class PolicyConfigValueSemanticsTest {
         CircuitBreakerConfig base = new CircuitBreakerConfig(4, 0.5, 100, ChronoUnit.MILLIS, 2, io, none);
 
         assertNotEquals(null, base);
-        assertNotEquals("CircuitBreakerConfig", base);
+        assertNotEquals(NOT_A_CONFIG, base);
         assertNotEquals(base, new CircuitBreakerConfig(5, 0.5, 100, ChronoUnit.MILLIS, 2, io, none));
         assertNotEquals(base, new CircuitBreakerConfig(4, 0.75, 100, ChronoUnit.MILLIS, 2, io, none));
         assertNotEquals(base, new CircuitBreakerConfig(4, 0.5, 101, ChronoUnit.MILLIS, 2, io, none));
@@ -137,7 +138,7 @@ class PolicyConfigValueSemanticsTest {
         FallbackConfig base = new FallbackConfig(io, state, "recover", null);
 
         assertNotEquals(null, base);
-        assertNotEquals("FallbackConfig", base);
+        assertNotEquals(NOT_A_CONFIG, base);
         assertNotEquals(base, new FallbackConfig(io, io, "recover", null));
         assertNotEquals(base, new FallbackConfig(io, state, "recover", NoopHandler.class));
     }

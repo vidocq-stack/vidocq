@@ -60,7 +60,7 @@ class CircuitBreakerEngineTransitionsTest {
         throw failure;
     }
 
-    private CircuitBreakerEngine openedEngine(int successThreshold, Class<?>[] skipOn) throws Exception {
+    private CircuitBreakerEngine openedEngine(int successThreshold, Class<?>[] skipOn) {
         CircuitBreakerEngine engine = new CircuitBreakerEngine(
                 config(1, 1.0, successThreshold, new Class[]{RuntimeException.class}, skipOn), registry);
         assertThrows(IllegalStateException.class,
@@ -117,7 +117,7 @@ class CircuitBreakerEngineTransitionsTest {
     }
 
     @Test
-    void skipOnFailuresCountAsSuccessesInClosed() throws Exception {
+    void skipOnFailuresCountAsSuccessesInClosed() {
         CircuitBreakerEngine engine = new CircuitBreakerEngine(
                 config(2, 0.5, 1, new Class[]{RuntimeException.class}, new Class[]{IllegalArgumentException.class}),
                 registry);
@@ -131,7 +131,7 @@ class CircuitBreakerEngineTransitionsTest {
     }
 
     @Test
-    void failuresOutsideFailOnDoNotOpenTheCircuit() throws Exception {
+    void failuresOutsideFailOnDoNotOpenTheCircuit() {
         CircuitBreakerEngine engine = new CircuitBreakerEngine(
                 config(1, 0.5, 1, new Class[]{IOException.class}, new Class[0]), registry);
 

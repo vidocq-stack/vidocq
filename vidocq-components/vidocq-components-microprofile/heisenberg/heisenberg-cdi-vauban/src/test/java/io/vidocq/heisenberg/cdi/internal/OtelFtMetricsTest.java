@@ -39,6 +39,9 @@ import org.junit.jupiter.api.Test;
  */
 class OtelFtMetricsTest {
 
+    /** An instance of an anonymous class, whose canonical name is null. */
+    private static final Object ANONYMOUS_BEAN = new Object() { };
+
     private static final String INVOCATIONS = "ft.invocations.total";
     private static final String RETRY_CALLS = "ft.retry.calls.total";
     private static final String RETRIES = "ft.retry.retries.total";
@@ -269,7 +272,7 @@ class OtelFtMetricsTest {
     @Test
     void anonymousBeanClassIsNamedAfterItsBinaryName() {
         OtelFtMetrics metrics = new OtelFtMetrics();
-        Class<?> anonymous = new Object() { }.getClass();
+        Class<?> anonymous = ANONYMOUS_BEAN.getClass();
 
         metrics.recordBulkheadRejected(anonymous, call);
 
@@ -278,7 +281,7 @@ class OtelFtMetricsTest {
 
     @Test
     void disabledMetricsPublishNothing() throws Exception {
-        try (AutoCloseable _ = TestConfigs.install(Map.of(TestConfigs.METRICS_ENABLED, FALSE))) {
+        try (var _ = TestConfigs.install(Map.of(TestConfigs.METRICS_ENABLED, FALSE))) {
             OtelFtMetrics metrics = new OtelFtMetrics();
 
             metrics.register(Service.class, call, true, true, true, true, true, true);

@@ -83,7 +83,7 @@ class FaultTolerancePriority3850InterceptorTest {
         InvocationContext context = flakyInvocation(proceeds);
 
         Object result;
-        try (AutoCloseable _ = TestConfigs.install(Map.of(PRIORITY, "3850"))) {
+        try (var _ = TestConfigs.install(Map.of(PRIORITY, "3850"))) {
             result = interceptor().around(context);
         }
 

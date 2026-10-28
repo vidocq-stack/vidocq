@@ -261,7 +261,7 @@ class DiracFtMetricsTest {
 
     @Test
     void disabledMetricsPublishNothing() throws Exception {
-        try (AutoCloseable _ = TestConfigs.install(Map.of(TestConfigs.METRICS_ENABLED, FALSE))) {
+        try (var _ = TestConfigs.install(Map.of(TestConfigs.METRICS_ENABLED, FALSE))) {
             metrics.register(Service.class, call, true, true, true, true, true, true);
             metrics.recordInvocation(Service.class, call, true, false, false);
             metrics.recordRetry(Service.class, call, 1, RetryResult.VALUE_RETURNED);

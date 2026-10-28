@@ -71,11 +71,12 @@ public record FallbackConfig(
     /** Compares the exception-type arrays by content, as a value record should. */
     @Override
     public boolean equals(Object other) {
-        return other instanceof FallbackConfig that
-                && Arrays.equals(applyOn, that.applyOn)
-                && Arrays.equals(skipOn, that.skipOn)
-                && Objects.equals(fallbackMethod, that.fallbackMethod)
-                && Objects.equals(fallbackHandlerClass, that.fallbackHandlerClass);
+        return other instanceof FallbackConfig(var otherApplyOn, var otherSkipOn, var otherFallbackMethod,
+                var otherFallbackHandlerClass)
+                && Arrays.equals(applyOn, otherApplyOn)
+                && Arrays.equals(skipOn, otherSkipOn)
+                && Objects.equals(fallbackMethod, otherFallbackMethod)
+                && Objects.equals(fallbackHandlerClass, otherFallbackHandlerClass);
     }
 
     @Override
