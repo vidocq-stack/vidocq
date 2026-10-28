@@ -61,25 +61,39 @@ final class IntelliJModuleNames {
             }
         }
         items.sort((a, b) -> a.path.compareToIgnoreCase(b.path));
+        return names(items, counters(items));
+    }
 
+    /**
+     * A counter, starting at 0, per original name (lower case) that several projects share; marks the projects that
+     * also share their groupId.
+     */
+    private static Map<String, Integer> counters(List<Item> items) {
         Map<String, Integer> counters = new HashMap<>();
         for (int i = 0; i < items.size(); i++) {
             Item item = items.get(i);
-            if (item.duplicatedGroup) {
-                continue;
+            if (!item.duplicatedGroup) {
+                markDuplicates(item, items.subList(i + 1, items.size()), counters);
             }
-            for (int k = i + 1; k < items.size(); k++) {
-                Item other = items.get(k);
-                if (item.originalName.equalsIgnoreCase(other.originalName)) {
-                    counters.put(item.originalName.toLowerCase(Locale.ROOT), 0);
-                    if (item.groupId.equals(other.groupId)) {
-                        item.duplicatedGroup = true;
-                        other.duplicatedGroup = true;
-                    }
+        }
+        return counters;
+    }
+
+    /** Compares {@code item} with the projects after it, in {@link #counters(List)}. */
+    private static void markDuplicates(Item item, List<Item> later, Map<String, Integer> counters) {
+        for (Item other : later) {
+            if (item.originalName.equalsIgnoreCase(other.originalName)) {
+                counters.put(item.originalName.toLowerCase(Locale.ROOT), 0);
+                if (item.groupId.equals(other.groupId)) {
+                    item.duplicatedGroup = true;
+                    other.duplicatedGroup = true;
                 }
             }
         }
+    }
 
+    /** Numbers the projects whose original name has a counter, then until each name is free, by pom path. */
+    private static Map<String, String> names(List<Item> items, Map<String, Integer> counters) {
         Set<String> taken = new HashSet<>();
         Map<String, String> names = new HashMap<>();
         for (Item item : items) {

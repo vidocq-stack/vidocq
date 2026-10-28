@@ -82,6 +82,9 @@ final class IdeaApplications {
             EXCLUDE_PROPERTY, "vidocq.dev.debugHost", "vidocq.dev.debugPort");
 
     private static final String COMPILER_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
+    private static final String COMPILE = "compile";
+    private static final String DEFAULT_COMPILE = "default-compile";
+    private static final String DEFAULT_TEST_COMPILE = "default-testCompile";
     private static final String PREFIX = "Vidocq idea: ";
 
     enum Level { DEBUG, INFO, WARN }
@@ -445,20 +448,9 @@ final class IdeaApplications {
      */
     static String splitReason(MavenProject project) {
         Plugin compiler = project.getPlugin(COMPILER_KEY);
-        Properties properties = project.getProperties();
-        for (String level : List.of("release", "source", "target")) {
-            String testLevel = "test" + Character.toUpperCase(level.charAt(0)) + level.substring(1);
-            String test = compilerValue(compiler, testLevel, properties.getProperty("maven.compiler." + testLevel));
-            if (test == null) {
-                continue;
-            }
-            String main = compilerValue(compiler, level, properties.getProperty("maven.compiler." + level));
-            if (!test.equals(main)) {
-                return testLevel + " " + test + " differs from " + level + " " + (main == null ? "(unset)" : main);
-            }
-        }
-        if (compiler == null) {
-            return null;
+        String reason = levelReason(compiler, project.getProperties());
+        if (reason != null || compiler == null) {
+            return reason;
         }
         for (String arguments : List.of("testCompilerArgument", "testCompilerArguments")) {
             if (compilerConfigurations(compiler).stream().anyMatch(c -> c.getChild(arguments) != null)) {
@@ -466,37 +458,58 @@ final class IdeaApplications {
             }
         }
         List<PluginExecution> executions = compiler.getExecutions();
-        if (!executions.isEmpty()) {
-            PluginExecution compile = executions.stream()
-                    .filter(e -> isExecutionOf(e, "compile", "compile", "default-compile")).findFirst().orElse(null);
-            PluginExecution testCompile = executions.stream()
-                    .filter(e -> isExecutionOf(e, "test-compile", "testCompile", "default-testCompile"))
-                    .findFirst().orElse(null);
-            Xpp3Dom compileArgs = child(compile, "compilerArgs");
-            Xpp3Dom testCompileArgs = child(testCompile, "compilerArgs");
-            if (compileArgs == null ? testCompileArgs != null : !compileArgs.equals(testCompileArgs)) {
-                return "compile and testCompile use different compilerArgs";
-            }
-            Xpp3Dom compileToolchain = executions.stream()
-                    .filter(e -> isExecutionOf(e, "compile", "compile", "default-compile"))
-                    .map(e -> child(e, "jdkToolchain")).filter(Objects::nonNull).findFirst().orElse(null);
-            Xpp3Dom testToolchain = executions.stream()
-                    .filter(e -> isExecutionOf(e, "test-compile", "testCompile", "default-testCompile"))
-                    .map(e -> child(e, "jdkToolchain")).filter(Objects::nonNull).findFirst().orElse(null);
-            if (!Objects.equals(compileToolchain, testToolchain)) {
-                return "compile and testCompile use different jdkToolchain";
-            }
-            for (PluginExecution execution : executions) {
-                Xpp3Dom roots = child(execution, "compileSourceRoots");
-                if (roots != null && roots.getChildCount() > 0
-                        && (execution.getPhase() == null || "compile".equals(execution.getPhase()))
-                        && !"default-compile".equals(execution.getId())
-                        && !"default-testCompile".equals(execution.getId())) {
-                    return "execution '" + execution.getId() + "' adds compileSourceRoots";
-                }
+        return executions.isEmpty() ? null : executionsReason(executions);
+    }
+
+    /** A test release, source or target level that differs from the main one, or {@code null}. */
+    private static String levelReason(Plugin compiler, Properties properties) {
+        for (String level : List.of("release", "source", "target")) {
+            String testLevel = "test" + Character.toUpperCase(level.charAt(0)) + level.substring(1);
+            String test = compilerValue(compiler, testLevel, properties.getProperty("maven.compiler." + testLevel));
+            String main = test == null ? null
+                    : compilerValue(compiler, level, properties.getProperty("maven.compiler." + level));
+            if (test != null && !test.equals(main)) {
+                return testLevel + " " + test + " differs from " + level + " " + (main == null ? "(unset)" : main);
             }
         }
         return null;
+    }
+
+    /** What of the compiler's executions splits the module, or {@code null}. */
+    private static String executionsReason(List<PluginExecution> executions) {
+        PluginExecution compile = executions.stream().filter(IdeaApplications::isCompile).findFirst().orElse(null);
+        PluginExecution testCompile = executions.stream().filter(IdeaApplications::isTestCompile).findFirst()
+                .orElse(null);
+        Xpp3Dom compileArgs = child(compile, "compilerArgs");
+        Xpp3Dom testCompileArgs = child(testCompile, "compilerArgs");
+        if (!Objects.equals(compileArgs, testCompileArgs)) {
+            return "compile and testCompile use different compilerArgs";
+        }
+        Xpp3Dom compileToolchain = executions.stream().filter(IdeaApplications::isCompile)
+                .map(e -> child(e, "jdkToolchain")).filter(Objects::nonNull).findFirst().orElse(null);
+        Xpp3Dom testToolchain = executions.stream().filter(IdeaApplications::isTestCompile)
+                .map(e -> child(e, "jdkToolchain")).filter(Objects::nonNull).findFirst().orElse(null);
+        if (!Objects.equals(compileToolchain, testToolchain)) {
+            return "compile and testCompile use different jdkToolchain";
+        }
+        for (PluginExecution execution : executions) {
+            Xpp3Dom roots = child(execution, "compileSourceRoots");
+            if (roots != null && roots.getChildCount() > 0
+                    && (execution.getPhase() == null || COMPILE.equals(execution.getPhase()))
+                    && !DEFAULT_COMPILE.equals(execution.getId())
+                    && !DEFAULT_TEST_COMPILE.equals(execution.getId())) {
+                return "execution '" + execution.getId() + "' adds compileSourceRoots";
+            }
+        }
+        return null;
+    }
+
+    private static boolean isCompile(PluginExecution execution) {
+        return isExecutionOf(execution, COMPILE, COMPILE, DEFAULT_COMPILE);
+    }
+
+    private static boolean isTestCompile(PluginExecution execution) {
+        return isExecutionOf(execution, "test-compile", "testCompile", DEFAULT_TEST_COMPILE);
     }
 
     private static String compilerValue(Plugin compiler, String name, String property) {
