@@ -47,7 +47,6 @@ public final class MansartRepoCreator implements SyntheticBeanCreator<Object> {
         RepositoryRuntime runtime = DataStoreResolver.resolve(lookup, itfClass);
         try {
             var ctor = implClass.getDeclaredConstructor(RepositoryRuntime.class);
-            ctor.setAccessible(true);
             return ctor.newInstance(runtime);
         } catch (ReflectiveOperationException e) {
             throw new MansartDataException("Failed to instantiate " + implClass.getName(), e);

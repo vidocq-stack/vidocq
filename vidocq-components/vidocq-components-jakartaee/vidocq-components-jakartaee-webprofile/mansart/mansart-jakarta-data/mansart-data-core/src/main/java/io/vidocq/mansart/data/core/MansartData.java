@@ -83,7 +83,6 @@ public final class MansartData {
         try {
             Class<?> impl = Class.forName(implName, true, itf.getClassLoader());
             Constructor<?> ctor = impl.getDeclaredConstructor(RepositoryRuntime.class);
-            ctor.setAccessible(true);
             @SuppressWarnings("unchecked")
             R instance = (R) ctor.newInstance(runtime);
             return instance;
