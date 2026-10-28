@@ -28,6 +28,7 @@ import jakarta.json.JsonValue;
 
 import java.time.Clock;
 import java.util.LinkedHashSet;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -46,7 +47,14 @@ import java.util.Set;
 final class JwtClaimsValidator {
 
     void validate(JsonObject claims, JwtConfig config, Clock clock) throws JwtValidationException {
-        long now = clock.instant().getEpochSecond();
+        validateTimes(claims, config, clock.instant().getEpochSecond());
+        validateIssuer(claims, config);
+        validateAudience(claims, config);
+        validatePrincipal(claims);
+    }
+
+    /** {@code exp}, {@code iat} and {@code nbf} (RFC 7519 §4.1.4-6), then the token age (MP JWT §9.2.1). */
+    private static void validateTimes(JsonObject claims, JwtConfig config, long now) throws JwtValidationException {
         long skew = config.clockSkew().getSeconds();
 
         JsonNumber exp = numberOrNull(claims, "exp");
@@ -62,10 +70,11 @@ final class JwtClaimsValidator {
         }
 
         //MP JWT spec §9.2.1: mp.jwt.verify.token.age — reject if now - iat > tokenAge (in seconds)
-        if (iat != null && config.tokenAge().isPresent()) {
+        Optional<Long> tokenAge = config.tokenAge();
+        if (iat != null && tokenAge.isPresent()) {
             long age = now - iat.longValue();
-            if (age > config.tokenAge().get()) {
-                throw new JwtValidationException("token age " + age + "s exceeds mp.jwt.verify.token.age=" + config.tokenAge().get() + "s");
+            if (age > tokenAge.get()) {
+                throw new JwtValidationException("token age " + age + "s exceeds mp.jwt.verify.token.age=" + tokenAge.get() + "s");
             }
         }
 
@@ -73,22 +82,26 @@ final class JwtClaimsValidator {
         if (nbf != null && nbf.longValue() - skew > now) {
             throw new JwtValidationException("token is not yet valid ('nbf' in the future)");
         }
+    }
 
-        if (config.issuer().isPresent()) {
-            String iss = stringOrNull(claims, "iss");
-            if (!config.issuer().get().equals(iss)) {
-                throw new JwtValidationException("issuer mismatch (expected '" + config.issuer().get() + "')");
-            }
+    private static void validateIssuer(JsonObject claims, JwtConfig config) throws JwtValidationException {
+        Optional<String> issuer = config.issuer();
+        if (issuer.isPresent() && !issuer.get().equals(stringOrNull(claims, "iss"))) {
+            throw new JwtValidationException("issuer mismatch (expected '" + issuer.get() + "')");
         }
+    }
 
+    private static void validateAudience(JsonObject claims, JwtConfig config) throws JwtValidationException {
         if (!config.audiences().isEmpty()) {
             Set<String> aud = audienceOf(claims);
             if (aud.stream().noneMatch(config.audiences()::contains)) {
                 throw new JwtValidationException("audience mismatch (none of " + config.audiences() + ")");
             }
         }
+    }
 
-        //MP JWT spec §4.1: the main name must be transferable from upn, preferred username, or sub
+    /** MP JWT spec §4.1: the principal name must come from {@code upn}, {@code preferred_username} or {@code sub}. */
+    private static void validatePrincipal(JsonObject claims) throws JwtValidationException {
         String upn = stringOrNull(claims, "upn");
         String preferred = stringOrNull(claims, "preferred_username");
         String sub = stringOrNull(claims, "sub");

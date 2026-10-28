@@ -31,6 +31,7 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import java.security.PublicKey;
 import java.time.Clock;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * {@link JwtValidator} Reference Implementation: parsing chain → key resolution →
@@ -73,11 +74,11 @@ public final class DefaultJwtValidator implements JwtValidator {
         SignatureAlgorithm alg = SignatureAlgorithm.fromJoseName(algName)
                 .orElseThrow(() -> new JwtValidationException("unsupported or missing 'alg' header: " + algName));
 
-        if (config.requiredAlgorithm().isPresent()
-                && config.requiredAlgorithm().get().family() != alg.family()) {
+        Optional<SignatureAlgorithm> required = config.requiredAlgorithm();
+        if (required.isPresent() && required.get().family() != alg.family()) {
             throw new JwtValidationException("token algorithm " + alg.name()
                     + " does not match the configured mp.jwt.verify.publickey.algorithm="
-                    + config.requiredAlgorithm().get().name());
+                    + required.get().name());
         }
 
         String kid = headerString(jwt, "kid");
