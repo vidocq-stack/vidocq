@@ -99,8 +99,8 @@ public class FaultToleranceInterceptor {
         Method resolvedMethod = resolveInterceptedMethod(context);
         registerMetricsOnce(recorder, context.getTarget(), resolvedMethod);
         return PolicyComposer.invoke(context::proceed, context.getTarget(), resolvedMethod,
-                context.getParameters(), stateRegistry, bulkheadRegistry, recorder,
-                new RequestContextActivation(requestContextControllers));
+                context.getParameters(), new PolicyComposer.Services(stateRegistry, bulkheadRegistry, recorder,
+                        new RequestContextActivation(requestContextControllers)));
     }
 
     /**

@@ -22,9 +22,26 @@ package io.vidocq.heisenberg.internal;
 import java.lang.reflect.Method;
 import org.eclipse.microprofile.faulttolerance.Fallback;
 
+/**
+ * MP FT 4.1 §6: runs an invocation and, when it fails with an exception the {@link FallbackConfig}
+ * selects, hands the failure to the fallback method or handler.
+ */
 public final class FallbackPolicy {
 
-    private FallbackPolicy() {}
+    private final Fallback fallback;
+    private final FallbackConfig config;
+    private final FallbackResolver resolver;
+
+    /**
+     * @param fallback the {@code @Fallback} annotation of the guarded method
+     * @param config   its effective configuration (annotation and MicroProfile Config overrides)
+     * @param resolver resolves and calls the fallback method or handler
+     */
+    public FallbackPolicy(Fallback fallback, FallbackConfig config, FallbackResolver resolver) {
+        this.fallback = fallback;
+        this.config = config;
+        this.resolver = resolver;
+    }
 
     public static Object execute(
             PolicyComposer.Invocation invocation,
@@ -35,17 +52,20 @@ public final class FallbackPolicy {
             Object[] parameters,
             FallbackResolver resolver
     ) throws Exception {
-        return execute(invocation, fallback, config, target, guardedMethod, parameters, resolver, () -> {});
+        return new FallbackPolicy(fallback, config, resolver)
+                .execute(invocation, target, guardedMethod, parameters, () -> {});
     }
 
-    public static Object execute(
+    /**
+     * Runs {@code invocation}, falling back on a failure the configuration selects.
+     *
+     * @param onFallbackApplied called as soon as the fallback is invoked
+     */
+    public Object execute(
             PolicyComposer.Invocation invocation,
-            Fallback fallback,
-            FallbackConfig config,
             Object target,
             Method guardedMethod,
             Object[] parameters,
-            FallbackResolver resolver,
             Runnable onFallbackApplied
     ) throws Exception {
         try {
@@ -68,4 +88,3 @@ public final class FallbackPolicy {
         }
     }
 }
-

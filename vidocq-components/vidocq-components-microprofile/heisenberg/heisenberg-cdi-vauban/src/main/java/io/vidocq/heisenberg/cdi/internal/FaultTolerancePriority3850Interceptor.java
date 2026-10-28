@@ -72,8 +72,8 @@ public class FaultTolerancePriority3850Interceptor {
 
         Method resolvedMethod = FaultToleranceInterceptor.resolveInterceptedMethod(context);
         return PolicyComposer.invoke(context::proceed, context.getTarget(), resolvedMethod,
-                context.getParameters(), stateRegistry, bulkheadRegistry, recorder,
-                new RequestContextActivation(requestContextControllers));
+                context.getParameters(), new PolicyComposer.Services(stateRegistry, bulkheadRegistry, recorder,
+                        new RequestContextActivation(requestContextControllers)));
     }
 }
 
