@@ -622,8 +622,19 @@ public final class RepositoryRuntime {
 
     /* -------- lifecycle (M3b-2): @Insert, @Update, @Delete ---------- */
 
-    /** Strict insert (never an upsert). Translates SQLState 23505 → {@link jakarta.data.exceptions.EntityExistsException}. */
+    /**
+     * Strict insert (never an upsert). Translates SQLState 23505 → {@link jakarta.data.exceptions.EntityExistsException}.
+     * An entity with a generated id that already holds the id of a stored row is that row: it is not inserted
+     * again (MANSART-021).
+     */
     public <E> E insertStrict(EntityModel<E> model, E entity) {
+        if (model.id().generated()) {
+            Object id = readId(model, entity);
+            if (id != null && existsById(model, id)) {
+                throw new jakarta.data.exceptions.EntityExistsException(
+                        model.entityClass().getSimpleName() + " with id " + id + " already exists");
+            }
+        }
         return insert(model, entity);
     }
 

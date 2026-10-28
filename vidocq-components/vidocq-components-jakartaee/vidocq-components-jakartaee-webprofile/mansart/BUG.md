@@ -722,3 +722,24 @@ java.util.Collection` on the runtime path: only `List` returns were recognised, 
 ### Fix
 `RuntimeRepositoryProxy.shapeFindResult` returns the list for `Collection` and `Iterable` returns too, as derived
 queries already did.
+
+## MANSART-021 — `@Insert` of an entity already stored inserted a copy
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-margin`)
+- **Severity**: medium (silent duplicate rows; Jakarta Data specifies `EntityExistsException`)
+- **Module**: `mansart-data-core` (`RepositoryRuntime`)
+
+### Symptom
+With a generated id, `insert(stored)` (or `@Insert`, `insertAll`) on an entity read or inserted before stored a new
+row under a new id and overwrote the entity's id, instead of throwing `EntityExistsException`.
+
+### Minimal repro
+`LifecycleBatchTest.insertingAStoredEntityAgainFails` (`mansart-data-tests`), through both implementations.
+
+### Cause
+The INSERT leaves out a generated id column, so the database never saw the conflicting id.
+
+### Fix
+`RepositoryRuntime.insertStrict` throws `EntityExistsException` when the entity's generated id is set and a row with
+that id exists. An id set on an entity that matches no row is still replaced by the generated one.

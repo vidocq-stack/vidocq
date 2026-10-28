@@ -20,6 +20,7 @@
 package io.vidocq.mansart.data.tests;
 
 import io.vidocq.mansart.data.core.MansartData;
+import jakarta.data.exceptions.EntityExistsException;
 import jakarta.data.exceptions.OptimisticLockingFailureException;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeAll;
@@ -133,5 +134,17 @@ class LifecycleBatchTest {
         Article stale = article("stale");
         stale.setId(one.getId());
         assertThatThrownBy(() -> repo.update(stale)).isInstanceOf(OptimisticLockingFailureException.class);
+    }
+
+    /** MANSART-021: inserting an entity that is already stored fails, instead of storing a copy. */
+    @ParameterizedTest
+    @MethodSource("crudRepositories")
+    void insertingAStoredEntityAgainFails(ArticleCrudRepository repo) {
+        Article stored = repo.insert(article("once"));
+        List<Article> again = List.of(stored);
+
+        assertThatThrownBy(() -> repo.insert(stored)).isInstanceOf(EntityExistsException.class);
+        assertThatThrownBy(() -> repo.insertAll(again)).isInstanceOf(EntityExistsException.class);
+        assertThat(repo.findAll().map(Article::getTitle)).containsExactly("once");
     }
 }
