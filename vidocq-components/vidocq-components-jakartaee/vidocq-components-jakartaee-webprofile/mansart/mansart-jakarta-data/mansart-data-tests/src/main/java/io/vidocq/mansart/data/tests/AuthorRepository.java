@@ -230,4 +230,12 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
     /** A single-value projection without a result throws {@code EmptyResultException} (MANSART-014). */
     @jakarta.data.repository.Query("SELECT name WHERE id = ?1")
     String jdqlNameOfId(Long id);
+
+    /** A projection to a primitive (MANSART-015). */
+    @jakarta.data.repository.Query("SELECT id WHERE name = ?1")
+    long jdqlIdOf(String name);
+
+    /** A projection to a primitive array (MANSART-015). */
+    @jakarta.data.repository.Query("SELECT id ORDER BY id")
+    long[] jdqlAllIds();
 }

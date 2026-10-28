@@ -587,3 +587,28 @@ does not extend, so a caller catching it missed the case.
 
 ### Fix
 The three generated `throw`s use `EmptyResultException`. Regression test: `EmptySingleResultTest`.
+
+## MANSART-015 — Projections to a primitive or a primitive array failed
+
+- **Date**: 2026-10-28
+- **Status**: FIXED 2026-10-28 (branch `test/coverage-processor`)
+- **Severity**: medium (`@Query("SELECT stock …") int stockOf(…)` failed at run time)
+- **Modules**: `mansart-data-core` (`JdqlExecutor`), `mansart-data-processor` (`JdqlParser`)
+
+### Symptom
+- Runtime proxy: `@Query("SELECT id WHERE name = ?1") long idOf(String)` failed with `MansartDataException: SQL error`
+  caused by the driver's "converting to class long" (H2: feature not supported).
+- Annotation processor: `@Query("SELECT id ORDER BY id") long[] ids()` asked the driver for a `long[]` per row
+  (`ClassCastException` inside H2), the array return falling into the single-value branch.
+
+### Minimal repro
+`EmptySingleResultTest.projectsToPrimitives` (`mansart-data-tests`): `AuthorRepository.jdqlIdOf` and `jdqlAllIds`,
+through both implementations.
+
+### Cause
+The runtime path passed the primitive return (or array component) type to `ResultSet.getObject(int, Class)`, which
+drivers only support for reference types; the processor had no array branch for single-column projections.
+
+### Fix
+`JdqlExecutor.projectionElement` boxes the element type; `JdqlParser.emitProject` reads an array's column as the
+boxed component type and copies it into the array. Regression test: `EmptySingleResultTest.projectsToPrimitives`.

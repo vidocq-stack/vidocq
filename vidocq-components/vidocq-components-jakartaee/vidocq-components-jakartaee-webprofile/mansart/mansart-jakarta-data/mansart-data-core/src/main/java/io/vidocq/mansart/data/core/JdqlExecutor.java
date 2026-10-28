@@ -971,14 +971,15 @@ public final class JdqlExecutor {
         }
     }
 
+    /** Boxed, so that the driver can convert a column to it (MANSART-015). */
     private static Class<?> projectionElement(Method m) {
         Class<?> rt = m.getReturnType();
-        if (rt.isArray()) return rt.getComponentType();
+        if (rt.isArray()) return boxed(rt.getComponentType());
         java.lang.reflect.Type genericRt = m.getGenericReturnType();
         if (genericRt instanceof java.lang.reflect.ParameterizedType pt) {
             java.lang.reflect.Type[] args = pt.getActualTypeArguments();
             if (args.length == 1 && args[0] instanceof Class<?> c) return c;
         }
-        return rt;
+        return boxed(rt);
     }
 }

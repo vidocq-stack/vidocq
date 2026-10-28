@@ -92,4 +92,14 @@ class EmptySingleResultTest {
         assertThatThrownBy(() -> repo.jdqlOneNamed("nobody")).isInstanceOf(EmptyResultException.class);
         assertThatThrownBy(() -> repo.jdqlNameOfId(-1L)).isInstanceOf(EmptyResultException.class);
     }
+
+    /** MANSART-015: a projection to a primitive or a primitive array. */
+    @ParameterizedTest
+    @MethodSource("repositories")
+    void projectsToPrimitives(AuthorRepository repo) {
+        long id = repo.jdqlOneNamed("Solo").getId();
+
+        assertThat(repo.jdqlIdOf("Solo")).isEqualTo(id);
+        assertThat(repo.jdqlAllIds()).containsExactly(id);
+    }
 }
