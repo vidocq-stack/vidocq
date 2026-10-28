@@ -62,6 +62,9 @@ class MultiDataStoreRoutingTest {
                 .addBeanClass(Author.class)
                 .addBeanClass(AuthorRepository.class)
                 .addBeanClass(AuthorRepositoryImpl.class)
+                // No generated implementation: the runtime proxy path, routed and not.
+                .addBeanClass(RoutedNoteLog.class)
+                .addBeanClass(DefaultNoteLog.class)
                 .build();
         routedNotes = container.select(RoutedNoteRepository.class);
         authors     = container.select(AuthorRepository.class);
@@ -149,5 +152,22 @@ class MultiDataStoreRoutingTest {
 
         assertThat(saved.getId()).isNotNull();
         assertThat(countRows(RoutingDataSources.DEFAULT_URL, "authors")).isEqualTo(1);
+    }
+
+    @Test
+    void runtimeRepositoriesWithoutGeneratedImplementationAreBeansRoutedByDataStore() throws Exception {
+        RoutedNote audited = new RoutedNote();
+        audited.setText("audited");
+        RoutedNote plain = new RoutedNote();
+        plain.setText("plain");
+
+        container.select(RoutedNoteLog.class).add(audited);
+        container.select(DefaultNoteLog.class).add(plain);
+
+        assertThat(container.select(RoutedNoteLog.class).all()).extracting(RoutedNote::getText)
+                .containsExactly("audited");
+        assertThat(container.select(DefaultNoteLog.class).all()).extracting(RoutedNote::getText)
+                .containsExactly("plain");
+        assertThat(countRows(RoutingDataSources.AUDIT_URL, "routed_notes")).isEqualTo(1);
     }
 }
