@@ -44,6 +44,6 @@ class GrimmExtensionTest {
 
         assertTrue(created.classes().contains(GrimmExtensionTest.class));
         assertTrue(created.classes().contains(String.class));
-        assertFalse(created.classes().stream().anyMatch(c -> c.getName().equals("com.example.Missing")));
+        assertFalse(created.classes().stream().map(Class::getName).toList().contains("com.example.Missing"));
     }
 }

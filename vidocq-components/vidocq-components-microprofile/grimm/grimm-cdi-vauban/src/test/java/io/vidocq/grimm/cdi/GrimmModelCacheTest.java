@@ -30,6 +30,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GrimmModelCacheTest {
@@ -51,6 +52,42 @@ class GrimmModelCacheTest {
         assertNotNull(doc.getPaths());
         assertTrue(doc.getPaths().hasPathItem("/pets"));
         assertNotNull(doc.getPaths().getPathItem("/pets").getGET());
+    }
+
+    @Test
+    void getDocument_returnsTheSameSkeletonOnEveryCall() {
+        GrimmModelCache cache = new GrimmModelCache();
+        assertSame(cache.getDocument(), cache.getDocument());
+    }
+
+    @Test
+    void initialize_isIdempotentOnceTheDocumentIsBuilt() {
+        GrimmModelCache cache = new GrimmModelCache();
+        cache.initialize(GrimmConfig.defaults(), List.of(PetsResource.class));
+        OpenAPI first = cache.getDocument();
+
+        cache.initialize(GrimmConfig.defaults(), List.of());
+
+        assertSame(first, cache.getDocument());
+        assertTrue(cache.getDocument().getPaths().hasPathItem("/pets"));
+    }
+
+    @Test
+    void initialize_acceptsNullTypes() {
+        GrimmModelCache cache = new GrimmModelCache();
+        cache.initialize(GrimmConfig.defaults(), null);
+        assertTrue(cache.getDocument().getOpenapi().startsWith("3.1"));
+    }
+
+    @Test
+    void setDocument_replacesTheCachedDocument() {
+        GrimmModelCache cache = new GrimmModelCache();
+        cache.initialize(GrimmConfig.defaults(), List.of(PetsResource.class));
+        OpenAPI replacement = new GrimmModelCache().getDocument();
+
+        cache.setDocument(replacement);
+
+        assertSame(replacement, cache.getDocument());
     }
 
     @Path("/pets")

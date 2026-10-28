@@ -25,6 +25,8 @@ import org.eclipse.microprofile.openapi.annotations.media.PatternProperty;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.eclipse.microprofile.openapi.annotations.media.SchemaProperty;
 
+import java.util.Arrays;
+
 /**
  * The attributes {@code @Schema} and {@code @SchemaProperty} share, read once from either
  * annotation so that {@link SchemaGenerator} maps them with a single piece of code. The two
@@ -111,6 +113,35 @@ record SchemaAttributes(
                 || ifSchema != Void.class || thenSchema != Void.class || elseSchema != Void.class
                 || contains != Void.class || minContains != 0 || maxContains != Integer.MAX_VALUE
                 || prefixItems.length > 0 || patternProperties.length > 0 || propertyNames != Void.class;
+    }
+
+    /**
+     * Content-based equality: the array components are compared element by element, not by
+     * reference as the implicit record {@code equals} would do.
+     */
+    @Override
+    public boolean equals(Object other) {
+        return other instanceof SchemaAttributes that && Arrays.deepEquals(components(), that.components());
+    }
+
+    @Override
+    public int hashCode() {
+        return Arrays.deepHashCode(components());
+    }
+
+    @Override
+    public String toString() {
+        return "SchemaAttributes" + Arrays.deepToString(components());
+    }
+
+    private Object[] components() {
+        return new Object[] {type, format, title, description, comment, pattern, example, examples, defaultValue,
+                minLength, maxLength, minProperties, maxProperties, minItems, maxItems, uniqueItems, minimum, maximum,
+                exclusiveMinimum, exclusiveMaximum, multipleOf, deprecated, readOnly, writeOnly, nullable,
+                contentEncoding, contentMediaType, contentSchema, constValue, requiredProperties, enumeration,
+                dependentRequired, dependentSchemas, additionalProperties, externalDocs, extensions, allOf, anyOf,
+                oneOf, not, discriminatorProperty, discriminatorMapping, ifSchema, thenSchema, elseSchema, contains,
+                minContains, maxContains, prefixItems, patternProperties, propertyNames};
     }
 
     static SchemaAttributes of(Schema a) {

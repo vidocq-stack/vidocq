@@ -31,6 +31,7 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -47,7 +48,7 @@ public class GrimmModelCache {
 
     private final ReentrantLock lock = new ReentrantLock();
     private final ModelBuilder modelBuilder = new ModelBuilder();
-    private volatile OpenAPI document;
+    private final AtomicReference<OpenAPI> document = new AtomicReference<>();
     private final GrimmConfig config;
     private final ScannedTypes scannedTypes;
 
@@ -80,15 +81,15 @@ public class GrimmModelCache {
      * once the document is set.
      */
     public void initialize(GrimmConfig config, Collection<Class<?>> annotatedTypes) {
-        if (document != null) {
+        if (document.get() != null) {
             return;
         }
         lock.lock();
         try {
-            if (document != null) {
+            if (document.get() != null) {
                 return;
             }
-            document = modelBuilder.build(config, annotatedTypes != null ? annotatedTypes : List.of());
+            document.set(modelBuilder.build(config, annotatedTypes != null ? annotatedTypes : List.of()));
         } finally {
             lock.unlock();
         }
@@ -98,7 +99,7 @@ public class GrimmModelCache {
     public void setDocument(OpenAPI document) {
         lock.lock();
         try {
-            this.document = document;
+            this.document.set(document);
         } finally {
             lock.unlock();
         }
@@ -106,16 +107,16 @@ public class GrimmModelCache {
 
     /** Returns the cached document; lazily builds an empty skeleton if uninitialized. */
     public OpenAPI getDocument() {
-        OpenAPI snapshot = document;
+        OpenAPI snapshot = document.get();
         if (snapshot != null) {
             return snapshot;
         }
         lock.lock();
         try {
-            if (document == null) {
-                document = OASFactory.createObject(OpenAPI.class).openapi("3.1.0");
+            if (document.get() == null) {
+                document.set(OASFactory.createObject(OpenAPI.class).openapi("3.1.0"));
             }
-            return document;
+            return document.get();
         } finally {
             lock.unlock();
         }
