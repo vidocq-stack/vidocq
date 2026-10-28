@@ -125,6 +125,32 @@ public final class ModelMerger {
         if (source == null) {
             return;
         }
+        mergeDocumentFields(target, source, overwrite);
+        mergeExtensions(target, source, overwrite);
+        mergePathsAndWebhooks(target, source);
+
+        if (source.getComponents() != null) {
+            if (target.getComponents() == null) {
+                target.setComponents(source.getComponents());
+            } else {
+                mergeComponents(target.getComponents(), source.getComponents(), overwrite);
+            }
+        }
+
+        if (source.getServers() != null && !source.getServers().isEmpty()) {
+            mergeServers(target, source, overwrite);
+        }
+        if (source.getSecurity() != null && !source.getSecurity().isEmpty()
+                && (overwrite || target.getSecurity() == null || target.getSecurity().isEmpty())) {
+            target.setSecurity(source.getSecurity());
+        }
+        if (source.getTags() != null && !source.getTags().isEmpty()) {
+            mergeTags(target, source.getTags(), overwrite);
+        }
+    }
+
+    /** The single-valued fields of the document: openapi, info, externalDocs and jsonSchemaDialect. */
+    private static void mergeDocumentFields(OpenAPI target, OpenAPI source, boolean overwrite) {
         if (source.getOpenapi() != null && (overwrite || target.getOpenapi() == null)) {
             target.setOpenapi(source.getOpenapi());
         }
@@ -137,9 +163,9 @@ public final class ModelMerger {
         if (source.getJsonSchemaDialect() != null && (overwrite || target.getJsonSchemaDialect() == null)) {
             target.setJsonSchemaDialect(source.getJsonSchemaDialect());
         }
+    }
 
-        mergeExtensions(target, source, overwrite);
-
+    private void mergePathsAndWebhooks(OpenAPI target, OpenAPI source) {
         if (source.getPaths() != null) {
             if (target.getPaths() == null) {
                 target.setPaths(source.getPaths());
@@ -157,26 +183,6 @@ public final class ModelMerger {
                 merged.merge(entry.getKey(), entry.getValue(), this::mergePathItem);
             }
             target.setWebhooks(merged);
-        }
-
-        if (source.getComponents() != null) {
-            if (target.getComponents() == null) {
-                target.setComponents(source.getComponents());
-            } else {
-                mergeComponents(target.getComponents(), source.getComponents(), overwrite);
-            }
-        }
-
-        if (source.getServers() != null && !source.getServers().isEmpty()) {
-            mergeServers(target, source, overwrite);
-        }
-        if (source.getSecurity() != null && !source.getSecurity().isEmpty()) {
-            if (overwrite || target.getSecurity() == null || target.getSecurity().isEmpty()) {
-                target.setSecurity(source.getSecurity());
-            }
-        }
-        if (source.getTags() != null && !source.getTags().isEmpty()) {
-            mergeTags(target, source.getTags(), overwrite);
         }
     }
 
@@ -251,6 +257,11 @@ public final class ModelMerger {
                     : mergeApiResponses(target.getResponses(), source.getResponses()));
         }
 
+        mergeCallbacksAndSecurity(target, source);
+        return target;
+    }
+
+    private static void mergeCallbacksAndSecurity(Operation target, Operation source) {
         if (source.getCallbacks() != null && !source.getCallbacks().isEmpty()) {
             Map<String, Callback> merged = new LinkedHashMap<>();
             if (target.getCallbacks() != null) {
@@ -262,7 +273,6 @@ public final class ModelMerger {
         if (source.getSecurity() != null && !source.getSecurity().isEmpty()) {
             target.setSecurity(source.getSecurity());
         }
-        return target;
     }
 
     private RequestBody mergeRequestBody(RequestBody target, RequestBody source) {
@@ -510,18 +520,25 @@ public final class ModelMerger {
             if (existing == null) {
                 byUrl.put(s.getUrl(), s);
             } else if (overwrite) {
-                if (s.getDescription() != null) existing.setDescription(s.getDescription());
-                if (s.getVariables() != null && !s.getVariables().isEmpty()) {
-                    Map<String, ServerVariable> mergedVars = new LinkedHashMap<>();
-                    if (existing.getVariables() != null) {
-                        mergedVars.putAll(existing.getVariables());
-                    }
-                    mergedVars.putAll(s.getVariables());
-                    existing.setVariables(mergedVars);
-                }
+                overwriteServer(existing, s);
             }
         }
         return new ArrayList<>(byUrl.values());
+    }
+
+    /** Copies the description of {@code source} onto {@code existing} and adds its variables. */
+    private static void overwriteServer(Server existing, Server source) {
+        if (source.getDescription() != null) {
+            existing.setDescription(source.getDescription());
+        }
+        if (source.getVariables() != null && !source.getVariables().isEmpty()) {
+            Map<String, ServerVariable> mergedVars = new LinkedHashMap<>();
+            if (existing.getVariables() != null) {
+                mergedVars.putAll(existing.getVariables());
+            }
+            mergedVars.putAll(source.getVariables());
+            existing.setVariables(mergedVars);
+        }
     }
 
     private void mergeTags(OpenAPI target, List<Tag> sourceTags, boolean overwrite) {

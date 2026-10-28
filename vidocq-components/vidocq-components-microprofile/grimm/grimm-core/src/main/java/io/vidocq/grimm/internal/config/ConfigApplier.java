@@ -67,20 +67,22 @@ public final class ConfigApplier {
 
         for (Map.Entry<String, PathItem> entry : pathItems.entrySet()) {
             PathItem item = entry.getValue();
-            if (item == null) {
-                continue;
+            if (item != null) {
+                applyPathItemServers(entry.getKey(), item, config);
             }
-            List<Server> pathServers = createServers(config.pathServers().get(entry.getKey()));
-            if (!pathServers.isEmpty()) {
-                item.setServers(pathServers);
-            }
+        }
+    }
 
-            for (PathItem.HttpMethod httpMethod : PathItem.HttpMethod.values()) {
-                Operation operation = getOperation(item, httpMethod);
-                if (operation == null || operation.getOperationId() == null) {
-                    continue;
-                }
-                List<Server> operationServers = createServers(config.operationServers().get(operation.getOperationId()));
+    private static void applyPathItemServers(String path, PathItem item, GrimmConfig config) {
+        List<Server> pathServers = createServers(config.pathServers().get(path));
+        if (!pathServers.isEmpty()) {
+            item.setServers(pathServers);
+        }
+        for (PathItem.HttpMethod httpMethod : PathItem.HttpMethod.values()) {
+            Operation operation = getOperation(item, httpMethod);
+            if (operation != null && operation.getOperationId() != null) {
+                List<Server> operationServers =
+                        createServers(config.operationServers().get(operation.getOperationId()));
                 if (!operationServers.isEmpty()) {
                     operation.setServers(operationServers);
                 }
@@ -184,24 +186,7 @@ public final class ConfigApplier {
     private static Map<Object, Object> expandRefAliases(Map<?, ?> schema) {
         Map<Object, Object> out = new LinkedHashMap<>();
         for (Map.Entry<?, ?> e : schema.entrySet()) {
-            String key = String.valueOf(e.getKey());
-            Object value = e.getValue();
-            if (SCHEMA_KEYS.contains(key) && value instanceof Map<?, ?> m) {
-                value = expandRefAliases(m);
-            } else if (SCHEMA_LIST_KEYS.contains(key) && value instanceof List<?> list) {
-                List<Object> items = new ArrayList<>();
-                for (Object item : list) {
-                    items.add(item instanceof Map<?, ?> m ? expandRefAliases(m) : item);
-                }
-                value = items;
-            } else if (SCHEMA_MAP_KEYS.contains(key) && value instanceof Map<?, ?> m) {
-                Map<Object, Object> named = new LinkedHashMap<>();
-                for (Map.Entry<?, ?> p : m.entrySet()) {
-                    named.put(p.getKey(), p.getValue() instanceof Map<?, ?> pm ? expandRefAliases(pm) : p.getValue());
-                }
-                value = named;
-            }
-            out.put(e.getKey(), value);
+            out.put(e.getKey(), expandNested(String.valueOf(e.getKey()), e.getValue()));
         }
         if (out.get("ref") instanceof String alias) {
             out.remove("ref"); // an explicit $ref wins; the alias must not reach Schema#set either
@@ -210,6 +195,32 @@ public final class ConfigApplier {
             }
         }
         return out;
+    }
+
+    /** Expands the aliases of the subschemas held by {@code value}, the value of the schema keyword {@code key}. */
+    private static Object expandNested(String key, Object value) {
+        if (SCHEMA_KEYS.contains(key) && value instanceof Map<?, ?> m) {
+            return expandRefAliases(m);
+        }
+        if (SCHEMA_LIST_KEYS.contains(key) && value instanceof List<?> list) {
+            List<Object> items = new ArrayList<>();
+            for (Object item : list) {
+                items.add(expandIfSchema(item));
+            }
+            return items;
+        }
+        if (SCHEMA_MAP_KEYS.contains(key) && value instanceof Map<?, ?> m) {
+            Map<Object, Object> named = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> p : m.entrySet()) {
+                named.put(p.getKey(), expandIfSchema(p.getValue()));
+            }
+            return named;
+        }
+        return value;
+    }
+
+    private static Object expandIfSchema(Object value) {
+        return value instanceof Map<?, ?> m ? expandRefAliases(m) : value;
     }
 
     private static Class<?> tryLoad(String fqcn) {

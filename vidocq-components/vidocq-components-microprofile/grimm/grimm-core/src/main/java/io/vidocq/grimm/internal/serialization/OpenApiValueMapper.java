@@ -42,17 +42,11 @@ final class OpenApiValueMapper {
     }
 
     static Object toSerializable(Object value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof String || value instanceof Number || value instanceof Boolean) {
+        if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean) {
             return value;
         }
-        if (value instanceof Character characterValue) {
-            return String.valueOf(characterValue);
-        }
-        if (value instanceof CharSequence sequence) {
-            return sequence.toString();
+        if (value instanceof Character || value instanceof CharSequence) {
+            return value.toString();
         }
         if (value instanceof Enum<?> enumValue) {
             return enumLiteral(enumValue);
@@ -67,7 +61,10 @@ final class OpenApiValueMapper {
         if (value instanceof List<?> listValue) {
             return toSerializableList(listValue);
         }
+        return toSerializableModel(value);
+    }
 
+    private static Object toSerializableModel(Object value) {
         // OpenAPI map-like objects are serialized as plain maps in the final document.
         if (value instanceof Paths paths) {
             return mergeWithExtensions(toSerializable(paths.getPathItems()), paths);
@@ -90,27 +87,7 @@ final class OpenApiValueMapper {
             return schema.getBooleanSchema();
         }
         if (value instanceof Callback callback) {
-            LinkedHashMap<String, Object> result = new LinkedHashMap<>();
-            Object pathItems = toSerializable(callback.getPathItems());
-            if (pathItems instanceof Map<?, ?> pathItemsMap) {
-                for (Map.Entry<?, ?> entry : pathItemsMap.entrySet()) {
-                    if (entry.getKey() != null) {
-                        result.put(String.valueOf(entry.getKey()), entry.getValue());
-                    }
-                }
-            }
-            if (callback.getRef() != null) {
-                result.put("$ref", callback.getRef());
-            }
-            Map<String, Object> extensions = callback.getExtensions();
-            if (extensions != null) {
-                for (Map.Entry<String, Object> entry : extensions.entrySet()) {
-                    if (entry.getValue() != null) {
-                        result.put(entry.getKey(), toSerializable(entry.getValue()));
-                    }
-                }
-            }
-            return result;
+            return toSerializableCallback(callback);
         }
 
         Map<String, Object> bean = toSerializableBean(value);
@@ -118,6 +95,30 @@ final class OpenApiValueMapper {
             discriminator.staticExtensions().forEach((name, extension) -> bean.put(name, toSerializable(extension)));
         }
         return bean;
+    }
+
+    private static Map<String, Object> toSerializableCallback(Callback callback) {
+        LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+        Object pathItems = toSerializable(callback.getPathItems());
+        if (pathItems instanceof Map<?, ?> pathItemsMap) {
+            for (Map.Entry<?, ?> entry : pathItemsMap.entrySet()) {
+                if (entry.getKey() != null) {
+                    result.put(String.valueOf(entry.getKey()), entry.getValue());
+                }
+            }
+        }
+        if (callback.getRef() != null) {
+            result.put("$ref", callback.getRef());
+        }
+        Map<String, Object> extensions = callback.getExtensions();
+        if (extensions != null) {
+            for (Map.Entry<String, Object> entry : extensions.entrySet()) {
+                if (entry.getValue() != null) {
+                    result.put(entry.getKey(), toSerializable(entry.getValue()));
+                }
+            }
+        }
+        return result;
     }
 
     private static Object mergeWithExtensions(Object base, Extensible<?> extensible) {
@@ -143,39 +144,43 @@ final class OpenApiValueMapper {
     private static Map<String, Object> toSerializableBean(Object bean) {
         LinkedHashMap<String, Object> result = new LinkedHashMap<>();
         for (Method method : bean.getClass().getMethods()) {
-            if (!isGetter(method)) {
-                continue;
+            String propertyName = isGetter(method) ? serializedPropertyName(method.getName()) : null;
+            Object rawValue = propertyName == null ? null : invoke(method, bean);
+            if (rawValue != null) {
+                putProperty(result, propertyName, rawValue);
             }
-            String propertyName = getterNameToProperty(method.getName());
-            // Schema.getAll() is a view of the other getters plus the extensions, both written
-            // here already: serializing it as well would write every schema property twice.
-            if (propertyName == null || "class".equals(propertyName) || "operations".equals(propertyName)
-                    || "all".equals(propertyName)) {
-                continue;
-            }
-            Object rawValue = invoke(method, bean);
-            if (rawValue == null) {
-                continue;
-            }
-
-            if ("extensions".equals(propertyName)) {
-                Map<?, ?> extensions = (Map<?, ?>) rawValue;
-                for (Map.Entry<?, ?> extension : extensions.entrySet()) {
-                    if (extension.getKey() != null && extension.getValue() != null) {
-                        result.put(String.valueOf(extension.getKey()), toSerializable(extension.getValue()));
-                    }
-                }
-                continue;
-            }
-
-            propertyName = toOpenApiPropertyName(propertyName);
-            Object serializableValue = toSerializable(rawValue);
-            if ("type".equals(propertyName) && serializableValue instanceof List<?> types && types.size() == 1) {
-                serializableValue = types.getFirst();
-            }
-            result.put(propertyName, serializableValue);
         }
         return result;
+    }
+
+    /** The bean property a getter contributes to the document, or {@code null} when it is not written. */
+    private static String serializedPropertyName(String getterName) {
+        String propertyName = getterNameToProperty(getterName);
+        // Schema.getAll() is a view of the other getters plus the extensions, both written
+        // here already: serializing it as well would write every schema property twice.
+        if (propertyName == null || "class".equals(propertyName) || "operations".equals(propertyName)
+                || "all".equals(propertyName)) {
+            return null;
+        }
+        return propertyName;
+    }
+
+    private static void putProperty(Map<String, Object> result, String propertyName, Object rawValue) {
+        if ("extensions".equals(propertyName)) {
+            Map<?, ?> extensions = (Map<?, ?>) rawValue;
+            for (Map.Entry<?, ?> extension : extensions.entrySet()) {
+                if (extension.getKey() != null && extension.getValue() != null) {
+                    result.put(String.valueOf(extension.getKey()), toSerializable(extension.getValue()));
+                }
+            }
+            return;
+        }
+        Object serializableValue = toSerializable(rawValue);
+        String name = toOpenApiPropertyName(propertyName);
+        if ("type".equals(name) && serializableValue instanceof List<?> types && types.size() == 1) {
+            serializableValue = types.getFirst();
+        }
+        result.put(name, serializableValue);
     }
 
     private static Map<String, Object> toSerializableMap(Map<?, ?> source) {

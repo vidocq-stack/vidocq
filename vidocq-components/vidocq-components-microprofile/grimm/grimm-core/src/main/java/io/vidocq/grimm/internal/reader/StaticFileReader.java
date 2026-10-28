@@ -32,6 +32,7 @@ import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 /**
  * Reads static OpenAPI documents from the deployment classpath.
@@ -95,13 +96,8 @@ public final class StaticFileReader {
         if (classLoader == null) {
             classLoader = StaticFileReader.class.getClassLoader();
         }
-        for (String resourcePath : SEARCH_PATHS) {
-            Optional<String> content = readResource(classLoader, resourcePath);
-            if (content.isPresent()) {
-                return Optional.of(deserialize(content.get(), resourcePath));
-            }
-        }
-        return Optional.empty();
+        ClassLoader loader = classLoader;
+        return firstDocument(resourcePath -> readResource(loader, resourcePath));
     }
 
     /**
@@ -112,27 +108,31 @@ public final class StaticFileReader {
         if (override != null) {
             return Optional.of(deserialize(override.content(), override.resourcePath()));
         }
-        Set<ClassLoader> candidates = collectCandidateClassLoaders(knownDeploymentTypes);
-        for (ClassLoader classLoader : candidates) {
-            for (String resourcePath : SEARCH_PATHS) {
-                Optional<String> content = readResource(classLoader, resourcePath);
-                if (content.isPresent()) {
-                    return Optional.of(deserialize(content.get(), resourcePath));
+        for (ClassLoader classLoader : collectCandidateClassLoaders(knownDeploymentTypes)) {
+            Optional<OpenAPI> document = firstDocument(resourcePath -> readResource(classLoader, resourcePath));
+            if (document.isPresent()) {
+                return document;
+            }
+        }
+        if (knownDeploymentTypes != null) {
+            for (Class<?> type : knownDeploymentTypes) {
+                Optional<OpenAPI> document = type == null
+                        ? Optional.empty()
+                        : firstDocument(resourcePath -> readResource(type, resourcePath));
+                if (document.isPresent()) {
+                    return document;
                 }
             }
         }
+        return Optional.empty();
+    }
 
-        if (knownDeploymentTypes != null) {
-            for (Class<?> type : knownDeploymentTypes) {
-                if (type == null) {
-                    continue;
-                }
-                for (String resourcePath : SEARCH_PATHS) {
-                    Optional<String> content = readResource(type, resourcePath);
-                    if (content.isPresent()) {
-                        return Optional.of(deserialize(content.get(), resourcePath));
-                    }
-                }
+    /** The first of the {@link #SEARCH_PATHS} that {@code reader} finds, deserialized. */
+    private Optional<OpenAPI> firstDocument(Function<String, Optional<String>> reader) {
+        for (String resourcePath : SEARCH_PATHS) {
+            Optional<String> content = reader.apply(resourcePath);
+            if (content.isPresent()) {
+                return Optional.of(deserialize(content.get(), resourcePath));
             }
         }
         return Optional.empty();

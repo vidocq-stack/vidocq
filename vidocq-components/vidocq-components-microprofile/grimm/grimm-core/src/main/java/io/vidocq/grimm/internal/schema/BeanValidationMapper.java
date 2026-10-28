@@ -33,6 +33,7 @@ public final class BeanValidationMapper {
 
     private static final String JAKARTA = "jakarta.validation.constraints.";
     private static final String JAVAX = "javax.validation.constraints.";
+    private static final String VALUE = "value";
 
     private static final java.util.concurrent.atomic.AtomicBoolean ENABLED =
             new java.util.concurrent.atomic.AtomicBoolean(true);
@@ -56,43 +57,56 @@ public final class BeanValidationMapper {
             return;
         }
         for (Annotation ann : annotations) {
-            if (!appliesToDefaultGroup(ann)) {
-                continue;
+            String constraint = constraintName(ann.annotationType().getName());
+            if (constraint != null && appliesToDefaultGroup(ann)) {
+                applyConstraint(schema, ann, constraint);
             }
-            String name = ann.annotationType().getName();
-            if (matches(name, "Size")) {
-                applySize(schema, ann);
-            } else if (matches(name, "DecimalMin")) {
-                applyDecimalMin(schema, ann);
-            } else if (matches(name, "DecimalMax")) {
-                applyDecimalMax(schema, ann);
-            } else if (matches(name, "Min")) {
-                schema.setMinimum(BigDecimal.valueOf(longAttr(ann, "value", Long.MIN_VALUE)));
-            } else if (matches(name, "Max")) {
-                schema.setMaximum(BigDecimal.valueOf(longAttr(ann, "value", Long.MAX_VALUE)));
-            } else if (matches(name, "Positive")) {
-                schema.setExclusiveMinimum(BigDecimal.ZERO);
-            } else if (matches(name, "PositiveOrZero")) {
-                schema.setMinimum(BigDecimal.ZERO);
-            } else if (matches(name, "Negative")) {
-                schema.setExclusiveMaximum(BigDecimal.ZERO);
-            } else if (matches(name, "NegativeOrZero")) {
-                schema.setMaximum(BigDecimal.ZERO);
-            } else if (matches(name, "Pattern")) {
-                String regexp = stringAttr(ann, "regexp");
-                if (!regexp.isEmpty()) {
-                    schema.setPattern(regexp);
-                }
-            } else if (matches(name, "NotBlank")) {
-                setMinLengthAtLeast(schema, 1);
-                if (schema.getPattern() == null || schema.getPattern().isBlank()) {
-                    schema.setPattern("\\S");
-                }
-            } else if (matches(name, "NotEmpty")) {
-                applyNotEmpty(schema);
-            } else if (matches(name, "Digits")) {
-                applyDigits(schema, ann);
+        }
+    }
+
+    /** The simple name of a Jakarta or javax Bean Validation built-in constraint, else {@code null}. */
+    private static String constraintName(String fqcn) {
+        if (fqcn.startsWith(JAKARTA)) {
+            return fqcn.substring(JAKARTA.length());
+        }
+        if (fqcn.startsWith(JAVAX)) {
+            return fqcn.substring(JAVAX.length());
+        }
+        return null;
+    }
+
+    private static void applyConstraint(Schema schema, Annotation ann, String constraint) {
+        switch (constraint) {
+            case "Size" -> applySize(schema, ann);
+            case "DecimalMin" -> applyDecimalMin(schema, ann);
+            case "DecimalMax" -> applyDecimalMax(schema, ann);
+            case "Min" -> schema.setMinimum(BigDecimal.valueOf(longAttr(ann, VALUE, Long.MIN_VALUE)));
+            case "Max" -> schema.setMaximum(BigDecimal.valueOf(longAttr(ann, VALUE, Long.MAX_VALUE)));
+            case "Positive" -> schema.setExclusiveMinimum(BigDecimal.ZERO);
+            case "PositiveOrZero" -> schema.setMinimum(BigDecimal.ZERO);
+            case "Negative" -> schema.setExclusiveMaximum(BigDecimal.ZERO);
+            case "NegativeOrZero" -> schema.setMaximum(BigDecimal.ZERO);
+            case "Pattern" -> applyPattern(schema, ann);
+            case "NotBlank" -> applyNotBlank(schema);
+            case "NotEmpty" -> applyNotEmpty(schema);
+            case "Digits" -> applyDigits(schema, ann);
+            default -> {
+                // a constraint without a JSON Schema counterpart
             }
+        }
+    }
+
+    private static void applyPattern(Schema schema, Annotation ann) {
+        String regexp = stringAttr(ann, "regexp");
+        if (!regexp.isEmpty()) {
+            schema.setPattern(regexp);
+        }
+    }
+
+    private static void applyNotBlank(Schema schema) {
+        setMinLengthAtLeast(schema, 1);
+        if (schema.getPattern() == null || schema.getPattern().isBlank()) {
+            schema.setPattern("\\S");
         }
     }
 
@@ -158,7 +172,7 @@ public final class BeanValidationMapper {
     }
 
     private static void applyDecimalMin(Schema schema, Annotation ann) {
-        String raw = stringAttr(ann, "value");
+        String raw = stringAttr(ann, VALUE);
         if (raw.isEmpty()) {
             return;
         }
@@ -172,7 +186,7 @@ public final class BeanValidationMapper {
     }
 
     private static void applyDecimalMax(Schema schema, Annotation ann) {
-        String raw = stringAttr(ann, "value");
+        String raw = stringAttr(ann, VALUE);
         if (raw.isEmpty()) {
             return;
         }

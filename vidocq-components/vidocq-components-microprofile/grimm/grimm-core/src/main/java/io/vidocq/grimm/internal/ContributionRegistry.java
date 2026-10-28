@@ -48,32 +48,56 @@ public final class ContributionRegistry {
 
     /** Returns the contribution for {@code resourceClass}, or {@code null} (scan fallback). */
     public static OpenApiContribution resolve(Class<?> resourceClass) {
-        ModuleLayer layer = resourceClass.getModule().getLayer();
-        if (layer != null) {
-            try {
-                for (OpenApiContribution contribution : ServiceLoader.load(layer, OpenApiContribution.class)) {
-                    if (contribution.resourceClass() == resourceClass) {
-                        SERVICE_LOADER_HITS.incrementAndGet();
-                        return contribution;
-                    }
-                }
-            } catch (java.util.ServiceConfigurationError e) {
-                LOG.log(System.Logger.Level.DEBUG, () -> "OpenApiContribution layer scan failed: " + e);
-            }
+        OpenApiContribution contribution = fromModuleLayer(resourceClass);
+        if (contribution == null) {
+            contribution = fromClassLoaders(resourceClass);
         }
+        if (contribution != null) {
+            SERVICE_LOADER_HITS.incrementAndGet();
+            return contribution;
+        }
+        return preGenerated(resourceClass);
+    }
+
+    private static OpenApiContribution fromModuleLayer(Class<?> resourceClass) {
+        ModuleLayer layer = resourceClass.getModule().getLayer();
+        if (layer == null) {
+            return null;
+        }
+        try {
+            return findFor(ServiceLoader.load(layer, OpenApiContribution.class), resourceClass);
+        } catch (java.util.ServiceConfigurationError e) {
+            LOG.log(System.Logger.Level.DEBUG, () -> "OpenApiContribution layer scan failed: " + e);
+            return null;
+        }
+    }
+
+    private static OpenApiContribution fromClassLoaders(Class<?> resourceClass) {
         for (ClassLoader loader : candidateLoaders(resourceClass)) {
             try {
-                for (OpenApiContribution contribution : ServiceLoader.load(OpenApiContribution.class, loader)) {
-                    if (contribution.resourceClass() == resourceClass) {
-                        SERVICE_LOADER_HITS.incrementAndGet();
-                        return contribution;
-                    }
+                OpenApiContribution contribution =
+                        findFor(ServiceLoader.load(OpenApiContribution.class, loader), resourceClass);
+                if (contribution != null) {
+                    return contribution;
                 }
             } catch (java.util.ServiceConfigurationError e) {
                 LOG.log(System.Logger.Level.DEBUG,
                         () -> "OpenApiContribution ServiceLoader scan failed on " + loader + ": " + e);
             }
         }
+        return null;
+    }
+
+    private static OpenApiContribution findFor(Iterable<OpenApiContribution> contributions, Class<?> resourceClass) {
+        for (OpenApiContribution contribution : contributions) {
+            if (contribution.resourceClass() == resourceClass) {
+                return contribution;
+            }
+        }
+        return null;
+    }
+
+    private static OpenApiContribution preGenerated(Class<?> resourceClass) {
         String generatedName = resourceClass.getName() + SUFFIX;
         try {
             Class<?> generated = Class.forName(generatedName, true, resourceClass.getClassLoader());
@@ -87,7 +111,7 @@ public final class ContributionRegistry {
             }
             PRE_GENERATED_HITS.incrementAndGet();
             return contribution;
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException _) {
             return null;
         } catch (ReflectiveOperationException | ClassCastException e) {
             LOG.log(System.Logger.Level.WARNING,

@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 /**
@@ -104,7 +103,7 @@ public record GrimmConfig(
         return fromGetter(getter, keys);
     }
 
-    private static GrimmConfig fromGetter(Function<String, String> get, Set<String> knownKeys) {
+    private static GrimmConfig fromGetter(UnaryOperator<String> get, Set<String> knownKeys) {
         boolean disableScan = bool(get.apply("mp.openapi.scan.disable"));
         Set<String> incPkg = csvSet(get.apply("mp.openapi.scan.packages"));
         Set<String> incCls = csvSet(get.apply("mp.openapi.scan.classes"));
@@ -119,40 +118,45 @@ public record GrimmConfig(
                 trimToNull(get.apply("mp.openapi.model.reader")));
 
         List<String> servers = List.copyOf(csvList(get.apply("mp.openapi.servers")));
-        Map<String, List<String>> pathServers = new LinkedHashMap<>();
-        Map<String, List<String>> operationServers = new LinkedHashMap<>();
-
-        Map<String, String> schemaOverrides = new LinkedHashMap<>();
-        String prefix = "mp.openapi.schema.";
-        for (String key : knownKeys) {
-            if (key != null && key.startsWith("mp.openapi.servers.path.")) {
-                String pathKey = key.substring("mp.openapi.servers.path.".length());
-                List<String> values = csvList(get.apply(key));
-                if (!pathKey.isBlank() && !values.isEmpty()) {
-                    pathServers.put(pathKey, values);
-                }
-                continue;
-            }
-            if (key != null && key.startsWith("mp.openapi.servers.operation.")) {
-                String operationId = key.substring("mp.openapi.servers.operation.".length());
-                List<String> values = csvList(get.apply(key));
-                if (!operationId.isBlank() && !values.isEmpty()) {
-                    operationServers.put(operationId, values);
-                }
-                continue;
-            }
-            if (key != null && key.startsWith(prefix) && key.length() > prefix.length()) {
-                String fqcn = key.substring(prefix.length());
-                String value = get.apply(key);
-                if (value != null && !value.isBlank()) {
-                    schemaOverrides.put(fqcn, value);
-                }
-            }
-        }
+        Map<String, List<String>> pathServers = prefixedServers(knownKeys, get, "mp.openapi.servers.path.");
+        Map<String, List<String>> operationServers =
+                prefixedServers(knownKeys, get, "mp.openapi.servers.operation.");
+        Map<String, String> schemaOverrides = schemaOverrides(knownKeys, get);
 
         boolean extScanDisable = bool(get.apply("mp.openapi.extensions.scan.disable"));
 
         return new GrimmConfig(scan, filter, servers, pathServers, operationServers, schemaOverrides, extScanDisable);
+    }
+
+    /** The non-empty server lists of the {@code prefix<suffix>} keys, by non-blank suffix (path or operation id). */
+    private static Map<String, List<String>> prefixedServers(Set<String> knownKeys, UnaryOperator<String> get,
+            String prefix) {
+        Map<String, List<String>> servers = new LinkedHashMap<>();
+        for (String key : knownKeys) {
+            if (key != null && key.startsWith(prefix)) {
+                String suffix = key.substring(prefix.length());
+                List<String> values = csvList(get.apply(key));
+                if (!suffix.isBlank() && !values.isEmpty()) {
+                    servers.put(suffix, values);
+                }
+            }
+        }
+        return servers;
+    }
+
+    /** The non-blank {@code mp.openapi.schema.<fqcn>} values, by class name. */
+    private static Map<String, String> schemaOverrides(Set<String> knownKeys, UnaryOperator<String> get) {
+        Map<String, String> schemaOverrides = new LinkedHashMap<>();
+        String prefix = "mp.openapi.schema.";
+        for (String key : knownKeys) {
+            if (key != null && key.startsWith(prefix) && key.length() > prefix.length()) {
+                String value = get.apply(key);
+                if (value != null && !value.isBlank()) {
+                    schemaOverrides.put(key.substring(prefix.length()), value);
+                }
+            }
+        }
+        return schemaOverrides;
     }
 
     private static Map<String, List<String>> immutableListMap(Map<String, List<String>> source) {
