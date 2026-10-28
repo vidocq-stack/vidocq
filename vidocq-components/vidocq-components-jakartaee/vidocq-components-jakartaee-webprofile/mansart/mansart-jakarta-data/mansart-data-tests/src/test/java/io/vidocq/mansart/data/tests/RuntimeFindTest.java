@@ -58,21 +58,23 @@ class RuntimeFindTest {
     private static final String ADA = "Ada";
     private static final String BOB = "Bob";
     private static final String CYD = "Cyd";
+    private static final String RENAMED = "Ada L.";
+    private static final String NAME = "name";
 
     /** Not annotated {@code @Repository}: only the runtime engine implements it. */
     public interface FindAuthors extends BasicRepository<Author, Long> {
 
         @Find
-        List<Author> byName(@Param("name") String name);
+        List<Author> byName(@Param(NAME) String name);
 
         @Find
-        Optional<Author> oneByName(@Param("name") String name);
+        Optional<Author> oneByName(@Param(NAME) String name);
 
         @Find
-        Author singleByName(@Param("name") String name);
+        Author singleByName(@Param(NAME) String name);
 
         @Find
-        List<Author> byIdAndName(@Param("id") Long id, @Param("name") String name);
+        List<Author> byIdAndName(@Param("id") Long id, @Param(NAME) String name);
 
         /** No {@code @Param}: bound to the only {@code String} attribute, {@code name}. */
         @Find
@@ -155,41 +157,41 @@ class RuntimeFindTest {
 
     @Test
     void returnsStreamsAndArraysInTheRequestedOrder() {
-        assertThat(repo.sorted(Sort.asc("name")).map(Author::getName)).containsExactly(ADA, BOB, CYD);
-        assertThat(repo.ordered(Order.by(Sort.desc("name")))).extracting(Author::getName)
+        assertThat(repo.sorted(Sort.asc(NAME)).map(Author::getName)).containsExactly(ADA, BOB, CYD);
+        assertThat(repo.ordered(Order.by(Sort.desc(NAME)))).extracting(Author::getName)
                 .containsExactly(CYD, BOB, ADA);
     }
 
     @Test
     void appliesTheLimitWindow() {
-        assertThat(repo.window(Limit.of(2), Sort.asc("name"))).extracting(Author::getName)
+        assertThat(repo.window(Limit.of(2), Sort.asc(NAME))).extracting(Author::getName)
                 .containsExactly(ADA, BOB);
-        assertThat(repo.window(Limit.range(2, 3), Sort.asc("name"))).extracting(Author::getName)
+        assertThat(repo.window(Limit.range(2, 3), Sort.asc(NAME))).extracting(Author::getName)
                 .containsExactly(BOB, CYD);
-        assertThat(repo.window(Limit.range(5, 6), Sort.asc("name"))).isEmpty();
+        assertThat(repo.window(Limit.range(5, 6), Sort.asc(NAME))).isEmpty();
     }
 
     @Test
     void returnsOffsetAndCursoredPages() {
-        Page<Author> first = repo.page(PageRequest.ofSize(2), Order.by(Sort.asc("name")));
+        Page<Author> first = repo.page(PageRequest.ofSize(2), Order.by(Sort.asc(NAME)));
         assertThat(first.content()).extracting(Author::getName).containsExactly(ADA, BOB);
         assertThat(first.totalElements()).isEqualTo(3);
 
-        CursoredPage<Author> start = repo.cursor(PageRequest.ofSize(2), Sort.asc("name"));
+        CursoredPage<Author> start = repo.cursor(PageRequest.ofSize(2), Sort.asc(NAME));
         assertThat(start.content()).extracting(Author::getName).containsExactly(ADA, BOB);
-        CursoredPage<Author> next = repo.cursor(start.nextPageRequest(), Sort.asc("name"));
+        CursoredPage<Author> next = repo.cursor(start.nextPageRequest(), Sort.asc(NAME));
         assertThat(next.content()).extracting(Author::getName).containsExactly(CYD);
-        CursoredPage<Author> back = repo.cursor(next.previousPageRequest(), Sort.asc("name"));
+        CursoredPage<Author> back = repo.cursor(next.previousPageRequest(), Sort.asc(NAME));
         assertThat(back.content()).extracting(Author::getName).containsExactly(ADA, BOB);
     }
 
     @Test
     void walksADescendingCursorBothWays() {
-        CursoredPage<Author> start = repo.cursor(PageRequest.ofSize(2), Sort.desc("name"));
+        CursoredPage<Author> start = repo.cursor(PageRequest.ofSize(2), Sort.desc(NAME));
         assertThat(start.content()).extracting(Author::getName).containsExactly(CYD, BOB);
-        CursoredPage<Author> next = repo.cursor(start.nextPageRequest(), Sort.desc("name"));
+        CursoredPage<Author> next = repo.cursor(start.nextPageRequest(), Sort.desc(NAME));
         assertThat(next.content()).extracting(Author::getName).containsExactly(ADA);
-        CursoredPage<Author> back = repo.cursor(next.previousPageRequest(), Sort.desc("name"));
+        CursoredPage<Author> back = repo.cursor(next.previousPageRequest(), Sort.desc(NAME));
         assertThat(back.content()).extracting(Author::getName).containsExactly(CYD, BOB);
     }
 
@@ -201,10 +203,10 @@ class RuntimeFindTest {
     @Test
     void updatesAndDeletesAnUnversionedEntityById() {
         Author ada = repo.byName(ADA).get(0);
-        ada.setName("Ada L.");
+        ada.setName(RENAMED);
 
-        assertThat(repo.update(ada).getName()).isEqualTo("Ada L.");
-        assertThat(repo.byName("Ada L.")).extracting(Author::getId).containsExactly(ada.getId());
+        assertThat(repo.update(ada).getName()).isEqualTo(RENAMED);
+        assertThat(repo.byName(RENAMED)).extracting(Author::getId).containsExactly(ada.getId());
 
         repo.remove(ada);
         assertThat(repo.findById(ada.getId())).isEmpty();

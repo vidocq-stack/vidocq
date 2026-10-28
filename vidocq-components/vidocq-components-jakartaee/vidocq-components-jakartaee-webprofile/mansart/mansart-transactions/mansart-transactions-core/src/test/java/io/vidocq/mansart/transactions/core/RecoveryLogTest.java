@@ -183,7 +183,7 @@ class RecoveryLogTest {
     /** MANSART-010: two scans of the same journal line describe the same transaction branch. */
     @Test
     void scannedXidsCompareByContent(@TempDir Path dir) throws IOException {
-        Path file = dir.resolve("tx.log");
+        Path file = dir.resolve("scanned.log");
         java.nio.file.Files.writeString(file,
                 "PREPARED|4D414E53|0A0B|01\nPREPARED|4D414E53|0A0C|01\n"
                         + "PREPARED|1234|0A0B|01\nPREPARED|4D414E53|0A0B|02\n",
