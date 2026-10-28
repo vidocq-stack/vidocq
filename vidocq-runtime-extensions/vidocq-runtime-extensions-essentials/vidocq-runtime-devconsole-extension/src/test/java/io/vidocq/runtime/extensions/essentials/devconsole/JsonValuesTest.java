@@ -53,7 +53,7 @@ class JsonValuesTest {
     @Test
     void refusesWhatJsonDoesNotAllow() {
         for (String text : List.of("", "{", "{\"a\":1,\"a\":2}", "{\"a\":1} x", "[01]", "[1.]", "{a:1}", "'a'",
-                "\"a\u0001\"", "\"\\x\"", "tru", "[1,]", "-")) {
+                "\"a\u0001\"", "\"\\x\"", "\"\\u00zz\"", "tru", "[1,]", "-")) {
             assertThrows(IllegalArgumentException.class, () -> JsonValues.parse(text, 8), text);
         }
     }

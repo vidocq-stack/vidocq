@@ -85,7 +85,7 @@ final class LogsPanel implements DevConsolePanel {
     static final Set<String> JDK_FINDERS =
             Set.of("sun.util.logging.internal.LoggingProviderImpl", "jdk.internal.logger.DefaultLoggerFinder");
 
-    private static final String ROOT = "(root)";
+    private static final String ROOT_LOGGER_NAME = "(root)";
     private static final List<Chart> CHARTS = List.of(
             new Chart("problems", "Warnings and errors", List.of(Series.rate(WARNINGS), Series.rate(ERRORS))));
     private static final List<String> RECORD_COLUMNS = List.of("time", LEVEL, LOGGER, "thread", "message");
@@ -245,20 +245,21 @@ final class LogsPanel implements DevConsolePanel {
             }
             sample.table("records", RECORD_COLUMNS, rows);
         }
-        sample.table("levels", LEVEL_COLUMNS, levels());
+        sample.table("levels", LEVEL_COLUMNS, loggerLevels());
     }
 
     /**
      * The root logger, then every logger whose level is set, by name, {@value #MAX_ROWS} at most; the third column
      * says which ones the action set.
      */
-    List<List<String>> levels() {
+    List<List<String>> loggerLevels() {
         Set<String> changed;
         synchronized (changes) {
             changed = Set.copyOf(changes.keySet());
         }
         List<List<String>> rows = new ArrayList<>();
-        rows.add(List.of(ROOT, levelName(root.getLevel()), changed.contains("") ? "until the next reload" : ""));
+        rows.add(List.of(ROOT_LOGGER_NAME, levelName(root.getLevel()),
+                changed.contains("") ? "until the next reload" : ""));
         LogManager manager = LogManager.getLogManager();
         List<String> names = Collections.list(manager.getLoggerNames());
         Collections.sort(names);
@@ -266,10 +267,8 @@ final class LogsPanel implements DevConsolePanel {
             if (rows.size() >= MAX_ROWS) {
                 break;
             }
-            if (name.isEmpty()) {
-                continue;
-            }
-            Logger logger = manager.getLogger(name);
+            // the root logger, named "", is the first row already
+            Logger logger = name.isEmpty() ? null : manager.getLogger(name);
             Level level = logger == null ? null : logger.getLevel();
             if (level != null) {
                 rows.add(List.of(name, level.getName(), changed.contains(name) ? "until the next reload" : ""));

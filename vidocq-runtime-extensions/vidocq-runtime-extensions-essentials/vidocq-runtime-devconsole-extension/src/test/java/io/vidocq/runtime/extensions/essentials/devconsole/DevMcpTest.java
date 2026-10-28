@@ -345,6 +345,9 @@ class DevMcpTest {
         assertEquals(-32600L, error(post(fromAClient(), "{\"jsonrpc\":\"2.0\",\"id\":null,\"method\":\"ping\"}"),
                 400).get("code"));
         assertEquals(-32600L, error(post(fromAClient(), "\"ping\""), 400).get("code"));
+        Map<?, ?> notAString = error(post(fromAClient(), "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":1}"), 400);
+        assertEquals(-32600L, notAString.get("code"));
+        assertEquals("The method is not a string.", notAString.get("message"));
     }
 
     @Test

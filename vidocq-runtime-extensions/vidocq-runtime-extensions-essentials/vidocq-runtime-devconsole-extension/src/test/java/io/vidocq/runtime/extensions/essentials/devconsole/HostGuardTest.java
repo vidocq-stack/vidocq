@@ -63,6 +63,8 @@ class HostGuardTest {
             "localhost:8888x,        127.0.0.1, false",
             "localhost:+8888,        127.0.0.1, false",
             "[::1]8888,              127.0.0.1, false",
+            "[::1,                   127.0.0.1, false",
+            "[localhost]:8888,       127.0.0.1, false",
             "::1,                    127.0.0.1, false",
             // nothing, or nothing a host is
             "(none),                 127.0.0.1, false",

@@ -230,35 +230,29 @@ final class PanelHistory {
                     out.value(times[p]);
                 }
             }
-            out.endArray().name("v").beginArray();
+            out.endArray().name("v");
+            writePoints(out, values, first, since);
+            if (ceiling) {
+                out.name("max");
+                writePoints(out, ceilings, first, since);
+            }
+            out.endObject();
+        }
+
+        /** Writes the points of {@code series} after {@code since} as an array, an absent one as a hole. */
+        private void writePoints(JsonWriter out, double[] series, int first, long since) {
+            out.beginArray();
             for (int i = 0; i < size; i++) {
                 int p = (first + i) % MAX_POINTS;
-                if (times[p] <= since) {
-                    continue;
-                }
-                if (Double.isNaN(values[p])) {
-                    out.nullValue();        // absent: a hole in the curve, never a zero
-                } else {
-                    out.value(values[p]);
+                if (times[p] > since) {
+                    if (Double.isNaN(series[p])) {
+                        out.nullValue();        // absent: a hole in the curve, never a zero
+                    } else {
+                        out.value(series[p]);
+                    }
                 }
             }
             out.endArray();
-            if (ceiling) {
-                out.name("max").beginArray();
-                for (int i = 0; i < size; i++) {
-                    int p = (first + i) % MAX_POINTS;
-                    if (times[p] <= since) {
-                        continue;
-                    }
-                    if (Double.isNaN(ceilings[p])) {
-                        out.nullValue();
-                    } else {
-                        out.value(ceilings[p]);
-                    }
-                }
-                out.endArray();
-            }
-            out.endObject();
         }
     }
 }

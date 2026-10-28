@@ -58,6 +58,12 @@ class JsonWriterTest {
     }
 
     @Test
+    void aHighSurrogateThatEndsTheTextIsEscaped() {
+        assertEquals("\"pair \uD83D\uDE00 cut \\ud83d\"",
+                new JsonWriter().value("pair \uD83D\uDE00 cut \uD83D").toString());
+    }
+
+    @Test
     void writesNumbersAsJsonHasThem() {
         String json = new JsonWriter().beginArray()
                 .value(3.0).value(0.25).value(-1.5e-7).value(1e300).value(Long.MIN_VALUE).value(Double.NaN)

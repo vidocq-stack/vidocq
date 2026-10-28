@@ -76,7 +76,8 @@ final class Texts {
             return null;
         }
         StringBuilder cleaned = new StringBuilder(Math.min(value.length(), max + 1));
-        for (int i = 0; i < value.length() && cleaned.length() <= max; ) {
+        int i = 0;
+        while (i < value.length() && cleaned.length() <= max) {
             int codePoint = value.codePointAt(i);
             i += Character.charCount(codePoint);
             if (lines && codePoint == '\r') {

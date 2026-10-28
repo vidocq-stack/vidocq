@@ -62,8 +62,8 @@ record ConfigInventory(List<String> sources, List<List<String>> rows, int applic
     /** How many keys the table shows at most: the console's limit. */
     static final int MAX_ROWS = 100;
 
-    private static final String VIDOCQ = "vidocq.";
-    private static final String MP = "mp.";
+    private static final String VIDOCQ_PREFIX = "vidocq.";
+    private static final String MP_PREFIX = "mp.";
 
     ConfigInventory {
         sources = List.copyOf(sources);
@@ -91,19 +91,13 @@ record ConfigInventory(List<String> sources, List<List<String>> rows, int applic
         for (ConfigSource source : lookup) {
             sources.add(name(source) + " " + source.getOrdinal());
             boolean system = isSystemSource(name(source));
-            Set<String> names;
-            try {
-                names = source.getPropertyNames();
-            } catch (RuntimeException unreadable) {
-                continue;
-            }
-            for (String key : names == null ? Set.<String>of() : names) {
+            for (String key : propertyNames(source)) {
                 if (key == null) {
                     continue;
                 }
-                if (key.startsWith(VIDOCQ)) {
+                if (key.startsWith(VIDOCQ_PREFIX)) {
                     vidocqKeys.add(key);
-                } else if (key.startsWith(MP)) {
+                } else if (key.startsWith(MP_PREFIX)) {
                     mpKeys.add(key);
                 } else if (!system) {
                     applicationKeys.add(key);
@@ -115,6 +109,16 @@ record ConfigInventory(List<String> sources, List<List<String>> rows, int applic
         int vidocq = rows(vidocqKeys, lookup, mode, rows);
         int mp = rows(mpKeys, lookup, mode, rows);
         return new ConfigInventory(sources, rows, application, vidocq, mp, mode == LaunchMode.DEV);
+    }
+
+    /** The names of {@code source}, none when it has none or cannot list them. */
+    private static Set<String> propertyNames(ConfigSource source) {
+        try {
+            Set<String> names = source.getPropertyNames();
+            return names == null ? Set.of() : names;
+        } catch (RuntimeException _) {
+            return Set.of();
+        }
     }
 
     /**
@@ -133,12 +137,7 @@ record ConfigInventory(List<String> sources, List<List<String>> rows, int applic
         int found = 0;
         for (String key : keys) {
             for (ConfigSource source : lookup) {
-                String value;
-                try {
-                    value = source.getValue(key);
-                } catch (RuntimeException _) {
-                    continue;
-                }
+                String value = valueOf(source, key);
                 if (value != null) {
                     found++;
                     if (rows.size() < MAX_ROWS) {
@@ -150,6 +149,15 @@ record ConfigInventory(List<String> sources, List<List<String>> rows, int applic
             }
         }
         return found;
+    }
+
+    /** The value {@code source} has for {@code key}, {@code null} when it has none or cannot read it. */
+    private static String valueOf(ConfigSource source, String key) {
+        try {
+            return source.getValue(key);
+        } catch (RuntimeException _) {
+            return null;
+        }
     }
 
     private static String name(ConfigSource source) {

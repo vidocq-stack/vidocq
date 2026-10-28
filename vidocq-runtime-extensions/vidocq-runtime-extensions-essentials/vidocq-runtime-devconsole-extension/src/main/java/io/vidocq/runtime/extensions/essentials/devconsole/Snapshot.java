@@ -181,8 +181,16 @@ final class Snapshot implements Handler {
      */
     Snapshot(String bootId, String vidocq, Supplier<Optional<StartupReportView>> report, List<PanelEntry> builtIns,
              LongSupplier clock, ConsoleActions actions) {
-        this(bootId, vidocq, report, builtIns, clock, actions, LivePanels.NONE, null);
+        this(bootId, vidocq, report, builtIns, clock, actions, new LiveSetup(LivePanels.NONE, null));
     }
+
+    /**
+     * The live panels of a boot and what they read when they start.
+     *
+     * @param panels  the live panels of this boot, started the first time the report is read
+     * @param context what a live panel's {@code start} may read, {@code null} in a test that starts none
+     */
+    record LiveSetup(LivePanels panels, ExtensionContext context) {}
 
     /**
      * @param bootId     the id of this boot, 64 random bits in hex
@@ -192,19 +200,18 @@ final class Snapshot implements Handler {
      * @param clock      the server's clock, in epoch milliseconds
      * @param actions    the actions of a dev boot, {@code null} in any other: then no panel's {@code actions()} is
      *                   called, and the snapshot carries neither the token nor an action
-     * @param livePanels the live panels of this boot, started the first time the report is read
-     * @param context    what a live panel's {@code start} may read, {@code null} in a test that starts none
+     * @param live       the live panels of this boot and what they read when they start
      */
     Snapshot(String bootId, String vidocq, Supplier<Optional<StartupReportView>> report, List<PanelEntry> builtIns,
-             LongSupplier clock, ConsoleActions actions, LivePanels livePanels, ExtensionContext context) {
+             LongSupplier clock, ConsoleActions actions, LiveSetup live) {
         this.bootId = Objects.requireNonNull(bootId, "bootId");
         this.vidocq = vidocq;
         this.report = Objects.requireNonNull(report, "report");
         this.builtIns = List.copyOf(builtIns);
         this.clock = Objects.requireNonNull(clock, "clock");
         this.actions = actions;
-        this.livePanels = Objects.requireNonNull(livePanels, "livePanels");
-        this.context = context;
+        this.livePanels = Objects.requireNonNull(live.panels(), "livePanels");
+        this.context = live.context();
     }
 
     /** The actions of this boot, {@code null} outside a dev launch. */
@@ -420,15 +427,7 @@ final class Snapshot implements Handler {
             }
             for (ReportSection section : sections) {
                 if (section.id().equals(id)) {
-                    StartupReportContributor shown = contributor;
-                    var live = livePanels.forSection(id);
-                    if (live.isPresent()) {
-                        if (contributor instanceof DevConsolePanel) {
-                            livePanels.reportDouble(id, contributor);
-                        }
-                        shown = new LivePanelAdapter(contributor, live.get());
-                    }
-                    panels.add(PanelEntry.contributed(shown, section, dev));
+                    panels.add(PanelEntry.contributed(shown(contributor, id), section, dev));
                     panelIds.add(id);
                     break;
                 }
@@ -437,6 +436,18 @@ final class Snapshot implements Handler {
         livePanels.reportOrphans(panelIds);
         List<ReportSection> others = sections.stream().filter(s -> !panelIds.contains(s.id())).toList();
         return new Contributed(view, List.copyOf(panels), others);
+    }
+
+    /** The contributor the console shows for panel {@code id}: itself, or adapted to its live panel when it has one. */
+    private StartupReportContributor shown(StartupReportContributor contributor, String id) {
+        var live = livePanels.forSection(id);
+        if (live.isEmpty()) {
+            return contributor;
+        }
+        if (contributor instanceof DevConsolePanel) {
+            livePanels.reportDouble(id, contributor);
+        }
+        return new LivePanelAdapter(contributor, live.get());
     }
 
     private static String id(StartupReportContributor contributor) {
@@ -582,41 +593,50 @@ final class Snapshot implements Handler {
             }
             out.name("arguments").beginArray();
             for (PanelAction.Argument argument : action.arguments()) {
-                out.beginObject().name("name").value(argument.name())
-                        .name("label").value(Texts.clean(argument.label()))
-                        .name("allowed");
-                if (argument.allowedValues() == null) {
-                    out.nullValue();
-                } else {
-                    out.beginArray();
-                    for (String value : argument.allowedValues()) {
-                        out.value(Texts.clean(value));
-                    }
-                    out.endArray();
-                }
-                if (argument.schema() != null) {
-                    out.name("schema");
-                    writeSchema(out, argument.schema());
-                }
-                out.endObject();
+                writeArgument(out, argument);
             }
             out.endArray();
             out.name("running").value(actions.running(panel.id(), action.id()));
             out.name("last");
-            ConsoleActions.Outcome last = actions.outcome(panel.id(), action.id());
-            if (last == null) {
-                out.nullValue();
-            } else {
-                out.beginObject().name("text").value(last.text()).name("time").value(last.time())
-                        .name("ok").value(last.ok());
-                if (last.error()) {
-                    out.name("error").value(true);
-                }
-                out.endObject();
-            }
+            writeOutcome(out, actions.outcome(panel.id(), action.id()));
             out.endObject();
         }
         out.endArray();
+    }
+
+    /** One argument of an action: its name, label, allowed values when it has some, and schema when it is json. */
+    private static void writeArgument(JsonWriter out, PanelAction.Argument argument) {
+        out.beginObject().name("name").value(argument.name())
+                .name("label").value(Texts.clean(argument.label()))
+                .name("allowed");
+        if (argument.allowedValues() == null) {
+            out.nullValue();
+        } else {
+            out.beginArray();
+            for (String value : argument.allowedValues()) {
+                out.value(Texts.clean(value));
+            }
+            out.endArray();
+        }
+        if (argument.schema() != null) {
+            out.name("schema");
+            writeSchema(out, argument.schema());
+        }
+        out.endObject();
+    }
+
+    /** How an action last ended this boot, {@code null} before its first run. */
+    private static void writeOutcome(JsonWriter out, ConsoleActions.Outcome last) {
+        if (last == null) {
+            out.nullValue();
+        } else {
+            out.beginObject().name("text").value(last.text()).name("time").value(last.time())
+                    .name("ok").value(last.ok());
+            if (last.error()) {
+                out.name("error").value(true);
+            }
+            out.endObject();
+        }
     }
 
     /**

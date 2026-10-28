@@ -169,6 +169,7 @@ class RecordingSampleTest {
         }
         List<List<String>> rows = new ArrayList<>();
         rows.add(Arrays.asList("short", null));
+        rows.add(null);
         for (int i = 0; i < 150; i++) {
             rows.add(List.of("r" + i, "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"));
         }
@@ -183,6 +184,7 @@ class RecordingSampleTest {
         assertEquals(8, ((List<?>) values(written).get(0).get("columns")).size());
         assertEquals(100, table.size());
         assertEquals(List.of("short", "", "", "", "", "", "", ""), table.get(0));
+        assertEquals(List.of("", "", "", "", "", "", "", ""), table.get(1), "a null row is a row of empty cells");
         assertEquals(8, table.get(99).size());
     }
 

@@ -101,8 +101,8 @@ class SnapshotTest {
 
     /** A snapshot whose report is {@code view} from the first poll, with the live panels of {@code livePanels}. */
     private static Snapshot snapshotOf(StartupReportView view, LivePanels livePanels) {
-        return new Snapshot(BOOT, "0.4.0-TEST", () -> Optional.of(view), List.of(), () -> NOW, null, livePanels,
-                null);
+        return new Snapshot(BOOT, "0.4.0-TEST", () -> Optional.of(view), List.of(), () -> NOW, null,
+                new Snapshot.LiveSetup(livePanels, null));
     }
 
     @SuppressWarnings("unchecked")
@@ -401,6 +401,19 @@ class SnapshotTest {
         assertEquals("rest", entry.id());
         assertEquals(live, ((LivePanelAdapter) entry.panel()).live());
         assertEquals(List.of("start"), live.calls, "started when the report is first read");
+    }
+
+    @Test
+    void aLivePanelWinsOverAPanelOfTheSameSectionAndSaysSo() {
+        List<String> warnings = new ArrayList<>();
+        LivePanelsTest.Live live = new LivePanelsTest.Live("broken");
+        Snapshot snapshot = snapshotOf(FakeReportView.of(new TestPanels.BrokenPanel()),
+                LivePanels.of(List.of(live), warnings::add));
+
+        PanelEntry entry = snapshot.panel("broken");
+
+        assertEquals(live, ((LivePanelAdapter) entry.panel()).live());
+        assertTrue(warnings.stream().anyMatch(w -> w.startsWith("[" + LivePanels.DOUBLE + "]")), warnings.toString());
     }
 
     @Test

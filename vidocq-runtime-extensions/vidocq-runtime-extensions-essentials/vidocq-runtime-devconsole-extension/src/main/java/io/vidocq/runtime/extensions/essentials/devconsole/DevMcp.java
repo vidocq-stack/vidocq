@@ -77,6 +77,8 @@ final class DevMcp {
     private static final int SNAPSHOT_DEPTH = 64;
     private static final String READ_ONLY = " Read-only: it changes nothing in the application.";
     private static final String JSONRPC = "jsonrpc";
+    private static final String METHOD = "method";
+    private static final String STARTUP = "startup";
     private static final String PANELS = "panels";
     private static final String TITLE = "title";
 
@@ -128,23 +130,25 @@ final class DevMcp {
             return answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "A batch is not supported: send one "
                     + "request per POST."));
         }
-        if (!(message instanceof Map<?, ?> request) || !"2.0".equals(request.get("jsonrpc"))) {
+        if (!(message instanceof Map<?, ?> request) || !"2.0".equals(request.get(JSONRPC))) {
             return answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "Not a JSON-RPC 2.0 request."));
         }
-        Object id = request.get("id");
         boolean hasId = request.containsKey("id");
-        if (!request.containsKey("method")) {
+        if (!request.containsKey(METHOD)) {
             // a response from the client, which this server never asked for anything: nothing to answer
             return hasId && (request.containsKey("result") || request.containsKey("error"))
                     ? accepted()
                     : answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "Not a JSON-RPC 2.0 request."));
         }
-        if (!(request.get("method") instanceof String method)) {
+        if (!(request.get(METHOD) instanceof String method)) {
             return answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "The method is not a string."));
         }
-        if (!hasId) {
-            return accepted();
-        }
+        return hasId ? dispatch(request, method) : accepted();
+    }
+
+    /** Answers a request that has an id: checks its id and its parameters, then calls {@code method}. */
+    private Response dispatch(Map<?, ?> request, String method) {
+        Object id = request.get("id");
         if (!(id instanceof String) && !(id instanceof Number)) {
             return answer(StatusCode.BAD_REQUEST, error(null, INVALID_REQUEST, "The id is not a string or a "
                     + "number."));
@@ -243,11 +247,11 @@ final class DevMcp {
         Map<String, Object> document = document();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("state", document.get("state"));
-        Map<?, ?> startup = document.get("startup") == null ? null : map(document.get("startup"));
+        Map<?, ?> startup = document.get(STARTUP) == null ? null : map(document.get(STARTUP));
         switch (name) {
             case "vidocq_report" -> {
                 out.put("console", document.get("console"));
-                out.put("startup", startup);
+                out.put(STARTUP, startup);
             }
             case "vidocq_panels" -> out.put(PANELS, panelSummaries(document));
             case "vidocq_panel" -> {

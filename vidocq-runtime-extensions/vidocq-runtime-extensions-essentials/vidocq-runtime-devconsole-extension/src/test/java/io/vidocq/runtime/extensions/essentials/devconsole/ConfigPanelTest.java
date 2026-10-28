@@ -328,6 +328,36 @@ class ConfigPanelTest {
         assertEquals(List.of("Failing 500", "PropertiesFile 100"), facts(contributed(panel)).get("sources"));
     }
 
+    @Test
+    void aSourceWithoutNamesListsNoKeyYetGivesItsValues() {
+        ConfigSource unnamed = new ConfigSource() {
+            @Override
+            public String getName() {
+                return "Unnamed";
+            }
+
+            @Override
+            public int getOrdinal() {
+                return 500;
+            }
+
+            @Override
+            public String getValue(String key) {
+                return "app.name".equals(key) ? "billing" : null;
+            }
+
+            @Override
+            public Set<String> getPropertyNames() {
+                return null;
+            }
+        };
+        ConfigPanel panel = ConfigPanel.of(new VidocqConfigImpl(List.of(unnamed,
+                new Source("PropertiesFile", 100, Map.of("app.name", "orders")))), LaunchMode.DEV, Optional::empty);
+
+        assertEquals(List.of(List.of("app.name", "Unnamed", "500", "billing", "report not written yet")),
+                rows(table(sampled(panel), "keys")));
+    }
+
     private static String status(ConfigPanel panel, String key) {
         return rows(table(sampled(panel), "keys")).stream().filter(row -> row.get(0).equals(key)).findFirst()
                 .orElseThrow().get(4);

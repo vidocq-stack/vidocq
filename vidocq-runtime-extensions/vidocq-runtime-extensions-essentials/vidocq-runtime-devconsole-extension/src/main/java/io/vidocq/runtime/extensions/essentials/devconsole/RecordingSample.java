@@ -133,15 +133,20 @@ final class RecordingSample implements PanelSample {
             int replay = heads.indexOf(PanelSample.REPLAY_COLUMN);
             List<List<String>> table = new ArrayList<>();
             for (List<String> row : rows.subList(0, Math.min(MAX_ROWS, rows.size()))) {
-                List<String> cells = new ArrayList<>(heads.size());
-                for (int i = 0; i < heads.size(); i++) {
-                    String raw = row != null && i < row.size() ? row.get(i) : null;
-                    String cell = i == replay ? replayCell(raw) : Texts.clean(raw);
-                    cells.add(cell == null ? "" : cell);
-                }
-                table.add(List.copyOf(cells));
+                table.add(cells(row, heads.size(), replay));
             }
             put(key, new Table(heads, List.copyOf(table)));
+        }
+
+        /** The first {@code width} cells of {@code row}, cleaned, the one at {@code replay} as a replay cell. */
+        private static List<String> cells(List<String> row, int width, int replay) {
+            List<String> cells = new ArrayList<>(width);
+            for (int i = 0; i < width; i++) {
+                String raw = row != null && i < row.size() ? row.get(i) : null;
+                String cell = i == replay ? replayCell(raw) : Texts.clean(raw);
+                cells.add(cell == null ? "" : cell);
+            }
+            return List.copyOf(cells);
         }
 
         void writeTo(JsonWriter out) {

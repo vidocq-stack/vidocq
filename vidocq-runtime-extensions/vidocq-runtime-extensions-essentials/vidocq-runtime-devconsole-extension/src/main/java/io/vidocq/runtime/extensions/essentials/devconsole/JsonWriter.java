@@ -135,8 +135,9 @@ final class JsonWriter {
 
     private void string(String value) {
         out.append('"');
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
+        int i = 0;
+        while (i < value.length()) {
+            char c = value.charAt(i++);
             switch (c) {
                 case '"' -> out.append("\\\"");
                 case '\\' -> out.append("\\\\");
@@ -146,9 +147,9 @@ final class JsonWriter {
                 default -> {
                     if (c < 0x20 || (c >= 0x7f && c <= 0x9f) || c == '\u2028' || c == '\u2029') {
                         escape(c);
-                    } else if (Character.isHighSurrogate(c) && i + 1 < value.length()
-                            && Character.isLowSurrogate(value.charAt(i + 1))) {
-                        out.append(c).append(value.charAt(++i));
+                    } else if (Character.isHighSurrogate(c) && i < value.length()
+                            && Character.isLowSurrogate(value.charAt(i))) {
+                        out.append(c).append(value.charAt(i++));
                     } else if (Character.isSurrogate(c)) {
                         escape(c);
                     } else {

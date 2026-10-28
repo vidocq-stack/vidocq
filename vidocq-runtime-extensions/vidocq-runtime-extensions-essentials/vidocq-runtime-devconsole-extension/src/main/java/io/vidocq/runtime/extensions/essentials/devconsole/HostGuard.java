@@ -56,30 +56,34 @@ final class HostGuard {
         if (host == null || host.isEmpty()) {
             return false;
         }
-        String name;
-        String port;
         if (host.startsWith("[")) {
-            int close = host.indexOf(']');
-            if (close < 0) {
-                return false;
-            }
-            name = host.substring(1, close);
-            String rest = host.substring(close + 1);
-            if (!rest.isEmpty() && !rest.startsWith(":")) {
-                return false;
-            }
-            port = rest.isEmpty() ? null : rest.substring(1);
-            if (!ipAddress(name)) {
-                return false;
-            }
-        } else {
-            int colon = host.lastIndexOf(':');
-            name = colon < 0 ? host : host.substring(0, colon);
-            port = colon < 0 ? null : host.substring(colon + 1);
-            if (name.indexOf(':') >= 0) {
-                return false; // an IPv6 address without its brackets
-            }
+            return allowsBracketed(host, boundPort);
         }
+        int colon = host.lastIndexOf(':');
+        String name = colon < 0 ? host : host.substring(0, colon);
+        String port = colon < 0 ? null : host.substring(colon + 1);
+        if (name.indexOf(':') >= 0) {
+            return false; // an IPv6 address without its brackets
+        }
+        return allowsNameAndPort(name, port, boundPort);
+    }
+
+    /** {@link #allows} for a {@code host} that starts with a bracket: an IPv6 address, maybe followed by a port. */
+    private boolean allowsBracketed(String host, int boundPort) {
+        int close = host.indexOf(']');
+        if (close < 0) {
+            return false;
+        }
+        String name = host.substring(1, close);
+        String rest = host.substring(close + 1);
+        if (!rest.isEmpty() && !rest.startsWith(":")) {
+            return false;
+        }
+        return ipAddress(name) && allowsNameAndPort(name, rest.isEmpty() ? null : rest.substring(1), boundPort);
+    }
+
+    /** Whether {@code port}, when there is one, is the bound port, and {@code name} one the console answers to. */
+    private boolean allowsNameAndPort(String name, String port, int boundPort) {
         return (port == null || samePort(port, boundPort)) && allowedName(name.toLowerCase(Locale.ROOT));
     }
 

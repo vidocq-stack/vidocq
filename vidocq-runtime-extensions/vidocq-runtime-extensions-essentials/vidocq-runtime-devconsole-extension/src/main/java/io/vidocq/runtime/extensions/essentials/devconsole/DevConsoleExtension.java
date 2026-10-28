@@ -215,7 +215,7 @@ public final class DevConsoleExtension implements VidocqExtension, StartupReport
         livePanels.set(live);
         Snapshot boot = new Snapshot(HexFormat.of().toHexDigits(RandomGenerator.getDefault().nextLong()),
                 VIDOCQ_VERSION, context.startupReport(), ownPanels(context, resolved.launchMode(), logged, tested),
-                clock, actions, live, context);
+                clock, actions, new Snapshot.LiveSetup(live, context));
         Handler page = StaticFileHandler.builder()
                 .addClasspath(DevConsoleExtension.class.getClassLoader(), PAGE_RESOURCES)
                 .indexFile("index.html")
