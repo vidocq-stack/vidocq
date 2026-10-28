@@ -122,6 +122,8 @@ class PanelActionTest {
         assertThrows(IllegalArgumentException.class, () -> PanelAction.Argument.oneOf("Level", "Level", "INFO"));
         assertThrows(IllegalArgumentException.class, () -> PanelAction.Argument.oneOf("level", "Level"));
         assertThrows(IllegalArgumentException.class, () -> PanelAction.Argument.oneOf("level", "Level", " "));
+        String tooLong = "a".repeat(PanelAction.MAX_VALUE_LENGTH + 1);
+        assertThrows(IllegalArgumentException.class, () -> PanelAction.Argument.oneOf("level", "Level", tooLong));
         assertThrows(IllegalArgumentException.class, () -> PanelAction.Argument.matching("logger", "Logger", "("));
         List<String> levels = List.of("INFO");
         assertThrows(IllegalArgumentException.class,

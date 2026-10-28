@@ -193,25 +193,35 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
                         + "' needs exactly one of its allowed values, a pattern or a schema");
             }
             if (allowedValues != null) {
-                allowedValues = List.copyOf(allowedValues);
-                if (allowedValues.isEmpty()) {
-                    throw new IllegalArgumentException("argument '" + name + "' allows no value");
-                }
-                for (String value : allowedValues) {
-                    if (value.isBlank() || value.length() > MAX_VALUE_LENGTH) {
-                        throw new IllegalArgumentException("argument '" + name + "' allows a blank value or one "
-                                + "longer than " + MAX_VALUE_LENGTH + " characters");
-                    }
-                }
+                allowedValues = checkedValues(name, allowedValues);
             } else if (pattern != null) {
-                try {
-                    Pattern.compile(pattern);
-                } catch (PatternSyntaxException invalid) {
-                    throw new IllegalArgumentException("argument '" + name + "' has an invalid pattern", invalid);
-                }
+                checkPattern(name, pattern);
             } else if (schema.length() > MAX_SCHEMA || !JsonCheck.isObject(schema, MAX_JSON_DEPTH)) {
                 throw new IllegalArgumentException("argument '" + name + "' has a schema that is not a JSON object "
                         + "of at most " + MAX_SCHEMA + " characters");
+            }
+        }
+
+        /** An immutable copy of {@code allowedValues}, refused when empty or when one is blank or too long. */
+        private static List<String> checkedValues(String name, List<String> allowedValues) {
+            List<String> values = List.copyOf(allowedValues);
+            if (values.isEmpty()) {
+                throw new IllegalArgumentException("argument '" + name + "' allows no value");
+            }
+            for (String value : values) {
+                if (value.isBlank() || value.length() > MAX_VALUE_LENGTH) {
+                    throw new IllegalArgumentException("argument '" + name + "' allows a blank value or one "
+                            + "longer than " + MAX_VALUE_LENGTH + " characters");
+                }
+            }
+            return values;
+        }
+
+        private static void checkPattern(String name, String pattern) {
+            try {
+                Pattern.compile(pattern);
+            } catch (PatternSyntaxException invalid) {
+                throw new IllegalArgumentException("argument '" + name + "' has an invalid pattern", invalid);
             }
         }
 

@@ -53,16 +53,7 @@ final class RowsBody {
                         + " columns");
             }
         }
-        StringBuilder out = new StringBuilder("{\"columns\":[");
-        for (int i = 0; i < width; i++) {
-            Column column = Objects.requireNonNull(columns.get(i), "column");
-            out.append(i == 0 ? "{\"name\":" : ",{\"name\":");
-            quote(column.name(), out);
-            out.append(",\"type\":");
-            quote(column.type(), out);
-            out.append('}');
-        }
-        out.append("],\"rows\":[");
+        StringBuilder out = columns(columns);
         if (out.length() + MORE.length() > ActionResult.MAX_CONTENT) {
             throw new IllegalArgumentException("the columns of a result pass " + ActionResult.MAX_CONTENT
                     + " characters");
@@ -72,20 +63,38 @@ final class RowsBody {
         for (int r = 0; r < rows.size() && !cut; r++) {
             row.setLength(0);
             row.append(r == 0 ? "[" : ",[");
-            List<?> values = rows.get(r);
-            for (int i = 0; i < width; i++) {
-                if (i > 0) {
-                    row.append(',');
-                }
-                value(values.get(i), row);
-            }
-            row.append(']');
+            writeRow(rows.get(r), row);
             cut = out.length() + row.length() + MORE.length() > ActionResult.MAX_CONTENT;
             if (!cut) {
                 out.append(row);
             }
         }
         return out.append(cut || more ? MORE : ALL).toString();
+    }
+
+    /** The body up to the opening of its rows: the columns, each with its name and type. */
+    private static StringBuilder columns(List<Column> columns) {
+        StringBuilder out = new StringBuilder("{\"columns\":[");
+        for (int i = 0; i < columns.size(); i++) {
+            Column column = Objects.requireNonNull(columns.get(i), "column");
+            out.append(i == 0 ? "{\"name\":" : ",{\"name\":");
+            quote(column.name(), out);
+            out.append(",\"type\":");
+            quote(column.type(), out);
+            out.append('}');
+        }
+        return out.append("],\"rows\":[");
+    }
+
+    /** Appends the values of one row, as a JSON array, to {@code row}. */
+    private static void writeRow(List<?> values, StringBuilder row) {
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) {
+                row.append(',');
+            }
+            value(values.get(i), row);
+        }
+        row.append(']');
     }
 
     private static void value(Object value, StringBuilder out) {

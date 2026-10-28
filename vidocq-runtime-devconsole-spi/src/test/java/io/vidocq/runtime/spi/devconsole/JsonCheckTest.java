@@ -47,6 +47,16 @@ class JsonCheckTest {
         assertFalse(JsonCheck.isObject("{'a':1}", 64));
         assertFalse(JsonCheck.isObject("{\"a\":1,}", 64));
         assertFalse(JsonCheck.isObject("{\"a\":", 64));
+        assertFalse(JsonCheck.isObject("{\"a\":\"\\x\"}", 64), "an unknown escape");
+        assertFalse(JsonCheck.isObject("{\"a\":\"\\u00zz\"}", 64), "a unicode escape that is not hexadecimal");
+    }
+
+    @Test
+    void namesAreComparedOnceTheirEscapesAreDecoded() {
+        assertTrue(JsonCheck.isObject("{\"\\\"\\\\\\/\\b\\f\\n\\r\\t\":1,\"\\\"\\\\/\\b\\f\\n\\r\\u0009x\":2}", 64));
+        assertFalse(JsonCheck.isObject("{\"\\\"\\\\\\/\\b\\f\\n\\r\\t\":1,\"\\\"\\\\/\\b\\f\\n\\r\\u0009\":2}", 64),
+                "the same name, spelt with other escapes");
+        assertFalse(JsonCheck.isObject("{\"a\":1,\"\\u0061\":2}", 64), "the same name, spelt with a unicode escape");
     }
 
     @Test

@@ -32,6 +32,9 @@ import java.util.regex.Pattern;
 final class JsonCheck {
 
     private static final Pattern NUMBER = Pattern.compile("-?(0|[1-9]\\d*)(\\.\\d+)?([eE][+-]?\\d+)?");
+    /** The characters a backslash may escape but {@code u}, and below, at the same index, what each stands for. */
+    private static final String ESCAPES = "\"\\/bfnrt";
+    private static final String UNESCAPED = "\"\\/\b\f\n\r\t";
 
     private final String text;
     private final int maxDepth;
@@ -143,32 +146,34 @@ final class JsonCheck {
             if (c < 0x20) {
                 throw new IllegalArgumentException("a control character in a string");
             }
-            if (c != '\\') {
-                out.append(c);
-                continue;
-            }
-            char escaped = next();
-            switch (escaped) {
-                case '"', '\\', '/' -> out.append(escaped);
-                case 'b' -> out.append('\b');
-                case 'f' -> out.append('\f');
-                case 'n' -> out.append('\n');
-                case 'r' -> out.append('\r');
-                case 't' -> out.append('\t');
-                case 'u' -> {
-                    int code = 0;
-                    for (int i = 0; i < 4; i++) {
-                        int digit = Character.digit(next(), 16);
-                        if (digit < 0) {
-                            throw new IllegalArgumentException("a \\u escape that is not hexadecimal");
-                        }
-                        code = code * 16 + digit;
-                    }
-                    out.append((char) code);
-                }
-                default -> throw new IllegalArgumentException("an unknown escape");
-            }
+            out.append(c == '\\' ? escaped() : c);
         }
+    }
+
+    /** Reads what follows a backslash in a string and returns the character it stands for. */
+    private char escaped() {
+        char escaped = next();
+        if (escaped == 'u') {
+            return hexadecimal();
+        }
+        int index = ESCAPES.indexOf(escaped);
+        if (index < 0) {
+            throw new IllegalArgumentException("an unknown escape");
+        }
+        return UNESCAPED.charAt(index);
+    }
+
+    /** Reads the four hexadecimal digits of a unicode escape. */
+    private char hexadecimal() {
+        int code = 0;
+        for (int i = 0; i < 4; i++) {
+            int digit = Character.digit(next(), 16);
+            if (digit < 0) {
+                throw new IllegalArgumentException("a \\u escape that is not hexadecimal");
+            }
+            code = code * 16 + digit;
+        }
+        return (char) code;
     }
 
     private void number() {
