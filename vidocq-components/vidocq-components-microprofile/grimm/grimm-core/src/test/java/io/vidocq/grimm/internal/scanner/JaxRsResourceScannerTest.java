@@ -52,7 +52,6 @@ import org.eclipse.microprofile.openapi.annotations.security.OAuthFlows;
 import org.eclipse.microprofile.openapi.annotations.security.OAuthScope;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme;
-import org.eclipse.microprofile.openapi.annotations.security.SecuritySchemes;
 import org.eclipse.microprofile.openapi.annotations.servers.Server;
 import org.eclipse.microprofile.openapi.annotations.servers.ServerVariable;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
@@ -164,7 +163,7 @@ class JaxRsResourceScannerTest {
         OpenAPI model = scanner.scanClasses(List.of(HiddenParameterResource.class));
 
         var op = model.getPaths().getPathItem("/hidden-param").getGET();
-        // q parameter has hidden=true, so only the implicit path/query left? Only 'q' query exists, should be absent.
+        // The only parameter, q, is hidden: the operation documents no parameter at all.
         assertTrue(op.getParameters() == null || op.getParameters().isEmpty());
     }
 
@@ -588,17 +587,23 @@ class JaxRsResourceScannerTest {
         @POST @Path("/enc-min") @Consumes("multipart/form-data")
         @RequestBody(content = @org.eclipse.microprofile.openapi.annotations.media.Content(mediaType = "multipart/form-data", encoding = @org.eclipse.microprofile.openapi.annotations.media.Encoding(name = "f",
                 headers = @org.eclipse.microprofile.openapi.annotations.headers.Header(name = "X", schema = @org.eclipse.microprofile.openapi.annotations.media.Schema(minimum = "0")))))
-        public void encMin(String body) { }
+        public void encMin(String body) {
+            // Fixture: only the annotations are read.
+        }
 
         @POST @Path("/enc-examples") @Consumes("multipart/form-data")
         @RequestBody(content = @org.eclipse.microprofile.openapi.annotations.media.Content(mediaType = "multipart/form-data", encoding = @org.eclipse.microprofile.openapi.annotations.media.Encoding(name = "f",
                 headers = @org.eclipse.microprofile.openapi.annotations.headers.Header(name = "X", schema = @org.eclipse.microprofile.openapi.annotations.media.Schema(examples = "x")))))
-        public void encExamples(String body) { }
+        public void encExamples(String body) {
+            // Fixture: only the annotations are read.
+        }
 
         @POST @Path("/enc-empty") @Consumes("multipart/form-data")
         @RequestBody(content = @org.eclipse.microprofile.openapi.annotations.media.Content(mediaType = "multipart/form-data", encoding = @org.eclipse.microprofile.openapi.annotations.media.Encoding(name = "f",
                 headers = @org.eclipse.microprofile.openapi.annotations.headers.Header(name = "X", schema = @org.eclipse.microprofile.openapi.annotations.media.Schema))))
-        public void encEmpty(String body) { }
+        public void encEmpty(String body) {
+            // Fixture: only the annotations are read.
+        }
     }
 
     @Path("/schema-only")
@@ -630,14 +635,17 @@ class JaxRsResourceScannerTest {
 
         @POST @Path("/body") @Consumes("application/json")
         public void body(@org.eclipse.microprofile.openapi.annotations.media.Schema(minimum = "1") int body) {
+            // Fixture: only the annotations are read.
         }
 
         @POST @Path("/body-examples") @Consumes("application/json")
         public void bodyExamples(@org.eclipse.microprofile.openapi.annotations.media.Schema(examples = "x") String body) {
+            // Fixture: only the annotations are read.
         }
 
         @POST @Path("/body-empty") @Consumes("application/json")
         public void bodyEmpty(@org.eclipse.microprofile.openapi.annotations.media.Schema String body) {
+            // Fixture: only the annotations are read.
         }
     }
 
@@ -724,10 +732,8 @@ class JaxRsResourceScannerTest {
     @Path("/responses")
     static class ResponsesResource {
         @GET
-        @APIResponses({
-                @APIResponse(responseCode = "200", description = "OK"),
-                @APIResponse(responseCode = "404", description = "Not found")
-        })
+        @APIResponse(responseCode = "200", description = "OK")
+        @APIResponse(responseCode = "404", description = "Not found")
         public Object g() { return null; }
     }
 
@@ -748,6 +754,7 @@ class JaxRsResourceScannerTest {
             variables = @ServerVariable(name = "protocol", defaultValue = "https", enumeration = {"http", "https"})
         )
         public void delete(@PathParam("id") String id) {
+            // Fixture: only the annotations are read.
         }
     }
 
@@ -795,24 +802,22 @@ class JaxRsResourceScannerTest {
     }
 
     @Path("/secure")
-    @SecuritySchemes({
-            @SecurityScheme(
-                    securitySchemeName = "petsApiKey",
-                    type = SecuritySchemeType.APIKEY,
-                    in = SecuritySchemeIn.HEADER,
-                    apiKeyName = "api_key"
-            ),
-            @SecurityScheme(
-                    securitySchemeName = "petsOAuth2",
-                    type = SecuritySchemeType.OAUTH2,
-                    flows = @OAuthFlows(
-                            implicit = @OAuthFlow(
-                                    authorizationUrl = "https://example.com/api/oauth/dialog",
-                                    scopes = @OAuthScope(name = "write:pets", description = "modify pets")
-                            )
+    @SecurityScheme(
+            securitySchemeName = "petsApiKey",
+            type = SecuritySchemeType.APIKEY,
+            in = SecuritySchemeIn.HEADER,
+            apiKeyName = "api_key"
+    )
+    @SecurityScheme(
+            securitySchemeName = "petsOAuth2",
+            type = SecuritySchemeType.OAUTH2,
+            flows = @OAuthFlows(
+                    implicit = @OAuthFlow(
+                            authorizationUrl = "https://example.com/api/oauth/dialog",
+                            scopes = @OAuthScope(name = "write:pets", description = "modify pets")
                     )
             )
-    })
+    )
     @SecurityRequirement(name = "petsOAuth2", scopes = {"write:pets"})
     static class SecurityResource {
         @DELETE

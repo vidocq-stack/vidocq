@@ -36,7 +36,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SerializationTest {
@@ -105,27 +108,7 @@ class SerializationTest {
         String json = new JsonSerializer().serialize(source);
         OpenAPI restored = new JsonDeserializer().deserialize(json);
 
-        assertTrue(restored != null);
-        assertTrue(restored.getInfo() != null);
-        assertTrue(restored.getPaths() != null);
-        assertTrue(restored.getPaths().getPathItem("/pets") != null);
-        assertTrue(restored.getPaths().getPathItem("/pets").getGET() != null);
-        assertTrue(restored.getPaths().getPathItem("/pets").getGET().getResponses() != null);
-        assertTrue(restored.getPaths().getPathItem("/pets").getGET().getResponses().getAPIResponse("200") != null);
-        assertTrue("3.1.0".equals(restored.getOpenapi()));
-        assertTrue("Pet Store".equals(restored.getInfo().getTitle()));
-        assertTrue("listPets".equals(restored.getPaths().getPathItem("/pets").getGET().getOperationId()));
-        assertTrue("A list of pets".equals(restored.getPaths().getPathItem("/pets").getGET().getResponses().getAPIResponse("200").getDescription()));
-        assertTrue(restored.getInfo().getExtension("x-internal-id") instanceof Number);
-        assertTrue(((Number) restored.getInfo().getExtension("x-internal-id")).intValue() == 42);
-        assertTrue(restored.getExternalDocs() != null);
-        assertTrue("https://example.com/docs".equals(restored.getExternalDocs().getUrl()));
-        assertTrue(restored.getTags() != null && restored.getTags().size() == 1);
-        assertTrue("pets".equals(restored.getTags().getFirst().getName()));
-        assertTrue(restored.getServers() != null && restored.getServers().size() == 1);
-        assertTrue("https://api.example.com".equals(restored.getServers().getFirst().getUrl()));
-        assertTrue(restored.getSecurity() != null && restored.getSecurity().size() == 1);
-        assertTrue(restored.getSecurity().getFirst().getScheme("oauth2") != null);
+        assertCoreFieldsRestored(restored);
     }
 
     @Test
@@ -136,27 +119,7 @@ class SerializationTest {
         String yaml = new YamlSerializer().serialize(source);
         OpenAPI restored = new YamlDeserializer().deserialize(yaml);
 
-        assertTrue(restored != null);
-        assertTrue(restored.getInfo() != null);
-        assertTrue(restored.getPaths() != null);
-        assertTrue(restored.getPaths().getPathItem("/pets") != null);
-        assertTrue(restored.getPaths().getPathItem("/pets").getGET() != null);
-        assertTrue(restored.getPaths().getPathItem("/pets").getGET().getResponses() != null);
-        assertTrue(restored.getPaths().getPathItem("/pets").getGET().getResponses().getAPIResponse("200") != null);
-        assertTrue("3.1.0".equals(restored.getOpenapi()));
-        assertTrue("Pet Store".equals(restored.getInfo().getTitle()));
-        assertTrue("listPets".equals(restored.getPaths().getPathItem("/pets").getGET().getOperationId()));
-        assertTrue("A list of pets".equals(restored.getPaths().getPathItem("/pets").getGET().getResponses().getAPIResponse("200").getDescription()));
-        assertTrue(restored.getInfo().getExtension("x-internal-id") instanceof Number);
-        assertTrue(((Number) restored.getInfo().getExtension("x-internal-id")).intValue() == 42);
-        assertTrue(restored.getExternalDocs() != null);
-        assertTrue("https://example.com/docs".equals(restored.getExternalDocs().getUrl()));
-        assertTrue(restored.getTags() != null && restored.getTags().size() == 1);
-        assertTrue("pets".equals(restored.getTags().getFirst().getName()));
-        assertTrue(restored.getServers() != null && restored.getServers().size() == 1);
-        assertTrue("https://api.example.com".equals(restored.getServers().getFirst().getUrl()));
-        assertTrue(restored.getSecurity() != null && restored.getSecurity().size() == 1);
-        assertTrue(restored.getSecurity().getFirst().getScheme("oauth2") != null);
+        assertCoreFieldsRestored(restored);
     }
 
     @Test
@@ -293,7 +256,31 @@ class SerializationTest {
                 .addSecurityRequirement(securityRequirement)
                 .paths(paths);
     }
+    /** The fields of {@link #createSampleModel()} a serialization round trip must keep. */
+    private static void assertCoreFieldsRestored(OpenAPI restored) {
+        assertNotNull(restored);
+        assertNotNull(restored.getInfo());
+        assertNotNull(restored.getPaths());
+        PathItem pets = restored.getPaths().getPathItem("/pets");
+        assertNotNull(pets);
+        Operation get = pets.getGET();
+        assertNotNull(get);
+        assertNotNull(get.getResponses());
+        APIResponse ok = get.getResponses().getAPIResponse("200");
+        assertNotNull(ok);
+        assertEquals("3.1.0", restored.getOpenapi());
+        assertEquals("Pet Store", restored.getInfo().getTitle());
+        assertEquals("listPets", get.getOperationId());
+        assertEquals("A list of pets", ok.getDescription());
+        Number internalId = assertInstanceOf(Number.class, restored.getInfo().getExtension("x-internal-id"));
+        assertEquals(42, internalId.intValue());
+        assertNotNull(restored.getExternalDocs());
+        assertEquals("https://example.com/docs", restored.getExternalDocs().getUrl());
+        assertEquals(1, restored.getTags().size());
+        assertEquals("pets", restored.getTags().getFirst().getName());
+        assertEquals(1, restored.getServers().size());
+        assertEquals("https://api.example.com", restored.getServers().getFirst().getUrl());
+        assertEquals(1, restored.getSecurity().size());
+        assertNotNull(restored.getSecurity().getFirst().getScheme("oauth2"));
+    }
 }
-
-
-

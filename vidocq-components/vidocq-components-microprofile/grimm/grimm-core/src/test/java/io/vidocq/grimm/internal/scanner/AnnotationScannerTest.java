@@ -286,6 +286,7 @@ class AnnotationScannerTest {
         @Tag(name = "method-tag", description = "Tag from operation")
         @Server(url = "https://method.example.com", description = "Method server")
         void operation() {
+            // Fixture: only the annotations are read.
         }
     }
 
@@ -295,6 +296,7 @@ class AnnotationScannerTest {
         @Tag(name = "pets", description = "Method tag duplicate")
         @Server(url = "https://api.example.com", description = "Method server duplicate")
         void operation() {
+            // Fixture: only the annotations are read.
         }
     }
 

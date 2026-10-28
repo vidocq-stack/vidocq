@@ -98,10 +98,11 @@ class StaticFileReaderTest {
     void readOpenAPI_throwsOnMalformedStaticFile() {
         String malformedYaml = "openapi \"3.1.0\"\ninfo:\n  title: \"Broken\"\n";
 
+        ClassLoader loader = new MapBackedClassLoader(Map.of("META-INF/openapi.yaml", malformedYaml));
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
             () -> withContextClassLoader(
-                new MapBackedClassLoader(Map.of("META-INF/openapi.yaml", malformedYaml)),
+                loader,
                 () -> new StaticFileReader().readOpenAPI()
             )
         );

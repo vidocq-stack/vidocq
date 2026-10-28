@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -126,7 +127,8 @@ class GrimmConfigTest {
         // Snapshot must not reflect the later mutation.
         assertEquals("https://a", cfg.servers().get(0));
         // List itself must be unmodifiable.
-        assertThrows(UnsupportedOperationException.class, () -> cfg.servers().add("x"));
+        List<String> servers = cfg.servers();
+        assertThrows(UnsupportedOperationException.class, () -> servers.add("x"));
     }
 
     @Test
@@ -184,7 +186,7 @@ class GrimmConfigTest {
                 getConverter(Class<T> forType) { return Optional.empty(); }
         @Override public <T> T unwrap(Class<T> type) { throw new IllegalArgumentException(); }
         // Java 25 default methods — implement getValues if needed (interface evolves)
-        @SuppressWarnings("unused")
+        @Override
         public <T> java.util.List<T> getValues(String name, Class<T> itemType) {
             String v = values.get(name);
             if (v == null) return java.util.List.of();
