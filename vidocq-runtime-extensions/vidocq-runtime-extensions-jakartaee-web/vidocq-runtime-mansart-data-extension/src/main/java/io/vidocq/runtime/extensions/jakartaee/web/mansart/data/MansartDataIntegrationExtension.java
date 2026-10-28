@@ -117,7 +117,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
     public void onStart(ExtensionContext context) {
         BeanManager bm = context.beanManager();
 
-        if (context.config().getValue(P_CHECK_ON_START, Boolean.class, Boolean.TRUE)) {
+        if (Boolean.TRUE.equals(context.config().getValue(P_CHECK_ON_START, Boolean.class, Boolean.TRUE))) {
             checkDataSourceReachable(bm);
         }
         start(() -> beanClasses(bm), EntityModels::of);

@@ -26,15 +26,15 @@ package io.vidocq.runtime.core.console;
 public final class Ansi {
 
     /** Resets every attribute. */
-    public static final String RESET = "[0m";
+    public static final String RESET = "\u001B[0m";
     /** Bold red. */
-    public static final String BOLD_RED = "[1;31m";
+    public static final String BOLD_RED = "\u001B[1;31m";
     /** Yellow. */
-    public static final String YELLOW = "[33m";
+    public static final String YELLOW = "\u001B[33m";
     /** Green. */
-    public static final String GREEN = "[32m";
+    public static final String GREEN = "\u001B[32m";
     /** Cyan. */
-    public static final String CYAN = "[36m";
+    public static final String CYAN = "\u001B[36m";
     /** Bold. */
     public static final String BOLD = "\u001B[1m";
     /** Red. */
@@ -44,7 +44,7 @@ public final class Ansi {
     /** Magenta. */
     public static final String MAGENTA = "\u001B[35m";
     /** Faint (dim). */
-    public static final String FAINT = "[2m";
+    public static final String FAINT = "\u001B[2m";
 
     private Ansi() {}
 

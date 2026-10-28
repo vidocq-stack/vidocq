@@ -152,11 +152,10 @@ final class CoreStartupReportView implements StartupReportView {
         List<ReportLine> lines = new ArrayList<>();
         for (Section.Line line : section.lines()) {
             switch (line) {
-                case Section.Row row -> lines.add(new ReportLine(row.key(), List.of(row.value()), row.href()));
-                case Section.Items items -> {
-                    if (!items.items().isEmpty()) {
-                        lines.add(new ReportLine(items.key(), items.items()));
-                    }
+                case Section.Row(var key, var value, var href) -> lines.add(new ReportLine(key, List.of(value), href));
+                case Section.Items(var key, var items) when !items.isEmpty() -> lines.add(new ReportLine(key, items));
+                case Section.Items _ -> {
+                    // an empty list: the report does not print it
                 }
                 case Section.Cells(var cells, var href) -> lines.add(new ReportLine(null, cells, href));
                 case Section.Text(var text) -> lines.add(new ReportLine(null, List.of(text)));

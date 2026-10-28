@@ -337,15 +337,20 @@ public final class DependencyCodegenSelection {
         if (needle.length == 0) {
             return -1;
         }
-        outer:
         for (int i = 0; i <= haystack.length - needle.length; i++) {
-            for (int j = 0; j < needle.length; j++) {
-                if (haystack[i + j] != needle[j]) {
-                    continue outer;
-                }
+            if (startsAt(haystack, i, needle)) {
+                return i;
             }
-            return i;
         }
         return -1;
+    }
+
+    private static boolean startsAt(byte[] haystack, int at, byte[] needle) {
+        for (int j = 0; j < needle.length; j++) {
+            if (haystack[at + j] != needle[j]) {
+                return false;
+            }
+        }
+        return true;
     }
 }

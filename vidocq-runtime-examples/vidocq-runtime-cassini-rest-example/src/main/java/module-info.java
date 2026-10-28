@@ -41,7 +41,7 @@ module io.vidocq.runtime.examples.rest {
     // and the Vauban application layer promotes them to synthetic `provides` when it
     // resolves this module (VaubanLayerFactory). The application never names a
     // generated class in this file.
-    // Only the `model` subpackage is exported, so Champollion JSON-B can read the `Todo`
+    // Only the `model` subpackage is exported, so Champollion JSON-B can read its
     // record via publicLookup (an export suffices, no opens) — same pattern as
     // cassini-examples.
     exports io.vidocq.runtime.examples.rest.model;

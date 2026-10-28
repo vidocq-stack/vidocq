@@ -66,6 +66,7 @@ import java.util.stream.Stream;
  */
 final class WarJspPages {
 
+    private static final System.Logger LOG = System.getLogger(WarJspPages.class.getName());
     static final String MODULE = "vidocq.tck.pages";
     private static final String ENGINE = MODULE + ".engine.Engine";
 
@@ -109,7 +110,7 @@ final class WarJspPages {
                 + "provides io.vidocq.foy.spi.jsp.JspEngine with " + ENGINE + "; }");
         Path engine = sources.resolve(ENGINE.replace('.', '/') + ".java");
         Files.createDirectories(engine.getParent());
-        Files.writeString(engine, engineSource());
+        Files.writeString(engine, ENGINE_SOURCE);
         javac("--module-path", join(modulePath), "--patch-module", MODULE + "=" + output,
                 "-d", output.toString(), descriptor.toString(), engine.toString());
 
@@ -120,38 +121,36 @@ final class WarJspPages {
         var result = new PagePrecompiler().precompileDeployment(web, output, modulePath, null,
                 new GenerationOptions(groups, Map.of()));
         new TreeMap<>(result.failures()).forEach((page, failure) ->
-                System.err.println("[VidocqTCK] JSP translation failed: " + page + ": " + failure));
+                LOG.log(System.Logger.Level.WARNING, "[VidocqTCK] JSP translation failed: " + page + ": " + failure));
         return Optional.of(define(output, warPackages, modulePath, loader));
     }
 
     /** A {@code JspEngine} in the pages module, so {@code ServiceLoader} finds it in the layer: it delegates to Ibarra's. */
-    private static String engineSource() {
-        return """
-                package vidocq.tck.pages.engine;
+    private static final String ENGINE_SOURCE = """
+            package vidocq.tck.pages.engine;
 
-                public final class Engine implements io.vidocq.foy.spi.jsp.JspEngine {
-                    private final io.vidocq.foy.spi.jsp.JspEngine ibarra;
+            public final class Engine implements io.vidocq.foy.spi.jsp.JspEngine {
+                private final io.vidocq.foy.spi.jsp.JspEngine ibarra;
 
-                    public Engine() throws ReflectiveOperationException {
-                        ibarra = (io.vidocq.foy.spi.jsp.JspEngine) Class
-                                .forName("io.vidocq.ibarra.foy.internal.IbarraJspEngine", true,
-                                        Engine.class.getClassLoader())
-                                .getConstructor().newInstance();
-                    }
-
-                    @Override
-                    public Application deploy(jakarta.servlet.ServletContext context, ModuleLayer layer)
-                            throws jakarta.servlet.ServletException {
-                        return ibarra.deploy(context, layer);
-                    }
-
-                    @Override
-                    public boolean hasPages(ModuleLayer layer) {
-                        return ibarra.hasPages(layer);
-                    }
+                public Engine() throws ReflectiveOperationException {
+                    ibarra = (io.vidocq.foy.spi.jsp.JspEngine) Class
+                            .forName("io.vidocq.ibarra.foy.internal.IbarraJspEngine", true,
+                                    Engine.class.getClassLoader())
+                            .getConstructor().newInstance();
                 }
-                """;
-    }
+
+                @Override
+                public Application deploy(jakarta.servlet.ServletContext context, ModuleLayer layer)
+                        throws jakarta.servlet.ServletException {
+                    return ibarra.deploy(context, layer);
+                }
+
+                @Override
+                public boolean hasPages(ModuleLayer layer) {
+                    return ibarra.hasPages(layer);
+                }
+            }
+            """;
 
     private static List<Path> libraries(Path web) throws IOException {
         Path lib = web.resolve("WEB-INF/lib");

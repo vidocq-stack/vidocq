@@ -24,7 +24,6 @@ import io.vidocq.runtime.maven.dev.TestResults.Trigger;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -57,9 +56,8 @@ final class TestRequestFile implements AutoCloseable {
         String word;
         try {
             word = Files.readString(file, StandardCharsets.UTF_8).strip();
-        } catch (NoSuchFileException _) {
-            return Optional.empty();
         } catch (IOException _) {
+            // no request (the file is absent) or none readable
             return Optional.empty();
         }
         try {

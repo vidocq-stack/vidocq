@@ -159,7 +159,9 @@ final class RecordingSample implements PanelSample {
                     case Counter(var total, var unit) ->
                             sink.measure(group, key, "counter", unit(unit), total, Double.NaN);
                     case Absent _ -> sink.measure(group, key, null, null, Double.NaN, Double.NaN);
-                    default -> { }      // a duration, a text or a table: nothing a chart draws
+                    default -> {
+                        // a duration, a text or a table: nothing a chart draws
+                    }
                 }
             });
         }
@@ -335,11 +337,11 @@ final class RecordingSample implements PanelSample {
                     out.name("reason").value(reason);
                 }
             }
-            case Table table -> {
+            case Table(var columns, var rows) -> {
                 out.name("kind").value("table").name("columns").beginArray();
-                table.columns().forEach(out::value);
+                columns.forEach(out::value);
                 out.endArray().name("rows").beginArray();
-                for (List<String> row : table.rows()) {
+                for (List<String> row : rows) {
                     out.beginArray();
                     row.forEach(out::value);
                     out.endArray();

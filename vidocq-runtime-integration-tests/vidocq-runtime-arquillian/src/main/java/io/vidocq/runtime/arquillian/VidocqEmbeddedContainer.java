@@ -241,9 +241,17 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
     private static void deleteQuietly(java.nio.file.Path root) {
         if (root == null) return;
         try (var files = java.nio.file.Files.walk(root)) {
-            files.sorted(java.util.Comparator.reverseOrder()).forEach(file -> file.toFile().delete());
+            files.sorted(java.util.Comparator.reverseOrder()).forEach(VidocqEmbeddedContainer::deleteIfPossible);
         } catch (IOException _) {
             // A temporary directory left behind is harmless.
+        }
+    }
+
+    private static void deleteIfPossible(java.nio.file.Path file) {
+        try {
+            java.nio.file.Files.deleteIfExists(file);
+        } catch (IOException _) {
+            // A temporary file left behind is harmless; its directory then stays too.
         }
     }
 

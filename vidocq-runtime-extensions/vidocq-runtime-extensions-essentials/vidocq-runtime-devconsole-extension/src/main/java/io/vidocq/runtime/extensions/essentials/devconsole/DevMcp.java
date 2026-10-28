@@ -323,7 +323,7 @@ final class DevMcp {
             }
             for (Object line : list(section.get("lines"))) {
                 List<?> cells = list(line);
-                int values = cells.size() > 0 && cells.get(cells.size() - 1) instanceof Map<?, ?>
+                int values = !cells.isEmpty() && cells.get(cells.size() - 1) instanceof Map<?, ?>
                         ? cells.size() - 2 : cells.size() - 1;
                 if (cells.isEmpty() || cells.get(0) != null || values != 3) {
                     continue;

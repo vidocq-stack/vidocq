@@ -48,7 +48,7 @@ record ExtensionContextImpl(
 ) implements ExtensionContext {
 
     ExtensionContextImpl {
-        // A lambda, not Optional::empty: an Eclipse (JDT) build types that reference as Optional<Object>.
-        startupReport = startupReport == null ? () -> Optional.empty() : startupReport;
+        // The type witness matters: without it an Eclipse (JDT) build types Optional::empty as Optional<Object>.
+        startupReport = startupReport == null ? Optional::<StartupReportView>empty : startupReport;
     }
 }

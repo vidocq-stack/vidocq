@@ -469,15 +469,15 @@ public final class VidocqBootstrap {
      * Never throws: nothing may hide the failure itself.
      */
     private void bootFailed(Throwable failure) {
-        StartupRecorder recorder = this.recorder;
-        if (recorder == null) {
+        StartupRecorder current = this.recorder;
+        if (current == null) {
             return;
         }
         try {
-            String failed = recorder.failing();
-            List<Section> sections = StartupFacts.coreSections(recorder.weaving(), config, extensions,
-                    recorder.onStartNanos(), failed, DisplayPaths.current(), enrichedReader());
-            StartupReport partial = recorder.report(launchMode(), launchReason(), verbosity, runtime(), sections, failed);
+            String failed = current.failing();
+            List<Section> sections = StartupFacts.coreSections(current.weaving(), config, extensions,
+                    current.onStartNanos(), failed, DisplayPaths.current(), enrichedReader());
+            StartupReport partial = current.report(launchMode(), launchReason(), verbosity, runtime(), sections, failed);
             startupReport.set(partial);
             StartupRecorder.logFailure(partial, System.nanoTime() - startTime, failure);
         } catch (RuntimeException | LinkageError _) {

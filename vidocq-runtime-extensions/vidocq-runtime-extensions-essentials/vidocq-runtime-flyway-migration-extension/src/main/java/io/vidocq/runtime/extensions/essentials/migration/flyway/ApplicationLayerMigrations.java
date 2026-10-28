@@ -175,7 +175,7 @@ final class ApplicationLayerMigrations implements ResourceProvider, ClassProvide
 
         @Override
         public String getAbsolutePathOnDisk() {
-            return name;
+            return getAbsolutePath();
         }
 
         @Override

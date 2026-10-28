@@ -32,6 +32,7 @@ import org.eclipse.microprofile.health.HealthCheckResponse;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -97,7 +98,7 @@ final class HealthPanel {
      * @param sample   where the values go
      */
     static void write(HealthCheckRegistry registry, ZoneId zone, PanelSample sample) {
-        Map<ProbeType, Map<String, CheckResult>> results = new HashMap<>();
+        Map<ProbeType, Map<String, CheckResult>> results = new EnumMap<>(ProbeType.class);
         for (CheckResult result : registry.getLastResults()) {
             results.computeIfAbsent(result.probe(), p -> new HashMap<>()).put(result.name(), result);
         }

@@ -114,7 +114,7 @@ public final class ProjectScaffolder {
                         + " (vidocq-runtime-junit) comes with 0.4.0.");
             }
         }
-        write(res.resolve("vidocq.properties"),                      buildProperties());
+        write(res.resolve("vidocq.properties"),                      BUILD_PROPERTIES);
     }
 
     /**
@@ -497,15 +497,13 @@ public final class ProjectScaffolder {
                 """ : "");
     }
 
-    private static String buildProperties() {
-        return """
-                # Vidocq application configuration
+    private static final String BUILD_PROPERTIES = """
+            # Vidocq application configuration
 
-                # HTTP endpoint. vidocq.http.port is an alias for the listener named 'default';
-                # vidocq.chappe.listener.<name>.port addresses any listener and wins over the alias.
-                vidocq.http.port=8080
-                """;
-    }
+            # HTTP endpoint. vidocq.http.port is an alias for the listener named 'default';
+            # vidocq.chappe.listener.<name>.port addresses any listener and wins over the alias.
+            vidocq.http.port=8080
+            """;
 
     // -------------------------------------------------------------------------
     // Utilities

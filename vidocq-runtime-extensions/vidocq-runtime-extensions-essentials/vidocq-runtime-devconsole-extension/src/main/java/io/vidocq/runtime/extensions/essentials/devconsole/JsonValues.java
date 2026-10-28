@@ -111,27 +111,29 @@ final class JsonValues {
     }
 
     private static void pretty(StringBuilder out, Object value, int level) {
-        if (value instanceof Map<?, ?> object && !object.isEmpty()) {
-            out.append('{');
-            boolean first = true;
-            for (Map.Entry<?, ?> member : object.entrySet()) {
-                out.append(first ? "\n" : ",\n").append("  ".repeat(level + 1));
-                first = false;
-                out.append(scalar(member.getKey())).append(": ");
-                pretty(out, member.getValue(), level + 1);
+        switch (value) {
+            case Map<?, ?> object when !object.isEmpty() -> {
+                out.append('{');
+                boolean first = true;
+                for (Map.Entry<?, ?> member : object.entrySet()) {
+                    out.append(first ? "\n" : ",\n").append("  ".repeat(level + 1));
+                    first = false;
+                    out.append(scalar(member.getKey())).append(": ");
+                    pretty(out, member.getValue(), level + 1);
+                }
+                out.append('\n').append("  ".repeat(level)).append('}');
             }
-            out.append('\n').append("  ".repeat(level)).append('}');
-        } else if (value instanceof List<?> array && !array.isEmpty()) {
-            out.append('[');
-            boolean first = true;
-            for (Object item : array) {
-                out.append(first ? "\n" : ",\n").append("  ".repeat(level + 1));
-                first = false;
-                pretty(out, item, level + 1);
+            case List<?> array when !array.isEmpty() -> {
+                out.append('[');
+                boolean first = true;
+                for (Object item : array) {
+                    out.append(first ? "\n" : ",\n").append("  ".repeat(level + 1));
+                    first = false;
+                    pretty(out, item, level + 1);
+                }
+                out.append('\n').append("  ".repeat(level)).append(']');
             }
-            out.append('\n').append("  ".repeat(level)).append(']');
-        } else {
-            out.append(scalar(value));
+            case null, default -> out.append(scalar(value));
         }
     }
 

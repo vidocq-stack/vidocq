@@ -459,18 +459,18 @@ public final class CommandRunner {
                     CliOutput.error("Could not check for updates: " + reason);
                     return 1;
                 }
-                case UpdatePlan.Update u -> {
-                    String label = u.version() + u.build().map(b -> " (build " + b + ")").orElse("");
+                case UpdatePlan.Update(var version, var zipUrl, var build) -> {
+                    String label = version + build.map(b -> " (build " + b + ")").orElse("");
                     if (update.checkOnly()) {
                         CliOutput.info("Update available: " + label + " — run 'vidocq update'.");
                         return 0;
                     }
-                    CliOutput.info("Downloading " + u.zipUrl());
+                    CliOutput.info("Downloading " + zipUrl);
                     Path zip = TempFiles.createFile("vidocq-cli", ".zip");
                     Path target;
                     try {
-                        http.download(u.zipUrl(), zip);
-                        target = CliInstaller.install(zip, installed.getParent(), u.version(), u.build());
+                        http.download(zipUrl, zip);
+                        target = CliInstaller.install(zip, installed.getParent(), version, build);
                     } finally {
                         Files.deleteIfExists(zip);
                     }

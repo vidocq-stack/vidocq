@@ -91,7 +91,7 @@ public interface ExtensionContext {
      * @return the supplier of the view, never {@code null}
      */
     default Supplier<Optional<StartupReportView>> startupReport() {
-        // A lambda, not Optional::empty: an Eclipse (JDT) build typed that reference as Optional<Object>.
-        return () -> Optional.empty();
+        // The type witness matters: without it an Eclipse (JDT) build typed Optional::empty as Optional<Object>.
+        return Optional::<StartupReportView>empty;
     }
 }
