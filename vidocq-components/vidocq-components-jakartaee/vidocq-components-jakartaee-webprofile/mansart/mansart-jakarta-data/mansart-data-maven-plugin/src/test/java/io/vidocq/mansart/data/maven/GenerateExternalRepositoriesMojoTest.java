@@ -84,6 +84,7 @@ class GenerateExternalRepositoriesMojoTest {
             public interface DoneRepository extends jakarta.data.repository.BasicRepository<Part, Long> { }
             """;
     private static final String TARGET = "app.gen";
+    private static final String GENERATED = "generated";
 
     @TempDir
     Path dir;
@@ -140,7 +141,7 @@ class GenerateExternalRepositoriesMojoTest {
         project.setArtifactId("1st-app");
         var mojo = new GenerateExternalRepositoriesMojo();
         set(mojo, "project", project);
-        set(mojo, "generatedSourcesDirectory", dir.resolve("generated").toFile());
+        set(mojo, "generatedSourcesDirectory", dir.resolve(GENERATED).toFile());
         set(mojo, "outputDirectory", dir.resolve("output").toFile());
         set(mojo, "targetPackage", targetPackage);
         set(mojo, "skip", skip);
@@ -154,7 +155,7 @@ class GenerateExternalRepositoriesMojoTest {
     }
 
     private List<String> generatedFiles() throws IOException {
-        Path generated = dir.resolve("generated");
+        Path generated = dir.resolve(GENERATED);
         if (!Files.exists(generated)) return List.of();
         try (Stream<Path> walk = Files.walk(generated)) {
             return walk.filter(Files::isRegularFile).map(p -> generated.relativize(p).toString()).sorted().toList();
@@ -183,7 +184,7 @@ class GenerateExternalRepositoriesMojoTest {
 
         List<String> args = new ArrayList<>(List.of("-proc:none", "-d", dir.resolve("check").toString(),
                 "-classpath", String.join(File.pathSeparator, classpath)));
-        for (String f : generated) args.add(dir.resolve("generated").resolve(f).toString());
+        for (String f : generated) args.add(dir.resolve(GENERATED).resolve(f).toString());
         assertThat(ToolProvider.getSystemJavaCompiler().run(null, null, null, args.toArray(String[]::new)))
                 .as("the generated sources compile").isZero();
     }
