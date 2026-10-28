@@ -43,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class MultiDataStoreRoutingTest {
 
+    private static final String ROUTED_NOTES = "routed_notes";
     private static VaubanContainer container;
     private static RoutedNoteRepository routedNotes;
     private static AuthorRepository authors;
@@ -124,10 +125,10 @@ class MultiDataStoreRoutingTest {
         RoutedNote saved = routedNotes.save(note);
 
         assertThat(saved.getId()).isNotNull();
-        assertThat(countRows(RoutingDataSources.AUDIT_URL, "routed_notes"))
+        assertThat(countRows(RoutingDataSources.AUDIT_URL, ROUTED_NOTES))
                 .as("@Repository(dataStore=\"auditds\") must write to the @Named(\"auditds\") database")
                 .isEqualTo(1);
-        assertThat(countRows(RoutingDataSources.DEFAULT_URL, "routed_notes"))
+        assertThat(countRows(RoutingDataSources.DEFAULT_URL, ROUTED_NOTES))
                 .as("the @Default database must NOT receive the routed repository's rows")
                 .isZero();
     }
@@ -168,6 +169,6 @@ class MultiDataStoreRoutingTest {
                 .containsExactly("audited");
         assertThat(container.select(DefaultNoteLog.class).all()).extracting(RoutedNote::getText)
                 .containsExactly("plain");
-        assertThat(countRows(RoutingDataSources.AUDIT_URL, "routed_notes")).isEqualTo(1);
+        assertThat(countRows(RoutingDataSources.AUDIT_URL, ROUTED_NOTES)).isEqualTo(1);
     }
 }

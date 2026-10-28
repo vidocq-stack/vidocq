@@ -53,6 +53,9 @@ class DialectPredicatesTest {
     private static final String ALPHA = "Alpha";
     private static final String BRAVO = "Bravo";
     private static final String CHARLIE = "Charlie";
+    private static final String LOWER_BRAVO = "bravo";
+    private static final String LENGTH = "LENGTH";
+    private static final String UPPER = "UPPER";
 
     static Stream<Arguments> dialects() {
         return Stream.of(
@@ -93,10 +96,10 @@ class DialectPredicatesTest {
 
         assertThat(names(rt, new Where.IgnoreCase(new Where.NotEq(n)), "alpha")).containsExactly(BRAVO, CHARLIE);
         assertThat(names(rt, new Where.IgnoreCase(new Where.Like(n)), "%RAV%")).containsExactly(BRAVO);
-        assertThat(names(rt, new Where.IgnoreCase(new Where.Lt(n)), "bravo")).containsExactly(ALPHA);
-        assertThat(names(rt, new Where.IgnoreCase(new Where.Lte(n)), "bravo")).containsExactly(ALPHA, BRAVO);
-        assertThat(names(rt, new Where.IgnoreCase(new Where.Gt(n)), "bravo")).containsExactly(CHARLIE);
-        assertThat(names(rt, new Where.IgnoreCase(new Where.Gte(n)), "bravo")).containsExactly(BRAVO, CHARLIE);
+        assertThat(names(rt, new Where.IgnoreCase(new Where.Lt(n)), LOWER_BRAVO)).containsExactly(ALPHA);
+        assertThat(names(rt, new Where.IgnoreCase(new Where.Lte(n)), LOWER_BRAVO)).containsExactly(ALPHA, BRAVO);
+        assertThat(names(rt, new Where.IgnoreCase(new Where.Gt(n)), LOWER_BRAVO)).containsExactly(CHARLIE);
+        assertThat(names(rt, new Where.IgnoreCase(new Where.Gte(n)), LOWER_BRAVO)).containsExactly(BRAVO, CHARLIE);
         assertThat(names(rt, new Where.IgnoreCase(new Where.Between(n)), "b", "c")).containsExactly(BRAVO);
         assertThat(names(rt, new Where.IgnoreCase(new Where.In(n, 2)), "ALPHA", "charlie"))
                 .as(name).containsExactly(ALPHA, CHARLIE);
@@ -112,16 +115,16 @@ class DialectPredicatesTest {
         RepositoryRuntime rt = runtime(dialect, url);
         Attribute<?, ?> n = _Author.name;
 
-        assertThat(names(rt, new Where.Func("LENGTH", new Where.NotEq(n)), 5)).containsExactly(CHARLIE);
-        assertThat(names(rt, new Where.Func("LENGTH", new Where.Lt(n)), 6)).containsExactly(ALPHA, BRAVO);
-        assertThat(names(rt, new Where.Func("LENGTH", new Where.Lte(n)), 5)).containsExactly(ALPHA, BRAVO);
-        assertThat(names(rt, new Where.Func("LENGTH", new Where.Gt(n)), 5)).containsExactly(CHARLIE);
-        assertThat(names(rt, new Where.Func("LENGTH", new Where.Gte(n)), 7)).containsExactly(CHARLIE);
-        assertThat(names(rt, new Where.Func("UPPER", new Where.IsNotNull(n)))).hasSize(3);
-        assertThat(names(rt, new Where.Func("UPPER", new Where.Not(new Where.Eq(n))), "BRAVO"))
+        assertThat(names(rt, new Where.Func(LENGTH, new Where.NotEq(n)), 5)).containsExactly(CHARLIE);
+        assertThat(names(rt, new Where.Func(LENGTH, new Where.Lt(n)), 6)).containsExactly(ALPHA, BRAVO);
+        assertThat(names(rt, new Where.Func(LENGTH, new Where.Lte(n)), 5)).containsExactly(ALPHA, BRAVO);
+        assertThat(names(rt, new Where.Func(LENGTH, new Where.Gt(n)), 5)).containsExactly(CHARLIE);
+        assertThat(names(rt, new Where.Func(LENGTH, new Where.Gte(n)), 7)).containsExactly(CHARLIE);
+        assertThat(names(rt, new Where.Func(UPPER, new Where.IsNotNull(n)))).hasSize(3);
+        assertThat(names(rt, new Where.Func(UPPER, new Where.Not(new Where.Eq(n))), "BRAVO"))
                 .as(name).containsExactly(ALPHA, CHARLIE);
         assertThat(names(rt, Where.ALWAYS_TRUE)).hasSize(3);
-        Where unsupported = new Where.Func("UPPER", new Where.And(List.of(new Where.Eq(n), new Where.Eq(n))));
+        Where unsupported = new Where.Func(UPPER, new Where.And(List.of(new Where.Eq(n), new Where.Eq(n))));
         assertThatThrownBy(() -> names(rt, unsupported)).isInstanceOf(IllegalArgumentException.class);
     }
 

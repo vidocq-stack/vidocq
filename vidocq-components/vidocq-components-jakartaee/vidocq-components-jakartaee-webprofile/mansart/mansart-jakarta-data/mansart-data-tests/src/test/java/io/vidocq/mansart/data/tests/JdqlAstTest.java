@@ -34,8 +34,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** The run-time JDQL parser: the statement tree it builds, and the errors it reports. */
 class JdqlAstTest {
 
-    private static final Set<String> ATTRIBUTES = Set.of("name", "price", "stock", "active", "category");
     private static final String ENTITY = "Gadget";
+    private static final String NAME = "name";
+    private static final String STOCK = "stock";
+    private static final Set<String> ATTRIBUTES = Set.of(NAME, "price", STOCK, "active", "category");
 
     private static Stmt parse(String jdql) {
         return JdqlAst.parse(jdql, ATTRIBUTES, ENTITY);
@@ -59,7 +61,7 @@ class JdqlAstTest {
 
         assertThat(or.children()).hasSize(6);
         assertThat(or.children().subList(0, 3)).allSatisfy(p -> assertThat(p).isInstanceOf(JdqlAst.Not.class));
-        assertThat(or.children().get(3)).isEqualTo(new JdqlAst.FnIsNull("UPPER", "name", true));
+        assertThat(or.children().get(3)).isEqualTo(new JdqlAst.FnIsNull("UPPER", NAME, true));
         assertThat(or.children().get(4)).isInstanceOf(JdqlAst.Not.class);
         assertThat(or.children().get(5)).isInstanceOf(JdqlAst.FnCmp.class);
     }
@@ -70,7 +72,7 @@ class JdqlAstTest {
                 + " WHERE active = true");
 
         assertThat(stmt.kind).isEqualTo(Stmt.Kind.UPDATE);
-        assertThat(stmt.setAssignments).extracting(JdqlAst.SetAssign::attr).containsExactly("price", "name", "stock");
+        assertThat(stmt.setAssignments).extracting(JdqlAst.SetAssign::attr).containsExactly("price", NAME, STOCK);
         assertThat(stmt.setAssignments.get(0).value()).isInstanceOf(JdqlAst.ExprBin.class);
         assertThat(stmt.setAssignments.get(1).value()).isInstanceOf(JdqlAst.ExprFunc.class);
         assertThat(parse("DELETE FROM Gadget WHERE stock = 0").kind).isEqualTo(Stmt.Kind.DELETE);
@@ -84,7 +86,7 @@ class JdqlAstTest {
         Stmt avg = parse("SELECT AVG(price) WHERE active = true");
         assertThat(avg.kind).isEqualTo(Stmt.Kind.AGGREGATE);
         assertThat(avg.aggregateOp).isEqualTo("AVG");
-        assertThat(parse("SELECT name, stock ORDER BY name DESC").projectAttrs).containsExactly("name", "stock");
+        assertThat(parse("SELECT name, stock ORDER BY name DESC").projectAttrs).containsExactly(NAME, STOCK);
         assertThat(parse("SELECT this FROM Gadget ORDER BY stock ASC, name").orderBy).hasSize(2);
     }
 
