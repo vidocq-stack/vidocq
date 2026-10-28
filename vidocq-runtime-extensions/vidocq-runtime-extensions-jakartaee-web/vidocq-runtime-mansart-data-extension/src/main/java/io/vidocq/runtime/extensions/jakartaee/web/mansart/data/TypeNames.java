@@ -64,11 +64,7 @@ final class TypeNames {
             return print(parameterized.getRawType()) + arguments;
         }
         if (type instanceof WildcardType wildcard) {
-            if (wildcard.getLowerBounds().length > 0) {
-                return "? super " + print(wildcard.getLowerBounds()[0]);
-            }
-            Type[] upper = wildcard.getUpperBounds();
-            return upper.length == 0 || upper[0] == Object.class ? "?" : "? extends " + print(upper[0]);
+            return printWildcard(wildcard);
         }
         if (type instanceof GenericArrayType array) {
             return print(array.getGenericComponentType()) + "[]";
@@ -77,5 +73,14 @@ final class TypeNames {
             return variable.getName();
         }
         return raw(type);
+    }
+
+    /** A wildcard as {@code ? super X}, {@code ? extends X} or {@code ?}. */
+    private static String printWildcard(WildcardType wildcard) {
+        if (wildcard.getLowerBounds().length > 0) {
+            return "? super " + print(wildcard.getLowerBounds()[0]);
+        }
+        Type[] upper = wildcard.getUpperBounds();
+        return upper.length == 0 || upper[0] == Object.class ? "?" : "? extends " + print(upper[0]);
     }
 }

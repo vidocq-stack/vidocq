@@ -61,6 +61,8 @@ final class RepositoryReader {
 
     private static final String JAKARTA_DATA = "jakarta.data.repository";
 
+    private static final Type[] NO_TYPES = {};
+
     /**
      * What a repository interface says of itself.
      *
@@ -76,58 +78,64 @@ final class RepositoryReader {
     /** Reads {@code repository}, cutting a query after {@code maxQuery} characters. */
     static Read read(Class<?> repository, int maxQuery) {
         Type[] primary = primaryTypes(repository);
-        Class<?> entity = primary == null ? null : rawClass(primary[0]);
+        Class<?> entity = primary.length == 0 ? null : rawClass(primary[0]);
         String idType = entity == null ? null : TypeNames.of(primary[1]);
         return new Read(entity, idType, methods(repository, maxQuery), inherits(repository));
     }
 
     /**
      * The type arguments of {@code BasicRepository}, {@code CrudRepository} or {@code DataRepository}, however deep in
-     * the super-interfaces, with the type variables of the interfaces in between bound; {@code null} when there is
-     * none or it cannot be read.
+     * the super-interfaces, with the type variables of the interfaces in between bound; empty when there is none or
+     * it cannot be read.
      */
     static Type[] primaryTypes(Class<?> repository) {
         try {
             return primaryTypes(repository, Map.of());
         } catch (RuntimeException | LinkageError _) {
-            return null;
+            return NO_TYPES;
         }
     }
 
     private static Type[] primaryTypes(Class<?> type, Map<TypeVariable<?>, Type> bindings) {
         for (Type superType : type.getGenericInterfaces()) {
-            Class<?> raw;
-            Type[] arguments;
-            if (superType instanceof ParameterizedType parameterized
-                    && parameterized.getRawType() instanceof Class<?> rawType) {
-                raw = rawType;
-                arguments = parameterized.getActualTypeArguments().clone();
-                for (int i = 0; i < arguments.length; i++) {
-                    Type bound = bindings.get(arguments[i]);
-                    if (bound != null) {
-                        arguments[i] = bound;
-                    }
-                }
-            } else if (superType instanceof Class<?> rawType) {
-                raw = rawType;
-                arguments = new Type[0];
-            } else {
-                continue;
-            }
-            if (PRIMARY.contains(raw) && arguments.length == 2) {
-                return arguments;
-            }
-            Map<TypeVariable<?>, Type> next = new HashMap<>();
-            TypeVariable<?>[] parameters = raw.getTypeParameters();
-            for (int i = 0; i < parameters.length && i < arguments.length; i++) {
-                next.put(parameters[i], arguments[i]);
-            }
-            Type[] found = primaryTypes(raw, next);
-            if (found != null) {
+            Type[] found = primaryTypesOf(superType, bindings);
+            if (found.length > 0) {
                 return found;
             }
         }
-        return null;
+        return NO_TYPES;
+    }
+
+    /** {@link #primaryTypes(Class)} of one super-interface, {@code bindings} binding the variables it names. */
+    private static Type[] primaryTypesOf(Type superType, Map<TypeVariable<?>, Type> bindings) {
+        Class<?> raw = switch (superType) {
+            case ParameterizedType parameterized when parameterized.getRawType() instanceof Class<?> rawType -> rawType;
+            case Class<?> rawType -> rawType;
+            default -> null;
+        };
+        if (raw == null) {
+            return NO_TYPES;
+        }
+        Type[] arguments = superType instanceof ParameterizedType parameterized
+                ? bound(parameterized.getActualTypeArguments(), bindings) : NO_TYPES;
+        if (PRIMARY.contains(raw) && arguments.length == 2) {
+            return arguments;
+        }
+        Map<TypeVariable<?>, Type> next = new HashMap<>();
+        TypeVariable<?>[] parameters = raw.getTypeParameters();
+        for (int i = 0; i < parameters.length && i < arguments.length; i++) {
+            next.put(parameters[i], arguments[i]);
+        }
+        return primaryTypes(raw, next);
+    }
+
+    /** A copy of {@code arguments}, each type variable {@code bindings} binds replaced by its binding. */
+    private static Type[] bound(Type[] arguments, Map<TypeVariable<?>, Type> bindings) {
+        Type[] bound = arguments.clone();
+        for (int i = 0; i < bound.length; i++) {
+            bound[i] = bindings.getOrDefault(bound[i], bound[i]);
+        }
+        return bound;
     }
 
     /** The class a type argument names, or {@code null} for a type variable or a wildcard. */

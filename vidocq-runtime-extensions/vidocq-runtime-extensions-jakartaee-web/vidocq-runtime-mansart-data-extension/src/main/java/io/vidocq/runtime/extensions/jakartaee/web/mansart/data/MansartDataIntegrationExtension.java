@@ -188,33 +188,38 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
                 + count(read.repositoryCount(), "repository", "repositories") + ", "
                 + count(read.methodCount(), METHOD, METHODS));
         if (context.verbosity() == Verbosity.DETAILED) {
-            for (MansartDataCatalogue.Entity entity : read.entities()) {
-                section.row(entity.name(), entity.failure() == null
-                        ? entity.table() + ", " + count(entity.columns().size(), "column", "columns")
-                        : "model unavailable (" + entity.failure() + ")");
-            }
-            if (read.moreEntities() > 0) {
-                section.row("more entities", "and " + read.moreEntities() + " more");
-            }
-            for (MansartDataCatalogue.Repository repository : read.repositories()) {
-                if (repository.entityClassName() != null) {
-                    section.row(repository.name(), repository.entityName() + ", "
-                            + count(repository.methodCount(), METHOD, METHODS));
-                }
-            }
-            for (MansartDataCatalogue.Repository repository : read.otherRepositories()) {
-                section.row(repository.name(),
-                        "no primary entity, " + count(repository.methodCount(), METHOD, METHODS));
-            }
-            if (read.moreRepositories() > 0) {
-                section.row("more repositories", "and " + read.moreRepositories() + " more");
-            }
+            detailedRows(read, section);
         }
         for (MansartDataCatalogue.Entity entity : read.entities()) {
             if (entity.failure() != null) {
                 section.anomaly(ANOMALY, "The model of entity " + entity.className() + " could not be read ("
                         + entity.failure() + ")", HINT);
             }
+        }
+    }
+
+    /** The rows of {@link Verbosity#DETAILED}: one per entity, then one per repository. */
+    private static void detailedRows(MansartDataCatalogue read, StartupReportSection section) {
+        for (MansartDataCatalogue.Entity entity : read.entities()) {
+            section.row(entity.name(), entity.failure() == null
+                    ? entity.table() + ", " + count(entity.columns().size(), "column", "columns")
+                    : "model unavailable (" + entity.failure() + ")");
+        }
+        if (read.moreEntities() > 0) {
+            section.row("more entities", "and " + read.moreEntities() + " more");
+        }
+        for (MansartDataCatalogue.Repository repository : read.repositories()) {
+            if (repository.entityClassName() != null) {
+                section.row(repository.name(), repository.entityName() + ", "
+                        + count(repository.methodCount(), METHOD, METHODS));
+            }
+        }
+        for (MansartDataCatalogue.Repository repository : read.otherRepositories()) {
+            section.row(repository.name(),
+                    "no primary entity, " + count(repository.methodCount(), METHOD, METHODS));
+        }
+        if (read.moreRepositories() > 0) {
+            section.row("more repositories", "and " + read.moreRepositories() + " more");
         }
     }
 
