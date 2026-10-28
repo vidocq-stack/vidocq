@@ -115,38 +115,81 @@ final class SqlText {
         boolean[] code = new boolean[n];
         int i = 0;
         while (i < n) {
-            char c = sql.charAt(i);
-            char next = i + 1 < n ? sql.charAt(i + 1) : 0;
-            // a $ or an E inside a name, such as price$ or typE, opens nothing
-            boolean inName = i > 0 && isNamePart(sql.charAt(i - 1));
-            String dollar = c == '$' && !inName ? dollarTag(sql, i) : null;
-            if (dollar != null) {
-                int end = sql.indexOf(dollar, i + dollar.length());
-                i = end < 0 ? n : end + dollar.length();
-            } else if ((c == 'E' || c == 'e') && next == '\'' && !inName) {
-                i += 2;
-                while (i < n && (sql.charAt(i) != '\'' || (i + 1 < n && sql.charAt(i + 1) == '\''))) {
-                    i += sql.charAt(i) == '\\' || sql.charAt(i) == '\'' ? 2 : 1;
-                }
-                i++;
-            } else if (c == '\'' || c == identifierQuote) {
-                i++;
-                while (i < n && (sql.charAt(i) != c || (i + 1 < n && sql.charAt(i + 1) == c))) {
-                    i += sql.charAt(i) == c ? 2 : 1;
-                }
-                i++;
-            } else if (c == '-' && next == '-') {
-                while (i < n && sql.charAt(i) != '\n' && sql.charAt(i) != '\r') {
-                    i++;
-                }
-            } else if (c == '/' && next == '*') {
-                int end = sql.indexOf("*/", i + 2);
-                i = end < 0 ? n : end + 2;
-            } else {
+            int end = afterNonCode(sql, i, identifierQuote);
+            if (end == i) {
                 code[i++] = true;
+            } else {
+                i = end;
             }
         }
         return code;
+    }
+
+    /**
+     * Where the string, quoted identifier or comment that opens at {@code i} ends, past its closing characters; the
+     * end of the text when it is unterminated; {@code i} itself when code is there.
+     */
+    private static int afterNonCode(String sql, int i, char identifierQuote) {
+        char c = sql.charAt(i);
+        // a $ or an E inside a name, such as price$ or typE, opens nothing
+        boolean inName = i > 0 && isNamePart(sql.charAt(i - 1));
+        int afterDollar = c == '$' && !inName ? afterDollarQuoted(sql, i) : i;
+        if (afterDollar != i) {
+            return afterDollar;
+        }
+        if ((c == 'E' || c == 'e') && sql.startsWith("'", i + 1) && !inName) {
+            return afterEscaped(sql, i + 2);
+        }
+        if (c == '\'' || c == identifierQuote) {
+            return afterQuoted(sql, i + 1, c);
+        }
+        if (sql.startsWith("--", i)) {
+            return lineEnd(sql, i);
+        }
+        if (sql.startsWith("/*", i)) {
+            int end = sql.indexOf("*/", i + 2);
+            return end < 0 ? sql.length() : end + 2;
+        }
+        return i;
+    }
+
+    /** Where the line holding {@code i} ends: its {@code \n} or {@code \r}, or the end of the text. */
+    private static int lineEnd(String sql, int i) {
+        int end = i;
+        while (end < sql.length() && sql.charAt(end) != '\n' && sql.charAt(end) != '\r') {
+            end++;
+        }
+        return end;
+    }
+
+    /** Past the dollar-quoted string that opens at {@code i}; {@code i} when none opens there. */
+    private static int afterDollarQuoted(String sql, int i) {
+        String dollar = dollarTag(sql, i);
+        if (dollar == null) {
+            return i;
+        }
+        int end = sql.indexOf(dollar, i + dollar.length());
+        return end < 0 ? sql.length() : end + dollar.length();
+    }
+
+    /** Past the {@code E'…'} string whose text starts at {@code from}: a backslash escapes, a quote doubles. */
+    private static int afterEscaped(String sql, int from) {
+        int n = sql.length();
+        int i = from;
+        while (i < n && (sql.charAt(i) != '\'' || (i + 1 < n && sql.charAt(i + 1) == '\''))) {
+            i += sql.charAt(i) == '\\' || sql.charAt(i) == '\'' ? 2 : 1;
+        }
+        return i + 1;
+    }
+
+    /** Past the string or quoted identifier, opened by {@code quote}, whose text starts at {@code from}. */
+    private static int afterQuoted(String sql, int from, char quote) {
+        int n = sql.length();
+        int i = from;
+        while (i < n && (sql.charAt(i) != quote || (i + 1 < n && sql.charAt(i + 1) == quote))) {
+            i += sql.charAt(i) == quote ? 2 : 1;
+        }
+        return i + 1;
     }
 
     /** Whether {@code c} may be part of an unquoted name. */

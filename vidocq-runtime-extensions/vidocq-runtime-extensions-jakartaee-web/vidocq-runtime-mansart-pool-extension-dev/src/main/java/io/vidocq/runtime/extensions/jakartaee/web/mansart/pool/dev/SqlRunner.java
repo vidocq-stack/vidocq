@@ -157,57 +157,99 @@ final class SqlRunner {
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("sql", sql);
         details.put("params", params);
-        details.put("transaction", reads ? "read-only" : commit ? COMMIT : ROLLBACK);
-        String refusal = sql.isBlank() ? "sql: missing"
-                : SqlText.severalStatements(sql, identifierQuote) ? "one statement at a time"
-                : reads && !SqlText.READS.contains(SqlText.firstWord(sql, identifierQuote))
-                ? "Query only reads: use Execute" : null;
+        details.put("transaction", transaction(reads, commit));
         SqlText.Named named = SqlText.named(sql, identifierQuote);
-        for (String name : named.names()) {
-            if (refusal == null && !params.containsKey(name)) {
-                refusal = "missing parameter " + name;
-            }
-        }
+        String refusal = refusal(sql, named, params, reads);
         if (refusal != null) {
             return new ActionResult(refusal, null, null, true, Json.write(details));
         }
         try (Connection connection = pool.getConnection()) {
-            boolean autoCommit = connection.getAutoCommit();
-            boolean readOnly = connection.isReadOnly();
-            try {
-                if (reads) {
-                    readOnly(connection, true);
-                }
-                connection.setAutoCommit(false);
-                boolean postgres = "PostgreSQL".equals(connection.getMetaData().getDatabaseProductName());
-                Answer answer;
-                try {
-                    answer = statement(connection, named, params, limit, postgres ? Binding.UNTYPED : Binding.PLAIN);
-                } catch (SQLException untypable) {
-                    if (!postgres || !UNTYPABLE.equals(untypable.getSQLState())) {
-                        throw untypable;
-                    }
-                    // nothing ran: the transaction PostgreSQL aborted is rolled back, the parameters bound as text
-                    connection.rollback();
-                    answer = statement(connection, named, params, limit, Binding.TEXT);
-                }
-                if (commit) {
-                    connection.commit();
-                } else {
-                    connection.rollback();
-                }
-                return result(answer, reads ? null : commit ? "committed" : "rolled back", start, details);
-            } catch (SQLException | RuntimeException failed) {
-                quietly(connection::rollback);
-                throw failed;
-            } finally {
-                quietly(() -> connection.setAutoCommit(autoCommit));
-                if (reads) {
-                    readOnly(connection, readOnly);
-                }
-            }
+            Answer answer = inTransaction(connection, named, params, reads, commit, limit);
+            return result(answer, reads ? null : state(commit), start, details);
         } catch (SQLException failed) {
             return failure(failed, details);
+        }
+    }
+
+    /** The transaction a call runs in: {@code read-only}, {@value #COMMIT} or {@value #ROLLBACK}. */
+    private static String transaction(boolean reads, boolean commit) {
+        if (reads) {
+            return "read-only";
+        }
+        return commit ? COMMIT : ROLLBACK;
+    }
+
+    /** How a write call's transaction ended. */
+    private static String state(boolean commit) {
+        return commit ? "committed" : "rolled back";
+    }
+
+    /** Why {@code sql} is not run, {@code null} when it is. */
+    private String refusal(String sql, SqlText.Named named, Map<String, Object> params, boolean reads) {
+        if (sql.isBlank()) {
+            return "sql: missing";
+        }
+        if (SqlText.severalStatements(sql, identifierQuote)) {
+            return "one statement at a time";
+        }
+        if (reads && !SqlText.READS.contains(SqlText.firstWord(sql, identifierQuote))) {
+            return "Query only reads: use Execute";
+        }
+        for (String name : named.names()) {
+            if (!params.containsKey(name)) {
+                return "missing parameter " + name;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Runs the statement in a transaction committed or rolled back, read-only when it {@code reads}; the connection's
+     * auto-commit and read-only modes given back as they were.
+     */
+    private Answer inTransaction(Connection connection, SqlText.Named named, Map<String, Object> params, boolean reads,
+                                 boolean commit, int limit) throws SQLException {
+        boolean autoCommit = connection.getAutoCommit();
+        boolean readOnly = connection.isReadOnly();
+        try {
+            if (reads) {
+                readOnly(connection, true);
+            }
+            connection.setAutoCommit(false);
+            Answer answer = answer(connection, named, params, limit);
+            if (commit) {
+                connection.commit();
+            } else {
+                connection.rollback();
+            }
+            return answer;
+        } catch (SQLException | RuntimeException failed) {
+            quietly(connection::rollback);
+            throw failed;
+        } finally {
+            quietly(() -> connection.setAutoCommit(autoCommit));
+            if (reads) {
+                readOnly(connection, readOnly);
+            }
+        }
+    }
+
+    /**
+     * The statement's answer, its parameters bound untyped on PostgreSQL; bound again as text when PostgreSQL could
+     * not infer their type.
+     */
+    private Answer answer(Connection connection, SqlText.Named named, Map<String, Object> params, int limit)
+            throws SQLException {
+        boolean postgres = "PostgreSQL".equals(connection.getMetaData().getDatabaseProductName());
+        try {
+            return statement(connection, named, params, limit, postgres ? Binding.UNTYPED : Binding.PLAIN);
+        } catch (SQLException untypable) {
+            if (!postgres || !UNTYPABLE.equals(untypable.getSQLState())) {
+                throw untypable;
+            }
+            // nothing ran: the transaction PostgreSQL aborted is rolled back, the parameters bound as text
+            connection.rollback();
+            return statement(connection, named, params, limit, Binding.TEXT);
         }
     }
 

@@ -181,34 +181,50 @@ final class JdbcUrls {
         }
         int subEnd = JDBC_PREFIX.length() + sub.length();
         int headEnd = firstOf(url, "?;", subEnd);
-        String head = url.substring(0, headEnd);
-        boolean removed = false;
-
-        int at = head.lastIndexOf('@');
-        if (at >= 0) {
-            int slashes = authorityOpener(head, subEnd);
-            if (slashes >= 0 && slashes < at) {
-                head = head.substring(0, slashes + 2) + head.substring(at + 1);
-                removed = true;
-            } else {
-                // Oracle: [user[/password]]@ opened by a colon; a password may hold a colon, not the user
-                int slash = head.indexOf('/', subEnd);
-                int colon = head.lastIndexOf(':', slash >= 0 && slash < at ? slash : at);
-                if (head.indexOf('@', subEnd) < colon) {
-                    return null;
-                }
-                removed = at > colon + 1;
-                head = head.substring(0, colon + 1) + head.substring(at);
-            }
+        Redacted head = withoutUserInfo(url.substring(0, headEnd), subEnd);
+        if (head == null || namesSecret(head.url())) {
+            return null;
         }
+        return withEntries(url, headEnd, head);
+    }
+
+    /** {@code head}, the URL before its first {@code ?} or {@code ;}, without its user info; {@code null} if unread. */
+    private static Redacted withoutUserInfo(String head, int subEnd) {
+        int at = head.lastIndexOf('@');
+        if (at < 0) {
+            return new Redacted(head, false);
+        }
+        int slashes = authorityOpener(head, subEnd);
+        if (slashes >= 0 && slashes < at) {
+            return new Redacted(head.substring(0, slashes + 2) + head.substring(at + 1), true);
+        }
+        // Oracle: [user[/password]]@ opened by a colon; a password may hold a colon, not the user
+        int slash = head.indexOf('/', subEnd);
+        int colon = head.lastIndexOf(':', slash >= 0 && slash < at ? slash : at);
+        if (head.indexOf('@', subEnd) < colon) {
+            return null;
+        }
+        return new Redacted(head.substring(0, colon + 1) + head.substring(at), at > colon + 1);
+    }
+
+    /** Whether {@code head} holds a {@code key=} of a secret, which only an unusual URL places there. */
+    private static boolean namesSecret(String head) {
         String lowerHead = head.toLowerCase(Locale.ROOT);
         for (String key : SECRET_KEYS) {
             if (lowerHead.contains(key + "=")) {
-                return null;
+                return true;
             }
         }
+        return false;
+    }
 
-        StringBuilder out = new StringBuilder(head);
+    /**
+     * {@code head} followed by the entries of {@code url} from {@code headEnd}, each {@code ?}, {@code &} or {@code ;}
+     * entry kept unless it is a secret; {@code null} when an entry cannot be read safely.
+     */
+    private static Redacted withEntries(String url, int headEnd, Redacted head) {
+        StringBuilder out = new StringBuilder(head.url());
+        boolean removed = head.credentialsRemoved();
         boolean queryOpened = false;
         int start = headEnd;
         while (start < url.length()) {
@@ -229,15 +245,19 @@ final class JdbcUrls {
             } else if (mayCloseUserInfo(entry)) {
                 return null;
             } else {
-                if (queryOpened && (separator == '?' || separator == '&')) {
-                    // the first parameter kept opens the query, even when the one that opened it was removed
-                    separator = out.indexOf("?", head.length()) < 0 ? '?' : '&';
-                }
-                out.append(separator).append(entry);
+                out.append(keptSeparator(separator, queryOpened, out, head.url().length())).append(entry);
             }
             start = end;
         }
         return new Redacted(out.toString(), removed);
+    }
+
+    /** The separator of an entry kept: the first parameter kept opens the query, even when the one that did was not. */
+    private static char keptSeparator(char separator, boolean queryOpened, StringBuilder out, int headLength) {
+        if (queryOpened && (separator == '?' || separator == '&')) {
+            return out.indexOf("?", headLength) < 0 ? '?' : '&';
+        }
+        return separator;
     }
 
     /**
