@@ -25,8 +25,8 @@ import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
-import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic;
 import java.io.IOException;
 import java.util.LinkedHashSet;
@@ -74,15 +74,14 @@ public final class MansartProcessor extends AbstractProcessor {
         Set<TypeElement> repositories = new LinkedHashSet<>();
 
         for (TypeElement annotation : annotations) {
-            String fqn = annotation.getQualifiedName().toString();
-            Set<TypeElement> into = switch (fqn) {
-                case "jakarta.data.repository.Repository" -> repositories;
-                case "jakarta.persistence.Entity" -> entities;
-                default -> null;
-            };
-            if (into == null) continue;
-            for (Element e : round.getElementsAnnotatedWith(annotation)) {
-                if (e instanceof TypeElement t) into.add(t);
+            switch (annotation.getQualifiedName().toString()) {
+                case "jakarta.data.repository.Repository" ->
+                        repositories.addAll(ElementFilter.typesIn(round.getElementsAnnotatedWith(annotation)));
+                case "jakarta.persistence.Entity" ->
+                        entities.addAll(ElementFilter.typesIn(round.getElementsAnnotatedWith(annotation)));
+                default -> {
+                    // not one of the two annotations @SupportedAnnotationTypes declares: nothing to collect
+                }
             }
         }
 

@@ -910,19 +910,12 @@ final class JdqlParser {
             skipWs();
             if (pos >= src.length()) return new Token(Tk.EOF, "");
             char c = src.charAt(pos);
-            Tk single = switch (c) {
-                case '(' -> Tk.LPAREN;
-                case ')' -> Tk.RPAREN;
-                case ',' -> Tk.COMMA;
-                case '*' -> Tk.STAR;
-                case '=' -> Tk.EQ;
-                default -> null;
-            };
-            if (single != null) {
-                pos++;
-                return new Token(single, String.valueOf(c));
-            }
             return switch (c) {
+                case '(' -> consume(Tk.LPAREN, "(");
+                case ')' -> consume(Tk.RPAREN, ")");
+                case ',' -> consume(Tk.COMMA, ",");
+                case '*' -> consume(Tk.STAR, "*");
+                case '=' -> consume(Tk.EQ, "=");
                 case '<', '>', '!' -> comparison(c);
                 case ':' -> parameter(Tk.NAMED, ch -> Character.isLetterOrDigit(ch) || ch == '_',
                         "Empty named parameter ':'");
@@ -936,18 +929,24 @@ final class JdqlParser {
         private Token comparison(char c) {
             pos++;
             String pair = pos < src.length() ? "" + c + src.charAt(pos) : "";
-            Tk two = switch (pair) {
-                case "<=" -> Tk.LTE;
-                case "<>", "!=" -> Tk.NE;
-                case ">=" -> Tk.GTE;
-                default -> null;
+            return switch (pair) {
+                case "<=" -> consume(Tk.LTE, pair);
+                case "<>", "!=" -> consume(Tk.NE, pair);
+                case ">=" -> consume(Tk.GTE, pair);
+                default -> lone(c);
             };
-            if (two != null) {
-                pos++;
-                return new Token(two, pair);
-            }
+        }
+
+        /** {@code <} or {@code >} alone; a {@code !} alone is not an operator. */
+        private static Token lone(char c) {
             if (c == '!') throw new ParseException("Unexpected '!'");
             return c == '<' ? new Token(Tk.LT, "<") : new Token(Tk.GT, ">");
+        }
+
+        /** The token of {@code kind} spelled {@code text}, whose last character is at the position: read past it. */
+        private Token consume(Tk kind, String text) {
+            pos++;
+            return new Token(kind, text);
         }
 
         /** A {@code :name} or {@code ?N} parameter: the characters after the sigil that {@code part} accepts. */
