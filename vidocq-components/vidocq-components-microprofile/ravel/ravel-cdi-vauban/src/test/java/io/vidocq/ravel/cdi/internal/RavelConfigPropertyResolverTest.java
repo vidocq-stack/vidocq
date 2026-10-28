@@ -32,6 +32,8 @@ import org.eclipse.microprofile.config.spi.Converter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
@@ -221,40 +223,24 @@ class RavelConfigPropertyResolverTest {
 
     // -- Required scalars ----------------------------------------------------------------------
 
-    @Test
-    void required_value_whose_converter_returns_null_is_a_deployment_problem() {
-        registerConfig(Map.of(KEY, "anything"));
-        InjectionPoint ip = injectionPointFor("nullConverted");
+    /**
+     * A required value fails the deployment when its converter answers null for a present value,
+     * when its default value is empty or converts to null, and when no converter handles its type.
+     * An empty {@code configured} value leaves the property out of the configuration.
+     */
+    @ParameterizedTest(name = "{1}")
+    @CsvSource({
+            "anything, nullConverted,             converter returned null",
+            "'',       stringWithEmptyDefault,    Empty defaultValue",
+            "'',       nullConvertedWithDefault,  converts to null",
+            "'',       notConvertibleWithDefault, No converter"
+    })
+    void unresolvable_required_value_is_a_deployment_problem(String configured, String field, String expectedMessage) {
+        registerConfig(configured.isEmpty() ? Map.of() : Map.of(KEY, configured));
+        InjectionPoint ip = injectionPointFor(field);
 
         DeploymentException e = assertThrows(DeploymentException.class, () -> RavelConfigPropertyResolver.resolve(ip));
-        assertTrue(e.getMessage().contains("converter returned null"), e.getMessage());
-    }
-
-    @Test
-    void required_value_with_an_empty_default_is_a_deployment_problem() {
-        registerConfig(Map.of());
-        InjectionPoint ip = injectionPointFor("stringWithEmptyDefault");
-
-        DeploymentException e = assertThrows(DeploymentException.class, () -> RavelConfigPropertyResolver.resolve(ip));
-        assertTrue(e.getMessage().contains("Empty defaultValue"), e.getMessage());
-    }
-
-    @Test
-    void required_value_whose_default_converts_to_null_is_a_deployment_problem() {
-        registerConfig(Map.of());
-        InjectionPoint ip = injectionPointFor("nullConvertedWithDefault");
-
-        DeploymentException e = assertThrows(DeploymentException.class, () -> RavelConfigPropertyResolver.resolve(ip));
-        assertTrue(e.getMessage().contains("converts to null"), e.getMessage());
-    }
-
-    @Test
-    void default_value_of_a_type_without_converter_is_a_deployment_problem() {
-        registerConfig(Map.of());
-        InjectionPoint ip = injectionPointFor("notConvertibleWithDefault");
-
-        DeploymentException e = assertThrows(DeploymentException.class, () -> RavelConfigPropertyResolver.resolve(ip));
-        assertTrue(e.getMessage().contains("No converter"), e.getMessage());
+        assertTrue(e.getMessage().contains(expectedMessage), e.getMessage());
     }
 
     @Test
