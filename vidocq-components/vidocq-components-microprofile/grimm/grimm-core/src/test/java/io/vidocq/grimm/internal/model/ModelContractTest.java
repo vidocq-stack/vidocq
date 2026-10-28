@@ -51,6 +51,7 @@ import org.eclipse.microprofile.openapi.models.security.SecurityScheme;
 import org.eclipse.microprofile.openapi.models.servers.Server;
 import org.eclipse.microprofile.openapi.models.servers.ServerVariable;
 import org.eclipse.microprofile.openapi.models.tags.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -75,8 +76,8 @@ import static org.junit.jupiter.api.Assertions.fail;
  * Contract of every model object built by {@link OASFactory}, read from the MP OpenAPI 4.2
  * models Javadoc: a property set is the property read; {@code addX} adds an element that
  * {@code removeX} removes again; the collections the getters return cannot be used to change the
- * model; a {@code null} model object given to a keyed {@code addX(key, value)} is ignored or
- * rejected. Setting {@code null} clears a property (an empty collection counts as cleared).
+ * model; a {@code null} value given to a keyed {@code addX(key, value)} is ignored or rejected, and
+ * removing from an empty model changes nothing. Setting {@code null} clears a property (an empty collection counts as cleared).
  *
  * <p>The accessors are found by reflection on the model interfaces so that every one of them is
  * checked, including those added by a later version of the API.</p>
@@ -153,26 +154,55 @@ class ModelContractTest {
 
     @ParameterizedTest
     @MethodSource("modelTypes")
-    void aNullKeyedValueIsIgnoredOrRejected(Class<? extends Constructible> type) throws Exception {
+    void aNullValueGivenToAKeyedAddIsIgnoredOrRejected(Class<? extends Constructible> type) throws Exception {
         for (Method add : type.getMethods()) {
-            Object[] args = isKeyedModelAdd(add) ? argumentsFor(add) : null;
+            Object[] args = isModelAdd(add) ? argumentsFor(add) : null;
             if (args == null) {
                 continue;
             }
-            args[1] = null;
+            args[args.length - 1] = null;
             Constructible model = OASFactory.createObject(type);
             if (invokeOrRejected(model, add, args)) {
-                assertEquals(0, elementCount(model), type.getSimpleName() + "." + add.getName() + "(k, null)");
+                assertEquals(0, elementCount(model), type.getSimpleName() + "." + add.getName() + "(key, null)");
             }
         }
         assertTrue(type.isInstance(OASFactory.createObject(type)));
     }
 
+    @ParameterizedTest
+    @MethodSource("modelTypes")
+    void removingFromAnEmptyModelChangesNothing(Class<? extends Constructible> type) throws Exception {
+        for (Method add : type.getMethods()) {
+            Object[] args = add.getName().startsWith("add") ? argumentsFor(add) : null;
+            Optional<Method> remove = args == null ? Optional.empty() : removerOf(type, add);
+            if (remove.isPresent()) {
+                Constructible model = OASFactory.createObject(type);
+                remove.get().invoke(model, removeArgument(add, remove.get(), args));
+                assertEquals(0, elementCount(model), type.getSimpleName() + "." + remove.get().getName());
+            }
+        }
+        assertTrue(type.isInstance(OASFactory.createObject(type)));
+    }
+
+    @Test
+    void aNullScopeGivesAnEmptyListOfScopes() {
+        SecurityRequirement requirement = OASFactory.createSecurityRequirement()
+                .addScheme("one", (String) null)
+                .addScheme("two", (List<String>) null);
+
+        assertEquals(Map.of("one", List.of(), "two", List.of()), requirement.getSchemes());
+    }
+
     // ── reflection helpers ──
 
-    private static boolean isKeyedModelAdd(Method add) {
+    /**
+     * The keyed {@code addX(key, value)} methods, whose Javadoc says a {@code null} value is
+     * rejected or ignored. {@code SecurityRequirement.addScheme} documents another behaviour
+     * (an empty list of scopes) and {@code OAuthFlow.addScope} documents none.
+     */
+    private static boolean isModelAdd(Method add) {
         return add.getName().startsWith("add") && add.getParameterCount() == 2
-                && Constructible.class.isAssignableFrom(add.getParameterTypes()[1]);
+                && !"addScheme".equals(add.getName()) && !"addScope".equals(add.getName());
     }
 
     private static boolean isNullOrEmpty(Object value) {
