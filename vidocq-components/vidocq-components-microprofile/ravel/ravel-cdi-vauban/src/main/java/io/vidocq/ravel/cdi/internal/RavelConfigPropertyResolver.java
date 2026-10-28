@@ -92,15 +92,7 @@ public final class RavelConfigPropertyResolver {
         Class<?> clazz = rawClass(targetType);
         // Spec §6.3: direct ConfigValue injection, no Converter involved.
         if (clazz == ConfigValue.class) {
-            ConfigValue cv = ConfigProvider.getConfig().getConfigValue(key);
-            if (cv != null && cv.getValue() != null) {
-                return cv;
-            }
-            // Missing property: apply defaultValue in a synthetic ConfigValue instance.
-            if (!ConfigProperty.UNCONFIGURED_VALUE.equals(metadata.defaultValue())) {
-                return new DefaultedConfigValue(key, metadata.defaultValue());
-            }
-            return cv != null ? cv : new DefaultedConfigValue(key, null);
+            return resolveConfigValue(key, metadata.defaultValue());
         }
         // OptionalInt/Long/Double: built-in converter already returns empty when
         // the property is missing, so no deployment error.
@@ -108,6 +100,18 @@ public final class RavelConfigPropertyResolver {
             return resolvePrimitiveOptional(key, clazz, metadata.defaultValue());
         }
         return resolveRequired(key, clazz, metadata.defaultValue());
+    }
+
+    /** §6.3: a missing property gets its {@code defaultValue} in a synthetic {@code ConfigValue}. */
+    private static ConfigValue resolveConfigValue(String key, String defaultValue) {
+        ConfigValue cv = ConfigProvider.getConfig().getConfigValue(key);
+        if (cv != null && cv.getValue() != null) {
+            return cv;
+        }
+        if (!ConfigProperty.UNCONFIGURED_VALUE.equals(defaultValue)) {
+            return new DefaultedConfigValue(key, defaultValue);
+        }
+        return cv != null ? cv : new DefaultedConfigValue(key, null);
     }
 
     private static Object resolvePrimitiveOptional(String key, Class<?> type, String defaultValue) {

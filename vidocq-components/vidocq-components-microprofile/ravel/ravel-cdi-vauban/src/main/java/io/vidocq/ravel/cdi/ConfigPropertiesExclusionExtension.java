@@ -72,17 +72,19 @@ public class ConfigPropertiesExclusionExtension implements Extension {
     public void validateConfigProperties(@Observes AfterDeploymentValidation event) {
         Config config = ConfigProvider.getConfig();
         for (Class<?> beanClass : configPropertiesClasses) {
-            ConfigProperties anno = beanClass.getAnnotation(ConfigProperties.class);
-            String prefix = anno != null && !ConfigProperties.UNCONFIGURED_PREFIX.equals(anno.prefix())
-                    ? anno.prefix() : "";
-            Object probe = tryInstantiate(beanClass);
-            for (Field field : beanClass.getDeclaredFields()) {
-                if (Modifier.isStatic(field.getModifiers())) continue;
-                if (isOptional(field.getType())) continue;
-                ConfigProperty fieldAnno = field.getAnnotation(ConfigProperty.class);
-                if (fieldAnno != null
-                        && !ConfigProperty.UNCONFIGURED_VALUE.equals(fieldAnno.defaultValue())) continue;
-                if (hasInitializer(probe, field)) continue;
+            validateConfigPropertiesClass(beanClass, config, event);
+        }
+    }
+
+    private static void validateConfigPropertiesClass(
+            Class<?> beanClass, Config config, AfterDeploymentValidation event) {
+        ConfigProperties anno = beanClass.getAnnotation(ConfigProperties.class);
+        String prefix = anno != null && !ConfigProperties.UNCONFIGURED_PREFIX.equals(anno.prefix())
+                ? anno.prefix() : "";
+        Object probe = tryInstantiate(beanClass);
+        for (Field field : beanClass.getDeclaredFields()) {
+            ConfigProperty fieldAnno = field.getAnnotation(ConfigProperty.class);
+            if (isRequired(field, fieldAnno, probe)) {
                 String name = propertyName(field, fieldAnno, prefix);
                 ConfigValue cv = config.getConfigValue(name);
                 String value = cv != null ? cv.getValue() : null;
@@ -93,6 +95,20 @@ public class ConfigPropertiesExclusionExtension implements Extension {
                 }
             }
         }
+    }
+
+    /**
+     * A field is required unless it is static, has an {@code Optional}-like type, has a
+     * configured {@code defaultValue}, or carries a Java initializer.
+     */
+    private static boolean isRequired(Field field, ConfigProperty fieldAnno, Object probe) {
+        if (Modifier.isStatic(field.getModifiers()) || isOptional(field.getType())) {
+            return false;
+        }
+        if (fieldAnno != null && !ConfigProperty.UNCONFIGURED_VALUE.equals(fieldAnno.defaultValue())) {
+            return false;
+        }
+        return !hasInitializer(probe, field);
     }
 
     private static String propertyName(Field field, ConfigProperty fieldAnno, String prefix) {
@@ -128,7 +144,7 @@ public class ConfigPropertiesExclusionExtension implements Extension {
             Object actual = field.get(probe);
             Object zero = zeroValue(field.getType());
             return !java.util.Objects.equals(actual, zero);
-        } catch (IllegalAccessException e) {
+        } catch (IllegalAccessException _) {
             return false;
         }
     }

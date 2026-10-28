@@ -404,8 +404,8 @@ class ConfigCdiExtensionPhasesTest {
 
     @Test
     void isOptionalLikeRuntime_recognises_optional_types() {
-        assertTrue(ConfigCdiExtension.isOptionalLikeRuntime(Optional.class, Optional.class));
-        assertFalse(ConfigCdiExtension.isOptionalLikeRuntime(String.class, String.class));
+        assertTrue(ConfigCdiExtension.isOptionalLikeRuntime(Optional.class));
+        assertFalse(ConfigCdiExtension.isOptionalLikeRuntime(String.class));
     }
 
     // -- Fixtures --------------------------------------------------------------------------------

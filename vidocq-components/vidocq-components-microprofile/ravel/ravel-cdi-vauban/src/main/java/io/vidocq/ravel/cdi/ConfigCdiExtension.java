@@ -31,6 +31,7 @@ import jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo;
 import jakarta.enterprise.inject.build.compatible.spi.Messages;
 import jakarta.enterprise.inject.build.compatible.spi.Registration;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.inject.build.compatible.spi.Types;
 import jakarta.enterprise.inject.build.compatible.spi.Validation;
@@ -162,35 +163,44 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     @Registration(types = Object.class)
     public void registerConfigPropertyInjectionPoints(BeanInfo beanInfo, Messages messages) {
         for (InjectionPointInfo injectionPoint : beanInfo.injectionPoints()) {
-            // Case 1: @ConfigProperty
             AnnotationInfo configPropertyQual = findConfigPropertyQualifier(injectionPoint);
             if (configPropertyQual != null) {
-                DeclarationInfo declaration = injectionPoint.declaration();
-                Type ipType = injectionPoint.type();
-                if (!isSupportedType(ipType)) {
-                    messages.error("Unsupported @ConfigProperty injection type: " + ipType, declaration);
-                    continue;
+                registerConfigPropertyInjectionPoint(injectionPoint, configPropertyQual, messages);
+            } else {
+                AnnotationInfo configPropertiesQual = findConfigPropertiesQualifier(injectionPoint);
+                if (configPropertiesQual != null) {
+                    registerConfigPropertiesInjectionPoint(injectionPoint, configPropertiesQual, messages);
                 }
-                validateDeploymentContract(configPropertyQual, declaration, ipType, messages);
-                collectedTypes.putIfAbsent(ipType.toString(), ipType);
-                continue;
-            }
-
-            // Case 2: @ConfigProperties
-            AnnotationInfo configPropertiesQual = findConfigPropertiesQualifier(injectionPoint);
-            if (configPropertiesQual != null) {
-                Type ipType = injectionPoint.type();
-                if (!(ipType instanceof ClassType ct)) {
-                    messages.error("@ConfigProperties only supports class types, got: " + ipType,
-                            injectionPoint.declaration());
-                    continue;
-                }
-                String fieldPrefix = extractRawPrefix(configPropertiesQual);
-                configPropertiesTypes.putIfAbsent(ipType.toString(),
-                    new ConfigPropertiesEntry(ipType, fieldPrefix));
-                validateConfigPropertiesDeployment(ct, fieldPrefix, injectionPoint.declaration(), messages);
             }
         }
+    }
+
+    /** Case 1: an {@code @ConfigProperty} injection point. */
+    private void registerConfigPropertyInjectionPoint(
+            InjectionPointInfo injectionPoint, AnnotationInfo configPropertyQual, Messages messages) {
+        DeclarationInfo declaration = injectionPoint.declaration();
+        Type ipType = injectionPoint.type();
+        if (!isSupportedType(ipType)) {
+            messages.error("Unsupported @ConfigProperty injection type: " + ipType, declaration);
+            return;
+        }
+        validateDeploymentContract(configPropertyQual, declaration, ipType, messages);
+        collectedTypes.putIfAbsent(ipType.toString(), ipType);
+    }
+
+    /** Case 2: an {@code @ConfigProperties} injection point. */
+    private void registerConfigPropertiesInjectionPoint(
+            InjectionPointInfo injectionPoint, AnnotationInfo configPropertiesQual, Messages messages) {
+        Type ipType = injectionPoint.type();
+        if (!(ipType instanceof ClassType ct)) {
+            messages.error("@ConfigProperties only supports class types, got: " + ipType,
+                    injectionPoint.declaration());
+            return;
+        }
+        String fieldPrefix = extractRawPrefix(configPropertiesQual);
+        configPropertiesTypes.putIfAbsent(ipType.toString(),
+            new ConfigPropertiesEntry(ipType, fieldPrefix));
+        validateConfigPropertiesDeployment(ct, fieldPrefix, injectionPoint.declaration(), messages);
     }
 
     /**
@@ -231,11 +241,10 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
                     .createWith(ConfigSyntheticCreator.class);
         }
 
-        // Synthesise @ConfigProperty beans.
-        // For non-parameterized types (Class, Class[], boxed primitives),
-        // use the runtime {@code Class<?>} — Weld binds array types without
-        // issue via {@code .type(Class<?>)}, whereas {@code .type(ArrayType lang-model)}
-        // may be silently ignored (see WELD-001408 for OffsetDateTime[]).
+        // Synthesise @ConfigProperty beans: for non-parameterized types (Class,
+        // Class arrays, boxed primitives) the bean is typed with the runtime class,
+        // which Weld binds correctly for arrays, whereas a lang-model array type
+        // may be silently ignored (see WELD-001408 for OffsetDateTime arrays).
         var registered = new java.util.HashSet<String>();
         for (Type ipType : collectedTypes.values()) {
             Type effectiveType = ipType instanceof jakarta.enterprise.lang.model.types.PrimitiveType pt
@@ -246,12 +255,10 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
                 continue;
             }
 
-            // For arrays and simple class types, use the runtime {@code Class<?>}
-            // — Weld binds array types correctly this way, whereas
-            // {@code .type(ArrayType lang-model)} may be silently ignored (see WELD-001408
-            // for OffsetDateTime[]). For parameterized types (List<X>, Provider<T>,
-            // Optional<T>, etc.) keep the lang-model {@code Type} — otherwise the
-            // generic parameter is lost and multiple beans conflict.
+            // Arrays and simple class types are typed with their runtime class (see
+            // above). Parameterized types such as a List, a Provider or an Optional
+            // keep their lang-model type: the runtime class would lose the generic
+            // parameter and several beans would then conflict.
             boolean isParameterized = effectiveType instanceof ParameterizedType;
             Class<?> runtimeClass = isParameterized ? null : toRuntimeClassOrNull(effectiveType);
             if (runtimeClass != null) {
@@ -291,16 +298,22 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         // Placeholder for additional synthesis needs
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static void addSyntheticConfigPropertyBean(SyntheticComponents components, Class<?> beanClass) {
-        // Cast required because {@code SyntheticComponents.addBean(Class<T>)} returns
-        // {@code SyntheticBeanBuilder<T>} and {@code createWith} expects
-        // {@code Class<? extends SyntheticBeanCreator<T>>} with the same T.
-        ((jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder) components.addBean(beanClass))
+    private static <T> void addSyntheticConfigPropertyBean(SyntheticComponents components, Class<T> beanClass) {
+        components.addBean(beanClass)
                 .type(beanClass)
                 .qualifier(ConfigProperty.class)
                 .scope(Dependent.class)
-                .createWith(ConfigPropertySyntheticCreator.class);
+                .createWith(configPropertyCreator());
+    }
+
+    /**
+     * {@code SyntheticComponents.addBean(Class<T>)} returns a {@code SyntheticBeanBuilder<T>}
+     * whose {@code createWith} expects a creator of the same {@code T}; the one
+     * {@link ConfigPropertySyntheticCreator} serves every {@code @ConfigProperty} type.
+     */
+    @SuppressWarnings("unchecked")
+    private static <T> Class<? extends SyntheticBeanCreator<T>> configPropertyCreator() {
+        return (Class<? extends SyntheticBeanCreator<T>>) (Class<?>) ConfigPropertySyntheticCreator.class;
     }
 
     private static Class<?> boxPrimitive(jakarta.enterprise.lang.model.types.PrimitiveType.PrimitiveKind kind) {
@@ -394,24 +407,40 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         Object probe = tryInstantiate(beanClass);
         Config config = ConfigProvider.getConfig();
         for (java.lang.reflect.Field field : beanClass.getDeclaredFields()) {
-            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
             ConfigProperty fieldAnno = field.getAnnotation(ConfigProperty.class);
-            String name = fieldConfigPropertyName(field, fieldAnno, resolvedPrefix);
-            if (fieldAnno != null
-                    && !ConfigProperty.UNCONFIGURED_VALUE.equals(fieldAnno.defaultValue())) continue;
-            if (isOptionalLikeRuntime(field.getType(), field.getGenericType())) continue;
-            if (hasJavaInitializer(probe, field)) continue;
-            ConfigValue cv = config.getConfigValue(name);
-            String resolved = cv != null ? cv.getValue() : null;
-            if (resolved == null || resolved.isEmpty()) {
-                String message = "@ConfigProperties: missing required property '" + name
-                        + "' for " + beanClass.getName() + "." + field.getName();
-                if (declaration != null) {
-                    messages.error(message, declaration);
-                } else {
-                    messages.error(message);
+            if (isRequiredField(field, fieldAnno, probe)) {
+                String name = fieldConfigPropertyName(field, fieldAnno, resolvedPrefix);
+                ConfigValue cv = config.getConfigValue(name);
+                String resolved = cv != null ? cv.getValue() : null;
+                if (resolved == null || resolved.isEmpty()) {
+                    reportMissingField(beanClass, field, name, declaration, messages);
                 }
             }
+        }
+    }
+
+    /**
+     * §6.4: a field is required unless it is static, has a configured
+     * {@code defaultValue}, has an {@code Optional}-like type, or carries a Java initializer.
+     */
+    private static boolean isRequiredField(java.lang.reflect.Field field, ConfigProperty fieldAnno, Object probe) {
+        if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+            return false;
+        }
+        if (fieldAnno != null && !ConfigProperty.UNCONFIGURED_VALUE.equals(fieldAnno.defaultValue())) {
+            return false;
+        }
+        return !isOptionalLikeRuntime(field.getType()) && !hasJavaInitializer(probe, field);
+    }
+
+    private static void reportMissingField(Class<?> beanClass, java.lang.reflect.Field field, String name,
+            DeclarationInfo declaration, Messages messages) {
+        String message = "@ConfigProperties: missing required property '" + name
+                + "' for " + beanClass.getName() + "." + field.getName();
+        if (declaration != null) {
+            messages.error(message, declaration);
+        } else {
+            messages.error(message);
         }
     }
 
@@ -432,7 +461,7 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
             Object actual = field.get(probe);
             Object zero = zeroValue(field.getType());
             return !java.util.Objects.equals(actual, zero);
-        } catch (IllegalAccessException e) {
+        } catch (IllegalAccessException _) {
             return false;
         }
     }
@@ -468,7 +497,7 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         return resolvedPrefix.isEmpty() ? field.getName() : resolvedPrefix + "." + field.getName();
     }
 
-    static boolean isOptionalLikeRuntime(Class<?> rawType, java.lang.reflect.Type genericType) {
+    static boolean isOptionalLikeRuntime(Class<?> rawType) {
         return rawType == Optional.class
                 || rawType == OptionalInt.class
                 || rawType == OptionalLong.class
@@ -569,22 +598,11 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
             Type ipType,
             Messages messages
     ) {
-        if (runsAtBuildTime() || isDeferredOrOptionalWrapper(ipType)) {
+        if (runsAtBuildTime()) {
             return;
         }
-        if (ipType instanceof ParameterizedType || ipType instanceof jakarta.enterprise.lang.model.types.ArrayType) {
-            return;
-        }
-
-        Class<?> targetType = toRuntimeClass(ipType);
-        if (targetType == null || targetType == ConfigValue.class || targetType.isArray()) {
-            return;
-        }
-        // OptionalInt/Long/Double are semantically "absent" when property is
-        // missing, so no deployment failure (see Optional<T> §6.1).
-        if (targetType == OptionalInt.class
-                || targetType == OptionalLong.class
-                || targetType == OptionalDouble.class) {
+        Class<?> targetType = requiredScalarType(ipType);
+        if (targetType == null) {
             return;
         }
 
@@ -627,6 +645,31 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         } catch (RuntimeException e) {
             messages.error("Invalid @ConfigProperty for key '" + key + "': " + e.getMessage(), declaration);
         }
+    }
+
+    /**
+     * The runtime class whose value must be present and convertible at deployment, or
+     * {@code null} when the injection point defers or tolerates a missing value: lazy and
+     * optional wrappers, parameterized and array types, {@code ConfigValue}, and
+     * {@code OptionalInt/Long/Double}, which are semantically "absent" when the property
+     * is missing (see {@code Optional<T>} in §6.1).
+     */
+    private static Class<?> requiredScalarType(Type ipType) {
+        if (isDeferredOrOptionalWrapper(ipType)
+                || ipType instanceof ParameterizedType
+                || ipType instanceof jakarta.enterprise.lang.model.types.ArrayType) {
+            return null;
+        }
+        Class<?> targetType = toRuntimeClass(ipType);
+        if (targetType == null
+                || targetType == ConfigValue.class
+                || targetType.isArray()
+                || targetType == OptionalInt.class
+                || targetType == OptionalLong.class
+                || targetType == OptionalDouble.class) {
+            return null;
+        }
+        return targetType;
     }
 
     /**
