@@ -28,11 +28,11 @@ import java.lang.management.BufferPoolMXBean;
 import java.lang.management.ClassLoadingMXBean;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
-import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryPoolMXBean;
 import java.lang.management.OperatingSystemMXBean;
 import java.lang.management.ThreadMXBean;
 import java.util.List;
+import java.util.function.ToLongFunction;
 
 /**
  * Registers OTel SemConv 1.27+ Observable instruments for standard JVM metrics —
@@ -52,6 +52,9 @@ import java.util.List;
  */
 public final class JvmMetricsBinder {
 
+    /** UCUM annotation unit of the class-loading counters. */
+    private static final String UNIT_CLASS = "{class}";
+
     private JvmMetricsBinder() {}
 
     /** Binds all Observable JVM metrics on the provided {@link Meter}. */
@@ -66,50 +69,35 @@ public final class JvmMetricsBinder {
     // ---- Memory --------------------------------------------------------------------------
 
     private static void bindMemory(Meter meter) {
-        MemoryMXBean memBean = ManagementFactory.getMemoryMXBean();
         List<MemoryPoolMXBean> pools = ManagementFactory.getMemoryPoolMXBeans();
 
         // OTel SemConv 1.27+: Memory as UpDownCounter (LONG_SUM), not Gauge — aligned with TCK.
-        meter.upDownCounterBuilder("jvm.memory.used")
-                .setDescription("Measure of memory used.")
-                .setUnit("By")
-                .buildWithCallback(m -> {
-                    for (MemoryPoolMXBean p : pools) {
-                        long used = p.getUsage().getUsed();
-                        if (used >= 0) m.record(used, poolAttrs(p));
-                    }
+        bindPoolMetric(meter, pools, "jvm.memory.used", "Measure of memory used.",
+                p -> p.getUsage().getUsed());
+        bindPoolMetric(meter, pools, "jvm.memory.committed", "Measure of memory committed.",
+                p -> p.getUsage().getCommitted());
+        bindPoolMetric(meter, pools, "jvm.memory.limit", "Measure of max obtainable memory.",
+                p -> p.getUsage().getMax());
+        bindPoolMetric(meter, pools, "jvm.memory.used_after_last_gc",
+                "Measure of memory used, as measured after the most recent garbage collection event on this pool.",
+                p -> {
+                    var collectionUsage = p.getCollectionUsage();
+                    return collectionUsage != null ? collectionUsage.getUsed() : -1L;
                 });
+    }
 
-        meter.upDownCounterBuilder("jvm.memory.committed")
-                .setDescription("Measure of memory committed.")
+    /**
+     * Binds a per-pool memory UpDownCounter in bytes; a pool whose reading is negative (undefined) is skipped.
+     */
+    private static void bindPoolMetric(Meter meter, List<MemoryPoolMXBean> pools, String name, String description,
+            ToLongFunction<MemoryPoolMXBean> reading) {
+        meter.upDownCounterBuilder(name)
+                .setDescription(description)
                 .setUnit("By")
                 .buildWithCallback(m -> {
                     for (MemoryPoolMXBean p : pools) {
-                        long c = p.getUsage().getCommitted();
-                        if (c >= 0) m.record(c, poolAttrs(p));
-                    }
-                });
-
-        meter.upDownCounterBuilder("jvm.memory.limit")
-                .setDescription("Measure of max obtainable memory.")
-                .setUnit("By")
-                .buildWithCallback(m -> {
-                    for (MemoryPoolMXBean p : pools) {
-                        long max = p.getUsage().getMax();
-                        if (max >= 0) m.record(max, poolAttrs(p));
-                    }
-                });
-
-        meter.upDownCounterBuilder("jvm.memory.used_after_last_gc")
-                .setDescription("Measure of memory used, as measured after the most recent garbage collection event on this pool.")
-                .setUnit("By")
-                .buildWithCallback(m -> {
-                    for (MemoryPoolMXBean p : pools) {
-                        var collectionUsage = p.getCollectionUsage();
-                        if (collectionUsage != null) {
-                            long used = collectionUsage.getUsed();
-                            if (used >= 0) m.record(used, poolAttrs(p));
-                        }
+                        long value = reading.applyAsLong(p);
+                        if (value >= 0) m.record(value, poolAttrs(p));
                     }
                 });
     }
@@ -162,17 +150,17 @@ public final class JvmMetricsBinder {
 
         meter.upDownCounterBuilder("jvm.class.count")
                 .setDescription("Number of classes currently loaded.")
-                .setUnit("{class}")
+                .setUnit(UNIT_CLASS)
                 .buildWithCallback(m -> m.record(clBean.getLoadedClassCount(), Attributes.empty()));
 
         meter.counterBuilder("jvm.class.loaded")
                 .setDescription("Number of classes loaded since JVM start.")
-                .setUnit("{class}")
+                .setUnit(UNIT_CLASS)
                 .buildWithCallback(m -> m.record(clBean.getTotalLoadedClassCount(), Attributes.empty()));
 
         meter.counterBuilder("jvm.class.unloaded")
                 .setDescription("Number of classes unloaded since JVM start.")
-                .setUnit("{class}")
+                .setUnit(UNIT_CLASS)
                 .buildWithCallback(m -> m.record(clBean.getUnloadedClassCount(), Attributes.empty()));
     }
 

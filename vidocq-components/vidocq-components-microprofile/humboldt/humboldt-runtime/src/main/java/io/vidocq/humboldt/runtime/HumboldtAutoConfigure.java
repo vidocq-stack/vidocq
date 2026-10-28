@@ -79,6 +79,12 @@ public final class HumboldtAutoConfigure {
 
     private static final Logger LOG = System.getLogger(HumboldtAutoConfigure.class.getName());
     private static final String DEFAULT_ENDPOINT = "http://localhost:4318";
+    /** Exporter name ({@code OTEL_*_EXPORTER}) that disables the signal's exporter. */
+    private static final String NONE = "none";
+    /** Exporter name ({@code OTEL_*_EXPORTER}) that keeps the signal's data in memory, for tests. */
+    private static final String IN_MEMORY = "in-memory";
+    /** Exporter name ({@code OTEL_*_EXPORTER}) that logs the signal's data (debugging exporter). */
+    private static final String LOGGING = "logging";
 
     private HumboldtAutoConfigure() {}
 
@@ -169,19 +175,50 @@ public final class HumboldtAutoConfigure {
         // --- Tracer ---
         String tracesExporter = env.getOrDefault("OTEL_TRACES_EXPORTER", "otlp");
         Sampler sampler = overrideSampler != null ? overrideSampler : parseSampler(env);
-        InMemorySpanExporter inMemSpan = "in-memory".equals(tracesExporter)
+        InMemorySpanExporter inMemSpan = IN_MEMORY.equals(tracesExporter)
                 ? InMemorySpanExporter.create() : null;
+        SdkTracerProvider tracerProvider =
+                buildTracerProvider(env, resource, sampler, tracesExporter, inMemSpan, extraSpanExporters);
+
+        // --- Meter ---
+        String metricsExporter = env.getOrDefault("OTEL_METRICS_EXPORTER", "otlp");
+        InMemoryMetricExporter inMemMetric = IN_MEMORY.equals(metricsExporter)
+                ? InMemoryMetricExporter.create() : null;
+        SdkMeterProvider meterProvider = buildMeterProvider(env, resource, metricsExporter, inMemMetric);
+
+        // --- Logger ---
+        String logsExporter = env.getOrDefault("OTEL_LOGS_EXPORTER", "otlp");
+        InMemoryLogRecordExporter inMemLog = IN_MEMORY.equals(logsExporter)
+                ? InMemoryLogRecordExporter.create() : null;
+        SdkLoggerProvider loggerProvider = buildLoggerProvider(env, resource, logsExporter, inMemLog);
+
+        ContextPropagators propagators = overridePropagators != null
+                ? overridePropagators
+                : W3CPropagators.get();
+
+        LOG.log(Level.INFO,
+                "Humboldt autoconfig : service.name={0}, traces={1}, metrics={2}, logs={3}, sampler={4}",
+                resource.attributes().get(stringKey("service.name")),
+                tracesExporter, metricsExporter, logsExporter, sampler.description());
+
+        return new AutoConfiguredHumboldt(
+                tracerProvider, meterProvider, loggerProvider, propagators,
+                inMemSpan, inMemMetric, inMemLog);
+    }
+
+    private static SdkTracerProvider buildTracerProvider(EnvConfig env, Resource resource, Sampler sampler,
+            String tracesExporter, InMemorySpanExporter inMemSpan, List<SpanExporter> extraSpanExporters) {
         SdkTracerProvider.Builder tpBuilder = SdkTracerProvider.builder()
                 .setResource(resource)
                 .setSampler(sampler);
         SpanExporter spanExporter = switch (tracesExporter) {
-            case "none" -> null;
-            case "in-memory" -> inMemSpan;
-            case "logging" -> LoggingSpanExporter.create();
+            case NONE -> null;
+            case IN_MEMORY -> inMemSpan;
+            case LOGGING -> LoggingSpanExporter.create();
             default -> buildOtlpSpanExporter(env);
         };
         if (spanExporter != null) {
-            SpanProcessor sp = "in-memory".equals(tracesExporter)
+            SpanProcessor sp = IN_MEMORY.equals(tracesExporter)
                     ? SimpleSpanProcessor.create(spanExporter)
                     : BatchSpanProcessor.builder(spanExporter).build();
             tpBuilder.addSpanProcessor(sp);
@@ -189,33 +226,21 @@ public final class HumboldtAutoConfigure {
         for (SpanExporter extra : extraSpanExporters) {
             tpBuilder.addSpanProcessor(SimpleSpanProcessor.create(extra));
         }
-        SdkTracerProvider tracerProvider = tpBuilder.build();
+        return tpBuilder.build();
+    }
 
-        // --- Meter ---
-        String metricsExporter = env.getOrDefault("OTEL_METRICS_EXPORTER", "otlp");
-        InMemoryMetricExporter inMemMetric = "in-memory".equals(metricsExporter)
-                ? InMemoryMetricExporter.create() : null;
+    private static SdkMeterProvider buildMeterProvider(EnvConfig env, Resource resource,
+            String metricsExporter, InMemoryMetricExporter inMemMetric) {
         SdkMeterProvider.Builder mpBuilder = SdkMeterProvider.builder().setResource(resource);
         MetricExporter metricExporter = switch (metricsExporter) {
-            case "none" -> null;
-            case "in-memory" -> inMemMetric;
-            case "logging" -> io.vidocq.humboldt.sdk.metric.export.LoggingMetricExporter.create();
+            case NONE -> null;
+            case IN_MEMORY -> inMemMetric;
+            case LOGGING -> io.vidocq.humboldt.sdk.metric.export.LoggingMetricExporter.create();
             default -> buildOtlpMetricExporter(env);
         };
         if (metricExporter != null) {
-            // OTEL_METRIC_EXPORT_INTERVAL (in ms) — default 60s per OTel spec; 3s for
-            // MP Telemetry TCK to allow awaitility.until() to complete within 15s.
-            long intervalMs = env.getLong("OTEL_METRIC_EXPORT_INTERVAL", -1L);
-            Duration interval;
-            if ("in-memory".equals(metricsExporter)) {
-                interval = Duration.ofMinutes(60); // explicit flush() in tests
-            } else if (intervalMs > 0) {
-                interval = Duration.ofMillis(intervalMs);
-            } else {
-                interval = Duration.ofSeconds(60);
-            }
             mpBuilder.registerMetricReader(PeriodicMetricReader.builder(metricExporter)
-                    .setInterval(interval)
+                    .setInterval(metricExportInterval(env, metricsExporter))
                     .build());
         }
         // Extra MetricExporters (M4b — OTel SDK bridge via humboldt-tck) passed via the
@@ -234,27 +259,40 @@ public final class HumboldtAutoConfigure {
         if (metricExporter != null || !EXTRA_METRIC_EXPORTERS.get().isEmpty()) {
             try {
                 JvmMetricsBinder.bindAll(meterProvider.get("io.vidocq.humboldt.runtime.jvm"));
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException _) {
                 // If MXBean is unavailable (specific env), continue without crashing the boot.
             }
         }
+        return meterProvider;
+    }
 
-        // --- Logger ---
-        String logsExporter = env.getOrDefault("OTEL_LOGS_EXPORTER", "otlp");
-        InMemoryLogRecordExporter inMemLog = "in-memory".equals(logsExporter)
-                ? InMemoryLogRecordExporter.create() : null;
+    /**
+     * OTEL_METRIC_EXPORT_INTERVAL (in ms) — default 60s per OTel spec; 3s for
+     * MP Telemetry TCK to allow awaitility.until() to complete within 15s.
+     * The in-memory exporter gets 60 minutes: tests flush explicitly.
+     */
+    private static Duration metricExportInterval(EnvConfig env, String metricsExporter) {
+        long intervalMs = env.getLong("OTEL_METRIC_EXPORT_INTERVAL", -1L);
+        if (IN_MEMORY.equals(metricsExporter)) {
+            return Duration.ofMinutes(60); // explicit flush() in tests
+        }
+        return intervalMs > 0 ? Duration.ofMillis(intervalMs) : Duration.ofSeconds(60);
+    }
+
+    private static SdkLoggerProvider buildLoggerProvider(EnvConfig env, Resource resource,
+            String logsExporter, InMemoryLogRecordExporter inMemLog) {
         SdkLoggerProvider.Builder lpBuilder = SdkLoggerProvider.builder().setResource(resource);
         LogRecordExporter logExporter = switch (logsExporter) {
-            case "none" -> null;
-            case "in-memory" -> inMemLog;
-            case "logging" -> LoggingLogRecordExporter.create();
+            case NONE -> null;
+            case IN_MEMORY -> inMemLog;
+            case LOGGING -> LoggingLogRecordExporter.create();
             default -> buildOtlpLogExporter(env);
         };
         if (logExporter != null) {
             // Simple processor for in-memory AND logging: output must be synchronous
             // so that tests (especially TCK JulTest) can read the file without
             // waiting for a deferred flush.
-            boolean useSimple = "in-memory".equals(logsExporter) || "logging".equals(logsExporter);
+            boolean useSimple = IN_MEMORY.equals(logsExporter) || LOGGING.equals(logsExporter);
             LogRecordProcessor lp = useSimple
                     ? SimpleLogRecordProcessor.create(logExporter)
                     : BatchLogRecordProcessor.builder(logExporter).build();
@@ -267,24 +305,12 @@ public final class HumboldtAutoConfigure {
         // runtime-internal logs polluting the InMemoryLogRecordExporter in tests.
         // Idempotent: does not re-install if a HumboldtJulHandler is already present.
         boolean installJulBridge = logExporter != null
-                && !"in-memory".equals(logsExporter)
-                && !"none".equals(logsExporter);
+                && !IN_MEMORY.equals(logsExporter)
+                && !NONE.equals(logsExporter);
         if (installJulBridge) {
             installJulBridge(loggerProvider);
         }
-
-        ContextPropagators propagators = overridePropagators != null
-                ? overridePropagators
-                : W3CPropagators.get();
-
-        LOG.log(Level.INFO,
-                "Humboldt autoconfig : service.name={0}, traces={1}, metrics={2}, logs={3}, sampler={4}",
-                resource.attributes().get(stringKey("service.name")),
-                tracesExporter, metricsExporter, logsExporter, sampler.description());
-
-        return new AutoConfiguredHumboldt(
-                tracerProvider, meterProvider, loggerProvider, propagators,
-                inMemSpan, inMemMetric, inMemLog);
+        return loggerProvider;
     }
 
     private static Resource buildResource(EnvConfig env) {
@@ -332,27 +358,30 @@ public final class HumboldtAutoConfigure {
     }
 
     private static OtlpHttpSpanExporter buildOtlpSpanExporter(EnvConfig env) {
-        String endpoint = env.getOrDefault("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
-                env.getOrDefault("OTEL_EXPORTER_OTLP_ENDPOINT", DEFAULT_ENDPOINT) + "/v1/traces");
+        String endpoint = otlpEndpoint(env, "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "/v1/traces");
         OtlpHttpSpanExporter.Builder b = OtlpHttpSpanExporter.builder().setEndpoint(endpoint);
         applyHeaders(env, b::addHeader);
         return b.build();
     }
 
     private static OtlpHttpMetricExporter buildOtlpMetricExporter(EnvConfig env) {
-        String endpoint = env.getOrDefault("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
-                env.getOrDefault("OTEL_EXPORTER_OTLP_ENDPOINT", DEFAULT_ENDPOINT) + "/v1/metrics");
+        String endpoint = otlpEndpoint(env, "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "/v1/metrics");
         OtlpHttpMetricExporter.Builder b = OtlpHttpMetricExporter.builder().setEndpoint(endpoint);
         applyHeaders(env, b::addHeader);
         return b.build();
     }
 
     private static OtlpHttpLogExporter buildOtlpLogExporter(EnvConfig env) {
-        String endpoint = env.getOrDefault("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
-                env.getOrDefault("OTEL_EXPORTER_OTLP_ENDPOINT", DEFAULT_ENDPOINT) + "/v1/logs");
+        String endpoint = otlpEndpoint(env, "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "/v1/logs");
         OtlpHttpLogExporter.Builder b = OtlpHttpLogExporter.builder().setEndpoint(endpoint);
         applyHeaders(env, b::addHeader);
         return b.build();
+    }
+
+    /** The signal-specific endpoint if set, otherwise {@code OTEL_EXPORTER_OTLP_ENDPOINT} (or the default) + path. */
+    private static String otlpEndpoint(EnvConfig env, String signalEndpointKey, String signalPath) {
+        return env.getOrDefault(signalEndpointKey,
+                env.getOrDefault("OTEL_EXPORTER_OTLP_ENDPOINT", DEFAULT_ENDPOINT) + signalPath);
     }
 
     private static void applyHeaders(EnvConfig env, java.util.function.BiConsumer<String, String> setter) {

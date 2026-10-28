@@ -40,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.function.Consumer;
 
@@ -68,6 +69,9 @@ import java.util.function.Consumer;
 public final class OtelSpiAutoConfiguration {
 
     private static final Logger LOG = System.getLogger(OtelSpiAutoConfiguration.class.getName());
+
+    /** OTel environment key of the resource attributes, to which the SPI-provided attributes are appended. */
+    private static final String OTEL_RESOURCE_ATTRIBUTES = "OTEL_RESOURCE_ATTRIBUTES";
 
     private OtelSpiAutoConfiguration() {}
 
@@ -109,20 +113,7 @@ public final class OtelSpiAutoConfiguration {
         // If otel.traces.exporter designates a discovered provider (e.g. "in-memory"),
         // create its OTel SpanExporter and bridge it to Humboldt — this is the
         // mechanism the TCK uses to retrieve its InMemorySpanExporter.
-        Map<String, ConfigurableSpanExporterProvider> spanExporterProviders = new LinkedHashMap<>();
-        forEachProvider(ConfigurableSpanExporterProvider.class, loader, p -> {
-            spanExporterProviders.put(p.getName(), p);
-            LOG.log(Level.INFO, "  -> SpanExporterProvider discovered: {0} (name={1})",
-                    p.getClass().getName(), p.getName());
-        });
-        List<SpanExporter> extraSpanExporters = new ArrayList<>();
-        String tracesExporterName = props.get("otel.traces.exporter");
-        if (tracesExporterName != null && spanExporterProviders.containsKey(tracesExporterName)) {
-            ConfigurableSpanExporterProvider p = spanExporterProviders.get(tracesExporterName);
-            var otelExporter = p.createExporter(new MapConfigProperties(props, loader));
-            extraSpanExporters.add(new OtelSpanExporterBridge(otelExporter));
-            LOG.log(Level.INFO, "  -> OTel SpanExporter '{0}' bridged to Humboldt", tracesExporterName);
-        }
+        List<SpanExporter> extraSpanExporters = loadSpanExporters(loader, props);
 
         // ResourceProvider SPI: invoke createResource(configProperties) on each provider
         // and append the resulting attributes to OTEL_RESOURCE_ATTRIBUTES. Humboldt's
@@ -152,20 +143,10 @@ public final class OtelSpiAutoConfiguration {
         // modifications — their values are "defaults" that can be overridden by
         // the other sources.
         envMap = autoCustomizer.applyPropertyCustomizers(envMap);
-        if (!spiResourceAttrs.isEmpty()) {
-            String existing = envMap.get("OTEL_RESOURCE_ATTRIBUTES");
-            envMap.put("OTEL_RESOURCE_ATTRIBUTES",
-                    existing == null || existing.isEmpty() ? spiResourceAttrs : existing + "," + spiResourceAttrs);
-        }
+        appendResourceAttributes(envMap, spiResourceAttrs);
         // ResourceCustomizer — invoke the chain and merge the resulting attrs into
         // OTEL_RESOURCE_ATTRIBUTES (Humboldt re-parses them when building its Resource).
-        String customizerResourceAttrs = autoCustomizer.applyResourceCustomizersAsAttrs(props);
-        if (!customizerResourceAttrs.isEmpty()) {
-            String existing = envMap.get("OTEL_RESOURCE_ATTRIBUTES");
-            envMap.put("OTEL_RESOURCE_ATTRIBUTES",
-                    existing == null || existing.isEmpty() ? customizerResourceAttrs
-                            : existing + "," + customizerResourceAttrs);
-        }
+        appendResourceAttributes(envMap, autoCustomizer.applyResourceCustomizersAsAttrs(props));
         // Side-effect-only invocations (the result of Sampler/SpanExporter/
         // TracerProvider customizers cannot be bridged to Humboldt 1:1 without full
         // bidirectional bridges — out of scope; SPI consumers such as the TCK
@@ -190,16 +171,56 @@ public final class OtelSpiAutoConfiguration {
         // if defined, otherwise the W3C default). Wrap the result in a new
         // ContextPropagators if the chain transformed it.
         if (autoCustomizer.hasAny()) {
-            TextMapPropagator basePropagator = spiPropagators != null
-                    ? spiPropagators.getTextMapPropagator()
-                    : W3CPropagators.textMap();
-            TextMapPropagator customized = autoCustomizer.applyPropagatorCustomizers(basePropagator, props);
-            if (customized != basePropagator) {
-                spiPropagators = ContextPropagators.create(customized);
-            }
+            spiPropagators = customizePropagators(autoCustomizer, spiPropagators, props);
         }
 
         return new Result(envMap, extraSpanExporters, spiSamplerOverride, spiPropagators, extraMetricExporters);
+    }
+
+    /**
+     * Scans {@link ConfigurableSpanExporterProvider}s. If {@code otel.traces.exporter} designates a discovered
+     * provider (e.g. {@code "in-memory"}), creates its OTel SpanExporter and bridges it to Humboldt — this is the
+     * mechanism the TCK uses to retrieve its InMemorySpanExporter.
+     */
+    private static List<SpanExporter> loadSpanExporters(ClassLoader loader, Map<String, String> props) {
+        Map<String, ConfigurableSpanExporterProvider> spanExporterProviders = new LinkedHashMap<>();
+        forEachProvider(ConfigurableSpanExporterProvider.class, loader, p -> {
+            spanExporterProviders.put(p.getName(), p);
+            LOG.log(Level.INFO, "  -> SpanExporterProvider discovered: {0} (name={1})",
+                    p.getClass().getName(), p.getName());
+        });
+        List<SpanExporter> extraSpanExporters = new ArrayList<>();
+        String tracesExporterName = props.get("otel.traces.exporter");
+        if (tracesExporterName != null && spanExporterProviders.containsKey(tracesExporterName)) {
+            ConfigurableSpanExporterProvider p = spanExporterProviders.get(tracesExporterName);
+            var otelExporter = p.createExporter(new MapConfigProperties(props, loader));
+            extraSpanExporters.add(new OtelSpanExporterBridge(otelExporter));
+            LOG.log(Level.INFO, "  -> OTel SpanExporter '{0}' bridged to Humboldt", tracesExporterName);
+        }
+        return extraSpanExporters;
+    }
+
+    /** Appends {@code attrs} ({@code key=value} CSV) to {@code OTEL_RESOURCE_ATTRIBUTES}; nothing when empty. */
+    private static void appendResourceAttributes(Map<String, String> envMap, String attrs) {
+        if (!attrs.isEmpty()) {
+            String existing = envMap.get(OTEL_RESOURCE_ATTRIBUTES);
+            envMap.put(OTEL_RESOURCE_ATTRIBUTES,
+                    existing == null || existing.isEmpty() ? attrs : existing + "," + attrs);
+        }
+    }
+
+    /**
+     * Applies the PropagatorCustomizer chain to the final propagator ({@code spiPropagators} if defined, otherwise
+     * the W3C default) and returns new ContextPropagators if the chain transformed it, {@code spiPropagators}
+     * otherwise.
+     */
+    private static ContextPropagators customizePropagators(CollectingAutoConfigurationCustomizer autoCustomizer,
+            ContextPropagators spiPropagators, Map<String, String> props) {
+        TextMapPropagator basePropagator = spiPropagators != null
+                ? spiPropagators.getTextMapPropagator()
+                : W3CPropagators.textMap();
+        TextMapPropagator customized = autoCustomizer.applyPropagatorCustomizers(basePropagator, props);
+        return customized != basePropagator ? ContextPropagators.create(customized) : spiPropagators;
     }
 
     /**
@@ -364,7 +385,7 @@ public final class OtelSpiAutoConfiguration {
             boolean hasNext;
             try {
                 hasNext = it.hasNext();
-            } catch (Throwable t) {
+            } catch (ServiceConfigurationError | RuntimeException | LinkageError t) {
                 LOG.log(Level.WARNING, "  {0} discovery aborted: {1}", spi.getSimpleName(), t.toString());
                 return;
             }
@@ -373,7 +394,7 @@ public final class OtelSpiAutoConfiguration {
                 ServiceLoader.Provider<S> provider = it.next();
                 extendExports(provider.type());
                 action.accept(provider.get());
-            } catch (Throwable t) {
+            } catch (ServiceConfigurationError | RuntimeException | LinkageError t) {
                 LOG.log(Level.WARNING, "  Provider ignored ({0}): {1}", spi.getSimpleName(), t.toString());
             }
         }

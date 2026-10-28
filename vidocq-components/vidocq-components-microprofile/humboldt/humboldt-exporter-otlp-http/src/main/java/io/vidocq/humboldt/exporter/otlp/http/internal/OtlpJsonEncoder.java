@@ -19,6 +19,7 @@
  */
 package io.vidocq.humboldt.exporter.otlp.http.internal;
 
+import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.vidocq.humboldt.sdk.common.InstrumentationScope;
@@ -26,6 +27,7 @@ import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.trace.data.EventData;
 import io.vidocq.humboldt.sdk.trace.data.LinkData;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
+import io.vidocq.humboldt.sdk.trace.data.StatusData;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -123,50 +125,61 @@ public final class OtlpJsonEncoder {
         sb.append(",\"kind\":").append(spanKindToInt(s.kind()));
         sb.append(",\"startTimeUnixNano\":\"").append(s.startEpochNanos()).append('"');
         sb.append(",\"endTimeUnixNano\":\"").append(s.endEpochNanos()).append('"');
-        if (!s.attributes().isEmpty()) {
-            sb.append(",\"attributes\":");
-            writeAttributesArray(sb, s.attributes());
-        }
+        writeAttributesField(sb, s.attributes());
         if (!s.events().isEmpty()) {
-            sb.append(",\"events\":[");
-            boolean first = true;
-            for (EventData e : s.events()) {
-                if (!first) sb.append(',');
-                first = false;
-                sb.append("{\"timeUnixNano\":\"").append(e.epochNanos()).append('"');
-                sb.append(",\"name\":");
-                appendString(sb, e.name());
-                if (!e.attributes().isEmpty()) {
-                    sb.append(",\"attributes\":");
-                    writeAttributesArray(sb, e.attributes());
-                }
-                sb.append('}');
-            }
-            sb.append(']');
+            writeEvents(sb, s.events());
         }
         if (!s.links().isEmpty()) {
-            sb.append(",\"links\":[");
-            boolean first = true;
-            for (LinkData l : s.links()) {
-                if (!first) sb.append(',');
-                first = false;
-                sb.append("{\"traceId\":\"").append(l.spanContext().getTraceId()).append('"');
-                sb.append(",\"spanId\":\"").append(l.spanContext().getSpanId()).append('"');
-                if (!l.attributes().isEmpty()) {
-                    sb.append(",\"attributes\":");
-                    writeAttributesArray(sb, l.attributes());
-                }
-                sb.append('}');
-            }
-            sb.append(']');
+            writeLinks(sb, s.links());
         }
-        sb.append(",\"status\":{");
-        sb.append("\"code\":").append(statusCodeToInt(s.status().code()));
-        if (!s.status().description().isEmpty()) {
-            sb.append(",\"message\":");
-            appendString(sb, s.status().description());
-        }
+        writeStatus(sb, s.status());
         sb.append('}');
+    }
+
+    /** Writes the {@code "attributes"} field, preceded by a comma, unless {@code attrs} is empty. */
+    private static void writeAttributesField(StringBuilder sb, Attributes attrs) {
+        if (!attrs.isEmpty()) {
+            sb.append(",\"attributes\":");
+            writeAttributesArray(sb, attrs);
+        }
+    }
+
+    private static void writeEvents(StringBuilder sb, List<EventData> events) {
+        sb.append(",\"events\":[");
+        boolean first = true;
+        for (EventData e : events) {
+            if (!first) sb.append(',');
+            first = false;
+            sb.append("{\"timeUnixNano\":\"").append(e.epochNanos()).append('"');
+            sb.append(",\"name\":");
+            appendString(sb, e.name());
+            writeAttributesField(sb, e.attributes());
+            sb.append('}');
+        }
+        sb.append(']');
+    }
+
+    private static void writeLinks(StringBuilder sb, List<LinkData> links) {
+        sb.append(",\"links\":[");
+        boolean first = true;
+        for (LinkData l : links) {
+            if (!first) sb.append(',');
+            first = false;
+            sb.append("{\"traceId\":\"").append(l.spanContext().getTraceId()).append('"');
+            sb.append(",\"spanId\":\"").append(l.spanContext().getSpanId()).append('"');
+            writeAttributesField(sb, l.attributes());
+            sb.append('}');
+        }
+        sb.append(']');
+    }
+
+    private static void writeStatus(StringBuilder sb, StatusData status) {
+        sb.append(",\"status\":{");
+        sb.append("\"code\":").append(statusCodeToInt(status.code()));
+        if (!status.description().isEmpty()) {
+            sb.append(",\"message\":");
+            appendString(sb, status.description());
+        }
         sb.append('}');
     }
 

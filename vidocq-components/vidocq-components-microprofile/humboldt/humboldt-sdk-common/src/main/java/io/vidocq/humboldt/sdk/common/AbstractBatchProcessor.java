@@ -134,15 +134,7 @@ public abstract class AbstractBatchProcessor<T> {
             long now = System.nanoTime();
             long waitNanos = scheduleDelayNanos - (now - lastExportNanos);
             if (waitNanos > 0 && queue.size() < maxExportBatchSize) {
-                synchronized (flushLock) {
-                    if (pendingFlush == null && running.get() && queue.size() < maxExportBatchSize) {
-                        try {
-                            TimeUnit.NANOSECONDS.timedWait(flushLock, waitNanos);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                }
+                awaitBatchOrFlush(waitNanos);
             }
             queue.drainTo(batch, maxExportBatchSize);
             if (!batch.isEmpty()) {
@@ -150,19 +142,39 @@ public abstract class AbstractBatchProcessor<T> {
                 batch.clear();
                 lastExportNanos = System.nanoTime();
             }
-            CompletableResultCode requested;
-            synchronized (flushLock) {
-                requested = pendingFlush;
-                pendingFlush = null;
-            }
-            if (requested != null) {
-                queue.drainTo(batch);
-                if (!batch.isEmpty()) {
-                    exportBatchSafe(batch);
-                    batch.clear();
+            serveFlushRequest(batch);
+        }
+    }
+
+    /**
+     * Waits up to {@code waitNanos} for a flush request, a shutdown or a full batch, unless one is already there.
+     */
+    private void awaitBatchOrFlush(long waitNanos) {
+        synchronized (flushLock) {
+            if (pendingFlush == null && running.get() && queue.size() < maxExportBatchSize) {
+                try {
+                    TimeUnit.NANOSECONDS.timedWait(flushLock, waitNanos);
+                } catch (InterruptedException _) {
+                    Thread.currentThread().interrupt();
                 }
-                requested.succeed();
             }
+        }
+    }
+
+    /** If a flush was requested, exports everything queued (using the empty {@code batch} buffer) and completes it. */
+    private void serveFlushRequest(List<T> batch) {
+        CompletableResultCode requested;
+        synchronized (flushLock) {
+            requested = pendingFlush;
+            pendingFlush = null;
+        }
+        if (requested != null) {
+            queue.drainTo(batch);
+            if (!batch.isEmpty()) {
+                exportBatchSafe(batch);
+                batch.clear();
+            }
+            requested.succeed();
         }
     }
 
