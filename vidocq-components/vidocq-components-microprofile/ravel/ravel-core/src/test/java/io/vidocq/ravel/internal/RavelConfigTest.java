@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RavelConfigTest {
 
     private static final Map<Class<?>, Converter<?>> STRING_ONLY =
-            Map.of(String.class, IdentityStringConverter.INSTANCE);
+            Map.of(String.class, new IdentityStringConverter());
 
     // --------- cascade & tie-breaking -----------
 

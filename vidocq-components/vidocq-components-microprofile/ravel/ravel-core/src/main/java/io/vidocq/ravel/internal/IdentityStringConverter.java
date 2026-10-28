@@ -34,12 +34,6 @@ final class IdentityStringConverter implements Converter<String> {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    static final IdentityStringConverter INSTANCE = new IdentityStringConverter();
-
-    private IdentityStringConverter() {
-        // singleton — utiliser INSTANCE
-    }
-
     @Override
     public String convert(String value) {
         return value;

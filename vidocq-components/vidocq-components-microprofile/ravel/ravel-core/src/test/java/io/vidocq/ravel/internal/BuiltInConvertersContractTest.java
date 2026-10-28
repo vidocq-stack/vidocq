@@ -77,8 +77,8 @@ class BuiltInConvertersContractTest {
 
     @Test
     void blank_boolean_converts_to_null() {
-        assertNull(BuiltInConverters.BooleanConverter.INSTANCE.convert("   "));
-        assertFalse(BuiltInConverters.BooleanConverter.INSTANCE.convert("off"));
+        assertNull(new BuiltInConverters.BooleanConverter().convert("   "));
+        assertFalse(new BuiltInConverters.BooleanConverter().convert("off"));
     }
 
     @Test

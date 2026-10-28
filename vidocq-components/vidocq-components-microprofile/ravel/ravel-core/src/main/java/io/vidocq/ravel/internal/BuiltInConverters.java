@@ -58,42 +58,60 @@ final class BuiltInConverters {
         // utility class
     }
 
+    /**
+     * Built once: the built-in converters are stateless, so every {@code Config}
+     * shares the same instances (a boxed type and its primitive share one).
+     */
+    private static final Map<Class<?>, Converter<?>> ALL = createAll();
+
     /** Returns the immutable {type → converter} map for all built-in converters. */
     static Map<Class<?>, Converter<?>> all() {
+        return ALL;
+    }
+
+    private static Map<Class<?>, Converter<?>> createAll() {
+        var booleans = new BooleanConverter();
+        var integers = new IntegerConverter();
+        var longs = new LongConverter();
+        var floats = new FloatConverter();
+        var doubles = new DoubleConverter();
+        var shorts = new ShortConverter();
+        var bytes = new ByteConverter();
+        var characters = new CharacterConverter();
         return Map.ofEntries(
-                Map.entry(String.class, IdentityStringConverter.INSTANCE),
-                Map.entry(Boolean.class, BooleanConverter.INSTANCE),
-                Map.entry(boolean.class, BooleanConverter.INSTANCE),
-                Map.entry(Integer.class, IntegerConverter.INSTANCE),
-                Map.entry(int.class, IntegerConverter.INSTANCE),
-                Map.entry(Long.class, LongConverter.INSTANCE),
-                Map.entry(long.class, LongConverter.INSTANCE),
-                Map.entry(Float.class, FloatConverter.INSTANCE),
-                Map.entry(float.class, FloatConverter.INSTANCE),
-                Map.entry(Double.class, DoubleConverter.INSTANCE),
-                Map.entry(double.class, DoubleConverter.INSTANCE),
-                Map.entry(Short.class, ShortConverter.INSTANCE),
-                Map.entry(short.class, ShortConverter.INSTANCE),
-                Map.entry(Byte.class, ByteConverter.INSTANCE),
-                Map.entry(byte.class, ByteConverter.INSTANCE),
-                Map.entry(Character.class, CharacterConverter.INSTANCE),
-                Map.entry(char.class, CharacterConverter.INSTANCE),
-                Map.entry(Class.class, ClassConverter.INSTANCE),
-                Map.entry(OptionalInt.class, OptionalIntConverter.INSTANCE),
-                Map.entry(OptionalLong.class, OptionalLongConverter.INSTANCE),
-                Map.entry(OptionalDouble.class, OptionalDoubleConverter.INSTANCE),
-                Map.entry(URI.class, URIConverter.INSTANCE),
-                Map.entry(URL.class, URLConverter.INSTANCE),
-                Map.entry(InetAddress.class, InetAddressConverter.INSTANCE),
-                Map.entry(Duration.class, DurationConverter.INSTANCE),
-                Map.entry(Period.class, PeriodConverter.INSTANCE),
-                Map.entry(LocalDate.class, LocalDateConverter.INSTANCE),
-                Map.entry(LocalTime.class, LocalTimeConverter.INSTANCE),
-                Map.entry(LocalDateTime.class, LocalDateTimeConverter.INSTANCE),
-                Map.entry(OffsetTime.class, OffsetTimeConverter.INSTANCE),
-                Map.entry(OffsetDateTime.class, OffsetDateTimeConverter.INSTANCE),
-                Map.entry(ZonedDateTime.class, ZonedDateTimeConverter.INSTANCE),
-                Map.entry(Instant.class, InstantConverter.INSTANCE)
+                Map.entry(String.class, new IdentityStringConverter()),
+                Map.entry(Boolean.class, booleans),
+                Map.entry(boolean.class, booleans),
+                Map.entry(Integer.class, integers),
+                Map.entry(int.class, integers),
+                Map.entry(Long.class, longs),
+                Map.entry(long.class, longs),
+                Map.entry(Float.class, floats),
+                Map.entry(float.class, floats),
+                Map.entry(Double.class, doubles),
+                Map.entry(double.class, doubles),
+                Map.entry(Short.class, shorts),
+                Map.entry(short.class, shorts),
+                Map.entry(Byte.class, bytes),
+                Map.entry(byte.class, bytes),
+                Map.entry(Character.class, characters),
+                Map.entry(char.class, characters),
+                Map.entry(Class.class, new ClassConverter()),
+                Map.entry(OptionalInt.class, new OptionalIntConverter()),
+                Map.entry(OptionalLong.class, new OptionalLongConverter()),
+                Map.entry(OptionalDouble.class, new OptionalDoubleConverter()),
+                Map.entry(URI.class, new URIConverter()),
+                Map.entry(URL.class, new URLConverter()),
+                Map.entry(InetAddress.class, new InetAddressConverter()),
+                Map.entry(Duration.class, new DurationConverter()),
+                Map.entry(Period.class, new PeriodConverter()),
+                Map.entry(LocalDate.class, new LocalDateConverter()),
+                Map.entry(LocalTime.class, new LocalTimeConverter()),
+                Map.entry(LocalDateTime.class, new LocalDateTimeConverter()),
+                Map.entry(OffsetTime.class, new OffsetTimeConverter()),
+                Map.entry(OffsetDateTime.class, new OffsetDateTimeConverter()),
+                Map.entry(ZonedDateTime.class, new ZonedDateTimeConverter()),
+                Map.entry(Instant.class, new InstantConverter())
         );
     }
 
@@ -107,8 +125,6 @@ final class BuiltInConverters {
      */
     static final class BooleanConverter implements Converter<Boolean> {
         @Serial private static final long serialVersionUID = 1L;
-        static final BooleanConverter INSTANCE = new BooleanConverter();
-        private BooleanConverter() { }
 
         @Override
         public Boolean convert(String value) {
@@ -129,7 +145,6 @@ final class BuiltInConverters {
 
     static final class IntegerConverter implements Converter<Integer> {
         @Serial private static final long serialVersionUID = 1L;
-        static final IntegerConverter INSTANCE = new IntegerConverter();
         @Override public Integer convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -144,7 +159,6 @@ final class BuiltInConverters {
 
     static final class LongConverter implements Converter<Long> {
         @Serial private static final long serialVersionUID = 1L;
-        static final LongConverter INSTANCE = new LongConverter();
         @Override public Long convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -159,7 +173,6 @@ final class BuiltInConverters {
 
     static final class FloatConverter implements Converter<Float> {
         @Serial private static final long serialVersionUID = 1L;
-        static final FloatConverter INSTANCE = new FloatConverter();
         @Override public Float convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -174,7 +187,6 @@ final class BuiltInConverters {
 
     static final class DoubleConverter implements Converter<Double> {
         @Serial private static final long serialVersionUID = 1L;
-        static final DoubleConverter INSTANCE = new DoubleConverter();
         @Override public Double convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -189,7 +201,6 @@ final class BuiltInConverters {
 
     static final class ShortConverter implements Converter<Short> {
         @Serial private static final long serialVersionUID = 1L;
-        static final ShortConverter INSTANCE = new ShortConverter();
         @Override public Short convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -204,7 +215,6 @@ final class BuiltInConverters {
 
     static final class ByteConverter implements Converter<Byte> {
         @Serial private static final long serialVersionUID = 1L;
-        static final ByteConverter INSTANCE = new ByteConverter();
         @Override public Byte convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -219,7 +229,6 @@ final class BuiltInConverters {
 
     static final class CharacterConverter implements Converter<Character> {
         @Serial private static final long serialVersionUID = 1L;
-        static final CharacterConverter INSTANCE = new CharacterConverter();
         @Override public Character convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -240,7 +249,6 @@ final class BuiltInConverters {
 
     static final class ClassConverter implements Converter<Class<?>> {
         @Serial private static final long serialVersionUID = 1L;
-        static final ClassConverter INSTANCE = new ClassConverter();
         @Override public Class<?> convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -264,7 +272,6 @@ final class BuiltInConverters {
 
     static final class OptionalIntConverter implements Converter<OptionalInt> {
         @Serial private static final long serialVersionUID = 1L;
-        static final OptionalIntConverter INSTANCE = new OptionalIntConverter();
         @Override public OptionalInt convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -279,7 +286,6 @@ final class BuiltInConverters {
 
     static final class OptionalLongConverter implements Converter<OptionalLong> {
         @Serial private static final long serialVersionUID = 1L;
-        static final OptionalLongConverter INSTANCE = new OptionalLongConverter();
         @Override public OptionalLong convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -294,7 +300,6 @@ final class BuiltInConverters {
 
     static final class OptionalDoubleConverter implements Converter<OptionalDouble> {
         @Serial private static final long serialVersionUID = 1L;
-        static final OptionalDoubleConverter INSTANCE = new OptionalDoubleConverter();
         @Override public OptionalDouble convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -313,7 +318,6 @@ final class BuiltInConverters {
 
     static final class URIConverter implements Converter<URI> {
         @Serial private static final long serialVersionUID = 1L;
-        static final URIConverter INSTANCE = new URIConverter();
         @Override public URI convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -328,7 +332,6 @@ final class BuiltInConverters {
 
     static final class URLConverter implements Converter<URL> {
         @Serial private static final long serialVersionUID = 1L;
-        static final URLConverter INSTANCE = new URLConverter();
         @Override public URL convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -345,7 +348,6 @@ final class BuiltInConverters {
 
     static final class InetAddressConverter implements Converter<InetAddress> {
         @Serial private static final long serialVersionUID = 1L;
-        static final InetAddressConverter INSTANCE = new InetAddressConverter();
         @Override public InetAddress convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -364,7 +366,6 @@ final class BuiltInConverters {
 
     static final class DurationConverter implements Converter<Duration> {
         @Serial private static final long serialVersionUID = 1L;
-        static final DurationConverter INSTANCE = new DurationConverter();
         @Override public Duration convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -379,7 +380,6 @@ final class BuiltInConverters {
 
     static final class PeriodConverter implements Converter<Period> {
         @Serial private static final long serialVersionUID = 1L;
-        static final PeriodConverter INSTANCE = new PeriodConverter();
         @Override public Period convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -394,7 +394,6 @@ final class BuiltInConverters {
 
     static final class LocalDateConverter implements Converter<LocalDate> {
         @Serial private static final long serialVersionUID = 1L;
-        static final LocalDateConverter INSTANCE = new LocalDateConverter();
         @Override public LocalDate convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -409,7 +408,6 @@ final class BuiltInConverters {
 
     static final class LocalTimeConverter implements Converter<LocalTime> {
         @Serial private static final long serialVersionUID = 1L;
-        static final LocalTimeConverter INSTANCE = new LocalTimeConverter();
         @Override public LocalTime convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -424,7 +422,6 @@ final class BuiltInConverters {
 
     static final class LocalDateTimeConverter implements Converter<LocalDateTime> {
         @Serial private static final long serialVersionUID = 1L;
-        static final LocalDateTimeConverter INSTANCE = new LocalDateTimeConverter();
         @Override public LocalDateTime convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -439,7 +436,6 @@ final class BuiltInConverters {
 
     static final class OffsetTimeConverter implements Converter<OffsetTime> {
         @Serial private static final long serialVersionUID = 1L;
-        static final OffsetTimeConverter INSTANCE = new OffsetTimeConverter();
         @Override public OffsetTime convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -454,7 +450,6 @@ final class BuiltInConverters {
 
     static final class OffsetDateTimeConverter implements Converter<OffsetDateTime> {
         @Serial private static final long serialVersionUID = 1L;
-        static final OffsetDateTimeConverter INSTANCE = new OffsetDateTimeConverter();
         @Override public OffsetDateTime convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -469,7 +464,6 @@ final class BuiltInConverters {
 
     static final class ZonedDateTimeConverter implements Converter<ZonedDateTime> {
         @Serial private static final long serialVersionUID = 1L;
-        static final ZonedDateTimeConverter INSTANCE = new ZonedDateTimeConverter();
         @Override public ZonedDateTime convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");
@@ -484,7 +478,6 @@ final class BuiltInConverters {
 
     static final class InstantConverter implements Converter<Instant> {
         @Serial private static final long serialVersionUID = 1L;
-        static final InstantConverter INSTANCE = new InstantConverter();
         @Override public Instant convert(String value) {
             if (value == null) {
                 throw new NullPointerException("value");

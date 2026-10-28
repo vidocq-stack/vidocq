@@ -54,7 +54,7 @@ class BuiltInConvertersTest {
 
     @Test
     void boolean_spec_section_5_1_1_truthy_values() {
-        var c = BuiltInConverters.BooleanConverter.INSTANCE;
+        var c = new BuiltInConverters.BooleanConverter();
         // true/yes/y/on (case-insensitive) + "1"
         assertTrue(c.convert("true"));
         assertTrue(c.convert("TRUE"));
@@ -70,7 +70,7 @@ class BuiltInConvertersTest {
 
     @Test
     void boolean_spec_section_5_1_1_falsy_values() {
-        var c = BuiltInConverters.BooleanConverter.INSTANCE;
+        var c = new BuiltInConverters.BooleanConverter();
         assertFalse(c.convert("false"));
         assertFalse(c.convert("no"));
         assertFalse(c.convert("0"));
@@ -81,7 +81,7 @@ class BuiltInConvertersTest {
 
     @Test
     void integer_converter_handles_signs_and_whitespace() {
-        var c = BuiltInConverters.IntegerConverter.INSTANCE;
+        var c = new BuiltInConverters.IntegerConverter();
         assertEquals(42, c.convert("42"));
         assertEquals(-7, c.convert("-7"));
         assertEquals(0, c.convert(" 0 "));
@@ -89,32 +89,32 @@ class BuiltInConvertersTest {
 
     @Test
     void integer_converter_throws_IAE_on_invalid_input() {
-        var c = BuiltInConverters.IntegerConverter.INSTANCE;
+        var c = new BuiltInConverters.IntegerConverter();
         assertThrows(IllegalArgumentException.class, () -> c.convert("abc"));
     }
 
     @Test
     void long_converter_handles_min_max() {
-        var c = BuiltInConverters.LongConverter.INSTANCE;
+        var c = new BuiltInConverters.LongConverter();
         assertEquals(Long.MAX_VALUE, c.convert(String.valueOf(Long.MAX_VALUE)));
         assertEquals(Long.MIN_VALUE, c.convert(String.valueOf(Long.MIN_VALUE)));
     }
 
     @Test
     void float_and_double_converters() {
-        assertEquals(1.5f, BuiltInConverters.FloatConverter.INSTANCE.convert("1.5"));
-        assertEquals(3.14d, BuiltInConverters.DoubleConverter.INSTANCE.convert("3.14"));
+        assertEquals(1.5f, new BuiltInConverters.FloatConverter().convert("1.5"));
+        assertEquals(3.14d, new BuiltInConverters.DoubleConverter().convert("3.14"));
     }
 
     @Test
     void short_and_byte_converters() {
-        assertEquals((short) 7, BuiltInConverters.ShortConverter.INSTANCE.convert("7"));
-        assertEquals((byte) 127, BuiltInConverters.ByteConverter.INSTANCE.convert("127"));
+        assertEquals((short) 7, new BuiltInConverters.ShortConverter().convert("7"));
+        assertEquals((byte) 127, new BuiltInConverters.ByteConverter().convert("127"));
     }
 
     @Test
     void character_converter_requires_single_char() {
-        var c = BuiltInConverters.CharacterConverter.INSTANCE;
+        var c = new BuiltInConverters.CharacterConverter();
         assertEquals('a', c.convert("a"));
         assertThrows(IllegalArgumentException.class, () -> c.convert("ab"));
     }
@@ -123,13 +123,13 @@ class BuiltInConvertersTest {
 
     @Test
     void class_converter_loads_via_context_classloader() {
-        var c = BuiltInConverters.ClassConverter.INSTANCE;
+        var c = new BuiltInConverters.ClassConverter();
         assertEquals(String.class, c.convert("java.lang.String"));
     }
 
     @Test
     void class_converter_throws_IAE_when_not_found() {
-        var c = BuiltInConverters.ClassConverter.INSTANCE;
+        var c = new BuiltInConverters.ClassConverter();
         assertThrows(IllegalArgumentException.class,
                 () -> c.convert("does.not.exist.NoSuchClass"));
     }
@@ -138,21 +138,21 @@ class BuiltInConvertersTest {
 
     @Test
     void optionalInt_converter_present_and_empty() {
-        var c = BuiltInConverters.OptionalIntConverter.INSTANCE;
+        var c = new BuiltInConverters.OptionalIntConverter();
         assertEquals(OptionalInt.of(42), c.convert("42"));
         assertEquals(OptionalInt.empty(), c.convert(""));
     }
 
     @Test
     void optionalLong_converter_present_and_empty() {
-        var c = BuiltInConverters.OptionalLongConverter.INSTANCE;
+        var c = new BuiltInConverters.OptionalLongConverter();
         assertEquals(OptionalLong.of(42L), c.convert("42"));
         assertEquals(OptionalLong.empty(), c.convert(""));
     }
 
     @Test
     void optionalDouble_converter_present_and_empty() {
-        var c = BuiltInConverters.OptionalDoubleConverter.INSTANCE;
+        var c = new BuiltInConverters.OptionalDoubleConverter();
         assertEquals(OptionalDouble.of(2.5), c.convert("2.5"));
         assertEquals(OptionalDouble.empty(), c.convert(""));
     }
@@ -162,20 +162,20 @@ class BuiltInConvertersTest {
     @Test
     void uri_url_inetaddress_converters() {
         assertEquals(URI.create("https://example.org/x"),
-                BuiltInConverters.URIConverter.INSTANCE.convert("https://example.org/x"));
+                new BuiltInConverters.URIConverter().convert("https://example.org/x"));
 
-        URL url = BuiltInConverters.URLConverter.INSTANCE.convert("https://example.org/y");
+        URL url = new BuiltInConverters.URLConverter().convert("https://example.org/y");
         assertNotNull(url);
         assertEquals("example.org", url.getHost());
 
-        InetAddress addr = BuiltInConverters.InetAddressConverter.INSTANCE.convert("127.0.0.1");
+        InetAddress addr = new BuiltInConverters.InetAddressConverter().convert("127.0.0.1");
         assertNotNull(addr);
         assertEquals("127.0.0.1", addr.getHostAddress());
     }
 
     @Test
     void uri_converter_throws_IAE_on_invalid_syntax() {
-        var c = BuiltInConverters.URIConverter.INSTANCE;
+        var c = new BuiltInConverters.URIConverter();
         assertThrows(IllegalArgumentException.class, () -> c.convert(":::"));
     }
 
@@ -184,28 +184,28 @@ class BuiltInConvertersTest {
     @Test
     void time_converters_iso_format() {
         assertEquals(Duration.ofSeconds(30),
-                BuiltInConverters.DurationConverter.INSTANCE.convert("PT30S"));
+                new BuiltInConverters.DurationConverter().convert("PT30S"));
         assertEquals(Period.ofDays(7),
-                BuiltInConverters.PeriodConverter.INSTANCE.convert("P7D"));
+                new BuiltInConverters.PeriodConverter().convert("P7D"));
         assertEquals(LocalDate.of(2026, 5, 7),
-                BuiltInConverters.LocalDateConverter.INSTANCE.convert("2026-05-07"));
+                new BuiltInConverters.LocalDateConverter().convert("2026-05-07"));
         assertEquals(LocalTime.of(12, 30),
-                BuiltInConverters.LocalTimeConverter.INSTANCE.convert("12:30"));
+                new BuiltInConverters.LocalTimeConverter().convert("12:30"));
         assertEquals(LocalDateTime.of(2026, 5, 7, 12, 30),
-                BuiltInConverters.LocalDateTimeConverter.INSTANCE.convert("2026-05-07T12:30"));
+                new BuiltInConverters.LocalDateTimeConverter().convert("2026-05-07T12:30"));
         assertEquals(Instant.parse("2026-05-07T10:00:00Z"),
-                BuiltInConverters.InstantConverter.INSTANCE.convert("2026-05-07T10:00:00Z"));
+                new BuiltInConverters.InstantConverter().convert("2026-05-07T10:00:00Z"));
         assertEquals(OffsetTime.parse("12:30+02:00"),
-                BuiltInConverters.OffsetTimeConverter.INSTANCE.convert("12:30+02:00"));
+                new BuiltInConverters.OffsetTimeConverter().convert("12:30+02:00"));
         assertEquals(OffsetDateTime.parse("2026-05-07T12:30+02:00"),
-                BuiltInConverters.OffsetDateTimeConverter.INSTANCE.convert("2026-05-07T12:30+02:00"));
+                new BuiltInConverters.OffsetDateTimeConverter().convert("2026-05-07T12:30+02:00"));
         assertEquals(ZonedDateTime.parse("2026-05-07T12:30+02:00[Europe/Paris]"),
-                BuiltInConverters.ZonedDateTimeConverter.INSTANCE.convert("2026-05-07T12:30+02:00[Europe/Paris]"));
+                new BuiltInConverters.ZonedDateTimeConverter().convert("2026-05-07T12:30+02:00[Europe/Paris]"));
     }
 
     @Test
     void duration_converter_throws_IAE_on_invalid() {
-        var c = BuiltInConverters.DurationConverter.INSTANCE;
+        var c = new BuiltInConverters.DurationConverter();
         assertThrows(IllegalArgumentException.class, () -> c.convert("not-a-duration"));
     }
 
