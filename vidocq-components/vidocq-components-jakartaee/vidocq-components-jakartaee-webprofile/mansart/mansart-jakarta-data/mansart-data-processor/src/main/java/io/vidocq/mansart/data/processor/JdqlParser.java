@@ -52,6 +52,8 @@ import java.util.Set;
 final class JdqlParser {
 
     private static final String PROJECTED_LIST = "var _list = runtime.projectColumn(";
+    private static final String MODEL_ARG = ".$MODEL, ";
+    private static final String CLASS_WHERE_ARGS = ".class, _w, _ob, _xs); ";
 
     private JdqlParser() {}
 
@@ -149,34 +151,34 @@ final class JdqlParser {
                 || rt.startsWith("java.util.Collection")
                 || rt.startsWith("java.lang.Iterable")) {
             String elem = projectionElementBoxed(rt);
-            sb.append("return runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
+            sb.append("return runtime.projectColumn(").append(metamodel).append(MODEL_ARG)
               .append(attrRef(metamodel, stmt.scalarAttr))
               .append(", ").append(elem).append(".class, _w, _ob, _xs);");
         } else if (rt.startsWith("java.util.stream.Stream")) {
             String elem = projectionElementBoxed(rt);
-            sb.append("return runtime.projectColumn(").append(metamodel).append(".$MODEL, ")
+            sb.append("return runtime.projectColumn(").append(metamodel).append(MODEL_ARG)
               .append(attrRef(metamodel, stmt.scalarAttr))
               .append(", ").append(elem).append(".class, _w, _ob, _xs).stream();");
         } else if (rt.startsWith("java.util.Optional")) {
             String elem = projectionElementBoxed(rt);
-            sb.append(PROJECTED_LIST).append(metamodel).append(".$MODEL, ")
+            sb.append(PROJECTED_LIST).append(metamodel).append(MODEL_ARG)
               .append(attrRef(metamodel, stmt.scalarAttr))
-              .append(", ").append(elem).append(".class, _w, _ob, _xs); ");
+              .append(", ").append(elem).append(CLASS_WHERE_ARGS);
             sb.append("return _list.isEmpty() ? java.util.Optional.empty() : java.util.Optional.ofNullable(_list.get(0));");
         } else if (returnType instanceof javax.lang.model.type.ArrayType array) {
             // An array, of a primitive or not (MANSART-015): the column as its boxed type, copied element by element.
             String component = array.getComponentType().toString();
-            sb.append(PROJECTED_LIST).append(metamodel).append(".$MODEL, ")
+            sb.append(PROJECTED_LIST).append(metamodel).append(MODEL_ARG)
               .append(attrRef(metamodel, stmt.scalarAttr))
-              .append(", ").append(boxedReturnType(array.getComponentType())).append(".class, _w, _ob, _xs); ");
+              .append(", ").append(boxedReturnType(array.getComponentType())).append(CLASS_WHERE_ARGS);
             sb.append(component).append("[] _a = new ").append(component).append("[_list.size()]; ")
               .append("for (int _i = 0; _i < _a.length; _i++) _a[_i] = _list.get(_i); return _a;");
         } else {
             // Single scalar return — fetch first, throw if absent
             String boxed = boxedReturnType(returnType);
-            sb.append(PROJECTED_LIST).append(metamodel).append(".$MODEL, ")
+            sb.append(PROJECTED_LIST).append(metamodel).append(MODEL_ARG)
               .append(attrRef(metamodel, stmt.scalarAttr))
-              .append(", ").append(boxed).append(".class, _w, _ob, _xs); ");
+              .append(", ").append(boxed).append(CLASS_WHERE_ARGS);
             sb.append("if (_list.isEmpty()) throw new jakarta.data.exceptions.EmptyResultException("
                     + "\"Projection returned no result\"); return _list.get(0);");
         }

@@ -53,6 +53,8 @@ final class RepositoryWriter {
     private static final String COLLECTION = "java.util.Collection";
     private static final String ITERABLE   = "java.lang.Iterable";
     private static final String VALUE      = "value";
+    private static final String RETURN     = "return ";
+    private static final String MODEL_CAST = ".$MODEL, (";
 
     private final SourceSink sink;
     private final Elements elements;
@@ -495,20 +497,20 @@ final class RepositoryWriter {
             return batchLifecycleBody(m, returnType, metamodel, entityFqn);
         }
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Insert")) {
-            return wrapReturn("runtime.insertStrict(" + metamodel + ".$MODEL, ("
+            return wrapReturn("runtime.insertStrict(" + metamodel + MODEL_CAST
                     + entityFqn + ") " + p(0) + ")", isVoid);
         }
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Update")) {
-            return wrapReturn("runtime.updateStrict(" + metamodel + ".$MODEL, ("
+            return wrapReturn("runtime.updateStrict(" + metamodel + MODEL_CAST
                     + entityFqn + ") " + p(0) + ")", isVoid);
         }
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Save")) {
-            return wrapReturn("runtime.save(" + metamodel + ".$MODEL, ("
+            return wrapReturn("runtime.save(" + metamodel + MODEL_CAST
                     + entityFqn + ") " + p(0) + ")", isVoid);
         }
         if (hasJakartaAnnotation(m, "jakarta.data.repository.Delete")) {
             // Delete annotation: parameter is the entity to delete (strict, with @Version check).
-            String call = "runtime.deleteStrict(" + metamodel + ".$MODEL, ("
+            String call = "runtime.deleteStrict(" + metamodel + MODEL_CAST
                     + entityFqn + ") " + p(0) + ")";
             return isVoid ? call + ";" : call + "; return null;";
         }
@@ -548,7 +550,7 @@ final class RepositoryWriter {
     }
 
     private String wrapReturn(String call, boolean isVoid) {
-        return isVoid ? call + ";" : "return " + call + ";";
+        return isVoid ? call + ";" : RETURN + call + ";";
     }
 
     private boolean hasJakartaAnnotation(ExecutableElement m, String fqn) {
@@ -812,10 +814,10 @@ final class RepositoryWriter {
         if (rt.startsWith(OPTIONAL)) {
             return "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args + ");";
         }
-        if (rt.startsWith(STREAM))    return "return " + list + ".stream();";
-        if (rt.startsWith(LIST))             return "return " + list + ";";
-        if (rt.startsWith(COLLECTION))       return "return " + list + ";";
-        if (rt.startsWith(ITERABLE))         return "return " + list + ";";
+        if (rt.startsWith(STREAM))    return RETURN + list + ".stream();";
+        if (rt.startsWith(LIST))             return RETURN + list + ";";
+        if (rt.startsWith(COLLECTION))       return RETURN + list + ";";
+        if (rt.startsWith(ITERABLE))         return RETURN + list + ";";
         // Single-entity return → use queryOne and unwrap (throws if missing per Jakarta Data semantics)
         return "return runtime.queryOne(" + metamodel + ".$MODEL, " + where + ", " + args
                 + ").orElseThrow(() -> new jakarta.data.exceptions.EmptyResultException(\"No result\"));";
@@ -825,9 +827,9 @@ final class RepositoryWriter {
         String call = "runtime.deleteWhere(" + metamodel + ".$MODEL, " + where + ", " + args + ")";
         return switch (returnType.getKind()) {
             case VOID -> call + ";";
-            case LONG -> "return " + call + ";";
+            case LONG -> RETURN + call + ";";
             case INT  -> "return (int) " + call + ";";
-            default   -> "return " + call + ";";
+            default   -> RETURN + call + ";";
         };
     }
 
@@ -1019,7 +1021,7 @@ final class RepositoryWriter {
             case "deleteAll" -> {
                 if (arity == 0) yield "for (var e : runtime.findAll(" + metamodel + ".$MODEL)) runtime.delete("
                         + metamodel + ".$MODEL, e);";
-                if (arity == 1) yield "for (var e : " + p(0) + ") runtime.delete(" + metamodel + ".$MODEL, ("
+                if (arity == 1) yield "for (var e : " + p(0) + ") runtime.delete(" + metamodel + MODEL_CAST
                         + entityFqn + ") e);";
                 yield null;
             }
@@ -1029,43 +1031,48 @@ final class RepositoryWriter {
         };
     }
 
+    /** The strict runtime operation behind a {@code CrudRepository} method name, or {@code null}. */
+    private static String crudOperation(String name) {
+        return switch (name) {
+            case "insert", "insertAll" -> "insertStrict";
+            case "update", "updateAll" -> "updateStrict";
+            default -> null;
+        };
+    }
+
     /**
      * The methods {@code CrudRepository} adds to {@code BasicRepository} (MANSART-017): {@code <S extends T> S
      * insert(S)}, {@code update(S)} and their {@code List<S>} forms {@code insertAll} and {@code updateAll}.
      */
     private String crudBody(String name, TypeMirror returnType, String metamodel, String entityFqn) {
-        String op = switch (name) {
-            case "insert", "insertAll" -> "insertStrict";
-            case "update", "updateAll" -> "updateStrict";
-            default -> null;
-        };
+        String op = crudOperation(name);
         if (op == null) return null;
         if (!name.endsWith("All")) {
             String s = returnType.toString();
             return "@SuppressWarnings(\"unchecked\") " + s + " _r = (" + s + ") runtime." + op + "(" + metamodel
-                    + ".$MODEL, (" + entityFqn + ") " + p(0) + "); return _r;";
+                    + MODEL_CAST + entityFqn + ") " + p(0) + "); return _r;";
         }
         if (!(returnType instanceof DeclaredType list) || list.getTypeArguments().size() != 1) return null;
         String s = list.getTypeArguments().get(0).toString();
         return "var _out = new java.util.ArrayList<" + s + ">(); for (" + s + " _e : " + p(0) + ") { "
                 + "@SuppressWarnings(\"unchecked\") " + s + " _r = (" + s + ") runtime." + op + "(" + metamodel
-                + ".$MODEL, (" + entityFqn + ") _e); _out.add(_r); } return _out;";
+                + MODEL_CAST + entityFqn + ") _e); _out.add(_r); } return _out;";
     }
 
     private String saveBody(String metamodel, String entityFqn) {
         // <S extends T> S save(S e) → runtime.save is typed on T; widen in, unchecked-cast out.
         return "@SuppressWarnings(\"unchecked\") S r = (S) runtime.save(" + metamodel
-                + ".$MODEL, (" + entityFqn + ") " + p(0) + "); return r;";
+                + MODEL_CAST + entityFqn + ") " + p(0) + "); return r;";
     }
 
     private String findAllBody(String metamodel, boolean returnsStream) {
         String call = "runtime.findAll(" + metamodel + ".$MODEL)";
-        return returnsStream ? "return " + call + ".stream();" : "return " + call + ";";
+        return returnsStream ? RETURN + call + ".stream();" : RETURN + call + ";";
     }
 
     private String simpleVoidOrBool(String op, String metamodel, boolean isVoid) {
         String call = "runtime." + op + "(" + metamodel + ".$MODEL, " + p(0) + ")";
-        return isVoid ? call + ";" : "return " + call + ";";
+        return isVoid ? call + ";" : RETURN + call + ";";
     }
 
     private String p(int idx) { return "arg" + idx; }
@@ -1073,12 +1080,12 @@ final class RepositoryWriter {
     private String saveAllBody(String metamodel, String entityFqn) {
         return "var out = new java.util.ArrayList<S>(); for (S e : " + p(0)
                 + ") { @SuppressWarnings(\"unchecked\") S r = (S) runtime.save(" + metamodel
-                + ".$MODEL, (" + entityFqn + ") e); out.add(r); } return out;";
+                + MODEL_CAST + entityFqn + ") e); out.add(r); } return out;";
     }
 
     private String deleteEntityBody(String metamodel, String entityFqn, boolean isVoid) {
-        String call = "runtime.delete(" + metamodel + ".$MODEL, (" + entityFqn + ") " + p(0) + ")";
-        return isVoid ? call + ";" : "return " + call + ";";
+        String call = "runtime.delete(" + metamodel + MODEL_CAST + entityFqn + ") " + p(0) + ")";
+        return isVoid ? call + ";" : RETURN + call + ";";
     }
 
     /* ---------- @Transactional propagation helpers ---------- */

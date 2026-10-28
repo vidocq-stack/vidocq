@@ -129,10 +129,9 @@ class PooledConnectionPassthroughTest {
             c.setHoldability(ResultSet.HOLD_CURSORS_OVER_COMMIT);
             assertThat(c.getHoldability()).isEqualTo(ResultSet.HOLD_CURSORS_OVER_COMMIT);
             c.clearWarnings();
-            java.sql.SQLWarning warnings = c.getWarnings();
-            assertThat(warnings == null).isTrue();
+            assertThat(java.util.Optional.ofNullable(c.getWarnings())).isEmpty();
             c.setTypeMap(new HashMap<>());
-            assertThat(c.getTypeMap().isEmpty()).isTrue();
+            assertThat(c.getTypeMap()).isEmpty();
             assertThat(c.getMetaData().getDatabaseProductName()).isEqualTo("H2");
             assertThat(c.isValid(1)).isTrue();
             assertThat(c.getClientInfo()).isNotNull();

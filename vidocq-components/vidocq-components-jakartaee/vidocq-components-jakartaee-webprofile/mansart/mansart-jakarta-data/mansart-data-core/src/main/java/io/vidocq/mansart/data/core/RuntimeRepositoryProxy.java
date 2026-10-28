@@ -492,7 +492,7 @@ public final class RuntimeRepositoryProxy {
             case "findAll"     -> (rt, em, args) -> findAll(m, rt, em, args);
             case "deleteById"  -> (rt, em, args) -> { rt.deleteById((EntityModel) em, args[0]); return null; };
             case "delete"      -> (rt, em, args) -> { rt.delete((EntityModel) em, args[0]); return null; };
-            case "deleteAll"   -> (rt, em, args) -> deleteAll(rt, em, args);
+            case "deleteAll"   -> RuntimeRepositoryProxy::deleteAll;
             case "count"       -> (rt, em, args) -> rt.count((EntityModel) em);
             case "existsById"  -> (rt, em, args) -> rt.existsById((EntityModel) em, args[0]);
             default            -> crudDispatcher(m.getName());
@@ -542,7 +542,7 @@ public final class RuntimeRepositoryProxy {
         // BasicRepository / CrudRepository / DataRepository methods carry @Find / @Save / etc. in
         // the spec, but their semantics are owned by the inheritedDispatcher (built-in K-keyed
         // ops). Skip those here so we don't route findById through the user-method @Find path.
-        if (m.getDeclaringClass().getName().startsWith("jakarta.data.")
+        if (m.getDeclaringClass().getPackageName().startsWith("jakarta.data")
                 || !m.isAnnotationPresent(jakarta.data.repository.Find.class)) {
             return null;
         }
