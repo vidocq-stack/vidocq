@@ -66,22 +66,23 @@ public final class SdkSpan implements Span, ReadableSpan {
     private long endEpochNanos = 0L;
     private boolean ended = false;
 
+    /**
+     * Starts a span described by its builder, which supplies the name, kind, links and tracer state.
+     */
     SdkSpan(
+            SdkSpanBuilder builder,
             SpanContext context,
             SpanContext parentContext,
-            String name,
-            SpanKind kind,
             long startEpochNanos,
-            Attributes initialAttributes,
-            List<LinkData> links,
-            TracerSharedState shared) {
+            Attributes initialAttributes) {
+        TracerSharedState shared = builder.shared();
         this.context = context;
         this.parentContext = parentContext;
-        this.name = name;
-        this.kind = kind;
+        this.name = builder.name();
+        this.kind = builder.kind();
         this.startEpochNanos = startEpochNanos;
         this.attributes = initialAttributes.toBuilder();
-        this.links = links;
+        this.links = List.copyOf(builder.links());
         this.resource = shared.resource();
         this.scope = shared.scope();
         this.clock = shared.clock();

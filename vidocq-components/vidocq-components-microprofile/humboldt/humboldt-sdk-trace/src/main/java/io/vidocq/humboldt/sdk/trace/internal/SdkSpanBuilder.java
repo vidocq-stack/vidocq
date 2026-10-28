@@ -138,6 +138,22 @@ public final class SdkSpanBuilder implements SpanBuilder {
         return this;
     }
 
+    String name() {
+        return name;
+    }
+
+    SpanKind kind() {
+        return kind;
+    }
+
+    List<LinkData> links() {
+        return links;
+    }
+
+    TracerSharedState shared() {
+        return shared;
+    }
+
     private Context parentContext() {
         if (noParent) return Context.root();
         return parent != null ? parent : Context.current();
@@ -179,12 +195,11 @@ public final class SdkSpanBuilder implements SpanBuilder {
 
         long start = startEpochNanos > 0 ? startEpochNanos : clock.now();
         SdkSpan span = new SdkSpan(
+                this,
                 newCtx,
                 parentSpanContext.isValid() ? parentSpanContext : null,
-                name, kind, start,
-                merged.build(),
-                List.copyOf(links),
-                shared);
+                start,
+                merged.build());
 
         for (SpanProcessor p : processors) {
             if (p.isStartRequired()) p.onStart(parentCtx, span);
