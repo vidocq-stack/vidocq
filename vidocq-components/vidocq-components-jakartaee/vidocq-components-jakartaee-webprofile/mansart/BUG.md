@@ -796,3 +796,35 @@ constant only when that type is an enum and the qualifier is that enum's canonic
 `loadClassForEnum` is removed: no class is loaded from a name in the statement. Regression tests:
 `JdqlEnumLiteralTest` (foreign class never requested, top-level and nested enum literals in comparisons, `IN` and
 `SET`, a literal naming another enum refused for the attribute's enum).
+
+## MANSART-024 — Runtime repository: a generic repository contract, or a default method, broke the runtime path
+
+- **Date**: 2026-10-29
+- **Status**: FIXED 2026-10-29 (branch `fix/runtime-method-selection`, generated-code audit)
+- **Severity**: high (the runtime path — the one the TCK and every pre-compiled repository take — failed where the
+  generated implementation worked)
+- **Module**: `mansart-data-core` (`RuntimeRepositoryProxy`, `RuntimeRepositoryClassGenerator`)
+
+### Symptom
+- `@Repository interface GenericArticleRepository extends ArticleBase<Article>`, with
+  `interface ArticleBase<T> extends CrudRepository<T, Long>`: `runtimeRepository` threw
+  `MansartDataException: … does not extend BasicRepository<E, K> / CrudRepository<E, K>`.
+- `@Repository interface DefaultedArticleRepository extends ArticleTitles, CrudRepository<Article, Long>` that
+  implements `ArticleTitles.featured()` with a default body: the runtime implementation overrode the default body
+  with a stub that threw `UnsupportedOperationException: … not handled by runtime fallback`.
+
+### Minimal repro
+`RepositoryShapesTest` (`mansart-data-tests`), parameterized over the generated and the runtime implementation.
+
+### Cause
+- `resolveEntityAndKey` walked the raw super-interfaces and only took a `Class` as entity argument, so the type
+  variable `T` of `ArticleBase<T>` was never bound to `Article`.
+- `RuntimeRepositoryClassGenerator.collectAbstractMethods` walked `getDeclaredMethods()` up the hierarchy and kept
+  every non-default method: the abstract method a default body implements, but also static, private and synthetic
+  methods. The annotation processor keeps the abstract members only (`getAllMembers`).
+
+### Fix
+- The entity and key are resolved through the hierarchy with the bindings of each parameterized super-interface.
+- The generator implements the abstract methods of `getMethods()` (a default body or a bridge hides what it
+  implements), the processor's rule; the dispatcher table keeps every abstract declaration of the hierarchy, so that
+  the `Proxy` safety net still finds its dispatcher, and no longer scans static, private or synthetic methods.

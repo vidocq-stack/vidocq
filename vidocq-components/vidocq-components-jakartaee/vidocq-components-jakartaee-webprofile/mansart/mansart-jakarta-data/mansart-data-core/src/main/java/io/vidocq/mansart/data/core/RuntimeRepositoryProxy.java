@@ -29,6 +29,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
+import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -277,15 +278,46 @@ public final class RuntimeRepositoryProxy {
     private record EntityAndKey(Class<?> entity, Class<?> key) {}
 
     private static EntityAndKey resolveEntityAndKey(Class<?> repoInterface) {
-        for (Type t : repoInterface.getGenericInterfaces()) {
-            EntityAndKey ek = fromGenericInterface(t);
+        EntityAndKey ek = resolveEntityAndKey(repoInterface, Map.of());
+        return ek != null ? ek : inferFromMethods(repoInterface);
+    }
+
+    /**
+     * The entity and key {@code itf} gives {@code BasicRepository}/{@code CrudRepository}/{@code DataRepository},
+     * its type variables bound by {@code bindings}: through a generic contract it parameterizes
+     * ({@code interface BookRepo extends Base<Book>}, {@code interface Base<T> extends CrudRepository<T, Long>}), the
+     * arguments are what the repository binds them to. The direct supertypes come first, then their ancestors.
+     */
+    private static EntityAndKey resolveEntityAndKey(Class<?> itf, Map<TypeVariable<?>, Type> bindings) {
+        for (Type t : itf.getGenericInterfaces()) {
+            EntityAndKey ek = fromGenericInterface(t, bindings);
             if (ek != null) return ek;
         }
-        for (Class<?> parent : repoInterface.getInterfaces()) {
-            EntityAndKey ek = resolveEntityAndKey(parent);
+        for (Type t : itf.getGenericInterfaces()) {
+            EntityAndKey ek = switch (t) {
+                case ParameterizedType pt when pt.getRawType() instanceof Class<?> raw ->
+                        resolveEntityAndKey(raw, bindingsOf(raw, bound(pt.getActualTypeArguments(), bindings)));
+                case Class<?> raw -> resolveEntityAndKey(raw, Map.of());
+                default -> null;
+            };
             if (ek != null) return ek;
         }
-        return inferFromMethods(repoInterface);
+        return null;
+    }
+
+    private static Map<TypeVariable<?>, Type> bindingsOf(Class<?> raw, Type[] args) {
+        TypeVariable<?>[] params = raw.getTypeParameters();
+        Map<TypeVariable<?>, Type> out = new HashMap<>();
+        for (int i = 0; i < params.length && i < args.length; i++) out.put(params[i], args[i]);
+        return out;
+    }
+
+    private static Type[] bound(Type[] args, Map<TypeVariable<?>, Type> bindings) {
+        Type[] out = args.clone();
+        for (int i = 0; i < out.length; i++) {
+            if (out[i] instanceof TypeVariable<?> v) out[i] = bindings.getOrDefault(v, v);
+        }
+        return out;
     }
 
     /**
@@ -330,7 +362,7 @@ public final class RuntimeRepositoryProxy {
         return c;
     }
 
-    private static EntityAndKey fromGenericInterface(Type t) {
+    private static EntityAndKey fromGenericInterface(Type t, Map<TypeVariable<?>, Type> bindings) {
         if (!(t instanceof ParameterizedType pt)) return null;
         Type raw = pt.getRawType();
         if (!(raw instanceof Class<?> rawClass)) return null;
@@ -338,7 +370,7 @@ public final class RuntimeRepositoryProxy {
         if (fqn.equals("jakarta.data.repository.BasicRepository")
                 || fqn.equals("jakarta.data.repository.CrudRepository")
                 || fqn.equals("jakarta.data.repository.DataRepository")) {
-            Type[] args = pt.getActualTypeArguments();
+            Type[] args = bound(pt.getActualTypeArguments(), bindings);
             if (args.length >= 2 && args[0] instanceof Class<?> entity) {
                 Class<?> key = (args[1] instanceof Class<?> k) ? k : null;
                 return new EntityAndKey(entity, key);
@@ -360,8 +392,14 @@ public final class RuntimeRepositoryProxy {
         return out;
     }
 
+    /**
+     * The abstract methods of the hierarchy, each declaration kept so that a {@link Proxy} call finds its dispatcher
+     * whichever interface it names; static, private, synthetic and default methods are not repository methods.
+     */
     private static void collectMethods(Class<?> itf, List<Method> out) {
-        java.util.Collections.addAll(out, itf.getDeclaredMethods());
+        for (Method m : itf.getDeclaredMethods()) {
+            if (java.lang.reflect.Modifier.isAbstract(m.getModifiers())) out.add(m);
+        }
         for (Class<?> parent : itf.getInterfaces()) collectMethods(parent, out);
     }
 

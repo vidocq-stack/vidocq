@@ -25,6 +25,7 @@ import java.lang.constant.ConstantDescs;
 import java.lang.constant.MethodTypeDesc;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.List;
 
 /**
@@ -95,12 +96,16 @@ final class RuntimeRepositoryClassGenerator {
         return new GeneratedRepo(implClass, List.copyOf(methods));
     }
 
+    /**
+     * The methods the class implements: the abstract ones of the repository's public methods, the rule the annotation
+     * processor applies. A default body that implements an inherited method hides it, and so does a bridge javac adds;
+     * static, private and synthetic methods are not the repository's.
+     */
     private static void collectAbstractMethods(Class<?> itf, List<Method> out) {
-        for (Method m : itf.getDeclaredMethods()) {
+        for (Method m : itf.getMethods()) {
             // Avoid duplicate signature when an interface re-declares an inherited method.
-            if (!m.isDefault() && m.getDeclaringClass() != Object.class && !isCollected(m, out)) out.add(m);
+            if (Modifier.isAbstract(m.getModifiers()) && !isCollected(m, out)) out.add(m);
         }
-        for (Class<?> parent : itf.getInterfaces()) collectAbstractMethods(parent, out);
     }
 
     /** Whether {@code out} already holds a method with the name and parameter types of {@code m}. */
