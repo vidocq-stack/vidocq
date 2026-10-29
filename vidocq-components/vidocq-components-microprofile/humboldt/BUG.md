@@ -556,3 +556,32 @@
 - **Fix**: a per-method plan, built on the first call, holds the span name, kind, `code.function.name` and one typed
   setter per `@SpanAttribute` parameter, chosen from the parameter's type.
 - **Regression test**: see repro.
+
+## BUG-20261029-02 — `Span.addLink` on a started span is silently ignored
+
+- **Date**: 2026-10-29
+- **Status**: FIXED (fix/with-span-plan)
+- **Module**: `humboldt-sdk-trace` — `SdkSpan`
+- **Symptom**: `span.addLink(ctx)` after `startSpan()` (OpenTelemetry API 1.37+) records nothing: the exported span
+  only has the links given to its builder.
+- **Minimal repro**: `SdkSpanTest.links_added_after_the_start_are_recorded`.
+- **Cause**: `SdkSpan` did not override `addLink`, whose API default is a no-op.
+- **Fix**: `SdkSpan.addLink` records the link while the span is not ended, ignoring an invalid context as the builder
+  does.
+- **Regression test**: see repro.
+
+## BUG-20261029-03 — The injected `Span` / `Baggage` wrap exceptions and are not equal to themselves
+
+- **Date**: 2026-10-29
+- **Status**: FIXED (fix/with-span-plan)
+- **Module**: `humboldt-cdi` — `HumboldtTelemetryProducers`
+- **Symptom**: the `@Inject Span` / `@Inject Baggage` objects were `java.lang.reflect.Proxy` instances calling
+  `Method.invoke` on the current span: an exception thrown by the current span reached the caller as an
+  `UndeclaredThrowableException`, and `equals`, `hashCode` and `toString` went to the current span, so
+  `span.equals(span)` was false.
+- **Minimal repro**: `HumboldtTelemetryProducersTest.an_exception_of_the_current_span_reaches_the_caller_as_is`,
+  `injected_span_and_baggage_are_plain_objects_equal_to_themselves`.
+- **Cause**: the dynamic proxies, which the ecosystem rules out anyway.
+- **Fix**: two written classes, `CurrentSpan` and `CurrentBaggage`, forward every method (default ones included) to
+  `Span.current()` / `Baggage.current()`; equality is identity.
+- **Regression tests**: see repro.

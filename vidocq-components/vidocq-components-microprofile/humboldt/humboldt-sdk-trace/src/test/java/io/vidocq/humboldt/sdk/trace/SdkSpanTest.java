@@ -92,6 +92,25 @@ class SdkSpanTest {
         assertEquals(Attributes.of(AttributeKey.stringKey(KEY), "v"), only().attributes());
     }
 
+    /** OpenTelemetry API 1.37+: a link added to a started span is recorded, after those of its builder. */
+    @Test
+    void links_added_after_the_start_are_recorded() {
+        SpanContext early = tracer.spanBuilder("early").startSpan().getSpanContext();
+        SpanContext late = tracer.spanBuilder("late").startSpan().getSpanContext();
+        Span span = tracer.spanBuilder(SPAN).addLink(early).startSpan();
+
+        span.addLink(late, Attributes.of(AttributeKey.stringKey(KEY), "v"));
+        span.addLink(SpanContext.getInvalid());
+        span.addLink(null);
+        span.end();
+        span.addLink(late);
+
+        List<io.vidocq.humboldt.sdk.trace.data.LinkData> links = only().links();
+        assertEquals(List.of(early, late), links.stream().map(l -> l.spanContext()).toList(),
+                "an invalid context and a link added after the end are ignored");
+        assertEquals("v", links.get(1).attributes().get(AttributeKey.stringKey(KEY)));
+    }
+
     @Test
     void ended_span_ignores_every_mutation() {
         Span span = tracer.spanBuilder(SPAN).startSpan();

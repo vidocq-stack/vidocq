@@ -56,12 +56,12 @@ public final class SdkSpan implements Span, ReadableSpan {
     private final Resource resource;
     private final InstrumentationScope scope;
     private final Clock clock;
-    private final List<LinkData> links;
     private final List<SpanProcessor> processors;
 
     private String name;
     private AttributesBuilder attributes;
     private List<EventData> events;
+    private final List<LinkData> links;
     private StatusData status = StatusData.unset();
     private long endEpochNanos = 0L;
     private boolean ended = false;
@@ -82,7 +82,7 @@ public final class SdkSpan implements Span, ReadableSpan {
         this.kind = builder.kind();
         this.startEpochNanos = startEpochNanos;
         this.attributes = initialAttributes.toBuilder();
-        this.links = List.copyOf(builder.links());
+        this.links = new ArrayList<>(builder.links());
         this.resource = shared.resource();
         this.scope = shared.scope();
         this.clock = shared.clock();
@@ -120,6 +120,14 @@ public final class SdkSpan implements Span, ReadableSpan {
         if (ended || name == null) return this;
         if (events == null) events = new ArrayList<>();
         events.add(new EventData(epochNanos, name, attrs != null ? attrs : Attributes.empty()));
+        return this;
+    }
+
+    /** OpenTelemetry API 1.37+: a link added to a started span; an invalid context is ignored, as by the builder. */
+    @Override
+    public synchronized Span addLink(SpanContext spanContext, Attributes attributes) {
+        if (ended || spanContext == null || !spanContext.isValid()) return this;
+        links.add(new LinkData(spanContext, attributes != null ? attributes : Attributes.empty()));
         return this;
     }
 
@@ -234,7 +242,7 @@ public final class SdkSpan implements Span, ReadableSpan {
                 endEpochNanos,
                 attributes.build(),
                 events != null ? List.copyOf(events) : List.of(),
-                links,
+                List.copyOf(links),
                 status,
                 resource,
                 scope);
