@@ -94,6 +94,7 @@ class MethodCallsTest {
 
         @Override
         public void setValue(ELContext context, Object base, Object property, Object value) {
+            // This resolver only invokes methods: nothing to write.
         }
 
         @Override

@@ -50,7 +50,8 @@ class ParserErrorTest {
         var ast = new Ast.ListLiteral(elements);
         elements.clear();
         org.junit.jupiter.api.Assertions.assertEquals(1, ast.elements().size());
-        assertThrows(UnsupportedOperationException.class, () -> ast.elements().clear());
+        var astElements = ast.elements();
+        assertThrows(UnsupportedOperationException.class, astElements::clear);
     }
 }
 

@@ -29,8 +29,8 @@ import org.junit.jupiter.api.Test;
 class GeneratedAccessorResolverTest {
     @Test
     void rejectsConflictingTablesForTheSameRuntimeType() {
-        assertThrows(ELException.class,
-                () -> new GeneratedAccessorELResolver(List.of(new Table(),new Table())));
+        var conflicting = List.<AccessorTable>of(new Table(),new Table());
+        assertThrows(ELException.class, () -> new GeneratedAccessorELResolver(conflicting));
         assertThrows(ELException.class, () -> new GeneratedAccessorELResolver((java.util.Collection<AccessorTable>) null));
     }
 

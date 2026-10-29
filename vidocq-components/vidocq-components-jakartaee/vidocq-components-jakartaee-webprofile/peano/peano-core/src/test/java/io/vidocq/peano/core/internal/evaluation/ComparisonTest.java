@@ -69,7 +69,9 @@ class ComparisonTest {
         }
         assertTrue(Comparison.relate(TokenKind.LESS, new Rank(), new Object()));
         assertTrue(Comparison.relate(TokenKind.GREATER, new Object(), new Rank()));
-        assertThrows(ELException.class, () -> Comparison.relate(TokenKind.LESS, new Object(), new Object()));
+        var left = new Object();
+        var right = new Object();
+        assertThrows(ELException.class, () -> Comparison.relate(TokenKind.LESS, left, right));
     }
 }
 

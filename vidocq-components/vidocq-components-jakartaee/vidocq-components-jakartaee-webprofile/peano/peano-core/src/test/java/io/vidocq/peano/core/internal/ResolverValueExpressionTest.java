@@ -73,7 +73,8 @@ class ResolverValueExpressionTest {
         assertEquals(42, ((Integer[]) data.get("array"))[0]);
         expression(context, "data.rows[0]").setValue(context, "new");
         assertEquals("new", ((List<?>) data.get("rows")).getFirst());
-        assertThrows(PropertyNotWritableException.class, () -> expression(context, "1+2").setValue(context, 4));
+        var sum = expression(context, "1+2");
+        assertThrows(PropertyNotWritableException.class, () -> sum.setValue(context, 4));
     }
 
     @Test

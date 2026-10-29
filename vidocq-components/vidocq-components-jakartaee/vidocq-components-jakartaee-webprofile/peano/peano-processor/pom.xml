@@ -11,6 +11,10 @@
     <artifactId>peano-processor</artifactId>
     <name>Peano :: Accessor Processor</name>
     <description>Build-time property accessor generation through the Java annotation processing API</description>
+    <properties>
+        <!-- Overridden by the JaCoCo agent under the quality profile; see the Surefire note below. -->
+        <argLine></argLine>
+    </properties>
     <dependencies>
         <dependency>
             <groupId>io.vidocq.peano</groupId>
@@ -27,4 +31,23 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                The processor tests run javac and the generated consumers in child processes.
+                Under the quality profile, argLine carries the JaCoCo agent: ChildJvm forwards it
+                (to javac through -J) so the processor code those compilations run is measured.
+                The empty argLine property keeps the late @{argLine} replacement valid when the
+                agent is not prepared.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} -Dpeano.test.coverageAgent=@{argLine}</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

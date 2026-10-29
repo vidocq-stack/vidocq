@@ -79,7 +79,9 @@ class NumericExpressionCompilerTest {
             }
             public Class<?> getType(ELContext c,Object b,Object p) { return Object.class; }
             public boolean isReadOnly(ELContext c,Object b,Object p) { return true; }
-            public void setValue(ELContext c,Object b,Object p,Object v) {}
+            public void setValue(ELContext c,Object b,Object p,Object v) {
+                // Read-only test resolver: isReadOnly answers true, nothing is written.
+            }
             public Class<?> getCommonPropertyType(ELContext c,Object b) { return String.class; }
         });
         var cases=new ArrayList<String>();

@@ -20,7 +20,6 @@
 package io.vidocq.peano.core.internal;
 
 import static org.junit.jupiter.api.Assertions.*;
-import java.util.List;
 import jakarta.el.ELException;
 import jakarta.el.ExpressionFactory;
 import jakarta.el.PropertyNotWritableException;

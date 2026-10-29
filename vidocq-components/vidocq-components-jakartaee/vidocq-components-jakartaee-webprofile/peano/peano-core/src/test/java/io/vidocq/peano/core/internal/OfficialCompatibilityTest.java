@@ -65,8 +65,8 @@ class OfficialCompatibilityTest {
         var method = factory.createMethodExpression(context,"#{vect.add}",boolean.class,new Class<?>[]{Object.class});
         assertEquals(true,method.invoke(context,new Object[]{"Peano"}));
         assertEquals(java.util.List.of("Peano"),vector);
-        assertThrows(MethodNotFoundException.class,
-                ()->factory.createValueExpression(context,"${vect.add('next')}",Object.class).getValue(context));
+        var call=factory.createValueExpression(context,"${vect.add('next')}",Object.class);
+        assertThrows(MethodNotFoundException.class,()->call.getValue(context));
         assertEquals(1,vector.size());
     }
 }

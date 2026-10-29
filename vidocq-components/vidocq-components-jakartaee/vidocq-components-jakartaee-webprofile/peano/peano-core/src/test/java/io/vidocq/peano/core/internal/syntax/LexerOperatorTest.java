@@ -70,7 +70,7 @@ class LexerOperatorTest {
     void returnsAnImmutableTokenListIncludingEndOfInput() {
         var tokens = Lexer.tokenize("");
         assertEquals(List.of(new Token(TokenKind.EOF, "", null, 0, 0)), tokens);
-        assertThrows(UnsupportedOperationException.class, () -> tokens.clear());
+        assertThrows(UnsupportedOperationException.class, tokens::clear);
     }
 }
 

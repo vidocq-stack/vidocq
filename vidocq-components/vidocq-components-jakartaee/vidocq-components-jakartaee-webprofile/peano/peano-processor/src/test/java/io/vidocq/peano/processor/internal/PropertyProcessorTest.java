@@ -27,7 +27,11 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import jakarta.el.ExpressionFactory;
 import io.vidocq.peano.spi.AccessorProvider;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.api.io.TempDir;
 
 class PropertyProcessorTest {
@@ -166,45 +170,62 @@ class PropertyProcessorTest {
         assertTrue(result.contains("PEANO_EDITOR_OK"),result);
     }
 
-    @Test
-    void diagnosesTypesOutsideTheCurrentModule() throws Exception {
-        var result = compile(sources("package demo; public class Model {}"),"-Apeano.accessorTypes=java.lang.String");
+    /** Invalid models fail the compilation with a diagnostic that names the problem. */
+    @ParameterizedTest
+    @MethodSource("invalidModels")
+    void diagnosesInvalidModels(String model,List<String> options,String diagnostic) throws Exception {
+        var result = compile(sources(model),options.toArray(String[]::new));
         assertNotEquals(0,result.status());
-        assertTrue(result.log().contains("current application module"),result.log());
+        assertTrue(result.log().contains(diagnostic),result.log());
     }
 
-    @Test
-    void diagnosesUnknownExplicitTypes() throws Exception {
-        var result = compile(sources("package demo; public class Model {}"),"-Apeano.accessorTypes=demo.Missing");
-        assertNotEquals(0,result.status());
-        assertTrue(result.log().contains("Unknown accessor type"),result.log());
-    }
-
-    @Test
-    void diagnosesAmbiguousWriteOnlySetters() throws Exception {
-        var result = compile(sources("""
+    static Stream<Arguments> invalidModels() {
+        return Stream.of(
+                Arguments.of("package demo; public class Model {}",
+                        List.of("-Apeano.accessorTypes=java.lang.String"),"current application module"),
+                Arguments.of("package demo; public class Model {}",
+                        List.of("-Apeano.accessorTypes=demo.Missing"),"Unknown accessor type"),
+                Arguments.of("""
                 package demo;
                 @io.vidocq.peano.annotation.ELAccessible
                 public class Model {
                     public void setValue(int value) {}
                     public void setValue(String value) {}
                 }
-                """));
-        assertNotEquals(0,result.status());
-        assertTrue(result.log().contains("Ambiguous setter"),result.log());
-    }
-
-    @Test
-    void diagnosesInaccessibleNestedModels() throws Exception {
-        var result = compile(sources("""
+                """,
+                        List.of(),"Ambiguous setter"),
+                Arguments.of("""
                 package demo;
                 public class Model {
                     @io.vidocq.peano.annotation.ELAccessible
                     private static class Hidden { public String getValue(){ return ""; } }
                 }
-                """));
-        assertNotEquals(0,result.status());
-        assertTrue(result.log().contains("private enclosing"),result.log());
+                """,
+                        List.of(),"private enclosing"),
+                Arguments.of("""
+                package demo;
+                @io.vidocq.peano.annotation.ELAccessible
+                public class Model<T> {
+                    public T getValue(){ return null; }
+                    public void setValue(T value) {}
+                }
+                """,
+                        List.of(),"Type-variable property"),
+                Arguments.of("package demo; @io.vidocq.peano.annotation.ELAccessible public interface Model { int apply(int value); }",
+                        List.of(),"annotated with @FunctionalInterface"),
+                Arguments.of("""
+                package demo;
+                @io.vidocq.peano.annotation.ELAccessible
+                public sealed interface Model permits Child { int apply(int value); }
+                final class Child implements Model { public int apply(int value) { return value; } }
+                """,
+                        List.of(),"non-sealed"),
+                Arguments.of("""
+                package demo;
+                @io.vidocq.peano.annotation.ELAccessible @FunctionalInterface
+                public interface Model { <T> T apply(T value); }
+                """,
+                        List.of(),"Generic functional methods"));
     }
 
     @Test
@@ -329,50 +350,6 @@ class PropertyProcessorTest {
     }
 
     @Test
-    void diagnosesTypeVariableBeanProperties() throws Exception {
-        var result = compile(sources("""
-                package demo;
-                @io.vidocq.peano.annotation.ELAccessible
-                public class Model<T> {
-                    public T getValue(){ return null; }
-                    public void setValue(T value) {}
-                }
-                """));
-        assertNotEquals(0,result.status());
-        assertTrue(result.log().contains("Type-variable property"),result.log());
-    }
-
-    @Test
-    void diagnosesInterfacesWithoutTheRequiredFunctionalAnnotation() throws Exception {
-        var result=compile(sources("package demo; @io.vidocq.peano.annotation.ELAccessible public interface Model { int apply(int value); }"));
-        assertNotEquals(0,result.status());
-        assertTrue(result.log().contains("annotated with @FunctionalInterface"),result.log());
-    }
-
-    @Test
-    void diagnosesSealedFunctionalTargets() throws Exception {
-        var result=compile(sources("""
-                package demo;
-                @io.vidocq.peano.annotation.ELAccessible
-                public sealed interface Model permits Child { int apply(int value); }
-                final class Child implements Model { public int apply(int value) { return value; } }
-                """));
-        assertNotEquals(0,result.status());
-        assertTrue(result.log().contains("non-sealed"),result.log());
-    }
-
-    @Test
-    void diagnosesGenericFunctionalMethods() throws Exception {
-        var result=compile(sources("""
-                package demo;
-                @io.vidocq.peano.annotation.ELAccessible @FunctionalInterface
-                public interface Model { <T> T apply(T value); }
-                """));
-        assertNotEquals(0,result.status());
-        assertTrue(result.log().contains("Generic functional methods"),result.log());
-    }
-
-    @Test
     void generatedJavaLangReferencesDoNotResolveToApplicationModelNames() throws Exception {
         Path source=sources("package demo; public class Model {}");
         for(String name:List.of("Object","Class","String","Float","Double","Boolean","Long","Throwable","SuppressWarnings")) {
@@ -416,14 +393,14 @@ class PropertyProcessorTest {
             paths.filter(p->p.toString().endsWith(".java")).sorted().forEach(p->args.add(p.toString()));
         }
         Path log = temporary.resolve("compile.log");
-        var process = new ProcessBuilder(args).redirectErrorStream(true).redirectOutput(log.toFile()).start();
+        var process = new ProcessBuilder(ChildJvm.command(args)).redirectErrorStream(true).redirectOutput(log.toFile()).start();
         assertTrue(process.waitFor(30,TimeUnit.SECONDS));
         return new Compilation(process.exitValue(),classes,generated,Files.readString(log));
     }
 
     private String run(List<String> args,int expected) throws Exception {
         Path log = temporary.resolve("run.log");
-        var process = new ProcessBuilder(args).redirectErrorStream(true).redirectOutput(log.toFile()).start();
+        var process = new ProcessBuilder(ChildJvm.command(args)).redirectErrorStream(true).redirectOutput(log.toFile()).start();
         assertTrue(process.waitFor(30,TimeUnit.SECONDS));
         String output = Files.readString(log);
         assertEquals(expected,process.exitValue(),output);

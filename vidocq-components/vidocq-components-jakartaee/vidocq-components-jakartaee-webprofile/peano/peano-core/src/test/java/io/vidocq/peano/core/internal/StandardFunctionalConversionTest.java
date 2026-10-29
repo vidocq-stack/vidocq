@@ -140,7 +140,9 @@ class StandardFunctionalConversionTest {
         el.getELManager().addELResolver(new ELResolver() {
             public Object getValue(ELContext c,Object b,Object p) { return null; }
             public Class<?> getType(ELContext c,Object b,Object p) { return null; }
-            public void setValue(ELContext c,Object b,Object p,Object v) {}
+            @Override public void setValue(ELContext c,Object b,Object p,Object v) {
+                // This resolver only converts values: nothing to write.
+            }
             public boolean isReadOnly(ELContext c,Object b,Object p) { return false; }
             public Class<?> getCommonPropertyType(ELContext c,Object b) { return null; }
             public <T> T convertToType(ELContext c,Object value,Class<T> target) {

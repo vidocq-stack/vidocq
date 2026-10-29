@@ -84,7 +84,8 @@ class ParserCompositeExpressionTest {
         var template = new Template(Template.Kind.LITERAL, parts);
         parts.clear();
         assertEquals(1, template.parts().size());
-        assertThrows(UnsupportedOperationException.class, () -> template.parts().clear());
+        var templateParts = template.parts();
+        assertThrows(UnsupportedOperationException.class, templateParts::clear);
     }
 
     @Test

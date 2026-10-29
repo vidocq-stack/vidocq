@@ -30,7 +30,7 @@ import io.vidocq.peano.core.internal.evaluation.Bindings;
 import org.junit.jupiter.api.Test;
 
 class ExpressionAnalysisTest {
-    @Test void capturesEachMapperInItsOriginalPhaseAndLookupOrder() throws Exception {
+    @Test void capturesEachMapperInItsOriginalPhaseAndLookupOrder() {
         var analysis=ExpressionAnalysis.parse("\u0024{a+p:f(b)} text \u0024{b+p:f(a)+q:g(a)}");
         var context=new TrackingContext();
         var variables=Bindings.capture(analysis,context);
@@ -39,8 +39,8 @@ class ExpressionAnalysisTest {
         assertEquals(2,variables.size());
         assertEquals(context.abs,functions.get("p:f"));
         assertEquals(context.max,functions.get("q:g"));
-        assertThrows(UnsupportedOperationException.class,()->variables.clear());
-        assertThrows(UnsupportedOperationException.class,()->functions.clear());
+        assertThrows(UnsupportedOperationException.class,variables::clear);
+        assertThrows(UnsupportedOperationException.class,functions::clear);
     }
 
     @Test void excludesNestedLambdaParametersFromVariableAndFunctionBindings() {
@@ -83,7 +83,8 @@ class ExpressionAnalysisTest {
         var deferred=ExpressionAnalysis.parse("#{ a + 1 }");
         assertEquals(immediate.identity(),deferred.identity());
         assertEquals(immediate.identity().hashCode(),deferred.identity().hashCode());
-        assertThrows(UnsupportedOperationException.class,()->immediate.variableNames().clear());
+        var names=immediate.variableNames();
+        assertThrows(UnsupportedOperationException.class,names::clear);
     }
 
     private static final class TrackingContext extends ELContext {

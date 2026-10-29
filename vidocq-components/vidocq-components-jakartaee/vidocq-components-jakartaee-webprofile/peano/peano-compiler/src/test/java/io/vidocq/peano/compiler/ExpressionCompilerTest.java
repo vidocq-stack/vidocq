@@ -21,6 +21,7 @@ package io.vidocq.peano.compiler;
 
 import static org.junit.jupiter.api.Assertions.*;
 import java.io.File;
+import java.io.IOException;
 import java.lang.classfile.ClassFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -84,7 +85,7 @@ class ExpressionCompilerTest {
         var expected=new ArrayList<String>();
         int[] oracleConversions={0};
         var instanceOracle=new StandardELContext(factory) {
-            public <T> T convertToType(Object value,Class<T> type) {
+            @Override public <T> T convertToType(Object value,Class<T> type) {
                 if (type==String.class) return (T)(++oracleConversions[0]==1 ? "left" : "right");
                 return super.convertToType(value,type);
             }
@@ -94,15 +95,7 @@ class ExpressionCompilerTest {
         assertEquals(Boolean.FALSE,factory.createValueExpression(instanceOracle,"${left==right}",Object.class).getValue(instanceOracle));
         assertEquals(2,oracleConversions[0]);
         for (int i=0;i<sources.size();i++) {
-            byte[] bytes=ExpressionCompiler.compile("demo.E"+i,sources.get(i));
-            assertTrue(ClassFile.of().verify(bytes).isEmpty(),sources.get(i)+": "+ClassFile.of().verify(bytes));
-            for (var entry:ClassFile.of().parse(bytes).constantPool()) {
-                if (entry instanceof java.lang.classfile.constantpool.ClassEntry type) {
-                    assertFalse(type.name().stringValue().startsWith("io/vidocq/peano/core/"));
-                    assertFalse(type.name().stringValue().startsWith("io/vidocq/peano/compiler/"));
-                }
-            }
-            Files.write(classes.resolve("demo/E"+i+".class"),bytes);
+            assertNoBuildToolingReference(writeCompiled(classes,"E"+i,sources.get(i)));
             constructors.add("new E"+i+"(Object.class)");
             var expression=factory.createValueExpression(oracle,sources.get(i),Object.class);
             Object value=expression.getValue(oracle);
@@ -398,44 +391,30 @@ class ExpressionCompilerTest {
                     }
                 }
                 """.formatted(String.join(",",constructors));
-        byte[] invalidUnary=ExpressionCompiler.compile("demo.BadUnary","${-true}");
-        assertTrue(ClassFile.of().verify(invalidUnary).isEmpty());
-        Files.write(classes.resolve("demo/BadUnary.class"),invalidUnary);
-        byte[] invalidArithmetic=ExpressionCompiler.compile("demo.BadArithmetic","${1%0}");
-        assertTrue(ClassFile.of().verify(invalidArithmetic).isEmpty());
-        Files.write(classes.resolve("demo/BadArithmetic.class"),invalidArithmetic);
-        byte[] invalidOperand=ExpressionCompiler.compile("demo.BadOperand","${(-true)+1}");
-        assertTrue(ClassFile.of().verify(invalidOperand).isEmpty());
-        Files.write(classes.resolve("demo/BadOperand.class"),invalidOperand);
+        writeCompiled(classes,"BadUnary","${-true}");
+        writeCompiled(classes,"BadArithmetic","${1%0}");
+        writeCompiled(classes,"BadOperand","${(-true)+1}");
         for (var entry:java.util.Map.of("LazyLogical","${false or not empty -'2'}",
                 "AlteredLogical","${true and (1%0)}", "BadLogical","${true and 7}",
                 "OverflowLogical","${false or 9223372036854775808}",
                 "OverflowLiteral","${9223372036854775808}").entrySet()) {
-            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
-            assertTrue(ClassFile.of().verify(bytes).isEmpty());
-            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+            writeCompiled(classes,entry.getKey(),entry.getValue());
         }
         for (var entry:java.util.Map.of("AlteredConditional","${true ? 1%0 : 7}",
                 "DynamicArithmetic","${(true ? null : 1)+(false ? 1.5 : 2)}",
                 "BadConditional","${7 ? 1 : 2}", "BadDynamicArithmetic","${(true ? 1 : 1.5)%0}",
                 "BadDynamicUnary","${-(true ? true : 1)}").entrySet()) {
-            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
-            assertTrue(ClassFile.of().verify(bytes).isEmpty());
-            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+            writeCompiled(classes,entry.getKey(),entry.getValue());
         }
         for (var entry:java.util.Map.of("StringEquality","${'x'=='x'}", "CachedEquality","${1==1}",
                 "OrderedComparison","${2<3}", "OrderedConcat","${1 += ('x'+=2)}",
                 "FailingSequence","${1%0;7}", "NullEquality","${1==2}").entrySet()) {
-            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
-            assertTrue(ClassFile.of().verify(bytes).isEmpty());
-            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+            writeCompiled(classes,entry.getKey(),entry.getValue());
         }
         for (var entry:java.util.Map.of("OrderedMap","${{-'1':-'2',-'3':-'4'}}",
                 "FreshList","${[1]}", "BadCollectionComparison","${[1]<[2]}",
                 "InstanceEquality","${left==right}").entrySet()) {
-            byte[] bytes=ExpressionCompiler.compile("demo."+entry.getKey(),entry.getValue());
-            assertTrue(ClassFile.of().verify(bytes).isEmpty());
-            Files.write(classes.resolve("demo/"+entry.getKey()+".class"),bytes);
+            writeCompiled(classes,entry.getKey(),entry.getValue());
         }
         Path source=temporary.resolve("sources");
         Files.createDirectories(source);
@@ -640,14 +619,31 @@ class ExpressionCompilerTest {
         assertThrows(NullPointerException.class,()->ExpressionCompiler.compile("demo.Missing",null));
     }
 
+    /** Compiles one demo class, checks that it verifies, and writes it under classes/demo. */
+    private static byte[] writeCompiled(Path classes,String simpleName,String source) throws IOException {
+        byte[] bytes=ExpressionCompiler.compile("demo."+simpleName,source);
+        assertTrue(ClassFile.of().verify(bytes).isEmpty(),source+": "+ClassFile.of().verify(bytes));
+        Files.write(classes.resolve("demo/"+simpleName+".class"),bytes);
+        return bytes;
+    }
+
+    private static void assertNoBuildToolingReference(byte[] bytes) {
+        for (var entry:ClassFile.of().parse(bytes).constantPool()) {
+            if (entry instanceof java.lang.classfile.constantpool.ClassEntry type) {
+                assertFalse(type.name().stringValue().startsWith("io/vidocq/peano/core/"));
+                assertFalse(type.name().stringValue().startsWith("io/vidocq/peano/compiler/"));
+            }
+        }
+    }
+
     private String render(Object value) {
         return value==null ? "null" : value.getClass().getName()+":"+value;
     }
 
     @Test
     void reportsOversizedClassFileConstantsAsCompilerDiagnostics() {
-        var failure=assertThrows(ELException.class,
-                ()->ExpressionCompiler.compile("demo.Large","x".repeat(70_000)));
+        String oversized="x".repeat(70_000);
+        var failure=assertThrows(ELException.class,()->ExpressionCompiler.compile("demo.Large",oversized));
         assertTrue(failure.getMessage().contains("demo.Large"),failure.getMessage());
         assertNotNull(failure.getCause());
     }

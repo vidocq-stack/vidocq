@@ -73,6 +73,7 @@ class ResolverConversionTest {
 
         @Override
         public void setValue(ELContext context, Object base, Object property, Object value) {
+            // This resolver only converts values: nothing to write.
         }
 
         @Override

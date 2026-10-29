@@ -33,8 +33,8 @@ class RegisteredConversionsTest {
     @Test void ordersProvidersWithoutDependingOnRegistrationOrder() {
         assertEquals("a",new RegisteredConversions(List.of(new ZProvider(),new AProvider())).convert("x",String.class).value());
         var priority=new AProvider() {
-            public int priority(){ return 7; }
-            public ConversionResult convert(Object value,Class<?> type){ return ConversionResult.handled("priority"); }
+            @Override public int priority(){ return 7; }
+            @Override public ConversionResult convert(Object value,Class<?> type){ return ConversionResult.handled("priority"); }
         };
         assertEquals("priority",new RegisteredConversions(List.of(new ZProvider(),priority)).convert("x",String.class).value());
     }
@@ -47,8 +47,10 @@ class RegisteredConversionsTest {
     }
     @Test void rejectsProviderContractViolations() {
         assertThrows(IllegalArgumentException.class,()->new ConversionResult(false,"invalid"));
-        assertThrows(ELException.class,()->new RegisteredConversions(List.of((value,type)->null)).convert("x",Object.class));
-        assertThrows(ELException.class,()->new RegisteredConversions(List.of((value,type)->ConversionResult.handled(7))).convert("x",String.class));
+        var nullResult=new RegisteredConversions(List.of((value,type)->null));
+        assertThrows(ELException.class,()->nullResult.convert("x",Object.class));
+        var wrongType=new RegisteredConversions(List.of((value,type)->ConversionResult.handled(7)));
+        assertThrows(ELException.class,()->wrongType.convert("x",String.class));
     }
 }
 
