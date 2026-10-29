@@ -28,7 +28,8 @@ public class PaymentService {
 
 Behavior of `WithSpanInterceptor`:
 
-* Annotation resolution: method overrides class.
+* Annotation resolution: method overrides class. The annotations of a method are read on its first call only.
+* `@SpanAttribute` parameters: the key is the annotation value, or the parameter name when it is empty (compile with `-parameters`). A `null` argument is not recorded. As in the OpenTelemetry instrumentation annotations, the parameter's type picks the attribute's: `long` for integral numbers, `double` for floating ones, `boolean`, array attributes for `String[]`, `long[]`, `int[]`, `double[]` and `boolean[]`, and a string (`String.valueOf`) for anything else.
 * Default name (`@WithSpan` without `value`): `Class.method`.
 * Every span carries the `code.function.name` attribute (`<binary class name>.<method>`, for example `com.acme.PaymentService.charge`), mandatory since MicroProfile Telemetry 2.2.
 * Parent: the current context by default. With `@WithSpan(inheritContext = false)` the span uses `Context.root()` as its parent: it starts a new trace, and the method runs without the caller's context (the caller's baggage is not visible inside it).

@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.UndeclaredThrowableException;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -51,6 +52,7 @@ class WithSpanInterceptorAttributesTest {
     private static final String TRACED = "traced";
     private static final String OK = "ok";
     private static final String FAILS = "fails";
+    private static final String TYPED = "typed";
 
     private InMemorySpanExporter exporter;
     private SdkTracerProvider provider;
@@ -78,10 +80,36 @@ class WithSpanInterceptorAttributesTest {
 
         SpanData span = exporter.getFinishedSpans().getFirst();
         assertEquals("alice", span.attributes().get(AttributeKey.stringKey("user.name")));
-        assertEquals("42", span.attributes().get(AttributeKey.stringKey(m.getParameters()[1].getName())),
-                "an empty @SpanAttribute uses the parameter name, the value through String.valueOf");
+        assertEquals(42L, span.attributes().get(AttributeKey.longKey(m.getParameters()[1].getName())),
+                "an empty @SpanAttribute uses the parameter name; an int is a long attribute");
         assertNull(span.attributes().get(AttributeKey.stringKey(m.getParameters()[2].getName())),
                 "a parameter without @SpanAttribute is not recorded");
+    }
+
+    /** The attribute types of the OpenTelemetry instrumentation annotations: the parameter's type picks the key's. */
+    @Test
+    void span_attributes_keep_the_type_of_the_parameter() throws Exception {
+        Object marker = new Object() {
+            @Override public String toString() { return "marker"; }
+        };
+        interceptor.aroundInvoke(new TestInvocationContext(method(TYPED), new Object[]{
+                7L, (short) 3, 1.5d, 2.5f, true, new String[]{"a", "b"}, new long[]{1, 2}, new int[]{3},
+                new double[]{0.5}, new boolean[]{false}, marker, 'c'}, () -> OK));
+
+        var attributes = exporter.getFinishedSpans().getFirst().attributes();
+        assertEquals(7L, attributes.get(AttributeKey.longKey("a.long")));
+        assertEquals(3L, attributes.get(AttributeKey.longKey("a.short")));
+        assertEquals(1.5d, attributes.get(AttributeKey.doubleKey("a.double")));
+        assertEquals(2.5d, attributes.get(AttributeKey.doubleKey("a.float")));
+        assertEquals(true, attributes.get(AttributeKey.booleanKey("a.boolean")));
+        assertEquals(List.of("a", "b"), attributes.get(AttributeKey.stringArrayKey("strings")));
+        assertEquals(List.of(1L, 2L), attributes.get(AttributeKey.longArrayKey("longs")));
+        assertEquals(List.of(3L), attributes.get(AttributeKey.longArrayKey("ints")));
+        assertEquals(List.of(0.5d), attributes.get(AttributeKey.doubleArrayKey("doubles")));
+        assertEquals(List.of(false), attributes.get(AttributeKey.booleanArrayKey("booleans")));
+        assertEquals("marker", attributes.get(AttributeKey.stringKey("other")),
+                "any other type is recorded through String.valueOf");
+        assertEquals("c", attributes.get(AttributeKey.stringKey("a.char")));
     }
 
     @Test
@@ -158,6 +186,17 @@ class WithSpanInterceptorAttributesTest {
         @WithSpan
         public String traced(@SpanAttribute("user.name") String user, @SpanAttribute int count, String other) {
             return user + count + other;
+        }
+
+        @WithSpan
+        @SuppressWarnings("java:S107") // one parameter per attribute type under test
+        public String typed(@SpanAttribute("a.long") Long l, @SpanAttribute("a.short") short s,
+                            @SpanAttribute("a.double") double d, @SpanAttribute("a.float") Float f,
+                            @SpanAttribute("a.boolean") boolean b, @SpanAttribute("strings") String[] strings,
+                            @SpanAttribute("longs") long[] longs, @SpanAttribute("ints") int[] ints,
+                            @SpanAttribute("doubles") double[] doubles, @SpanAttribute("booleans") boolean[] booleans,
+                            @SpanAttribute("other") Object other, @SpanAttribute("a.char") char c) {
+            return "typed";
         }
 
         @WithSpan

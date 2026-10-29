@@ -541,3 +541,18 @@
   `shutdown()`, before leaving the loop for the final drain.
 - **Fix**: a wake-up without a pending flush once the reader is stopped leaves the loop; the final drain exports once.
 - **Regression test**: `PeriodicMetricReaderTest.shutdown_exports_a_final_collection_then_shuts_the_exporter_down_once`.
+
+## BUG-20261029-01 — `@SpanAttribute` values are always recorded as strings
+
+- **Date**: 2026-10-29
+- **Status**: FIXED (fix/with-span-plan)
+- **Module**: `humboldt-cdi` — `WithSpanInterceptor`
+- **Symptom**: `@SpanAttribute int count` = 42 is recorded as the string attribute `"42"`; the OpenTelemetry
+  instrumentation annotations (and the Java agent) record it as the `long` 42, a `double` as a double, a `boolean`
+  as a boolean and `String[]` / primitive arrays as array attributes. A backend query on `count > 10` misses the span.
+- **Minimal repro**: `WithSpanInterceptorAttributesTest.span_attributes_keep_the_type_of_the_parameter`.
+- **Cause**: every value went through `String.valueOf` and `stringKey`. The interceptor also re-read the method's
+  annotations, parameters and attribute keys on every call.
+- **Fix**: a per-method plan, built on the first call, holds the span name, kind, `code.function.name` and one typed
+  setter per `@SpanAttribute` parameter, chosen from the parameter's type.
+- **Regression test**: see repro.
