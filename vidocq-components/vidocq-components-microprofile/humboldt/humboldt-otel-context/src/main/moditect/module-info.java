@@ -25,12 +25,21 @@ module io.opentelemetry.context {
     // Unqualified on purpose: ComponentLoader is public upstream OpenTelemetry API, used by autoconfigure,
     // autoconfigure-spi (ConfigProperties.getComponentLoader) and the exporters — any consumer may need it.
     exports io.opentelemetry.common;
-    // Internal logger used by the API module only (opentelemetry-common is shaded in here since 1.66).
-    exports io.opentelemetry.common.impl to io.opentelemetry.api;
+    // opentelemetry-common is shaded in here since 1.66. Its internal package (ConfigUtil, the internal logger) is
+    // used by the API module and, since 1.67, by the SDK and exporter modules: jdeps over the stable jars of
+    // opentelemetry-bom 1.67.0 names opentelemetry-exporter-common, -sdk-common, -sdk-extension-autoconfigure-spi
+    // and -sdk-metrics (without it SdkTracerProvider.builder() fails on the module path with an IllegalAccessError).
+    // (No comment inside the list below: ModiTect would take it into the module names.)
+    exports io.opentelemetry.common.impl to
+            io.opentelemetry.api,
+            io.opentelemetry.exporter.internal,
+            io.opentelemetry.sdk.common,
+            io.opentelemetry.sdk.autoconfigure.spi,
+            io.opentelemetry.sdk.metrics;
     // WeakConcurrentMap, which opentelemetry-exporter-otlp-common (ResourceMarshaler,
     // InstrumentationScopeMarshaler) uses to cache marshalers: without it every OTLP export fails on the module
-    // path with an IllegalAccessError (BUG-20261004-03). Qualified to the only OpenTelemetry 1.66 stable artifact
-    // that references the package (jdeps over opentelemetry-bom 1.66.0); see humboldt-otel-api's descriptor for
+    // path with an IllegalAccessError (BUG-20261004-03). Qualified to the only OpenTelemetry 1.67 stable artifact
+    // that references the package (jdeps over opentelemetry-bom 1.67.0); see humboldt-otel-api's descriptor for
     // the layer rule.
     exports io.opentelemetry.context.internal.shaded to io.opentelemetry.exporter.internal.otlp;
     // Humboldt's own package (src/main/java): extends the qualified exports above to OpenTelemetry modules of a

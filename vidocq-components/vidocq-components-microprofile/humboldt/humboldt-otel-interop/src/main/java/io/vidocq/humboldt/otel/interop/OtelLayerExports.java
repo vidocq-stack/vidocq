@@ -27,7 +27,8 @@ import io.vidocq.humboldt.otel.context.layer.ContextLayerExports;
  * that {@code io.opentelemetry.api} and {@code io.opentelemetry.context} export to them by name.
  *
  * <p>Those modules' descriptors export {@code io.opentelemetry.api.internal}, {@code io.opentelemetry.api.impl},
- * {@code io.opentelemetry.api.trace.propagation.internal} and {@code io.opentelemetry.context.internal.shaded} to
+ * {@code io.opentelemetry.api.trace.propagation.internal}, {@code io.opentelemetry.common.impl} and
+ * {@code io.opentelemetry.context.internal.shaded} to
  * the OpenTelemetry SDK, exporter and sender modules that use them (BUG-20261004-03). A qualified export reaches
  * only target modules of the same layer or of a parent layer: when the application brings an OTLP exporter in a
  * child layer of Humboldt's modules, nothing reaches it. Only the owning module may add an export at run time,

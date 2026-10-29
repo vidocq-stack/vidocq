@@ -30,12 +30,14 @@ import io.opentelemetry.context.propagation.TextMapPropagator;
 import io.opentelemetry.context.propagation.TextMapSetter;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class W3CPropagatorsTest {
@@ -116,5 +118,21 @@ class W3CPropagatorsTest {
                 W3CPropagators.get(), W3CPropagators.get());
         org.junit.jupiter.api.Assertions.assertSame(
                 W3CPropagators.textMap(), W3CPropagators.textMap());
+    }
+
+    /**
+     * A crafted {@code tracestate} (a long run of spaces with no comma after it) must not make extraction quadratic:
+     * an unauthenticated request header reaches it (GHSA-ccrj-gw8r-854m, fixed in OpenTelemetry Java 1.67.0).
+     */
+    @Test
+    void crafted_tracestate_is_extracted_in_linear_time() {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+        headers.put("tracestate", "vendor=value" + " ".repeat(100_000) + "x");
+
+        Context extracted = assertTimeoutPreemptively(Duration.ofSeconds(2),
+                () -> propagator.extract(Context.root(), headers, GETTER));
+
+        assertTrue(Span.fromContext(extracted).getSpanContext().isValid());
     }
 }

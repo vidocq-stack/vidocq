@@ -36,8 +36,8 @@ module io.opentelemetry.api {
     // exports every package; without these exports those jars fail on the module path with an IllegalAccessError
     // (BUG-20261004-03). io.opentelemetry.context does the same for context.internal.shaded.
     //
-    // Each export is qualified, to exactly the OpenTelemetry 1.66 stable artifacts whose classes reference the
-    // package (jdeps -verbose:class over every jar of opentelemetry-bom 1.66.0), named by their
+    // Each export is qualified, to the OpenTelemetry 1.67 stable artifacts whose classes reference the
+    // package (jdeps -verbose:class over every jar of opentelemetry-bom 1.67.0), named by their
     // Automatic-Module-Name:
     //   opentelemetry-sdk-common                          io.opentelemetry.sdk.common                  internal
     //   opentelemetry-sdk-trace                           io.opentelemetry.sdk.trace                   internal
@@ -52,6 +52,8 @@ module io.opentelemetry.api {
     //   opentelemetry-exporter-otlp                       io.opentelemetry.exporter.otlp               internal
     //   opentelemetry-exporter-sender-jdk                 io.opentelemetry.exporter.sender.jdk.internal impl
     //   opentelemetry-exporter-sender-okhttp              io.opentelemetry.exporter.sender.okhttp.internal impl
+    // Since 1.67, sdk-extension-autoconfigure-spi no longer references api.internal: it stays a target so that a
+    // 1.66 autoconfigure-spi next to this API keeps working.
     // OtlpExporterModuleLayerTest (humboldt-otel-interop) exports a span, a metric and a log record through
     // opentelemetry-exporter-otlp and the JDK sender on the module path; the other targets rest on jdeps.
     //

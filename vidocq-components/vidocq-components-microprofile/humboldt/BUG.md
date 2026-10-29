@@ -629,3 +629,21 @@
   one volatile read of the queue size per item, plus a CAS and a short monitor once per batch; the worker's size
   check under the lock before waiting rules out a lost wake-up.
 - **Regression test**: see repro.
+
+## BUG-20261029-06 — a crafted `tracestate` header makes trace-context extraction quadratic (GHSA-ccrj-gw8r-854m)
+
+- **Date**: 2026-10-29
+- **Status**: FIXED (fix/opentelemetry-1.67.0)
+- **Module**: `humboldt-otel-api` (repackaged `opentelemetry-api`), reached through `humboldt-propagator-w3c` and
+  `humboldt-otel-interop` on every incoming request
+- **Symptom**: SonarQube (osv-scanner) flags `opentelemetry-api` 1.66.0 with GHSA-ccrj-gw8r-854m. The W3C
+  trace-context propagator parses `tracestate` with a backtracking regex: a header with a long run of spaces or tabs
+  and no comma after it takes quadratic time, so one unauthenticated request can hold a CPU.
+- **Minimal repro**: `W3CPropagatorsTest.crafted_tracestate_is_extracted_in_linear_time`: a 100 000-space
+  `tracestate` is still being extracted after 2 s on 1.66.0.
+- **Cause**: upstream, in OpenTelemetry Java's `W3CTraceContextPropagator` up to 1.66.0.
+- **Fix**: OpenTelemetry Java 1.67.0. Same packages as 1.66.0, no API change for applications, but the SDK and
+  exporter jars of 1.67.0 now use `io.opentelemetry.common.impl`: the repackaged `io.opentelemetry.context` exports
+  it to them too (jdeps over the stable jars of the 1.67.0 BOM), else `SdkTracerProvider.builder()` fails on the
+  module path with an `IllegalAccessError` (caught by `OtlpExporterModuleLayerTest`).
+- **Regression test**: see repro.

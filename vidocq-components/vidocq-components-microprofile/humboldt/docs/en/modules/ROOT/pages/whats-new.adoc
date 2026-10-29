@@ -4,4 +4,4 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._
+* *OpenTelemetry 1.67.0* — the repackaged OpenTelemetry API and context move from 1.66.0 to 1.67.0, which fixes GHSA-ccrj-gw8r-854m: a crafted `tracestate` request header made the W3C trace-context propagator parse in quadratic time (an unauthenticated CPU denial of service). No API change for applications. See xref:reference.adoc#compatibility[Compatibility].

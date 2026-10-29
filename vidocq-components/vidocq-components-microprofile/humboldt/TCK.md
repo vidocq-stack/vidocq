@@ -2,7 +2,8 @@
 
 ## MicroProfile Telemetry 2.2 (TCK 2.2-RC3, byte-identical to the 2.2 final under ballot; to be re-run on the final once it is published)
 
-Date: 2026-10-04 — OpenTelemetry 1.66.0, instrumentation-annotations 2.31.1, semconv 1.44.0.
+Date: 2026-10-29 — OpenTelemetry 1.67.0, instrumentation-annotations 2.31.1, semconv 1.44.0 (first run 2026-10-04 on
+OpenTelemetry 1.66.0, same result).
 Command: `./run-official-tck-telemetry-2.2.sh all`.
 
 ```
