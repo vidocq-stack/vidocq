@@ -1002,17 +1002,33 @@ public final class JdqlExecutor {
         return out;
     }
 
+    /**
+     * The canonical constructor of each record type a projection maps rows to, looked up once per type rather than
+     * once per row: {@code getRecordComponents} and {@code getDeclaredConstructor} copy their arrays on every call.
+     */
+    private static final ClassValue<java.lang.reflect.Constructor<?>> CANONICAL_CONSTRUCTORS = new ClassValue<>() {
+        @Override
+        protected java.lang.reflect.Constructor<?> computeValue(Class<?> recordType) {
+            Class<?>[] paramTypes = java.util.Arrays.stream(recordType.getRecordComponents())
+                    .map(java.lang.reflect.RecordComponent::getType)
+                    .toArray(Class<?>[]::new);
+            try {
+                return recordType.getDeclaredConstructor(paramTypes);
+            } catch (NoSuchMethodException e) {
+                throw new MansartDataException("Record " + recordType.getName() + " has no canonical constructor", e);
+            }
+        }
+    };
+
     private static Object mapRowToRecord(Object[] row, Class<?> recordType,
                                          java.util.List<Attribute<?, ?>> attrs) {
-        java.lang.reflect.RecordComponent[] comps = recordType.getRecordComponents();
-        if (comps.length != attrs.size()) {
-            throw new MansartDataException("Record " + recordType.getSimpleName()
-                    + " has " + comps.length + " components but projection selected " + attrs.size() + " attributes");
+        java.lang.reflect.Constructor<?> canonical = CANONICAL_CONSTRUCTORS.get(recordType);
+        if (canonical.getParameterCount() != attrs.size()) {
+            throw new MansartDataException("Record " + recordType.getSimpleName() + " has "
+                    + canonical.getParameterCount() + " components but projection selected " + attrs.size() + " attributes");
         }
-        Class<?>[] paramTypes = new Class<?>[comps.length];
-        for (int i = 0; i < comps.length; i++) paramTypes[i] = comps[i].getType();
         try {
-            return recordType.getDeclaredConstructor(paramTypes).newInstance(row);
+            return canonical.newInstance(row);
         } catch (ReflectiveOperationException e) {
             throw new MansartDataException("Failed to construct " + recordType.getName() + " from projection row", e);
         }
