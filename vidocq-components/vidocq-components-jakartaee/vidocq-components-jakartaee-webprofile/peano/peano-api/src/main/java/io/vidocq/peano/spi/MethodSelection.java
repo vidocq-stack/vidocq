@@ -20,6 +20,7 @@
 package io.vidocq.peano.spi;
 
 import java.util.ArrayList;
+import java.util.List;
 import jakarta.el.ELContext;
 import jakarta.el.ELException;
 import jakarta.el.MethodNotFoundException;
@@ -51,22 +52,21 @@ public final class MethodSelection {
      */
     public static int select(ELContext context, MethodDescriptor[] descriptors, String name,
             Class<?>[] expectedTypes, Object[] values, boolean staticOnly) {
-        Class<?>[] actual = expectedTypes;
-        if (actual == null) {
-            actual = new Class<?>[values == null ? 0 : values.length];
-            for (int i=0;i<actual.length;i++) actual[i]=values[i]==null?null:values[i].getClass();
-        }
+        Class<?>[] actual = expectedTypes != null ? expectedTypes : typesOf(values);
         var best = new ArrayList<Integer>();
         Score bestScore = null;
         for (int i=0;i<descriptors.length;i++) {
-            MethodDescriptor descriptor = descriptors[i];
-            if (!descriptor.name().equals(name) || staticOnly && !descriptor.staticMethod()) continue;
-            Score score = score(context,descriptor,actual,values);
-            if (score == null) continue;
-            int order = bestScore==null?1:score.compareTo(bestScore);
-            if (order>0) { best.clear(); best.add(i); bestScore=score; }
-            else if (order==0) best.add(i);
+            Score score = candidateScore(context,descriptors[i],name,staticOnly,actual,values);
+            if (score != null) {
+                int order = bestScore==null ? 1 : score.compareTo(bestScore);
+                if (order>0) { best.clear(); best.add(i); bestScore=score; }
+                else if (order==0) best.add(i);
+            }
         }
+        return mostSpecific(descriptors,best,name);
+    }
+
+    private static int mostSpecific(MethodDescriptor[] descriptors, List<Integer> best, String name) {
         for (int candidate : best) {
             if (best.stream().allMatch(other->candidate==other
                     || moreSpecific(descriptors[candidate],descriptors[other]))) return candidate;
@@ -74,35 +74,62 @@ public final class MethodSelection {
         throw new MethodNotFoundException("No unique method "+name);
     }
 
+    private static Class<?>[] typesOf(Object[] values) {
+        if (values == null) return new Class<?>[0];
+        Class<?>[] types = new Class<?>[values.length];
+        for (int i=0;i<types.length;i++) types[i]=values[i]==null?null:values[i].getClass();
+        return types;
+    }
+
+    private static Score candidateScore(ELContext context, MethodDescriptor descriptor, String name,
+            boolean staticOnly, Class<?>[] actual, Object[] values) {
+        if (!descriptor.name().equals(name) || staticOnly && !descriptor.staticMethod()) return null;
+        return score(context,descriptor,actual,values);
+    }
+
+    private enum Match { EXACT, ASSIGNABLE, COERCIBLE, NONE }
+
     private static Score score(ELContext context, MethodDescriptor descriptor, Class<?>[] actual, Object[] values) {
         Class<?>[] formal = descriptor.parameterTypes();
-        if (!descriptor.varargs() && actual.length!=formal.length
-                || descriptor.varargs() && actual.length<formal.length-1) return null;
-        int exact=0, assignable=0, coercible=0;
+        boolean varargs = descriptor.varargs();
+        if (!varargs && actual.length!=formal.length || varargs && actual.length<formal.length-1) return null;
+        int exact = 0;
+        int assignable = 0;
+        int coercible = 0;
         for (int i=0;i<actual.length;i++) {
-            Class<?> target;
-            if (descriptor.varargs() && i>=formal.length-1) {
-                boolean packed=i==formal.length-1 && actual.length==formal.length && actual[i]!=null
-                        && formal[i].isAssignableFrom(actual[i]);
-                target=packed?formal[i]:formal[formal.length-1].getComponentType();
-            } else target=formal[i];
-            Class<?> source=actual[i];
-            if (source==null) coercible++;
-            else if (source==target) exact++;
-            else if (boxed(target).isAssignableFrom(boxed(source))) assignable++;
-            else if (canCoerce(context,source,target,values!=null && i<values.length?values[i]:null,
-                    values!=null && i<values.length)) coercible++;
-            else return null;
+            boolean hasValue = values!=null && i<values.length;
+            Match match = match(context,actual[i],target(varargs,formal,actual,i),hasValue ? values[i] : null,hasValue);
+            switch (match) {
+                case EXACT -> exact++;
+                case ASSIGNABLE -> assignable++;
+                case COERCIBLE -> coercible++;
+                case NONE -> { return null; }
+            }
         }
-        return new Score(exact,assignable,coercible,descriptor.varargs());
+        return new Score(exact,assignable,coercible,varargs);
+    }
+
+    private static Class<?> target(boolean varargs, Class<?>[] formal, Class<?>[] actual, int i) {
+        if (!varargs || i<formal.length-1) return formal[i];
+        boolean packed=i==formal.length-1 && actual.length==formal.length && actual[i]!=null
+                && formal[i].isAssignableFrom(actual[i]);
+        return packed?formal[i]:formal[formal.length-1].getComponentType();
+    }
+
+    private static Match match(ELContext context, Class<?> source, Class<?> target, Object value, boolean hasValue) {
+        if (source==null) return Match.COERCIBLE;
+        if (source==target) return Match.EXACT;
+        if (boxed(target).isAssignableFrom(boxed(source))) return Match.ASSIGNABLE;
+        return canCoerce(context,source,target,value,hasValue) ? Match.COERCIBLE : Match.NONE;
     }
 
     private static boolean canCoerce(ELContext context, Class<?> source, Class<?> target,Object value,boolean hasValue) {
         if (hasValue) {
             try { context.convertToType(value,target); return true; }
-            catch (ELException failure) { return false; }
+            catch (ELException _) { return false; }
         }
-        Class<?> from=boxed(source), to=boxed(target);
+        Class<?> from=boxed(source);
+        Class<?> to=boxed(target);
         return to==String.class || from==String.class && (Number.class.isAssignableFrom(to)
                 || to==Boolean.class || to==Character.class || to.isEnum())
                 || Number.class.isAssignableFrom(from) && (Number.class.isAssignableFrom(to) || to==Character.class)
@@ -110,7 +137,8 @@ public final class MethodSelection {
     }
 
     private static boolean moreSpecific(MethodDescriptor a,MethodDescriptor b) {
-        Class<?>[] left=a.parameterTypes(), right=b.parameterTypes();
+        Class<?>[] left=a.parameterTypes();
+        Class<?>[] right=b.parameterTypes();
         if (left.length!=right.length) return false;
         boolean narrower=false;
         for (int i=0;i<left.length;i++) {

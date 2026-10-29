@@ -191,8 +191,8 @@ public final class Interpreter {
         return switch (operator) {
             case PLUS, MINUS, MULTIPLY, DIVIDE, MODULO -> Arithmetic.binary(operator, left, right, context);
             case CONCAT -> convert(left, String.class) + convert(right, String.class);
-            case EQUAL -> Comparison.equal(left, right, context);
-            case NOT_EQUAL -> !Comparison.equal(left, right, context);
+            case EQUAL -> Comparison.isEqual(left, right, context);
+            case NOT_EQUAL -> !Comparison.isEqual(left, right, context);
             case LESS, GREATER, LESS_EQUAL, GREATER_EQUAL -> Comparison.relate(operator, left, right, context);
             case SEMICOLON -> right;
             default -> throw new ELException("Invalid binary operator " + operator);

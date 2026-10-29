@@ -33,11 +33,11 @@ public final class Comparison {
         this.context = context;
     }
 
-    public static boolean equal(Object a, Object b) {
-        return equal(a, b, null);
+    public static boolean isEqual(Object a, Object b) {
+        return isEqual(a, b, null);
     }
 
-    public static boolean equal(Object a, Object b, ELContext context) {
+    public static boolean isEqual(Object a, Object b, ELContext context) {
         return new Comparison(context).equalValues(a, b);
     }
 

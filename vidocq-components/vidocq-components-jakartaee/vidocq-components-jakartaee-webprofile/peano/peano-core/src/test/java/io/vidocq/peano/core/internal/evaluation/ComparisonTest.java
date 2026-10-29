@@ -29,21 +29,21 @@ import org.junit.jupiter.api.Test;
 class ComparisonTest {
     @Test
     void distinguishesDecimalScaleEqualityFromOrdering() {
-        assertFalse(Comparison.equal(new BigDecimal("1.0"), new BigDecimal("1.00")));
+        assertFalse(Comparison.isEqual(new BigDecimal("1.0"), new BigDecimal("1.00")));
         assertTrue(Comparison.relate(TokenKind.LESS_EQUAL, new BigDecimal("1.0"), new BigDecimal("1.00")));
     }
 
     @Test
     void comparesNumericStringsNullsEnumsAndBooleansInTheSpecifiedOrder() {
-        assertTrue(Comparison.equal(1L, "1"));
-        assertFalse(Comparison.equal("01", "1"));
-        assertTrue(Comparison.equal(BigInteger.ONE, 1L));
-        assertTrue(Comparison.equal(true, "TRUE"));
-        assertTrue(Comparison.equal(CoercionsTest.Color.RED, "RED"));
-        assertFalse(Comparison.equal(CoercionsTest.Color.RED, ""));
-        assertFalse(Comparison.equal("", CoercionsTest.Color.RED));
-        assertFalse(Comparison.equal(null, ""));
-        assertTrue(Comparison.equal(null, null));
+        assertTrue(Comparison.isEqual(1L, "1"));
+        assertFalse(Comparison.isEqual("01", "1"));
+        assertTrue(Comparison.isEqual(BigInteger.ONE, 1L));
+        assertTrue(Comparison.isEqual(true, "TRUE"));
+        assertTrue(Comparison.isEqual(CoercionsTest.Color.RED, "RED"));
+        assertFalse(Comparison.isEqual(CoercionsTest.Color.RED, ""));
+        assertFalse(Comparison.isEqual("", CoercionsTest.Color.RED));
+        assertFalse(Comparison.isEqual(null, ""));
+        assertTrue(Comparison.isEqual(null, null));
         assertTrue(Comparison.relate(TokenKind.LESS, "10", "2"));
         assertFalse(Comparison.relate(TokenKind.LESS, null, 1L));
         assertTrue(Comparison.relate(TokenKind.LESS_EQUAL, null, null));
@@ -52,8 +52,8 @@ class ComparisonTest {
 
     @Test
     void preservesIEEEEqualityAndOrderingForNaNAndSignedZero() {
-        assertFalse(Comparison.equal(Double.NaN, Double.NaN));
-        assertTrue(Comparison.equal(-0d, 0d));
+        assertFalse(Comparison.isEqual(Double.NaN, Double.NaN));
+        assertTrue(Comparison.isEqual(-0d, 0d));
         assertFalse(Comparison.relate(TokenKind.LESS, Double.NaN, 1d));
         assertFalse(Comparison.relate(TokenKind.GREATER_EQUAL, Double.NaN, 1d));
         assertTrue(Comparison.relate(TokenKind.LESS_EQUAL, -0d, 0d));

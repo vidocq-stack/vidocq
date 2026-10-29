@@ -91,7 +91,9 @@ public final class Arithmetic {
             return 0L;
         }
         if (value instanceof String) {
-            value = floating(value) ? number(value, Double.class, context) : number(value, Long.class, context);
+            // EL 6.0 section 1.8.1: a String operand is coerced to Double or to Long, each kept as is.
+            Class<? extends Number> domain = floating(value) ? Double.class : Long.class;
+            value = number(value, domain, context);
         }
         return switch (value) {
             case BigDecimal n -> n.negate();
