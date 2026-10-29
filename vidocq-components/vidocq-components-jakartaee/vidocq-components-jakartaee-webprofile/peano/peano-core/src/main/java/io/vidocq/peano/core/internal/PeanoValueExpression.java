@@ -38,6 +38,7 @@ import io.vidocq.peano.core.internal.syntax.Template;
 /** Value expression with immutable parse-time bindings and context-owned resolution. */
 final class PeanoValueExpression extends ValueExpression {
     private static final long serialVersionUID = 1L;
+    private static final String CONTEXT = "context";
     private final Class<?> expectedType;
     private final String source;
     private final Template template;
@@ -49,18 +50,31 @@ final class PeanoValueExpression extends ValueExpression {
     /** The creating factory's accessor catalog; absent after deserialization (EL-019). */
     private final transient Supplier<AccessorCatalog> accessors;
 
-    private PeanoValueExpression(Class<?> expectedType, String source, Template template, Template identity,
-            Object instance, boolean objectExpression, Map<String, ValueExpression> variables, Map<String, Method> functions,
-            Supplier<AccessorCatalog> accessors) {
+    /** A parsed expression: template, identity and creation-time bindings. */
+    private PeanoValueExpression(Class<?> expectedType, String source, ExpressionAnalysis analysis,
+            Map<String, ValueExpression> variables, Map<String, Method> functions, Supplier<AccessorCatalog> accessors) {
         this.expectedType = expectedType;
         this.source = source;
-        this.template = template;
-        this.identity = identity;
-        this.instance = instance;
-        this.objectExpression = objectExpression;
+        this.template = analysis.template();
+        this.identity = analysis.identity();
+        this.instance = null;
+        this.objectExpression = false;
         this.variables = variables;
         this.functions = functions;
         this.accessors = accessors;
+    }
+
+    /** An object wrapped by ExpressionFactory.createValueExpression(Object, Class). */
+    private PeanoValueExpression(Object instance, Class<?> expectedType) {
+        this.expectedType = expectedType;
+        this.source = null;
+        this.template = null;
+        this.identity = null;
+        this.instance = instance;
+        this.objectExpression = true;
+        this.variables = Map.of();
+        this.functions = Map.of();
+        this.accessors = null;
     }
 
     static PeanoValueExpression text(String source, Class<?> expectedType, ELContext context) {
@@ -73,18 +87,18 @@ final class PeanoValueExpression extends ValueExpression {
 
     static PeanoValueExpression text(String source, Class<?> expectedType, ELContext context, ExpressionAnalysis analysis,
             Supplier<AccessorCatalog> accessors) {
-        return new PeanoValueExpression(expectedType, source, analysis.template(), analysis.identity(), null, false,
+        return new PeanoValueExpression(expectedType, source, analysis,
                 Bindings.capture(analysis, context), Bindings.captureFunctions(analysis, context), accessors);
     }
 
     static PeanoValueExpression object(Object instance, Class<?> expectedType) {
-        return new PeanoValueExpression(expectedType, null, null, null, instance, true, Map.of(), Map.of(), null);
+        return new PeanoValueExpression(instance, expectedType);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <T> T getValue(ELContext context) {
-        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(context, CONTEXT);
         if (!objectExpression) context.notifyBeforeEvaluation(source);
         T value = (T) context.convertToType(rawValue(context), expectedType);
         if (!objectExpression) context.notifyAfterEvaluation(source);
@@ -93,7 +107,7 @@ final class PeanoValueExpression extends ValueExpression {
 
     @Override
     public void setValue(ELContext context, Object value) {
-        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(context, CONTEXT);
         Ast body = body();
         if (lambdaArgument(body, context)) {
             throw new PropertyNotWritableException("Lambda arguments are read-only");
@@ -110,7 +124,7 @@ final class PeanoValueExpression extends ValueExpression {
 
     @Override
     public boolean isReadOnly(ELContext context) {
-        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(context, CONTEXT);
         Ast body = body();
         if (lambdaArgument(body, context)) return true;
         ValueExpression variable = variable(body);
@@ -121,7 +135,7 @@ final class PeanoValueExpression extends ValueExpression {
 
     @Override
     public Class<?> getType(ELContext context) {
-        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(context, CONTEXT);
         Ast body = body();
         if (!lambdaArgument(body, context)) {
             ValueExpression variable = variable(body);
@@ -136,7 +150,7 @@ final class PeanoValueExpression extends ValueExpression {
 
     @Override
     public ValueReference getValueReference(ELContext context) {
-        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(context, CONTEXT);
         Ast body = body();
         if (lambdaArgument(body, context)) return null;
         ValueExpression variable = variable(body);

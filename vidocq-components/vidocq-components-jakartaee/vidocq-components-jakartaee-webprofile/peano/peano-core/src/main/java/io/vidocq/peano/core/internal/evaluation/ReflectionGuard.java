@@ -57,10 +57,14 @@ public final class ReflectionGuard extends ELResolver {
     }
 
     @Override public Object getValue(ELContext context,Object base,Object key) {
-        property(context,base);
-        return null;
+        return unresolved(context,base);
     }
     @Override public Class<?> getType(ELContext context,Object base,Object key) {
+        return unresolved(context,base);
+    }
+
+    /** Checks the base and leaves the property unresolved for the next resolver. */
+    private static <T> T unresolved(ELContext context,Object base) {
         property(context,base);
         return null;
     }

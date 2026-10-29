@@ -46,6 +46,7 @@ import io.vidocq.peano.core.internal.syntax.Template;
 /** Method expression with parse-time bindings and API-owned method invocation. */
 final class PeanoMethodExpression extends MethodExpression {
     private static final long serialVersionUID = 1L;
+    private static final String CONTEXT = "context";
     private final String source;
     private final Template template;
     private final Template identity;
@@ -88,7 +89,7 @@ final class PeanoMethodExpression extends MethodExpression {
 
     @Override
     public Object invoke(ELContext context, Object[] parameters) {
-        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(context, CONTEXT);
         GeneratedAccessorELResolver.prepare(context, accessors);
         return invokeChecked(context, parameters, List.of());
     }
@@ -129,7 +130,7 @@ final class PeanoMethodExpression extends MethodExpression {
 
     @Override
     public MethodInfo getMethodInfo(ELContext context) {
-        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(context, CONTEXT);
         GeneratedAccessorELResolver.prepare(context, accessors);
         if (isLiteralText()) return new MethodInfo(source, expectedReturnType == null ? String.class : expectedReturnType,
                 expectedParameterTypes.clone());
@@ -145,7 +146,7 @@ final class PeanoMethodExpression extends MethodExpression {
 
     @Override
     public MethodReference getMethodReference(ELContext context) {
-        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(context, CONTEXT);
         GeneratedAccessorELResolver.prepare(context, accessors);
         context.notifyBeforeEvaluation(source);
         MethodReference reference = reference(context);

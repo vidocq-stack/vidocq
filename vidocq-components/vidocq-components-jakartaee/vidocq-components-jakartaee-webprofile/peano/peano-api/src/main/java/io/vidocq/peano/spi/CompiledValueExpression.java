@@ -32,6 +32,7 @@ import jakarta.el.ValueReference;
  */
 public abstract class CompiledValueExpression extends ValueExpression {
     private static final long serialVersionUID=1L;
+    private static final String CONTEXT="context";
     private final String source;
     private final String identity;
     private final Class<?> expectedType;
@@ -56,26 +57,26 @@ public abstract class CompiledValueExpression extends ValueExpression {
 
     @Override @SuppressWarnings("unchecked")
     public final <T> T getValue(ELContext context) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         context.notifyBeforeEvaluation(source);
         T value=(T)context.convertToType(evaluate(context),expectedType);
         context.notifyAfterEvaluation(source);
         return value;
     }
     @Override public void setValue(ELContext context,Object value) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         throw new PropertyNotWritableException("This expression is read-only");
     }
     @Override public boolean isReadOnly(ELContext context) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         return true;
     }
     @Override public Class<?> getType(ELContext context) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         return rawType;
     }
     @Override public ValueReference getValueReference(ELContext context) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         return null;
     }
     @Override public final Class<?> getExpectedType() { return expectedType; }

@@ -45,36 +45,42 @@ public final class Comparison {
         try {
             if (a == b) return true;
             if (a == null || b == null) return false;
-            if (a instanceof BigDecimal || b instanceof BigDecimal) {
-                return convert(a, BigDecimal.class).equals(convert(b, BigDecimal.class));
-            }
-            if (floating(a) || floating(b)) {
-                return convert(a, Double.class).doubleValue() == convert(b, Double.class).doubleValue();
-            }
-            if (a instanceof BigInteger || b instanceof BigInteger) {
-                return convert(a, BigInteger.class).equals(convert(b, BigInteger.class));
-            }
-            if (integral(a) || integral(b)) {
-                return convert(a, Long.class).equals(convert(b, Long.class));
-            }
-            if (a instanceof Boolean || b instanceof Boolean) {
-                return convert(a, Boolean.class).equals(convert(b, Boolean.class));
-            }
-            if (a instanceof Enum<?> e) {
-                return e.equals(convert(b, e.getDeclaringClass()));
-            }
-            if (b instanceof Enum<?> e) {
-                return e.equals(convert(a, e.getDeclaringClass()));
-            }
-            if (a instanceof String || b instanceof String) {
-                return convert(a, String.class).equals(convert(b, String.class));
-            }
-            return a.equals(b);
+            if (numeric(a) || numeric(b)) return equalNumbers(a, b);
+            return equalOthers(a, b);
         } catch (ELException error) {
             throw error;
         } catch (RuntimeException error) {
             throw new ELException("Equality comparison failed", error);
         }
+    }
+
+    private boolean equalNumbers(Object a, Object b) {
+        if (a instanceof BigDecimal || b instanceof BigDecimal) {
+            return convert(a, BigDecimal.class).equals(convert(b, BigDecimal.class));
+        }
+        if (floating(a) || floating(b)) {
+            return convert(a, Double.class).doubleValue() == convert(b, Double.class).doubleValue();
+        }
+        if (a instanceof BigInteger || b instanceof BigInteger) {
+            return convert(a, BigInteger.class).equals(convert(b, BigInteger.class));
+        }
+        return convert(a, Long.class).equals(convert(b, Long.class));
+    }
+
+    private boolean equalOthers(Object a, Object b) {
+        if (a instanceof Boolean || b instanceof Boolean) {
+            return convert(a, Boolean.class).equals(convert(b, Boolean.class));
+        }
+        if (a instanceof Enum<?> e) {
+            return e.equals(convert(b, e.getDeclaringClass()));
+        }
+        if (b instanceof Enum<?> e) {
+            return e.equals(convert(a, e.getDeclaringClass()));
+        }
+        if (a instanceof String || b instanceof String) {
+            return convert(a, String.class).equals(convert(b, String.class));
+        }
+        return a.equals(b);
     }
 
     public static boolean relate(TokenKind operator, Object a, Object b) {
@@ -91,26 +97,7 @@ public final class Comparison {
                 return operator == TokenKind.LESS_EQUAL || operator == TokenKind.GREATER_EQUAL;
             }
             if (a == null || b == null) return false;
-            if (a instanceof BigDecimal || b instanceof BigDecimal) {
-                return ordered(operator, convert(a, BigDecimal.class).compareTo(convert(b, BigDecimal.class)));
-            }
-            if (floating(a) || floating(b)) {
-                double left = convert(a, Double.class);
-                double right = convert(b, Double.class);
-                return switch (operator) {
-                    case LESS -> left < right;
-                    case GREATER -> left > right;
-                    case LESS_EQUAL -> left <= right;
-                    case GREATER_EQUAL -> left >= right;
-                    default -> throw new ELException("Invalid comparison operator " + operator);
-                };
-            }
-            if (a instanceof BigInteger || b instanceof BigInteger) {
-                return ordered(operator, convert(a, BigInteger.class).compareTo(convert(b, BigInteger.class)));
-            }
-            if (integral(a) || integral(b)) {
-                return ordered(operator, Long.compare(convert(a, Long.class), convert(b, Long.class)));
-            }
+            if (numeric(a) || numeric(b)) return relateNumbers(operator, a, b);
             if (a instanceof String || b instanceof String) {
                 return ordered(operator, convert(a, String.class).compareTo(convert(b, String.class)));
             }
@@ -124,6 +111,27 @@ public final class Comparison {
         }
     }
 
+    private boolean relateNumbers(TokenKind operator, Object a, Object b) {
+        if (a instanceof BigDecimal || b instanceof BigDecimal) {
+            return ordered(operator, convert(a, BigDecimal.class).compareTo(convert(b, BigDecimal.class)));
+        }
+        if (floating(a) || floating(b)) {
+            double left = convert(a, Double.class);
+            double right = convert(b, Double.class);
+            return switch (operator) {
+                case LESS -> left < right;
+                case GREATER -> left > right;
+                case LESS_EQUAL -> left <= right;
+                case GREATER_EQUAL -> left >= right;
+                default -> throw new ELException("Invalid comparison operator " + operator);
+            };
+        }
+        if (a instanceof BigInteger || b instanceof BigInteger) {
+            return ordered(operator, convert(a, BigInteger.class).compareTo(convert(b, BigInteger.class)));
+        }
+        return ordered(operator, Long.compare(convert(a, Long.class), convert(b, Long.class)));
+    }
+
     private <T> T convert(Object value, Class<T> type) {
         return context == null ? Coercions.convert(value, type) : context.convertToType(value, type);
     }
@@ -131,6 +139,10 @@ public final class Comparison {
     @SuppressWarnings("unchecked")
     private static int compare(Comparable<?> value, Object other) {
         return ((Comparable<Object>) value).compareTo(other);
+    }
+
+    private static boolean numeric(Object value) {
+        return value instanceof BigDecimal || value instanceof BigInteger || floating(value) || integral(value);
     }
 
     private static boolean floating(Object value) {

@@ -34,6 +34,7 @@ import jakarta.el.ValueReference;
 /** Resolver protocol for application-owned compiled property navigation. */
 public abstract class CompiledPropertyValueExpression extends CompiledValueExpression {
     private static final long serialVersionUID=1L;
+    private static final String CONTEXT="context";
     private final Map<String,ValueExpression> bindings;
     private final boolean composite;
 
@@ -116,7 +117,7 @@ public abstract class CompiledPropertyValueExpression extends CompiledValueExpre
     @Override protected Object bindingIdentity() { return bindings; }
 
     @Override public final Class<?> getType(ELContext context) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         if (composite) return String.class;
         var location=locate(context);
         if (location==null) {
@@ -130,7 +131,7 @@ public abstract class CompiledPropertyValueExpression extends CompiledValueExpre
     }
 
     @Override public final boolean isReadOnly(ELContext context) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         var location=locate(context);
         if (location==null) return true;
         context.setPropertyResolved(false);
@@ -140,12 +141,12 @@ public abstract class CompiledPropertyValueExpression extends CompiledValueExpre
     }
 
     @Override public final ValueReference getValueReference(ELContext context) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         return locate(context);
     }
 
     @Override public final void setValue(ELContext context,Object value) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         var location=locate(context);
         if (location==null) throw new PropertyNotWritableException("This expression is read-only");
         context.setPropertyResolved(false);

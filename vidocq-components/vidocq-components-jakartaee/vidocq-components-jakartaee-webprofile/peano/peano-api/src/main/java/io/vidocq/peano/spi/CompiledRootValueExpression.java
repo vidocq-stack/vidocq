@@ -33,6 +33,7 @@ import jakarta.el.ValueReference;
 /** Runtime protocol for a build-time compiled standalone root identifier. */
 public abstract class CompiledRootValueExpression extends CompiledValueExpression {
     private static final long serialVersionUID=1L;
+    private static final String CONTEXT="context";
     private final String name;
     private final ValueExpression binding;
 
@@ -67,7 +68,7 @@ public abstract class CompiledRootValueExpression extends CompiledValueExpressio
     }
 
     @Override public final Class<?> getType(ELContext context) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         if (context.isLambdaArgument(name)) {
             Object value=context.getLambdaArgument(name);
             return value==null ? null : value.getClass();
@@ -77,7 +78,7 @@ public abstract class CompiledRootValueExpression extends CompiledValueExpressio
     }
 
     @Override public final boolean isReadOnly(ELContext context) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         if (context.isLambdaArgument(name)) return true;
         if (binding!=null) return binding.isReadOnly(context);
         var location=effectiveRoot(context);
@@ -89,7 +90,7 @@ public abstract class CompiledRootValueExpression extends CompiledValueExpressio
     }
 
     @Override public final void setValue(ELContext context,Object value) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         if (context.isLambdaArgument(name)) throw new PropertyNotWritableException("Lambda arguments are read-only");
         if (binding!=null) { binding.setValue(context,value); return; }
         writeReference(context,new ValueReference(null,name),value);
@@ -111,7 +112,7 @@ public abstract class CompiledRootValueExpression extends CompiledValueExpressio
     }
 
     @Override public final ValueReference getValueReference(ELContext context) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         if (context.isLambdaArgument(name)) return null;
         if (binding!=null) return binding.getValueReference(context);
         return effectiveRoot(context);

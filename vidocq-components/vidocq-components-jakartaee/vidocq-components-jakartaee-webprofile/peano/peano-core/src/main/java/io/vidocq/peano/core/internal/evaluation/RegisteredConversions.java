@@ -31,7 +31,7 @@ import jakarta.el.ELException;
 final class RegisteredConversions {
     private final List<TypeConversionProvider> providers;
     RegisteredConversions(Collection<? extends TypeConversionProvider> providers) {
-        this.providers=providers.stream().map(provider->(TypeConversionProvider)provider)
+        this.providers=providers.stream().map(TypeConversionProvider.class::cast)
                 .sorted(Comparator.comparingInt(TypeConversionProvider::priority).reversed()
                         .thenComparing(provider->provider.getClass().getName())).toList();
     }

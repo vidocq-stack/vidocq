@@ -19,6 +19,8 @@
  */
 package io.vidocq.peano.core.internal.evaluation;
 
+import java.util.Map;
+import java.util.function.Function;
 import jakarta.el.ELContext;
 import jakarta.el.LambdaExpression;
 
@@ -27,57 +29,60 @@ import jakarta.el.LambdaExpression;
 final class StandardFunctionalAdapters {
     private StandardFunctionalAdapters() {}
 
+    /** One adapter factory per standard functional interface, selected by an exact type match. */
+    private static final Map<Class<?>,Function<Invocation,Object>> ADAPTERS=Map.ofEntries(
+            Map.entry(java.util.function.BiConsumer.class,BiConsumerAdapter::new),
+            Map.entry(java.util.function.BiFunction.class,BiFunctionAdapter::new),
+            Map.entry(java.util.function.BinaryOperator.class,BinaryOperatorAdapter::new),
+            Map.entry(java.util.function.BiPredicate.class,BiPredicateAdapter::new),
+            Map.entry(java.util.function.BooleanSupplier.class,BooleanSupplierAdapter::new),
+            Map.entry(java.util.function.Consumer.class,ConsumerAdapter::new),
+            Map.entry(java.util.function.DoubleBinaryOperator.class,DoubleBinaryOperatorAdapter::new),
+            Map.entry(java.util.function.DoubleConsumer.class,DoubleConsumerAdapter::new),
+            Map.entry(java.util.function.DoubleFunction.class,DoubleFunctionAdapter::new),
+            Map.entry(java.util.function.DoublePredicate.class,DoublePredicateAdapter::new),
+            Map.entry(java.util.function.DoubleSupplier.class,DoubleSupplierAdapter::new),
+            Map.entry(java.util.function.DoubleToIntFunction.class,DoubleToIntFunctionAdapter::new),
+            Map.entry(java.util.function.DoubleToLongFunction.class,DoubleToLongFunctionAdapter::new),
+            Map.entry(java.util.function.DoubleUnaryOperator.class,DoubleUnaryOperatorAdapter::new),
+            Map.entry(java.util.function.Function.class,FunctionAdapter::new),
+            Map.entry(java.util.function.IntBinaryOperator.class,IntBinaryOperatorAdapter::new),
+            Map.entry(java.util.function.IntConsumer.class,IntConsumerAdapter::new),
+            Map.entry(java.util.function.IntFunction.class,IntFunctionAdapter::new),
+            Map.entry(java.util.function.IntPredicate.class,IntPredicateAdapter::new),
+            Map.entry(java.util.function.IntSupplier.class,IntSupplierAdapter::new),
+            Map.entry(java.util.function.IntToDoubleFunction.class,IntToDoubleFunctionAdapter::new),
+            Map.entry(java.util.function.IntToLongFunction.class,IntToLongFunctionAdapter::new),
+            Map.entry(java.util.function.IntUnaryOperator.class,IntUnaryOperatorAdapter::new),
+            Map.entry(java.util.function.LongBinaryOperator.class,LongBinaryOperatorAdapter::new),
+            Map.entry(java.util.function.LongConsumer.class,LongConsumerAdapter::new),
+            Map.entry(java.util.function.LongFunction.class,LongFunctionAdapter::new),
+            Map.entry(java.util.function.LongPredicate.class,LongPredicateAdapter::new),
+            Map.entry(java.util.function.LongSupplier.class,LongSupplierAdapter::new),
+            Map.entry(java.util.function.LongToDoubleFunction.class,LongToDoubleFunctionAdapter::new),
+            Map.entry(java.util.function.LongToIntFunction.class,LongToIntFunctionAdapter::new),
+            Map.entry(java.util.function.LongUnaryOperator.class,LongUnaryOperatorAdapter::new),
+            Map.entry(java.util.function.ObjDoubleConsumer.class,ObjDoubleConsumerAdapter::new),
+            Map.entry(java.util.function.ObjIntConsumer.class,ObjIntConsumerAdapter::new),
+            Map.entry(java.util.function.ObjLongConsumer.class,ObjLongConsumerAdapter::new),
+            Map.entry(java.util.function.Predicate.class,PredicateAdapter::new),
+            Map.entry(java.util.function.Supplier.class,SupplierAdapter::new),
+            Map.entry(java.util.function.ToDoubleBiFunction.class,ToDoubleBiFunctionAdapter::new),
+            Map.entry(java.util.function.ToDoubleFunction.class,ToDoubleFunctionAdapter::new),
+            Map.entry(java.util.function.ToIntBiFunction.class,ToIntBiFunctionAdapter::new),
+            Map.entry(java.util.function.ToIntFunction.class,ToIntFunctionAdapter::new),
+            Map.entry(java.util.function.ToLongBiFunction.class,ToLongBiFunctionAdapter::new),
+            Map.entry(java.util.function.ToLongFunction.class,ToLongFunctionAdapter::new),
+            Map.entry(java.util.function.UnaryOperator.class,UnaryOperatorAdapter::new),
+            Map.entry(java.lang.Runnable.class,RunnableAdapter::new),
+            Map.entry(java.util.concurrent.Callable.class,CallableAdapter::new),
+            Map.entry(java.util.Comparator.class,ComparatorAdapter::new));
+
     static <T> T adapt(ELContext context,Object value,Class<T> type) {
         if (!(value instanceof LambdaExpression lambda)) return null;
-        var invocation=new Invocation(lambda,context);
-        Object adapter;
-        if (type==java.util.function.BiConsumer.class) adapter=new BiConsumerAdapter(invocation);
-        else if (type==java.util.function.BiFunction.class) adapter=new BiFunctionAdapter(invocation);
-        else if (type==java.util.function.BinaryOperator.class) adapter=new BinaryOperatorAdapter(invocation);
-        else if (type==java.util.function.BiPredicate.class) adapter=new BiPredicateAdapter(invocation);
-        else if (type==java.util.function.BooleanSupplier.class) adapter=new BooleanSupplierAdapter(invocation);
-        else if (type==java.util.function.Consumer.class) adapter=new ConsumerAdapter(invocation);
-        else if (type==java.util.function.DoubleBinaryOperator.class) adapter=new DoubleBinaryOperatorAdapter(invocation);
-        else if (type==java.util.function.DoubleConsumer.class) adapter=new DoubleConsumerAdapter(invocation);
-        else if (type==java.util.function.DoubleFunction.class) adapter=new DoubleFunctionAdapter(invocation);
-        else if (type==java.util.function.DoublePredicate.class) adapter=new DoublePredicateAdapter(invocation);
-        else if (type==java.util.function.DoubleSupplier.class) adapter=new DoubleSupplierAdapter(invocation);
-        else if (type==java.util.function.DoubleToIntFunction.class) adapter=new DoubleToIntFunctionAdapter(invocation);
-        else if (type==java.util.function.DoubleToLongFunction.class) adapter=new DoubleToLongFunctionAdapter(invocation);
-        else if (type==java.util.function.DoubleUnaryOperator.class) adapter=new DoubleUnaryOperatorAdapter(invocation);
-        else if (type==java.util.function.Function.class) adapter=new FunctionAdapter(invocation);
-        else if (type==java.util.function.IntBinaryOperator.class) adapter=new IntBinaryOperatorAdapter(invocation);
-        else if (type==java.util.function.IntConsumer.class) adapter=new IntConsumerAdapter(invocation);
-        else if (type==java.util.function.IntFunction.class) adapter=new IntFunctionAdapter(invocation);
-        else if (type==java.util.function.IntPredicate.class) adapter=new IntPredicateAdapter(invocation);
-        else if (type==java.util.function.IntSupplier.class) adapter=new IntSupplierAdapter(invocation);
-        else if (type==java.util.function.IntToDoubleFunction.class) adapter=new IntToDoubleFunctionAdapter(invocation);
-        else if (type==java.util.function.IntToLongFunction.class) adapter=new IntToLongFunctionAdapter(invocation);
-        else if (type==java.util.function.IntUnaryOperator.class) adapter=new IntUnaryOperatorAdapter(invocation);
-        else if (type==java.util.function.LongBinaryOperator.class) adapter=new LongBinaryOperatorAdapter(invocation);
-        else if (type==java.util.function.LongConsumer.class) adapter=new LongConsumerAdapter(invocation);
-        else if (type==java.util.function.LongFunction.class) adapter=new LongFunctionAdapter(invocation);
-        else if (type==java.util.function.LongPredicate.class) adapter=new LongPredicateAdapter(invocation);
-        else if (type==java.util.function.LongSupplier.class) adapter=new LongSupplierAdapter(invocation);
-        else if (type==java.util.function.LongToDoubleFunction.class) adapter=new LongToDoubleFunctionAdapter(invocation);
-        else if (type==java.util.function.LongToIntFunction.class) adapter=new LongToIntFunctionAdapter(invocation);
-        else if (type==java.util.function.LongUnaryOperator.class) adapter=new LongUnaryOperatorAdapter(invocation);
-        else if (type==java.util.function.ObjDoubleConsumer.class) adapter=new ObjDoubleConsumerAdapter(invocation);
-        else if (type==java.util.function.ObjIntConsumer.class) adapter=new ObjIntConsumerAdapter(invocation);
-        else if (type==java.util.function.ObjLongConsumer.class) adapter=new ObjLongConsumerAdapter(invocation);
-        else if (type==java.util.function.Predicate.class) adapter=new PredicateAdapter(invocation);
-        else if (type==java.util.function.Supplier.class) adapter=new SupplierAdapter(invocation);
-        else if (type==java.util.function.ToDoubleBiFunction.class) adapter=new ToDoubleBiFunctionAdapter(invocation);
-        else if (type==java.util.function.ToDoubleFunction.class) adapter=new ToDoubleFunctionAdapter(invocation);
-        else if (type==java.util.function.ToIntBiFunction.class) adapter=new ToIntBiFunctionAdapter(invocation);
-        else if (type==java.util.function.ToIntFunction.class) adapter=new ToIntFunctionAdapter(invocation);
-        else if (type==java.util.function.ToLongBiFunction.class) adapter=new ToLongBiFunctionAdapter(invocation);
-        else if (type==java.util.function.ToLongFunction.class) adapter=new ToLongFunctionAdapter(invocation);
-        else if (type==java.util.function.UnaryOperator.class) adapter=new UnaryOperatorAdapter(invocation);
-        else if (type==java.lang.Runnable.class) adapter=new RunnableAdapter(invocation);
-        else if (type==java.util.concurrent.Callable.class) adapter=new CallableAdapter(invocation);
-        else if (type==java.util.Comparator.class) adapter=new ComparatorAdapter(invocation);
-        else return null;
+        Function<Invocation,Object> factory=ADAPTERS.get(type);
+        if (factory==null) return null;
+        Object adapter=factory.apply(new Invocation(lambda,context));
         if (context!=null) context.setPropertyResolved(true);
         return (T)adapter;
     }

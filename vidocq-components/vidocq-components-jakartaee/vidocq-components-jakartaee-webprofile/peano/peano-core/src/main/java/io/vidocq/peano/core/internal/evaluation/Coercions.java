@@ -157,37 +157,42 @@ public final class Coercions {
     }
 
     private static Number number(Object value, Class<?> type) {
-        if (value == null || "".equals(value)) {
-            value = 0L;
+        Object input = value == null || "".equals(value) ? Long.valueOf(0L) : value;
+        if (input instanceof Character character) {
+            input = (short) character.charValue();
         }
-        if (value instanceof Character character) {
-            value = (short) character.charValue();
+        if (input instanceof String text) return parsed(text, type);
+        if (input instanceof Number number) return narrowed(number, type);
+        throw failure(type);
+    }
+
+    private static Number parsed(String text, Class<?> type) {
+        if (type == Byte.class) return Byte.valueOf(text);
+        if (type == Short.class) return Short.valueOf(text);
+        if (type == Integer.class) return Integer.valueOf(text);
+        if (type == Long.class) return Long.valueOf(text);
+        if (type == Float.class) return Float.valueOf(text);
+        if (type == Double.class) return Double.valueOf(text);
+        if (type == BigInteger.class) return new BigInteger(text);
+        if (type == BigDecimal.class) return new BigDecimal(text);
+        throw failure(type);
+    }
+
+    private static Number narrowed(Number number, Class<?> type) {
+        if (type == Byte.class) return number.byteValue();
+        if (type == Short.class) return number.shortValue();
+        if (type == Integer.class) return number.intValue();
+        if (type == Long.class) return number.longValue();
+        if (type == Float.class) return number.floatValue();
+        if (type == Double.class) return number.doubleValue();
+        if (type == BigInteger.class) {
+            return number instanceof BigDecimal decimal ? decimal.toBigInteger()
+                    : BigInteger.valueOf(number.longValue());
         }
-        if (value instanceof String text) {
-            if (type == Byte.class) return Byte.valueOf(text);
-            if (type == Short.class) return Short.valueOf(text);
-            if (type == Integer.class) return Integer.valueOf(text);
-            if (type == Long.class) return Long.valueOf(text);
-            if (type == Float.class) return Float.valueOf(text);
-            if (type == Double.class) return Double.valueOf(text);
-            if (type == BigInteger.class) return new BigInteger(text);
-            if (type == BigDecimal.class) return new BigDecimal(text);
-        }
-        if (value instanceof Number number) {
-            if (type == Byte.class) return number.byteValue();
-            if (type == Short.class) return number.shortValue();
-            if (type == Integer.class) return number.intValue();
-            if (type == Long.class) return number.longValue();
-            if (type == Float.class) return number.floatValue();
-            if (type == Double.class) return number.doubleValue();
-            if (type == BigInteger.class) {
-                return number instanceof BigDecimal decimal ? decimal.toBigInteger()
-                        : BigInteger.valueOf(number.longValue());
-            }
-            if (type == BigDecimal.class) {
-                return number instanceof BigInteger integer ? new BigDecimal(integer)
-                        : new BigDecimal(number.doubleValue());
-            }
+        if (type == BigDecimal.class) {
+            // As the EL coercion rules and the RI (ELArithmetic) do: new BigDecimal(A.doubleValue()), the exact binary value.
+            return number instanceof BigInteger integer ? new BigDecimal(integer)
+                    : new BigDecimal(number.doubleValue());
         }
         throw failure(type);
     }

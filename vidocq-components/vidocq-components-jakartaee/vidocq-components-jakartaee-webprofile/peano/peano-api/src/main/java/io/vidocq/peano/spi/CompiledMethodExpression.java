@@ -29,6 +29,7 @@ import jakarta.el.*;
 /** Method protocol for classes emitted at build time, without a runtime syntax tree. */
 public abstract class CompiledMethodExpression extends MethodExpression {
     private static final long serialVersionUID=1L;
+    private static final String CONTEXT="context";
     private final String source;
     private final Class<?> expectedReturn;
     private final Class<?>[] parameterTypes;
@@ -48,57 +49,66 @@ public abstract class CompiledMethodExpression extends MethodExpression {
     protected abstract Object evaluatePart(ELContext context,int part);
 
     @Override public final Object invoke(ELContext context,Object[] parameters) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         return invokeChecked(context,parameters,List.of());
     }
     private Object invokeChecked(ELContext context,Object[] parameters,List<Class<?>> inheritedReturns) {
         context.notifyBeforeEvaluation(source);
         var returns=new ArrayList<>(inheritedReturns);
         if (expectedReturn!=null) returns.add(expectedReturn);
-        Object value;
-        if (shape==0) {
-            if (expectedReturn==void.class) throw new ELException("Literal method expression cannot return void");
-            Class<?> type=expectedReturn==null ? String.class : expectedReturn;
-            returns.forEach(expected->checkReturn(expected,type));
-            value=evaluatePart(context,0);
-            if (expectedReturn!=null) value=context.convertToType(value,expectedReturn);
-        } else if (shape==1) {
-            var delegate=delegate(context);
-            if (delegate instanceof CompiledMethodExpression compiled) value=compiled.invokeChecked(context,parameters,returns);
-            else {
-                var info=delegate.getMethodInfo(context);
-                returns.forEach(expected->checkReturn(expected,info.getReturnType()));
-                value=delegate.invoke(context,parameters);
-            }
-        } else {
-            var resolved=resolve(context,parameters);
-            if (!returns.isEmpty()) {
-                var info=metadata(context,resolved).getMethodInfo();
-                returns.forEach(expected->checkReturn(expected,info.getReturnType()));
-            }
-            context.setPropertyResolved(false);
-            value=guarded(()->context.getELResolver().invoke(context,resolved.base(),resolved.name(),resolved.types(),resolved.arguments()));
-            if (!context.isPropertyResolved() && shape==2) {
-                requireReflection(resolved.base());
-                ELResolver fallback=resolved.base() instanceof ELClass ? new StaticFieldELResolver() : new BeanELResolver();
-                value=guarded(()->fallback.invoke(context,resolved.base(),resolved.name(),resolved.types(),resolved.arguments()));
-            }
-            if (!context.isPropertyResolved()) throw new MethodNotFoundException("Unresolved method "+resolved.name());
-        }
+        Object value=switch (shape) {
+            case 0 -> invokeLiteral(context,returns);
+            case 1 -> invokeDelegate(context,parameters,returns);
+            default -> invokeResolved(context,parameters,returns);
+        };
         context.notifyAfterEvaluation(source);
         return value;
     }
+    private Object invokeLiteral(ELContext context,List<Class<?>> returns) {
+        if (expectedReturn==void.class) throw new ELException("Literal method expression cannot return void");
+        Class<?> type=expectedReturn==null ? String.class : expectedReturn;
+        returns.forEach(expected->checkReturn(expected,type));
+        Object value=evaluatePart(context,0);
+        return expectedReturn==null ? value : context.convertToType(value,expectedReturn);
+    }
+    private Object invokeDelegate(ELContext context,Object[] parameters,List<Class<?>> returns) {
+        var delegate=delegate(context);
+        if (delegate instanceof CompiledMethodExpression compiled) return compiled.invokeChecked(context,parameters,returns);
+        var info=delegate.getMethodInfo(context);
+        returns.forEach(expected->checkReturn(expected,info.getReturnType()));
+        return delegate.invoke(context,parameters);
+    }
+    private Object invokeResolved(ELContext context,Object[] parameters,List<Class<?>> returns) {
+        var resolved=resolve(context,parameters);
+        if (!returns.isEmpty()) {
+            var info=metadata(context,resolved).getMethodInfo();
+            returns.forEach(expected->checkReturn(expected,info.getReturnType()));
+        }
+        context.setPropertyResolved(false);
+        Object value=guarded(()->context.getELResolver().invoke(context,resolved.base(),resolved.name(),resolved.types(),resolved.arguments()));
+        if (!context.isPropertyResolved() && shape==2) {
+            requireReflection(resolved.base());
+            ELResolver fallback=resolved.base() instanceof ELClass ? new StaticFieldELResolver() : new BeanELResolver();
+            value=guarded(()->fallback.invoke(context,resolved.base(),resolved.name(),resolved.types(),resolved.arguments()));
+        }
+        if (!context.isPropertyResolved()) throw new MethodNotFoundException("Unresolved method "+resolved.name());
+        return value;
+    }
     @Override public final MethodInfo getMethodInfo(ELContext context) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         if (shape==0) return new MethodInfo(source,expectedReturn==null ? String.class : expectedReturn,parameterTypes.clone());
         var info=shape==1 ? delegate(context).getMethodInfo(context) : metadata(context,resolve(context,null)).getMethodInfo();
         checkReturn(expectedReturn,info.getReturnType());
         return info;
     }
     @Override public final MethodReference getMethodReference(ELContext context) {
-        Objects.requireNonNull(context,"context");
+        Objects.requireNonNull(context,CONTEXT);
         context.notifyBeforeEvaluation(source);
-        MethodReference reference=shape==0 ? null : shape==1 ? delegate(context).getMethodReference(context) : metadata(context,resolve(context,null));
+        MethodReference reference=switch (shape) {
+            case 0 -> null;
+            case 1 -> delegate(context).getMethodReference(context);
+            default -> metadata(context,resolve(context,null));
+        };
         if (reference!=null) checkReturn(expectedReturn,reference.getMethodInfo().getReturnType());
         context.notifyAfterEvaluation(source);
         return reference;
@@ -114,7 +124,9 @@ public abstract class CompiledMethodExpression extends MethodExpression {
         Object property=evaluatePart(context,1);
         if (property==null) throw new PropertyNotFoundException("Unresolved property null property");
         String name=context.convertToType(property,String.class);
-        Object[] arguments=shape==3 ? (Object[])evaluatePart(context,2) : parameters==null ? new Object[0] : parameters.clone();
+        Object[] arguments;
+        if (shape==3) arguments=(Object[])evaluatePart(context,2);
+        else arguments=parameters==null ? new Object[0] : parameters.clone();
         return new Resolved(base,name,parameterTypes==null ? null : parameterTypes.clone(),arguments);
     }
     private record Resolved(Object base,String name,Class<?>[] types,Object[] arguments) {}
@@ -140,24 +152,33 @@ public abstract class CompiledMethodExpression extends MethodExpression {
     }
     private static void collect(Class<?> type,String name,boolean staticOnly,Map<List<Class<?>>,Method> candidates,Set<Class<?>> visited) {
         if (type==null || !visited.add(type)) return;
+        Module api=ExpressionFactory.class.getModule();
         for (var method:type.getMethods()) {
-            Class<?> owner=method.getDeclaringClass();
-            Module api=ExpressionFactory.class.getModule();
-            if (!method.getName().equals(name) || !Modifier.isPublic(method.getModifiers())
-                    || staticOnly && !Modifier.isStatic(method.getModifiers()) || !Modifier.isPublic(owner.getModifiers())
-                    || owner.getModule()!=api && !owner.getModule().isExported(owner.getPackageName(),api)) continue;
+            if (!candidate(method,name,staticOnly,api)) continue;
             var key=Arrays.asList(method.getParameterTypes());
             var previous=candidates.get(key);
-            if (previous==null || previous.isBridge() && !method.isBridge()
-                    || previous.getReturnType()!=method.getReturnType() && previous.getReturnType().isAssignableFrom(method.getReturnType()))
-                candidates.put(key,method);
+            if (previous==null || replaces(previous,method)) candidates.put(key,method);
         }
         for (Class<?> contract:type.getInterfaces()) collect(contract,name,staticOnly,candidates,visited);
         collect(type.getSuperclass(),name,staticOnly,candidates,visited);
     }
+    /** A public method of that name, declared by a public type the Jakarta EL API module can read. */
+    private static boolean candidate(Method method,String name,boolean staticOnly,Module api) {
+        Class<?> owner=method.getDeclaringClass();
+        return method.getName().equals(name) && Modifier.isPublic(method.getModifiers())
+                && (!staticOnly || Modifier.isStatic(method.getModifiers())) && Modifier.isPublic(owner.getModifiers())
+                && (owner.getModule()==api || owner.getModule().isExported(owner.getPackageName(),api));
+    }
+    /** A non-bridge method, or a covariant override, wins over the signature already collected. */
+    private static boolean replaces(Method previous,Method method) {
+        return previous.isBridge() && !method.isBridge()
+                || previous.getReturnType()!=method.getReturnType() && previous.getReturnType().isAssignableFrom(method.getReturnType());
+    }
     private static void requireReflection(Object base) {
         switch (System.getProperty("peano.reflection","allow")) {
-            case "allow" -> {}
+            case "allow" -> {
+                // The caller goes on with the reflective resolver.
+            }
             case "deny" -> throw new ELException("Reflection fallback denied for "+(base instanceof ELClass owner ? owner.getKlass() : base.getClass()).getName());
             default -> throw new ELException("Invalid peano.reflection value; expected allow or deny");
         }

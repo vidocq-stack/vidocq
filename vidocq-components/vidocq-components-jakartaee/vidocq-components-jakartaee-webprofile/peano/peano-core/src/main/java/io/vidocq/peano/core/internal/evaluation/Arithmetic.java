@@ -45,37 +45,49 @@ public final class Arithmetic {
                 return 0L;
             }
             if (operator == TokenKind.DIVIDE) {
-                if (a instanceof BigDecimal || b instanceof BigDecimal
-                        || a instanceof BigInteger || b instanceof BigInteger) {
-                    return number(a, BigDecimal.class, context).divide(number(b, BigDecimal.class, context), RoundingMode.HALF_UP);
-                }
-                return number(a, Double.class, context) / number(b, Double.class, context);
+                return divide(a, b, context);
             }
             if (operator == TokenKind.MODULO) {
-                if (a instanceof BigDecimal || b instanceof BigDecimal || floating(a) || floating(b)) {
-                    return number(a, Double.class, context) % number(b, Double.class, context);
-                }
-                if (a instanceof BigInteger || b instanceof BigInteger) {
-                    return number(a, BigInteger.class, context).remainder(number(b, BigInteger.class, context));
-                }
-                return number(a, Long.class, context) % number(b, Long.class, context);
+                return modulo(a, b, context);
             }
-            if (a instanceof BigDecimal || b instanceof BigDecimal
-                    || ((floating(a) || floating(b)) && (a instanceof BigInteger || b instanceof BigInteger))) {
-                return decimal(operator, number(a, BigDecimal.class, context), number(b, BigDecimal.class, context));
-            }
-            if (floating(a) || floating(b)) {
-                return floating(operator, number(a, Double.class, context), number(b, Double.class, context));
-            }
-            if (a instanceof BigInteger || b instanceof BigInteger) {
-                return integer(operator, number(a, BigInteger.class, context), number(b, BigInteger.class, context));
-            }
-            return integral(operator, number(a, Long.class, context), number(b, Long.class, context));
+            return additive(operator, a, b, context);
         } catch (ELException error) {
             throw error;
         } catch (RuntimeException error) {
             throw new ELException("Arithmetic error for " + operator, error);
         }
+    }
+
+    private static Number divide(Object a, Object b, ELContext context) {
+        if (a instanceof BigDecimal || b instanceof BigDecimal
+                || a instanceof BigInteger || b instanceof BigInteger) {
+            return number(a, BigDecimal.class, context).divide(number(b, BigDecimal.class, context), RoundingMode.HALF_UP);
+        }
+        return number(a, Double.class, context) / number(b, Double.class, context);
+    }
+
+    private static Number modulo(Object a, Object b, ELContext context) {
+        if (a instanceof BigDecimal || b instanceof BigDecimal || floating(a) || floating(b)) {
+            return number(a, Double.class, context) % number(b, Double.class, context);
+        }
+        if (a instanceof BigInteger || b instanceof BigInteger) {
+            return number(a, BigInteger.class, context).remainder(number(b, BigInteger.class, context));
+        }
+        return number(a, Long.class, context) % number(b, Long.class, context);
+    }
+
+    private static Number additive(TokenKind operator, Object a, Object b, ELContext context) {
+        if (a instanceof BigDecimal || b instanceof BigDecimal
+                || ((floating(a) || floating(b)) && (a instanceof BigInteger || b instanceof BigInteger))) {
+            return decimal(operator, number(a, BigDecimal.class, context), number(b, BigDecimal.class, context));
+        }
+        if (floating(a) || floating(b)) {
+            return floating(operator, number(a, Double.class, context), number(b, Double.class, context));
+        }
+        if (a instanceof BigInteger || b instanceof BigInteger) {
+            return integer(operator, number(a, BigInteger.class, context), number(b, BigInteger.class, context));
+        }
+        return integral(operator, number(a, Long.class, context), number(b, Long.class, context));
     }
 
     public static Number negate(Object value) {

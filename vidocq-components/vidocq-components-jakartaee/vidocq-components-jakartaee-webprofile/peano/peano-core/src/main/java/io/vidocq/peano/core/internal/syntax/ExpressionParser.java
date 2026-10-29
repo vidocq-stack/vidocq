@@ -20,6 +20,7 @@
 package io.vidocq.peano.core.internal.syntax;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import jakarta.el.ELException;
 
@@ -50,15 +51,8 @@ public final class ExpressionParser {
                 text.append(source.charAt(cursor + 1)).append('{');
                 cursor += 3;
             } else if (markerAt(source, cursor)) {
-                Template.Kind next = ch == '$' ? Template.Kind.IMMEDIATE : Template.Kind.DEFERRED;
-                if (kind != Template.Kind.LITERAL && kind != next) {
-                    throw error("Mixed immediate and deferred expressions", cursor);
-                }
-                kind = next;
-                if (!text.isEmpty()) {
-                    parts.add(new Template.Text(text.toString()));
-                    text.setLength(0);
-                }
+                kind = evaluationKind(kind, ch, cursor);
+                flushText(text, parts);
                 int end = bodyEnd(source, cursor);
                 parts.add(new Template.Evaluation(Parser.parseBody(
                         source.substring(cursor + 2, end), cursor + 2)));
@@ -74,23 +68,29 @@ public final class ExpressionParser {
         return new Template(kind, parts);
     }
 
+    /** The template kind once the delimiter at {@code cursor} is read: immediate and deferred never mix. */
+    private static Template.Kind evaluationKind(Template.Kind current, char marker, int cursor) {
+        Template.Kind next = marker == '$' ? Template.Kind.IMMEDIATE : Template.Kind.DEFERRED;
+        if (current != Template.Kind.LITERAL && current != next) {
+            throw error("Mixed immediate and deferred expressions", cursor);
+        }
+        return next;
+    }
+
+    private static void flushText(StringBuilder text, List<Template.Part> parts) {
+        if (!text.isEmpty()) {
+            parts.add(new Template.Text(text.toString()));
+            text.setLength(0);
+        }
+    }
+
     private static int bodyEnd(String source, int start) {
         int depth = 0;
-        char quote = 0;
-        int quoteStart = -1;
-        for (int cursor = start + 2; cursor < source.length(); cursor++) {
+        int cursor = start + 2;
+        while (cursor < source.length()) {
             char ch = source.charAt(cursor);
-            if (quote != 0) {
-                if (ch == '\\') {
-                    cursor++;
-                } else if (ch == quote) {
-                    quote = 0;
-                }
-                continue;
-            }
             if (ch == '\'' || ch == '"') {
-                quote = ch;
-                quoteStart = cursor;
+                cursor = quoteEnd(source, cursor);
             } else if (markerAt(source, cursor)) {
                 throw error("Nested eval-expression", cursor);
             } else if (ch == '{') {
@@ -101,11 +101,26 @@ public final class ExpressionParser {
                 }
                 depth--;
             }
-        }
-        if (quote != 0) {
-            throw error("Unterminated string", quoteStart);
+            cursor++;
         }
         throw error("Unterminated eval-expression", start);
+    }
+
+    /** The offset of the quote closing the string literal opened at {@code start}; escapes skip a character. */
+    private static int quoteEnd(String source, int start) {
+        char quote = source.charAt(start);
+        int cursor = start + 1;
+        while (cursor < source.length()) {
+            char ch = source.charAt(cursor);
+            if (ch == '\\') {
+                cursor += 2;
+            } else if (ch == quote) {
+                return cursor;
+            } else {
+                cursor++;
+            }
+        }
+        throw error("Unterminated string", start);
     }
 
     private static boolean markerAt(String source, int offset) {

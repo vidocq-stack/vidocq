@@ -31,6 +31,7 @@ import jakarta.el.ELException;
  * Each invocation owns its cursor; no evaluation state is shared.
  */
 public final class Lexer {
+    private static final String ILLEGAL_CHARACTER = "Illegal character";
     private static final Map<String, TokenKind> WORDS = Map.ofEntries(
             Map.entry("true", TokenKind.TRUE), Map.entry("false", TokenKind.FALSE),
             Map.entry("null", TokenKind.NULL), Map.entry("empty", TokenKind.EMPTY),
@@ -80,16 +81,10 @@ public final class Lexer {
             if (ch == '\'' || ch == '"') {
                 value = string();
                 kind = TokenKind.STRING;
-            } else if (digit(ch) || (ch == '.' && cursor + 1 < source.length()
-                    && digit(source.charAt(cursor + 1)))) {
+            } else if (numberStart(ch)) {
                 kind = number();
             } else if (letter(ch) || ch == '#') {
-                cursor++;
-                while (cursor < source.length()
-                        && (letter(source.charAt(cursor)) || identifierDigit(source.charAt(cursor)))) {
-                    cursor++;
-                }
-                kind = WORDS.getOrDefault(source.substring(start, cursor), TokenKind.IDENTIFIER);
+                kind = word(start);
             } else {
                 kind = operator();
             }
@@ -98,6 +93,20 @@ public final class Lexer {
         }
         tokens.add(new Token(TokenKind.EOF, "", null, sourceOffset + cursor, sourceOffset + cursor));
         return List.copyOf(tokens);
+    }
+
+    private boolean numberStart(char ch) {
+        return digit(ch) || (ch == '.' && cursor + 1 < source.length() && digit(source.charAt(cursor + 1)));
+    }
+
+    /** An identifier, or the reserved word it spells. */
+    private TokenKind word(int start) {
+        cursor++;
+        while (cursor < source.length()
+                && (letter(source.charAt(cursor)) || identifierDigit(source.charAt(cursor)))) {
+            cursor++;
+        }
+        return WORDS.getOrDefault(source.substring(start, cursor), TokenKind.IDENTIFIER);
     }
 
     private String string() {
@@ -180,17 +189,17 @@ public final class Lexer {
             case '>' -> take('=') ? TokenKind.GREATER_EQUAL : TokenKind.GREATER;
             case '&' -> {
                 if (!take('&')) {
-                    throw error("Illegal character", start);
+                    throw error(ILLEGAL_CHARACTER, start);
                 }
                 yield TokenKind.AND;
             }
             case '|' -> {
                 if (!take('|')) {
-                    throw error("Illegal character", start);
+                    throw error(ILLEGAL_CHARACTER, start);
                 }
                 yield TokenKind.OR;
             }
-            default -> throw error("Illegal character", start);
+            default -> throw error(ILLEGAL_CHARACTER, start);
         };
     }
 
