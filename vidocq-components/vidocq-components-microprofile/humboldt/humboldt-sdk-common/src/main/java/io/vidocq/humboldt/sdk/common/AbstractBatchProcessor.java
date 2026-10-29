@@ -204,7 +204,9 @@ public abstract class AbstractBatchProcessor<T> {
         pending.add(flushExporter.get());
         CompletableResultCode done = CompletableResultCode.ofAll(pending);
         done.whenComplete(() -> {
-            boolean success = done.isSuccess() & !exportFailed.getAndSet(false);
+            // Reset whatever the outcome: the next flush only reports the failures after this one.
+            boolean failedSinceLastFlush = exportFailed.getAndSet(false);
+            boolean success = done.isSuccess() && !failedSinceLastFlush;
             for (CompletableResultCode r : requested) {
                 if (success) r.succeed();
                 else r.fail();
