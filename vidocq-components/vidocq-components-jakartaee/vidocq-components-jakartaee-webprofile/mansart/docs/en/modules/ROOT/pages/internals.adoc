@@ -74,6 +74,17 @@ package "Application" {
 . **Zero warmup** — no dynamic classloading on first call.
 . **strict Java Modules-friendly** — generated classes are in the same package as sources, no need for `opens`.
 
+=== The run-time fallback
+
+A repository compiled without `mansart-data-processor` (the Jakarta Data TCK jar, for instance) is implemented at run time: `RuntimeRepositoryProxy` builds its dispatchers and `RuntimeRepositoryClassGenerator` writes a hidden class with the Class-File API, defined next to the interface. When that class cannot be defined or linked, a `java.lang.reflect.Proxy` serves the repository instead.
+
+Both are exceptional, and both are announced at startup by a framed `WARNING`, once per repository, from the `io.vidocq.mansart.data.core.RuntimeGeneration` logger:
+
+* `MANSART — RUNTIME CODE GENERATION FALLBACK` — the repository is implemented at run time;
+* `MANSART — DYNAMIC PROXY FALLBACK` — the run-time generator failed too; the warning names the cause.
+
+The fix is the same for both: add `mansart-data-processor` to the annotation processor path of the module that declares the repository.
+
 == The `Connection` wrapper (hand-written)
 
 `mansart-pool` ships a plain hand-written `PooledConnection implements Connection`: every method delegates to the physical connection, and `close()` returns the connection to the pool instead of closing it.

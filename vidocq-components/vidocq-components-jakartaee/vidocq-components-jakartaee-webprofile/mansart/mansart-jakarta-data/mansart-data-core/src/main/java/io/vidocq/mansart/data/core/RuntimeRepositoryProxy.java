@@ -91,13 +91,15 @@ public final class RuntimeRepositoryProxy {
 
         // M7-25 — try a generated hidden class first (Class-File API). Falls back to
         // java.lang.reflect.Proxy if generation throws — keeps the runtime path resilient
-        // while we ship and validate the bytecode emitter.
+        // while we ship and validate the bytecode emitter. Both are announced at startup.
         try {
-            return (R) createGenerated(repoInterface, methodModel, dispatchers, primary, runtime);
-        } catch (ReflectiveOperationException | RuntimeException | LinkageError _) {
-            // Swallow and fall through to the Proxy path. The generator is the canonical
-            // runtime impl; java.lang.reflect.Proxy stays as a safety net for shapes not yet
-            // supported by RuntimeRepositoryClassGenerator.
+            R generated = (R) createGenerated(repoInterface, methodModel, dispatchers, primary, runtime);
+            RuntimeGeneration.generated(repoInterface);
+            return generated;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            // The generator is the canonical runtime impl; java.lang.reflect.Proxy stays as a
+            // safety net for shapes not yet supported by RuntimeRepositoryClassGenerator.
+            RuntimeGeneration.proxied(repoInterface, e);
         }
 
         InvocationHandler handler = (proxy, method, args) -> {

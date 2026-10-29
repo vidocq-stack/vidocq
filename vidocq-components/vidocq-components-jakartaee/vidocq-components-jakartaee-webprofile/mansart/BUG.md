@@ -828,3 +828,30 @@ constant only when that type is an enum and the qualifier is that enum's canonic
 - The generator implements the abstract methods of `getMethods()` (a default body or a bridge hides what it
   implements), the processor's rule; the dispatcher table keeps every abstract declaration of the hierarchy, so that
   the `Proxy` safety net still finds its dispatcher, and no longer scans static, private or synthetic methods.
+
+## MANSART-025 — Runtime repositories: the `Proxy` fallback was silent
+
+- **Date**: 2026-10-29
+- **Status**: FIXED 2026-10-29 (branch `fix/runtime-generation-warning`, generated-code audit)
+- **Severity**: medium (silent performance and AOT regression)
+- **Module**: `mansart-data-core` (`RuntimeRepositoryProxy`)
+
+### Symptom
+A repository compiled without `mansart-data-processor` is implemented at run time, and when the Class-File API
+generator failed on it (`ReflectiveOperationException`, `RuntimeException` or `LinkageError`: a repository package not
+open to Mansart under strict Java Modules, a loader that cannot link the generated class), a
+`java.lang.reflect.Proxy` served it instead. Both fallbacks happened without a word in the log: an application could
+run on reflection without knowing that its build did not run the processor.
+
+### Minimal repro
+`RuntimeGenerationWarningTest` (`mansart-data-tests`): a repository interface defined by a loader that cannot link the
+generated class is served by a `Proxy`, and nothing is logged.
+
+### Cause
+`RuntimeRepositoryProxy.create` swallowed the generator's failure (`catch (… _)`) and logged neither path.
+
+### Fix
+`RuntimeGeneration` announces each repository implemented at run time with a framed `WARNING` (`MANSART — RUNTIME
+CODE GENERATION FALLBACK`), and each repository served by the `Proxy` with another (`MANSART — DYNAMIC PROXY
+FALLBACK`) that names the cause and carries the exception; once per repository and JVM. Both point to the fix: add
+`mansart-data-processor` to the annotation processor path. Documented in `internals.adoc` ("The run-time fallback").
