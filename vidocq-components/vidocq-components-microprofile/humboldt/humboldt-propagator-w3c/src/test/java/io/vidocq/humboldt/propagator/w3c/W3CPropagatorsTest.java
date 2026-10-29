@@ -51,11 +51,6 @@ class W3CPropagatorsTest {
 
     private static final TextMapGetter<Map<String, String>> GETTER = new TextMapGetter<>() {
         @Override
-        public Iterable<String> keys(Map<String, String> carrier) {
-            return carrier.keySet();
-        }
-
-        @Override
         public String get(Map<String, String> carrier, String key) {
             return carrier == null ? null : carrier.get(key);
         }
