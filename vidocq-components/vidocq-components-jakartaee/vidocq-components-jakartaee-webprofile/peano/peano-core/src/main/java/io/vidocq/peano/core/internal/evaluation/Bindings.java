@@ -80,12 +80,7 @@ public final class Bindings {
     private static void visit(Ast ast, VariableMapper mapper, Map<String, ValueExpression> variables,
             Set<String> visited, Collection<String> locals) {
         switch (ast) {
-            case Ast.Identifier(String name) -> {
-                if (!locals.contains(name) && visited.add(name)) {
-                    ValueExpression expression = mapper.resolveVariable(name);
-                    if (expression != null) variables.put(name, expression);
-                }
-            }
+            case Ast.Identifier(String name) -> capture(name, mapper, variables, visited, locals);
             case Ast.Literal _ -> {
                 // A literal references no variable.
             }
@@ -123,7 +118,15 @@ public final class Bindings {
         }
     }
 
-    public static String functionKey(String prefix, String name) {
+    /** Resolves a free name once; lambda parameters in scope shadow it. */
+    private static void capture(String name, VariableMapper mapper, Map<String, ValueExpression> variables,
+            Set<String> visited, Collection<String> locals) {
+        if (locals.contains(name) || !visited.add(name)) return;
+        ValueExpression expression = mapper.resolveVariable(name);
+        if (expression != null) variables.put(name, expression);
+    }
+
+        public static String functionKey(String prefix, String name) {
         return prefix + ":" + name;
     }
 
