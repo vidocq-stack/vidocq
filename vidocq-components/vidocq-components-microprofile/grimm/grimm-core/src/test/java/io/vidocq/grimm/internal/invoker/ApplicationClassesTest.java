@@ -65,8 +65,10 @@ class ApplicationClassesTest {
 
     @Test
     void aClassNoLoaderSeesIsStillReported() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new ModelReaderInvoker().invokeModelReader(new FilterConfig(null, READER)));
+        ModelReaderInvoker invoker = new ModelReaderInvoker();
+        FilterConfig config = new FilterConfig(null, READER);
+
+        assertThrows(IllegalArgumentException.class, () -> invoker.invokeModelReader(config));
     }
 
     private static <T> T inApplication(Callable<T> action) throws Exception {

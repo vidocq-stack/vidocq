@@ -38,11 +38,12 @@ public final class ApplicationClasses {
         ClassLoader application = Thread.currentThread().getContextClassLoader();
         if (application != null) {
             try {
-                return Class.forName(name, false, application);
+                return application.loadClass(name);
             } catch (ClassNotFoundException _) {
                 // not the application's: Grimm's own loader may still see it
             }
         }
-        return Class.forName(name, false, ApplicationClasses.class.getClassLoader());
+        ClassLoader own = ApplicationClasses.class.getClassLoader();
+        return own != null ? own.loadClass(name) : ClassLoader.getSystemClassLoader().loadClass(name);
     }
 }
