@@ -57,7 +57,8 @@ public final class EntityModels {
     /**
      * The model Mansart uses for {@code entityType}: its generated metamodel, or one built at run time.
      *
-     * <p>The generated {@code <pkg>._<EntitySimpleName>.$MODEL} wins; without it, the model is built from the
+     * <p>The generated {@code <pkg>._<EntitySimpleName>.$MODEL} wins; without it (no such class, or a
+     * {@code _<EntitySimpleName>} metamodel another tool wrote, with no {@code $MODEL}), the model is built from the
      * class's fields and its {@code jakarta.persistence} mapping annotations, read by name. The model is cached with
      * the class: a second call returns the same instance, and the model goes away with the class's loader.
      *
@@ -72,7 +73,7 @@ public final class EntityModels {
      * @return its model, never {@code null}
      * @throws MansartDataException when Mansart cannot map {@code entityType}: no id field, no no-arg constructor,
      *                              a package not open to {@code io.vidocq.mansart.data.core}, or a generated
-     *                              metamodel without a public static {@code $MODEL} field; the initialisation of a
+     *                              metamodel whose {@code $MODEL} field cannot be read; the initialisation of a
      *                              generated metamodel may also throw its own error
      */
     public static <E> EntityModel<E> of(Class<E> entityType) {
@@ -92,12 +93,14 @@ public final class EntityModels {
         try {
             Class<?> meta = Class.forName(generatedName, true, entityType.getClassLoader());
             Field model = meta.getField("$MODEL");
-            return (EntityModel<?>) model.get(null);
-        } catch (ClassNotFoundException _) {
-            // Fall through to runtime builder.
-        } catch (NoSuchFieldException | IllegalAccessException e) {
+            if (model.get(null) instanceof EntityModel<?> generated) return generated;
+            // MANSART-028: a $MODEL of another type is not Mansart's either.
+        } catch (ClassNotFoundException | NoSuchFieldException _) {
+            // No metamodel, or a Jakarta Data static metamodel Mansart did not generate (written by hand or by
+            // another processor, which shares the _Entity name): the model is built at run time.
+        } catch (IllegalAccessException e) {
             throw new MansartDataException(
-                    "Generated metamodel " + generatedName + " has no public static $MODEL field", e);
+                    "Generated metamodel " + generatedName + " has an inaccessible $MODEL field", e);
         }
         return RuntimeEntityModelBuilder.build(entityType);
     }

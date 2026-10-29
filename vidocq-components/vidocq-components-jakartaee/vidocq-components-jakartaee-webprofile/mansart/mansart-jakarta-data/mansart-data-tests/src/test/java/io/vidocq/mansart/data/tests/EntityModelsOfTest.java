@@ -53,6 +53,15 @@ class EntityModelsOfTest {
         assertThat(EntityModels.of(UnscannedGadget.class)).isSameAs(model);
     }
 
+    /** MANSART-028: a {@code _Entity} class Mansart did not generate is another tool's; the model is built instead. */
+    @Test
+    void aMetamodelWithoutModelFieldIsAnotherToolsAndTheModelIsBuiltAtRunTime() {
+        EntityModel<ForeignGadget> model = EntityModels.of(ForeignGadget.class);
+
+        assertThat(model.entityClass()).isEqualTo(ForeignGadget.class);
+        assertThat(model.attributes()).extracting(Attribute::name).containsExactly("id", "label");
+    }
+
     @Test
     void aClassThatIsNoEntityThrowsWhatTheLookupThrows() {
         assertThatThrownBy(() -> EntityModels.of(NotAnEntity.class))

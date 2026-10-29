@@ -912,3 +912,26 @@ silently as soon as either class failed to load, a tolerance meant for the APT-t
 ### Fix
 When the interface loads but its implementation does not, the extension logs a WARNING and registers the interface on
 the runtime path. An entry whose interface does not load is still skipped silently. Jakarta Data TCK 74/74.
+
+## MANSART-028 — A Jakarta Data metamodel Mansart did not generate made the entity unusable
+
+- **Date**: 2026-10-29
+- **Status**: FIXED 2026-10-29 (branch `fix/foreign-metamodel`, generated-code audit)
+- **Severity**: medium (any repository of the entity fails)
+- **Module**: `mansart-data-core` (`EntityModels`)
+
+### Symptom
+An entity `Book` next to a `_Book` class that Mansart did not generate — the Jakarta Data static metamodel written by
+hand, or by another annotation processor, which uses the same `_Entity` name — made `EntityModels.of(Book.class)`
+throw `MansartDataException: Generated metamodel …_Book has no public static $MODEL field`.
+
+### Minimal repro
+`EntityModelsOfTest.aMetamodelWithoutModelFieldIsAnotherToolsAndTheModelIsBuiltAtRunTime` (`mansart-data-tests`),
+with the hand-written `_ForeignGadget`.
+
+### Cause
+Any `_Entity` class was taken for Mansart's own, so a missing `$MODEL` was reported as a broken generation.
+
+### Fix
+A `_Entity` class without a `$MODEL` field, or whose `$MODEL` is not an `EntityModel`, is another tool's: the model is
+built at run time, as when there is no such class. An inaccessible `$MODEL` still throws. Jakarta Data TCK 74/74.
