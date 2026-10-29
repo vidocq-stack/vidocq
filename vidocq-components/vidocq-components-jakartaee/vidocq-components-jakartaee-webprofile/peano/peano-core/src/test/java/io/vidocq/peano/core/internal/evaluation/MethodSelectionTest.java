@@ -68,6 +68,50 @@ class MethodSelectionTest {
                 ()->MethodSelection.select(context,ambiguous,"m",null,new Object[]{"value"},false));
     }
 
+    @Test
+    void variableArityAcceptsSpreadPackedAndAbsentTrailingArguments() {
+        var context=new StandardELContext(ExpressionFactory.newInstance());
+        MethodDescriptor[] varargs={
+            new MethodDescriptor("join",String.class,new Class<?>[]{String.class,Object[].class},true,false,new Annotation[0])
+        };
+        assertEquals(0,MethodSelection.select(context,varargs,"join",null,new Object[]{"a",1,2},false));
+        assertEquals(0,MethodSelection.select(context,varargs,"join",null,new Object[]{"a"},false));
+        assertEquals(0,MethodSelection.select(context,varargs,"join",new Class<?>[]{String.class,Object[].class},null,false));
+        assertThrows(MethodNotFoundException.class,
+                ()->MethodSelection.select(context,varargs,"join",new Class<?>[0],null,false));
+    }
+
+    @Test
+    void signatureOnlyQueriesFollowTheStaticCoercionTable() {
+        var context=new StandardELContext(ExpressionFactory.newInstance());
+        assertEquals(0,MethodSelection.select(context,new MethodDescriptor[]{descriptor("m",long.class)},"m",
+                new Class<?>[]{Integer.class},null,false));
+        assertEquals(0,MethodSelection.select(context,new MethodDescriptor[]{descriptor("m",String.class)},"m",
+                new Class<?>[]{Thread.class},null,false));
+        assertEquals(0,MethodSelection.select(context,new MethodDescriptor[]{descriptor("m",Thread.State.class)},"m",
+                new Class<?>[]{String.class},null,false));
+        assertEquals(0,MethodSelection.select(context,new MethodDescriptor[]{descriptor("m",int.class)},"m",
+                new Class<?>[]{char.class},null,false));
+        assertEquals(0,MethodSelection.select(context,new MethodDescriptor[]{descriptor("m",char.class)},"m",
+                new Class<?>[]{Long.class},null,false));
+        MethodDescriptor[] unrelated={descriptor("m",Thread.class)};
+        Class<?>[] integer={Integer.class};
+        assertThrows(MethodNotFoundException.class,()->MethodSelection.select(context,unrelated,"m",integer,null,false));
+    }
+
+    @Test
+    void valueQueriesProbeTheContextAndStaticQueriesSkipInstanceMethods() {
+        var context=new StandardELContext(ExpressionFactory.newInstance());
+        MethodDescriptor[] numeric={descriptor("m",long.class)};
+        assertEquals(0,MethodSelection.select(context,numeric,"m",null,new Object[]{"42"},false));
+        Object[] text={"not a number"};
+        assertThrows(MethodNotFoundException.class,()->MethodSelection.select(context,numeric,"m",null,text,false));
+        Object[] nothing={null};
+        assertEquals(0,MethodSelection.select(context,numeric,"m",null,nothing,false));
+        assertThrows(MethodNotFoundException.class,()->MethodSelection.select(context,numeric,"m",null,nothing,true));
+        assertThrows(MethodNotFoundException.class,()->MethodSelection.select(context,numeric,"other",null,nothing,false));
+    }
+
     private static MethodDescriptor descriptor(String name,Class<?> parameter) {
         return new MethodDescriptor(name,String.class,new Class<?>[]{parameter},false,false,new Annotation[0]);
     }
