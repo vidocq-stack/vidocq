@@ -29,16 +29,31 @@ import javax.lang.model.util.ElementFilter;
 
 /** Emits direct method dispatch and immutable signature constants inside the owning module. */
 final class MethodGenerator {
+    private static final String CASE_INDENT = "          ";
     private final ProcessingEnvironment environment;
     private final List<String> annotationClasses = new ArrayList<>();
 
     MethodGenerator(ProcessingEnvironment environment) { this.environment=environment; }
 
     void append(StringBuilder text, TypeElement model) throws IOException {
+        List<ExecutableElement> methods = dispatchableMethods(model);
+        for (ExecutableElement method : methods) checkSignature(method, model);
+        appendDescriptors(text, methods, model);
+        appendDispatchHeader(text);
+        for(int i=0;i<methods.size();i++) appendCase(text, i, methods.get(i), model);
+        text.append("        default: throw new jakarta.el.MethodNotFoundException(\"Unknown method descriptor\");\n")
+                .append("      } } catch(jakarta.el.ELException failure) { throw failure; }\n")
+                .append("      catch(java.lang.Throwable failure) { throw new jakarta.el.ELException(\"Generated method invocation failed\",failure); }\n")
+                .append("    }\n");
+        annotationClasses.forEach(text::append);
+    }
+
+    /** The public methods of the model (Object's excluded), one per signature, the most derived one winning. */
+    private List<ExecutableElement> dispatchableMethods(TypeElement model) {
         List<ExecutableElement> available = ElementFilter.methodsIn(environment.getElementUtils().getAllMembers(model))
                 .stream().filter(m->m.getModifiers().contains(Modifier.PUBLIC))
                 .filter(m->!((TypeElement)m.getEnclosingElement()).getQualifiedName().contentEquals("java.lang.Object"))
-                .sorted(java.util.Comparator.comparing(m->signature(m))).toList();
+                .sorted(java.util.Comparator.comparing(this::signature)).toList();
         var signatures = new java.util.TreeMap<String, ExecutableElement>();
         for (ExecutableElement method : available) {
             ExecutableElement previous = signatures.get(signature(method));
@@ -47,19 +62,23 @@ final class MethodGenerator {
                 signatures.put(signature(method), method);
             }
         }
-        List<ExecutableElement> methods = new ArrayList<>(signatures.values());
-        for (ExecutableElement method : methods) {
-            accessible(environment.getTypeUtils().erasure(method.getReturnType()),model);
-            for (var parameter : method.getParameters()) accessible(environment.getTypeUtils().erasure(parameter.asType()),model);
-            ExecutableType bound=(ExecutableType)environment.getTypeUtils().asMemberOf((DeclaredType)model.asType(),method);
-            for(int i=0;i<method.getParameters().size();i++) {
-                if(!environment.getTypeUtils().isSameType(
-                        environment.getTypeUtils().erasure(bound.getParameterTypes().get(i)),
-                        environment.getTypeUtils().erasure(method.getParameters().get(i).asType()))) {
-                    throw new IOException("Inherited specialized generic methods are not supported yet: "+method);
-                }
+        return new ArrayList<>(signatures.values());
+    }
+
+    private void checkSignature(ExecutableElement method, TypeElement model) throws IOException {
+        accessible(environment.getTypeUtils().erasure(method.getReturnType()),model);
+        for (var parameter : method.getParameters()) accessible(environment.getTypeUtils().erasure(parameter.asType()),model);
+        ExecutableType bound=(ExecutableType)environment.getTypeUtils().asMemberOf((DeclaredType)model.asType(),method);
+        for(int i=0;i<method.getParameters().size();i++) {
+            if(!environment.getTypeUtils().isSameType(
+                    environment.getTypeUtils().erasure(bound.getParameterTypes().get(i)),
+                    environment.getTypeUtils().erasure(method.getParameters().get(i).asType()))) {
+                throw new IOException("Inherited specialized generic methods are not supported yet: "+method);
             }
         }
+    }
+
+    private void appendDescriptors(StringBuilder text, List<ExecutableElement> methods, TypeElement model) throws IOException {
         text.append("    private static final io.vidocq.peano.spi.MethodDescriptor[] METHODS = {\n");
         for (ExecutableElement method : methods) {
             text.append("      new io.vidocq.peano.spi.MethodDescriptor(").append(quote(method.getSimpleName().toString()))
@@ -74,8 +93,11 @@ final class MethodGenerator {
             }
             text.append(String.join(",",annotations)).append("}),\n");
         }
-        text.append("    };\n")
-                .append("    private boolean methodTarget(jakarta.el.ELContext context, java.lang.Object base) {\n")
+        text.append("    };\n");
+    }
+
+    private static void appendDispatchHeader(StringBuilder text) {
+        text.append("    private boolean methodTarget(jakarta.el.ELContext context, java.lang.Object base) {\n")
                 .append("      java.util.Objects.requireNonNull(context); return base != null && (base.getClass()==targetType()")
                 .append(" || base instanceof jakarta.el.ELClass c && c.getKlass()==targetType());\n    }\n")
                 .append("    private boolean hasMethod(java.lang.String name, boolean staticOnly) {\n")
@@ -93,41 +115,40 @@ final class MethodGenerator {
                 .append("      java.lang.Object[] args=arguments==null?new java.lang.Object[0]:arguments;\n")
                 .append("      int selected=io.vidocq.peano.spi.MethodSelection.select(context,METHODS,name,types,args,base instanceof jakarta.el.ELClass);\n")
                 .append("      try { switch(selected) {\n");
-        for(int i=0;i<methods.size();i++) {
-            ExecutableElement method=methods.get(i);
-            text.append("        case ").append(i).append(": {\n");
-            int fixed=method.getParameters().size()-(method.isVarArgs()?1:0);
-            text.append("          if(args.length").append(method.isVarArgs()?"<":"!=").append(fixed)
-                    .append(") throw new jakarta.el.MethodNotFoundException(\"Invalid argument count\");\n");
-            for(int j=0;j<fixed;j++) {
-                String type=erased(method.getParameters().get(j).asType());
-                text.append("          ").append(type).append(" a").append(j).append("=context.convertToType(args[")
-                        .append(j).append("],").append(type).append(".class);\n");
-            }
-            if(method.isVarArgs()) {
-                String array=erased(method.getParameters().getLast().asType());
-                String component=array.substring(0,array.length()-2);
-                text.append("          ").append(array).append(" a").append(fixed).append(";\n")
-                        .append("          if(args.length==").append(fixed+1).append(" && args[").append(fixed).append("] instanceof ")
-                        .append(array).append(") a").append(fixed).append("=context.convertToType(args[").append(fixed).append("],")
-                        .append(array).append(".class);\n")
-                        .append("          else { a").append(fixed).append("=").append(arrayAllocation(component,"args.length-"+fixed))
-                        .append("; for(int j=0;j<a").append(fixed).append(".length;j++) a").append(fixed)
-                        .append("[j]=context.convertToType(args[j+").append(fixed).append("],").append(component).append(".class); }\n");
-            }
-            String receiver=method.getModifiers().contains(Modifier.STATIC)?model.getQualifiedName().toString()
-                    :"(("+model.getQualifiedName()+")base)";
-            boolean returns=method.getReturnType().getKind()!=TypeKind.VOID;
-            text.append("          ").append(returns?"return ":"").append(receiver).append('.').append(method.getSimpleName()).append('(');
-            var args=new ArrayList<String>();
-            for(int j=0;j<method.getParameters().size();j++) args.add("a"+j);
-            text.append(String.join(",",args)).append(");").append(returns?"":" return null;").append("\n        }\n");
+    }
+
+    /** One switch case: argument count check, conversions, then the direct call. */
+    private void appendCase(StringBuilder text, int index, ExecutableElement method, TypeElement model) {
+        text.append("        case ").append(index).append(": {\n");
+        int fixed=method.getParameters().size()-(method.isVarArgs()?1:0);
+        text.append(CASE_INDENT).append("if(args.length").append(method.isVarArgs()?"<":"!=").append(fixed)
+                .append(") throw new jakarta.el.MethodNotFoundException(\"Invalid argument count\");\n");
+        for(int j=0;j<fixed;j++) {
+            String type=erased(method.getParameters().get(j).asType());
+            text.append(CASE_INDENT).append(type).append(" a").append(j).append("=context.convertToType(args[")
+                    .append(j).append("],").append(type).append(".class);\n");
         }
-        text.append("        default: throw new jakarta.el.MethodNotFoundException(\"Unknown method descriptor\");\n")
-                .append("      } } catch(jakarta.el.ELException failure) { throw failure; }\n")
-                .append("      catch(java.lang.Throwable failure) { throw new jakarta.el.ELException(\"Generated method invocation failed\",failure); }\n")
-                .append("    }\n");
-        annotationClasses.forEach(text::append);
+        if(method.isVarArgs()) appendVariableArguments(text, method, fixed);
+        String receiver=method.getModifiers().contains(Modifier.STATIC)?model.getQualifiedName().toString()
+                :"(("+model.getQualifiedName()+")base)";
+        boolean returns=method.getReturnType().getKind()!=TypeKind.VOID;
+        text.append(CASE_INDENT).append(returns?"return ":"").append(receiver).append('.').append(method.getSimpleName()).append('(');
+        var args=new ArrayList<String>();
+        for(int j=0;j<method.getParameters().size();j++) args.add("a"+j);
+        text.append(String.join(",",args)).append(");").append(returns?"":" return null;").append("\n        }\n");
+    }
+
+    /** The trailing array: passed as is when given packed, otherwise built from the remaining arguments. */
+    private void appendVariableArguments(StringBuilder text, ExecutableElement method, int fixed) {
+        String array=erased(method.getParameters().getLast().asType());
+        String component=array.substring(0,array.length()-2);
+        text.append(CASE_INDENT).append(array).append(" a").append(fixed).append(";\n")
+                .append(CASE_INDENT).append("if(args.length==").append(fixed+1).append(" && args[").append(fixed).append("] instanceof ")
+                .append(array).append(") a").append(fixed).append("=context.convertToType(args[").append(fixed).append("],")
+                .append(array).append(".class);\n")
+                .append(CASE_INDENT).append("else { a").append(fixed).append("=").append(arrayAllocation(component,"args.length-"+fixed))
+                .append("; for(int j=0;j<a").append(fixed).append(".length;j++) a").append(fixed)
+                .append("[j]=context.convertToType(args[j+").append(fixed).append("],").append(component).append(".class); }\n");
     }
 
     private String signature(ExecutableElement method) {
@@ -219,19 +240,23 @@ final class MethodGenerator {
         if(constant instanceof String string) return quote(string);
         if(constant instanceof Character character) return "(char)"+(int)character.charValue();
         if(constant instanceof Long number) return number+"L";
-        if(constant instanceof Float number) {
-            if(number.isNaN()) return "java.lang.Float.NaN";
-            if(number==Float.POSITIVE_INFINITY) return "java.lang.Float.POSITIVE_INFINITY";
-            if(number==Float.NEGATIVE_INFINITY) return "java.lang.Float.NEGATIVE_INFINITY";
-            return Float.toHexString(number)+"f";
-        }
-        if(constant instanceof Double number) {
-            if(number.isNaN()) return "java.lang.Double.NaN";
-            if(number==Double.POSITIVE_INFINITY) return "java.lang.Double.POSITIVE_INFINITY";
-            if(number==Double.NEGATIVE_INFINITY) return "java.lang.Double.NEGATIVE_INFINITY";
-            return Double.toHexString(number);
-        }
+        if(constant instanceof Float number) return floatLiteral(number);
+        if(constant instanceof Double number) return doubleLiteral(number);
         return constant.toString();
+    }
+
+    private static String floatLiteral(Float number) {
+        if(number.isNaN()) return "java.lang.Float.NaN";
+        if(number==Float.POSITIVE_INFINITY) return "java.lang.Float.POSITIVE_INFINITY";
+        if(number==Float.NEGATIVE_INFINITY) return "java.lang.Float.NEGATIVE_INFINITY";
+        return Float.toHexString(number)+"f";
+    }
+
+    private static String doubleLiteral(Double number) {
+        if(number.isNaN()) return "java.lang.Double.NaN";
+        if(number==Double.POSITIVE_INFINITY) return "java.lang.Double.POSITIVE_INFINITY";
+        if(number==Double.NEGATIVE_INFINITY) return "java.lang.Double.NEGATIVE_INFINITY";
+        return Double.toHexString(number);
     }
 
     void accessible(TypeMirror type,TypeElement model) throws IOException {

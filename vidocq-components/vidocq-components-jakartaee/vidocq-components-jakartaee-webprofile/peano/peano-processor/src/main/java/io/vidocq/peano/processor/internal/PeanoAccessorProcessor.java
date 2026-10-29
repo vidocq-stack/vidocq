@@ -56,6 +56,10 @@ import io.vidocq.peano.annotation.ELAccessible;
 @SupportedSourceVersion(SourceVersion.RELEASE_25)
 public final class PeanoAccessorProcessor extends AbstractProcessor {
     private static final String SUFFIX = "__PeanoAccessors";
+    private static final String GET_VALUE = "getValue";
+    private static final String GET_TYPE = "getType";
+    private static final String IS_READ_ONLY = "isReadOnly";
+    private static final String SET_VALUE = "setValue";
     private final Set<String> emitted = new HashSet<>();
     private final Set<ModuleElement> applicationModules = new HashSet<>();
     private final Set<String> pendingTypes = new java.util.LinkedHashSet<>();
@@ -69,7 +73,10 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
 
     private record Property(String name, ExecutableElement getter, ExecutableElement setter) {}
 
-    public PeanoAccessorProcessor() {}
+    /** The public no-argument constructor that javac and ServiceLoader instantiate. */
+    public PeanoAccessorProcessor() {
+        // State is created per instance by the field initializers; javac calls init before process.
+    }
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment round) {
@@ -92,14 +99,32 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
         for (Element element : round.getElementsAnnotatedWith(ELAccessible.class)) {
             if (element instanceof TypeElement type) selected.add(type);
         }
-        if (!optionsProcessed) {
-            optionsProcessed = true;
-            String configured = processingEnv.getOptions().getOrDefault("peano.accessorTypes", "");
-            for (String name : configured.split(",")) {
-                if (name.isBlank()) continue;
-                pendingTypes.add(name.trim());
-            }
+        readOptions();
+        resolvePendingTypes(selected);
+        selected.stream().sorted(java.util.Comparator.comparing(t -> t.getQualifiedName().toString()))
+                .forEach(type -> {
+                    if (eligibleSubtype(type)) selectedRoots.put(type.getQualifiedName().toString(), type);
+                    generate(type);
+                });
+        for (TypeElement type : new ArrayList<>(deferredTypes.values())) generate(type);
+        for (TypeElement candidate : sourceTypes.values()) {
+            if (inSelectedFamily(candidate)) generate(candidate);
         }
+        // Do not consume annotations belonging to other processors.
+        return false;
+    }
+
+    /** Reads the peano.accessorTypes option once: its names wait until a round knows their type. */
+    private void readOptions() {
+        if (optionsProcessed) return;
+        optionsProcessed = true;
+        String configured = processingEnv.getOptions().getOrDefault("peano.accessorTypes", "");
+        for (String name : configured.split(",")) {
+            if (!name.isBlank()) pendingTypes.add(name.trim());
+        }
+    }
+
+    private void resolvePendingTypes(List<TypeElement> selected) {
         var pending = pendingTypes.iterator();
         while (pending.hasNext()) {
             TypeElement type = processingEnv.getElementUtils().getTypeElement(pending.next());
@@ -108,23 +133,16 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
                 pending.remove();
             }
         }
-        selected.stream().sorted(java.util.Comparator.comparing(t -> t.getQualifiedName().toString()))
-                .forEach(type -> {
-                    if (eligibleSubtype(type)) selectedRoots.put(type.getQualifiedName().toString(), type);
-                    generate(type);
-                });
-        for (TypeElement type : new ArrayList<>(deferredTypes.values())) generate(type);
-        for (TypeElement candidate : sourceTypes.values()) {
-            if (candidate.getKind() == ElementKind.INTERFACE) continue;
-            if (!eligibleSubtype(candidate) || unresolvedHierarchy(candidate.asType(), new HashSet<>())) continue;
-            boolean selectedFamily = selectedRoots.values().stream().anyMatch(root ->
-                    !unresolvedHierarchy(root.asType(), new HashSet<>())
-                    && processingEnv.getTypeUtils().isSubtype(processingEnv.getTypeUtils().erasure(candidate.asType()),
-                            processingEnv.getTypeUtils().erasure(root.asType())));
-            if (selectedFamily) generate(candidate);
-        }
-        // Do not consume annotations belonging to other processors.
-        return false;
+    }
+
+    /** A resolved source class or record of this module that extends one of the selected roots. */
+    private boolean inSelectedFamily(TypeElement candidate) {
+        if (candidate.getKind() == ElementKind.INTERFACE || !eligibleSubtype(candidate)
+                || unresolvedHierarchy(candidate.asType(), new HashSet<>())) return false;
+        return selectedRoots.values().stream().anyMatch(root ->
+                !unresolvedHierarchy(root.asType(), new HashSet<>())
+                && processingEnv.getTypeUtils().isSubtype(processingEnv.getTypeUtils().erasure(candidate.asType()),
+                        processingEnv.getTypeUtils().erasure(root.asType())));
     }
 
     private void rememberSourceTypes(Element element) {
@@ -204,7 +222,7 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
                 if (name.isEmpty() || name.startsWith("#")) continue;
                 if (java.nio.file.Files.isRegularFile(root.resolve(name.replace('.', '/') + ".class"))) listed.add(name);
             }
-        } catch (IOException | IllegalArgumentException | UnsupportedOperationException noPreviousFile) {
+        } catch (IOException | IllegalArgumentException | UnsupportedOperationException _) {
             // First build, or an output that is not a directory: this compilation's providers only.
         }
         if (listed.isEmpty()) return;
@@ -235,24 +253,9 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
         var readers = new TreeMap<String, ExecutableElement>();
         var writers = new TreeMap<String, List<ExecutableElement>>();
         for (ExecutableElement method : ElementFilter.methodsIn(processingEnv.getElementUtils().getAllMembers(type))) {
-            if (!method.getModifiers().contains(Modifier.PUBLIC) || method.getModifiers().contains(Modifier.STATIC)) continue;
-            String name = method.getSimpleName().toString();
-            String property = null;
-            if (method.getParameters().isEmpty() && method.getReturnType().getKind() != TypeKind.VOID) {
-                boolean is = name.startsWith("is") && name.length() > 2 && method.getReturnType().getKind() == TypeKind.BOOLEAN;
-                if (is) property = decapitalize(name.substring(2));
-                else if (name.startsWith("get") && name.length() > 3) property = decapitalize(name.substring(3));
-                if (property != null) {
-                    ExecutableElement previous = readers.get(property);
-                    boolean previousIs = previous != null && previous.getSimpleName().toString().startsWith("is")
-                            && previous.getReturnType().getKind() == TypeKind.BOOLEAN;
-                    if (previous == null || is || !previousIs && processingEnv.getTypeUtils().isSubtype(
-                            method.getReturnType(), previous.getReturnType())) readers.put(property, method);
-                }
-            }
-            if (name.startsWith("set") && name.length() > 3 && method.getParameters().size() == 1
-                    && method.getReturnType().getKind() == TypeKind.VOID) {
-                writers.computeIfAbsent(decapitalize(name.substring(3)), ignored -> new ArrayList<>()).add(method);
+            if (method.getModifiers().contains(Modifier.PUBLIC) && !method.getModifiers().contains(Modifier.STATIC)) {
+                collectReader(readers, method);
+                collectWriter(writers, method);
             }
         }
         var names = new java.util.TreeSet<>(readers.keySet());
@@ -260,28 +263,56 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
         var result = new ArrayList<Property>();
         boolean valid = true;
         for (String name : names) {
-            ExecutableElement getter = readers.get(name);
-            List<ExecutableElement> setters = writers.getOrDefault(name, List.of());
-            if (getter != null) {
-                TypeMirror expected = processingEnv.getTypeUtils().erasure(getter.getReturnType());
-                setters = setters.stream().filter(setter -> processingEnv.getTypeUtils().isSameType(expected,
-                        processingEnv.getTypeUtils().erasure(setter.getParameters().getFirst().asType()))).toList();
-            }
-            if (setters.size() > 1) {
-                error("Ambiguous setter for property " + name, type);
-                valid = false;
-                continue;
-            }
-            ExecutableElement setter = setters.isEmpty() ? null : setters.getFirst();
-            if (getter != null && typeVariable(getter.getReturnType())
-                    || setter != null && typeVariable(setter.getParameters().getFirst().asType())) {
-                error("Type-variable property adapters are not supported yet: " + name, type);
-                valid = false;
-                continue;
-            }
-            result.add(new Property(name, getter, setter));
+            Property property = property(type, name, readers.get(name), writers.getOrDefault(name, List.of()));
+            if (property == null) valid = false;
+            else result.add(property);
         }
         return valid ? result : null;
+    }
+
+    /** A getter (or a boolean is-getter, which wins) for the property its name spells. */
+    private void collectReader(TreeMap<String, ExecutableElement> readers, ExecutableElement method) {
+        if (!method.getParameters().isEmpty() || method.getReturnType().getKind() == TypeKind.VOID) return;
+        String name = method.getSimpleName().toString();
+        boolean is = name.startsWith("is") && name.length() > 2 && method.getReturnType().getKind() == TypeKind.BOOLEAN;
+        String property = null;
+        if (is) property = decapitalize(name.substring(2));
+        else if (name.startsWith("get") && name.length() > 3) property = decapitalize(name.substring(3));
+        if (property == null) return;
+        ExecutableElement previous = readers.get(property);
+        boolean previousIs = previous != null && previous.getSimpleName().toString().startsWith("is")
+                && previous.getReturnType().getKind() == TypeKind.BOOLEAN;
+        if (previous == null || is || !previousIs && processingEnv.getTypeUtils().isSubtype(
+                method.getReturnType(), previous.getReturnType())) readers.put(property, method);
+    }
+
+    private static void collectWriter(TreeMap<String, List<ExecutableElement>> writers, ExecutableElement method) {
+        String name = method.getSimpleName().toString();
+        if (name.startsWith("set") && name.length() > 3 && method.getParameters().size() == 1
+                && method.getReturnType().getKind() == TypeKind.VOID) {
+            writers.computeIfAbsent(decapitalize(name.substring(3)), _ -> new ArrayList<>()).add(method);
+        }
+    }
+
+    /** The property, or null once an ambiguous setter or a type-variable type has been reported. */
+    private Property property(TypeElement type, String name, ExecutableElement getter, List<ExecutableElement> setters) {
+        List<ExecutableElement> candidates = setters;
+        if (getter != null) {
+            TypeMirror expected = processingEnv.getTypeUtils().erasure(getter.getReturnType());
+            candidates = setters.stream().filter(setter -> processingEnv.getTypeUtils().isSameType(expected,
+                    processingEnv.getTypeUtils().erasure(setter.getParameters().getFirst().asType()))).toList();
+        }
+        if (candidates.size() > 1) {
+            error("Ambiguous setter for property " + name, type);
+            return null;
+        }
+        ExecutableElement setter = candidates.isEmpty() ? null : candidates.getFirst();
+        if (getter != null && typeVariable(getter.getReturnType())
+                || setter != null && typeVariable(setter.getParameters().getFirst().asType())) {
+            error("Type-variable property adapters are not supported yet: " + name, type);
+            return null;
+        }
+        return new Property(name, getter, setter);
     }
 
     private static boolean typeVariable(TypeMirror type) {
@@ -319,10 +350,10 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
                 .append("    private boolean accepts(jakarta.el.ELContext context, java.lang.Object base, java.lang.Object property) {\n")
                 .append("      java.util.Objects.requireNonNull(context); return base != null && base.getClass() == ")
                 .append(model).append(".class && property instanceof java.lang.String;\n    }\n");
-        operation(text, model, properties, "getValue");
-        operation(text, model, properties, "getType");
-        operation(text, model, properties, "isReadOnly");
-        operation(text, model, properties, "setValue");
+        operation(text, model, properties, GET_VALUE);
+        operation(text, model, properties, GET_TYPE);
+        operation(text, model, properties, IS_READ_ONLY);
+        operation(text, model, properties, SET_VALUE);
         if (type.getKind() == ElementKind.INTERFACE) new FunctionalGenerator(processingEnv).append(text, type);
         else new MethodGenerator(processingEnv).append(text, type);
         text.append("    public java.lang.Class<?> getCommonPropertyType(jakarta.el.ELContext context, java.lang.Object base) {\n")
@@ -333,14 +364,18 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
     }
 
     private void operation(StringBuilder text, String model, List<Property> properties, String operation) {
-        boolean write = operation.equals("setValue");
+        boolean write = operation.equals(SET_VALUE);
         String returnType = switch (operation) {
-            case "getType" -> "java.lang.Class<?>";
-            case "isReadOnly" -> "boolean";
-            case "setValue" -> "void";
+            case GET_TYPE -> "java.lang.Class<?>";
+            case IS_READ_ONLY -> "boolean";
+            case SET_VALUE -> "void";
             default -> "java.lang.Object";
         };
-        String fallback = write ? "return;" : operation.equals("isReadOnly") ? "return false;" : "return null;";
+        String fallback = switch (operation) {
+            case SET_VALUE -> "return;";
+            case IS_READ_ONLY -> "return false;";
+            default -> "return null;";
+        };
         text.append("    public ").append(returnType).append(' ').append(operation)
                 .append("(jakarta.el.ELContext context, java.lang.Object base, java.lang.Object property")
                 .append(write ? ", java.lang.Object value" : "").append(") {\n")
@@ -349,28 +384,32 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
         for (Property property : properties) {
             text.append("        case \"").append(property.name()).append("\":\n")
                     .append("          context.setPropertyResolved(base, property);\n");
-            switch (operation) {
-                case "getValue" -> {
-                    if (property.getter() == null) text.append("          throw new jakarta.el.PropertyNotFoundException(\"Write-only property\");\n");
-                    else text.append("          return ((").append(model).append(") base).").append(property.getter().getSimpleName()).append("();\n");
-                }
-                case "getType" -> text.append("          return ").append(property.setter() == null ? "null"
-                        : processingEnv.getTypeUtils().erasure(property.setter().getParameters().getFirst().asType()) + ".class").append(";\n");
-                case "isReadOnly" -> text.append("          return ").append(property.setter() == null).append(";\n");
-                case "setValue" -> {
-                    if (property.setter() == null) text.append("          throw new jakarta.el.PropertyNotWritableException(\"Read-only property\");\n");
-                    else text.append("          ((").append(model).append(") base).").append(property.setter().getSimpleName())
-                            .append("(context.convertToType(value, ")
-                            .append(processingEnv.getTypeUtils().erasure(property.setter().getParameters().getFirst().asType()))
-                            .append(".class)); return;\n");
-                }
-                default -> throw new IllegalArgumentException(operation);
-            }
+            appendOperationCase(text, model, property, operation);
         }
         text.append("        default: ").append(fallback).append("\n")
                 .append("      } } catch (jakarta.el.ELException failure) { throw failure; }\n")
                 .append("      catch (java.lang.Throwable failure) { throw new jakarta.el.ELException(\"Generated property operation failed\", failure); }\n")
                 .append("    }\n");
+    }
+
+    private void appendOperationCase(StringBuilder text, String model, Property property, String operation) {
+        switch (operation) {
+            case GET_VALUE -> {
+                if (property.getter() == null) text.append("          throw new jakarta.el.PropertyNotFoundException(\"Write-only property\");\n");
+                else text.append("          return ((").append(model).append(") base).").append(property.getter().getSimpleName()).append("();\n");
+            }
+            case GET_TYPE -> text.append("          return ").append(property.setter() == null ? "null"
+                    : processingEnv.getTypeUtils().erasure(property.setter().getParameters().getFirst().asType()) + ".class").append(";\n");
+            case IS_READ_ONLY -> text.append("          return ").append(property.setter() == null).append(";\n");
+            case SET_VALUE -> {
+                if (property.setter() == null) text.append("          throw new jakarta.el.PropertyNotWritableException(\"Read-only property\");\n");
+                else text.append("          ((").append(model).append(") base).").append(property.setter().getSimpleName())
+                        .append("(context.convertToType(value, ")
+                        .append(processingEnv.getTypeUtils().erasure(property.setter().getParameters().getFirst().asType()))
+                        .append(".class)); return;\n");
+            }
+            default -> throw new IllegalArgumentException(operation);
+        }
     }
 
     private void error(String message, Element element) {

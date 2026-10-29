@@ -21,6 +21,7 @@ package io.vidocq.peano.processor.internal;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
@@ -39,38 +40,12 @@ final class FunctionalGenerator {
     }
 
     void append(StringBuilder text, TypeElement model) throws IOException {
-        if (model.getModifiers().contains(Modifier.SEALED)
-                || model.getAnnotationMirrors().stream().noneMatch(annotation ->
-                        annotation.getAnnotationType().toString().equals("java.lang.FunctionalInterface"))) {
-            throw new IOException("Selected interface must be non-sealed and annotated with @FunctionalInterface");
-        }
+        requireFunctionalAnnotation(model);
         var types=environment.getTypeUtils();
-        var elements=environment.getElementUtils();
-        var methods=new ArrayList<ExecutableElement>();
-        var objectMethods=ElementFilter.methodsIn(elements.getTypeElement("java.lang.Object").getEnclosedElements())
-                .stream().filter(method->method.getModifiers().contains(Modifier.PUBLIC)).toList();
-        for (var method:ElementFilter.methodsIn(elements.getAllMembers(model))) {
-            if (!method.getModifiers().contains(Modifier.ABSTRACT)
-                    || method.getModifiers().contains(Modifier.STATIC)) continue;
-            var signature=(ExecutableType)types.asMemberOf((DeclaredType)model.asType(),method);
-            boolean objectMethod=objectMethods.stream().anyMatch(other ->
-                    method.getSimpleName().contentEquals(other.getSimpleName())
-                    && types.isSubsignature(signature,(ExecutableType)other.asType()));
-            if (!objectMethod) methods.add(method);
-        }
+        var methods=functionalCandidates(model);
         if (methods.isEmpty()) throw new IOException("Selected interface has no functional method");
-        ExecutableElement method=methods.getFirst();
-        var signature=(ExecutableType)types.asMemberOf((DeclaredType)model.asType(),method);
-        for (var candidate:methods) {
-            var other=(ExecutableType)types.asMemberOf((DeclaredType)model.asType(),candidate);
-            if (!method.getSimpleName().contentEquals(candidate.getSimpleName())
-                    || !(types.isSubsignature(signature,other) || types.isSubsignature(other,signature)))
-                throw new IOException("Selected interface has multiple functional methods");
-            if (types.isSubtype(other.getReturnType(),signature.getReturnType())) {
-                method=candidate;
-                signature=other;
-            }
-        }
+        ExecutableElement method=mostSpecific(model,methods);
+        var signature=memberType(model,method);
         if (!signature.getTypeVariables().isEmpty())
             throw new IOException("Generic functional methods cannot be adapted");
         var accessibility=new MethodGenerator(environment);
@@ -105,5 +80,53 @@ final class FunctionalGenerator {
         }
         text.append("      }\n    }\n");
     }
-}
 
+    private static void requireFunctionalAnnotation(TypeElement model) throws IOException {
+        if (model.getModifiers().contains(Modifier.SEALED)
+                || model.getAnnotationMirrors().stream().noneMatch(annotation ->
+                        annotation.getAnnotationType().toString().equals("java.lang.FunctionalInterface"))) {
+            throw new IOException("Selected interface must be non-sealed and annotated with @FunctionalInterface");
+        }
+    }
+
+    /** The abstract instance methods of the interface that do not restate a public Object method. */
+    private List<ExecutableElement> functionalCandidates(TypeElement model) {
+        var types=environment.getTypeUtils();
+        var elements=environment.getElementUtils();
+        var methods=new ArrayList<ExecutableElement>();
+        var objectMethods=ElementFilter.methodsIn(elements.getTypeElement("java.lang.Object").getEnclosedElements())
+                .stream().filter(method->method.getModifiers().contains(Modifier.PUBLIC)).toList();
+        for (var method:ElementFilter.methodsIn(elements.getAllMembers(model))) {
+            if (!method.getModifiers().contains(Modifier.ABSTRACT)
+                    || method.getModifiers().contains(Modifier.STATIC)) continue;
+            var signature=memberType(model,method);
+            boolean objectMethod=objectMethods.stream().anyMatch(other ->
+                    method.getSimpleName().contentEquals(other.getSimpleName())
+                    && types.isSubsignature(signature,(ExecutableType)other.asType()));
+            if (!objectMethod) methods.add(method);
+        }
+        return methods;
+    }
+
+    /** The candidate with the most specific return type; distinct functional methods are rejected. */
+    private ExecutableElement mostSpecific(TypeElement model, List<ExecutableElement> methods) throws IOException {
+        var types=environment.getTypeUtils();
+        ExecutableElement method=methods.getFirst();
+        var signature=memberType(model,method);
+        for (var candidate:methods) {
+            var other=memberType(model,candidate);
+            if (!method.getSimpleName().contentEquals(candidate.getSimpleName())
+                    || !(types.isSubsignature(signature,other) || types.isSubsignature(other,signature)))
+                throw new IOException("Selected interface has multiple functional methods");
+            if (types.isSubtype(other.getReturnType(),signature.getReturnType())) {
+                method=candidate;
+                signature=other;
+            }
+        }
+        return method;
+    }
+
+    private ExecutableType memberType(TypeElement model, ExecutableElement method) {
+        return (ExecutableType)environment.getTypeUtils().asMemberOf((DeclaredType)model.asType(),method);
+    }
+}
