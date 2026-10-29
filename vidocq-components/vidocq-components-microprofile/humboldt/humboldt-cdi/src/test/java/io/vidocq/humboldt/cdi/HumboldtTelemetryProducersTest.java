@@ -22,9 +22,15 @@ package io.vidocq.humboldt.cdi;
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.baggage.Baggage;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.Value;
 import io.opentelemetry.api.logs.LoggerProvider;
 import io.opentelemetry.api.metrics.MeterProvider;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Context;
 import io.opentelemetry.api.trace.TracerProvider;
 import io.opentelemetry.context.propagation.ContextPropagators;
 import io.vidocq.humboldt.sdk.trace.SdkTracerProvider;
@@ -36,15 +42,20 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The CDI producers resolve OpenTelemetry objects from {@link GlobalOpenTelemetry}, scoped by the injection point,
@@ -152,6 +163,99 @@ class HumboldtTelemetryProducersTest {
             assertEquals("naruto", injected.getEntryValue("user"));
         }
         assertEquals(0, injected.size());
+    }
+
+    @Test
+    void injected_span_and_baggage_are_plain_objects_equal_to_themselves() {
+        Span span = producers.produceCurrentSpan();
+        Baggage baggage = producers.produceCurrentBaggage();
+
+        assertFalse(Proxy.isProxyClass(span.getClass()), "no dynamic proxy");
+        assertFalse(Proxy.isProxyClass(baggage.getClass()), "no dynamic proxy");
+        assertEquals(span, span);
+        assertEquals(baggage, baggage);
+        assertEquals(span.hashCode(), span.hashCode());
+    }
+
+    @Test
+    void an_exception_of_the_current_span_reaches_the_caller_as_is() {
+        IllegalStateException failure = new IllegalStateException("ended");
+        Span throwing = (Span) Proxy.newProxyInstance(Span.class.getClassLoader(), new Class<?>[]{Span.class},
+                (proxy, m, args) -> {
+                    if ("updateName".equals(m.getName())) throw failure;
+                    if (m.isDefault()) return InvocationHandler.invokeDefault(proxy, m, args);
+                    return "getSpanContext".equals(m.getName()) ? SpanContext.getInvalid() : null;
+                });
+        Span injected = producers.produceCurrentSpan();
+
+        try (var _ = Context.current().with(throwing).makeCurrent()) {
+            assertSame(failure, assertThrows(IllegalStateException.class, () -> injected.updateName("x")));
+        }
+    }
+
+    @Test
+    void injected_span_links_and_stores_the_current_span() {
+        Span injected = producers.produceCurrentSpan();
+        Span outer = provider.get("test").spanBuilder("outer").startSpan();
+        Span linked = provider.get("test").spanBuilder("linked").startSpan();
+        try (var _ = outer.makeCurrent()) {
+            injected.addLink(linked.getSpanContext()).setAttribute("k", "v");
+            assertSame(outer, Span.fromContext(injected.storeInContext(Context.root())),
+                    "the context holds the current span, not the injected one");
+        }
+        outer.end();
+        linked.end();
+
+        var data = exporter.getFinishedSpans().stream().filter(s -> s.name().equals("outer")).findFirst().orElseThrow();
+        assertEquals(1, data.links().size(), "a link added through the injected span reaches the current one");
+        assertEquals("v", data.attributes().get(AttributeKey.stringKey("k")));
+    }
+
+    @Test
+    void every_call_of_the_injected_span_reaches_the_current_one() {
+        Span injected = producers.produceCurrentSpan();
+        Span outer = provider.get("test").spanBuilder("outer").startSpan();
+        try (var _ = outer.makeCurrent()) {
+            assertSame(injected, injected.setAttribute("s", "v").setAttribute("l", 1L).setAttribute("d", 1.5)
+                    .setAttribute("b", true).setAttribute("val", Value.of("x"))
+                    .setAttribute(AttributeKey.longKey("i"), 2).setAttribute(AttributeKey.stringKey("k"), "w")
+                    .setAllAttributes(Attributes.of(AttributeKey.stringKey("all"), "a"))
+                    .addEvent("e1").addEvent("e2", 1, TimeUnit.SECONDS).addEvent("e3", Instant.EPOCH)
+                    .addEvent("e4", Attributes.empty()).addEvent("e5", Attributes.empty(), 1, TimeUnit.SECONDS)
+                    .addEvent("e6", Attributes.empty(), Instant.EPOCH)
+                    .recordException(new IllegalStateException("one"))
+                    .recordException(new IllegalStateException("two"), Attributes.empty())
+                    .addLink(SpanContext.getInvalid(), Attributes.empty())
+                    .setStatus(StatusCode.ERROR).setStatus(StatusCode.ERROR, "failed")
+                    .updateName("renamed"));
+            assertTrue(injected.isRecording());
+            assertTrue(injected.toString().startsWith("CurrentSpan["));
+            injected.end(Instant.now());
+        }
+        injected.end();
+        injected.end(1, TimeUnit.SECONDS);
+
+        var data = exporter.getFinishedSpans().getFirst();
+        assertEquals("renamed", data.name());
+        assertEquals(8, data.attributes().size());
+        assertEquals(8, data.events().size(), "six events and two exceptions");
+        assertEquals(StatusCode.ERROR, data.status().code());
+    }
+
+    @Test
+    void every_call_of_the_injected_baggage_reads_the_current_one() {
+        Baggage injected = producers.produceCurrentBaggage();
+        try (var _ = Baggage.builder().put("user", "naruto").build().makeCurrent()) {
+            assertFalse(injected.isEmpty());
+            assertEquals("naruto", injected.getEntry("user").getValue());
+            assertEquals(1, injected.asMap().size());
+            List<String> keys = new ArrayList<>();
+            injected.forEach((key, _) -> keys.add(key));
+            assertEquals(List.of("user"), keys);
+            assertEquals("naruto", injected.toBuilder().build().getEntryValue("user"));
+            assertEquals("naruto", Baggage.fromContext(injected.storeInContext(Context.root())).getEntryValue("user"));
+            assertTrue(injected.toString().startsWith("CurrentBaggage["));
+        }
     }
 
     private static InjectionPoint injectionPoint(Member member) {

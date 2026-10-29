@@ -30,8 +30,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.enterprise.inject.spi.InjectionPoint;
 
-import java.lang.reflect.Proxy;
-
 /**
  * CDI producers for the standard OpenTelemetry types required by the
  * MicroProfile Telemetry 2.2 spec §"Access to the OpenTelemetry Tracing API".
@@ -73,7 +71,7 @@ public class HumboldtTelemetryProducers {
     }
 
     /**
-     * Producer for {@link Span} — returns a dynamic proxy that delegates each method
+     * Producer for {@link Span} — returns a {@link CurrentSpan}, which delegates each method
      * call to {@link Span#current()} at invocation time (not at injection time).
      * MP Telemetry 2.2 spec §"Access to the OpenTelemetry Tracing API": {@code SpanBeanTest.spanBeanChange}
      * mutates the Context after injection and expects subsequent accesses to
@@ -81,24 +79,18 @@ public class HumboldtTelemetryProducers {
      */
     @Produces
     public Span produceCurrentSpan() {
-        return (Span) Proxy.newProxyInstance(
-                Span.class.getClassLoader(),
-                new Class<?>[]{Span.class},
-                (proxy, method, args) -> method.invoke(Span.current(), args));
+        return new CurrentSpan();
     }
 
     /**
-     * Producer for {@link Baggage} — dynamic proxy that delegates to
+     * Producer for {@link Baggage} — a {@link CurrentBaggage}, which delegates to
      * {@link Baggage#current()} on each call. For
      * {@code BaggageBeanTest.baggageBeanChange} which mutates the Context after
      * injection (see {@link #produceCurrentSpan()} for the same approach).
      */
     @Produces
     public Baggage produceCurrentBaggage() {
-        return (Baggage) Proxy.newProxyInstance(
-                Baggage.class.getClassLoader(),
-                new Class<?>[]{Baggage.class},
-                (proxy, method, args) -> method.invoke(Baggage.current(), args));
+        return new CurrentBaggage();
     }
 
     /**
