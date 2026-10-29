@@ -138,14 +138,14 @@ class StandardFunctionalConversionTest {
     void preservesCustomTargetAndResultConverters() {
         var el=new ELProcessor();
         el.getELManager().addELResolver(new ELResolver() {
-            public Object getValue(ELContext c,Object b,Object p) { return null; }
-            public Class<?> getType(ELContext c,Object b,Object p) { return null; }
+            @Override public Object getValue(ELContext c,Object b,Object p) { return null; }
+            @Override public Class<?> getType(ELContext c,Object b,Object p) { return null; }
             @Override public void setValue(ELContext c,Object b,Object p,Object v) {
                 // This resolver only converts values: nothing to write.
             }
-            public boolean isReadOnly(ELContext c,Object b,Object p) { return false; }
-            public Class<?> getCommonPropertyType(ELContext c,Object b) { return null; }
-            public <T> T convertToType(ELContext c,Object value,Class<T> target) {
+            @Override public boolean isReadOnly(ELContext c,Object b,Object p) { return false; }
+            @Override public Class<?> getCommonPropertyType(ELContext c,Object b) { return null; }
+            @Override public <T> T convertToType(ELContext c,Object value,Class<T> target) {
                 if (target==IntSupplier.class) { c.setPropertyResolved(true); return (T)(IntSupplier)()->99; }
                 if (target==long.class) { c.setPropertyResolved(true); return (T)Long.valueOf(23); }
                 return null;
