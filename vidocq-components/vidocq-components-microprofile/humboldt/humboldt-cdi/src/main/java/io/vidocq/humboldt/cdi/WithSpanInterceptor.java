@@ -142,7 +142,7 @@ public class WithSpanInterceptor {
      * caller's context, its {@code code.function.name}, and the {@code @SpanAttribute} parameters.
      */
     private record SpanPlan(String name, SpanKind kind, boolean detached, String function,
-                            AttributeBinding[] attributes) {
+                            List<AttributeBinding> attributes) {
 
         static SpanPlan of(Method method) {
             WithSpan annotation = method.getAnnotation(WithSpan.class);
@@ -177,7 +177,7 @@ public class WithSpanInterceptor {
      */
     private record AttributeBinding(int index, BiConsumer<Span, Object> setter) {
 
-        static AttributeBinding[] of(Method method) {
+        static List<AttributeBinding> of(Method method) {
             Parameter[] params = method.getParameters();
             List<AttributeBinding> bindings = new ArrayList<>();
             for (int i = 0; i < params.length; i++) {
@@ -187,7 +187,7 @@ public class WithSpanInterceptor {
                     bindings.add(new AttributeBinding(i, setter(key, params[i].getType())));
                 }
             }
-            return bindings.toArray(AttributeBinding[]::new);
+            return List.copyOf(bindings);
         }
 
         private static BiConsumer<Span, Object> setter(String name, Class<?> type) {
