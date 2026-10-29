@@ -3,6 +3,22 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## EL-021 · 2026-10-29 · MethodDescriptor text hid its parameter types and annotations
+
+- Symptom: `io.vidocq.peano.spi.MethodDescriptor.toString()` printed array identities
+  (`parameterTypes=[Ljava.lang.Class;@7c541c15`, `annotations=[Ljava.lang.annotation.Annotation;@...`),
+  so two equal descriptors (equality already compares array contents) printed differently and
+  diagnostics never showed the signature. Reported by SonarQube as `java:S6218` on main.
+- Minimal reproduction: `new MethodDescriptor("m", String.class, new Class<?>[]{int.class},
+  false, false, new Annotation[0]).toString()` differs from the same call made a second time.
+- Cause: the record overrode `equals`/`hashCode` with `Arrays` but kept the generated
+  `toString`, which prints array components by identity.
+- Status: fixed on branch `fix/sonar-peano-zero`: `toString` prints both arrays with
+  `Arrays.toString` (the record format is otherwise unchanged); `equals` now uses a record
+  deconstruction pattern. No signature change.
+- Evidence: MethodSelectionTest.descriptorTextShowsTheArrayContentsLikeEqualityDoes failed
+  (identity hashes) before the fix and passes after it.
+
 ## COMP-010 · 2026-10-24 · Constant compiled expressions lacked the (ELContext, Class) constructor
 
 - Symptom: an Ibarra page passing a constant EL expression to a deferred-value tag attribute

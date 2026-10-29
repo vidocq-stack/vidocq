@@ -43,6 +43,17 @@ class MethodSelectionTest {
     }
 
     @Test
+    void descriptorTextShowsTheArrayContentsLikeEqualityDoes() {
+        var descriptor=new MethodDescriptor("m",String.class,new Class<?>[]{int.class,String[].class},true,true,
+                new Annotation[0]);
+        var equivalent=new MethodDescriptor("m",String.class,new Class<?>[]{int.class,String[].class},true,true,
+                new Annotation[0]);
+        assertEquals(equivalent.toString(),descriptor.toString());
+        assertEquals("MethodDescriptor[name=m, returnType=class java.lang.String, parameterTypes=[int, "
+                +"class [Ljava.lang.String;], varargs=true, staticMethod=true, annotations=[]]",descriptor.toString());
+    }
+
+    @Test
     void signaturesResolveDeclaredDescriptorsAndKeepUnrelatedMatchesAmbiguous() {
         var context=new StandardELContext(ExpressionFactory.newInstance());
         MethodDescriptor[] overloaded={

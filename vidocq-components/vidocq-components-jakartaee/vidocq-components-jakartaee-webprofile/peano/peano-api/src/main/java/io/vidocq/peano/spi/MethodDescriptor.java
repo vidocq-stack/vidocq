@@ -20,6 +20,7 @@
 package io.vidocq.peano.spi;
 
 import java.lang.annotation.Annotation;
+import java.util.Arrays;
 import java.util.Objects;
 import jakarta.el.MethodInfo;
 
@@ -53,15 +54,22 @@ public record MethodDescriptor(String name, Class<?> returnType, Class<?>[] para
     public MethodInfo methodInfo() { return new MethodInfo(name,returnType,parameterTypes.clone()); }
 
     @Override public boolean equals(Object other) {
-        return other instanceof MethodDescriptor descriptor && name.equals(descriptor.name)
-                && returnType == descriptor.returnType && varargs == descriptor.varargs && staticMethod == descriptor.staticMethod
-                && java.util.Arrays.equals(parameterTypes,descriptor.parameterTypes)
-                && java.util.Arrays.equals(annotations,descriptor.annotations);
+        return other instanceof MethodDescriptor(var otherName, var otherReturn, var otherParameters,
+                var otherVarargs, var otherStatic, var otherAnnotations)
+                && name.equals(otherName) && returnType == otherReturn && varargs == otherVarargs
+                && staticMethod == otherStatic && Arrays.equals(parameterTypes, otherParameters)
+                && Arrays.equals(annotations, otherAnnotations);
     }
 
     @Override public int hashCode() {
         return Objects.hash(name,returnType,varargs,staticMethod,
-                java.util.Arrays.hashCode(parameterTypes),java.util.Arrays.hashCode(annotations));
+                Arrays.hashCode(parameterTypes),Arrays.hashCode(annotations));
+    }
+
+    @Override public String toString() {
+        return "MethodDescriptor[name=" + name + ", returnType=" + returnType
+                + ", parameterTypes=" + Arrays.toString(parameterTypes) + ", varargs=" + varargs
+                + ", staticMethod=" + staticMethod + ", annotations=" + Arrays.toString(annotations) + "]";
     }
 }
 
