@@ -68,6 +68,8 @@ public abstract class AbstractBatchProcessor<T> {
     private final java.util.function.Supplier<CompletableResultCode> shutdownExporter;
     private final java.util.function.Supplier<CompletableResultCode> flushExporter;
     private final AtomicBoolean running = new AtomicBoolean(true);
+    /** Set by {@link #offer(Object)} when it woke the worker for a full batch, cleared by the worker's drain. */
+    private final AtomicBoolean batchSignalled = new AtomicBoolean();
     private final Thread worker;
     private final Object flushLock = new Object();
     /** The flushes asked for and not served yet; guarded by {@link #flushLock}. */
@@ -112,6 +114,13 @@ public abstract class AbstractBatchProcessor<T> {
         if (!running.get()) return;
         if (!queue.offer(item)) {
             LOG.log(Level.WARNING, "{0} queue full — item dropped", workerName);
+            return;
+        }
+        // Wake the worker once per full batch: a volatile read per item, a CAS and a monitor once per batch.
+        if (queue.size() >= maxExportBatchSize && batchSignalled.compareAndSet(false, true)) {
+            synchronized (flushLock) {
+                flushLock.notifyAll();
+            }
         }
     }
 
@@ -154,6 +163,8 @@ public abstract class AbstractBatchProcessor<T> {
                 awaitBatchOrFlush(waitNanos);
             }
             queue.drainTo(batch, maxExportBatchSize);
+            // Reset after the drain: the size check before the next wait covers the items queued meanwhile.
+            batchSignalled.set(false);
             if (!batch.isEmpty()) {
                 exportBatchSafe(batch);
                 batch.clear();

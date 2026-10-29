@@ -95,6 +95,43 @@ class SpanProcessorTest {
     }
 
     @Test
+    void batch_processor_exports_a_full_batch_without_waiting_for_the_schedule_delay() throws Exception {
+        CountDownLatch exported = new CountDownLatch(6);
+        SpanExporter counting = new SpanExporter() {
+            @Override
+            public CompletableResultCode export(Collection<SpanData> spans) {
+                spans.forEach(_ -> exported.countDown());
+                return CompletableResultCode.ofSuccess();
+            }
+
+            @Override
+            public CompletableResultCode flush() {
+                return CompletableResultCode.ofSuccess();
+            }
+
+            @Override
+            public CompletableResultCode shutdown() {
+                return CompletableResultCode.ofSuccess();
+            }
+        };
+        BatchSpanProcessor batch = BatchSpanProcessor.builder(counting)
+                .setMaxExportBatchSize(3)
+                .setScheduleDelay(Duration.ofMinutes(10))
+                .build();
+        try (SdkTracerProvider p = SdkTracerProvider.builder()
+                .setSampler(Sampler.alwaysOn())
+                .addSpanProcessor(batch)
+                .build()) {
+            Tracer t = p.get("x");
+            for (int i = 0; i < 6; i++) {
+                t.spanBuilder("span-" + i).startSpan().end();
+            }
+            assertTrue(exported.await(10, TimeUnit.SECONDS),
+                    "two full batches must be exported long before the 10-minute schedule delay");
+        }
+    }
+
+    @Test
     void batch_processor_drains_on_shutdown() {
         InMemorySpanExporter exporter = InMemorySpanExporter.create();
         BatchSpanProcessor batch = BatchSpanProcessor.builder(exporter)

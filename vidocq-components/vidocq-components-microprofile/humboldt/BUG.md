@@ -614,3 +614,18 @@
   and `shutdown()` wait for them. `PeriodicMetricReader` serves every flush asked for, and answers a flush after the
   shutdown with the exporter's flush.
 - **Regression tests**: see repro.
+
+## BUG-20261029-05 — a full batch waits for the schedule delay instead of waking the batch worker
+
+- **Date**: 2026-10-29
+- **Status**: FIXED (fix/batch-worker-wakeup)
+- **Module**: `humboldt-sdk-common` — `AbstractBatchProcessor`
+- **Symptom**: with a long schedule delay, `maxExportBatchSize` items stay queued until the delay elapses; with the
+  defaults (5 s, batch 512, queue 2048) a burst above about 400 spans per second fills the queue and drops spans.
+- **Minimal repro**: `SpanProcessorTest.batch_processor_exports_a_full_batch_without_waiting_for_the_schedule_delay`
+  (batch 3, delay 10 min, 6 spans: nothing exported within 10 s). Found while writing the BUG-20261029-04 tests.
+- **Cause**: the worker re-checks the queue size only when it wakes up; `offer` never woke it.
+- **Fix**: `offer` wakes the worker once per full batch (an `AtomicBoolean` cleared after each drain). Span-end cost:
+  one volatile read of the queue size per item, plus a CAS and a short monitor once per batch; the worker's size
+  check under the lock before waiting rules out a lost wake-up.
+- **Regression test**: see repro.
