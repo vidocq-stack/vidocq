@@ -11,6 +11,11 @@
     <artifactId>peano-compiler</artifactId>
     <name>Peano :: Expression Compiler</name>
     <description>Build-time expression compilation through the Java Class-File API</description>
+    <properties>
+        <!-- Overridden by the JaCoCo agent under the quality profile; see the Surefire note below. -->
+        <argLine></argLine>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.peano</groupId>
@@ -26,4 +31,23 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                The compiled-expression tests run their consumers in child JVMs (no core, no
+                compiler at run time). Under the quality profile, argLine carries the JaCoCo
+                agent: ChildJvm forwards it so the peano-api runtime they execute is measured.
+                The empty argLine property keeps the late @{argLine} replacement valid when the
+                agent is not prepared.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine} -Dpeano.test.coverageAgent=@{argLine}</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

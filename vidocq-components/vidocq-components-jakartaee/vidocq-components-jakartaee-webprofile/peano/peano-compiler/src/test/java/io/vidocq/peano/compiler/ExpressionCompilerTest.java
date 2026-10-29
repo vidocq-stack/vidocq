@@ -659,7 +659,7 @@ class ExpressionCompilerTest {
     }
     private String run(List<String> args) throws Exception {
         Path log=temporary.resolve("process.log");
-        var process=new ProcessBuilder(args).redirectErrorStream(true).redirectOutput(log.toFile()).start();
+        var process=new ProcessBuilder(ChildJvm.command(args)).redirectErrorStream(true).redirectOutput(log.toFile()).start();
         assertTrue(process.waitFor(30,TimeUnit.SECONDS));
         String output=Files.readString(log);
         assertEquals(0,process.exitValue(),output);
