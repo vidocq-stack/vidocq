@@ -63,6 +63,8 @@ import java.util.Set;
  */
 public final class MansartDataExtension implements BuildCompatibleExtension {
 
+    private static final System.Logger LOG = System.getLogger(MansartDataExtension.class.getName());
+
     private final List<RepoEntry> entries = new ArrayList<>();
     private final Set<String> runtimeRepoFqns = new LinkedHashSet<>();
 
@@ -191,14 +193,25 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
 
     private static void registerCompileTimeEntry(SyntheticComponents components, ClassLoader cl, RepoEntry e) {
         Class<?> itf;
-        Class<?> impl;
         try {
-            itf  = cl.loadClass(e.itfFqn());
-            impl = cl.loadClass(e.implFqn());
+            itf = cl.loadClass(e.itfFqn());
         } catch (ClassNotFoundException _) {
             // Compile-time: the impl/interface aren't loadable yet from the APT classloader.
             // Skip silently — the runtime container will register the bean correctly when it
             // re-runs this BCE with a classloader that can see the user module.
+            return;
+        }
+        Class<?> impl;
+        try {
+            impl = cl.loadClass(e.implFqn());
+        } catch (ClassNotFoundException _) {
+            // MANSART-027: the interface is there but its generated implementation is gone (deleted, or a stale
+            // index left by an incremental build). The entry kept the interface off the runtime path, so serve
+            // it there now rather than leave the application without the bean.
+            LOG.log(System.Logger.Level.WARNING, "Repository {0} is indexed with {1}, which cannot be loaded;"
+                    + " it is implemented at run time instead. Rebuild the module to regenerate it.",
+                    e.itfFqn(), e.implFqn());
+            registerRuntimeEntry(components, cl, e.itfFqn());
             return;
         }
         Repository ann = itf.getAnnotation(Repository.class);

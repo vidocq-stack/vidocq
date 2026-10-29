@@ -888,3 +888,27 @@ generated an implementation for every `@Repository`, whatever its visibility, an
   left to the run-time path, with a NOTE.
 - A `RuntimeException` while generating is reported as a compile error on the repository. The source is rendered in
   memory before it is written, so no partial file is left behind.
+
+## MANSART-027 — A stale `mansart-repositories.list` entry left the repository without a bean
+
+- **Date**: 2026-10-29
+- **Status**: FIXED 2026-10-29 (branch `fix/stale-repository-entry`, generated-code audit)
+- **Severity**: medium (the application fails to start with an unsatisfied dependency)
+- **Module**: `mansart-data-cdi` (`MansartDataExtension`)
+
+### Symptom
+An index entry `Itf=ItfImpl` whose implementation cannot be loaded (deleted, or left behind by an incremental build
+or a repackaged jar) made `@Inject Itf` unsatisfied: the interface was neither registered from the index nor sent
+to the runtime path.
+
+### Minimal repro
+`StaleRepositoryIndexTest` (`mansart-data-tests`): a context class loader adds an index naming a missing
+`DefaultNoteLogGoneImpl`; `container.select(DefaultNoteLog.class)` threw `UnsatisfiedResolutionException`.
+
+### Cause
+`discoverRuntimeRepositories` keeps every indexed interface off the runtime path, and `@Synthesis` skipped an entry
+silently as soon as either class failed to load, a tolerance meant for the APT-time replay, where neither is loadable.
+
+### Fix
+When the interface loads but its implementation does not, the extension logs a WARNING and registers the interface on
+the runtime path. An entry whose interface does not load is still skipped silently. Jakarta Data TCK 74/74.
