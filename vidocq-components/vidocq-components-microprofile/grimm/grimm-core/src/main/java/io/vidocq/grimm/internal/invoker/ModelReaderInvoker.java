@@ -19,6 +19,7 @@
  */
 package io.vidocq.grimm.internal.invoker;
 
+import io.vidocq.grimm.internal.ApplicationClasses;
 import io.vidocq.grimm.internal.config.FilterConfig;
 import org.eclipse.microprofile.openapi.OASModelReader;
 import org.eclipse.microprofile.openapi.models.OpenAPI;
@@ -43,7 +44,7 @@ public final class ModelReaderInvoker {
         }
 
         try {
-            Class<?> readerClass = Class.forName(config.modelReaderClassName());
+            Class<?> readerClass = ApplicationClasses.load(config.modelReaderClassName());
             OASModelReader reader = (OASModelReader) readerClass.getDeclaredConstructor().newInstance();
 
             return reader.buildModel();

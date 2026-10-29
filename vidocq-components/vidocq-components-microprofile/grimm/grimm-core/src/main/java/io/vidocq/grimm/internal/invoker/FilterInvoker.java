@@ -19,6 +19,7 @@
  */
 package io.vidocq.grimm.internal.invoker;
 
+import io.vidocq.grimm.internal.ApplicationClasses;
 import io.vidocq.grimm.internal.config.FilterConfig;
 import org.eclipse.microprofile.openapi.OASFilter;
 import org.eclipse.microprofile.openapi.models.Components;
@@ -250,7 +251,7 @@ public final class FilterInvoker {
 
     private OASFilter instantiateFilter(String filterClassName) {
         try {
-            Class<?> filterClass = Class.forName(filterClassName);
+            Class<?> filterClass = ApplicationClasses.load(filterClassName);
             return (OASFilter) filterClass.getDeclaredConstructor().newInstance();
         } catch (ClassNotFoundException e) {
             throw new IllegalArgumentException("Filter class not found: " + filterClassName, e);

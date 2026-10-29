@@ -461,3 +461,20 @@ Track reproducible bugs with:
   the dot is absent, so a failed match retries every split point (quadratic backtracking).
 - **status**: FIXED — 2026-10-28. The pattern is `\d+(?:\.\d*)?`, which accepts the same language (the
   YAML 1.2 core-schema float) with a single way to match the digits. Regression test: `YamlDeserializerTest`.
+
+## BUG-20261029-01 — the configured model reader and filter are looked up in Grimm's loader only
+
+- **Date**: 2026-10-29
+- **Status**: FIXED (branch fix/application-class-loader)
+- **Symptom**: `mp.openapi.model.reader` and `mp.openapi.filter` name classes of the application (MicroProfile
+  OpenAPI §5.1, §5.2). `ModelReaderInvoker` and `FilterInvoker` loaded them with a single-argument `Class.forName`,
+  that is through grimm-core's own loader. When that loader does not see the application's classes — Grimm provided
+  by an application server, or in a parent module layer — the document build fails with
+  `IllegalArgumentException: Model reader class not found` / `Filter class not found`.
+- **Minimal repro**: `ApplicationClassesTest` (grimm-core): a reader and a filter defined by an application loader
+  set as thread context class loader, invisible to Grimm's loader.
+- **Root cause**: the single-argument `Class.forName`, found during the cross-repository pass on generated code and
+  reflection. `ConfigApplier` already asked the thread context class loader first, the invokers did not.
+- **Fix**: `ApplicationClasses.load` asks the thread context class loader, then Grimm's own; the two invokers and
+  `ConfigApplier` use it.
+- **Regression test**: `ApplicationClassesTest` (red before the fix).

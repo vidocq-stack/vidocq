@@ -19,6 +19,7 @@
  */
 package io.vidocq.grimm.internal.config;
 
+import io.vidocq.grimm.internal.ApplicationClasses;
 import io.vidocq.grimm.internal.schema.SchemaRegistry;
 import io.vidocq.grimm.internal.serialization.JsonDeserializer;
 import org.eclipse.microprofile.openapi.OASFactory;
@@ -225,13 +226,9 @@ public final class ConfigApplier {
 
     private static Class<?> tryLoad(String fqcn) {
         try {
-            return Class.forName(fqcn, false, Thread.currentThread().getContextClassLoader());
+            return ApplicationClasses.load(fqcn);
         } catch (ClassNotFoundException _) {
-            try {
-                return Class.forName(fqcn);
-            } catch (ClassNotFoundException _) {
-                return null;
-            }
+            return null;
         }
     }
 }
