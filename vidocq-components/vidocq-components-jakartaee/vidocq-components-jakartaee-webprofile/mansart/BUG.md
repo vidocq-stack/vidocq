@@ -855,3 +855,36 @@ generated class is served by a `Proxy`, and nothing is logged.
 CODE GENERATION FALLBACK`), and each repository served by the `Proxy` with another (`MANSART — DYNAMIC PROXY
 FALLBACK`) that names the cause and carries the exception; once per repository and JVM. Both point to the fix: add
 `mansart-data-processor` to the annotation processor path. Documented in `internals.adoc` ("The run-time fallback").
+
+## MANSART-026 — Annotation processor: nested repositories, private repositories and invalid queries
+
+- **Date**: 2026-10-29
+- **Status**: FIXED 2026-10-29 (branch `fix/processor-robustness`, generated-code audit)
+- **Severity**: medium (build failures and a repository that `MansartData.repository` never finds)
+- **Module**: `mansart-data-processor` (`MansartProcessor`, `RepositoryWriter`)
+
+### Symptom
+- Two repositories nested in different types under the same simple name (`Kennel.Pets`, `Shelter.Pets`) both
+  generated `demo.PetsImpl`: the second failed with "Attempt to recreate a file for type demo.PetsImpl".
+- A nested repository's implementation was named `PetsImpl`, but `MansartData.repository(Class)` and the CDI
+  extension's sibling check look for `<binary name>Impl` (`Kennel$PetsImpl`): never found.
+- A private nested repository got a generated class that cannot implement it, and the build failed with
+  "demo.Hidden.Pets has private access in demo.Hidden".
+- An invalid `@Query` made the processor throw out of javac (an `IllegalStateException` with its stack trace) instead
+  of reporting a compile error.
+
+### Minimal repro
+`ProcessorNestedRepositoryTest` and `ProcessorComparisonOperatorsTest.rejectsALoneExclamationMark`
+(`mansart-data-tests`).
+
+### Cause
+`RepositoryWriter.writeIfRepository` named the implementation `<simple name>Impl`. `MansartProcessor.writeRepository`
+generated an implementation for every `@Repository`, whatever its visibility, and caught only `IOException`.
+
+### Fix
+- The implementation is named after the binary name (`Outer$PetsImpl` for a nested repository; unchanged for a
+  top-level one).
+- A repository that a top-level class of its package cannot implement (private, local, nested in a private type) is
+  left to the run-time path, with a NOTE.
+- A `RuntimeException` while generating is reported as a compile error on the repository. The source is rendered in
+  memory before it is written, so no partial file is left behind.

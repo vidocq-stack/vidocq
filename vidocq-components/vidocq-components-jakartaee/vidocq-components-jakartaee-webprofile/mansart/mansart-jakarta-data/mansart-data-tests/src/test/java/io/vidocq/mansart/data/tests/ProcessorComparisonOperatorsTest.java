@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** The comparison operators of a {@code @Query} that the annotation processor reads at compile time. */
 class ProcessorComparisonOperatorsTest {
@@ -92,13 +91,17 @@ class ProcessorComparisonOperatorsTest {
         assertThat(impl).contains("notNamed", "otherThan", "below", "upTo", "above", "from", "exactly");
     }
 
+    /** An invalid query fails the compilation with an error that names it; the processor does not crash javac. */
     @Test
-    void rejectsALoneExclamationMark() {
+    void rejectsALoneExclamationMark() throws IOException {
         String pets = repository("""
                 @Query("WHERE name ! ?1") List<Pet> odd(String name);
                 """);
 
-        assertThatThrownBy(() -> InProcessCompilation.compileSources(out, PET, PET_SOURCE, PETS, pets))
-                .rootCause().hasMessageContaining("Unexpected '!'");
+        InProcessCompilation.Result result = InProcessCompilation.compileSources(out, PET, PET_SOURCE, PETS, pets);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.errors()).anySatisfy(error -> assertThat(error)
+                .contains("demo.Pets", "odd", "Unexpected '!'"));
     }
 }

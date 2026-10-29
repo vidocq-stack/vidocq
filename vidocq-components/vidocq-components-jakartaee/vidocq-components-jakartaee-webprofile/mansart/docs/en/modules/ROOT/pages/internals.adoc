@@ -46,6 +46,8 @@ The whole hot path is reflection-free: query plans are prepared once and cached,
 
 . For each class annotated `@Entity` (Mansart or JPA) → generates `_Book.java` (rich metamodel) and `Book_.java` (JPA standard metamodel).
 . For each interface annotated `@Repository` → generates `BookRepositoryImpl.java` (final public implementation class) + an entry in `META-INF/mansart-repositories.list`.
+. A nested repository's implementation is named after its binary name, `Outer$BookRepositoryImpl`, so two nested repositories with the same simple name do not clash. A repository that a top-level class of its package cannot implement (a private or local interface, or one nested in a private type) gets no implementation; a compiler NOTE says so, and it is served on the run-time path.
+. An invalid `@Query`, or a method the processor cannot implement, is a compile error on the repository; no partial source is written.
 
 Source code generated under `target/generated-sources/annotations/`, marked `@Generated("io.vidocq.mansart.data.processor.MansartProcessor")`. The processor has no runtime dependency — it lives only in the consuming module's APT classpath.
 

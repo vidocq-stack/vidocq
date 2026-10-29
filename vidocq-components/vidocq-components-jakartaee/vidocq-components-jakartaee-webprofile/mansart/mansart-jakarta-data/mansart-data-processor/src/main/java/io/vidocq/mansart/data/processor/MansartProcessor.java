@@ -25,6 +25,9 @@ import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.NestingKind;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic;
@@ -107,17 +110,40 @@ public final class MansartProcessor extends AbstractProcessor {
     }
 
     private void writeRepository(TypeElement repo) {
+        if (!implementableFromItsPackage(repo)) {
+            // The generated class is a top-level class of the repository's package: it cannot implement a
+            // private or local interface, nor one nested in a private type. MansartData.runtimeRepository and the
+            // CDI extension serve it on the run-time path.
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,
+                    "[mansart-data] " + repo.getQualifiedName() + " is not visible from its package: no "
+                            + "implementation is generated, it is served on the run-time path.", repo);
+            return;
+        }
         try {
             String implFqn = repositoryWriter.writeIfRepository(repo);
             if (implFqn != null) {
                 String itfFqn = repo.getQualifiedName().toString();
                 repoEntries.add(itfFqn + "=" + implFqn);
             }
-        } catch (IOException ex) {
+        } catch (IOException | RuntimeException ex) {
+            // An invalid @Query, or a shape the processor cannot implement: a compile error on the repository,
+            // not an exception out of javac.
             processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
                     "[mansart-data] Failed to write repository impl for "
                             + repo.getQualifiedName() + ": " + ex.getMessage(), repo);
         }
+    }
+
+    /** Whether a top-level class of the repository's package can implement it. */
+    private static boolean implementableFromItsPackage(TypeElement repo) {
+        for (Element e = repo; e instanceof TypeElement type; e = e.getEnclosingElement()) {
+            NestingKind kind = type.getNestingKind();
+            if (kind == NestingKind.LOCAL || kind == NestingKind.ANONYMOUS
+                    || type.getModifiers().contains(Modifier.PRIVATE)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Writes {@code META-INF/mansart-repositories.list} consumed by the CDI BCE. */

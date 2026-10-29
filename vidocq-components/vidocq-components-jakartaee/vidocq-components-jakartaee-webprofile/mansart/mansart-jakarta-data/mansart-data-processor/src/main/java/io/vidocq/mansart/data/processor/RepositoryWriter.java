@@ -137,8 +137,10 @@ final class RepositoryWriter {
         if (args == null) return null;
 
         String pkg       = elements.getPackageOf(repo).getQualifiedName().toString();
-        String simple    = repo.getSimpleName().toString();
-        String implName  = simple + "Impl";
+        // Named after the binary name (Outer$RepoImpl for a nested repository): two nested repositories of the
+        // same simple name do not clash, and MansartData / the CDI extension find it as <binary name>Impl.
+        String binary    = elements.getBinaryName(repo).toString();
+        String implName  = (pkg.isEmpty() ? binary : binary.substring(pkg.length() + 1)) + "Impl";
         // For nested repository interfaces (e.g. EnclosingTest.MyRepo), the simple name
         // alone won't resolve from a top-level generated Impl class. We compute the
         // access name relative to the package — for a top-level interface this is the
@@ -184,7 +186,9 @@ final class RepositoryWriter {
         QueryMethodParser.PathResolver pathResolver =
                 buildPathResolver(entityType.getQualifiedName().toString());
 
-        try (PrintWriter w = new PrintWriter(sink.createSource(fqn))) {
+        // Rendered in memory first: a method the processor cannot generate leaves no half-written source behind.
+        java.io.StringWriter rendered = new java.io.StringWriter();
+        try (PrintWriter w = new PrintWriter(rendered)) {
             if (!pkg.isEmpty()) {
                 w.println("package " + pkg + ";");
                 w.println();
@@ -233,6 +237,9 @@ final class RepositoryWriter {
             }
 
             w.println("}");
+        }
+        try (java.io.Writer source = sink.createSource(fqn)) {
+            source.write(rendered.toString());
         }
         return fqn;
     }
