@@ -167,19 +167,19 @@ final class PeanoValueExpression extends ValueExpression {
 
     private Ast body() {
         if (objectExpression || template.parts().size() != 1) return null;
-        return template.parts().getFirst() instanceof Template.Evaluation evaluation ? evaluation.body() : null;
+        return template.parts().getFirst() instanceof Template.Evaluation(Ast evaluated) ? evaluated : null;
     }
 
     private boolean lambdaArgument(Ast body, ELContext context) {
-        return body instanceof Ast.Identifier identifier && context.isLambdaArgument(identifier.name());
+        return body instanceof Ast.Identifier(String name) && context.isLambdaArgument(name);
     }
 
     private ValueExpression variable(Ast body) {
-        return body instanceof Ast.Identifier identifier ? variables.get(identifier.name()) : null;
+        return body instanceof Ast.Identifier(String name) ? variables.get(name) : null;
     }
 
     private ResolverAccess.Location location(Ast body, ELContext context) {
-        if (body instanceof Ast.Identifier identifier) return new ResolverAccess.Location(null, identifier.name());
+        if (body instanceof Ast.Identifier(String name)) return new ResolverAccess.Location(null, name);
         prepare(context);
         if (body instanceof Ast.Property property) return ResolverAccess.property(property, context, variables, functions);
         return null;

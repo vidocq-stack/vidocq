@@ -26,6 +26,7 @@ import java.util.Set;
 import io.vidocq.peano.core.internal.syntax.Ast;
 import io.vidocq.peano.core.internal.syntax.ExpressionParser;
 import io.vidocq.peano.core.internal.syntax.Template;
+import io.vidocq.peano.core.internal.syntax.Token;
 
 /** Context-free syntax, canonical identity and ordered creation-time lookup descriptors. */
 public final class ExpressionAnalysis {
@@ -59,12 +60,12 @@ public final class ExpressionAnalysis {
         var builder=new Builder(template.parts().size());
         for (Template.Part part:template.parts()) {
             builder.syntaxBytes+=64;
-            if (part instanceof Template.Evaluation evaluation) {
+            if (part instanceof Template.Evaluation(Ast body)) {
                 builder.partFunctions=List.of();
-                builder.visit(evaluation.body(),Set.of());
+                builder.visit(body,Set.of());
                 builder.functions.add(builder.partFunctions);
-            } else if (part instanceof Template.Text text) {
-                builder.syntaxBytes+=48+2L*text.value().length();
+            } else if (part instanceof Template.Text(String value)) {
+                builder.syntaxBytes+=48+2L*value.length();
             }
         }
         var functions=new ArrayList<List<FunctionName>>(builder.functions.size());
@@ -102,55 +103,54 @@ public final class ExpressionAnalysis {
         private void visit(Ast node,Set<String> locals) {
             syntaxBytes+=64;
             switch (node) {
-                case Ast.Literal literal -> {
-                    var token=literal.token();
+                case Ast.Literal(Token token) -> {
                     syntaxBytes+=128L+2L*token.text().length();
                     if (token.value()!=null) {
                         syntaxBytes+=2L*token.value().length();
                         if (!token.value().isEmpty()) stringValues=true;
                     }
                 }
-                case Ast.Identifier name -> {
-                    syntaxBytes+=48L+2L*name.name().length();
-                    if (!locals.contains(name.name()) && seenVariables.add(name.name())) variables.add(name.name());
+                case Ast.Identifier(String name) -> {
+                    syntaxBytes+=48L+2L*name.length();
+                    if (!locals.contains(name) && seenVariables.add(name)) variables.add(name);
                 }
-                case Ast.Unary unary -> {
-                    syntaxBytes+=96L+2L*unary.operator().text().length(); visit(unary.operand(),locals);
+                case Ast.Unary(Token operator, Ast operand) -> {
+                    syntaxBytes+=96L+2L*operator.text().length(); visit(operand,locals);
                 }
-                case Ast.Binary binary -> {
-                    syntaxBytes+=96L+2L*binary.operator().text().length();
-                    visit(binary.left(),locals); visit(binary.right(),locals);
+                case Ast.Binary(Token operator, Ast left, Ast right) -> {
+                    syntaxBytes+=96L+2L*operator.text().length();
+                    visit(left,locals); visit(right,locals);
                 }
-                case Ast.Conditional choice -> {
-                    visit(choice.condition(),locals); visit(choice.whenTrue(),locals); visit(choice.whenFalse(),locals);
+                case Ast.Conditional(Ast condition, Ast whenTrue, Ast whenFalse) -> {
+                    visit(condition,locals); visit(whenTrue,locals); visit(whenFalse,locals);
                 }
-                case Ast.Property property -> { visit(property.base(),locals); visit(property.key(),locals); }
-                case Ast.Call call -> {
-                    syntaxBytes+=8L*call.arguments().size();
-                    if (call.target() instanceof Ast.Identifier name && !locals.contains(name.name())) function("",name.name());
-                    visit(call.target(),locals);
-                    call.arguments().forEach(argument->visit(argument,locals));
+                case Ast.Property(Ast base, Ast key) -> { visit(base,locals); visit(key,locals); }
+                case Ast.Call(Ast target, List<Ast> arguments) -> {
+                    syntaxBytes+=8L*arguments.size();
+                    if (target instanceof Ast.Identifier(String name) && !locals.contains(name)) function("",name);
+                    visit(target,locals);
+                    arguments.forEach(argument->visit(argument,locals));
                 }
-                case Ast.Function function -> {
-                    syntaxBytes+=96L+2L*function.prefix().length()+2L*function.name().length()+8L*function.arguments().size();
-                    function(function.prefix(),function.name());
-                    function.arguments().forEach(argument->visit(argument,locals));
+                case Ast.Function(String prefix, String name, List<Ast> arguments) -> {
+                    syntaxBytes+=96L+2L*prefix.length()+2L*name.length()+8L*arguments.size();
+                    function(prefix,name);
+                    arguments.forEach(argument->visit(argument,locals));
                 }
-                case Ast.Lambda lambda -> {
-                    syntaxBytes+=8L*lambda.parameters().size();
-                    for (String parameter:lambda.parameters()) syntaxBytes+=48L+2L*parameter.length();
-                    var nested=new HashSet<>(locals); nested.addAll(lambda.parameters());
-                    visit(lambda.body(),nested);
+                case Ast.Lambda(List<String> parameters, Ast body) -> {
+                    syntaxBytes+=8L*parameters.size();
+                    for (String parameter:parameters) syntaxBytes+=48L+2L*parameter.length();
+                    var nested=new HashSet<>(locals); nested.addAll(parameters);
+                    visit(body,nested);
                 }
-                case Ast.ListLiteral list -> {
-                    syntaxBytes+=8L*list.elements().size(); list.elements().forEach(element->visit(element,locals));
+                case Ast.ListLiteral(List<Ast> elements) -> {
+                    syntaxBytes+=8L*elements.size(); elements.forEach(element->visit(element,locals));
                 }
-                case Ast.SetLiteral set -> {
-                    syntaxBytes+=8L*set.elements().size(); set.elements().forEach(element->visit(element,locals));
+                case Ast.SetLiteral(List<Ast> elements) -> {
+                    syntaxBytes+=8L*elements.size(); elements.forEach(element->visit(element,locals));
                 }
-                case Ast.MapLiteral map -> {
-                    syntaxBytes+=40L*map.entries().size();
-                    map.entries().forEach(entry->{ visit(entry.key(),locals); visit(entry.value(),locals); });
+                case Ast.MapLiteral(List<Ast.Entry> entries) -> {
+                    syntaxBytes+=40L*entries.size();
+                    entries.forEach(entry->{ visit(entry.key(),locals); visit(entry.value(),locals); });
                 }
             }
         }

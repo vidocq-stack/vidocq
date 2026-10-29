@@ -56,6 +56,19 @@ class LambdaCaptureEffectsTest {
         } finally { context.exitLambdaScope(); }
     }
 
+    @Test void capturesOuterArgumentsFromEveryNestedSyntaxForm() {
+        var context=new CaptureContext();
+        var scope=new HashMap<String,Object>();
+        for (String name:List.of("a","b","c","d","e","f","g","h")) scope.put(name,name.toUpperCase());
+        context.enterLambdaScope(scope);
+        try {
+            var lambda=(Ast.Lambda)Parser.parseBody("(x -> -a + fn:call(b) + {c} + {d: e} + [f] + (g ? x.y : h[x]) + 'z')");
+            var captured=Bindings.captureLambdaArguments(lambda,context);
+            assertEquals(List.of("a","b","c","d","e","f","g","h"),context.visited);
+            assertEquals(java.util.Map.of("a","A","b","B","c","C","d","D","e","E","f","F","g","G","h","H"),captured);
+        } finally { context.exitLambdaScope(); }
+    }
+
     @Test void nullableCapturesRemainPresentAndImmutable() {
         var context=new CaptureContext();
         var scope=new HashMap<String,Object>(); scope.put("seed",null);
@@ -65,7 +78,7 @@ class LambdaCaptureEffectsTest {
             var captured=Bindings.captureLambdaArguments(lambda,context);
             assertTrue(captured.containsKey("seed")); assertNull(captured.get("seed"));
             scope.put("seed",99L); assertNull(captured.get("seed"));
-            assertThrows(UnsupportedOperationException.class,()->captured.clear());
+            assertThrows(UnsupportedOperationException.class,captured::clear);
         } finally { context.exitLambdaScope(); }
     }
 

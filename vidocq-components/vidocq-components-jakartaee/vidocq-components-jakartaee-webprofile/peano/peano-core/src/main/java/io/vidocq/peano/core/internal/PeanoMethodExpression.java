@@ -71,8 +71,8 @@ final class PeanoMethodExpression extends MethodExpression {
         this.source = source;
         this.template = analysis.template();
         this.identity = analysis.identity();
-        this.body = template.parts().size() == 1 && template.parts().getFirst() instanceof Template.Evaluation evaluation
-                ? evaluation.body() : null;
+        this.body = template.parts().size() == 1 && template.parts().getFirst() instanceof Template.Evaluation(Ast evaluated)
+                ? evaluated : null;
         boolean literal = template.kind() == Template.Kind.LITERAL;
         if (!literal && !(body instanceof Ast.Identifier || body instanceof Ast.Property
                 || body instanceof Ast.Call call && call.target() instanceof Ast.Property)) {

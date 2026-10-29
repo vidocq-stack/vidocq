@@ -66,15 +66,15 @@ public final class Interpreter {
     }
 
     private Object template(Template template) {
-        if (template.parts().size() == 1 && template.parts().getFirst() instanceof Template.Evaluation part) {
-            return eval(part.body());
+        if (template.parts().size() == 1 && template.parts().getFirst() instanceof Template.Evaluation(Ast body)) {
+            return eval(body);
         }
         var result = new StringBuilder();
         for (Template.Part part : template.parts()) {
             switch (part) {
-                case Template.Text text -> result.append(text.value());
-                case Template.Evaluation expression -> result.append(
-                        convert(eval(expression.body()), String.class));
+                case Template.Text(String value) -> result.append(value);
+                case Template.Evaluation(Ast body) -> result.append(
+                        convert(eval(body), String.class));
             }
         }
         return result.toString();
@@ -95,19 +95,19 @@ public final class Interpreter {
 
     private Object eval(Ast ast) {
         return switch (ast) {
-            case Ast.Literal literal -> literal(literal.token());
-            case Ast.Identifier identifier -> ResolverAccess.identifier(identifier.name(), context, variables);
+            case Ast.Literal(Token token) -> literal(token);
+            case Ast.Identifier(String name) -> ResolverAccess.identifier(name, context, variables);
             case Ast.Property property -> property(property);
             case Ast.Call call -> call(call);
             case Ast.Function function -> function(function);
-            case Ast.ListLiteral list -> list(list.elements());
-            case Ast.SetLiteral set -> new LinkedHashSet<>(list(set.elements()));
+            case Ast.ListLiteral(List<Ast> elements) -> list(elements);
+            case Ast.SetLiteral(List<Ast> elements) -> new LinkedHashSet<>(list(elements));
             case Ast.MapLiteral map -> map(map);
             case Ast.Lambda lambda -> lambda(lambda);
             case Ast.Unary unary -> unary(unary);
             case Ast.Binary binary -> binary(binary);
-            case Ast.Conditional conditional -> convert(eval(conditional.condition()), boolean.class)
-                    ? eval(conditional.whenTrue()) : eval(conditional.whenFalse());
+            case Ast.Conditional(Ast condition, Ast whenTrue, Ast whenFalse) -> truth(eval(condition))
+                    ? eval(whenTrue) : eval(whenFalse);
         };
     }
 
@@ -152,12 +152,12 @@ public final class Interpreter {
 
     private Object unary(Ast.Unary unary) {
         // Parse the signed literal directly: Long.MIN_VALUE's magnitude does not fit in Long.
-        if (unary.operator().kind() == TokenKind.MINUS && unary.operand() instanceof Ast.Literal literal
-                && literal.token().kind() == TokenKind.INTEGER) {
+        if (unary.operator().kind() == TokenKind.MINUS && unary.operand() instanceof Ast.Literal(Token token)
+                && token.kind() == TokenKind.INTEGER) {
             try {
-                return Long.valueOf("-" + literal.token().text());
+                return Long.valueOf("-" + token.text());
             } catch (NumberFormatException error) {
-                throw new ELException("Invalid numeric literal at offset " + literal.token().start(), error);
+                throw new ELException("Invalid numeric literal at offset " + token.start(), error);
             }
         }
         Object value = eval(unary.operand());
@@ -220,30 +220,30 @@ public final class Interpreter {
     }
 
     private Object call(Ast.Call call) {
-        if (call.target() instanceof Ast.Property property) {
-            Object base = eval(property.base());
+        if (call.target() instanceof Ast.Property(Ast baseNode, Ast keyNode)) {
+            Object base = eval(baseNode);
             if (base == null) return null;
-            Object key = eval(property.key());
+            Object key = eval(keyNode);
             if (key == null) return null;
             return ResolverAccess.invoke(context, new ResolverAccess.Location(base, convert(key, String.class)),
                     null, arguments(call.arguments()));
         }
-        if (call.target() instanceof Ast.Identifier identifier) {
-            Object callable = ResolverAccess.callable(identifier.name(), context, variables);
+        if (call.target() instanceof Ast.Identifier(String name)) {
+            Object callable = ResolverAccess.callable(name, context, variables);
             if (callable instanceof LambdaExpression lambda) return lambda.invoke(context, arguments(call.arguments()));
-            Method method = functions.get(Bindings.functionKey("", identifier.name()));
+            Method method = functions.get(Bindings.functionKey("", name));
             if (method != null) return ResolverAccess.function(context, method, arguments(call.arguments()));
-            Class<?> type = context.getImportHandler().resolveClass(identifier.name());
+            Class<?> type = context.getImportHandler().resolveClass(name);
             if (type != null) {
                 return ResolverAccess.invoke(context, new ResolverAccess.Location(new ELClass(type), "<init>"),
                         null, arguments(call.arguments()));
             }
-            type = context.getImportHandler().resolveStatic(identifier.name());
+            type = context.getImportHandler().resolveStatic(name);
             if (type != null) {
-                return ResolverAccess.invoke(context, new ResolverAccess.Location(new ELClass(type), identifier.name()),
+                return ResolverAccess.invoke(context, new ResolverAccess.Location(new ELClass(type), name),
                         null, arguments(call.arguments()));
             }
-            throw new MethodNotFoundException("Unresolved function " + identifier.name());
+            throw new MethodNotFoundException("Unresolved function " + name);
         }
         Object callable = eval(call.target());
         if (callable instanceof LambdaExpression lambda) return lambda.invoke(context, arguments(call.arguments()));
@@ -252,11 +252,11 @@ public final class Interpreter {
 
     private Consumer<Object> writer(Ast target) {
         if (context == null) throw new ELException("Assignment requires an ELContext");
-        if (target instanceof Ast.Identifier identifier) {
-            if (context.isLambdaArgument(identifier.name())) {
+        if (target instanceof Ast.Identifier(String name)) {
+            if (context.isLambdaArgument(name)) {
                 throw new PropertyNotWritableException("Lambda arguments are read-only");
             }
-            ValueExpression variable = variables.get(identifier.name());
+            ValueExpression variable = variables.get(name);
             if (variable != null) {
                 var reference = variable.getValueReference(context);
                 if (reference != null) {
@@ -266,7 +266,7 @@ public final class Interpreter {
                 if (variable.isReadOnly(context)) throw new PropertyNotWritableException("Variable is read-only");
                 return value -> variable.setValue(context, value);
             }
-            var location = new ResolverAccess.Location(null, identifier.name());
+            var location = new ResolverAccess.Location(null, name);
             return value -> ResolverAccess.write(context, location, value);
         }
         if (target instanceof Ast.Property property) {
@@ -274,6 +274,10 @@ public final class Interpreter {
             return value -> ResolverAccess.write(context, location, value);
         }
         throw new PropertyNotWritableException("Assignment target is not an lvalue");
+    }
+
+    private boolean truth(Object value) {
+        return convert(value, boolean.class);
     }
 
     private <T> T convert(Object value, Class<T> type) {

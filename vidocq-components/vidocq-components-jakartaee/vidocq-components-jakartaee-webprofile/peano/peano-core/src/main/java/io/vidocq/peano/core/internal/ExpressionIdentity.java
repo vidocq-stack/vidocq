@@ -19,6 +19,7 @@
  */
 package io.vidocq.peano.core.internal;
 
+import java.util.List;
 import io.vidocq.peano.core.internal.syntax.Ast;
 import io.vidocq.peano.core.internal.syntax.Template;
 import io.vidocq.peano.core.internal.syntax.Token;
@@ -29,10 +30,14 @@ final class ExpressionIdentity {
 
     static Template template(Template template) {
         return new Template(template.kind() == Template.Kind.LITERAL ? Template.Kind.LITERAL : Template.Kind.IMMEDIATE,
-                template.parts().stream().map(part -> switch (part) {
-                    case Template.Text text -> (Template.Part) text;
-                    case Template.Evaluation evaluation -> new Template.Evaluation(ast(evaluation.body()));
-                }).toList());
+                template.parts().stream().map(ExpressionIdentity::part).toList());
+    }
+
+    private static Template.Part part(Template.Part part) {
+        return switch (part) {
+            case Template.Text text -> text;
+            case Template.Evaluation(Ast body) -> new Template.Evaluation(ast(body));
+        };
     }
 
     private static Token literal(Token token) {
@@ -49,22 +54,26 @@ final class ExpressionIdentity {
 
     private static Ast ast(Ast node) {
         return switch (node) {
-            case Ast.Literal value -> new Ast.Literal(literal(value.token()));
+            case Ast.Literal(Token token) -> new Ast.Literal(literal(token));
             case Ast.Identifier identifier -> identifier;
-            case Ast.Unary unary -> new Ast.Unary(operator(unary.operator()), ast(unary.operand()));
-            case Ast.Binary binary -> new Ast.Binary(operator(binary.operator()), ast(binary.left()), ast(binary.right()));
-            case Ast.Conditional conditional -> new Ast.Conditional(ast(conditional.condition()),
-                    ast(conditional.whenTrue()), ast(conditional.whenFalse()));
-            case Ast.Property property -> new Ast.Property(ast(property.base()), ast(property.key()));
-            case Ast.Call call -> new Ast.Call(ast(call.target()), call.arguments().stream().map(ExpressionIdentity::ast).toList());
-            case Ast.Function function -> new Ast.Function(function.prefix(), function.name(),
-                    function.arguments().stream().map(ExpressionIdentity::ast).toList());
-            case Ast.Lambda lambda -> new Ast.Lambda(lambda.parameters(), ast(lambda.body()));
-            case Ast.ListLiteral list -> new Ast.ListLiteral(list.elements().stream().map(ExpressionIdentity::ast).toList());
-            case Ast.SetLiteral set -> new Ast.SetLiteral(set.elements().stream().map(ExpressionIdentity::ast).toList());
-            case Ast.MapLiteral map -> new Ast.MapLiteral(map.entries().stream()
+            case Ast.Unary(Token operator, Ast operand) -> new Ast.Unary(operator(operator), ast(operand));
+            case Ast.Binary(Token operator, Ast left, Ast right) -> new Ast.Binary(operator(operator), ast(left), ast(right));
+            case Ast.Conditional(Ast condition, Ast whenTrue, Ast whenFalse) -> new Ast.Conditional(ast(condition),
+                    ast(whenTrue), ast(whenFalse));
+            case Ast.Property(Ast base, Ast key) -> new Ast.Property(ast(base), ast(key));
+            case Ast.Call(Ast target, List<Ast> arguments) -> new Ast.Call(ast(target), asts(arguments));
+            case Ast.Function(String prefix, String name, List<Ast> arguments) -> new Ast.Function(prefix, name,
+                    asts(arguments));
+            case Ast.Lambda(List<String> parameters, Ast body) -> new Ast.Lambda(parameters, ast(body));
+            case Ast.ListLiteral(List<Ast> elements) -> new Ast.ListLiteral(asts(elements));
+            case Ast.SetLiteral(List<Ast> elements) -> new Ast.SetLiteral(asts(elements));
+            case Ast.MapLiteral(List<Ast.Entry> entries) -> new Ast.MapLiteral(entries.stream()
                     .map(entry -> new Ast.Entry(ast(entry.key()), ast(entry.value()))).toList());
         };
+    }
+
+    private static List<Ast> asts(List<Ast> nodes) {
+        return nodes.stream().map(ExpressionIdentity::ast).toList();
     }
 }
 

@@ -36,32 +36,39 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
         var mapper=creationContext==null ? null : creationContext.getFunctionMapper();
         var captured=new LinkedHashMap<String,FunctionBinding>();
         for (String key:functionKeys) {
-            int separator=key.indexOf(':');
-            if (separator<0) throw new ELException("Invalid compiled function key "+key);
-            String prefix=key.substring(0,separator),name=key.substring(separator+1);
-            if (mapper instanceof CompiledFunctionMapper compiled) {
-                var descriptor=compiled.resolveCompiledFunction(prefix,name);
-                if (descriptor==null) {
-                    if (!prefix.isEmpty()) throw new ELException("Unmapped function "+key);
-                    continue;
-                }
-                var method=descriptor.method();
-                captured.put(key,new FunctionBinding(descriptor.owner(),method.name(),
-                        Arrays.asList(method.parameterTypes()),method.returnType(),descriptor.invoker()));
-                continue;
-            }
-            var method=mapper==null ? null : mapper.resolveFunction(prefix,name);
-            if (method==null) {
-                if (!prefix.isEmpty()) throw new ELException("Unmapped function "+key);
-                continue;
-            }
-            if (!Modifier.isPublic(method.getModifiers()) || !Modifier.isStatic(method.getModifiers())
-                    || !Modifier.isPublic(method.getDeclaringClass().getModifiers()))
-                throw new ELException("Function must reference a public static method: "+key);
-            captured.put(key,new FunctionBinding(method.getDeclaringClass(),method.getName(),
-                    Arrays.asList(method.getParameterTypes()),method.getReturnType(),null));
+            FunctionBinding binding=bind(mapper,key);
+            if (binding!=null) captured.put(key,binding);
         }
         functions=Map.copyOf(captured);
+    }
+
+    /** The creation-time binding of one function key, or null for an unmapped default-namespace call. */
+    private static FunctionBinding bind(FunctionMapper mapper,String key) {
+        int separator=key.indexOf(':');
+        if (separator<0) throw new ELException("Invalid compiled function key "+key);
+        String prefix=key.substring(0,separator);
+        String name=key.substring(separator+1);
+        if (mapper instanceof CompiledFunctionMapper compiled) return compiledBinding(compiled,prefix,name,key);
+        var method=mapper==null ? null : mapper.resolveFunction(prefix,name);
+        if (method==null) return unmapped(prefix,key);
+        if (!Modifier.isPublic(method.getModifiers()) || !Modifier.isStatic(method.getModifiers())
+                || !Modifier.isPublic(method.getDeclaringClass().getModifiers()))
+            throw new ELException("Function must reference a public static method: "+key);
+        return new FunctionBinding(method.getDeclaringClass(),method.getName(),
+                Arrays.asList(method.getParameterTypes()),method.getReturnType(),null);
+    }
+
+    private static FunctionBinding compiledBinding(CompiledFunctionMapper compiled,String prefix,String name,String key) {
+        var descriptor=compiled.resolveCompiledFunction(prefix,name);
+        if (descriptor==null) return unmapped(prefix,key);
+        var method=descriptor.method();
+        return new FunctionBinding(descriptor.owner(),method.name(),
+                Arrays.asList(method.parameterTypes()),method.returnType(),descriptor.invoker());
+    }
+
+    private static FunctionBinding unmapped(String prefix,String key) {
+        if (!prefix.isEmpty()) throw new ELException("Unmapped function "+key);
+        return null;
     }
 
     @Override protected Object bindingIdentity() {
@@ -82,7 +89,7 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
 
     protected final Object invokeResolvedCall(ELContext context,Object target,Object[] arguments) {
         if (target instanceof LambdaExpression lambda) return lambda.invoke(context,arguments);
-        if (target instanceof MappedCall mapped) return invokeFunction(context,mapped.key(),arguments);
+        if (target instanceof MappedCall(String key)) return invokeFunction(context,key,arguments);
         var imported=(ImportedCall)target;
         return invokeProperty(context,new ELClass(imported.owner()),imported.name(),arguments);
     }
@@ -107,7 +114,9 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
         });
         if (context.isPropertyResolved()) return value;
         switch (System.getProperty("peano.reflection","allow")) {
-            case "allow" -> {}
+            case "allow" -> {
+                // Fall through to the reflective StaticFieldELResolver below.
+            }
             case "deny" -> throw new ELException("Reflection fallback denied for "+function.owner().getName()
                     +"; register a generated accessor provider or a custom resolver");
             default -> throw new ELException("Invalid peano.reflection value; expected allow or deny");
@@ -134,7 +143,8 @@ public abstract class CompiledFunctionValueExpression extends CompiledPropertyVa
     protected static AccessorTable registered(ELContext context,Class<?> owner) {
         ClassLoader loader=Thread.currentThread().getContextClassLoader();
         Object cached=context.getContext(Registry.class);
-        if (cached instanceof Registry registry && registry.loader()==loader) return registry.tables().get(owner);
+        if (cached instanceof Registry(ClassLoader cachedLoader,Map<Class<?>,AccessorTable> tables) && cachedLoader==loader)
+            return tables.get(owner);
         var registry=load(loader);
         context.putContext(Registry.class,registry);
         return registry.tables().get(owner);

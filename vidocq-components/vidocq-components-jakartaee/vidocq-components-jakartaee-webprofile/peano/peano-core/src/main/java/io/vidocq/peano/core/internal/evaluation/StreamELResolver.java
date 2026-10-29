@@ -57,9 +57,9 @@ public final class StreamELResolver extends ELResolver {
             }
             return new Pipeline(IntStream.range(0, Array.getLength(base)).mapToObj(i -> Array.get(base, i)));
         }
-        if (base instanceof Pipeline pipeline) {
+        if (base instanceof Pipeline(Stream<Object> elements)) {
             context.setPropertyResolved(base, method);
-            return pipeline(context, pipeline.elements(), name, args);
+            return pipeline(context, elements, name, args);
         }
         if (base instanceof Result result) {
             context.setPropertyResolved(base, method);
@@ -80,15 +80,7 @@ public final class StreamELResolver extends ELResolver {
                 LambdaExpression mapper = lambda(args[0]);
                 yield new Pipeline(stream.map(value -> mapper.invoke(context, value)));
             }
-            case "flatMap" -> {
-                arity(name, args, 1);
-                LambdaExpression mapper = lambda(args[0]);
-                yield new Pipeline(stream.flatMap(value -> {
-                    Object mapped = mapper.invoke(context, value);
-                    if (mapped instanceof Pipeline nested) return nested.elements();
-                    throw new ELException("flatMap requires an EL stream result");
-                }));
-            }
+            case "flatMap" -> flatMap(context, stream, name, args);
             case "distinct" -> {
                 arity(name, args, 0);
                 yield new Pipeline(stream.distinct());
@@ -97,31 +89,12 @@ public final class StreamELResolver extends ELResolver {
                 arity(name, args, 0, 1);
                 yield new Pipeline(stream.sorted(comparator(context, args)));
             }
-            case "peek", "forEach" -> {
-                arity(name, args, 1);
-                LambdaExpression consumer = lambda(args[0]);
-                if (name.equals("peek")) {
-                    yield new Pipeline(stream.peek(value -> consumer.invoke(context, value)));
-                }
-                stream.forEachOrdered(value -> consumer.invoke(context, value));
-                yield null;
-            }
+            case "peek", "forEach" -> visit(context, stream, name, args);
             case "limit" -> {
                 arity(name, args, 1);
                 yield new Pipeline(stream.limit(Math.max(0, number(context, args[0]))));
             }
-            case "substream" -> {
-                arity(name, args, 1, 2);
-                long start = number(context, args[0]);
-                Stream<Object> skipped = stream.skip(Math.max(0, start));
-                if (args.length == 2) {
-                    long end = number(context, args[1]);
-                    // Saturate subtraction to avoid overflowing a very large positive range.
-                    long length = end <= start ? 0 : end - start;
-                    skipped = skipped.limit(length < 0 ? Long.MAX_VALUE : length);
-                }
-                yield new Pipeline(skipped);
-            }
+            case "substream" -> substream(context, stream, name, args);
             case "toArray" -> {
                 arity(name, args, 0);
                 yield stream.toArray();
@@ -134,72 +107,11 @@ public final class StreamELResolver extends ELResolver {
                 arity(name, args, 0);
                 yield stream.iterator();
             }
-            case "count" -> {
-                arity(name, args, 0);
-                // Traverse even sized sources: EL peek callbacks are observable.
-                long count = 0;
-                Iterator<Object> iterator = stream.iterator();
-                while (iterator.hasNext()) {
-                    iterator.next();
-                    count++;
-                }
-                yield count;
-            }
-            case "reduce" -> {
-                arity(name, args, 1, 2);
-                LambdaExpression reducer = lambda(args[args.length - 1]);
-                Iterator<Object> iterator = stream.iterator();
-                if (args.length == 1 && !iterator.hasNext()) yield Result.empty();
-                Object value = args.length == 2 ? args[0] : iterator.next();
-                while (iterator.hasNext()) value = reducer.invoke(context, value, iterator.next());
-                yield args.length == 2 ? value : Result.of(value);
-            }
-            case "min", "max" -> {
-                arity(name, args, 0, 1);
-                Comparator<Object> comparison = comparator(context, args);
-                Iterator<Object> iterator = stream.iterator();
-                if (!iterator.hasNext()) yield Result.empty();
-                Object best = iterator.next();
-                // Even a singleton must satisfy the natural ordering contract.
-                if (args.length == 0 && !(best instanceof Comparable<?>)) {
-                    throw new ELException("Natural ordering requires Comparable elements");
-                }
-                while (iterator.hasNext()) {
-                    Object next = iterator.next();
-                    int order = comparison.compare(next, best);
-                    if (name.equals("max") ? order > 0 : order < 0) best = next;
-                }
-                yield Result.of(best);
-            }
-            case "sum", "average" -> {
-                arity(name, args, 0);
-                Iterator<Object> iterator = stream.iterator();
-                Number sum = 0L;
-                long count = 0;
-                while (iterator.hasNext()) {
-                    sum = Arithmetic.binary(TokenKind.PLUS, sum, iterator.next(), context);
-                    count++;
-                }
-                if (name.equals("sum")) yield sum;
-                yield count == 0 ? Result.empty()
-                        : Result.of(Arithmetic.binary(TokenKind.DIVIDE, sum, count, context));
-            }
-            case "anyMatch", "allMatch", "noneMatch" -> {
-                arity(name, args, 1);
-                LambdaExpression predicate = lambda(args[0]);
-                Iterator<Object> iterator = stream.iterator();
-                if (!iterator.hasNext()) yield Result.empty();
-                boolean all = name.equals("allMatch");
-                boolean matched = all;
-                do {
-                    boolean test = truth(context, predicate, iterator.next());
-                    if (test != all) {
-                        matched = !all;
-                        break;
-                    }
-                } while (iterator.hasNext());
-                yield Result.of(name.equals("noneMatch") ? !matched : matched);
-            }
+            case "count" -> count(stream, name, args);
+            case "reduce" -> reduce(context, stream, name, args);
+            case "min", "max" -> extreme(context, stream, name, args);
+            case "sum", "average" -> total(context, stream, name, args);
+            case "anyMatch", "allMatch", "noneMatch" -> match(context, stream, name, args);
             case "findFirst" -> {
                 arity(name, args, 0);
                 Iterator<Object> iterator = stream.iterator();
@@ -207,6 +119,114 @@ public final class StreamELResolver extends ELResolver {
             }
             default -> throw new MethodNotFoundException("Unknown EL stream operation: " + name);
         };
+    }
+
+    private static Pipeline flatMap(ELContext context, Stream<Object> stream, String name, Object[] args) {
+        arity(name, args, 1);
+        LambdaExpression mapper = lambda(args[0]);
+        return new Pipeline(stream.flatMap(value -> {
+            Object mapped = mapper.invoke(context, value);
+            if (mapped instanceof Pipeline(Stream<Object> elements)) return elements;
+            throw new ELException("flatMap requires an EL stream result");
+        }));
+    }
+
+    /** peek stays lazy (a pass-through map, never elided); forEach consumes the stream in order. */
+    private static Pipeline visit(ELContext context, Stream<Object> stream, String name, Object[] args) {
+        arity(name, args, 1);
+        LambdaExpression consumer = lambda(args[0]);
+        if (name.equals("peek")) {
+            return new Pipeline(stream.map(value -> {
+                consumer.invoke(context, value);
+                return value;
+            }));
+        }
+        stream.forEachOrdered(value -> consumer.invoke(context, value));
+        return null;
+    }
+
+    private static Pipeline substream(ELContext context, Stream<Object> stream, String name, Object[] args) {
+        arity(name, args, 1, 2);
+        long start = number(context, args[0]);
+        Stream<Object> skipped = stream.skip(Math.max(0, start));
+        if (args.length == 2) {
+            long end = number(context, args[1]);
+            // Saturate subtraction to avoid overflowing a very large positive range.
+            long length = end <= start ? 0 : end - start;
+            skipped = skipped.limit(length < 0 ? Long.MAX_VALUE : length);
+        }
+        return new Pipeline(skipped);
+    }
+
+    private static long count(Stream<Object> stream, String name, Object[] args) {
+        arity(name, args, 0);
+        // Traverse even sized sources: EL peek callbacks are observable.
+        long count = 0;
+        Iterator<Object> iterator = stream.iterator();
+        while (iterator.hasNext()) {
+            iterator.next();
+            count++;
+        }
+        return count;
+    }
+
+    private static Object reduce(ELContext context, Stream<Object> stream, String name, Object[] args) {
+        arity(name, args, 1, 2);
+        LambdaExpression reducer = lambda(args[args.length - 1]);
+        Iterator<Object> iterator = stream.iterator();
+        if (args.length == 1 && !iterator.hasNext()) return Result.empty();
+        Object value = args.length == 2 ? args[0] : iterator.next();
+        while (iterator.hasNext()) value = reducer.invoke(context, value, iterator.next());
+        return args.length == 2 ? value : Result.of(value);
+    }
+
+    private static Result extreme(ELContext context, Stream<Object> stream, String name, Object[] args) {
+        arity(name, args, 0, 1);
+        Comparator<Object> comparison = comparator(context, args);
+        Iterator<Object> iterator = stream.iterator();
+        if (!iterator.hasNext()) return Result.empty();
+        Object best = iterator.next();
+        // Even a singleton must satisfy the natural ordering contract.
+        if (args.length == 0 && !(best instanceof Comparable<?>)) {
+            throw new ELException("Natural ordering requires Comparable elements");
+        }
+        boolean max = name.equals("max");
+        while (iterator.hasNext()) {
+            Object next = iterator.next();
+            int order = comparison.compare(next, best);
+            if (max ? order > 0 : order < 0) best = next;
+        }
+        return Result.of(best);
+    }
+
+    private static Object total(ELContext context, Stream<Object> stream, String name, Object[] args) {
+        arity(name, args, 0);
+        Iterator<Object> iterator = stream.iterator();
+        Number sum = 0L;
+        long count = 0;
+        while (iterator.hasNext()) {
+            sum = Arithmetic.binary(TokenKind.PLUS, sum, iterator.next(), context);
+            count++;
+        }
+        if (name.equals("sum")) return sum;
+        return count == 0 ? Result.empty() : Result.of(Arithmetic.binary(TokenKind.DIVIDE, sum, count, context));
+    }
+
+    private static Result match(ELContext context, Stream<Object> stream, String name, Object[] args) {
+        arity(name, args, 1);
+        LambdaExpression predicate = lambda(args[0]);
+        Iterator<Object> iterator = stream.iterator();
+        if (!iterator.hasNext()) return Result.empty();
+        boolean all = name.equals("allMatch");
+        boolean matched = all;
+        do {
+            boolean test = truth(context, predicate, iterator.next());
+            if (test != all) {
+                matched = !all;
+                break;
+            }
+        } while (iterator.hasNext());
+        return Result.of(name.equals("noneMatch") ? !matched : matched);
     }
 
     private Object optional(ELContext context, Result result, String name, Object[] args) {
@@ -271,7 +291,9 @@ public final class StreamELResolver extends ELResolver {
 
     @Override public Object getValue(ELContext context, Object base, Object property) { return null; }
     @Override public Class<?> getType(ELContext context, Object base, Object property) { return null; }
-    @Override public void setValue(ELContext context, Object base, Object property, Object value) {}
+    @Override public void setValue(ELContext context, Object base, Object property, Object value) {
+        // Stream and optional values expose no writable property: invoke is the only operation.
+    }
     @Override public boolean isReadOnly(ELContext context, Object base, Object property) { return false; }
     @Override public Class<?> getCommonPropertyType(ELContext context, Object base) { return null; }
 }
