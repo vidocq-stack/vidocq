@@ -56,13 +56,13 @@ public final class OtlpHttpLogExporter implements LogRecordExporter {
 
     @Override
     public CompletableResultCode flush() {
-        return CompletableResultCode.ofSuccess();
+        return sender.flush();
     }
 
     @Override
     public CompletableResultCode shutdown() {
         stopped.set(true);
-        return CompletableResultCode.ofSuccess();
+        return sender.flush();
     }
 
     /** Builder of {@link OtlpHttpLogExporter}; default endpoint {@code http://localhost:4318/v1/logs}. */

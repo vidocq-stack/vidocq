@@ -208,9 +208,10 @@ class SdkLogRecordBuilderEdgeCasesTest {
             processor.onEmit(sampleRecord());
             assertTrue(processor.flush().join(5, TimeUnit.SECONDS).isSuccess());
             assertEquals(2, exporter.exported.size());
-            // Nothing queued any more: the flush goes straight to the exporter.
-            assertTrue(processor.flush().isSuccess());
-            assertEquals(1, exporter.flushes.get());
+            // Nothing queued any more: the flush still goes through the worker, which may hold a batch it took from
+            // the queue (BUG-20261029-04), then flushes the exporter like the first one did.
+            assertTrue(processor.flush().join(5, TimeUnit.SECONDS).isSuccess());
+            assertEquals(2, exporter.flushes.get());
         } finally {
             processor.shutdown();
         }

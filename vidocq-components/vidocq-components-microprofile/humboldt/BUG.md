@@ -585,3 +585,32 @@
 - **Fix**: two written classes, `CurrentSpan` and `CurrentBaggage`, forward every method (default ones included) to
   `Span.current()` / `Baggage.current()`; equality is identity.
 - **Regression tests**: see repro.
+
+## BUG-20261029-04 — A successful flush or shutdown did not mean the data had been exported
+
+- **Date**: 2026-10-29
+- **Status**: FIXED (fix/batch-flush)
+- **Module**: `humboldt-sdk-common` — `AbstractBatchProcessor`; `humboldt-sdk-metric` — `PeriodicMetricReader`;
+  `humboldt-exporter-otlp-http` — `OtlpHttpJsonSender` and the three OTLP exporters
+- **Symptom**: `HumboldtAutoConfigureExportersTest.per_signal_trace_and_metric_endpoints_override_the_base_endpoint`
+  failed on `main` (CI push of `85ea01ee`, green on its pull request): the trace request had not reached the
+  collector although `flush()` had succeeded and the provider was closed. Not reproduced locally in 25 runs.
+- **Minimal repro**: `AbstractBatchProcessorTest` (a flush asked while the worker exports a batch, two flushes asked
+  at once, an export still in flight, a failed export, the exporter shutdown) and
+  `OtlpHttpDeliveryTest.flush_and_shutdown_wait_for_the_requests_in_flight`,
+  `PeriodicMetricReaderTest.every_flush_asked_while_the_reader_collects_completes` and
+  `a_flush_after_the_shutdown_completes`.
+- **Cause**: three gaps, any of which lets a flush succeed before the export.
+  - `flushBase()` answered straight away with an empty queue, while the worker could hold the batch it had just
+    taken from the queue; a second flush asked before the worker served the first replaced it, so the first never
+    completed.
+  - The flush ignored the results of the exports, and `shutdownBase()` discarded the exporter's shutdown result.
+  - The OTLP exporters send on a virtual thread, but their `flush()` and `shutdown()` answered success at once.
+  - `PeriodicMetricReader` kept one pending flush, so it lost all but the last of the flushes asked while it
+    exported; a flush asked after the shutdown never completed.
+- **Fix**: every flush is served by the worker, after the batch it is exporting; it completes once the exports
+  still in flight and the exporter's flush have, and fails if an export failed since the last flush. The shutdown
+  completes with the exporter's shutdown. The OTLP sender tracks its requests in flight, and the exporters' `flush()`
+  and `shutdown()` wait for them. `PeriodicMetricReader` serves every flush asked for, and answers a flush after the
+  shutdown with the exporter's flush.
+- **Regression tests**: see repro.

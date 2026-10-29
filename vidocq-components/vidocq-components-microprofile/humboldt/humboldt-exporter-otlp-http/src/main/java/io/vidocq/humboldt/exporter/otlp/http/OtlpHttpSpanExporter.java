@@ -56,13 +56,13 @@ public final class OtlpHttpSpanExporter implements SpanExporter {
 
     @Override
     public CompletableResultCode flush() {
-        return CompletableResultCode.ofSuccess();
+        return sender.flush();
     }
 
     @Override
     public CompletableResultCode shutdown() {
         stopped.set(true);
-        return CompletableResultCode.ofSuccess();
+        return sender.flush();
     }
 
     /**

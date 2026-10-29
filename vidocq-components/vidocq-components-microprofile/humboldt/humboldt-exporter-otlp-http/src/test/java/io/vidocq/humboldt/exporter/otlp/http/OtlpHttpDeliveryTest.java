@@ -43,6 +43,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -56,6 +57,9 @@ class OtlpHttpDeliveryTest {
     private HttpServer server;
     private final AtomicInteger calls = new AtomicInteger();
     private volatile int[] statuses = {200};
+    /** The collector answers once this opens. */
+    private final CountDownLatch answer = new CountDownLatch(1);
+    private volatile boolean holdAnswers;
 
     @BeforeEach
     void startServer() throws IOException {
@@ -64,6 +68,13 @@ class OtlpHttpDeliveryTest {
             int n = calls.getAndIncrement();
             int sc = statuses[Math.min(n, statuses.length - 1)];
             ex.getRequestBody().readAllBytes();
+            if (holdAnswers) {
+                try {
+                    answer.await(10, TimeUnit.SECONDS);
+                } catch (InterruptedException _) {
+                    Thread.currentThread().interrupt();
+                }
+            }
             ex.sendResponseHeaders(sc, -1);
             ex.close();
         });
@@ -72,6 +83,7 @@ class OtlpHttpDeliveryTest {
 
     @AfterEach
     void stopServer() {
+        answer.countDown();
         server.stop(0);
     }
 
@@ -225,5 +237,30 @@ class OtlpHttpDeliveryTest {
         assertFalse(metrics.export(oneMetric()).isSuccess());
         assertFalse(logs.export(oneLog()).isSuccess());
         assertEquals(0, calls.get());
+    }
+
+    /** A flush or a shutdown completes once the requests already sent are answered (BUG-20261029-04). */
+    @Test
+    void flush_and_shutdown_wait_for_the_requests_in_flight() {
+        holdAnswers = true;
+        OtlpHttpSpanExporter spans = OtlpHttpSpanExporter.builder().setEndpoint(url("/v1/traces")).build();
+        OtlpHttpMetricExporter metrics = OtlpHttpMetricExporter.builder().setEndpoint(url("/v1/metrics")).build();
+        OtlpHttpLogExporter logs = OtlpHttpLogExporter.builder().setEndpoint(url("/v1/logs")).build();
+        spans.export(oneSpan());
+        metrics.export(oneMetric());
+        logs.export(oneLog());
+
+        CompletableResultCode spansFlushed = spans.flush();
+        CompletableResultCode metricsFlushed = metrics.flush();
+        CompletableResultCode logsShutDown = logs.shutdown();
+        assertFalse(spansFlushed.isDone(), "the span request is not answered yet");
+        assertFalse(metricsFlushed.isDone(), "the metric request is not answered yet");
+        assertFalse(logsShutDown.isDone(), "the log request is not answered yet");
+
+        answer.countDown();
+        assertTrue(await(spansFlushed));
+        assertTrue(await(metricsFlushed));
+        assertTrue(await(logsShutDown));
+        assertEquals(3, calls.get());
     }
 }

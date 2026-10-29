@@ -76,13 +76,13 @@ public final class OtlpHttpMetricExporter implements MetricExporter {
 
     @Override
     public CompletableResultCode flush() {
-        return CompletableResultCode.ofSuccess();
+        return sender.flush();
     }
 
     @Override
     public CompletableResultCode shutdown() {
         stopped.set(true);
-        return CompletableResultCode.ofSuccess();
+        return sender.flush();
     }
 
     /** Builder of {@link OtlpHttpMetricExporter}; default endpoint {@code http://localhost:4318/v1/metrics}. */

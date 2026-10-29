@@ -30,7 +30,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 
 /**
@@ -54,6 +57,8 @@ public final class OtlpHttpJsonSender {
     private final int maxRetries;
     private final HttpClient client;
     private final String signalLabel;
+    /** The results of the requests sent and not answered yet. */
+    private final Set<CompletableResultCode> inFlight = ConcurrentHashMap.newKeySet();
 
     private OtlpHttpJsonSender(Builder b) {
         this.endpoint = b.endpoint;
@@ -85,8 +90,18 @@ public final class OtlpHttpJsonSender {
         HttpRequest req = reqB.build();
 
         CompletableResultCode result = new CompletableResultCode();
+        inFlight.add(result);
+        result.whenComplete(() -> inFlight.remove(result));
         Thread.ofVirtual().start(() -> sendWithRetry(req, result, 0));
         return result;
+    }
+
+    /**
+     * Completes once every request sent so far is answered (or has failed for good): the exporters' {@code flush} and
+     * {@code shutdown} return it, so that their success means the data reached the collector (BUG-20261029-04).
+     */
+    public CompletableResultCode flush() {
+        return CompletableResultCode.ofAll(List.copyOf(inFlight));
     }
 
     private void sendWithRetry(HttpRequest req, CompletableResultCode result, int attempt) {

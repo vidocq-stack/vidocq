@@ -30,6 +30,8 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -179,5 +181,39 @@ class PeriodicMetricReaderTest {
         MetricData exported = exporter.exports.getFirst().iterator().next();
         assertEquals("requests", exported.name());
         assertEquals(1, exporter.shutdowns.get());
+    }
+
+    /** Two flushes asked while the reader exports are both served, not only the last one (BUG-20261029-04). */
+    @Test
+    void every_flush_asked_while_the_reader_collects_completes() throws InterruptedException {
+        Semaphore collecting = new Semaphore(0);
+        CountDownLatch release = new CountDownLatch(1);
+        reader.register(() -> {
+            collecting.release();
+            try {
+                release.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException _) {
+                Thread.currentThread().interrupt();
+            }
+            return List.of(METRIC);
+        });
+        CompletableResultCode first = reader.flush();
+        assertTrue(collecting.tryAcquire(5, TimeUnit.SECONDS), "the reader collects for the first flush");
+
+        CompletableResultCode second = reader.flush();
+        CompletableResultCode third = reader.flush();
+        release.countDown();
+
+        assertTrue(await(first).isSuccess());
+        assertTrue(await(second).isSuccess(), "the second flush is not forgotten");
+        assertTrue(await(third).isSuccess());
+    }
+
+    @Test
+    void a_flush_after_the_shutdown_completes() {
+        reader.register(() -> List.of(METRIC));
+        reader.shutdown();
+
+        assertTrue(await(reader.flush()).isSuccess(), "nothing is left to export");
     }
 }
