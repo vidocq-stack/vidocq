@@ -51,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Map;
 import java.util.Set;
 
@@ -300,6 +301,41 @@ class HumboldtServerRequestFilterTest {
         assertNull(recorded.get(HumboldtServerResponseFilter.URL_SCHEME));
         assertNull(recorded.get(io.opentelemetry.api.common.AttributeKey.stringKey("error.type")));
         assertEquals(1, exporter.getFinishedSpans().size());
+    }
+
+    /** The duration histogram is looked up once per installed {@code OpenTelemetry}, not on every response. */
+    @Test
+    void the_duration_histogram_is_looked_up_once_per_open_telemetry() {
+        AtomicInteger lookups = new AtomicInteger();
+        MeterProvider recording = JaxRsFakes.recordingMeterProvider(histogramRecords);
+        MeterProvider counting = JaxRsFakes.proxy(MeterProvider.class, (m, args) -> {
+            lookups.incrementAndGet();
+            try {
+                return m.invoke(recording, args);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        installGlobal(W3CPropagators.get(), counting);
+        HumboldtServerRequestFilter requests = new HumboldtServerRequestFilter();
+        HumboldtServerResponseFilter responses = new HumboldtServerResponseFilter();
+
+        for (int i = 0; i < 3; i++) {
+            ContainerRequestContext req = containerRequest(METHOD_GET,
+                    uriInfo(URI.create(LOCALHOST), "h", URI.create("http://localhost/h")));
+            requests.filter(req);
+            responses.filter(req, containerResponse(200));
+        }
+        assertEquals(1, lookups.get(), "one lookup for three responses");
+
+        installGlobal(W3CPropagators.get(), counting);
+        ContainerRequestContext req = containerRequest(METHOD_GET,
+                uriInfo(URI.create(LOCALHOST), "h", URI.create("http://localhost/h")));
+        requests.filter(req);
+        responses.filter(req, containerResponse(200));
+
+        assertEquals(2, lookups.get(), "a new OpenTelemetry gets its own histogram");
+        assertEquals(4, histogramRecords.size());
     }
 
     @Test
