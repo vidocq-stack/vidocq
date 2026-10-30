@@ -63,7 +63,7 @@ public final class OtelDevService implements DevService {
     static final String PROTOCOL = "otel.exporter.otlp.protocol";
     static final String SDK_DISABLED = "otel.sdk.disabled";
 
-    private GenericContainer<?> container;
+    private LgtmContainer container;
     private String image;
 
     @Override
@@ -117,10 +117,10 @@ public final class OtelDevService implements DevService {
     }
 
     /** The container, not started: named and labelled by {@link DevContainers}, a reused one after its image. */
-    static GenericContainer<?> container(DevServiceContext ctx, String image, boolean reuse) {
+    static LgtmContainer container(DevServiceContext ctx, String image, boolean reuse) {
         String name = DevContainers.name(ctx, ID, null, reuse ? image : null);
         // Configured on the instance itself: the caller owns (and stops) this very container.
-        GenericContainer<?> container = new GenericContainer<>(DockerImageName.parse(image));
+        LgtmContainer container = new LgtmContainer(DockerImageName.parse(image));
         container.withExposedPorts(GRAFANA_PORT, OTLP_GRPC_PORT, OTLP_HTTP_PORT)
                 .withLabels(DevContainers.labels(ctx, ID))
                 .withCreateContainerCmdModifier(cmd -> cmd.withName(name));
@@ -153,5 +153,12 @@ public final class OtelDevService implements DevService {
             endpoints.put("otlp-grpc", container.getHost() + ":" + container.getMappedPort(OTLP_GRPC_PORT));
         }
         return new DevServiceState(id(), image, endpoints, List.copyOf(injected.keySet()));
+    }
+
+    /** The {@code otel-lgtm} container, typed by itself as Testcontainers' fluent API expects. */
+    static final class LgtmContainer extends GenericContainer<LgtmContainer> {
+        LgtmContainer(DockerImageName image) {
+            super(image);
+        }
     }
 }

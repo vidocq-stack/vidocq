@@ -24,7 +24,6 @@ import io.vidocq.runtime.devservices.spi.DevServiceState;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.testcontainers.DockerClientFactory;
-import org.testcontainers.containers.GenericContainer;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -78,7 +77,7 @@ class OtelDevServiceTest {
 
     @Test
     void theContainerExposesGrafanaAndBothOtlpPortsWithTheDevLabels() {
-        GenericContainer<?> container = OtelDevService.container(ctx(Map.of(), Map.of(), Set.of(HUMBOLDT)),
+        OtelDevService.LgtmContainer container = OtelDevService.container(ctx(Map.of(), Map.of(), Set.of(HUMBOLDT)),
                 OtelDevService.DEFAULT_IMAGE, false);
 
         assertEquals(java.util.List.of(3000, 4317, 4318), container.getExposedPorts());
