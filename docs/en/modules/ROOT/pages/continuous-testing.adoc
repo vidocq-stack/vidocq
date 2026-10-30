@@ -157,21 +157,25 @@ a key) or `rerun-failed`. A message is the first line of the exception's message
 [#terminal]
 == The terminal
 
-`vidocq:dev` prints one line per run, among the application's own output:
+`vidocq:dev` prints one line for a green run, among the application's own output. When tests fail, it adds a line
+per failure, with where the test failed, and the log [.tag-new]#NEW#:
 
 ----
 [INFO] Tests: 41 passed, 1 failed, 0 skipped in 3.2 s (change)
+[INFO]   FAILED com.acme.OrderServiceTest#rejectsEmptyCart — AssertionFailedError: expected: <400> but was: <200> (OrderServiceTest.java:31)
+[INFO] Log: target/vidocq-dev-tests.log
 ----
 
-`vidocq:test` prints the failures and the log too, ten failures at most:
+`vidocq:test` prints the failures and the log on every run, ten failures at most, then the keys:
 
 ----
 Tests: 41 passed, 1 failed, 0 skipped in 3.2 s (change)
-  FAILED com.acme.OrderServiceTest#rejectsEmptyCart — AssertionFailedError: expected: <400> but was: <200>
+  FAILED com.acme.OrderServiceTest#rejectsEmptyCart — AssertionFailedError: expected: <400> but was: <200> (OrderServiceTest.java:31)
 Log: target/vidocq-dev-tests.log   [r] run all  [f] rerun failed  [q] quit
 ----
 
-A compilation failure, another failure before the tests, a run with no test and a cancelled run each print one line, such as
+The location in parentheses is the first frame of the test's own class in the stack trace, so it points at the
+failing assertion rather than at JUnit [.tag-new]#NEW#. A compilation failure, another failure before the tests, a run with no test and a cancelled run each print one line, such as
 `Tests: compilation failed (change), see target/vidocq-dev-tests.log` or `Tests: the run failed (change), see target/vidocq-dev-tests.log`.
 
 With a console attached, `vidocq:test` reads a key per line — type the key, then Enter:

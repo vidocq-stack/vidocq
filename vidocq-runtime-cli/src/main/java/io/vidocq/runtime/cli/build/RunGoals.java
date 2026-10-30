@@ -44,10 +44,12 @@ public final class RunGoals {
 
     /**
      * {@code vidocq:dev} after {@code process-classes}: the goal starts from
-     * {@code target/classes} and only recompiles on a change.
+     * {@code target/classes} and only recompiles on a change. A compile error does not stop Maven before the goal
+     * ({@code maven.compiler.failOnError=false}): the goal reports it and waits for a fix (BUG-20261030-12).
      */
     public static List<String> dev(String profile, boolean portExplicit, int port, boolean debug) {
-        List<String> args = new ArrayList<>(List.of("process-classes", "vidocq:dev"));
+        List<String> args = new ArrayList<>(List.of("process-classes", "vidocq:dev",
+                "-Dmaven.compiler.failOnError=false"));
         args.add("-Dvidocq.profile=" + profile);
         if (portExplicit) {
             args.add("-Dvidocq.dev.systemProperties=" + PORT_KEY + "=" + port);

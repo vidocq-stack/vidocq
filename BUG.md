@@ -8,7 +8,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-08 — Continuous testing does not print the failing tests and their causes
 
 - **Date**: 2026-10-30
-- **Status**: OPEN
+- **Status**: FIXED on `fix/dev-mode-08-12`: `vidocq:dev` prints each failure under the headline, with the line of the test where it failed (first frame of the test class in the Surefire stack trace), then the log; a green run stays one line (`TestSummaryPrinterTest.vidocqDevNamesTheFailuresUnderTheHeadline`, `SurefireReportsTest.theLocationIsTheFirstFrameOfTheTestClass`)
 - **Reported by**: the vidocq-tutorial session (batch 3, item 2)
 - **Minimal reproduction**: `vidocq dev` with continuous testing on, a failing `@VidocqTest`: the console says tests failed, without the test names or assertion messages.
 - **Cause hypothesis**: the surefire reports are read for counts only.
@@ -40,7 +40,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-12 — `vidocq dev` exits on the first compile failure
 
 - **Date**: 2026-10-30
-- **Status**: OPEN
+- **Status**: FIXED on `fix/dev-mode-08-12`: `vidocq dev` passes `-Dmaven.compiler.failOnError=false` so Maven reaches the goal, and a first build that leaves no class in `target/classes` waits for the next change and builds again instead of failing (`CompilerOutputTest.aFirstBuildThatDoesNotCompileWaitsForAChangeAndBuildsAgain`, `RunGoalsTest`)
 - **Reported by**: the vidocq-tutorial session (batch 3, item 6)
 - **Minimal reproduction**: start `vidocq dev` on a project that does not compile: the goal fails instead of waiting for a fix.
 - **Cause hypothesis**: the first build is run as a precondition, outside the reload loop that tolerates failures.

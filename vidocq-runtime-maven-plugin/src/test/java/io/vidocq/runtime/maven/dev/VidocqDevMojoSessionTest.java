@@ -85,7 +85,8 @@ class VidocqDevMojoSessionTest {
     /** Runs {@code vidocq:dev} on a built project until its child started, then interrupts it as Ctrl+C does. */
     private static SessionLog runUntilTheChildStarted(Path projectDir, boolean continuousTesting) throws Exception {
         Path classes = Files.createDirectories(projectDir.resolve("target/classes"));
-        Files.writeString(classes.resolve("marker.txt"), "built");
+        // A built output holds one class at least (BUG-20261030-12).
+        Files.writeString(classes.resolve("Marker.class"), "built");
         Files.createDirectories(projectDir.resolve("src/main/java"));
         SessionLog log = new SessionLog();
         VidocqDevMojo mojo = new VidocqDevMojo();

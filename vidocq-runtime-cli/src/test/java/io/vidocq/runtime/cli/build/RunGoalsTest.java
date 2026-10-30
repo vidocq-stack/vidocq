@@ -30,13 +30,15 @@ class RunGoalsTest {
 
     @Test
     void devCompilesThenRunsTheDevGoalWithItsProfile() {
-        assertEquals(List.of("process-classes", "vidocq:dev", "-Dvidocq.profile=dev"),
+        assertEquals(List.of("process-classes", "vidocq:dev", "-Dmaven.compiler.failOnError=false",
+                        "-Dvidocq.profile=dev"),
                 RunGoals.dev("dev", false, 8080, false));
     }
 
     @Test
     void devPassesAnExplicitPortToTheApplicationAndTheDebugSwitch() {
-        assertEquals(List.of("process-classes", "vidocq:dev", "-Dvidocq.profile=staging",
+        assertEquals(List.of("process-classes", "vidocq:dev", "-Dmaven.compiler.failOnError=false",
+                        "-Dvidocq.profile=staging",
                         "-Dvidocq.dev.systemProperties=vidocq.chappe.listener.default.port=9090", "-Dvidocq.dev.debug=true"),
                 RunGoals.dev("staging", true, 9090, true));
     }

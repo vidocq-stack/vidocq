@@ -35,6 +35,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -44,6 +46,9 @@ import java.util.stream.Stream;
  * of its message. A report that cannot be parsed is counted, never thrown.
  */
 final class SurefireReports {
+
+    /** A stack frame: {@code at <class>.<method>(<File>:<line>)}. */
+    private static final Pattern FRAME = Pattern.compile("at ([\\w.$]+)\\.[\\w$<>]+\\(([\\w$]+\\.java:\\d+)\\)");
 
     /** The longest message kept, in characters. */
     static final int MAX_MESSAGE = 200;
@@ -134,9 +139,10 @@ final class SurefireReports {
                 } else {
                     errors++;
                 }
-                failures.add(new TestResults.Failure(
-                        testcase.getAttribute("classname") + "#" + testcase.getAttribute("name"),
-                        problem.getAttribute("type"), message(problem)));
+                String testClass = testcase.getAttribute("classname");
+                failures.add(new TestResults.Failure(testClass + "#" + testcase.getAttribute("name"),
+                        problem.getAttribute("type"), message(problem),
+                        location(testClass, problem.getTextContent())));
             } else if (child(testcase, "skipped") != null) {
                 skipped++;
             }
@@ -151,6 +157,24 @@ final class SurefireReports {
             }
         }
         return null;
+    }
+
+    /**
+     * {@code <File>.java:<line>} of the first frame of {@code testClass}, or of one of its nested classes, in
+     * {@code stack}; empty when none is there (BUG-20261030-08).
+     */
+    static String location(String testClass, String stack) {
+        if (stack == null || testClass == null || testClass.isEmpty()) {
+            return "";
+        }
+        Matcher frame = FRAME.matcher(stack);
+        while (frame.find()) {
+            String owner = frame.group(1);
+            if (owner.equals(testClass) || owner.startsWith(testClass + "$")) {
+                return frame.group(2);
+            }
+        }
+        return "";
     }
 
     private static String message(Element problem) {

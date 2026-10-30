@@ -24,9 +24,10 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * The terminal lines of a run (spec §4.3): {@code vidocq:dev} prints the headline only, {@code vidocq:test} the
- * headline, one line per failure — {@value #MAX_FAILURE_LINES} at most — and the log, with the keys when a console
- * is attached. Messages come masked from {@link SurefireReports}.
+ * The terminal lines of a run (spec §4.3): the headline, one line per failure — {@value #MAX_FAILURE_LINES} at most,
+ * with where the test failed — and the log, with the keys when a console is attached ({@code vidocq:test}).
+ * {@code vidocq:dev} prints the failures too, without the keys, and a green run as its headline alone
+ * (BUG-20261030-08). Messages come masked from {@link SurefireReports}.
  */
 final class TestSummaryPrinter {
 
@@ -52,23 +53,23 @@ final class TestSummaryPrinter {
     }
 
     /**
-     * @param full {@code false} for the headline alone ({@code vidocq:dev})
+     * @param full {@code false} for {@code vidocq:dev}: no keys, and the headline alone when nothing failed
      * @param keys whether to add the key hints to the log line
      */
     static List<String> lines(TestResults r, boolean full, boolean keys) {
         List<String> lines = new ArrayList<>();
         lines.add(headline(r));
-        if (!full) {
+        List<TestResults.Failure> failures = r.failures();
+        if (!full && failures.isEmpty()) {
             return lines;
         }
-        List<TestResults.Failure> failures = r.failures();
         for (int i = 0; i < Math.min(failures.size(), MAX_FAILURE_LINES); i++) {
             lines.add(failureLine(failures.get(i)));
         }
         if (failures.size() > MAX_FAILURE_LINES) {
             lines.add("  … and " + (failures.size() - MAX_FAILURE_LINES) + " more in " + r.log());
         }
-        lines.add("Log: " + r.log() + (keys ? KEYS : ""));
+        lines.add("Log: " + r.log() + (keys && full ? KEYS : ""));
         return lines;
     }
 
@@ -81,6 +82,7 @@ final class TestSummaryPrinter {
         } else {
             what = failure.message().isEmpty() ? type : type + ": " + failure.message();
         }
-        return "  FAILED " + failure.test() + (what.isEmpty() ? "" : " — " + what);
+        return "  FAILED " + failure.test() + (what.isEmpty() ? "" : " — " + what)
+                + (failure.at().isEmpty() ? "" : " (" + failure.at() + ")");
     }
 }
