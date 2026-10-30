@@ -92,7 +92,8 @@ public final class VidocqTestExtension implements BeforeAllCallback, ParameterRe
         try {
             int port = VidocqApplication.freePort();
             return VidocqApplication.start(
-                    ApplicationLaunch.command(java, modulePath, module, port, List.of(settings.properties())),
+                    ApplicationLaunch.command(java, modulePath, module, port, ApplicationLaunch.properties(
+                            ApplicationLaunch.devServiceProperties(System.getProperties()), settings.properties())),
                     port, Duration.ofSeconds(settings.startupTimeoutSeconds()));
         } catch (IOException e) {
             throw new UncheckedIOException("Could not start the application module " + module, e);

@@ -80,6 +80,14 @@ class HelloResourceTest {
     </configuration>
 </plugin>
 ----
+* [[dev-services]]**The dev services of the run** [.tag-new]#NEW# reach the application. `vidocq test`, `vidocq dev`
+  and, under a plain `mvn test`, the `vidocq-runtime-devservices-junit` listener (see
+  xref:dev-services.adoc[Dev services]) put the keys their containers publish, `vidocq.pool.url` or
+  `mp.jwt.verify.issuer` for instance, in the system properties of the tests. The application gets each of them, as
+  `vidocq:dev` gives them to its application, so it migrates and queries the dev database rather than the one
+  `vidocq.properties` names. A key set by hand in the test JVM stays there; `properties` below wins over a dev
+  service's key. Without that listener on the test class path, a plain `mvn test` starts no dev service, and the
+  application uses what `vidocq.properties` points to.
 * **Its HTTP listener** is the `default` Chappe listener, on a free port of `127.0.0.1`
   (`vidocq.chappe.listener.default.host` and `.port`, which win over `vidocq.properties`).
 * **The test starts** once that port listens. If the process exits first, or after 60 seconds, the class fails with

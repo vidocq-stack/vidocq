@@ -22,6 +22,7 @@ package io.vidocq.runtime.junit;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -101,5 +102,46 @@ class ApplicationLaunchTest {
         assertEquals(String.join(sep, "/app/classes", "/m2/core.jar", "/m2/postgresql.jar"),
                 ApplicationLaunch.modulePath(String.join(sep, "/app/classes", "/m2/core.jar"),
                         String.join(sep, "/m2/core.jar", "/m2/postgresql.jar")));
+    }
+
+    /**
+     * The dev services the test run started, through {@code vidocq test}, {@code vidocq dev} or the JUnit listener,
+     * reach the application: each key the session injected, which its {@code vidocq.dev.provided.<key>} marker names,
+     * the marker itself and the state file, and nothing else of the test JVM (BUG-20261030-20).
+     */
+    @Test
+    void theApplicationGetsTheKeysTheDevServicesInjected() {
+        Properties system = new Properties();
+        system.setProperty("vidocq.pool.url", "jdbc:postgresql://localhost:33003/app");
+        system.setProperty("vidocq.dev.provided.vidocq.pool.url", "postgres");
+        system.setProperty("mp.jwt.verify.issuer", "http://localhost:33004/realms/app");
+        system.setProperty("vidocq.dev.provided.mp.jwt.verify.issuer", "keycloak");
+        system.setProperty("vidocq.devservices.state", "/app/target/vidocq-dev-services.json");
+        system.setProperty("vidocq.pool.username", "set-by-hand");
+        system.setProperty("user.dir", "/app");
+
+        assertEquals(List.of(
+                "mp.jwt.verify.issuer=http://localhost:33004/realms/app",
+                "vidocq.dev.provided.mp.jwt.verify.issuer=keycloak",
+                "vidocq.pool.url=jdbc:postgresql://localhost:33003/app",
+                "vidocq.dev.provided.vidocq.pool.url=postgres",
+                "vidocq.devservices.state=/app/target/vidocq-dev-services.json"),
+                ApplicationLaunch.devServiceProperties(system));
+    }
+
+    @Test
+    void withoutDevServicesTheApplicationGetsNoneOfTheTestJvmProperties() {
+        Properties system = new Properties();
+        system.setProperty("vidocq.pool.url", "jdbc:h2:mem:app");
+
+        assertEquals(List.of(), ApplicationLaunch.devServiceProperties(system));
+    }
+
+    /** {@code @VidocqTest(properties)} comes after the dev services' keys: the last {@code -D} wins. */
+    @Test
+    void thePropertiesOfTheAnnotationOverrideTheDevServices() {
+        assertEquals(List.of("vidocq.pool.url=jdbc:postgresql://dev", "vidocq.pool.url=jdbc:h2:mem:t"),
+                ApplicationLaunch.properties(List.of("vidocq.pool.url=jdbc:postgresql://dev"),
+                        new String[] {"vidocq.pool.url=jdbc:h2:mem:t"}));
     }
 }

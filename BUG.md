@@ -101,6 +101,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Minimal reproduction**: a created application with no dev-service dependency under `vidocq dev`.
 - **Cause hypothesis**: partly fixed by BUG-20261030-05 (provider found, host given); the listener line comes from both the Chappe section and the summary.
 
+## BUG-20261030-20 — The application a `@VidocqTest` starts does not get the dev services of the test run
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/vidocq-test-dev-services`: `@VidocqTest` hands the application each key a dev services session injected into the test JVM, its `vidocq.dev.provided.<key>` marker and the state file, before the annotation's own `properties` (`ApplicationLaunchTest.theApplicationGetsTheKeysTheDevServicesInjected`)
+- **Reported by**: the vidocq-tutorial session (batch 10, items 1 and 2)
+- **Minimal reproduction**: an application on Flyway and PostgreSQL, no database running, `vidocq test` (or `mvn test` with `vidocq-runtime-devservices-junit`): the PostgreSQL container starts, then every `@VidocqTest` class fails with _Connection to localhost:5432 refused_, the URL of `vidocq.properties`.
+- **Cause hypothesis**: the session folds its keys into the system properties of the test JVM, where an in-process bootstrap reads them; since `@VidocqTest` starts the application in its own JVM (#350), it passed that JVM the annotation's `properties` only.
+
 ## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
 
 - **Date**: 2026-10-30
