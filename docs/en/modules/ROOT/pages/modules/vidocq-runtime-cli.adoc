@@ -204,7 +204,7 @@ including the resource class, the JPMS module declarations, and `curl` calls.
 
 == Command reference
 
-Run `vidocq help` for the command list, or `vidocq help <command>` for per-command options.
+Run `vidocq help` for the command list, or `vidocq help <command>` for per-command options; `vidocq <command> --help` (or `-h`) [.tag-new]#NEW# shows the same. After `--`, a `--help` goes to Maven.
 
 [cols="1,3"]
 |===
