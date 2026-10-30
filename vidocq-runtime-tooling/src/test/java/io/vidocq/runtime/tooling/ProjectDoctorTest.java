@@ -273,6 +273,42 @@ class ProjectDoctorTest {
         assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
     }
 
+    /**
+     * BUG-20261031-01: {@code vidocq doctor} said ✔ while {@code vidocq:check-module-info} failed the build on a
+     * migration package left closed. Both now ask for the {@code opens} of the resource packages an extension reads,
+     * and {@code --fix} writes it.
+     */
+    @Test
+    void aClosedMigrationPackageFailsAndIsOpened(@TempDir Path dir) throws IOException {
+        Path project = create(dir, Set.of("flyway-migration"), true);
+        Path moduleInfo = project.resolve("src/main/java/module-info.java");
+        edit(moduleInfo, "    opens db.migration; // vidocq:flyway-migration\n", "");
+        Path migration = project.resolve("src/main/resources/db/migration/V1__books.sql");
+        Files.writeString(migration, "create table book (id bigint primary key);\n");
+
+        Diagnostic directives = check(project).get("Module directives");
+        assertEquals(Diagnostic.Status.FAIL, directives.status());
+        assertTrue(directives.detail().contains("flyway-migration: opens db.migration"), directives.detail());
+        assertTrue(directives.fixable());
+
+        ProjectDoctor.fix(project, RUNTIME, new RecordingReporter());
+
+        assertTrue(Files.readString(moduleInfo).contains("opens db.migration; // vidocq:flyway-migration"),
+                Files.readString(moduleInfo));
+        assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
+    }
+
+    /** BUG-20261031-03: a created project with a migration extension has its folder, opened, before any script. */
+    @Test
+    void aCreatedProjectWithFlywayHasItsMigrationFolderOpened(@TempDir Path dir) throws IOException {
+        Path project = create(dir, Set.of("flyway-migration"), true);
+
+        assertTrue(Files.readString(project.resolve("src/main/java/module-info.java"))
+                .contains("opens db.migration; // vidocq:flyway-migration"));
+        assertTrue(Files.isRegularFile(project.resolve("src/main/resources/db/migration/README.md")));
+        assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
+    }
+
     @Test
     void aProjectWithoutModuleInfoIsWarned(@TempDir Path dir) throws IOException {
         Path project = create(dir, Set.of(), true);

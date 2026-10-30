@@ -5,6 +5,30 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261031-01 — `vidocq doctor` says ✔ Module directives while `vidocq:check-module-info` fails the build
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/module-directives-one-check`: `KnownExtensions.moduleDirectives` now holds the `opens` of the resource packages an extension reads, so `doctor`, `extension add`, `create` and `doctor --fix` ask for and write the same directives that `check-module-info` checks (`ProjectDoctorTest.aClosedMigrationPackageFailsAndIsOpened`). The goal's failure names `vidocq doctor --fix`
+- **Reported by**: the vidocq-tutorial session (overnight replay, R1)
+- **Minimal reproduction**: `vidocq create -x cassini-rest`, `vidocq extension add flyway-migration`, then `src/main/resources/db/migration/V1__books.sql` without `opens db.migration;`: `vidocq doctor` 11/11 ✔, `./mvnw package` fails in `check-module-info`.
+- **Cause hypothesis**: `doctor` checked the catalog's `requires` and application-package `opens` only; the resource-package `opens` were known to `extension add` and to the build's descriptors, not to `doctor`.
+
+## BUG-20261031-02 — After a compile error, `check-module-info` reports a module without `module-info.java`
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/module-directives-one-check`: when `target/classes` holds no `module-info.class` but a compile source root holds `module-info.java`, the goal warns that the module is not compiled yet and checks nothing (`VidocqCheckModuleInfoMojoTest`); its messages say "Java module" instead of "JPMS"
+- **Reported by**: the vidocq-tutorial session (overnight replay, R2)
+- **Minimal reproduction**: under `vidocq dev` (`failOnError=false`), one compile error in a module whose `module-info.java` already declares `opens db.migration;`: "This module depends on Vidocq extensions that require JPMS directives, but it has no module-info.java (it is not modular). … Add a module-info.java declaring: opens db.migration;".
+- **Cause hypothesis**: a missing `module-info.class` was read as a non-modular module; the compilation that did not produce it was not considered.
+
+## BUG-20261031-03 — `opens db.migration;` needs a second `vidocq extension add flyway-migration`
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/module-directives-one-check`: `extension add`, `create` and `doctor --fix` create `src/main/resources/db/migration` with a `README.md` and write the `opens` at once (`ExtensionEditorTest.addingFlywayWithoutMigrationCreatesTheFolderAndOpensIt`, `ProjectDoctorTest.aCreatedProjectWithFlywayHasItsMigrationFolderOpened`). A hidden file such as `.gitkeep` would not do: the JVM ignores it in the exploded module `vidocq dev` runs ("Package db.migration not found in module"), and the README is not a Flyway script. Replaces the warning of BUG-20261030-11
+- **Reported by**: the vidocq-tutorial session (overnight replay, R7)
+- **Minimal reproduction**: `vidocq extension add flyway-migration` on a project without `src/main/resources/db/migration`: a ⚠ and no directive; the first script then fails `check-module-info` until the extension is added again.
+- **Cause hypothesis**: opening a package without a file makes the JVM refuse the module, so the edit waited for a script instead of creating the package.
+
 ## BUG-20261030-08 — Continuous testing does not print the failing tests and their causes
 
 - **Date**: 2026-10-30
@@ -32,7 +56,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-11 — `vidocq extension add flyway-migration` does not write `opens db.migration;`
 
 - **Date**: 2026-10-30
-- **Status**: FIXED on `feat/flyway-opens-migration-package`: the catalog key `module-info.opens-resource-package = db.migration` (Flyway and Liquibase); `vidocq extension add` writes the `opens` once the package holds a file, and otherwise says where the migrations go (`ExtensionEditorTest.addingFlywayOpensTheMigrationPackageWhenItHoldsAMigration`, `…WithoutMigrationSaysWhereTheyGo`). Opening an absent package fails the build, which is why `check-module-info` only asks for it once the package exists
+- **Status**: FIXED on `feat/flyway-opens-migration-package`: the catalog key `module-info.opens-resource-package = db.migration` (Flyway and Liquibase); `vidocq extension add` writes the `opens` once the package holds a file, and otherwise says where the migrations go (`ExtensionEditorTest.addingFlywayOpensTheMigrationPackageWhenItHoldsAMigration`, `…WithoutMigrationSaysWhereTheyGo`). Opening an absent package fails the build, which is why `check-module-info` only asks for it once the package exists. Since BUG-20261031-03 the edit creates the package with a README and opens it at once
 - **Reported by**: the vidocq-tutorial session (batch 3, item 5)
 - **Minimal reproduction**: add the extension, add `src/main/resources/db/migration/V1__init.sql`: `vidocq:check-module-info` fails, or Flyway finds no migration on the module path.
 - **Cause hypothesis**: `ModuleInfoEditor` writes `requires` only; the `opens` the extension declares are checked, not written.
