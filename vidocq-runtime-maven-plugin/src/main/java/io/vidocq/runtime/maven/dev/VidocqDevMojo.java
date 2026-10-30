@@ -301,8 +301,8 @@ public class VidocqDevMojo extends AbstractMojo {
     public void execute() throws MojoExecutionException {
         LayerSplit.Mode mode = layerSplitMode();
         Path projectDir = baseDir.toPath();
-        ensureCompiled(projectDir);
         List<Path> watch = parseDirs(projectDir, watchDirs);
+        ensureCompiled(projectDir, watch);
         ApplicationLaunch.Layered layered = buildLaunch(mode);
         List<Path> modulePath = layered.modulePath();
         Map<String, String> sysProps = buildSystemProperties();
@@ -355,12 +355,25 @@ public class VidocqDevMojo extends AbstractMojo {
     }
 
     /** Builds the project when nobody did, and again when an IDE compiled it without the annotation processors. */
-    private void ensureCompiled(Path projectDir) throws MojoExecutionException {
-        // Nobody built the project (right after "mvn clean"): build it once, as every reload does.
-        CompilerOutput.ensureBuilt(classesDir.toPath(), new RecompileRunner(projectDir)::run, getLog()::warn);
+    private void ensureCompiled(Path projectDir, List<Path> watch) throws MojoExecutionException {
+        // Nobody built the project (right after "mvn clean", or a first build that did not compile): build it, and
+        // while it does not compile, wait for the next change of the sources, as a failed reload does
+        // (BUG-20261030-12).
+        CompilerOutput.ensureBuilt(classesDir.toPath(), new RecompileRunner(projectDir)::run, getLog()::warn,
+                () -> awaitSourceChange(watch));
         // An IDE build may have compiled target/classes without the annotation processors (Vidocq/vidocq#237).
         CompilerOutput.ensureComplete(buildDirPath(), classesDir.toPath(), new RecompileRunner(projectDir)::run,
                 getLog()::warn);
+    }
+
+    /** Blocks until a file of {@code watch} changes; {@code false} when the directories cannot be watched. */
+    private boolean awaitSourceChange(List<Path> watch) throws InterruptedException {
+        try (SourceWatcher watcher = SourceWatcher.on(watch, Duration.ofMillis(debounceMillis))) {
+            return watcher.awaitChange();
+        } catch (IOException e) {
+            getLog().warn("Cannot watch " + watch + ": " + e.getMessage());
+            return false;
+        }
     }
 
     /** Under {@code vidocq.app.layer=all}: logs the split and hands the pinned modules to the child. */
@@ -475,7 +488,7 @@ public class VidocqDevMojo extends AbstractMojo {
             devs.foldInto(testProps);
         }
         ContinuousTesting started = ContinuousTesting.forProject(projectDir, buildDirPath(), testProps,
-                result -> getLog().info(TestSummaryPrinter.headline(result)), getLog()::warn);
+                result -> TestSummaryPrinter.lines(result, false, false).forEach(getLog()::info), getLog()::warn);
         TestRequestFile requests;
         try {
             requests = TestRequestFile.poll(results.resolveSibling(TestRequestFile.FILE_NAME), trigger -> {

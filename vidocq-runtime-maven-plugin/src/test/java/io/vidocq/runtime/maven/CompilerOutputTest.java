@@ -156,6 +156,72 @@ class CompilerOutputTest {
         assertTrue(warnings.getFirst().contains("building the project first"), warnings.getFirst());
     }
 
+    /**
+     * Under {@code vidocq dev}, a first build that does not compile waits for the next change and builds again,
+     * as a failed reload does, instead of ending the session (BUG-20261030-12).
+     */
+    @Test
+    void aFirstBuildThatDoesNotCompileWaitsForAChangeAndBuildsAgain() throws Exception {
+        classes = build.resolve("classes");
+        List<String> warnings = new ArrayList<>();
+        AtomicInteger builds = new AtomicInteger();
+        AtomicInteger waits = new AtomicInteger();
+
+        CompilerOutput.ensureBuilt(classes, () -> {
+            if (builds.incrementAndGet() == 1) {
+                return 1;
+            }
+            Files.createDirectories(classes.resolve("a"));
+            Files.writeString(classes.resolve("a/A.class"), "x");
+            return 0;
+        }, warnings::add, () -> {
+            waits.incrementAndGet();
+            return true;
+        });
+
+        assertEquals(2, builds.get());
+        assertEquals(1, waits.get());
+        assertTrue(warnings.stream().anyMatch(w -> w.contains("did not compile")
+                && w.contains("fix the sources")), warnings.toString());
+    }
+
+    /**
+     * A compile error under {@code -Dmaven.compiler.failOnError=false} still copies the resources: an output without
+     * a single class did not compile, whatever else it holds.
+     */
+    @Test
+    void anOutputWithResourcesButNoClassIsBuiltAgainUnderVidocqDev() throws Exception {
+        classes = build.resolve("classes");
+        Files.createDirectories(classes.resolve("META-INF"));
+        Files.writeString(classes.resolve("vidocq.properties"), "a=b");
+        AtomicInteger builds = new AtomicInteger();
+        AtomicInteger waits = new AtomicInteger();
+
+        CompilerOutput.ensureBuilt(classes, () -> {
+            if (builds.incrementAndGet() == 1) {
+                return 0;
+            }
+            Files.writeString(classes.resolve("module-info.class"), "x");
+            return 0;
+        }, warning -> { }, () -> {
+            waits.incrementAndGet();
+            return true;
+        });
+
+        assertEquals(2, builds.get());
+        assertEquals(1, waits.get());
+    }
+
+    @Test
+    void aFirstBuildThatNeverCompilesEndsWhenTheWatchStops() {
+        classes = build.resolve("classes");
+
+        MojoExecutionException e = assertThrows(MojoExecutionException.class,
+                () -> CompilerOutput.ensureBuilt(classes, () -> 1, warning -> { }, () -> false));
+
+        assertTrue(e.getMessage().contains("stopped before the project compiled"), e.getMessage());
+    }
+
     @Test
     void aClassesDirectoryHoldingOnlyEmptyDirectoriesIsBuiltToo() throws Exception {
         classes = build.resolve("classes");

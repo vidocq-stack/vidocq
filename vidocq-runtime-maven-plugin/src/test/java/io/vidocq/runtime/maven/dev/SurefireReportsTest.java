@@ -88,6 +88,26 @@ class SurefireReportsTest {
         TestResults.Failure failure = reports.failures().getFirst();
         assertEquals("org.opentest4j.AssertionFailedError", failure.type());
         assertEquals("expected: <400> but was: <200>", failure.message());
+        assertEquals("OrderServiceTest.java:31", failure.at());
+    }
+
+    /**
+     * A failure shows where the test failed, the first frame of its own class in the stack (BUG-20261030-08); the
+     * frames of JUnit or of the code under test do not name the test's line.
+     */
+    @Test
+    void theLocationIsTheFirstFrameOfTheTestClass() {
+        assertEquals("OrderServiceTest.java:31", SurefireReports.location("com.acme.OrderServiceTest", """
+                org.opentest4j.AssertionFailedError: expected: <400>
+                	at org.junit.jupiter.api.AssertionUtils.fail(AssertionUtils.java:38)
+                	at com.acme.OrderService.check(OrderService.java:12)
+                	at com.acme.OrderServiceTest.rejectsEmptyCart(OrderServiceTest.java:31)
+                	at com.acme.OrderServiceTest.other(OrderServiceTest.java:50)
+                """));
+        assertEquals("CartTest.java:8", SurefireReports.location("com.acme.CartTest",
+                "x\n\tat com.acme.CartTest$Nested.adds(CartTest.java:8)"));
+        assertEquals("", SurefireReports.location("com.acme.CartTest", "java.lang.Error: boom"));
+        assertEquals("", SurefireReports.location("com.acme.CartTest", null));
     }
 
     @Test

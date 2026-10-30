@@ -106,8 +106,14 @@ record TestResults(State state, Trigger trigger, Instant startedAt, long duratio
      * @param test    {@code <class>#<method>}, as Surefire names the testcase
      * @param type    the exception's class
      * @param message the first line of its message, masked and cut (see {@link SurefireReports#firstLine})
+     * @param at      {@code <File>.java:<line>}, the first frame of the test's class in the stack, or empty
      */
-    record Failure(String test, String type, String message) {}
+    record Failure(String test, String type, String message, String at) {
+
+        Failure(String test, String type, String message) {
+            this(test, type, message, "");
+        }
+    }
 
     TestResults {
         Objects.requireNonNull(state, "state");

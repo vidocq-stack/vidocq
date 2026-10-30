@@ -56,6 +56,12 @@ public final class CompilerOutput {
         int run() throws IOException, InterruptedException;
     }
 
+    /** Blocks until the sources change; {@code false} once nothing will change any more (the watch stopped). */
+    @FunctionalInterface
+    public interface AwaitChange {
+        boolean await() throws InterruptedException;
+    }
+
     private CompilerOutput() {
     }
 
@@ -113,6 +119,47 @@ public final class CompilerOutput {
         if (exit != 0) {
             throw new MojoExecutionException("The first build of " + classes
                     + " (mvn process-classes) failed (exit " + exit + ").");
+        }
+    }
+
+    /**
+     * {@link #ensureBuilt(Path, Recompile, Consumer)} for {@code vidocq:dev}: a first build that does not compile
+     * says so, then waits for the next change of the sources and builds again, as a failed reload does, instead of
+     * ending the session (BUG-20261030-12). Built means one class at least: under
+     * {@code -Dmaven.compiler.failOnError=false}, a compile error still leaves the resources in the output.
+     */
+    public static void ensureBuilt(Path classes, Recompile build, Consumer<String> warn, AwaitChange change)
+            throws MojoExecutionException {
+        while (!hasClassFiles(classes)) {
+            warn.accept("nothing in " + classes + ": building the project first (mvn process-classes).");
+            int exit;
+            try {
+                exit = build.run();
+                if (hasClassFiles(classes)) {
+                    return;
+                }
+                warn.accept("The first build of " + classes + " did not compile (exit " + exit + "): fix the"
+                        + " sources, vidocq dev builds again on the next change.");
+                if (!change.await()) {
+                    throw new MojoExecutionException("vidocq dev stopped before the project compiled.");
+                }
+            } catch (IOException e) {
+                throw new MojoExecutionException("Cannot build " + classes + ": " + e.getMessage(), e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new MojoExecutionException("Interrupted while building " + classes, e);
+            }
+        }
+    }
+
+    private static boolean hasClassFiles(Path classes) {
+        if (!Files.isDirectory(classes)) {
+            return false;
+        }
+        try (Stream<Path> walk = Files.walk(classes)) {
+            return walk.anyMatch(p -> Files.isRegularFile(p) && p.getFileName().toString().endsWith(".class"));
+        } catch (IOException | UncheckedIOException _) {   // Files.walk reports an unreadable directory unchecked
+            return true;   // unreadable: do not start a build on a guess, the launch will report it
         }
     }
 

@@ -54,13 +54,30 @@ class TestSummaryPrinterTest {
                 TestSummaryPrinter.lines(failed, true, true));
     }
 
+    /**
+     * {@code vidocq:dev} names the failed tests and why, under the headline (BUG-20261030-08): its console said only
+     * that tests failed. A green run stays one line.
+     */
     @Test
-    void vidocqDevPrintsTheFirstLineOnlyAndNoKeysWithoutAConsole() {
+    void vidocqDevNamesTheFailuresUnderTheHeadline() {
         TestResults failed = completed(1, new Counts(42, 1, 0, 0), List.of(FAILURE));
 
-        assertEquals(List.of("Tests: 41 passed, 1 failed, 0 skipped in 3.2 s (change)"),
+        assertEquals(List.of(
+                "Tests: 41 passed, 1 failed, 0 skipped in 3.2 s (change)",
+                "  FAILED com.acme.OrderServiceTest#rejectsEmptyCart — AssertionFailedError: expected: <400> but"
+                        + " was: <200>",
+                "Log: target/vidocq-dev-tests.log"),
                 TestSummaryPrinter.lines(failed, false, true));
+        assertEquals(List.of("Tests: 42 passed, 0 failed, 0 skipped in 3.2 s (change)"),
+                TestSummaryPrinter.lines(completed(0, new Counts(42, 0, 0, 0), List.of()), false, true));
         assertEquals("Log: target/vidocq-dev-tests.log", TestSummaryPrinter.lines(failed, true, false).getLast());
+    }
+
+    @Test
+    void aFailureLineEndsWithWhereTheTestFailed() {
+        assertEquals("  FAILED a.BTest#c — AssertionFailedError: expected 2 (BTest.java:31)",
+                TestSummaryPrinter.failureLine(new Failure("a.BTest#c", "org.opentest4j.AssertionFailedError",
+                        "expected 2", "BTest.java:31")));
     }
 
     @Test
