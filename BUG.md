@@ -81,6 +81,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 - **Date**: 2026-10-30
 - **Status**: item 4 (no JVM options hook) FIXED on `feat/launcher-java-opts`: the launchers pass `JAVA_OPTS` after `<jvmArgs>` (`VidocqPackageMojoTest.javaOptsReachTheJvmAfterTheConfiguredJvmArgs`); item 5 (`--help` per command) FIXED on `fix/packaging-17-cli-help-extensions` (`CliParserHelpTest`); item 6 (start-up list without the CDI-only extensions) FIXED on the same branch: they are listed as _CDI only_ (`ExtensionLoaderTest`); items 1-3 OPEN
+- **Status**: item 4 (no JVM options hook) FIXED on `feat/launcher-java-opts`: the launchers pass `JAVA_OPTS` after `<jvmArgs>` (`VidocqPackageMojoTest.javaOptsReachTheJvmAfterTheConfiguredJvmArgs`); item 3 (test jars in `lib/`): `opentelemetry-sdk-testing` no longer reaches it, FIXED on `fix/packaging-17-lib-scope` with humboldt#46 (`NoTestLibraryTest`; the other jars listed, `flyway-database-cockroachdb`, `jackson-annotations`, `commons-text`, `annotations`, are Flyway's own runtime dependencies, not a scope error); items 1, 2, 5, 6 OPEN
 - **Reported by**: the vidocq-tutorial session (batch 8)
 - **Minimal reproduction**: `vidocq build docker --skip-tests` on the tutorial application (flyway + PostgreSQL + telemetry).
 - **Cause hypothesis**: six separate causes, listed in the batch; jlink refuses `flyway.core` (automatic module), `opentelemetry-sdk-testing` reaches `lib/` through a wrong scope, `bin/<app>.sh` passes `$@` after `--module`.

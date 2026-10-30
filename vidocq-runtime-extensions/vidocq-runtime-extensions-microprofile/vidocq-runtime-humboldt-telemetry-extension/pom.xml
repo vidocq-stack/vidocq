@@ -75,22 +75,6 @@
                 </exclusion>
             </exclusions>
         </dependency>
-        <!-- TestSpanData used by the interop SpanDataMapper (only concrete OTel SpanData). -->
-        <dependency>
-            <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-sdk-testing</artifactId>
-            <version>${opentelemetry.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>io.opentelemetry</groupId>
-                    <artifactId>opentelemetry-api</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.opentelemetry</groupId>
-                    <artifactId>opentelemetry-context</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
         <!-- Builtin b3 / b3multi / jaeger propagators resolvable from otel.propagators. -->
         <dependency>
             <groupId>io.opentelemetry</groupId>
