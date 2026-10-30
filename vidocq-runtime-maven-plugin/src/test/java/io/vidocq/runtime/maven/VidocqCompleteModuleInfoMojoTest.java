@@ -23,6 +23,8 @@ import io.vidocq.runtime.codegen.commons.Requirement;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -78,6 +80,22 @@ class VidocqCompleteModuleInfoMojoTest {
         List<String> add = VidocqCompleteModuleInfoMojo.directivesToAdd(
                 MODULE_INFO, List.of(Requirement.requires("java.sql", "x")));
         assertTrue(add.isEmpty(), "complete must not inject a requires directive");
+    }
+
+    @Test
+    void opensThePackagesTheRuntimeReachesByReflection() {
+        // BUG-20261031-04: the tutorial's interceptor and Book DTO packages, which check-module-info reports
+        var reached = new ReflectedPackages.Reached(Map.of(
+                "com.example.lib.support", "com.example.lib.support.AuditedInterceptor, a CDI interceptor",
+                "com.example.lib.book", "com.example.lib.book.Book, a JPA entity",
+                "com.example.lib", "com.example.lib.HelloResource"), Set.of("com.example.lib.support"));
+        var descriptor = java.lang.module.ModuleDescriptor.newModule("com.example.lib").opens("com.example.lib")
+                .packages(Set.of("com.example.lib.support", "com.example.lib.book")).build();
+
+        List<String> add = VidocqCompleteModuleInfoMojo.directivesToAdd(MODULE_INFO,
+                VidocqCompleteModuleInfoMojo.reflectedRequirements(descriptor, reached));
+
+        assertEquals(List.of("opens com.example.lib.book;", "opens com.example.lib.support;"), add);
     }
 
     @Test

@@ -49,6 +49,9 @@ import java.util.Set;
  * brace (zero-dependency, no parser), is idempotent (a directive already present in source is never
  * duplicated), and marks the block it adds. Only {@code opens} is auto-added: it is never inherited,
  * whereas a {@code requires} may be satisfied transitively and must not be injected blindly.</p>
+ *
+ * <p>It also opens the packages of the module the runtime reaches by reflection — JSON-B types, JPA entities, CDI
+ * interceptors (see {@link ReflectedPackages}) — that {@code check-module-info} reports (BUG-20261031-04).</p>
  */
 @Mojo(name = "complete-module-info",
       requiresDependencyResolution = ResolutionScope.COMPILE,
@@ -79,9 +82,9 @@ public class VidocqCompleteModuleInfoMojo extends AbstractMojo {
 
         Set<Requirement> required = ModuleRequirementsCollector.applicableTo(
                 ModuleRequirementsCollector.collect(project.getArtifacts(), getLog()), outputDirectory);
-        if (required.isEmpty()) {
-            getLog().info("Vidocq complete-module-info: no applicable extension requirements for this module, "
-                    + "nothing to add.");
+        List<Requirement> missing = computeMissing(required);
+        if (missing.isEmpty()) {
+            getLog().info("Vidocq complete-module-info: no directive to add for this module.");
             return;
         }
 
@@ -99,7 +102,6 @@ public class VidocqCompleteModuleInfoMojo extends AbstractMojo {
             throw new MojoExecutionException("Cannot read " + source, e);
         }
 
-        List<Requirement> missing = computeMissing(required);
         List<String> toAdd = directivesToAdd(original, missing);
         if (toAdd.isEmpty()) {
             getLog().info("Vidocq complete-module-info: module-info.java already declares every required "
@@ -118,14 +120,20 @@ public class VidocqCompleteModuleInfoMojo extends AbstractMojo {
         toAdd.forEach(d -> getLog().info("    " + d));
     }
 
-    /** Missing directives, from the compiled module-info.class when present, else all required. */
+    /**
+     * Missing directives, from the compiled module-info.class when present (with the packages the runtime reaches
+     * by reflection), else all required.
+     */
     private List<Requirement> computeMissing(Set<Requirement> required) {
         File moduleInfo = new File(outputDirectory, "module-info.class");
         if (!moduleInfo.isFile()) {
             return new ArrayList<>(required);
         }
         try (InputStream in = Files.newInputStream(moduleInfo.toPath())) {
-            return ModuleInfoRequirements.missing(ModuleDescriptor.read(in), required);
+            ModuleDescriptor descriptor = ModuleDescriptor.read(in);
+            List<Requirement> missing = new ArrayList<>(ModuleInfoRequirements.missing(descriptor, required));
+            missing.addAll(reflectedRequirements(descriptor, ReflectedPackages.of(outputDirectory.toPath())));
+            return missing;
         } catch (IOException e) {
             getLog().debug("Vidocq complete-module-info: cannot read " + moduleInfo + " (" + e + "); "
                     + "falling back to source text.");
@@ -144,6 +152,13 @@ public class VidocqCompleteModuleInfoMojo extends AbstractMojo {
     }
 
     // --- pure, unit-testable text logic ---
+
+    /** An {@code opens} for each package the runtime reaches by reflection that {@code descriptor} does not open. */
+    static List<Requirement> reflectedRequirements(ModuleDescriptor descriptor, ReflectedPackages.Reached reached) {
+        return ReflectedPackages.missing(descriptor, reached).stream().sorted()
+                .map(pkg -> Requirement.opens(pkg, reached.reasons().get(pkg)))
+                .toList();
+    }
 
     /**
      * Renders the {@code opens} directives among {@code missing} that are not already declared in

@@ -214,6 +214,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Minimal reproduction**: `vidocq create -x cassini-rest`, then a `BookResource` returning a `Book` DTO in `com.acme.shop.book` (the scaffold opens `com.acme.shop` only): the build passes, and `GET /books` answers 500 with _IllegalAccessException: … RuntimeBindingRegistry$MethodAccessor (in module io.vidocq.champollion.jsonb) cannot access class com.acme.shop.book.Book … because module com.acme.shop does not export com.acme.shop.book_.
 - **Cause hypothesis**: `check-module-info` only checked the directives the extensions declare (`opens db.migration`); the packages of the application itself were checked by nobody before the first request.
 
+## BUG-20261031-04 — A CDI interceptor's package, not opened, fails the first request; the build and doctor say nothing
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/opens-interceptors-jsonb`: `ReflectedPackages` also lists the package of each class annotated `@Interceptor`, and asks for its `opens` (an export is not enough) unless the class and every method its container calls (`@AroundInvoke`, `@AroundConstruct`, `@AroundTimeout`, `@PostConstruct`, `@PreDestroy`) are public (`ReflectedPackagesTest.anInterceptorWithANonPublicMethodNeedsItsPackageOpenedNotOnlyExported`). `vidocq:complete-module-info` writes the `opens` of every package `check-module-info` reports, the JSON-B and JPA ones included (`VidocqCompleteModuleInfoMojoTest.opensThePackagesTheRuntimeReachesByReflection`), and the check's message names the goal. On the tutorial's compiled classes the check reports `com.example.lib.book` and `com.example.lib.support`. The JSON-B half (the error named no access cause) is Champollion BUG-20261031-01.
+- **Reported by**: the vidocq-tutorial session (overnight replay, finding R3)
+- **Minimal reproduction**: the tutorial's step-03 sources (an `@Audited` `AuditedInterceptor` with a package-private `@AroundInvoke`, in `com.example.lib.support`), and a module-info holding only the CLI lines and `opens db.migration;`: `package` and `doctor` are green, and `GET /books` answers 500 `IllegalAccessException: … VaubanInvocationContext$InterceptorInvocation (in module io.vidocq.vauban.core) cannot access class com.example.lib.support.AuditedInterceptor`.
+- **Cause**: the check of BUG-24 covered the JSON-B and JPA types, not the interceptors; Vauban calls interceptor methods by reflection (Vauban VAU-INT-011), so their package needs `opens`, or an export when everything is public.
+
 ## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
 
 - **Date**: 2026-10-30
