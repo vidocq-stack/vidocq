@@ -74,7 +74,14 @@ import java.util.TreeSet;
  * nothing per class. The runtime {@code AnnotationScanner} remains the behavioural
  * oracle and fallback.</p>
  */
+@javax.annotation.processing.SupportedOptions(GrimmModelProcessor.VERBOSE_OPTION)
 public final class GrimmModelProcessor extends AbstractProcessor {
+
+    /** Lists, one note each, the classes left to the run-time scan and why. */
+    static final String VERBOSE_OPTION = "grimm.processor.verbose";
+
+    /** The classes left to the run-time scan so far, said in one note at the end of the build. */
+    private int skippedClasses;
 
     private static final String SUFFIX = "$$GrimmModel";
     private static final String MP_OPENAPI_ANNOTATIONS_PREFIX = "org.eclipse.microprofile.openapi.annotations";
@@ -126,8 +133,11 @@ public final class GrimmModelProcessor extends AbstractProcessor {
                 try {
                     generate(type);
                 } catch (SkipGeneration skip) {
-                    note(type, "skipping " + type.getQualifiedName() + SUFFIX + " — "
-                            + skip.getMessage() + " (runtime annotation scan will handle this class)");
+                    skippedClasses++;
+                    if (verbose()) {
+                        note(type, "skipping " + type.getQualifiedName() + SUFFIX + " — "
+                                + skip.getMessage() + " (runtime annotation scan will handle this class)");
+                    }
                 } catch (IOException | RuntimeException ex) {
                     processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
                             "Grimm fragment generation failed, runtime scan will handle it: " + ex, type);
@@ -138,6 +148,7 @@ public final class GrimmModelProcessor extends AbstractProcessor {
         if (roundEnv.processingOver()) {
             writeServicesFile();
             writeDefinitionsFile();
+            summarizeSkippedClasses();
         }
         return false;
     }
@@ -515,6 +526,25 @@ public final class GrimmModelProcessor extends AbstractProcessor {
                     "Could not list the @OpenAPIDefinition classes; in annotated discovery mode their definition"
                             + " is not read: " + e);
         }
+    }
+
+    private boolean verbose() {
+        return Boolean.parseBoolean(processingEnv.getOptions().getOrDefault(VERBOSE_OPTION, "false").strip());
+    }
+
+    /**
+     * One note for the classes left to the run-time scan, which reads them as before: a line per class at every
+     * build was noise for a fallback that works (BUG-20261030-26 of vidocq). {@code -Agrimm.processor.verbose=true}
+     * lists them.
+     */
+    private void summarizeSkippedClasses() {
+        if (skippedClasses == 0 || verbose()) {
+            return;
+        }
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, "[grimm-processor] " + skippedClasses
+                + (skippedClasses == 1 ? " resource class is" : " resource classes are")
+                + " described when the application starts, by the annotation scan, rather than at build time;"
+                + " -Agrimm.processor.verbose=true lists them.");
     }
 
     private void note(Element element, String message) {

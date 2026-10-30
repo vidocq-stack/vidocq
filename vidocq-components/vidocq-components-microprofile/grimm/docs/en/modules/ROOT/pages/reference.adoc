@@ -16,7 +16,7 @@ This page consolidates Grimm's public surface: artefacts to declare, exported Ja
 
 | `io.vidocq.grimm`
 | `grimm-processor`
-| APT processor generating the `$$GrimmModel` compile-time companions consumed through `io.vidocq.grimm.spi.gen`.
+| APT processor generating the `$$GrimmModel` compile-time companions consumed through `io.vidocq.grimm.spi.gen`. [[processor-verbose]]A class it cannot describe at build time is described by the annotation scan when the application starts; the build says how many in one note [.tag-new]#NEW#, and `-Agrimm.processor.verbose=true` lists them with their reason.
 
 | `io.vidocq.grimm`
 | `grimm-cdi-vauban`

@@ -555,3 +555,13 @@ Track reproducible bugs with:
 - **Fix**: `ScannedTypes.merge` reads the classes of every `ScannedTypes` bean, once each; the CDI constructor uses it.
 - **Regression test**: `GrimmModelCacheTest.theScannedTypesOfEveryRunAreMerged`; in Vidocq,
   `vidocq-runtime-it-grimm-openapi` 5/5 and the MicroProfile OpenAPI TCK 364/364 with `GrimmExtension` run at build time.
+## BUG-20261030-05 — grimm-processor says, one INFO line per class at every build, that the run-time scan describes it
+- **Date**: 2026-10-30 — **Status**: FIXED (fix/build-noise-26)
+- **Symptom**: `[INFO] … [grimm-processor] skipping com.example.BookResource$$GrimmModel — MicroProfile OpenAPI
+  annotation …Tag is outside the M1 subset (runtime annotation scan will handle this class)`, once per resource class,
+  at every build (vidocq BUG-20261030-26).
+- **Root cause**: the fallback to the run-time annotation scan, which works, was reported per class.
+- **Fix**: one note per build, with the count; `-Agrimm.processor.verbose=true` lists the classes and their reason.
+  Supporting `@Tag` at build time stays a separate item: the tags of the class reach each operation and the
+  document's `tags`, which the run-time scan already does.
+- **Regression test**: `SkippedClassesSummaryTest`.

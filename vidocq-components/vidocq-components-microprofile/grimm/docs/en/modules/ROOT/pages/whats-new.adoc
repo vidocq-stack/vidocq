@@ -9,3 +9,4 @@ New in the `{project-version}` development line — everything listed here lande
 * xref:concepts.adoc#runtime-endpoints[The runtime's endpoints stay out of the document] — `/health` and `/metrics` are no longer listed in the application's OpenAPI document.
 * The document starts with `openapi`, then `info`, in JSON and YAML alike.
 * `GrimmExtension` can run when the application compiles: the document covers the classes of that run and of the start-up one, so the extension can be on the annotation-processor path without being reported twice.
+* xref:reference.adoc#processor-verbose[One note for the classes left to the run-time scan] — `grimm-processor` no longer prints an INFO line per resource class it leaves to the annotation scan at every build; `-Agrimm.processor.verbose=true` lists them.
