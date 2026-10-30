@@ -72,6 +72,8 @@
         <!-- Vidocq ecosystem -->
         <chappe.version>0.4.0-SNAPSHOT</chappe.version>
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <!-- humboldt-rest runs cassini-processor: the Cassini adapters of its filters (BUG-20261030-02). -->
+        <cassini.version>0.4.0-SNAPSHOT</cassini.version>
         <champollion.version>0.4.0-SNAPSHOT</champollion.version>
         <ravel.version>0.4.0-SNAPSHOT</ravel.version>
 

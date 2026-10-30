@@ -192,10 +192,11 @@ class OtelSpiAutoConfigurationTest {
         assertTrue(result.extraMetricExporters().isEmpty());
         assertNull(result.samplerOverride());
         assertNull(result.propagatorsOverride());
-        // Faithful to the reference harness: exporters default to "none" when unset.
-        assertEquals("none", result.env().get("OTEL_TRACES_EXPORTER"));
-        assertEquals("none", result.env().get("OTEL_METRICS_EXPORTER"));
-        assertEquals("none", result.env().get("OTEL_LOGS_EXPORTER"));
+        // An unset exporter stays unset, so Humboldt applies the OpenTelemetry default, otlp: an application that
+        // names a collector endpoint exports without naming the exporters too (BUG-20261030-01).
+        assertNull(result.env().get("OTEL_TRACES_EXPORTER"));
+        assertNull(result.env().get("OTEL_METRICS_EXPORTER"));
+        assertNull(result.env().get("OTEL_LOGS_EXPORTER"));
         assertEquals("always_on", result.env().get("OTEL_TRACES_SAMPLER"));
     }
 }

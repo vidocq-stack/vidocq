@@ -15,6 +15,14 @@
     <description>Filters JAX-RS pour instrumentation HTTP serveur : extract W3C TraceContext, span SERVER, conventions OTel HTTP semantic.</description>
 
     <dependencies>
+        <!-- Compile-only: the generated $$CassiniAdapter classes of the server filters implement a cassini-api type.
+             Only Cassini loads them; on another JAX-RS runtime they stay unused (BUG-20261030-02). -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-api</artifactId>
+            <version>${cassini.version}</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.humboldt</groupId>
             <artifactId>humboldt-api</artifactId>
@@ -105,6 +113,14 @@
                             <groupId>io.vidocq.vauban</groupId>
                             <artifactId>vauban-processor</artifactId>
                             <version>${vauban.version}</version>
+                        </path>
+                        <!-- The Cassini adapters of the filters that take @Context fields, built with the module:
+                             at run time Cassini could not generate them in this module, and the filter lost its
+                             ResourceInfo, so http.route was the concrete path (BUG-20261030-02). -->
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-processor</artifactId>
+                            <version>${cassini.version}</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>

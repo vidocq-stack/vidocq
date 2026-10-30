@@ -155,16 +155,14 @@ public final class OtelSpiAutoConfiguration {
         autoCustomizer.invokeSpanExporterCustomizers(props);
         autoCustomizer.invokeTracerProviderCustomizers(props);
         envMap.putIfAbsent("OTEL_TRACES_SAMPLER", "always_on");
+        // A bridged exporter replaces Humboldt's own. An unset exporter stays unset, so Humboldt applies the
+        // OpenTelemetry default, otlp: these keys used to default to none, and an application that named a
+        // collector endpoint exported nothing (BUG-20261030-01).
         if (!extraMetricExporters.isEmpty()) {
             envMap.put("OTEL_METRICS_EXPORTER", "none");
-        } else {
-            envMap.putIfAbsent("OTEL_METRICS_EXPORTER", "none");
         }
-        envMap.putIfAbsent("OTEL_LOGS_EXPORTER", "none");
         if (!extraSpanExporters.isEmpty()) {
             envMap.put("OTEL_TRACES_EXPORTER", "none");
-        } else {
-            envMap.putIfAbsent("OTEL_TRACES_EXPORTER", "none");
         }
 
         // PropagatorCustomizer — apply the chain to the final propagator (spiPropagators

@@ -647,3 +647,52 @@
   it to them too (jdeps over the stable jars of the 1.67.0 BOM), else `SdkTracerProvider.builder()` fails on the
   module path with an `IllegalAccessError` (caught by `OtlpExporterModuleLayerTest`).
 - **Regression test**: see repro.
+
+## BUG-20261030-01 — Nothing is exported with an OTLP endpoint set unless the three exporters are named
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/otlp-exporter-defaults-and-route)
+- **Symptom**: an application with `otel.sdk.disabled=false`, `otel.exporter.otlp.endpoint=http://localhost:4318`
+  logs _Humboldt autoconfig : service.name=library, traces=none, metrics=none, logs=none_ and exports nothing; it has
+  to set `otel.traces.exporter`, `otel.metrics.exporter` and `otel.logs.exporter` to `otlp`. Reported by the
+  vidocq-tutorial session (batch 7, item 1). The reference page already documented `otlp` as the default.
+- **Minimal repro**: `OtelSpiAutoConfigurationTest.noProvidersMeansNoBridgesAndDefaultedEnv`: `discover(Map.of(), …)`
+  returned `none` for the three keys.
+- **Root cause**: `OtelSpiAutoConfiguration.discover`, which the Vidocq extension runs on every start, set every
+  unset exporter key to `none`, a default taken from a test harness. `HumboldtAutoConfigure` defaults to `otlp`, but
+  never saw an unset key.
+- **Fix**: an unset key stays unset; only a bridged OpenTelemetry exporter still forces Humboldt's own to `none`.
+- **Regression test**: the test above, now asserting the keys stay unset.
+
+## BUG-20261030-02 — `http.route` is the concrete path on Cassini: one metric series per id
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/otlp-exporter-defaults-and-route)
+- **Symptom**: the server span of `GET /books/2/details` is named `GET /books/2/details`, with
+  `http.route=/books/2/details`, and `http.server.request.duration` gets one series per book id. At the first request
+  Cassini logs _Runtime adapter generation failed for io.vidocq.humboldt.rest.HumboldtServerRequestFilter — using
+  reflective fallback_. Reported by the vidocq-tutorial session (batch 7, items 2 and 4).
+- **Minimal repro**: `HumboldtCassiniAdapterTest`: `HumboldtServerRequestFilter$$CassiniAdapter.class` is not in the
+  module.
+- **Root cause**: the filter takes its `ResourceInfo` through `@jakarta.ws.rs.core.Context`. `humboldt-rest` did not run
+  `cassini-processor`, so Cassini generated the adapter at run time, which fails in this module; the filter then got no
+  `ResourceInfo` and fell back to the request path.
+- **Fix**: `humboldt-rest` runs `cassini-processor`, with `cassini-api` provided and `requires static
+  io.vidocq.cassini.api`, as `grimm-cdi-vauban` and `dirac-rest` do. No `provides`: on another JAX-RS runtime the
+  adapter is never loaded.
+- **Regression test**: `HumboldtCassiniAdapterTest`.
+
+## BUG-20261030-03 — after a redeployment or a hot reload, JUL records go to the previous logger provider
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/otlp-exporter-defaults-and-route)
+- **Symptom**: the second configuration in a JVM, a redeployment or a `vidocq dev` hot reload, exports no
+  `java.util.logging` record: they all reach the first configuration's logger provider, already shut down. Found by
+  the MP Telemetry TCK (`JulTest.julInfoTest`, `julWarnTest`) once BUG-20261030-01 made the earlier deployments export
+  their logs: until then they had `logs=none` and installed no bridge.
+- **Minimal repro**: `JulBridgeReinstallTest`: two `installJulBridge` calls, a JUL record reaches the first provider.
+- **Root cause**: `installJulBridge` returned when a `HumboldtJulHandler` was already on the root logger, so the
+  bridge stayed bound to the provider of the first configuration.
+- **Fix**: an earlier bridge is removed and the new one installed.
+- **Regression test**: `JulBridgeReinstallTest`; MP Telemetry TCK 85/85.
+

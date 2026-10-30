@@ -37,6 +37,9 @@ module io.vidocq.humboldt.rest {
     requires jakarta.annotation;  // @Priority on HumboldtSpanFinalizer + Client*Filter
     requires static jakarta.cdi;  // @Dependent on the server filters (runtime brings CDI)
     requires static io.vidocq.vauban.api;  // generated _VaubanComponents provider (runtime brings Vauban)
+    // Compile-only: the generated $$CassiniAdapter classes implement a cassini-api type. Cassini finds them by name in
+    // this package; on another JAX-RS runtime they are never loaded (BUG-20261030-02).
+    requires static io.vidocq.cassini.api;
     requires java.logging;
     // MicroProfile Rest Client: optional. HumboldtMpRestClientListener only runs when a Rest
     // Client is present at run time (cyrano-core brings it); read through the module Vidocq

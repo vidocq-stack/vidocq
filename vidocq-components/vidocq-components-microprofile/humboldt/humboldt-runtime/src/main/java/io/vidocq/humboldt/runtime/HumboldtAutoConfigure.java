@@ -303,7 +303,7 @@ public final class HumboldtAutoConfigure {
         // JUL → OTel bridge: auto-installed on the root logger when the log pipeline
         // is in production mode (otlp or logging). Not in in-memory mode to avoid
         // runtime-internal logs polluting the InMemoryLogRecordExporter in tests.
-        // Idempotent: does not re-install if a HumboldtJulHandler is already present.
+        // The latest configuration wins: a bridge left by an earlier one is replaced (BUG-20261030-03).
         boolean installJulBridge = logExporter != null
                 && !IN_MEMORY.equals(logsExporter)
                 && !NONE.equals(logsExporter);
@@ -331,13 +331,16 @@ public final class HumboldtAutoConfigure {
 
     /**
      * Installs {@link HumboldtJulHandler} on the root JUL logger to pipe
-     * {@code java.util.logging} into the OTel humboldt pipeline. Idempotent:
-     * if a {@link HumboldtJulHandler} is already present, does nothing.
+     * {@code java.util.logging} into the OTel humboldt pipeline, replacing the bridge an earlier configuration
+     * installed: a second deployment in the JVM, or a hot reload, kept sending its records to the first one's logger
+     * provider, already shut down (BUG-20261030-03).
      */
-    private static void installJulBridge(SdkLoggerProvider loggerProvider) {
+    static void installJulBridge(SdkLoggerProvider loggerProvider) {
         java.util.logging.Logger root = java.util.logging.Logger.getLogger("");
         for (java.util.logging.Handler existing : root.getHandlers()) {
-            if (existing instanceof HumboldtJulHandler) return;
+            if (existing instanceof HumboldtJulHandler) {
+                root.removeHandler(existing);
+            }
         }
         HumboldtJulHandler bridge = new HumboldtJulHandler(loggerProvider);
         bridge.setLevel(java.util.logging.Level.ALL);

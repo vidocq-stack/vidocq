@@ -231,6 +231,8 @@ Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent syst
 | `otlp`, `none`, `in-memory`, `logging`
 |===
 
+[[exporter-defaults]]An exporter key left unset is `otlp` [.tag-new]#NEW#, through the OpenTelemetry SPI discovery too: setting `OTEL_EXPORTER_OTLP_ENDPOINT` (and enabling the SDK) is enough to export the three signals. Until now the discovery set the unset keys to `none`, and nothing was exported unless the three keys were named. A bridged OpenTelemetry exporter (`OTEL_TRACES_EXPORTER=in-memory` from an SPI provider, as the TCK does) still replaces Humboldt's own.
+
 === OTLP HTTP endpoint
 
 [cols="2,1,2"]
