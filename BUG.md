@@ -156,7 +156,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Reported by**: the vidocq-tutorial session (batch 7, item 4; batch 10)
 - **Minimal reproduction**: `vidocq create -x cassini-rest -x dirac-metrics -x grimm-openapi -x cervantes-jwt`, then `mvn compile`: _[Vauban] … Build Compatible Extension(s) present on the compile/module path are NOT on the annotation-processor path and will not run: [CervantesClaimExtension, DiracExtension, GrimmExtension]_.
 - **Cause hypothesis**: JWT had no codegen bundle; the Metrics and OpenAPI bundles carried their processor only, not the jar of their extension's BCE, nor the CDI API those jars leave `provided`.
-- **Still open**: _Unsatisfied dependency … JsonWebToken_ at build time. The producer is a bean of cervantes-cdi-vauban, which Vauban's build-time validation does not see; it defers to the runtime container, where injection works.
+- **_Unsatisfied dependency … JsonWebToken_ at build time**: FIXED in Vauban (VAU-APT-006, https://codefloe.com/Vidocq/vauban/pulls/250). The processor now validates against the beans of the bean archive modules on the module path, so `JsonWebTokenProducer` of cervantes-cdi-vauban satisfies the injection point at build. Checked on `vidocq create -x cassini-rest -x cervantes-jwt` with `@Inject JsonWebToken`: no warning; a type nobody provides still warns. Effective once that Vauban SNAPSHOT is published; nothing changes in vidocq.
 
 ## BUG-20261030-25 — A request's trace has no database span
 
