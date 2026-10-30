@@ -50,7 +50,11 @@ class CreateThenBuildIT {
 
     private static final Duration TIMEOUT = Duration.ofMinutes(5);
 
-    /** The javac warnings the created project is allowed: one per class Vauban writes last (#337, documented). */
+    /**
+     * The javac warnings the created project is allowed: one per class Vauban writes in javac's last round (#337,
+     * documented). From Vidocq/vauban#251 on, Vauban writes them earlier and there are none (BUG-20261030-26); until
+     * that Vauban is the one this build uses, two are still allowed.
+     */
     private static final String LAST_ROUND = "created in the last round will not be subject to annotation processing";
 
     /** The IT checks what the scaffolder writes and what the build prints, not what the scaffolder says. */
@@ -96,7 +100,8 @@ class CreateThenBuildIT {
                 .filter(l -> l.startsWith("[WARNING]") && !l.contains(LAST_ROUND))
                 .toList();
         assertEquals(List.of(), warnings, "the created project builds with warnings:\n" + output);
-        assertEquals(2, output.lines().filter(l -> l.contains(LAST_ROUND)).count(), output);
+        long lastRound = output.lines().filter(l -> l.contains(LAST_ROUND)).count();
+        assertTrue(lastRound == 0 || lastRound == 2, () -> lastRound + " last-round warnings:\n" + output);
     }
 
     /**
