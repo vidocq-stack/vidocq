@@ -268,16 +268,17 @@ public final class ConfigResolver {
      */
     private record InterceptorSettings(Config config, int generation, int priority, boolean globallyDisabled) {}
 
-    private static volatile InterceptorSettings interceptorSettings;
+    private static final java.util.concurrent.atomic.AtomicReference<InterceptorSettings> INTERCEPTOR_SETTINGS =
+            new java.util.concurrent.atomic.AtomicReference<>();
 
     private static InterceptorSettings interceptorSettings() {
         Config config = loadConfig();
         int generation = GENERATION.get();
-        InterceptorSettings settings = interceptorSettings;
+        InterceptorSettings settings = INTERCEPTOR_SETTINGS.get();
         if (settings == null || settings.config() != config || settings.generation() != generation || config == null) {
             settings = new InterceptorSettings(config, generation, interceptorPriority(config),
                     isInterceptorGloballyDisabled(config));
-            if (config != null) interceptorSettings = settings;
+            if (config != null) INTERCEPTOR_SETTINGS.set(settings);
         }
         return settings;
     }
@@ -400,7 +401,7 @@ public final class ConfigResolver {
     /** Says that the configuration may have changed: everything resolved from it is resolved again. */
     public static void configurationChanged() {
         GENERATION.incrementAndGet();
-        interceptorSettings = null;
+        INTERCEPTOR_SETTINGS.set(null);
     }
 
     static int generation() {
