@@ -47,6 +47,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -132,6 +133,15 @@ public class VidocqJlinkMojo extends AbstractMojo {
     @Parameter(defaultValue = "false", property = "vidocq.jlink.mergeSharedResources")
     private boolean mergeSharedResources;
 
+    /**
+     * Give the automatic modules of the dependencies their module descriptor before staging, as
+     * {@code vauban:modularize} does in its {@code all-automatic} mode (default: true). jlink refuses an automatic
+     * module, and Flyway or a JDBC driver are one: without it, every image with them needed a hand-run
+     * {@code vauban:modularize} (BUG-20261030-17). Skipped when the project ran {@code vauban:modularize} itself.
+     */
+    @Parameter(defaultValue = "true", property = "vidocq.jlink.modularize")
+    private boolean modularize = true;
+
     /** jlink compression level ({@code zip-0} to {@code zip-9}, default: {@code zip-6}). */
     @Parameter(defaultValue = "zip-6", property = "vidocq.compress")
     private String compress;
@@ -189,6 +199,9 @@ public class VidocqJlinkMojo extends AbstractMojo {
 
         var packaging = DependencyBricks.packaging(project, buildDir.toPath(), repoSystem, repoSession, remoteRepos,
                 getLog()::warn, true);
+        if (modularize) {
+            modularizeAutomaticModules();
+        }
         for (var artifact : project.getArtifacts()) {
             File f = artifact.getFile();
             if (f != null && f.getName().endsWith(".jar")) {
@@ -197,6 +210,39 @@ public class VidocqJlinkMojo extends AbstractMojo {
         }
         checkNamedModules(stage);
         checkSharedResources(stage);
+    }
+
+    /**
+     * Patches the automatic jars of the dependency closure into {@code target/vauban-modularized/}, where
+     * {@link #stagingSource} picks them up. A project that ran {@code vauban:modularize} itself keeps its own copies
+     * and options.
+     */
+    private void modularizeAutomaticModules() throws IOException, MojoExecutionException {
+        Path report = ModularizedJars.root(buildDir.toPath()).resolve(Modularizer.REPORT_FILE_NAME);
+        if (Files.isRegularFile(report)) {
+            return;
+        }
+        List<Path> closure = new ArrayList<>();
+        Map<Path, String> artifactIdByJar = new HashMap<>();
+        for (var artifact : project.getArtifacts()) {
+            File f = artifact.getFile();
+            if (f != null && f.getName().endsWith(".jar")) {
+                closure.add(f.toPath());
+                artifactIdByJar.put(f.toPath(), artifact.getArtifactId());
+            }
+        }
+        var options = new Modularizer.Options(Modularizer.Mode.ALL_AUTOMATIC, Set.of(), Set.of(),
+                Map.of(), true, false);
+        try {
+            Modularizer.Result result = Modularizer.run(closure, artifactIdByJar, buildDir.toPath(), options,
+                    getLog()::info);
+            if (!result.patched().isEmpty()) {
+                getLog().info("Vidocq jlink — gave " + result.patched().size()
+                        + " automatic module(s) a module descriptor (vidocq.jlink.modularize=false to skip)");
+            }
+        } catch (IllegalStateException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
     }
 
     /** Stages the jar {@code f} of {@code artifact} into {@code stage}, unless it is dev-only. */

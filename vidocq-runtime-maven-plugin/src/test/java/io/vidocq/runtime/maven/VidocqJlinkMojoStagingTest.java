@@ -105,12 +105,29 @@ class VidocqJlinkMojoStagingTest {
     }
 
     @Test
-    void anAutomaticModuleFailsTheStaging() throws Exception {
+    void anAutomaticModuleFailsTheStagingWhenModularizeIsOff() throws Exception {
         VidocqJlinkMojo mojo = mojo(false, artifact("auto", automaticJar(dir.resolve("auto.jar"), "org.auto")));
+        set(mojo, "modularize", false);
 
         IOException e = assertThrows(IOException.class, mojo::stageModules);
 
         assertTrue(e.getMessage().startsWith("jlink does not support automatic modules: org.auto"), e.getMessage());
+    }
+
+    /**
+     * An automatic module, Flyway's or a JDBC driver's, gets its module descriptor before staging: the image no
+     * longer needs a hand-run {@code vauban:modularize} (BUG-20261030-17, item 2).
+     */
+    @Test
+    void anAutomaticModuleIsModularizedBeforeStaging() throws Exception {
+        VidocqJlinkMojo mojo = mojo(false, artifact("auto", automaticJar(dir.resolve("auto.jar"), "org.auto")));
+
+        mojo.stageModules();
+
+        try (JarFile staged = new JarFile(stage().resolve("auto.jar").toFile())) {
+            assertNotNull(staged.getEntry("module-info.class"), "the staged copy carries a module descriptor");
+        }
+        assertTrue(Files.isRegularFile(target().resolve("vauban-modularized/auto.jar")));
     }
 
     @Test
