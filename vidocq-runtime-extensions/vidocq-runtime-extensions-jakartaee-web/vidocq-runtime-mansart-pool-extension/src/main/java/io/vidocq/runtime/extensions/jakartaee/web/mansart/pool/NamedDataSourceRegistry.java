@@ -59,9 +59,7 @@ public final class NamedDataSourceRegistry {
     public static DataSource require(String name) {
         DataSource ds = SOURCES.get(name);
         if (ds == null) {
-            throw new IllegalStateException(
-                    "No DataSource registered for dataStore '" + name + "' — is vidocq.pool."
-                            + name + ".url set?");
+            throw MissingDataSource.forNamedPool(name);
         }
         return ds;
     }

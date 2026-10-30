@@ -248,6 +248,28 @@ class DevServiceManagerTest {
         assertTrue(mgr.collectedProperties().isEmpty());
     }
 
+    /**
+     * BUG-20261031-06: a provider the application needs but cannot start, the PostgreSQL one without a URL and without
+     * a driver, says so as a WARNING, not as an INFO line lost before the fatal error it explains.
+     */
+    @Test
+    void aSkipThatNeedsTheUsersActionIsAWarning() throws Exception {
+        DevService noDriver = new Scripted("postgres") {
+            @Override public boolean appliesWhen(DevServiceContext ctx) { return false; }
+            @Override public String skipReason(DevServiceContext ctx) {
+                return "no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path";
+            }
+            @Override public boolean skipNeedsAction(DevServiceContext ctx) { return true; }
+        };
+        CapturingLogger log = new CapturingLogger();
+
+        DevServiceManager.start(List.of(noDriver), ctx(), log);
+
+        assertTrue(log.lines.stream().anyMatch(line -> line.startsWith("WARNING")
+                && line.contains("postgres not started: no vidocq.pool.url and no PostgreSQL driver")),
+                log.lines.toString());
+    }
+
     @Test
     void withoutAReasonTheOldLineIsLoggedAndNothingIsRecorded() throws Exception {
         List<String> events = new ArrayList<>();

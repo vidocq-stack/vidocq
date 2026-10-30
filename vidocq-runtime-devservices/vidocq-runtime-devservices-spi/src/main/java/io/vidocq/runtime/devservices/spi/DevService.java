@@ -81,6 +81,18 @@ public interface DevService {
     }
 
     /**
+     * Whether the {@link #skipReason} asks the user to act, because the application needs this service and gets
+     * nothing in its place: the host then logs it as a WARNING instead of an INFO line. {@code false}, the default,
+     * for a provider that stays off because the application does not use it or configured it itself.
+     *
+     * @param ctx the context {@link #appliesWhen} was given
+     * @return whether not starting is a problem the user has to fix
+     */
+    default boolean skipNeedsAction(DevServiceContext ctx) {
+        return false;
+    }
+
+    /**
      * Provision the service and return the system properties to inject into the child JVM. Blocks
      * until the service is ready. Keys collide-resolve in favour of explicitly configured values:
      * the goal folds these in with {@code putIfAbsent}, so a user-set {@code -D} or

@@ -59,8 +59,7 @@ public class MansartPoolHolder implements DataSource {
     private static MansartDataSource delegate() {
         MansartDataSource ds = INSTANCE.get();
         if (ds == null) {
-            throw new IllegalStateException(
-                    "MansartPoolExtension did not publish a DataSource — is vidocq.pool.url set?");
+            throw MissingDataSource.forDefaultPool();
         }
         return ds;
     }

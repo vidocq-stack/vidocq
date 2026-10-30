@@ -228,6 +228,20 @@ class PostgresDevServiceTest {
                 svc.skipReason(without));
     }
 
+    /**
+     * BUG-20261031-06: without a URL and without the driver, the pool gets no database at all, so the host warns;
+     * a URL of another database is the application's choice and stays an INFO line.
+     */
+    @Test
+    void onlyTheMissingDriverAsksTheUserToAct() {
+        PostgresDevService svc = new PostgresDevService();
+
+        assertTrue(svc.skipNeedsAction(ctx(Map.of(), Map.of(), false)), "no URL, no driver");
+        assertFalse(svc.skipNeedsAction(ctx(Map.of(), Map.of("vidocq.pool.url", "jdbc:h2:mem:x"), false)), "H2");
+        assertFalse(svc.skipNeedsAction(ctx(Map.of("vidocq.pool.url", "jdbc:postgresql://h/db"), Map.of(), false)),
+                "explicit URL");
+    }
+
     /** Review Focus: a value that is not a jdbc: URL — an expression the dev host never resolves — is rule 4. */
     @Test
     void aPlaceholderInTheFileIsNoUrlAtAll() {

@@ -104,7 +104,8 @@ public final class DevServiceManager implements AutoCloseable {
             if (reason == null) {
                 log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' skipped (already configured)");
             } else {
-                log.log(System.Logger.Level.INFO, DEV_SERVICE + p.id() + "' not started: " + reason);
+                log.log(needsAction(p, ctx) ? System.Logger.Level.WARNING : System.Logger.Level.INFO,
+                        DEV_SERVICE + p.id() + "' not started: " + reason);
                 skipped.add(new Skipped(p.id(), reason));
             }
             return;
@@ -152,6 +153,15 @@ public final class DevServiceManager implements AutoCloseable {
             return null;
         }
         return SecretMasking.withoutCredentials(reason.strip().replaceAll("\\s+", " "));
+    }
+
+    /** {@code p.skipNeedsAction(ctx)}; {@code false} when it throws, a log level being no reason to fail. */
+    private static boolean needsAction(DevService p, DevServiceContext ctx) {
+        try {
+            return p.skipNeedsAction(ctx);
+        } catch (RuntimeException _) {
+            return false;
+        }
     }
 
     /** The {@code key=value} pairs to expose to the child JVM (provider outputs only). */
