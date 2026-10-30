@@ -100,35 +100,12 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
 
         File moduleInfo = new File(outputDirectory, "module-info.class");
         if (!moduleInfo.isFile()) {
-            if (required.isEmpty()) {
-                getLog().debug("Vidocq check-module-info: no applicable extension requirements for this module.");
-                return;
-            }
-            List<String> issues = new ArrayList<>();
-            issues.add("This module depends on Vidocq extensions that require JPMS directives, but it has "
-                    + "no module-info.java (it is not modular). On the module path the extensions break. "
-                    + "Add a module-info.java declaring:");
-            for (Requirement r : required) {
-                issues.add("    " + render(r));
-            }
-            report(issues);
+            reportNonModular(required);
             return;
         }
-
-        ModuleDescriptor descriptor;
-        try (InputStream in = Files.newInputStream(moduleInfo.toPath())) {
-            descriptor = ModuleDescriptor.read(in);
-        } catch (IOException e) {
-            throw new MojoFailureException("Cannot read " + moduleInfo, e);
-        }
-
+        ModuleDescriptor descriptor = read(moduleInfo);
         List<Requirement> missing = required.isEmpty() ? List.of() : ModuleInfoRequirements.missing(descriptor, required);
-        Map<String, String> reached;
-        try {
-            reached = ReflectedPackages.of(outputDirectory.toPath());
-        } catch (IOException e) {
-            throw new MojoFailureException("Cannot read the classes of " + outputDirectory, e);
-        }
+        Map<String, String> reached = reflectedPackages();
         List<String> unopened = ReflectedPackages.missing(descriptor, reached);
         if (missing.isEmpty() && unopened.isEmpty()) {
             getLog().info("Vidocq check-module-info: module-info of '" + descriptor.name() + "' satisfies all "
@@ -136,14 +113,11 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
                     + " package(s) the runtime reaches by reflection.");
             return;
         }
-
         List<String> issues = new ArrayList<>();
         if (!missing.isEmpty()) {
             issues.add("module-info of '" + descriptor.name() + "' is missing " + missing.size()
                     + " directive(s) required by its Vidocq extensions — add to src/main/java/module-info.java:");
-            for (Requirement r : missing) {
-                issues.add("    " + render(r));
-            }
+            missing.forEach(r -> issues.add("    " + render(r)));
         }
         if (!unopened.isEmpty()) {
             // BUG-20261030-24: JSON-B binds these types by reflection, and the first request failed with an
@@ -151,11 +125,39 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
             issues.add("module-info of '" + descriptor.name() + "' neither opens nor exports " + unopened.size()
                     + " package(s) the runtime reaches by reflection (JSON-B, JPA): the first request using them"
                     + " would fail — add to src/main/java/module-info.java:");
-            for (String pkg : unopened) {
-                issues.add("    opens " + pkg + ";   (" + reached.get(pkg) + ")");
-            }
+            unopened.forEach(pkg -> issues.add("    opens " + pkg + ";   (" + reached.get(pkg) + ")"));
         }
         report(issues);
+    }
+
+    /** A module without module-info: only the extensions' directives can be asked for, if there are any. */
+    private void reportNonModular(Set<Requirement> required) throws MojoFailureException {
+        if (required.isEmpty()) {
+            getLog().debug("Vidocq check-module-info: no applicable extension requirements for this module.");
+            return;
+        }
+        List<String> issues = new ArrayList<>();
+        issues.add("This module depends on Vidocq extensions that require JPMS directives, but it has "
+                + "no module-info.java (it is not modular). On the module path the extensions break. "
+                + "Add a module-info.java declaring:");
+        required.forEach(r -> issues.add("    " + render(r)));
+        report(issues);
+    }
+
+    private static ModuleDescriptor read(File moduleInfo) throws MojoFailureException {
+        try (InputStream in = Files.newInputStream(moduleInfo.toPath())) {
+            return ModuleDescriptor.read(in);
+        } catch (IOException e) {
+            throw new MojoFailureException("Cannot read " + moduleInfo, e);
+        }
+    }
+
+    private Map<String, String> reflectedPackages() throws MojoFailureException {
+        try {
+            return ReflectedPackages.of(outputDirectory.toPath());
+        } catch (IOException e) {
+            throw new MojoFailureException("Cannot read the classes of " + outputDirectory, e);
+        }
     }
 
     private static String render(Requirement r) {

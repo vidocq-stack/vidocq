@@ -73,20 +73,7 @@ final class ReflectedPackages {
         Map<String, String> reasons = new TreeMap<>();
         Deque<String[]> queue = new ArrayDeque<>();
         for (ClassModel model : application.values()) {
-            String name = model.thisClass().asInternalName();
-            Set<String> annotations = annotations(model);
-            if (annotations.stream().anyMatch(ENTITY_ANNOTATIONS::contains)) {
-                queue.add(new String[] {name, "a JPA entity"});
-            }
-            if (annotations.stream().anyMatch(RESOURCE_ANNOTATIONS::contains)) {
-                for (MethodModel method : model.methods()) {
-                    if ((method.flags().flagsMask() & ClassFile.ACC_PUBLIC) != 0) {
-                        for (String type : referenced(signature(method))) {
-                            queue.add(new String[] {type, "reached through " + dotted(name)});
-                        }
-                    }
-                }
-            }
+            queue.addAll(roots(model));
         }
         Set<String> seen = new HashSet<>();
         while (!queue.isEmpty()) {
@@ -121,6 +108,26 @@ final class ReflectedPackages {
             }
         }
         return missing;
+    }
+
+    /**
+     * The starting points {@code model} gives, as {@code {class, how it is reached}}: itself when it is a JPA
+     * entity, and the types its public methods take or return when it is a REST resource or provider.
+     */
+    private static List<String[]> roots(ClassModel model) {
+        String name = model.thisClass().asInternalName();
+        Set<String> annotations = annotations(model);
+        List<String[]> roots = new ArrayList<>();
+        if (annotations.stream().anyMatch(ENTITY_ANNOTATIONS::contains)) {
+            roots.add(new String[] {name, "a JPA entity"});
+        }
+        if (annotations.stream().anyMatch(RESOURCE_ANNOTATIONS::contains)) {
+            model.methods().stream()
+                    .filter(method -> (method.flags().flagsMask() & ClassFile.ACC_PUBLIC) != 0)
+                    .flatMap(method -> referenced(signature(method)).stream())
+                    .forEach(type -> roots.add(new String[] {type, "reached through " + dotted(name)}));
+        }
+        return roots;
     }
 
     /** The types the non-static fields and the getters of {@code model} hold. */

@@ -73,8 +73,8 @@ class ReflectedPackagesTest {
     }
 
     private static Consumer<ClassBuilder> getter(String name, ClassDesc type) {
-        return cb -> cb.withMethod(name, MethodTypeDesc.of(type), ClassFile.ACC_PUBLIC,
-                mb -> mb.withCode(code -> code.aconst_null().areturn()));
+        return cb -> cb.withMethodBody(name, MethodTypeDesc.of(type), ClassFile.ACC_PUBLIC,
+                code -> code.aconst_null().areturn());
     }
 
     /** A Book DTO whose author is an Author in another package, behind a private field and a getter. */
