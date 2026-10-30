@@ -80,9 +80,20 @@ public final class DefaultDevServiceContext implements DevServiceContext {
     public DefaultDevServiceContext(Path basedir, Map<String, String> seed,
             Function<String, Optional<String>> applicationFiles, Function<String, Optional<String>> applicationValues,
             Predicate<String> applicationClasspath) {
+        this(basedir, seed, applicationFiles, applicationValues, applicationClasspath,
+                System.getLogger("vidocq.dev.devservices"));
+    }
+
+    /**
+     * As the constructor above, the providers logging through {@code logger}: the host's own, which under Maven is
+     * the build's log (BUG-20261030-07).
+     */
+    public DefaultDevServiceContext(Path basedir, Map<String, String> seed,
+            Function<String, Optional<String>> applicationFiles, Function<String, Optional<String>> applicationValues,
+            Predicate<String> applicationClasspath, System.Logger logger) {
         this.basedir = basedir;
         this.resolved = new LinkedHashMap<>(seed);
-        this.logger = System.getLogger("vidocq.dev.devservices");
+        this.logger = logger;
         this.applicationFiles = applicationFiles;
         this.applicationValues = applicationValues;
         this.applicationClasspath = applicationClasspath;

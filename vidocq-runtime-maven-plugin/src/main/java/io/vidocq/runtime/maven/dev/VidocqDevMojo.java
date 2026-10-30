@@ -441,7 +441,7 @@ public class VidocqDevMojo extends AbstractMojo {
             devs = DevServicesSession.open("vidocq:dev", projectDir, sysProps, applicationFiles,
                     ApplicationFiles.allOf(classesDir.toPath(), projectDir.resolve("src/main/resources")),
                     classpath::contains,
-                    System.getLogger("vidocq.dev.devservices"));
+                    new MavenSystemLogger(getLog()));
         } catch (DevServicesException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         }

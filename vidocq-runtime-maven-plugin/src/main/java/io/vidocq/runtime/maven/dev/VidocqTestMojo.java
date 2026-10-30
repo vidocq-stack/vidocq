@@ -109,7 +109,7 @@ public class VidocqTestMojo extends AbstractMojo {
             try {
                 devs = DevServicesSession.open(HOST, projectDir, new LinkedHashMap<>(), files,
                         ApplicationFiles.allOf(classesDir.toPath()), classpath::contains,
-                        System.getLogger("vidocq.test.devservices"));
+                        new MavenSystemLogger(getLog()));
             } catch (DevServicesException e) {
                 throw new MojoExecutionException(e.getMessage(), e);
             }

@@ -5,6 +5,22 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/devservices-log-through-maven`
+- **Affected modules**: vidocq-runtime-devservices-host, vidocq-runtime-maven-plugin
+- **Symptom**: on a French-locale machine, `vidocq dev` prints _oct. 30, 2026 1:52:50 PM
+  io.vidocq.runtime.devservices.postgres.PostgresDevService start_ / _INFOS: Postgres dev service 'default' ready
+  at …_ between the `[INFO]` lines of Maven. Reported by the tutorial session (batch 4, item 2).
+- **Minimal reproduction**: `LANG=fr_FR.UTF-8 vidocq dev` on an application with a PostgreSQL dev service.
+- **Cause**: the goals gave the session `System.getLogger(…)`, and the context the providers log through made its
+  own; both are java.util.logging loggers with the JDK's default `SimpleFormatter`, two lines and localized, in the
+  Maven JVM.
+- **Fix**: `MavenSystemLogger`, a `System.Logger` that writes to the goal's `Log` (parameters formatted with
+  `Locale.ROOT`), given by `vidocq:dev`, `vidocq:run` and `vidocq:test`; `DevServicesSession.open` hands the host's
+  logger to the context, so `ctx.log()` is the same. `MavenSystemLoggerTest`, `DefaultDevServiceContextTest`.
+
 ## BUG-20261030-04 — The startup report counts and prints the same things twice, differently
 
 - **Date**: 2026-10-30

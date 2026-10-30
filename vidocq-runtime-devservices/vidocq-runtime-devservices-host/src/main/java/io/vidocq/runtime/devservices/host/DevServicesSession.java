@@ -82,7 +82,8 @@ public final class DevServicesSession implements AutoCloseable {
             Function<String, Optional<String>> applicationFiles, Function<String, Optional<String>> applicationValues,
             Predicate<String> applicationClasspath, System.Logger log) throws DevServicesException {
         DefaultDevServiceContext ctx =
-                new DefaultDevServiceContext(basedir, seed, applicationFiles, applicationValues, applicationClasspath);
+                new DefaultDevServiceContext(basedir, seed, applicationFiles, applicationValues, applicationClasspath,
+                        log);
         DevServiceManager mgr = DevServiceManager.start(ctx, log);
         return open(host, basedir, mgr, log, Clock.systemUTC());
     }

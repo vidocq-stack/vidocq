@@ -33,6 +33,11 @@ Testcontainers and the Docker client never reach the application's own module pa
 depends on nothing but `vidocq-runtime-devservices-extension`, which reads a small state file and
 has no Testcontainers, no Maven API and no JSON library of its own.
 
+[#host-log]
+Under a Maven goal (`vidocq:dev`, `vidocq:run`, `vidocq:test`), the dev services and their providers log
+through the build's log [.tag-new]#NEW#: one `[INFO]` line like the rest of the build, in English whatever the
+machine's locale. Under a JUnit test run they log through `System.Logger`, logger `vidocq.test.devservices`.
+
 [#named-modules]
 Every dev services jar is a named module, as every published Vidocq jar is: none of them
 reaches a module path as an automatic module. The providers name Testcontainers by the name its jar's

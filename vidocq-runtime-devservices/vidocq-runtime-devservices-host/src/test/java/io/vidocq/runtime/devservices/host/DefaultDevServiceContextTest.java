@@ -30,9 +30,23 @@ import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DefaultDevServiceContextTest {
+
+    /**
+     * The providers log through the host's logger: under Maven, the build's log, instead of the JDK's default
+     * two-line, localized format (BUG-20261030-07).
+     */
+    @Test
+    void theProvidersLogThroughTheLoggerTheHostGives() {
+        System.Logger host = System.getLogger("host.under.test");
+        DefaultDevServiceContext ctx = new DefaultDevServiceContext(Path.of("."), Map.of(), key -> Optional.empty(),
+                key -> Optional.empty(), className -> false, host);
+
+        assertSame(host, ctx.log());
+    }
 
     @Test
     void seededOverrideBeatsSystemProperty() {
