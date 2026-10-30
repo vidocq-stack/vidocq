@@ -29,7 +29,6 @@ import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.List;
 
 /**
  * Starts the application of a {@link VidocqTest} class once, keeps it in the class's store, which closes it after
