@@ -151,6 +151,22 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
     - The span records the exception and sets status ERROR. No span for `close`, `getConnection` or metadata calls.
   - **Tests.** Unit tests on the sanitizer and on span names. A Humboldt in-memory exporter test: a `@VidocqTest` request that runs a query yields a server span with one database child span, on H2, then PostgreSQL via Testcontainers.
   - **Threads.** No `ThreadLocal`; the span's scope is opened and closed within each `execute*` call, on the caller's virtual thread.
+## BUG-20261030-26 — Build noise: javac's "created in the last round" per generated class, a raw JUL line per resource, a grimm-processor line per class
+
+- **Date**: 2026-10-30
+- **Status**: FIXED in the bricks, on `fix/build-noise-26`:
+  - Vauban (VAU-APT-006): its classes are written before javac's last round, and what the BCEs log at build time becomes javac messages (`GenerationRoundTest`, `BceLoggingTest`);
+  - Cassini (CASSINI-038): the default scopes are logged at DEBUG (`CassiniScopeExtensionTest.theDefaultScopesAreSaidAtDebugLevel`);
+  - Grimm (BUG-20261030-05): one note per build for the classes left to the run-time scan (`SkippedClassesSummaryTest`).
+
+  Measured on an application created with `cassini-rest`, `cyrano-rest-client` and `grimm-openapi` (an intercepted bean, a `@Tag` resource, a `@Provider` without scope, a rest client). Before: 5 "created in the last round" warnings, 2 two-line French JUL records, 1 grimm line per tagged class. After: none of them, and one grimm note.
+- **Reported by**: the vidocq-tutorial session (batch 10, item 4)
+- **Minimal reproduction**: `mvn compile` on the tutorial application: 17 `[WARNING] File for type '…_ClientProxy' / '…$$Intercepted' / '…._VaubanComponents' created in the last round will not be subject to annotation processing`, `oct. 30, 2026 … CassiniScopeExtension addProviderDefaultScope` / `INFOS: @Provider class … defaulting to @Dependent`, `[grimm-processor] skipping …$$GrimmModel — … Tag is outside the M1 subset`.
+- **Cause hypothesis**:
+  - Vauban generated in javac's last round, and javac warns for every file created there, whatever `-Xlint` says;
+  - the BCEs Vauban runs at build time logged through the JDK's default console handler;
+  - grimm-processor reported its working fallback per class.
+- **Still there**: an application whose beans carry `@Inherited` annotations that are not CDI's, JAX-RS's or OpenAPI's keeps the last round, and its warnings. Class-level Fault Tolerance and Metrics annotations are such annotations: their processors would take Vauban's subclasses for their own. `-Avauban.generationRound=last` restores the former behaviour everywhere.
 
 ## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
 
