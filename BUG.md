@@ -5,6 +5,102 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261030-08 — Continuous testing does not print the failing tests and their causes
+
+- **Date**: 2026-10-30
+- **Status**: OPEN
+- **Reported by**: the vidocq-tutorial session (batch 3, item 2)
+- **Minimal reproduction**: `vidocq dev` with continuous testing on, a failing `@VidocqTest`: the console says tests failed, without the test names or assertion messages.
+- **Cause hypothesis**: the surefire reports are read for counts only.
+
+## BUG-20261030-09 — `vidocq extension add mansart-data` does not bring `jakarta.persistence-api` nor the `requires` it needs
+
+- **Date**: 2026-10-30
+- **Status**: OPEN
+- **Reported by**: the vidocq-tutorial session (batch 3, item 3)
+- **Minimal reproduction**: `vidocq extension add mansart-data` on a created application, then an `@Entity`: compilation fails until the dependency and `requires jakarta.persistence` are added by hand.
+- **Cause hypothesis**: the extension's catalog entry names its own artifact only; `module-info.requires` does not list the Persistence module.
+
+## BUG-20261030-10 — A missing PostgreSQL dialect is found at the first query, not at boot; the dialects and `devservice-postgres` are not managed by the BOM
+
+- **Date**: 2026-10-30
+- **Status**: OPEN
+- **Reported by**: the vidocq-tutorial session (batch 3, item 4)
+- **Minimal reproduction**: an application with the PostgreSQL dev service and no `mansart-dialect-postgresql`; the docs show `${vidocq.version}`, which no pom defines.
+- **Cause hypothesis**: no start-up check matches the JDBC URL with an installed dialect; the BOM does not list the dialect artifacts.
+
+## BUG-20261030-11 — `vidocq extension add flyway-migration` does not write `opens db.migration;`
+
+- **Date**: 2026-10-30
+- **Status**: OPEN
+- **Reported by**: the vidocq-tutorial session (batch 3, item 5)
+- **Minimal reproduction**: add the extension, add `src/main/resources/db/migration/V1__init.sql`: `vidocq:check-module-info` fails, or Flyway finds no migration on the module path.
+- **Cause hypothesis**: `ModuleInfoEditor` writes `requires` only; the `opens` the extension declares are checked, not written.
+
+## BUG-20261030-12 — `vidocq dev` exits on the first compile failure
+
+- **Date**: 2026-10-30
+- **Status**: OPEN
+- **Reported by**: the vidocq-tutorial session (batch 3, item 6)
+- **Minimal reproduction**: start `vidocq dev` on a project that does not compile: the goal fails instead of waiting for a fix.
+- **Cause hypothesis**: the first build is run as a precondition, outside the reload loop that tolerates failures.
+
+## BUG-20261030-13 — Automatic-module warnings and Flyway logging the database twice at start-up
+
+- **Date**: 2026-10-30
+- **Status**: OPEN
+- **Reported by**: the vidocq-tutorial session (batch 3, item 7)
+- **Minimal reproduction**: a created application with `flyway-migration` and the PostgreSQL driver.
+- **Cause hypothesis**: to investigate: the automatic modules are reported by the layer builder, the double log comes from two Flyway configurations.
+
+## BUG-20261030-14 — `META-INF/openapi.yaml` edited under `vidocq dev` is not re-read on hot reload
+
+- **Date**: 2026-10-30
+- **Status**: OPEN
+- **Reported by**: the vidocq-tutorial session (batch 5, item 2)
+- **Minimal reproduction**: edit the file while `vidocq dev` runs: `/openapi` keeps the old content until a restart.
+- **Cause hypothesis**: resources are not part of the watched roots, or Grimm's model cache outlives the reload.
+
+## BUG-20261030-15 — Dev console, Mansart Data › JDQL: the placeholder names `Product`, not one of the application's entities
+
+- **Date**: 2026-10-30
+- **Status**: OPEN
+- **Reported by**: the vidocq-tutorial session (batch 5, item 6)
+- **Minimal reproduction**: open the panel in an application with entities `Book` and `Loan`.
+- **Cause hypothesis**: the placeholder is a constant.
+
+## BUG-20261030-16 — The Keycloak dev service publishes no issuer, token URL nor admin console, and has no fixed port
+
+- **Date**: 2026-10-30
+- **Status**: OPEN
+- **Reported by**: the vidocq-tutorial session (batch 6)
+- **Minimal reproduction**: `vidocq dev` with `vidocq.dev.keycloak.realm-import`: `target/vidocq-dev-services.properties` holds the datasource only; the issuer port changes at every start.
+- **Cause hypothesis**: `describe` and the published keys only cover what the application consumes; no `vidocq.dev.keycloak.port` key.
+
+## BUG-20261030-17 — `vidocq build` packaging: docker does not chain jlink, automatic modules stop jlink, test jars in the distribution, no JVM options hook, no `--help` per command, incomplete extension list
+
+- **Date**: 2026-10-30
+- **Status**: OPEN
+- **Reported by**: the vidocq-tutorial session (batch 8)
+- **Minimal reproduction**: `vidocq build docker --skip-tests` on the tutorial application (flyway + PostgreSQL + telemetry).
+- **Cause hypothesis**: six separate causes, listed in the batch; jlink refuses `flyway.core` (automatic module), `opentelemetry-sdk-testing` reaches `lib/` through a wrong scope, `bin/<app>.sh` passes `$@` after `--module`.
+
+## BUG-20261030-18 — `VidocqApplication.request` cannot send headers; a test cannot read the dev services' configuration
+
+- **Date**: 2026-10-30
+- **Status**: OPEN
+- **Reported by**: the vidocq-tutorial session (batch 9, items 1 and 2)
+- **Minimal reproduction**: a `@VidocqTest` calling a `@RolesAllowed` endpoint needs `Authorization: Bearer …` and a token from the Keycloak dev service.
+- **Cause hypothesis**: the test API has no header overload, and the dev-service keys are given to the application only.
+
+## BUG-20261030-19 — Startup report: "no dev service: not started by …" under `vidocq dev` without any provider; the default listener printed twice
+
+- **Date**: 2026-10-30
+- **Status**: OPEN
+- **Reported by**: the vidocq-tutorial session (batch 9, item 3)
+- **Minimal reproduction**: a created application with no dev-service dependency under `vidocq dev`.
+- **Cause hypothesis**: partly fixed by BUG-20261030-05 (provider found, host given); the listener line comes from both the Chappe section and the summary.
+
 ## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
 
 - **Date**: 2026-10-30
