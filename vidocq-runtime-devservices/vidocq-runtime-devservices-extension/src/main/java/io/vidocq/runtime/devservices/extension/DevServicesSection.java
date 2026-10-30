@@ -48,6 +48,19 @@ public final class DevServicesSection {
 
     private DevServicesSection() {}
 
+    /** The summary when no dev service ran and none was skipped. */
+    private static String noServiceSummary(DevServicesSnapshot snapshot, StartupReportContext context) {
+        if (snapshot.host() != null) {
+            return "no dev service: " + snapshot.host() + " found no provider (a vidocq-runtime-devservice-* dependency)";
+        }
+        if (context.launchMode() == LaunchMode.DEV) {
+            // vidocq dev started this application and wrote no state file: no dev service to start
+            // (BUG-20261030-19).
+            return NOT_CONFIGURED;
+        }
+        return "no dev service: not started by vidocq:dev, vidocq:run or the test launcher";
+    }
+
     /**
      * Writes the section.
      *
@@ -73,14 +86,7 @@ public final class DevServicesSection {
         List<DevServicesSnapshot.Skipped> skipped = snapshot.skipped();
         if (services.isEmpty()) {
             if (skipped.isEmpty()) {
-                section.summary(snapshot.host() != null
-                        ? "no dev service: " + snapshot.host()
-                                + " found no provider (a vidocq-runtime-devservice-* dependency)"
-                        // vidocq dev started this application and wrote no state file: no dev service to start
-                        // (BUG-20261030-19).
-                        : context.launchMode() == LaunchMode.DEV
-                                ? NOT_CONFIGURED
-                                : "no dev service: not started by vidocq:dev, vidocq:run or the test launcher");
+                section.summary(noServiceSummary(snapshot, context));
                 return;
             }
             section.summary("no dev service started");
