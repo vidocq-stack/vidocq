@@ -492,7 +492,7 @@ public final class CommandRunner {
     private static UpdatePlan.Decision updatePlan(Path installed, HttpDownloads http) {
         String central = env("VIDOCQ_CENTRAL", "https://repo1.maven.org/maven2") + CLI_PATH;
         String snapshots = env("VIDOCQ_SNAPSHOTS",
-                "https://central.sonatype.com/repository/maven-snapshots") + CLI_PATH;
+                "https://maven.vidocq.dev/snapshots") + CLI_PATH;
         return UpdatePlan.plan(Version.cli(), CliInstaller.installedBuild(installed), Version.buildTimestamp(),
                 http::fetch, central, snapshots);
     }

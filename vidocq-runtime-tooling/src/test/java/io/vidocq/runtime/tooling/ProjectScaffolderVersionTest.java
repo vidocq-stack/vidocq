@@ -128,36 +128,36 @@ class ProjectScaffolderVersionTest {
     }
 
     @Test
-    void snapshotParentDeclaresTheCentralSnapshotRepository() {
+    void snapshotParentDeclaresTheVidocqSnapshotRepository() {
         String pom = ProjectScaffolder.buildPom(create("0.4.0-SNAPSHOT"), "0.3.0", SILENT);
 
         String repository = """
                     <repositories>
                         <repository>
-                            <id>central-snapshots</id>
-                            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+                            <id>vidocq-snapshots</id>
+                            <url>https://maven.vidocq.dev/snapshots/</url>
                             <releases><enabled>false</enabled></releases>
                             <snapshots><enabled>true</enabled></snapshots>
                         </repository>
                     </repositories>
                 """;
         assertTrue(pom.contains(repository),
-                "a SNAPSHOT parent must resolve its artifacts from Central snapshots, pom was:\n" + pom);
+                "a SNAPSHOT parent must resolve its artifacts from maven.vidocq.dev, pom was:\n" + pom);
         assertTrue(pom.contains("""
                     <pluginRepositories>
                         <pluginRepository>
-                            <id>central-snapshots</id>
+                            <id>vidocq-snapshots</id>
                 """),
                 "the SNAPSHOT vidocq-runtime-maven-plugin needs a plugin repository, pom was:\n" + pom);
     }
 
     @Test
-    void snapshotRuntimeOfTheCliDeclaresTheCentralSnapshotRepository() {
+    void snapshotRuntimeOfTheCliDeclaresTheVidocqSnapshotRepository() {
         // A CLI installed from a SNAPSHOT scaffolds with its own SNAPSHOT runtime.
         String pom = ProjectScaffolder.buildPom(create(null), "0.4.0-SNAPSHOT", SILENT);
 
-        assertTrue(pom.contains("<id>central-snapshots</id>"),
-                "the CLI's SNAPSHOT runtime must resolve from Central snapshots, pom was:\n" + pom);
+        assertTrue(pom.contains("<id>vidocq-snapshots</id>"),
+                "the CLI's SNAPSHOT runtime must resolve from maven.vidocq.dev, pom was:\n" + pom);
     }
 
     @Test
@@ -175,7 +175,7 @@ class ProjectScaffolderVersionTest {
         RecordingReporter reporter = new RecordingReporter();
         ProjectScaffolder.buildPom(create("0.4.0-SNAPSHOT"), "0.3.0", reporter);
         String out = String.join("\n", reporter.lines);
-        assertTrue(out.contains("https://central.sonatype.com/repository/maven-snapshots/"),
+        assertTrue(out.contains("https://maven.vidocq.dev/snapshots/"),
                 "a SNAPSHOT parent must say where its artifacts come from, got: " + out);
     }
 

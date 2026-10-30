@@ -64,7 +64,7 @@ Four parts of this pom are easy to leave out, and each one fails in its own way 
 [#snapshot-repositories]
 === Building against a SNAPSHOT
 
-Until 0.4.0 is released, the parent and the plugin come from Central's snapshot repository. The pom declares it twice:
+Until 0.4.0 is released, the parent and the plugin come from the Vidocq snapshot repository, `https://maven.vidocq.dev/snapshots/` [.tag-new]#NEW#. The pom declares it twice:
 `vidocq-runtime-maven-plugin` is a build extension, and Maven resolves a build extension from the plugin
 repositories only, so a `<repositories>` block alone finds the parent and then stops with _Unresolveable build
 extension_. A developer's `settings.xml` often holds just the first block, and the build works there only because the
@@ -74,16 +74,16 @@ plugin jar is already in `~/.m2`: on a clean machine it fails.
 ----
 <repositories>
   <repository>
-    <id>central-snapshots</id>
-    <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+    <id>vidocq-snapshots</id>
+    <url>https://maven.vidocq.dev/snapshots/</url>
     <releases><enabled>false</enabled></releases>
     <snapshots><enabled>true</enabled></snapshots>
   </repository>
 </repositories>
 <pluginRepositories>
   <pluginRepository>
-    <id>central-snapshots</id>
-    <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+    <id>vidocq-snapshots</id>
+    <url>https://maven.vidocq.dev/snapshots/</url>
     <releases><enabled>false</enabled></releases>
     <snapshots><enabled>true</enabled></snapshots>
   </pluginRepository>
@@ -421,9 +421,9 @@ Vaadin logs nothing without an SLF4J provider, so add one first (see <<setup>>).
 | The pom leaves `build-frontend` in its default phase, `prepare-package`, which `vidocq:run` does not reach.
 | Bind `build-frontend` to `process-classes`, as in <<setup>>.
 
-|On a clean machine, the build stops with _Unresolveable build extension: vidocq-runtime-maven-plugin:0.4.0-SNAPSHOT_ although the jar is on Central's snapshot repository.
+|On a clean machine, the build stops with _Unresolveable build extension: vidocq-runtime-maven-plugin:0.4.0-SNAPSHOT_ although the jar is on the Vidocq snapshot repository.
 | The pom declares the snapshot repository for dependencies only, and a build extension resolves from the plugin repositories.
-| Add `<pluginRepositories>` for `central-snapshots`. See <<snapshot-repositories>>.
+| Add `<pluginRepositories>` for `vidocq-snapshots`. See <<snapshot-repositories>>.
 
 |The pom cannot be read: _'build.plugins.plugin.version' for io.vidocq.vauban:vauban-maven-plugin must
 be a valid version but is '${vauban.version}'_.
