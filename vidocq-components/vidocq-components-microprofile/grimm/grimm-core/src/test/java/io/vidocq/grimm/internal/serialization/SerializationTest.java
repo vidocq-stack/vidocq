@@ -44,6 +44,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SerializationTest {
 
+    /** Readers and tools expect the version first, as the specification's examples write it (grimm BUG-20261030-04). */
+    @Test
+    void theDocumentStartsWithItsVersionThenInfo() {
+        OpenAPI openAPI = createSampleModel();
+
+        String yaml = new YamlSerializer().serialize(openAPI);
+        String json = new JsonSerializer().serialize(openAPI);
+
+        assertTrue(yaml.startsWith("openapi: \"3.1.0\"\ninfo:"), yaml);
+        assertTrue(json.startsWith("{\"openapi\":\"3.1.0\",\"info\":"), json);
+    }
+
     @Test
     void jsonSerializer_serializesCoreDocumentShape() {
         // Spec §2.2 / §3.1: OpenAPI document serialized in JSON format.

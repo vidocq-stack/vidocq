@@ -59,6 +59,27 @@ public final class GrimmExtension implements BuildCompatibleExtension {
     /** Grimm's own classes stay out of the document: /openapi must not list itself (spec §2.2). */
     static final String OWN_PACKAGE_PREFIX = "io.vidocq.grimm.";
 
+    /**
+     * The packages of the bricks whose endpoints the runtime serves beside the application (health, metrics, the
+     * token endpoints…): they are not the application's API, so they stay out of its document, as in the other
+     * MicroProfile runtimes (BUG-20261030-03). The runtime's examples, in {@code io.vidocq.runtime.examples}, are
+     * applications and stay in.
+     */
+    private static final java.util.List<String> RUNTIME_PREFIXES = java.util.List.of(OWN_PACKAGE_PREFIX,
+            "io.vidocq.knock.", "io.vidocq.dirac.", "io.vidocq.humboldt.", "io.vidocq.cervantes.",
+            "io.vidocq.heisenberg.", "io.vidocq.ravel.", "io.vidocq.cyrano.", "io.vidocq.cassini.",
+            "io.vidocq.runtime.extensions.", "io.vidocq.runtime.devconsole.", "io.vidocq.runtime.core.");
+
+    /** Whether the class {@code name} belongs in the application's document: not the runtime's own endpoints. */
+    static boolean documented(String name) {
+        for (String prefix : RUNTIME_PREFIXES) {
+            if (name.startsWith(prefix)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // One extension instance per container start: the classes of this deployment only.
     private final Set<String> discoveredNames = Collections.synchronizedSet(new LinkedHashSet<>());
 
@@ -73,7 +94,7 @@ public final class GrimmExtension implements BuildCompatibleExtension {
     @Enhancement(types = Object.class, withSubtypes = true)
     public void registerApplicationClass(ClassConfig classConfig) {
         String name = classConfig.info().name();
-        if (!name.startsWith(OWN_PACKAGE_PREFIX)) {
+        if (documented(name)) {
             discoveredNames.add(name);
         }
     }

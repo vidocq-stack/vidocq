@@ -141,6 +141,13 @@ final class OpenApiValueMapper {
         return merged;
     }
 
+    /**
+     * The order of the document's root fields, as the specification lists them: {@code getMethods()} has none, and
+     * {@code openapi} came out after {@code paths} (grimm BUG-20261030-04). Other fields, extensions among them, follow.
+     */
+    private static final List<String> ROOT_ORDER = List.of("openapi", "info", "jsonSchemaDialect", "servers", "paths",
+            "webhooks", "components", "security", "tags", "externalDocs");
+
     private static Map<String, Object> toSerializableBean(Object bean) {
         LinkedHashMap<String, Object> result = new LinkedHashMap<>();
         for (Method method : bean.getClass().getMethods()) {
@@ -150,7 +157,18 @@ final class OpenApiValueMapper {
                 putProperty(result, propertyName, rawValue);
             }
         }
-        return result;
+        return bean instanceof org.eclipse.microprofile.openapi.models.OpenAPI ? rootOrdered(result) : result;
+    }
+
+    private static Map<String, Object> rootOrdered(Map<String, Object> fields) {
+        LinkedHashMap<String, Object> ordered = new LinkedHashMap<>();
+        for (String name : ROOT_ORDER) {
+            if (fields.containsKey(name)) {
+                ordered.put(name, fields.get(name));
+            }
+        }
+        fields.forEach(ordered::putIfAbsent);
+        return ordered;
     }
 
     /** The bean property a getter contributes to the document, or {@code null} when it is not written. */

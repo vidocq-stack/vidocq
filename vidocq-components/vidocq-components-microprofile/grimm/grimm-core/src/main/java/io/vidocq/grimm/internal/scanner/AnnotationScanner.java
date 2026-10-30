@@ -121,6 +121,18 @@ public final class AnnotationScanner {
         return openAPI;
     }
 
+    /**
+     * Reads the {@code @OpenAPIDefinition} of {@code classes} into {@code openAPI}, and nothing else: their paths come
+     * from compile-time fragments (grimm BUG-20261030-02).
+     */
+    public void scanDefinitions(Collection<Class<?>> classes, OpenAPI openAPI) {
+        for (Class<?> clazz : classes) {
+            if (config.shouldScan(clazz.getName())) {
+                processOpenAPIDefinition(clazz, openAPI);
+            }
+        }
+    }
+
     private void processOpenAPIDefinition(Class<?> clazz, OpenAPI openAPI) {
         OpenAPIDefinition annotation = clazz.getAnnotation(OpenAPIDefinition.class);
         if (annotation == null) {

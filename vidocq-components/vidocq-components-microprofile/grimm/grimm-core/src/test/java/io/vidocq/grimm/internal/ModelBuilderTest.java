@@ -92,4 +92,17 @@ class ModelBuilderTest {
         assertEquals(1, ContributionRegistry.preGeneratedHits());
         assertEquals(0, ContributionRegistry.scanFallbacks());
     }
+
+    /**
+     * A class with a compile-time fragment is not scanned, yet its {@code @OpenAPIDefinition} is still read (grimm
+     * BUG-20261030-02): the fragment carries paths only. The test class path holds a static {@code openapi.yaml}
+     * whose info wins, as the specification orders, so the definition's tags tell.
+     */
+    @Test
+    void theDefinitionOfAClassWithACompanionIsRead() {
+        OpenAPI model = new ModelBuilder().build(GrimmConfig.defaults(), List.of(DefinedResource.class));
+
+        assertEquals(List.of("library"), model.getTags().stream().map(t -> t.getName()).toList());
+        assertNotNull(model.getPaths().getPathItem("/defined"));
+    }
 }

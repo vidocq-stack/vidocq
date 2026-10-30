@@ -131,4 +131,34 @@ class ScannedTypesCreatorTest {
 
         assertFalse(types.classes().contains(UUID.class));
     }
+
+    /**
+     * The classes grimm-processor listed for their {@code @OpenAPIDefinition} are scanned: an {@code Application}
+     * subclass is no bean in {@code annotated} discovery mode (grimm BUG-20261030-02).
+     */
+    @Test
+    void theClassesListedForTheirDefinitionAreScanned() throws Exception {
+        Path definitions = tempDir.resolve("classes").resolve(OpenApiContribution.DEFINITIONS);
+        Files.createDirectories(definitions.getParent());
+        Files.writeString(definitions, UUID.class.getName() + "\n");
+
+        try (URLClassLoader loader = loaderListing()) {
+            ScannedTypes types = createWith(loader);
+
+            assertTrue(types.classes().contains(UUID.class));
+        }
+    }
+
+    /**
+     * The endpoints the runtime's bricks serve (health, metrics…) are not the application's API (grimm
+     * BUG-20261030-03); the application's classes, and the examples of the runtime, are.
+     */
+    @Test
+    void theEndpointsOfTheBricksStayOutOfTheDocument() {
+        assertFalse(GrimmExtension.documented("io.vidocq.knock.jaxrs.KnockHealthResource"));
+        assertFalse(GrimmExtension.documented("io.vidocq.dirac.rest.MetricsResource"));
+        assertFalse(GrimmExtension.documented("io.vidocq.grimm.cdi.OpenApiResource"));
+        assertTrue(GrimmExtension.documented("com.example.library.BookResource"));
+        assertTrue(GrimmExtension.documented("io.vidocq.runtime.examples.rest.TodoResource"));
+    }
 }

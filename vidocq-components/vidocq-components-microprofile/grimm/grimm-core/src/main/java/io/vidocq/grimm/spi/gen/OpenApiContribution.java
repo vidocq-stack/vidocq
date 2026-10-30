@@ -37,6 +37,12 @@ package io.vidocq.grimm.spi.gen;
  */
 public interface OpenApiContribution {
 
+    /**
+     * The resource where grimm-processor lists, one binary name per line, the classes that carry
+     * {@code @OpenAPIDefinition}: the run time reads the definition from them, a fragment carrying paths only.
+     */
+    String DEFINITIONS = "META-INF/grimm/openapi-definitions";
+
     /** The JAX-RS resource class this fragment was derived from. */
     Class<?> resourceClass();
 

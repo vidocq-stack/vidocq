@@ -61,13 +61,41 @@ public class ScannedTypesCreator implements SyntheticBeanCreator<ScannedTypes> {
         try {
             for (OpenApiContribution contribution : ServiceLoader.load(OpenApiContribution.class, loader)) {
                 Class<?> resource = contribution.resourceClass();
-                if (!resource.getName().startsWith(GrimmExtension.OWN_PACKAGE_PREFIX)) {
+                if (GrimmExtension.documented(resource.getName())) {
                     classes.add(resource);
                 }
             }
         } catch (ServiceConfigurationError e) {
             LOG.log(System.Logger.Level.DEBUG, () -> "OpenApiContribution services could not be read: " + e);
         }
+        addDefinitionClasses(loader, classes);
         return ScannedTypes.of(classes);
+    }
+
+    /**
+     * Adds the classes grimm-processor listed for their {@code @OpenAPIDefinition}: in {@code annotated} discovery
+     * mode an {@code Application} subclass is no bean, so the extension never sees it (BUG-20261030-02).
+     */
+    private static void addDefinitionClasses(ClassLoader loader, Set<Class<?>> classes) {
+        try {
+            var lists = loader.getResources(OpenApiContribution.DEFINITIONS);
+            while (lists.hasMoreElements()) {
+                try (var in = lists.nextElement().openStream()) {
+                    for (String line : new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                            .split("\\R")) {
+                        String name = line.strip();
+                        if (!name.isEmpty() && GrimmExtension.documented(name)) {
+                            try {
+                                classes.add(Class.forName(name, false, loader));
+                            } catch (ClassNotFoundException | LinkageError _) {
+                                LOG.log(System.Logger.Level.DEBUG, "Listed definition class {0} is not visible", name);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (java.io.IOException e) {
+            LOG.log(System.Logger.Level.DEBUG, () -> "OpenAPI definition lists could not be read: " + e);
+        }
     }
 }

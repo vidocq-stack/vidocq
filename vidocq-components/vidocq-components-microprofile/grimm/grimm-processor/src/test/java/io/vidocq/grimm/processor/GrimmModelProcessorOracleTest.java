@@ -675,4 +675,27 @@ class GrimmModelProcessorOracleTest {
         assertTrue(Files.exists(services));
         assertTrue(Files.readString(services).contains("t.Listed$$GrimmModel"));
     }
+
+    /**
+     * A class carrying {@code @OpenAPIDefinition} is listed for the run time, which reads the definition from it: in
+     * {@code annotated} discovery mode an {@code Application} subclass is no bean, and no scan ever saw it (grimm
+     * BUG-20261030-02).
+     */
+    @Test
+    void theClassesCarryingTheDefinitionAreListed() throws Exception {
+        var compilation = compile(writeSource("t/LibraryApi.java", """
+                package t;
+                import jakarta.ws.rs.ApplicationPath;
+                import jakarta.ws.rs.core.Application;
+                import org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition;
+                import org.eclipse.microprofile.openapi.annotations.info.Info;
+                @ApplicationPath("/")
+                @OpenAPIDefinition(info = @Info(title = "Library API", version = "1.0"))
+                public class LibraryApi extends Application {
+                }
+                """));
+
+        Path listed = compilation.outputDir().toPath().resolve("META-INF/grimm/openapi-definitions");
+        assertEquals(List.of("t.LibraryApi"), Files.readAllLines(listed));
+    }
 }

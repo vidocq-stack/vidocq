@@ -5,3 +5,6 @@
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
 * xref:internals.adoc#_openapi_endpoint[`/openapi` endpoint] — on Cassini, the adapter of `OpenApiResource` is built with `grimm-cdi-vauban` instead of being generated at run time when the REST stack starts. Nothing changes on other JAX-RS runtimes.
+* xref:concepts.adoc#definition-classes[`@OpenAPIDefinition` on an `Application` subclass] — read again on Vidocq, where such a class is no bean, and on a resource that has a compile-time fragment.
+* xref:concepts.adoc#runtime-endpoints[The runtime's endpoints stay out of the document] — `/health` and `/metrics` are no longer listed in the application's OpenAPI document.
+* The document starts with `openapi`, then `info`, in JSON and YAML alike.

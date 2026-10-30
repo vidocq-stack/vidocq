@@ -32,6 +32,10 @@ The "Processing rules" of MP OpenAPI 4.2 prescribe three model sources, merged i
 . **`OASModelReader`** — an application class implementing `org.eclipse.microprofile.openapi.OASModelReader`, selected via `mp.openapi.model.reader`. Lets you build the `OpenAPI` programmatically; it is the starting model.
 . **Static file** — `META-INF/openapi.yaml`, `.yml` or `.json` packaged in the classpath. Loaded by `StaticFileReader`. Acts as the "editorial skeleton" supplied by the design team.
 . **Annotation scan** — visits every application class discovered by the CDI container: `@Path` resources, but also standalone carriers of `@OpenAPIDefinition`, `@Server`, `@Tag`, `@SecurityScheme` or `@Schema`. Driven by `AnnotationScanner`.
++
+[[definition-classes]]With `grimm-processor` on the processor path [.tag-new]#NEW#, the classes carrying `@OpenAPIDefinition` are listed at build time in `META-INF/grimm/openapi-definitions`, so an `Application` subclass that is no bean (CDI `annotated` discovery mode) still gives the document its `info`, `servers`, `tags` and `security`.
++
+[[runtime-endpoints]]The endpoints the Vidocq runtime serves beside the application [.tag-new]#NEW# (Knock's `/health`, Dirac's `/metrics`, and the other bricks' and runtime extensions' resources) are not part of the application's API: they stay out of the document, as in the other MicroProfile runtimes.
 
 `ModelMerger` combines the three with the spec priority annotations > static file > reader: the static file overrides the conflicting elements of the reader model, and the annotations override any conflicting element of both. The result is a single `OpenAPI`, dropped into `GrimmModelCache`.
 

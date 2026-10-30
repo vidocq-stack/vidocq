@@ -497,3 +497,47 @@ Track reproducible bugs with:
 - **Fix**: `process` runs each round with the processor's class loader as thread context class loader, and restores
   the previous one.
 - **Regression test**: the test above (red before the fix).
+
+## BUG-20261030-02 — `@OpenAPIDefinition` is ignored: the document keeps "Generated API"
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/openapi-definition-and-order)
+- **Symptom**: an application with `@OpenAPIDefinition(info = @Info(title = "Library API", …))` on its
+  `Application` subclass, or on a plain class, serves `info: title: "Generated API"`. Reported by the vidocq-tutorial
+  session (batch 5, item 1).
+- **Minimal repro**: `ModelBuilderTest.theDefinitionOfAClassWithACompanionIsRead`; `ScannedTypesCreatorTest
+  .theClassesListedForTheirDefinitionAreScanned`; `GrimmModelProcessorOracleTest.theClassesCarryingTheDefinitionAreListed`.
+- **Root cause**: two paths lose it. In `annotated` discovery mode (Vidocq's), an `Application` subclass or a plain
+  class without a bean-defining annotation is no bean: `GrimmExtension` never records it, and only the resources of
+  the `$$GrimmModel` services reach the scan. And a class that has a `$$GrimmModel` is not scanned at all: its fragment
+  carries paths only, so an `@OpenAPIDefinition` on a resource was lost too.
+- **Fix**: grimm-processor lists the classes carrying `@OpenAPIDefinition` in `META-INF/grimm/openapi-definitions`
+  (`OpenApiContribution.DEFINITIONS`), and `ScannedTypesCreator` adds them to the scanned types. `ModelBuilder` reads
+  the definition of a class that has a fragment (`AnnotationScanner.scanDefinitions`).
+- **Regression tests**: the three above (red before the fix).
+
+## BUG-20261030-03 — the application's document lists the runtime's health and metrics endpoints
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/openapi-definition-and-order)
+- **Symptom**: on Vidocq, `/openapi` lists `/health`, `/health/live|ready|started`, `/metrics`, `/metrics/{scope}` and
+  `/metrics/{scope}/{name}` under a `default` tag, beside the application's own paths. Reported by the vidocq-tutorial
+  session (batch 5, item 3).
+- **Root cause**: `GrimmExtension` records every bean class but Grimm's own, so the JAX-RS resources of Knock and
+  Dirac, beans of the runtime, are scanned as the application's.
+- **Fix**: `GrimmExtension.documented` leaves out the packages of the bricks whose endpoints the runtime serves
+  (`io.vidocq.knock.`, `io.vidocq.dirac.`, … and `io.vidocq.runtime.extensions.`), as the other MicroProfile runtimes
+  do. The runtime's examples (`io.vidocq.runtime.examples.`) are applications and stay in.
+- **Regression test**: `ScannedTypesCreatorTest.theEndpointsOfTheBricksStayOutOfTheDocument`.
+
+## BUG-20261030-04 — the YAML document writes `openapi:` after `info` and `paths`
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/openapi-definition-and-order)
+- **Symptom**: `openapi: "3.1.0"` appears at line 277 of the tutorial's document, after `info` and `paths`. Valid, but
+  readers and tools expect it first. Reported by the vidocq-tutorial session (batch 5, item 4).
+- **Root cause**: `OpenApiValueMapper` writes a model's properties in the order of `Class.getMethods()`, which is
+  unspecified.
+- **Fix**: the root fields are written in the specification's order (`openapi`, `info`, `jsonSchemaDialect`,
+  `servers`, `paths`, `webhooks`, `components`, `security`, `tags`, `externalDocs`), then the others.
+- **Regression test**: `SerializationTest.theDocumentStartsWithItsVersionThenInfo` (JSON and YAML).

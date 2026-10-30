@@ -84,9 +84,14 @@ public final class GrimmModelProcessor extends AbstractProcessor {
     private final Set<String> companionFqns = new TreeSet<>();
     private boolean servicesWritten;
 
+    private static final String OPENAPI_DEFINITION = "org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition";
+
+    /** The classes carrying {@code @OpenAPIDefinition}, by binary name (grimm BUG-20261030-02). */
+    private final Set<String> definitionClasses = new TreeSet<>();
+
     @Override
     public Set<String> getSupportedAnnotationTypes() {
-        return Set.of("jakarta.ws.rs.Path");
+        return Set.of("jakarta.ws.rs.Path", OPENAPI_DEFINITION);
     }
 
     @Override
@@ -129,8 +134,17 @@ public final class GrimmModelProcessor extends AbstractProcessor {
                 }
             }
         }
+        TypeElement definitionAnnotation = processingEnv.getElementUtils().getTypeElement(OPENAPI_DEFINITION);
+        if (definitionAnnotation != null) {
+            for (Element e : roundEnv.getElementsAnnotatedWith(definitionAnnotation)) {
+                if (e instanceof TypeElement type) {
+                    definitionClasses.add(processingEnv.getElementUtils().getBinaryName(type).toString());
+                }
+            }
+        }
         if (roundEnv.processingOver()) {
             writeServicesFile();
+            writeDefinitionsFile();
         }
         return false;
     }
@@ -475,6 +489,28 @@ public final class GrimmModelProcessor extends AbstractProcessor {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
                     "Could not write OpenApiContribution services file (naming-convention "
                             + "resolution still applies): " + e);
+        }
+    }
+
+    /**
+     * Lists the classes carrying {@code @OpenAPIDefinition} for the run time: in {@code annotated} discovery mode an
+     * {@code Application} subclass is no bean, and a class with a fragment is not scanned (grimm BUG-20261030-02).
+     */
+    private void writeDefinitionsFile() {
+        if (definitionClasses.isEmpty()) return;
+        try {
+            var resource = processingEnv.getFiler().createResource(StandardLocation.CLASS_OUTPUT, "",
+                    io.vidocq.grimm.spi.gen.OpenApiContribution.DEFINITIONS);
+            try (Writer w = resource.openWriter()) {
+                for (String name : definitionClasses) {
+                    w.write(name);
+                    w.write('\n');
+                }
+            }
+        } catch (IOException e) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
+                    "Could not list the @OpenAPIDefinition classes; in annotated discovery mode their definition"
+                            + " is not read: " + e);
         }
     }
 

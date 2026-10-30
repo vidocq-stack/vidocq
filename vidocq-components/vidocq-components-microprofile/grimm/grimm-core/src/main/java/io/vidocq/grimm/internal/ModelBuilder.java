@@ -95,12 +95,18 @@ public final class ModelBuilder {
         // Step 3 — annotation source: compile-time $$GrimmModel contributions first
         // (CG-06, APT-first rule), reflective scan as documented fallback for the rest.
         java.util.List<Class<?>> toScan = new ArrayList<>(annotatedTypes.size());
+        java.util.List<Class<?>> definedWithFragment = new ArrayList<>();
         java.util.List<OpenAPI> fragments = new ArrayList<>();
         var fragmentReader = new io.vidocq.grimm.internal.serialization.JsonDeserializer();
         for (Class<?> annotatedType : annotatedTypes) {
             var contribution = ContributionRegistry.resolve(annotatedType);
             if (contribution != null) {
                 fragments.add(fragmentReader.deserialize(contribution.openApiJson()));
+                // The fragment carries paths only: the definition is read from the class (BUG-20261030-02).
+                if (annotatedType.isAnnotationPresent(
+                        org.eclipse.microprofile.openapi.annotations.OpenAPIDefinition.class)) {
+                    definedWithFragment.add(annotatedType);
+                }
             } else {
                 ContributionRegistry.noteScanFallback();
                 toScan.add(annotatedType);
@@ -113,6 +119,7 @@ public final class ModelBuilder {
         ConfigApplier.applySchemaOverrides(scanner.schemaRegistry(), config);
 
         OpenAPI annotationModel = scanner.scanClasses(toScan);
+        scanner.scanDefinitions(definedWithFragment, annotationModel);
         for (OpenAPI fragment : fragments) {
             io.vidocq.grimm.internal.merger.FragmentMerger.mergeInto(annotationModel, fragment);
         }
