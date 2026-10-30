@@ -333,6 +333,11 @@ public class VidocqPackageMojo extends AbstractMojo {
         }
     }
 
+    /**
+     * The launchers pass {@code JAVA_OPTS} to the JVM after {@code <jvmArgs>}, so that an option set when the
+     * application is started wins, unquoted so that each option is its own word: {@code "$@"} goes to the
+     * application (BUG-20261030-17, item 4).
+     */
     void generateShScript(Path binDir) throws IOException, MojoExecutionException {
         String jvmArgsLine = jvmArgsLine();
         String script;
@@ -343,7 +348,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             script = """
                     #!/bin/sh
                     BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
-                    exec java%s \\
+                    exec java%s $JAVA_OPTS \\
                       --module-path "$BASEDIR/lib:$BASEDIR/app" \\
                       --add-modules ALL-MODULE-PATH \\%s
                       --module %s \\
@@ -354,7 +359,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             script = """
                     #!/bin/sh
                     BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
-                    exec java%s \\
+                    exec java%s $JAVA_OPTS \\
                       --module-path "$BASEDIR/lib" \\
                       --add-modules %s \\%s
                       -Dvidocq.app.path="$BASEDIR/app" \\%s
@@ -366,7 +371,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             script = """
                     #!/bin/sh
                     BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
-                    exec java%s \\
+                    exec java%s $JAVA_OPTS \\
                       --module-path "$BASEDIR/lib" \\
                       --module %s \\
                       "$@"
@@ -387,7 +392,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             script = """
                     @echo off
                     set BASEDIR=%%~dp0..
-                    java%s ^
+                    java%s %%JAVA_OPTS%% ^
                       --module-path "%%BASEDIR%%\\lib;%%BASEDIR%%\\app" ^
                       --add-modules ALL-MODULE-PATH ^%s
                       --module %s ^
@@ -398,7 +403,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             script = """
                     @echo off
                     set BASEDIR=%%~dp0..
-                    java%s ^
+                    java%s %%JAVA_OPTS%% ^
                       --module-path "%%BASEDIR%%\\lib" ^
                       --add-modules %s ^%s
                       -Dvidocq.app.path="%%BASEDIR%%\\app" ^%s
@@ -410,7 +415,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             script = """
                     @echo off
                     set BASEDIR=%%~dp0..
-                    java%s ^
+                    java%s %%JAVA_OPTS%% ^
                       --module-path "%%BASEDIR%%\\lib" ^
                       --module %s ^
                       %%*

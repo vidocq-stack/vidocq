@@ -70,12 +70,12 @@ class VidocqPackageMojoTest {
         mojo.generateCmdScript(binDir);
 
         String sh = Files.readString(binDir.resolve("app.sh"));
-        assertTrue(sh.contains("exec java \\"),
+        assertTrue(sh.contains("exec java $JAVA_OPTS \\"),
                 "an absent <jvmArgs> must leave the java invocation bare: " + sh);
         assertTrue(sh.contains("--module io.repro.app/io.repro.app.Main"), sh);
 
         String cmd = Files.readString(binDir.resolve("app.cmd"));
-        assertTrue(cmd.contains("java ^"), "an absent <jvmArgs> must leave the java invocation bare: " + cmd);
+        assertTrue(cmd.contains("java %JAVA_OPTS% ^"), "an absent <jvmArgs> must leave the java invocation bare: " + cmd);
     }
 
     @Test
@@ -86,9 +86,35 @@ class VidocqPackageMojoTest {
         mojo.generateCmdScript(binDir);
 
         assertTrue(Files.readString(binDir.resolve("app.sh"))
-                .contains("exec java -Dfile.encoding=UTF-8 -Xmx512m \\"));
+                .contains("exec java -Dfile.encoding=UTF-8 -Xmx512m $JAVA_OPTS \\"));
         assertTrue(Files.readString(binDir.resolve("app.cmd"))
-                .contains("java -Dfile.encoding=UTF-8 -Xmx512m ^"));
+                .contains("java -Dfile.encoding=UTF-8 -Xmx512m %JAVA_OPTS% ^"));
+    }
+
+    /**
+     * {@code JAVA_OPTS} reaches the JVM, after the pom's {@code <jvmArgs>} so that it wins, each option its own word:
+     * {@code "$@"} goes to the application, and the launcher had no other way to set {@code -Xmx} or a {@code -D}
+     * (BUG-20261030-17, item 4).
+     */
+    @Test
+    void javaOptsReachTheJvmAfterTheConfiguredJvmArgs(@TempDir Path dir) throws Exception {
+        Path binDir = java.nio.file.Files.createDirectories(dir.resolve("bin"));
+        mojoWith("-Xmx512m").generateShScript(binDir);
+        Path fakeBin = java.nio.file.Files.createDirectories(dir.resolve("fake"));
+        Path fakeJava = fakeBin.resolve("java");
+        Files.writeString(fakeJava, "#!/bin/sh\nfor a in \"$@\"; do echo \"[$a]\"; done\n");
+        assertTrue(fakeJava.toFile().setExecutable(true));
+
+        ProcessBuilder run = new ProcessBuilder("sh", binDir.resolve("app.sh").toString(), "--port", "8081")
+                .redirectErrorStream(true);
+        run.environment().put("PATH", fakeBin + java.io.File.pathSeparator + System.getenv("PATH"));
+        run.environment().put("JAVA_OPTS", "-Xmx1g -Dlibrary.max=3");
+        Process process = run.start();
+        String out = new String(process.getInputStream().readAllBytes());
+        assertEquals(0, process.waitFor(), out);
+
+        assertTrue(out.startsWith("[-Xmx512m]\n[-Xmx1g]\n[-Dlibrary.max=3]\n"), out);
+        assertTrue(out.endsWith("[--port]\n[8081]\n"), out);
     }
 
     @Test
@@ -98,7 +124,7 @@ class VidocqPackageMojoTest {
         mojo.generateShScript(binDir);
 
         String sh = Files.readString(binDir.resolve("app.sh"));
-        assertTrue(sh.contains("exec java \\"), sh);
+        assertTrue(sh.contains("exec java $JAVA_OPTS \\"), sh);
         assertFalse(sh.contains("java    "), "whitespace-only jvmArgs must not leak into the launcher: " + sh);
     }
 
@@ -252,7 +278,7 @@ class VidocqPackageMojoTest {
         assertEquals("""
                 #!/bin/sh
                 BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
-                exec java \\
+                exec java $JAVA_OPTS \\
                   --module-path "$BASEDIR/lib:$BASEDIR/app" \\
                   --add-modules ALL-MODULE-PATH \\
                   --module io.repro.app/io.repro.app.Main \\
@@ -261,7 +287,7 @@ class VidocqPackageMojoTest {
         assertEquals("""
                 @echo off
                 set BASEDIR=%~dp0..
-                java ^
+                java %JAVA_OPTS% ^
                   --module-path "%BASEDIR%\\lib;%BASEDIR%\\app" ^
                   --add-modules ALL-MODULE-PATH ^
                   --module io.repro.app/io.repro.app.Main ^

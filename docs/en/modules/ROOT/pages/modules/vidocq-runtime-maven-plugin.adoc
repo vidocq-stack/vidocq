@@ -386,6 +386,15 @@ By default the application jar lands in `app/`, apart from the module-path closu
 `bin/` launchers boot the runtime with `-Dvidocq.app.path="$BASEDIR/app"`: the application resolves into the
 module layer the Vauban class loader defines, as it does under `vidocq:dev` and `vidocq:run`.
 
+[[launcher-java-opts]]The launchers pass the `JAVA_OPTS` environment variable to the JVM [.tag-new]#NEW#, after the
+`<jvmArgs>` of the pom, so that an option set when the application starts wins; the arguments of the launcher go to
+the application:
+
+[source,shell]
+----
+JAVA_OPTS="-Xmx1g -Dlibrary.loan.max=3" bin/library.sh --port 8081
+----
+
 [#package-legacy-layout]
 === The legacy layout
 
