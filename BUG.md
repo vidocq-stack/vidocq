@@ -88,7 +88,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-18 — `VidocqApplication.request` cannot send headers; a test cannot read the dev services' configuration
 
 - **Date**: 2026-10-30
-- **Status**: OPEN
+- **Status**: headers FIXED on `feat/junit-request-headers` (`get(path, headers)`, `request(method, path, headers, contentType, body)`, `VidocqApplicationTest.aRequestCarriesTheHeadersOfTheTest`); the dev services' configuration for the test is OPEN
 - **Reported by**: the vidocq-tutorial session (batch 9, items 1 and 2)
 - **Minimal reproduction**: a `@VidocqTest` calling a `@RolesAllowed` endpoint needs `Authorization: Bearer …` and a token from the Keycloak dev service.
 - **Cause hypothesis**: the test API has no header overload, and the dev-service keys are given to the application only.

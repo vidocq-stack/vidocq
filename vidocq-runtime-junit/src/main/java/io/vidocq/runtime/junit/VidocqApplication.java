@@ -132,6 +132,11 @@ public final class VidocqApplication implements AutoCloseable {
         return request("GET", path, null, null);
     }
 
+    /** {@code GET path} with {@code headers}, an {@code Authorization: Bearer …} for one. */
+    public VidocqResponse get(String path, Map<String, String> headers) {
+        return request("GET", path, headers, null, null);
+    }
+
     /** {@code POST path} with {@code body} of type {@code contentType}. */
     public VidocqResponse post(String path, String contentType, String body) {
         return request("POST", path, contentType, body);
@@ -142,19 +147,32 @@ public final class VidocqApplication implements AutoCloseable {
      * The body of the answer is read as UTF-8.
      */
     public VidocqResponse request(String method, String path, String contentType, String body) {
+        return request(method, path, Map.of(), contentType, body);
+    }
+
+    /**
+     * {@code method path} with {@code headers}, and {@code body} of type {@code contentType} when {@code body} is not
+     * {@code null}. A test cannot send a request itself: patched into the application module, it does not read
+     * {@code java.net.http} (BUG-20261030-18).
+     *
+     * @throws IllegalArgumentException for a header the HTTP client sets itself ({@code Host}, {@code Connection}…)
+     */
+    public VidocqResponse request(String method, String path, Map<String, String> headers, String contentType,
+                                  String body) {
         HttpRequest.Builder request = HttpRequest.newBuilder(url(path)).timeout(REQUEST_TIMEOUT)
                 .method(method, body == null
                         ? HttpRequest.BodyPublishers.noBody()
                         : HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+        headers.forEach(request::header);
         if (body != null && contentType != null) {
             request.header("Content-Type", contentType);
         }
         try {
             HttpResponse<String> response = http.send(request.build(),
                     HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            Map<String, List<String>> headers = new TreeMap<>();
-            response.headers().map().forEach((name, values) -> headers.put(name.toLowerCase(Locale.ROOT), values));
-            return new VidocqResponse(response.statusCode(), response.body(), headers);
+            Map<String, List<String>> answered = new TreeMap<>();
+            response.headers().map().forEach((name, values) -> answered.put(name.toLowerCase(Locale.ROOT), values));
+            return new VidocqResponse(response.statusCode(), response.body(), answered);
         } catch (IOException e) {
             throw new UncheckedIOException(method + " " + url(path) + " failed", e);
         } catch (InterruptedException e) {

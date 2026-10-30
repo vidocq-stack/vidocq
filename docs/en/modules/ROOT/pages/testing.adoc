@@ -98,6 +98,9 @@ A test method declares any of these parameters:
 | `get(path)`, `post(path, contentType, body)` and `request(method, path, contentType, body)` send a request and
   return a `VidocqResponse` (`status()`, `body()` read as UTF-8, `header(name)`, `headers()`); `url()` and
   `url(path)` give the URL; `log()` gives what the application wrote so far.
+  [[request-headers]]`get(path, headers)` and `request(method, path, headers, contentType, body)` [.tag-new]#NEW# add request
+  headers, an `Authorization: Bearer …` for a `@RolesAllowed` endpoint for one. The test cannot send the request
+  itself: patched into the application module, it does not read `java.net.http`.
 
 | `@VidocqUrl URI base` or `@VidocqUrl String base`
 | `http://127.0.0.1:<port>`.

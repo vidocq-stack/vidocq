@@ -29,7 +29,9 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -65,6 +67,13 @@ class VidocqApplicationTest {
                 server.createContext("/hello", exchange -> {
                     byte[] body = "hello".getBytes();
                     exchange.getResponseHeaders().add("Content-Type", "text/plain");
+                    exchange.sendResponseHeaders(200, body.length);
+                    exchange.getResponseBody().write(body);
+                    exchange.close();
+                });
+                server.createContext("/whoami", exchange -> {
+                    byte[] body = (exchange.getRequestHeaders().getFirst("Authorization") + " "
+                            + exchange.getRequestHeaders().getFirst("X-Tenant")).getBytes();
                     exchange.sendResponseHeaders(200, body.length);
                     exchange.getResponseBody().write(body);
                     exchange.close();
@@ -158,6 +167,26 @@ class VidocqApplicationTest {
             assertEquals("POST application/json {\"a\":1}", echoed.body());
 
             assertEquals(404, application.request("DELETE", "/nowhere", null, null).status());
+        }
+    }
+
+    /**
+     * A test sends headers, a bearer token for a {@code @RolesAllowed} endpoint for one: the test module cannot use
+     * {@code java.net.http} itself (BUG-20261030-18).
+     */
+    @Test
+    void aRequestCarriesTheHeadersOfTheTest() throws Exception {
+        int port = VidocqApplication.freePort();
+
+        try (VidocqApplication application = VidocqApplication.start(program("Http", HTTP, port), port,
+                Duration.ofSeconds(60))) {
+            Map<String, String> headers = new LinkedHashMap<>();
+            headers.put("Authorization", "Bearer abc");
+            headers.put("X-Tenant", "library");
+
+            assertEquals("Bearer abc library", application.get("/whoami", headers).body());
+            assertEquals("POST application/json {}",
+                    application.request("POST", "/echo", headers, "application/json", "{}").body());
         }
     }
 
