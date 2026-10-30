@@ -61,6 +61,7 @@ in `vidocq.properties` (see [Switching dev services on and off](#switching-dev-s
 |----------|----------|-----------|
 | PostgreSQL | `vidocq-runtime-devservice-postgres` | `vidocq.pool[.<name>].url` / `.username` / `.password` |
 | Keycloak | `vidocq-runtime-devservice-keycloak` | OIDC issuer / auth-server coordinates |
+| OpenTelemetry (Grafana LGTM) | `vidocq-runtime-devservice-otel` | `otel.exporter.otlp.endpoint`, `otel.exporter.otlp.protocol`, and `otel.sdk.disabled=false` unless set |
 
 Add the provider to the **plugin**'s `<dependencies>` (not the project's):
 
@@ -77,6 +78,26 @@ Add the provider to the **plugin**'s `<dependencies>` (not the project's):
   </dependencies>
 </plugin>
 ```
+
+### OpenTelemetry (Grafana LGTM)
+
+`vidocq-runtime-devservice-otel` starts `grafana/otel-lgtm` (pinned, `vidocq.dev.otel.image` to change it): an
+OpenTelemetry collector in front of Grafana, Tempo (traces), Loki (logs) and Prometheus (metrics). It applies when
+MicroProfile Telemetry (Humboldt, `io.vidocq.humboldt.runtime.HumboldtAutoConfigure`) is on the application's class
+path and no endpoint is given (`otel.exporter.otlp.endpoint` or `OTEL_EXPORTER_OTLP_ENDPOINT` as a `-D`, an
+environment variable or the goal's configuration); otherwise the log and the report say why it did not start.
+
+It publishes:
+
+| Key | Value |
+|-----|-------|
+| `otel.exporter.otlp.endpoint` | `http://<host>:<mapped 4318>`, the collector's OTLP/HTTP port |
+| `otel.exporter.otlp.protocol` | `http/protobuf`, what Humboldt speaks |
+| `otel.sdk.disabled` | `false`, only when neither the goal nor the application's files set it: MicroProfile Telemetry leaves the SDK off by default, and the traces would not reach Grafana |
+
+The startup report and the dev console's *Dev services* panel show Grafana's URL (`grafana`),
+the OTLP/HTTP endpoint and the OTLP/gRPC address. For the production run, point `otel.exporter.otlp.endpoint` at your
+collector, as docker compose does with the same image.
 
 ### Opt-out semantics
 

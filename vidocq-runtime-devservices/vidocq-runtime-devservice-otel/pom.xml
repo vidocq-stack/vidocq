@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-devservices</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-devservice-otel</artifactId>
+    <name>Vidocq :: DevServices :: OpenTelemetry (Grafana LGTM)</name>
+    <description>DevService that starts a Grafana LGTM container (grafana/otel-lgtm: an OpenTelemetry collector
+        with Grafana, Tempo, Loki and Prometheus) for vidocq:dev and the tests, when MicroProfile Telemetry (Humboldt)
+        is on the application's class path, and publishes otel.exporter.otlp.endpoint. Runs in the Maven plugin JVM
+        only.</description>
+
+    <dependencies>
+        <!-- Provided by the host plugin's classpath at run time; needed here only to compile. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devservices-spi</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Generic Testcontainers: the LGTM stack runs in a GenericContainer. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- No Vidocq beans here: turn off the inherited Vauban indexer APT. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <proc>none</proc>
+                </configuration>
+                <executions>
+                    <!-- The tests are patched into this named module (Vidocq/vidocq#177) and query Grafana with the
+                         JDK's HTTP client, which the module itself never needs: added for testCompile only. -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <compilerArgs>
+                                <arg>--add-modules</arg>
+                                <arg>java.net.http</arg>
+                                <arg>--add-reads</arg>
+                                <arg>io.vidocq.runtime.devservices.otel=java.net.http</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- The provider runs on the Maven plugin's class path, never on a module path: so do its tests. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -250,6 +250,11 @@
         </dependency>
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devservice-otel</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-devservices-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
