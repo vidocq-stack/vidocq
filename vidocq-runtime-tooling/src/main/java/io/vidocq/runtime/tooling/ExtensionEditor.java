@@ -127,7 +127,7 @@ public final class ExtensionEditor {
             String updated = source;
             for (String id : ids) {
                 updated = (add
-                        ? ModuleInfoEditor.add(updated, id, KnownExtensions.moduleDirectives(id, pkg))
+                        ? ModuleInfoEditor.add(updated, id, directives(projectDir, id, pkg, reporter))
                         : ModuleInfoEditor.remove(updated, id, KnownExtensions.moduleName(id).orElse(null)))
                         .source();
                 if (add && pkg == null) {
@@ -143,6 +143,37 @@ public final class ExtensionEditor {
             return true;
         } catch (IOException | IllegalArgumentException e) {
             reporter.warning("Could not update module-info.java: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * The directives {@code id} needs, with the {@code opens} of the resource packages it reads that hold a file
+     * already. Opening a package the module lacks fails the build, so for one that does not exist yet the reporter
+     * says where its files go and what to declare then (BUG-20261030-11).
+     */
+    private static List<String> directives(Path projectDir, String id, String pkg, Reporter reporter) {
+        List<String> directives = new java.util.ArrayList<>(KnownExtensions.moduleDirectives(id, pkg));
+        for (String resourcePackage : KnownExtensions.resourcePackagesToOpen(id)) {
+            Path dir = projectDir.resolve("src/main/resources").resolve(resourcePackage.replace('.', '/'));
+            if (holdsAFile(dir)) {
+                directives.add("opens " + resourcePackage);
+            } else {
+                String relative = "src/main/resources/" + resourcePackage.replace('.', '/');
+                reporter.warning(id + " reads " + relative + ": once it holds a file, add `opens " + resourcePackage
+                        + ";` to module-info.java, or add " + id + " again (vidocq:check-module-info checks it)");
+            }
+        }
+        return directives;
+    }
+
+    private static boolean holdsAFile(Path dir) {
+        if (!Files.isDirectory(dir)) {
+            return false;
+        }
+        try (var entries = Files.list(dir)) {
+            return entries.anyMatch(Files::isRegularFile);
+        } catch (IOException _) {
             return false;
         }
     }

@@ -32,7 +32,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-11 — `vidocq extension add flyway-migration` does not write `opens db.migration;`
 
 - **Date**: 2026-10-30
-- **Status**: OPEN
+- **Status**: FIXED on `feat/flyway-opens-migration-package`: the catalog key `module-info.opens-resource-package = db.migration` (Flyway and Liquibase); `vidocq extension add` writes the `opens` once the package holds a file, and otherwise says where the migrations go (`ExtensionEditorTest.addingFlywayOpensTheMigrationPackageWhenItHoldsAMigration`, `…WithoutMigrationSaysWhereTheyGo`). Opening an absent package fails the build, which is why `check-module-info` only asks for it once the package exists
 - **Reported by**: the vidocq-tutorial session (batch 3, item 5)
 - **Minimal reproduction**: add the extension, add `src/main/resources/db/migration/V1__init.sql`: `vidocq:check-module-info` fails, or Flyway finds no migration on the module path.
 - **Cause hypothesis**: `ModuleInfoEditor` writes `requires` only; the `opens` the extension declares are checked, not written.

@@ -390,6 +390,40 @@ class ExtensionEditorTest {
         assertTrue(Files.readString(moduleInfo()).contains("opens com.acme.demo;"));
     }
 
+    /**
+     * Flyway reads its migrations from the {@code db.migration} package: once the project has one, adding the
+     * extension opens it, which {@code vidocq:check-module-info} asks for (BUG-20261030-11).
+     */
+    @Test
+    void addingFlywayOpensTheMigrationPackageWhenItHoldsAMigration() throws IOException {
+        writePom("");
+        writeModuleInfo();
+        Path migration = project.resolve("src/main/resources/db/migration/V1__init.sql");
+        Files.createDirectories(migration.getParent());
+        Files.writeString(migration, "create table book (id bigint primary key);\n");
+
+        edit(List.of("flyway-migration"), true);
+
+        assertTrue(Files.readString(moduleInfo()).contains("opens db.migration; // vidocq:flyway-migration"),
+                Files.readString(moduleInfo()));
+    }
+
+    /**
+     * Without a migration the package does not exist yet, and opening it would fail the build: the edit says where
+     * the migrations go and what to declare then.
+     */
+    @Test
+    void addingFlywayWithoutMigrationSaysWhereTheyGo() throws IOException {
+        writePom("");
+        writeModuleInfo();
+
+        edit(List.of("flyway-migration"), true);
+
+        assertFalse(Files.readString(moduleInfo()).contains("opens db.migration"), Files.readString(moduleInfo()));
+        assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("warning: ") && l.contains("src/main/resources/db/migration")
+                && l.contains("opens db.migration;")), reporter.lines.toString());
+    }
+
     private ExtensionEditor.Outcome edit(List<String> ids, boolean add) {
         return ExtensionEditor.edit(project, ids, add, "1.2.3", reporter);
     }
