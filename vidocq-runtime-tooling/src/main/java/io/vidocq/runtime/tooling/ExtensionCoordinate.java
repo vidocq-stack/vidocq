@@ -62,11 +62,17 @@ public record ExtensionCoordinate(String groupId, String artifactId) {
 
     /** {@link #dependencyXml(String)} with a {@code <version>}, omitted when {@code null}. */
     public String dependencyXml(String indent, String version) {
+        return dependencyXml(indent, version, null);
+    }
+
+    /** {@link #dependencyXml(String, String)} with a {@code <scope>}, omitted when {@code null}. */
+    public String dependencyXml(String indent, String version, String scope) {
         String child = indent + "    ";
         return indent + "<dependency>\n"
                 + child + "<groupId>" + groupId + "</groupId>\n"
                 + child + "<artifactId>" + artifactId + "</artifactId>\n"
                 + (version == null ? "" : child + "<version>" + version + "</version>\n")
+                + (scope == null ? "" : child + "<scope>" + scope + "</scope>\n")
                 + indent + "</dependency>";
     }
 

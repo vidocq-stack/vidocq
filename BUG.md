@@ -206,6 +206,30 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Reported by**: the vidocq-tutorial session (after the train vidocq#434), step 11
 - **Minimal reproduction**: a clean project whose `src/main/resources/vidocq.properties` sets `vidocq.dev.keycloak.realm=library` and a realm import; `vidocq test` logs _issuer …/realms/master_, and a test that asks the token URL for a realm user gets 401. `vidocq dev` and `mvn test` use the right realm.
 - **Cause hypothesis**: `vidocq:test` opens the dev services from `target/classes/vidocq.properties` before its first run, and the CLI ran the goal alone; a project without a previous build (here, after a history rewrite) had no such file. Not a regression of #434: an older `target/classes` hid it.
+## BUG-20261031-05 — `extension add mansart-pool` leaves the dev-service provider to the user, and the boot error ignores it
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/devservice-deps-by-cli`: an extension descriptor names its dev service (`devservice`, catalog keys), and `vidocq extension add`, `vidocq create` and `vidocq doctor --fix` declare the provider among `vidocq-runtime-maven-plugin`'s dependencies (`DevServiceWiring`, `DevServiceWiringTest`, `ExtensionEditorTest.anExtensionWithADevServiceBringsWhatItNeeds`, `ProjectScaffolderExtensionsTest.anExtensionWithADevServiceIsCreatedWithWhatItNeeds`); `vidocq doctor` warns under _Dev services_ and `vidocq:checkpom` in the build (`ProjectDoctorTest.aDevServiceWithoutWhatItNeedsWarnsAndIsFixed`, `VidocqCheckPomMojoTest.aDevServiceWithoutItsPiecesIsReported`); the boot error names both ways out (`MissingDataSourceTest`). Same for `cervantes-jwt` (Keycloak) and `humboldt-telemetry` (collector, plugin only)
+- **Reported by**: the vidocq-tutorial session (replay of 2026-10-31, R4)
+- **Minimal reproduction**: `vidocq create -x cassini-rest`, `vidocq extension add mansart-data mansart-pool`, `vidocq dev`: _MansartPoolExtension did not publish a DataSource — is vidocq.pool.url set?_; `vidocq doctor` 11/11 ok. The provider had to be added by hand to the plugin's `<dependencies>`.
+- **Cause hypothesis**: the catalog knew each extension's codegen bundle and module directives, not its dev service; nothing wrote or checked the provider.
+
+## BUG-20261031-06 — Without the PostgreSQL driver, the dev service says so as an INFO line, then the boot fails on the URL
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/devservice-deps-by-cli`: the pool's descriptor names the driver (`devservice.driver = org.postgresql:postgresql:42.7.10`), written in runtime scope unless the project declares a JDBC driver already (then on another database, nothing is written); `DevService.skipNeedsAction` lets a provider say that not starting is a problem, and the host logs it as a WARNING (`DevServiceManagerTest.aSkipThatNeedsTheUsersActionIsAWarning`, `PostgresDevServiceTest.onlyTheMissingDriverAsksTheUserToAct`); doctor and checkpom name the missing driver
+- **Reported by**: the vidocq-tutorial session (replay of 2026-10-31, R5)
+- **Minimal reproduction**: the provider on the plugin, no `org.postgresql:postgresql`; `vidocq dev` logs `[INFO] DevService 'postgres' not started: no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path`, then fails with _is vidocq.pool.url set?_
+- **Cause hypothesis**: every skip reason was logged at INFO, including the one that leaves the application without a database.
+
+## BUG-20261031-07 — A plain `mvn test` needs the dev-service provider again, in test scope, with `vidocq-runtime-devservices-junit`
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/devservice-deps-by-cli`: `vidocq extension add` writes `vidocq-runtime-devservices-junit` and the provider in test scope (not the collector, `devservice.in-tests = false`), `vidocq extension remove` takes them away; doctor and checkpom report a missing pair; the pool's boot error points to `vidocq-runtime-devservices-junit` for `mvn test`. The plugin's providers do not serve Surefire: they run in the plugin's class realm, and Surefire never sees it, so the test-scope pair stays, written by the CLI instead of the user
+- **Reported by**: the vidocq-tutorial session (replay of 2026-10-31, R6)
+- **Minimal reproduction**: the provider on the plugin only; `vidocq test` passes, `./mvnw test` fails every `@VidocqTest` with _did not publish a DataSource — is vidocq.pool.url set?_; doctor silent.
+- **Cause hypothesis**: two hosts discover providers in two places (the plugin realm, the test class path); only the documentation said so.
+
 ## BUG-20261030-24 — A package the runtime reaches by reflection, and the module does not open, fails at the first request
 
 - **Date**: 2026-10-30

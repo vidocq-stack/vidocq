@@ -98,8 +98,37 @@ class ProjectDoctorTest {
 
     @Test
     void theProjectChecksAreNamed(@TempDir Path dir) throws IOException {
-        assertEquals(Set.of("Codegen bundles", "Vauban indexer", "Module directives", "Maven version",
+        assertEquals(Set.of("Codegen bundles", "Vauban indexer", "Module directives", "Dev services", "Maven version",
                 "HTTP port"), check(create(dir, Set.of("cassini-rest"), false)).keySet());
+    }
+
+    // -------------------------------------------------------------------------
+    // Dev services
+    // -------------------------------------------------------------------------
+
+    /**
+     * BUG-20261031-05, -06, -07: the tutorial's project, whose pool came before `extension add` wired its dev
+     * service, has no provider, no test host and no driver; doctor names each and --fix writes them.
+     */
+    @Test
+    void aDevServiceWithoutWhatItNeedsWarnsAndIsFixed(@TempDir Path dir) throws IOException {
+        Path project = create(dir, Set.of("mansart-pool"), false);
+        assertEquals(Diagnostic.Status.OK, check(project).get("Dev services").status());
+        Path pom = project.resolve("pom.xml");
+        String unwired = DevServiceWiring.unwire(Files.readString(pom), "mansart-pool", List.of(),
+                new RecordingReporter()).pom();
+        Files.writeString(pom, PomEditor.remove(unwired, new ExtensionCoordinate("org.postgresql", "postgresql")).pom());
+
+        Diagnostic devServices = check(project).get("Dev services");
+        assertEquals(Diagnostic.Status.WARN, devServices.status());
+        assertTrue(devServices.detail().contains("vidocq-runtime-devservice-postgres")
+                && devServices.detail().contains("vidocq-runtime-devservices-junit")
+                && devServices.detail().contains("org.postgresql:postgresql"), devServices.detail());
+        assertTrue(devServices.fixable());
+
+        assertTrue(ProjectDoctor.fix(project, RUNTIME, new RecordingReporter()));
+
+        assertEquals(Diagnostic.Status.OK, check(project).get("Dev services").status());
     }
 
     @Test

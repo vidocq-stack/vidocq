@@ -485,4 +485,27 @@ class ExtensionEditorTest {
         assertFalse(pom().contains("vidocq-runtime-mansart-pool-telemetry-extension"), pom());
         assertTrue(pom().contains("<artifactId>vidocq-runtime-mansart-pool-extension</artifactId>"), pom());
     }
+
+    /**
+     * BUG-20261031-05, -06, -07: adding the pool brings what its dev service needs, so that {@code vidocq dev},
+     * {@code vidocq test} and a plain {@code mvn test} get a database; removing it takes the providers away.
+     */
+    @Test
+    void anExtensionWithADevServiceBringsWhatItNeeds() throws IOException {
+        writePom("");
+        writeModuleInfo();
+
+        edit(List.of("mansart-pool"), true);
+
+        DevServiceWiring.Declared declared = DevServiceWiring.Declared.of(pom());
+        assertEquals(List.of(), DevServiceWiring.missing(List.of("mansart-pool"), declared), pom());
+        assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("success: Wired vidocq-runtime-devservice-postgres")),
+                reporter.lines.toString());
+
+        edit(List.of("mansart-pool"), false);
+
+        DevServiceWiring.Declared after = DevServiceWiring.Declared.of(pom());
+        assertEquals(List.of(), after.plugin(), pom());
+        assertFalse(after.scopes().containsKey(DevServiceWiring.JUNIT_HOST), pom());
+    }
 }

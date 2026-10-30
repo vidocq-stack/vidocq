@@ -27,7 +27,9 @@ import java.io.StringReader;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -110,6 +112,102 @@ public final class PomDependencies {
                 default -> { /* ignore */ }
             }
         }
+    }
+
+    /**
+     * The scope of every dependency declared under {@code <project>/<dependencies>}, {@code compile} when it names
+     * none, in the pom's order; a coordinate declared twice keeps its first scope.
+     *
+     * @throws IllegalArgumentException if the XML cannot be parsed
+     */
+    public static Map<ExtensionCoordinate, String> scopes(String pomXml) {
+        Map<ExtensionCoordinate, String> scopes = new LinkedHashMap<>();
+        for (Map<String, String> dependency : dependencies(pomXml, List.of("project", "dependencies"))) {
+            String scope = dependency.get("scope");
+            coordinate(dependency).ifPresent(c -> scopes.putIfAbsent(c,
+                    scope == null || scope.isBlank() ? "compile" : scope));
+        }
+        return scopes;
+    }
+
+    /**
+     * The {@code <dependencies>} of {@code plugin} in the project build's {@code <plugins>}, in order: neither
+     * {@code pluginManagement} nor a profile, whose plugin dependencies a plain build does not load.
+     *
+     * @throws IllegalArgumentException if the XML cannot be parsed
+     */
+    public static List<ExtensionCoordinate> pluginDependencies(String pomXml, ExtensionCoordinate plugin) {
+        Matcher block = PLUGIN_BLOCK.matcher(pomXml);
+        List<ExtensionCoordinate> result = new ArrayList<>();
+        while (block.find()) {
+            String content = block.group(1);
+            if (!content.contains("<artifactId>" + plugin.artifactId() + "</artifactId>")
+                    || insideAny(pomXml, block.start(), "<pluginManagement>", "</pluginManagement>")
+                    || insideAny(pomXml, block.start(), "<profiles>", "</profiles>")) {
+                continue;
+            }
+            for (Map<String, String> dependency : dependencies("<plugin>" + content + "</plugin>",
+                    List.of("plugin", "dependencies"))) {
+                coordinate(dependency).ifPresent(result::add);
+            }
+        }
+        return result;
+    }
+
+    private static boolean insideAny(String pom, int index, String open, String close) {
+        int start = pom.lastIndexOf(open, index);
+        return start >= 0 && pom.indexOf(close, start) > index;
+    }
+
+    private static Optional<ExtensionCoordinate> coordinate(Map<String, String> dependency) {
+        String groupId = dependency.get(GROUP_ID);
+        String artifactId = dependency.get(ARTIFACT_ID);
+        return groupId == null || artifactId == null || groupId.isBlank() || artifactId.isBlank()
+                ? Optional.empty()
+                : Optional.of(new ExtensionCoordinate(groupId, artifactId));
+    }
+
+    /** The child elements' texts of each {@code <dependency>} directly under {@code parent} (a path from the root). */
+    private static List<Map<String, String>> dependencies(String xml, List<String> parent) {
+        XMLInputFactory factory = XMLInputFactory.newFactory();
+        factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+        List<Map<String, String>> result = new ArrayList<>();
+        try {
+            XMLStreamReader reader = factory.createXMLStreamReader(new StringReader(xml));
+            try (var _ = (ClosingReader) reader::close) {
+                List<String> path = new ArrayList<>();
+                Map<String, String> current = null;
+                StringBuilder text = new StringBuilder();
+                while (reader.hasNext()) {
+                    switch (reader.next()) {
+                        case XMLStreamConstants.START_ELEMENT -> {
+                            path.add(reader.getLocalName());
+                            text.setLength(0);
+                            if (path.size() == parent.size() + 1 && path.subList(0, parent.size()).equals(parent)
+                                    && DEPENDENCY.equals(reader.getLocalName())) {
+                                current = new LinkedHashMap<>();
+                            }
+                        }
+                        case XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA -> text.append(reader.getText());
+                        case XMLStreamConstants.END_ELEMENT -> {
+                            if (current != null && path.size() == parent.size() + 2) {
+                                current.put(path.getLast(), text.toString().trim());
+                            } else if (current != null && path.size() == parent.size() + 1) {
+                                result.add(current);
+                                current = null;
+                            }
+                            path.removeLast();
+                            text.setLength(0);
+                        }
+                        default -> { /* ignore */ }
+                    }
+                }
+            }
+        } catch (XMLStreamException e) {
+            throw new IllegalArgumentException("Invalid pom.xml: " + e.getMessage(), e);
+        }
+        return result;
     }
 
     /**

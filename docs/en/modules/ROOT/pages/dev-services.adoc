@@ -25,8 +25,46 @@ Three hosts can start dev services, all through the same `vidocq-runtime-devserv
 
 | A JUnit test run
 | The same providers, for the whole test run, before any test class.
-| Off — opt in by adding the dependencies (see <<in-tests>>)
+| On for the dependencies `vidocq extension add` writes; off otherwise (see <<in-tests>>)
 |===
+
+[#declared-for-you]
+=== Declared for you [.tag-new]#NEW#
+
+An extension with a dev service brings what that service needs: `vidocq extension add`, `vidocq create`
+and `vidocq doctor --fix` write it into the `pom.xml`, so `vidocq dev`, `vidocq test` and a plain `mvn test`
+get a database, Keycloak or a collector without a step of your own.
+
+[cols="1,1,3"]
+|===
+| Extension | Dev service | What is written
+
+| `mansart-pool`
+| `vidocq-runtime-devservice-postgres`
+| The provider among `vidocq-runtime-maven-plugin`'s `<dependencies>`; the provider and
+  `vidocq-runtime-devservices-junit` in `test` scope; the PostgreSQL driver `org.postgresql:postgresql` in
+  `runtime` scope, unless the project declares a JDBC driver already, being then on another database
+  (nothing is written then)
+
+| `cervantes-jwt`
+| `vidocq-runtime-devservice-keycloak`
+| The provider on the plugin; the provider and `vidocq-runtime-devservices-junit` in `test` scope
+
+| `humboldt-telemetry`
+| `vidocq-runtime-devservice-otel`
+| The provider on the plugin only: a test needs no collector
+|===
+
+Maven versions no plugin dependency from a BOM, so the provider on the plugin carries
+`${project.parent.version}`; the test-scope pair takes its version from the BOM. `vidocq extension remove`
+takes the providers away, and the JUnit host with the last of them; the driver stays, as the application
+may query the database itself.
+
+`vidocq doctor` warns, under *Dev services*, about each piece a project lacks, and `vidocq:checkpom` says the
+same in the build (a warning, never a failure): a project whose pool came before this, as the tutorial's did,
+learns it at the next build. Without these pieces, a pool with no `vidocq.pool.url` fails the boot with
+`MansartPoolExtension did not publish a DataSource: set vidocq.pool.url …, or let the PostgreSQL dev service
+provide it …`, which names both ways out and, for `mvn test`, `vidocq-runtime-devservices-junit`.
 
 Testcontainers and the Docker client never reach the application's own module path: they live in
 `vidocq-runtime-devservices-host` and the providers, consumed only by the host. The application
@@ -99,7 +137,7 @@ service decides, for the `@Default` datasource (`vidocq.pool.url`) and then for 
 
 | No URL at all, or a value that is not a readable `jdbc:` URL, such as a `${db.url}` expression, `jdbc:${db.kind}://…` or `jdbc:` alone
 | Only when `org.postgresql.Driver` is on the application's class path
-| Without the driver: `not started: no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path`
+| Without the driver: `not started: no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path`, as a `[WARNING]` [.tag-new]#NEW#: the pool gets no database at all
 |===
 
 The class path is the one the application will run with: its runtime dependencies under
@@ -190,8 +228,9 @@ turns them off for that one run.
 [#in-tests]
 == In tests
 
-A test that only needs a database adds the JUnit host's listener and the provider it wants, both
-`test` scope:
+A test that only needs a database runs with the JUnit host's listener and the provider it wants, both
+`test` scope. `vidocq extension add` writes them for the pool and JWT (<<declared-for-you>>); a project
+outside the CLI declares them itself:
 
 [source,xml,subs=attributes+]
 ----
