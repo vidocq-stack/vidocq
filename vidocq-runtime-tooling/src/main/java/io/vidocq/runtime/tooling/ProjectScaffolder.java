@@ -55,8 +55,11 @@ import java.util.Set;
  */
 public final class ProjectScaffolder {
 
-    /** Where the Vidocq SNAPSHOTs are published, on every build of {@code main}. */
-    static final String SNAPSHOT_REPOSITORY_URL = "https://central.sonatype.com/repository/maven-snapshots/";
+    /**
+     * Where the Vidocq SNAPSHOTs are published, on every build of {@code main}: the project's own repository since
+     * 2026-10-30, {@code maven.bak.vidocq.dev} mirroring it.
+     */
+    static final String SNAPSHOT_REPOSITORY_URL = "https://maven.vidocq.dev/snapshots/";
 
     /** The extension whose scaffold writes a {@code HelloResource}. */
     private static final String REST_EXTENSION = "cassini-rest";
@@ -227,7 +230,7 @@ public final class ProjectScaffolder {
     }
 
     /**
-     * Central snapshot repository, for dependencies and for the SNAPSHOT
+     * The Vidocq snapshot repository, for dependencies and for the SNAPSHOT
      * {@code vidocq-runtime-maven-plugin}. Releases stay on Maven Central.
      */
     private static String snapshotRepositories() {
@@ -235,7 +238,7 @@ public final class ProjectScaffolder {
 
                     <repositories>
                         <repository>
-                            <id>central-snapshots</id>
+                            <id>vidocq-snapshots</id>
                             <url>%1$s</url>
                             <releases><enabled>false</enabled></releases>
                             <snapshots><enabled>true</enabled></snapshots>
@@ -244,7 +247,7 @@ public final class ProjectScaffolder {
 
                     <pluginRepositories>
                         <pluginRepository>
-                            <id>central-snapshots</id>
+                            <id>vidocq-snapshots</id>
                             <url>%1$s</url>
                             <releases><enabled>false</enabled></releases>
                             <snapshots><enabled>true</enabled></snapshots>
