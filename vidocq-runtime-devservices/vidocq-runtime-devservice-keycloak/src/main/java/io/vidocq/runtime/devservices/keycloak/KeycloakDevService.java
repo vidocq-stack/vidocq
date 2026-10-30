@@ -70,6 +70,9 @@ public final class KeycloakDevService implements DevService {
     /** The prefix of the coordinates published for the developer, not for the application. */
     private static final String DEV_PREFIX = "vidocq.dev.keycloak.";
 
+    /** The path of a realm under the server root, before its name. */
+    private static final String REALMS = "/realms/";
+
     private GenericContainer<?> container;
     private String image;
     private String issuer;
@@ -103,7 +106,7 @@ public final class KeycloakDevService implements DevService {
         container.start();
 
         issuer = "http://" + container.getHost() + ":" + container.getMappedPort(KC_PORT)
-                + "/realms/" + realm;
+                + REALMS + realm;
         ctx.log().log(System.Logger.Level.INFO, "Keycloak dev service ready, issuer " + issuer);
 
         Map<String, String> props = new LinkedHashMap<>();
@@ -113,7 +116,7 @@ public final class KeycloakDevService implements DevService {
         // endpoint and the admin console a curl or a browser needs (BUG-20261030-16).
         props.put(DEV_PREFIX + "issuer", issuer);
         props.put(DEV_PREFIX + "token-url", issuer + "/protocol/openid-connect/token");
-        props.put(DEV_PREFIX + "admin-console", issuer.substring(0, issuer.indexOf("/realms/")) + "/" + ADMIN_CONSOLE);
+        props.put(DEV_PREFIX + "admin-console", issuer.substring(0, issuer.indexOf(REALMS)) + "/" + ADMIN_CONSOLE);
         props.put(DEV_PREFIX + "admin-user", BOOTSTRAP_ADMIN);
         // App-mapping: duplicate the issuer into extra app-specific keys (e.g. arago.oidc.issuer).
         ctx.property("vidocq.dev.keycloak.issuer-keys").ifPresent(csv -> {
@@ -161,7 +164,7 @@ public final class KeycloakDevService implements DevService {
         } else {
             container.withCommand("start-dev");
         }
-        container.waitingFor(Wait.forHttp("/realms/" + realm).forPort(KC_PORT).forStatusCode(200)
+        container.waitingFor(Wait.forHttp(REALMS + realm).forPort(KC_PORT).forStatusCode(200)
                 .withStartupTimeout(Duration.ofMinutes(3)));
         // vidocq.dev.keycloak.port pins the host port: the issuer, and every token request of a tutorial or a
         // script, stays the same across starts (BUG-20261030-16).
