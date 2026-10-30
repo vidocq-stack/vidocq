@@ -32,6 +32,9 @@ module io.vidocq.grimm.cdi.vauban {
   // classes cannot be loaded without this module. It also supplies the service type of the
   // APT-generated _VaubanComponents below.
   requires io.vidocq.vauban.api;
+  // Compile-only: the generated OpenApiResource$$CassiniAdapter implements a cassini-api type. Cassini finds it by
+  // name in this package; on another JAX-RS runtime it is never loaded (vidocq-workspace#38).
+  requires static io.vidocq.cassini.api;
 
   // ScannedTypesCreator reads the resources the Grimm annotation processor described (grimm#22).
   uses io.vidocq.grimm.spi.gen.OpenApiContribution;

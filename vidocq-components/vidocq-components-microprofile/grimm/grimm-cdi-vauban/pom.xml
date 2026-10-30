@@ -70,6 +70,15 @@
       </exclusions>
     </dependency>
 
+    <!-- Compile-only: the generated OpenApiResource$$CassiniAdapter implements a cassini-api type. Only Cassini
+         loads it; on another JAX-RS runtime it stays unused, and the module does not need cassini-api. -->
+    <dependency>
+      <groupId>io.vidocq.cassini</groupId>
+      <artifactId>cassini-api</artifactId>
+      <version>${cassini.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
@@ -125,6 +134,13 @@
                   <groupId>io.vidocq.vauban</groupId>
                   <artifactId>vauban-processor</artifactId>
                   <version>${vauban.version}</version>
+                </path>
+                <!-- The Cassini adapter of OpenApiResource, generated with the module rather than at run
+                     time when a Cassini stack is built (vidocq-workspace#38). Inert on other JAX-RS runtimes. -->
+                <path>
+                  <groupId>io.vidocq.cassini</groupId>
+                  <artifactId>cassini-processor</artifactId>
+                  <version>${cassini.version}</version>
                 </path>
               </annotationProcessorPaths>
             </configuration>

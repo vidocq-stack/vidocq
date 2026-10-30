@@ -106,6 +106,8 @@ Symmetrically, `JsonDeserializer` and `YamlDeserializer` consume the static file
 
 No lock is taken; serialisation itself can parallelise safely.
 
+On Cassini, `OpenApiResource` is served by an adapter built with `grimm-cdi-vauban` [.tag-new]#NEW#: the module runs `cassini-processor`, with a compile-only `requires static io.vidocq.cassini.api`. Cassini finds the adapter by name in the resource's package, so building the stack no longer generates it at run time. On another JAX-RS runtime the class is present but never loaded, and the module does not need Cassini.
+
 == Further reading
 
 * xref:concepts.adoc[Concepts] — sources, merge, configuration.
