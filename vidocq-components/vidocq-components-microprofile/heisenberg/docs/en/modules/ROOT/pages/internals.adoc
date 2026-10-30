@@ -149,6 +149,20 @@ public void addFaultToleranceBinding(ClassConfig classConfig) {
 
 Startup validation is crucial: any malformed annotation (`@Asynchronous void m()`, `@Bulkhead(value=0)`, a `@Fallback` whose fallback method does not match the guarded signature) raises `FaultToleranceDefinitionException` and immediately aborts application startup — no late runtime surprise.
 
+[#compile-time-policies]
+== Annotations read at compile time [.tag-new]#NEW#
+
+`heisenberg-processor` is an annotation processor. For each class whose methods carry Fault Tolerance annotations, directly or through a class of their hierarchy, it generates a `<Bean>$$HeisenbergPolicies` companion: an implementation of `io.vidocq.heisenberg.spi.gen.FaultToleranceCompanion` that holds the annotations as constant `Literals`, defaults filled in. The resolution rule is the runtime's: each annotation comes from the method's nearest declaration in the class hierarchy, else from the nearest class that carries it. The processor is checked against `AnnotationReader` as an oracle (`FaultTolerancePoliciesProcessorOracleTest`).
+
+At run time, `AnnotationReader` asks the companion first. It is found once per bean class: through `ServiceLoader` in the bean's module layer, then through its class loaders, then by its name. With a companion there is no reflection on the annotations, which matters for ahead-of-time compilation. MicroProfile Config overrides still apply at run time.
+
+* *On a plain module path*, the application declares `provides io.vidocq.heisenberg.spi.gen.FaultToleranceCompanion with ...$$HeisenbergPolicies`, as `heisenberg-cdi-vauban-module-it` does.
+* *On the Vidocq runtime*, the application layer turns the processor's `META-INF/services` file into `provides` by itself.
+
+A class compiled without the processor, such as the TCK's classes, is read by reflection as before. Its first read logs one warning per class (`HEISENBERG — Fault Tolerance annotations of ... read by reflection`).
+
+The processor skips, with a compiler note, the classes a companion cannot name: private, local or anonymous classes, and annotation values naming a class the companion's package cannot reach. The generated code carries no `@Generated` annotation: `javax.annotation.processing` belongs to `java.compiler`, which an application module does not read.
+
 [#fallback-lookup]
 == How a fallback method is reached
 

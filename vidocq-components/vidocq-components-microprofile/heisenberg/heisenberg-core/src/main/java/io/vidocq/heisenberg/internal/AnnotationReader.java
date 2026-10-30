@@ -19,6 +19,7 @@
  */
 package io.vidocq.heisenberg.internal;
 
+import io.vidocq.heisenberg.spi.gen.FaultToleranceCompanion;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import org.eclipse.microprofile.faulttolerance.Asynchronous;
@@ -41,6 +42,25 @@ public final class AnnotationReader {
 
     public static FaultToleranceAnnotations read(Method method, Class<?> beanClassHint) {
         Class<?> beanClass = beanClassHint != null ? beanClassHint : method.getDeclaringClass();
+        FaultToleranceCompanion companion = Companions.of(beanClass);
+        if (companion != null) {
+            FaultToleranceCompanion.Policies policies =
+                    companion.policies(FaultToleranceCompanion.methodKey(method.getName(), method.getParameterTypes()));
+            return policies == null ? NONE : new FaultToleranceAnnotations(policies.retry(), policies.timeout(),
+                    policies.circuitBreaker(), policies.bulkhead(), policies.fallback(), policies.asynchronous());
+        }
+        FaultToleranceAnnotations read = reflectively(method, beanClass);
+        if (!read.equals(NONE)) {
+            Companions.reflecting(beanClass);
+        }
+        return read;
+    }
+
+    private static final FaultToleranceAnnotations NONE =
+            new FaultToleranceAnnotations(null, null, null, null, null, null);
+
+    /** The annotations by reflection, for a bean class compiled without the Heisenberg processor. */
+    public static FaultToleranceAnnotations reflectively(Method method, Class<?> beanClass) {
         return new FaultToleranceAnnotations(
                 select(method, beanClass, Retry.class),
                 select(method, beanClass, Timeout.class),

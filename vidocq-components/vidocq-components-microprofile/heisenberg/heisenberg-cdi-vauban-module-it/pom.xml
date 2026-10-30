@@ -108,6 +108,13 @@
                             <artifactId>heisenberg-cdi-vauban</artifactId>
                             <version>${project.version}</version>
                         </path>
+                        <!-- The $$HeisenbergPolicies companions, provided below: on the strict module path the
+                             runtime reads the annotations from them, without reflection (vidocq-workspace#38). -->
+                        <path>
+                            <groupId>io.vidocq.heisenberg</groupId>
+                            <artifactId>heisenberg-processor</artifactId>
+                            <version>${project.version}</version>
+                        </path>
                         <!-- The BCE needs the CDI API to load. heisenberg-cdi-vauban leaves it to the
                              container (`provided`, and excluded from vauban-api), so name it here. -->
                         <path>

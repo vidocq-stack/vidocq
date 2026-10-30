@@ -42,4 +42,6 @@ module io.vidocq.heisenberg.api {
     requires transitive microprofile.fault.tolerance.api;
 
     exports io.vidocq.heisenberg.api;
+    // Read by the companions the Heisenberg processor generates in application modules.
+    exports io.vidocq.heisenberg.spi.gen;
 }

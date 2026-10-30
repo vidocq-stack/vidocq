@@ -40,4 +40,7 @@ module io.vidocq.heisenberg.core {
     requires org.eclipse.microprofile.config;
 
     exports io.vidocq.heisenberg.internal to io.vidocq.heisenberg.cdi.vauban;
+
+    // The $$HeisenbergPolicies companions generated in application modules.
+    uses io.vidocq.heisenberg.spi.gen.FaultToleranceCompanion;
 }

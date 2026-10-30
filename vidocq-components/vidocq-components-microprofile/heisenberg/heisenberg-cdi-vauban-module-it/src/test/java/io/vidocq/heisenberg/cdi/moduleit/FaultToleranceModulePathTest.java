@@ -52,6 +52,15 @@ class FaultToleranceModulePathTest {
                 Class.forName("io.vidocq.heisenberg.cdi.moduleit.FaultToleranceService$$Intercepted"),
                 "the APT must have generated FaultToleranceService$$Intercepted at build time");
 
+        // The Fault Tolerance annotations come from the companion the processor generated, found in the layer.
+        boolean provided = java.util.ServiceLoader.load(ModuleLayer.boot(),
+                        io.vidocq.heisenberg.spi.gen.FaultToleranceCompanion.class).stream()
+                .map(java.util.ServiceLoader.Provider::get)
+                .anyMatch(c -> c.beanClass() == FaultToleranceService.class
+                        && c.policies("call()") != null && c.policies("call()").retry().maxRetries() == 3);
+        org.junit.jupiter.api.Assertions.assertTrue(provided,
+                "FaultToleranceService$$HeisenbergPolicies must be provided on the module path");
+
         FaultToleranceService.CALLS.set(0);
         VaubanContainer container = VaubanContainer.builder()
                 .addBeanClass(HeisenbergExtension.class)

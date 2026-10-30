@@ -125,6 +125,7 @@
         <module>heisenberg-mp-ft-api</module>
         <module>heisenberg-api</module>
         <module>heisenberg-core</module>
+        <module>heisenberg-processor</module>
         <module>heisenberg-cdi-vauban</module>
         <module>heisenberg-cdi-vauban-module-it</module>
         <module>heisenberg-it-other-containers</module>
@@ -234,6 +235,11 @@
             <dependency>
                 <groupId>io.vidocq.heisenberg</groupId>
                 <artifactId>heisenberg-cdi-vauban</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.heisenberg</groupId>
+                <artifactId>heisenberg-processor</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
