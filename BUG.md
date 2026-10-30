@@ -125,6 +125,15 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Minimal reproduction**: list the `BuildCompatibleExtension` providers of the boot layer with `vidocq-runtime-cervantes-jwt-extension` (or the Rest Client one): `CervantesClaimExtension` and its empty subclass `CervantesJwtBuildCompatibleExtension` are both declared.
 - **Cause hypothesis**: the wrappers republished their brick's extension through a subclass when the brick did not declare it; `cervantes-cdi-vauban` and `cyrano-cdi-vauban` now declare it themselves, in an exported package. Two extensions doing the same work, and a codegen bundle putting the brick on the processor path saw both.
 
+## BUG-20261030-23 — Vauban warns at each build that the JWT, Metrics and OpenAPI extensions will not run
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `feat/codegen-bundles-bce`: new `vidocq-runtime-cervantes-jwt-extension-codegen` (cervantes-cdi-vauban, cdi-api, the Config bundle); the Metrics bundle adds dirac-cdi-vauban with cdi-api. JWT TCK 208/208, Metrics 127/127. OpenAPI still OPEN: `GrimmExtension` on the processor path registers its synthetic `ScannedTypes` bean at build time, and again when the application starts (`vidocq-runtime-it-grimm-openapi`: _Ambiguous dependency … ScannedTypes_)
+- **Reported by**: the vidocq-tutorial session (batch 7, item 4; batch 10)
+- **Minimal reproduction**: `vidocq create -x cassini-rest -x dirac-metrics -x grimm-openapi -x cervantes-jwt`, then `mvn compile`: _[Vauban] … Build Compatible Extension(s) present on the compile/module path are NOT on the annotation-processor path and will not run: [CervantesClaimExtension, DiracExtension, GrimmExtension]_.
+- **Cause hypothesis**: JWT had no codegen bundle; the Metrics and OpenAPI bundles carried their processor only, not the jar of their extension's BCE, nor the CDI API those jars leave `provided`.
+- **Still open**: _Unsatisfied dependency … JsonWebToken_ at build time. The producer is a bean of cervantes-cdi-vauban, which Vauban's build-time validation does not see; it defers to the runtime container, where injection works.
+
 ## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
 
 - **Date**: 2026-10-30

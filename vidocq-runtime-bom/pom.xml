@@ -233,6 +233,11 @@
             </dependency>
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                <artifactId>vidocq-runtime-cervantes-jwt-extension-codegen</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-grimm-openapi-extension-codegen</artifactId>
                 <version>0.4.0-SNAPSHOT</version>
             </dependency>

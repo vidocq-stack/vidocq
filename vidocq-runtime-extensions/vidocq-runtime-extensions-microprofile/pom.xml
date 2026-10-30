@@ -27,6 +27,7 @@
         <module>vidocq-runtime-dirac-metrics-extension-dev</module>
         <module>vidocq-runtime-heisenberg-fault-tolerance-extension</module>
         <module>vidocq-runtime-heisenberg-fault-tolerance-extension-codegen</module>
+        <module>vidocq-runtime-cervantes-jwt-extension-codegen</module>
         <module>vidocq-runtime-grimm-openapi-extension</module>
         <module>vidocq-runtime-grimm-openapi-extension-codegen</module>
         <module>vidocq-runtime-grimm-openapi-ui-extension</module>

@@ -286,9 +286,9 @@ xref:modules/vidocq-runtime-extensions.adoc#ravel-config-codegen[the Config exte
 xref:modules/vidocq-runtime-extensions.adoc#cyrano-rest-client-codegen[the Rest Client extension].
 
 [#metrics-openapi-codegen]
-== Metrics, OpenAPI and Fault Tolerance need their codegen bundle
+== Metrics, OpenAPI, Fault Tolerance and JWT need their codegen bundle
 
-Three more extensions ship a `-codegen` bundle, so that their processor runs on the application's classes instead of
+Four more extensions ship a `-codegen` bundle, so that their processor runs on the application's classes instead of
 a scan by reflection when the application starts (Vidocq/vidocq-workspace#38). `vidocq:checkpom` fails the build of an
 application that declares the extension without it:
 
@@ -296,12 +296,20 @@ application that declares the extension without it:
 * `vidocq-runtime-grimm-openapi-extension` → `vidocq-runtime-grimm-openapi-extension-codegen`.
 * `vidocq-runtime-heisenberg-fault-tolerance-extension` → `vidocq-runtime-heisenberg-fault-tolerance-extension-codegen`
   [.tag-new]#NEW#: Heisenberg's processor writes the Fault Tolerance annotations of each bean into a companion.
+* `vidocq-runtime-cervantes-jwt-extension` → `vidocq-runtime-cervantes-jwt-extension-codegen` [.tag-new]#NEW#: Vauban
+  runs Cervantes' Build Compatible Extension when the application compiles.
+
+The Metrics bundle now also brings its extension's Build Compatible Extension, `DiracExtension` [.tag-new]#NEW#:
+without it, Vauban warned at each build that the extension was on the module path only and would not run. The
+OpenAPI bundle does not bring `GrimmExtension` yet: run at build time, it registers its `ScannedTypes` bean a second
+time when the application starts.
 
 Add each one to the compiler's `annotationProcessorPaths`, as in xref:#config-rest-client-codegen[the previous
 section]; `checkpom` prints the `<path>` to paste, and `vidocq extension add` writes it. See
 xref:modules/vidocq-runtime-extensions.adoc#dirac-metrics-codegen[the Metrics extension] and
-xref:modules/vidocq-runtime-extensions.adoc#grimm-openapi-codegen[the OpenAPI extension] and
-xref:modules/vidocq-runtime-extensions.adoc#heisenberg-fault-tolerance-codegen[the Fault Tolerance extension].
+xref:modules/vidocq-runtime-extensions.adoc#grimm-openapi-codegen[the OpenAPI extension],
+xref:modules/vidocq-runtime-extensions.adoc#heisenberg-fault-tolerance-codegen[the Fault Tolerance extension] and
+xref:modules/vidocq-runtime-extensions.adoc#cervantes-jwt-codegen[the JWT extension].
 
 [#application-parent]
 == `vidocq-runtime-parent` is an application parent, with a BOM
