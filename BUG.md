@@ -48,7 +48,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-13 — Automatic-module warnings and Flyway logging the database twice at start-up
 
 - **Date**: 2026-10-30
-- **Status**: OPEN
+- **Status**: Flyway's double `Database:` line is NOT A BUG: the tutorial session checked one "Successfully applied" / "up to date" per start; the second line is the connection Flyway opens for `info()`, which the dev console's migration panel reads. The automatic-module warnings (Flyway and the PostgreSQL driver have no `module-info`) stay OPEN, with the jlink item of BUG-20261030-17, which they share a cause with
 - **Reported by**: the vidocq-tutorial session (batch 3, item 7)
 - **Minimal reproduction**: a created application with `flyway-migration` and the PostgreSQL driver.
 - **Cause hypothesis**: to investigate: the automatic modules are reported by the layer builder, the double log comes from two Flyway configurations.
@@ -56,7 +56,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-14 — `META-INF/openapi.yaml` edited under `vidocq dev` is not re-read on hot reload
 
 - **Date**: 2026-10-30
-- **Status**: OPEN
+- **Status**: NOT REPRODUCED on main 070881f2 (grimm main): an application with `META-INF/openapi.yaml` under `vidocq dev`, the title edited, the hot reload swapped the layer and `/openapi` served the new title. To verify against the tutorial's step; reopen with its exact sequence if it still happens
 - **Reported by**: the vidocq-tutorial session (batch 5, item 2)
 - **Minimal reproduction**: edit the file while `vidocq dev` runs: `/openapi` keeps the old content until a restart.
 - **Cause hypothesis**: resources are not part of the watched roots, or Grimm's model cache outlives the reload.
@@ -64,7 +64,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-15 — Dev console, Mansart Data › JDQL: the placeholder names `Product`, not one of the application's entities
 
 - **Date**: 2026-10-30
-- **Status**: OPEN
+- **Status**: FIXED on `fix/devconsole-14-15-19`: the example of the JDQL query editor, and of the CSV export, is `FROM` the application's first entity in name order, `ORDER BY` its id when the catalogue knows it (`JdqlActionsTest.theExampleQueryNamesAnEntityOfTheApplication`)
 - **Reported by**: the vidocq-tutorial session (batch 5, item 6)
 - **Minimal reproduction**: open the panel in an application with entities `Book` and `Loan`.
 - **Cause hypothesis**: the placeholder is a constant.
@@ -88,7 +88,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-18 — `VidocqApplication.request` cannot send headers; a test cannot read the dev services' configuration
 
 - **Date**: 2026-10-30
-- **Status**: headers FIXED on `feat/junit-request-headers` (`get(path, headers)`, `request(method, path, headers, contentType, body)`, `VidocqApplicationTest.aRequestCarriesTheHeadersOfTheTest`); the dev services' configuration for the test is OPEN
+- **Status**: FIXED: headers on `feat/junit-request-headers` (`VidocqApplicationTest.aRequestCarriesTheHeadersOfTheTest`); the dev services' keys reach the test JVM as system properties (`DevServicesSessionListenerTest`, `vidocq test` folds them the same way), and the application a `@VidocqTest` starts gets them too since BUG-20261030-20 (Vidocq/vidocq#417). The tutorial reads `vidocq.dev.keycloak.token-url` from a test
 - **Reported by**: the vidocq-tutorial session (batch 9, items 1 and 2)
 - **Minimal reproduction**: a `@VidocqTest` calling a `@RolesAllowed` endpoint needs `Authorization: Bearer …` and a token from the Keycloak dev service.
 - **Cause hypothesis**: the test API has no header overload, and the dev-service keys are given to the application only.
@@ -96,7 +96,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-19 — Startup report: "no dev service: not started by …" under `vidocq dev` without any provider; the default listener printed twice
 
 - **Date**: 2026-10-30
-- **Status**: OPEN
+- **Status**: FIXED on `fix/devconsole-14-15-19`: under `vidocq dev` without a state file, the section says _no dev service configured (no vidocq-runtime-devservice-* dependency, or vidocq.dev.devServices=false)_ (`DevServicesSectionTest.underVidocqDevNoStateFileMeansNoDevServiceConfigured`); the default listener printed twice was already fixed by BUG-20261030-04 (one line per listener under the summary)
 - **Reported by**: the vidocq-tutorial session (batch 9, item 3)
 - **Minimal reproduction**: a created application with no dev-service dependency under `vidocq dev`.
 - **Cause hypothesis**: partly fixed by BUG-20261030-05 (provider found, host given); the listener line comes from both the Chappe section and the summary.

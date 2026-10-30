@@ -156,8 +156,8 @@ class JdqlActionsTest {
         String schema = query.arguments().getFirst().schema();
         assertEquals(schema, write.arguments().getFirst().schema());
         assertTrue(schema.contains("\"query\":{\"type\":\"string\",\"format\":\"textarea\","
-                + "\"contentMediaType\":\"text/x-query\",\"x-language\":\"jdql\",\"description\":\"FROM Product "
-                + "WHERE price > :min ORDER BY name\"}"), "the query editor, with the panel's jdql: " + schema);
+                + "\"contentMediaType\":\"text/x-query\",\"x-language\":\"jdql\",\"description\":\"FROM Gizmo\"}"),
+                "the query editor, with the panel's jdql and an entity of the application: " + schema);
         assertTrue(schema.contains("\"params\":{\"type\":\"string\",\"format\":\"textarea\","
                 + "\"x-parameters-of\":\"query\",\"description\":"), "the JSON editor of its parameters: " + schema);
         assertTrue(schema.endsWith("\"required\":[\"query\"]}"), schema);
@@ -456,5 +456,23 @@ class JdqlActionsTest {
     @Test
     void anEntityClassIsLoadedThroughTheRepositoriesLoader() {
         assertSame(Gizmo.class, RepositoryActions.load(Gizmo.class.getName(), RunFixtures.REPOSITORIES));
+    }
+
+    /**
+     * The example of the query editor names an entity of the application, the first in name order, and its id when
+     * the catalogue knows it; it named {@code Product}, which few applications have (BUG-20261030-15).
+     */
+    @Test
+    void theExampleQueryNamesAnEntityOfTheApplication() {
+        MansartDataCatalogue.Column id = new MansartDataCatalogue.Column("isbn", "isbn", "String", "id", false, true);
+        MansartDataCatalogue.Column title = new MansartDataCatalogue.Column("title", "title", "String", null, false,
+                false);
+        List<MansartDataCatalogue.Entity> entities = List.of(
+                new MansartDataCatalogue.Entity("Loan", "x.Loan", "loans", List.of(), null),
+                new MansartDataCatalogue.Entity("Book", "x.Book", "books", List.of(title, id), null));
+
+        assertEquals("FROM Book ORDER BY isbn", JdqlActions.exampleQuery(entities));
+        assertEquals("FROM Loan", JdqlActions.exampleQuery(List.of(entities.getFirst())));
+        assertEquals("FROM <Entity>", JdqlActions.exampleQuery(List.of()));
     }
 }

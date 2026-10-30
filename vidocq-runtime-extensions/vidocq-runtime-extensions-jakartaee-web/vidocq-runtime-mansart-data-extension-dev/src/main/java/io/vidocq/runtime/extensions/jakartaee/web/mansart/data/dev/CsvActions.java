@@ -135,9 +135,10 @@ final class CsvActions {
 
     private PanelAction exportAction() {
         return new PanelAction(EXPORT, EXPORT_LABEL, null,
-                List.of(PanelAction.Argument.json(STATEMENT, "Statement", exportSchema())), this::exportCsv, group,
-                Failures.cut("A JDQL query whose whole result is downloaded as a CSV file: FROM Product for every "
-                        + "attribute of an entity, SELECT name, price FROM Product for some. Every row, the file at "
+                List.of(PanelAction.Argument.json(STATEMENT, "Statement", exportSchema(jdql.exampleQuery()))),
+                this::exportCsv, group,
+                Failures.cut("A JDQL query whose whole result is downloaded as a CSV file: FROM <Entity> for every "
+                        + "attribute of an entity, SELECT a, b FROM <Entity> for some. Every row, the file at "
                         + "most 256 KiB; an empty field is null, \"\" the empty text.\nEntities: "
                         + jdql.entityNames(), PanelAction.MAX_DESCRIPTION - 1));
     }
@@ -145,11 +146,12 @@ final class CsvActions {
     /**
      * The JSON Schema of an export's {@value #STATEMENT}: the query, in the page's query editor as the tab's queries
      * are, its parameters, in the JSON editor that follows it, and the separator.
+     *
+     * @param example the query the editor shows as an example, {@link JdqlActions#exampleQuery}
      */
-    static String exportSchema() {
+    static String exportSchema(String example) {
         return Json.write(Scalars.object("type", "object", "properties", Scalars.object(
-                        QUERY_MEMBER,
-                        JdqlActions.queryProperty("FROM Product ORDER BY id, or SELECT name, price FROM Product"),
+                        QUERY_MEMBER, JdqlActions.queryProperty(example),
                         PARAMS_MEMBER, JdqlActions.params(),
                         SEPARATOR_MEMBER, separatorSchema()),
                 "required", List.of(QUERY_MEMBER)));

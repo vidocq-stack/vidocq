@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.devservices.extension;
 
+import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.Verbosity;
 
 import org.junit.jupiter.api.Test;
@@ -77,7 +78,7 @@ class DevServicesExtensionTest {
             extension.onStart(null);
 
             RecordingSection section = new RecordingSection();
-            extension.contribute(new FakeReportContext(Verbosity.DETAILED), section);
+            extension.contribute(new FakeReportContext(Verbosity.DETAILED, LaunchMode.PROD), section);
             assertEquals("no dev service: not started by vidocq:dev, vidocq:run or the test launcher",
                     section.summary);
             assertTrue(section.anomalies.isEmpty());
