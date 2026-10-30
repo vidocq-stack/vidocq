@@ -57,6 +57,10 @@ public final class CliParser {
     private CliParser() {}
 
     public static Command parse(String[] args) {
+        String topic = helpTopic(args);
+        if (topic != null) {
+            return new Command.Help(topic);
+        }
         return switch (args[0]) {
             case "version", "--version", "-V" -> new Command.Version();
             case "info"                       -> new Command.Info();
@@ -77,6 +81,29 @@ public final class CliParser {
             case UPDATE                     -> parseUpdate(args, 1);
             default -> new Command.Plugin(args[0], rest(args, 1));
         };
+    }
+
+    /**
+     * The help topic of {@code vidocq <command> … --help} (or {@code -h}), else {@code null}: a built-in command shows
+     * its own help rather than refusing the option (BUG-20261030-17). After {@code --} the arguments are Maven's, and
+     * a plugin parses its own.
+     */
+    private static String helpTopic(String[] args) {
+        String topic = switch (args[0]) {
+            case START, "dev", DOCTOR, "test", "idea", VSCODE, ECLIPSE, CREATE, BUILD, CLEAN, "config", "completion",
+                 UPDATE -> args[0];
+            case "extension", "ext" -> "extension";
+            default -> null;
+        };
+        if (topic == null) {
+            return null;
+        }
+        for (int i = 1; i < args.length && !"--".equals(args[i]); i++) {
+            if ("--help".equals(args[i]) || "-h".equals(args[i])) {
+                return topic;
+            }
+        }
+        return null;
     }
 
     // -------------------------------------------------------------------------

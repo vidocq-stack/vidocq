@@ -80,7 +80,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-17 — `vidocq build` packaging: docker does not chain jlink, automatic modules stop jlink, test jars in the distribution, no JVM options hook, no `--help` per command, incomplete extension list
 
 - **Date**: 2026-10-30
-- **Status**: item 4 (no JVM options hook) FIXED on `feat/launcher-java-opts`: the launchers pass `JAVA_OPTS` after `<jvmArgs>` (`VidocqPackageMojoTest.javaOptsReachTheJvmAfterTheConfiguredJvmArgs`); the other items are OPEN
+- **Status**: item 4 (no JVM options hook) FIXED on `feat/launcher-java-opts`: the launchers pass `JAVA_OPTS` after `<jvmArgs>` (`VidocqPackageMojoTest.javaOptsReachTheJvmAfterTheConfiguredJvmArgs`); item 5 (`--help` per command) FIXED on `fix/packaging-17-cli-help-extensions` (`CliParserHelpTest`); item 6 (start-up list without the CDI-only extensions) FIXED on the same branch: they are listed as _CDI only_ (`ExtensionLoaderTest`); items 1-3 OPEN
 - **Reported by**: the vidocq-tutorial session (batch 8)
 - **Minimal reproduction**: `vidocq build docker --skip-tests` on the tutorial application (flyway + PostgreSQL + telemetry).
 - **Cause hypothesis**: six separate causes, listed in the batch; jlink refuses `flyway.core` (automatic module), `opentelemetry-sdk-testing` reaches `lib/` through a wrong scope, `bin/<app>.sh` passes `$@` after `--module`.
