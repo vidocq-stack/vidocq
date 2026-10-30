@@ -127,5 +127,16 @@ public final class AnnotationReader {
             Bulkhead bulkhead,
             Fallback fallback,
             Asynchronous asynchronous
-    ) {}
+    ) {
+
+        /**
+         * Whether the method carries any Fault Tolerance annotation, enabled or not. The binding is added to the
+         * whole class, so a method without one, a fallback method for one, is intercepted too, and is no FT method
+         * (BUG-014).
+         */
+        public boolean any() {
+            return retry != null || timeout != null || circuitBreaker != null || bulkhead != null || fallback != null
+                    || asynchronous != null;
+        }
+    }
 }

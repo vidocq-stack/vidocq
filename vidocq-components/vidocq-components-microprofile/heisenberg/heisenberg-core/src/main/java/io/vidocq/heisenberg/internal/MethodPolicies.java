@@ -46,6 +46,7 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
 record MethodPolicies(
         Config config,
         int generation,
+        boolean guarded,
         boolean asynchronous,
         boolean completionStage,
         Retry retry,
@@ -94,6 +95,7 @@ record MethodPolicies(
         return new MethodPolicies(
                 config,
                 generation,
+                annotations.any(),
                 asynchronous,
                 CompletionStage.class.isAssignableFrom(method.getReturnType()),
                 retry,

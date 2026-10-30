@@ -132,6 +132,30 @@ class PolicyComposerTest {
         assertEquals(3, calls.get());
     }
 
+    /**
+     * The binding is added to the whole class, so every method of a guarded bean is intercepted: one without any
+     * Fault Tolerance annotation, a fallback method for one, is no FT method and records no metric (heisenberg
+     * BUG-014, seen as ft_invocations_total of the fallback method).
+     */
+    @Test
+    void aMethodWithoutFaultToleranceRecordsNoMetric() throws Exception {
+        java.util.List<String> recorded = new java.util.ArrayList<>();
+        io.vidocq.heisenberg.api.FtMetricsRecorder recorder = (io.vidocq.heisenberg.api.FtMetricsRecorder)
+                java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+                        new Class<?>[] {io.vidocq.heisenberg.api.FtMetricsRecorder.class},
+                        (proxy, m, args) -> {
+                            recorded.add(m.getName());
+                            return null;
+                        });
+        Method recover = FallbackService.class.getDeclaredMethod("recover");
+
+        Object result = PolicyComposer.invoke(() -> "plain", new FallbackService(), recover, new Object[0],
+                null, null, recorder);
+
+        assertEquals("plain", result);
+        assertEquals(java.util.List.of(), recorded);
+    }
+
     static class FallbackService {
         @Fallback(fallbackMethod = "recover")
         String guarded() {

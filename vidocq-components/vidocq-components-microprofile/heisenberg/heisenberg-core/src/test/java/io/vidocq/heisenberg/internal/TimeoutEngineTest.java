@@ -97,7 +97,53 @@ class TimeoutEngineTest {
 
         assertEquals(2_000L, config.duration().toMillis());
     }
+
+    private static final ThreadLocal<String> CALLER_CONTEXT = new ThreadLocal<>();
+    private static final ScopedValue<String> CALLER_SCOPE = ScopedValue.newInstance();
+
+    /**
+     * A synchronous guarded method runs on the caller's thread: it sees the caller's context, the OpenTelemetry
+     * context or a request's scoped values, so a REST client call it makes stays in the caller's trace (heisenberg
+     * BUG-015).
+     */
+    @Test
+    void aSynchronousMethodRunsWithTheCallersContext() throws Exception {
+        TimeoutConfig config = new TimeoutConfig(500, ChronoUnit.MILLIS);
+        CALLER_CONTEXT.set("trace-42");
+        try {
+            Object seen = ScopedValue.where(CALLER_SCOPE, "request-7").call(() -> TimeoutEngine.execute(
+                    () -> CALLER_CONTEXT.get() + "/" + (CALLER_SCOPE.isBound() ? CALLER_SCOPE.get() : null), config));
+
+            assertEquals("trace-42/request-7", seen);
+        } finally {
+            CALLER_CONTEXT.remove();
+        }
+    }
+
+    /** The interruption that ends a timed-out method does not outlive it: the caller's thread is not left interrupted. */
+    @Test
+    void aTimedOutMethodLeavesTheCallerNotInterrupted() {
+        TimeoutConfig config = new TimeoutConfig(50, ChronoUnit.MILLIS);
+
+        assertThrows(TimeoutException.class, () -> TimeoutEngine.execute(() -> {
+            Thread.sleep(5_000);
+            return "too-late";
+        }, config));
+        org.junit.jupiter.api.Assertions.assertFalse(Thread.currentThread().isInterrupted());
+    }
+
+    /** A method that ignores the interruption and returns after the deadline still times out (§4.1.2). */
+    @Test
+    void aMethodReturningAfterTheDeadlineTimesOut() {
+        TimeoutConfig config = new TimeoutConfig(50, ChronoUnit.MILLIS);
+
+        assertThrows(TimeoutException.class, () -> TimeoutEngine.execute(() -> {
+            long end = System.nanoTime() + 300_000_000L;
+            while (System.nanoTime() < end) {
+                Thread.onSpinWait();
+            }
+            return "late";
+        }, config));
+        org.junit.jupiter.api.Assertions.assertFalse(Thread.currentThread().isInterrupted());
+    }
 }
-
-
-

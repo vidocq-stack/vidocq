@@ -20,17 +20,20 @@
 package io.vidocq.heisenberg.internal;
 
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.eclipse.microprofile.faulttolerance.exceptions.TimeoutException;
 
 /**
  * {@code @Timeout} engine using virtual threads (Project Loom, finalized in Java 21+).
  *
- * <p>The invocation is forked into a dedicated virtual thread via {@code Thread.ofVirtual()}.
- * {@code Thread.join(Duration)} waits until the deadline; if the thread is still active,
- * it is interrupted (best-effort) and an MP FT {@code TimeoutException} is thrown.
- * No platform-thread pool is created: each invocation forks an ephemeral virtual thread.
- * MP FT 4.1 §4.</p>
+ * <p>A synchronous invocation runs on the caller's thread, so it keeps the caller's context: thread locals such as
+ * the OpenTelemetry context, scoped values, the request context (BUG-015). A watchdog virtual thread
+ * interrupts the caller at the deadline (best effort); the interruption is cleared before
+ * {@code TimeoutException} is thrown, so it never outlives the invocation. An asynchronous invocation, whose caller
+ * has already returned, is forked into an ephemeral virtual thread joined until the deadline. No platform-thread
+ * pool is created. MP FT 4.1 §4.</p>
  *
  * <p><strong>Note:</strong> The target implementation remains {@code StructuredTaskScope}
  * (JEP 505), which guarantees cancellation of child threads when the scope is closed. This
@@ -65,6 +68,9 @@ public final class TimeoutEngine {
      *                       the {@link TimeoutException}.
      */
     public static Object execute(PolicyComposer.Invocation invocation, TimeoutConfig config, boolean asyncCall) throws Exception {
+        if (!asyncCall) {
+            return onCallerThread(invocation, config.duration());
+        }
         Duration timeout = config.duration();
         AtomicReference<Object> resultRef = new AtomicReference<>();
         AtomicReference<Throwable> errorRef = new AtomicReference<>();
@@ -106,5 +112,71 @@ public final class TimeoutEngine {
         }
 
         return resultRef.get();
+    }
+
+    private static final int RUNNING = 0;
+    private static final int DONE = 1;
+    private static final int TIMED_OUT = 2;
+
+    /**
+     * Runs {@code invocation} on the caller's thread, which a watchdog interrupts at the deadline. §4.1.2: the caller
+     * waits for the method to end, then gets {@code TimeoutException} if the deadline passed first, whatever the method
+     * returned.
+     */
+    private static Object onCallerThread(PolicyComposer.Invocation invocation, Duration timeout) throws Exception {
+        Thread caller = Thread.currentThread();
+        AtomicInteger state = new AtomicInteger(RUNNING);
+        CountDownLatch interrupted = new CountDownLatch(1);
+        Thread watchdog = Thread.ofVirtual().name("heisenberg-timeout").start(() -> {
+            try {
+                Thread.sleep(timeout);
+                if (state.compareAndSet(RUNNING, TIMED_OUT)) {
+                    caller.interrupt();
+                    interrupted.countDown();
+                }
+            } catch (InterruptedException _) {
+                // the invocation ended first
+            }
+        });
+        Object result;
+        try {
+            result = invocation.proceed();
+        } catch (Throwable t) {
+            if (timedOut(state, interrupted, watchdog)) {
+                throw timeoutException(timeout);
+            }
+            throw Failures.asException(t);
+        }
+        if (timedOut(state, interrupted, watchdog)) {
+            throw timeoutException(timeout);
+        }
+        return result;
+    }
+
+    /**
+     * Ends the watch: {@code false} when the invocation ended first; {@code true} when the deadline passed first, once
+     * the caller's interruption is cleared.
+     */
+    private static boolean timedOut(AtomicInteger state, CountDownLatch interrupted, Thread watchdog) {
+        if (state.compareAndSet(RUNNING, DONE)) {
+            watchdog.interrupt();
+            return false;
+        }
+        // The deadline passed: wait until the watchdog has interrupted this thread, then clear it.
+        boolean waited = false;
+        while (!waited) {
+            try {
+                interrupted.await();
+                waited = true;
+            } catch (InterruptedException _) {
+                // the watchdog's own interruption, which the await clears; wait for its count-down
+            }
+        }
+        Thread.interrupted();
+        return true;
+    }
+
+    private static TimeoutException timeoutException(Duration timeout) {
+        return new TimeoutException("Invocation timed out after " + timeout.toMillis() + " ms");
     }
 }

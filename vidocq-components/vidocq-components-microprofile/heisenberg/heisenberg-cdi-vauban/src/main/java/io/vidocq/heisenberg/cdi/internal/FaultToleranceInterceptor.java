@@ -119,6 +119,9 @@ public class FaultToleranceInterceptor {
         String key = beanClass.getName() + "#" + method.getName();
         if (!REGISTERED.add(key)) return;
         AnnotationReader.FaultToleranceAnnotations ann = AnnotationReader.read(method, beanClass);
+        if (!ann.any()) {
+            return; // no FT method: the binding is on the class (BUG-014)
+        }
         recorder.register(beanClass, method,
                 ann.retry() != null,
                 ann.timeout() != null,

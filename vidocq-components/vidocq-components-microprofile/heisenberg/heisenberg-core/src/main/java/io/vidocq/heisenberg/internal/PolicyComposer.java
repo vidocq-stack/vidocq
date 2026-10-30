@@ -151,6 +151,11 @@ public final class PolicyComposer {
         }
 
         Object invoke(Invocation invocation, Object target, Object[] parameters) throws Exception {
+            // A method without any FT annotation (a fallback method, for one) is intercepted only because the
+            // binding is on the class: it is no FT method, and records no metric (BUG-014).
+            if (!resolved.guarded()) {
+                return invocation.proceed();
+            }
             // M7 — @Asynchronous
             boolean asyncActive = resolved.asynchronous();
             boolean completionStageSemantics = resolved.completionStage();

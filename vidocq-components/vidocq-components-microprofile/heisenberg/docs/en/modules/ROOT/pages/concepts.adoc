@@ -60,6 +60,8 @@ flowchart LR
   Bh --> Method
 ....
 
+[[timeout-thread]]A synchronous `@Timeout` method runs on the caller's thread [.tag-new]#NEW#: it sees the caller's context, so a REST client call it makes stays in the request's trace. A watchdog virtual thread interrupts it at the deadline; the caller still waits for the method to end before it gets `TimeoutException`, as §4.1.2 requires.
+
 `@Asynchronous` sits _above_ this chain when present: it switches execution onto a virtual thread, then the `@Fallback → ... → method` chain runs in that thread.
 
 Concrete consequence: composition is **non-commutative**. A `@Retry` around a `@Timeout` (what the chain does) retries each _timed attempt_. Conversely, a `@Timeout` around a `@Retry` (which MP FT does not let you express) would time-limit the _entire retry sequence_. The spec picks the first form — each attempt has its own time budget.
