@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.jakartaee.web.mansart.data;
 
 import io.vidocq.mansart.data.core.EntityModels;
+import io.vidocq.mansart.data.dialect.DialectFactory;
 import io.vidocq.mansart.data.dialect.EntityModel;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataCatalogue;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataLive;
@@ -35,9 +36,13 @@ import jakarta.enterprise.inject.spi.BeanManager;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -246,12 +251,40 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
                 throw new IllegalStateException(
                         "Mansart Data: DataSource handed out an invalid connection on boot");
             }
+            String missing = missingDialect(c.getMetaData(), ServiceLoader.load(DialectFactory.class));
+            if (missing != null) {
+                throw new IllegalStateException(missing);
+            }
         } catch (SQLException e) {
             throw new IllegalStateException(
                     "Mansart Data: cannot reach the configured DataSource on boot", e);
         }
         LOG.log(System.Logger.Level.INFO, "Mansart Data: DataSource reachable");
     }
+
+    /**
+     * Why Mansart could not query the database {@code metaData} describes, with the dialects of {@code factories}, or
+     * {@code null} when one of them supports it. Mansart picks the dialect at the first query: checked here, a
+     * missing one fails the boot with what to add instead (BUG-20261030-10). Visible for tests.
+     */
+    static String missingDialect(DatabaseMetaData metaData, Iterable<DialectFactory> factories) throws SQLException {
+        for (DialectFactory factory : factories) {
+            if (factory.supports(metaData)) {
+                return null;
+            }
+        }
+        String product = metaData.getDatabaseProductName();
+        String start = "Mansart Data: no SQL dialect for the database '" + product + "' (" + metaData.getURL() + ").";
+        String artifact = DIALECTS.get(product == null ? "" : product.toLowerCase(Locale.ROOT));
+        return artifact != null
+                ? start + " Add io.vidocq.mansart:" + artifact + " to the application."
+                : start + " Mansart Data supports H2 and PostgreSQL; another database needs a DialectFactory of its own"
+                        + " (io.vidocq.mansart.data.dialect).";
+    }
+
+    /** The dialect artifact of each database Mansart supports, by lower-case product name. */
+    private static final Map<String, String> DIALECTS =
+            Map.of("h2", "mansart-data-dialect-h2", "postgresql", "mansart-data-dialect-postgresql");
 
     /**
      * The class of every bean. We cannot ask the BeanManager directly for an annotated type set without crossing CDI

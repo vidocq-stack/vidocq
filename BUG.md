@@ -24,7 +24,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-10 — A missing PostgreSQL dialect is found at the first query, not at boot; the dialects and `devservice-postgres` are not managed by the BOM
 
 - **Date**: 2026-10-30
-- **Status**: OPEN
+- **Status**: FIXED on `fix/dialect-check-10`: `vidocq-runtime-mansart-data-extension` brings `mansart-data-dialect-h2` and `-postgresql` (both leave their driver `provided`), so no dialect needs a version; the boot connectivity check asks the dialects for the database and fails with what to add (`DialectCheckTest`). `vidocq-runtime-devservice-postgres` was already in the BOM, which manages the runtime's own artifacts only (`ApplicationBomAndParentTest`). The extensions page used `${vidocq.version}`, defined nowhere: now `{project-version}`
 - **Reported by**: the vidocq-tutorial session (batch 3, item 4)
 - **Minimal reproduction**: an application with the PostgreSQL dev service and no `mansart-dialect-postgresql`; the docs show `${vidocq.version}`, which no pom defines.
 - **Cause hypothesis**: no start-up check matches the JDBC URL with an installed dialect; the BOM does not list the dialect artifacts.

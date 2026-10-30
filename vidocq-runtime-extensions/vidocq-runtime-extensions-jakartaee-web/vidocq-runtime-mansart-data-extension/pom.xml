@@ -30,8 +30,7 @@
         </dependency>
 
         <!-- Mansart Jakarta Data stack — pulled transitively so the application only needs to
-             declare ONE dep (this extension) to get repositories injectable. The dialect jar
-             stays the user's choice (h2 vs postgresql) — we ship none by default. -->
+             declare ONE dep (this extension) to get repositories injectable. -->
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-core</artifactId>
@@ -40,6 +39,19 @@
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-cdi</artifactId>
+            <version>${mansart.version}</version>
+        </dependency>
+        <!-- Both SQL dialects Mansart ships (BUG-20261030-10). Each is a few classes that leave their JDBC driver
+             provided: an application gets the dialect of its database without declaring it, and never a driver it
+             did not ask for. -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-h2</artifactId>
+            <version>${mansart.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-postgresql</artifactId>
             <version>${mansart.version}</version>
         </dependency>
         <dependency>

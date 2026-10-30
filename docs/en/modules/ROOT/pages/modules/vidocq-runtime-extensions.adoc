@@ -72,7 +72,7 @@
 
 | `vidocq-runtime-mansart-data-extension`
 | `jakartaee-web`
-| Jakarta Data 1.0 via Mansart — scans `@Repository`, implementations generated via APT (companion `-codegen` artefact). Its section of the startup report is the application's entities and repositories, a dev console panel(<<mansart-data-catalogue>>).
+| Jakarta Data 1.0 via Mansart — scans `@Repository`, implementations generated via APT (companion `-codegen` artefact). Its section of the startup report is the application's entities and repositories, a dev console panel(<<mansart-data-catalogue>>). [[mansart-data-dialects]]The SQL dialects come with it [.tag-new]#NEW#: H2's and PostgreSQL's, without their JDBC drivers, so the application declares its driver only. At start-up, the connectivity check (`vidocq.data.checkOnStart`, on by default) also asks the dialects whether one supports the database, and fails the boot naming what is missing, instead of the first query.
 
 | `vidocq-runtime-mansart-transactions-extension`
 | `jakartaee-web`
@@ -138,7 +138,7 @@ bundle to the inherited compiler configuration:
     <path>
         <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
         <artifactId>vidocq-runtime-peano-el-extension-codegen</artifactId>
-        <version>${vidocq.version}</version>
+        <version>{project-version}</version>
     </path>
 </annotationProcessorPaths>
 ----
@@ -181,7 +181,7 @@ Declare the extension, and its codegen bundle on the processor path:
     <path>
         <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
         <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
-        <version>${vidocq.version}</version>
+        <version>{project-version}</version>
     </path>
 </annotationProcessorPaths>
 ----

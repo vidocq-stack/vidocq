@@ -79,13 +79,7 @@
             <artifactId>vidocq-runtime-mansart-transactions-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <!-- User picks the dialect — H2 here. -->
-        <dependency>
-            <groupId>io.vidocq.mansart</groupId>
-            <artifactId>mansart-data-dialect-h2</artifactId>
-            <version>${mansart.version}</version>
-            <scope>runtime</scope>
-        </dependency>
+        <!-- No dialect to declare: the Mansart Data extension brings H2's and PostgreSQL's (BUG-20261030-10). -->
 
         <!-- JDBC driver (runtime only) -->
         <dependency>

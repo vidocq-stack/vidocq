@@ -40,6 +40,9 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.data {
     exports io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live
             to io.vidocq.runtime.extensions.jakartaee.web.mansart.data.dev;
 
+    // The boot check asks the dialects whether one supports the database (BUG-20261030-10).
+    uses io.vidocq.mansart.data.dialect.DialectFactory;
+
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.jakartaee.web.mansart.data.MansartDataIntegrationExtension;
 }
