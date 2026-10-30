@@ -20,6 +20,7 @@
         <module>vidocq-runtime-mansart-pool-extension</module>
         <module>vidocq-runtime-mansart-pool-extension-dev</module>
         <module>vidocq-runtime-mansart-pool-datasources-codegen</module>
+        <module>vidocq-runtime-mansart-pool-telemetry-extension</module>
         <module>vidocq-runtime-mansart-data-extension</module>
         <module>vidocq-runtime-mansart-data-extension-dev</module>
         <module>vidocq-runtime-mansart-data-extension-codegen</module>

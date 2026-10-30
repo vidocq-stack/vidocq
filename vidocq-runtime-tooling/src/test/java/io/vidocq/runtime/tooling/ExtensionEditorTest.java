@@ -448,4 +448,25 @@ class ExtensionEditorTest {
     private String pom() throws IOException {
         return Files.readString(project.resolve("pom.xml"));
     }
+
+    /**
+     * Adding the pool to a project with Telemetry adds the JDBC spans glue that goes with both, and removing one of
+     * them removes it (BUG-20261030-25).
+     */
+    @Test
+    void theCompanionOfAPairComesAndGoesWithIt() throws IOException {
+        writePom("");
+        writeModuleInfo();
+        edit(List.of("humboldt-telemetry"), true);
+        assertFalse(pom().contains("vidocq-runtime-mansart-pool-telemetry-extension"), pom());
+
+        edit(List.of("mansart-pool"), true);
+        assertTrue(pom().contains("<artifactId>vidocq-runtime-mansart-pool-telemetry-extension</artifactId>"), pom());
+        assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("success: Added jdbc-telemetry")),
+                reporter.lines.toString());
+
+        edit(List.of("humboldt-telemetry"), false);
+        assertFalse(pom().contains("vidocq-runtime-mansart-pool-telemetry-extension"), pom());
+        assertTrue(pom().contains("<artifactId>vidocq-runtime-mansart-pool-extension</artifactId>"), pom());
+    }
 }

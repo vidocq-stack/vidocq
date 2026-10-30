@@ -102,4 +102,14 @@ class ProjectSpecTest {
         assertEquals(ids, List.copyOf(spec.extensions()));
         assertEquals(ids, List.copyOf(new ProjectSpec("demo", "g", "g.demo", spec.extensions(), null, false).extensions()));
     }
+
+    /** {@code vidocq create -x humboldt-telemetry -x mansart-pool} gets the JDBC spans glue too (BUG-20261030-25). */
+    @Test
+    void aProjectWithTelemetryAndThePoolGetsTheirCompanion() {
+        ProjectSpec spec = ProjectSpec.of("library", null, null, List.of("humboldt-telemetry", "mansart-pool"), null,
+                false, "--package");
+
+        assertEquals(List.of("humboldt-telemetry", "mansart-pool", "jdbc-telemetry"),
+                List.copyOf(spec.extensions()));
+    }
 }

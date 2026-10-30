@@ -83,7 +83,9 @@ public record ProjectSpec(String name, String groupId, String pkg, Set<String> e
                 throw new IllegalArgumentException("unknown extension '" + id + "': " + e.getMessage(), e);
             }
         }
-        return new ProjectSpec(name, gid, p, new LinkedHashSet<>(extensions), parentVersion, main);
+        Set<String> ids = new LinkedHashSet<>(extensions);
+        ids.addAll(KnownExtensions.companions(ids));
+        return new ProjectSpec(name, gid, p, ids, parentVersion, main);
     }
 
     /** Whether {@code name} is a qualified Java name usable as a package and module name. */

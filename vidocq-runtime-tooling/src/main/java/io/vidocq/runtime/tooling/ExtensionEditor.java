@@ -22,7 +22,10 @@ package io.vidocq.runtime.tooling;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -82,6 +85,7 @@ public final class ExtensionEditor {
         boolean wiredByPlugin = PomDependencies.codegenWiredByPlugin(pom);
         boolean droppedInheritedPaths = !wiredByPlugin && PomEditor.dropsInheritedProcessorPaths(pom);
         boolean pomChanged = false;
+        ids = withCompanions(pom, ids, add);
         for (String id : ids) {
             ExtensionCoordinate coordinate;
             try {
@@ -108,6 +112,32 @@ public final class ExtensionEditor {
             }
         }
         return new Outcome(true, pomChanged, moduleInfoChanged);
+    }
+
+    /**
+     * {@code ids} and the companions they bring or leave (BUG-20261030-25): on add, the catalog extensions that go
+     * with the extensions the project will then declare; on remove, the declared companions whose pair breaks.
+     */
+    private static List<String> withCompanions(String pom, List<String> ids, boolean add) {
+        Set<String> declared = new LinkedHashSet<>();
+        for (ExtensionCoordinate coordinate : PomDependencies.parse(pom)) {
+            declared.add(KnownExtensions.idOf(coordinate));
+        }
+        List<String> all = new ArrayList<>(ids);
+        if (add) {
+            declared.addAll(ids);
+            all.addAll(KnownExtensions.companions(declared));
+            return List.copyOf(all);
+        }
+        Set<String> remaining = new LinkedHashSet<>(declared);
+        ids.forEach(remaining::remove);
+        for (String id : remaining) {
+            List<String> of = KnownExtensions.companionOf(id);
+            if (!of.isEmpty() && !remaining.containsAll(of)) {
+                all.add(id);
+            }
+        }
+        return List.copyOf(all);
     }
 
     /**

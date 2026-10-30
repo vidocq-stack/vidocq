@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -210,6 +211,27 @@ public final class KnownExtensions {
         return byId(id).flatMap(e -> Optional.of(property(e.id(), "codegen"))
                 .filter(bundle -> !bundle.isEmpty())
                 .map(bundle -> new ExtensionCoordinate(e.groupId(), bundle)));
+    }
+
+    /**
+     * The catalog extensions that go with {@code declared}: each one whose descriptor's {@code companion-of} lists
+     * extensions all declared, and that is not declared itself, sorted. The JDBC spans glue goes with Telemetry and
+     * the pool (BUG-20261030-25).
+     */
+    public static List<String> companions(Collection<String> declared) {
+        return CATALOG.stream()
+                .map(RegistryEntry::id)
+                .filter(id -> !declared.contains(id))
+                .filter(id -> {
+                    List<String> of = companionOf(id);
+                    return !of.isEmpty() && declared.containsAll(of);
+                })
+                .toList();
+    }
+
+    /** The extensions {@code id} goes with, from its descriptor's {@code companion-of}; empty for most. */
+    public static List<String> companionOf(String id) {
+        return byId(id).map(e -> csv(property(e.id(), "companion-of"))).orElse(List.of());
     }
 
     /** The module a catalog extension ships, which an application {@code requires}; empty outside the catalog. */
