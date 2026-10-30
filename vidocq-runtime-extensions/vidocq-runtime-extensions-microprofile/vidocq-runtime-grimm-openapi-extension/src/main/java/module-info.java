@@ -29,6 +29,9 @@ module io.vidocq.runtime.extensions.microprofile.grimm.openapi {
     // OpenApiResource and GrimmModelCache. A named module: an automatic one let cassini-maven-plugin
     // split its package into the application module (Vidocq/grimm#15).
     requires io.vidocq.grimm.cdi.vauban;
+    // The $$GrimmModel contributions the codegen bundle generates in the application implement
+    // io.vidocq.grimm.spi.gen.OpenApiContribution: the application must read grimm-core to compile them.
+    requires transitive io.vidocq.grimm.core;
     // The application annotates its resources with the MicroProfile OpenAPI annotations.
     requires transitive org.eclipse.microprofile.openapi;
 
