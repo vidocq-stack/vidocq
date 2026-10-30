@@ -58,7 +58,7 @@ class LiteralsTest {
         Retry literal = retry(IOException.class);
         assertEquals(literal, retry(IOException.class));
         assertEquals(literal.hashCode(), retry(IOException.class).hashCode());
-        assertTrue(literal.equals(annotation), "same members, arrays by content");
+        assertEquals(literal, annotation, "same members, arrays by content");
         assertNotEquals(literal, retry(RuntimeException.class));
         assertTrue(literal.toString().contains("retryOn=[class java.io.IOException]"), literal.toString());
         assertEquals(Retry.class, literal.annotationType());
@@ -69,7 +69,7 @@ class LiteralsTest {
         CircuitBreaker annotation = Annotated.class.getDeclaredMethod("call").getAnnotation(CircuitBreaker.class);
         CircuitBreaker literal = new Literals.CircuitBreakerLiteral(array(IllegalStateException.class), array(),
                 5_000L, ChronoUnit.MILLIS, 20, 0.25, 1);
-        assertTrue(literal.equals(annotation));
+        assertEquals(literal, annotation);
         assertEquals(literal.hashCode(), new Literals.CircuitBreakerLiteral(array(IllegalStateException.class),
                 array(), 5_000L, ChronoUnit.MILLIS, 20, 0.25, 1).hashCode());
         assertTrue(literal.toString().startsWith("@" + CircuitBreaker.class.getName() + "(failOn=["));
@@ -80,7 +80,7 @@ class LiteralsTest {
         Fallback annotation = Annotated.class.getDeclaredMethod("call").getAnnotation(Fallback.class);
         Fallback literal = new Literals.FallbackLiteral(Fallback.DEFAULT.class, "recover", array(IOException.class),
                 array());
-        assertTrue(literal.equals(annotation));
+        assertEquals(literal, annotation);
         assertNotEquals(literal, new Literals.FallbackLiteral(Fallback.DEFAULT.class, "other",
                 array(IOException.class), array()));
         assertTrue(literal.toString().contains("fallbackMethod=recover"), literal.toString());
