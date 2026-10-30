@@ -112,6 +112,15 @@ public final class PostgresDevService implements DevService {
         return reasons.isEmpty() ? null : String.join("; ", reasons);
     }
 
+    /**
+     * A datasource with no URL and no driver gets no database at all, and the pool then fails the boot: the host
+     * warns (BUG-20261031-06). A URL of another database, or the developer's own, is a choice, not a problem.
+     */
+    @Override
+    public boolean skipNeedsAction(DevServiceContext ctx) {
+        return decide(ctx).stream().anyMatch(Decision::noDriver);
+    }
+
     @Override
     public Map<String, String> start(DevServiceContext ctx) {
         boolean reuse = reuse(ctx);
@@ -216,9 +225,13 @@ public final class PostgresDevService implements DevService {
 
     /**
      * What the rule decided for one datasource: a plan to provision, or none — with the reason, or {@code null}
-     * when its URL was given explicitly.
+     * when its URL was given explicitly; {@code noDriver} when it has neither a URL nor the driver (rule 4).
      */
-    record Decision(String name, DatasourcePlan plan, String reason) {
+    record Decision(String name, DatasourcePlan plan, String reason, boolean noDriver) {
+
+        Decision(String name, DatasourcePlan plan, String reason) {
+            this(name, plan, reason, false);
+        }
     }
 
     /** The datasources this provider must create: those of {@link #decide} that have a plan, in its order. */
@@ -274,7 +287,7 @@ public final class PostgresDevService implements DevService {
         }
         if (!ctx.onApplicationClasspath(DRIVER)) {
             return new Decision(name, null,
-                    "no " + urlKey + " and no PostgreSQL driver (" + DRIVER + ") on the class path");
+                    "no " + urlKey + " and no PostgreSQL driver (" + DRIVER + ") on the class path", true);
         }
         return new Decision(name, specFor(ctx, name, poolPrefix, devPrefix), null);
     }
