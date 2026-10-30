@@ -75,7 +75,9 @@ public class GaugeRegistrationBean {
         if (discovered.isUnsatisfied()) {
             return;
         }
-        DiscoveredMetrics metrics = discovered.get();
+        // Every run of DiracExtension, the build-time one included, registered its own bean: register their union
+        // (BUG-20261030-27 of vidocq).
+        DiscoveredMetrics metrics = DiscoveredMetrics.merge(discovered);
         metrics.registerGauges(registries, beanClass -> beans.select(beanClass).get());
         metrics.registerTimers(registries);
         metrics.registerCounters(registries);

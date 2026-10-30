@@ -51,6 +51,27 @@ public final class DiscoveredMetrics {
     private final Set<DiracExtension.PreRegisteredMetric> timers = ConcurrentHashMap.newKeySet();
     private final Set<DiracExtension.PreRegisteredMetric> counters = ConcurrentHashMap.newKeySet();
 
+    /**
+     * The union of {@code runs}, each metric once. DiracExtension may run at build time, from the codegen bundle,
+     * and again when the container starts: each run registers its own synthetic bean, listing the classes it saw,
+     * so both beans stay (BUG-20261030-27 of vidocq). A gauge is kept once per scope and {@link MetricID}: two runs
+     * resolve the same gauge into records whose method handles differ.
+     */
+    static DiscoveredMetrics merge(Iterable<DiscoveredMetrics> runs) {
+        var merged = new DiscoveredMetrics();
+        var gaugeIds = new java.util.HashSet<String>();
+        for (var run : runs) {
+            for (var gauge : run.gauges) {
+                if (gaugeIds.add(gauge.scope() + '\u0000' + gauge.metricID())) {
+                    merged.gauges.add(gauge);
+                }
+            }
+            merged.timers.addAll(run.timers);
+            merged.counters.addAll(run.counters);
+        }
+        return merged;
+    }
+
     /** Resolves the metrics of {@code beanClass}: its compile-time companion, else its annotations. */
     void ingest(Class<?> beanClass) {
         // CG-05: compile-time $$DiracMetrics companion first; the reflective annotation scan stays

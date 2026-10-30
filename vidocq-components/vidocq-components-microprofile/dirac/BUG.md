@@ -6,6 +6,14 @@ minimal repro, cause hypothesis, status.
 
 ---
 
+## DRC-008 — Two `DiscoveredMetrics` beans make metric registration fail at start-up
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/merge-discovered-metrics`: `GaugeRegistrationBean` registers `DiscoveredMetrics.merge(...)` of every `DiscoveredMetrics` bean, each metric once (`DiscoveredMetricsMergeTest`; MP Metrics TCK 127/127; vidocq FT TCK 463/463 on the assembled runtime)
+- **Reported by**: vidocq BUG-20261030-27, found while measuring the build noise of the tutorial application
+- **Minimal reproduction**: `vidocq create -x cassini-rest -x heisenberg-fault-tolerance -x dirac-metrics`, a bean with class-level `@Retry` and `@Counted` injected into a resource: the application stops at boot with _AmbiguousResolutionException: 2 beans match: [DiscoveredMetrics, DiscoveredMetrics]_ from `GaugeRegistrationBean.registerMetrics`.
+- **Cause**: since the Metrics codegen bundle carries `dirac-cdi-vauban` (vidocq#426), `DiracExtension` runs at build time, in vauban-processor, and again when the container starts. Each run registers a synthetic `DiscoveredMetrics` bean whose parameter lists the classes it saw. Vauban keeps one bean when two synthetic beans are identical; here the lists differ, so both stay, and `Instance.get()` is ambiguous. Same pattern as Grimm's `ScannedTypes` (grimm#44).
+
 ## DRC-001 — Java Modules bypassed via manual copy of compile-scope JARs
 
 - **Opening date**: 2026-05-25
