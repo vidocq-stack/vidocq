@@ -83,8 +83,12 @@ class JdbcConnectionDecoratorsTest {
         @Override public Connection getConnection() { return CONNECTION; }
         @Override public Connection getConnection(String u, String p) { return CONNECTION; }
         @Override public PrintWriter getLogWriter() { return null; }
-        @Override public void setLogWriter(PrintWriter out) { }
-        @Override public void setLoginTimeout(int seconds) { }
+        @Override public void setLogWriter(PrintWriter out) {
+            // the stub keeps no log writer
+        }
+        @Override public void setLoginTimeout(int seconds) {
+            // the stub never times out
+        }
         @Override public int getLoginTimeout() { return 0; }
         @Override public Logger getParentLogger() { return null; }
         @Override public <T> T unwrap(Class<T> iface) { return null; }

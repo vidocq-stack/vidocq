@@ -23,6 +23,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.ServiceLoader;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The {@link JdbcConnectionDecorator}s found through {@link ServiceLoader} when this class is first used, applied in
@@ -33,9 +34,10 @@ final class JdbcConnectionDecorators {
     /** The name {@link MansartPoolHolder}, the {@code @Default} pool, passes to the decorators. */
     static final String DEFAULT_NAME = "default";
 
-    private static volatile List<JdbcConnectionDecorator> decorators = ServiceLoader
+    /** An immutable list, replaced as a whole by {@link #install(List)}. */
+    private static final AtomicReference<List<JdbcConnectionDecorator>> DECORATORS = new AtomicReference<>(ServiceLoader
             .load(JdbcConnectionDecorator.class, JdbcConnectionDecorator.class.getClassLoader())
-            .stream().map(ServiceLoader.Provider::get).toList();
+            .stream().map(ServiceLoader.Provider::get).toList());
 
     private JdbcConnectionDecorators() {
     }
@@ -43,7 +45,7 @@ final class JdbcConnectionDecorators {
     /** {@code connection} through every decorator, or itself when there is none. */
     static Connection decorate(String dataSourceName, Connection connection) throws SQLException {
         Connection current = connection;
-        for (JdbcConnectionDecorator decorator : decorators) {
+        for (JdbcConnectionDecorator decorator : DECORATORS.get()) {
             current = decorator.decorate(dataSourceName, current);
         }
         return current;
@@ -51,6 +53,6 @@ final class JdbcConnectionDecorators {
 
     /** Replaces the decorators; for the tests, where the module's own {@code provides} is not read. */
     static void install(List<JdbcConnectionDecorator> installed) {
-        decorators = List.copyOf(installed);
+        DECORATORS.set(List.copyOf(installed));
     }
 }
