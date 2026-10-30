@@ -182,6 +182,13 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Reported by**: the vidocq-tutorial session (after the train vidocq#434), step 11
 - **Minimal reproduction**: a clean project whose `src/main/resources/vidocq.properties` sets `vidocq.dev.keycloak.realm=library` and a realm import; `vidocq test` logs _issuer …/realms/master_, and a test that asks the token URL for a realm user gets 401. `vidocq dev` and `mvn test` use the right realm.
 - **Cause hypothesis**: `vidocq:test` opens the dev services from `target/classes/vidocq.properties` before its first run, and the CLI ran the goal alone; a project without a previous build (here, after a history rewrite) had no such file. Not a regression of #434: an older `target/classes` hid it.
+## BUG-20261030-24 — A package the runtime reaches by reflection, and the module does not open, fails at the first request
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/opens-check-24`: `vidocq:check-module-info` reads the compiled classes (`ReflectedPackages`): JPA entities, and the types a REST resource or provider takes or returns, with the types their fields and getters hold. A package among them that the module neither opens nor exports fails the build with the `opens` line to add (`ReflectedPackagesTest`, 4 cases)
+- **Reported by**: the vidocq-tutorial session (batch 2, item 3)
+- **Minimal reproduction**: `vidocq create -x cassini-rest`, then a `BookResource` returning a `Book` DTO in `com.acme.shop.book` (the scaffold opens `com.acme.shop` only): the build passes, and `GET /books` answers 500 with _IllegalAccessException: … RuntimeBindingRegistry$MethodAccessor (in module io.vidocq.champollion.jsonb) cannot access class com.acme.shop.book.Book … because module com.acme.shop does not export com.acme.shop.book_.
+- **Cause hypothesis**: `check-module-info` only checked the directives the extensions declare (`opens db.migration`); the packages of the application itself were checked by nobody before the first request.
 
 ## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
 
