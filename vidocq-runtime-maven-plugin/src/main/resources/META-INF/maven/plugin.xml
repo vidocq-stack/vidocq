@@ -619,6 +619,13 @@
                     <description>Move the files of a resource directory several staged jars hold (a split package jlink refuses) into one module of the image. Only the staged copies change (vidocq#256).</description>
                 </parameter>
                 <parameter>
+                    <name>modularize</name>
+                    <type>boolean</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Give the automatic modules of the dependencies (Flyway, a JDBC driver…) their module descriptor before staging, as vauban:modularize in its all-automatic mode; skipped when the project ran vauban:modularize itself (BUG-20261030-17).</description>
+                </parameter>
+                <parameter>
                     <name>repoSession</name>
                     <type>org.eclipse.aether.RepositorySystemSession</type>
                     <required>true</required>
@@ -656,6 +663,7 @@
                 <skip implementation="boolean"
                       default-value="false">${vidocq.jlink.skip}</skip>
                 <mergeSharedResources implementation="boolean" default-value="false">${vidocq.jlink.mergeSharedResources}</mergeSharedResources>
+                <modularize implementation="boolean" default-value="true">${vidocq.jlink.modularize}</modularize>
                 <repoSession implementation="org.eclipse.aether.RepositorySystemSession"
                              default-value="${repositorySystemSession}"/>
                 <remoteRepos implementation="java.util.List"

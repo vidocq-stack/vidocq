@@ -40,8 +40,11 @@ public enum BuildType {
     /** {@code mvn package vidocq:jpackage} — native installer / app-image. */
     JPACKAGE("jpackage", "native installer", List.of(BuildType.PACKAGE_PHASE, "vidocq:jpackage")),
 
-    /** {@code mvn package vidocq:docker} — Dockerfile around the jlink image. */
-    DOCKER("docker", "Docker image", List.of(BuildType.PACKAGE_PHASE, "vidocq:docker"));
+    /**
+     * {@code mvn package vidocq:jlink vidocq:docker} — Dockerfile around the jlink image, which it builds first:
+     * {@code vidocq:docker} alone failed with "runtimeImage not found" (BUG-20261030-17).
+     */
+    DOCKER("docker", "Docker image", List.of(BuildType.PACKAGE_PHASE, "vidocq:jlink", "vidocq:docker"));
 
     /** The Maven phase every flavour runs (qualified above: the constants come before this field). */
     private static final String PACKAGE_PHASE = "package";

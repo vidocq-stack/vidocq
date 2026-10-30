@@ -59,7 +59,12 @@ class BuildTypeTest {
     void flavoursLayerGoalOnPackage() {
         assertEquals(List.of("package", "vidocq:jlink"), BuildType.JLINK.goals());
         assertEquals(List.of("package", "vidocq:jpackage"), BuildType.JPACKAGE.goals());
-        assertEquals(List.of("package", "vidocq:docker"), BuildType.DOCKER.goals());
+    }
+
+    /** The image wraps the jlink runtime: docker alone failed with "runtimeImage not found" (BUG-20261030-17). */
+    @Test
+    void dockerBuildsTheJlinkImageFirst() {
+        assertEquals(List.of("package", "vidocq:jlink", "vidocq:docker"), BuildType.DOCKER.goals());
     }
 
     @Test

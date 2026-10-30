@@ -43,7 +43,7 @@
 | Gives the non-modular dependency jars a `module-info` in `target/vauban-modularized/`, picked up automatically by `dev`, `jlink` and `package`. No longer a goal of this plugin — see <<modularize>>.
 
 | `vidocq:jlink`
-| Standalone Java image (`target/dist/`) with `bin/<launcher>` binary — no `java` required on target.
+| Standalone Java image (`target/dist/`) with `bin/<launcher>` binary — no `java` required on target. [[jlink-modularize]]The automatic modules of the dependencies (Flyway, a JDBC driver…) first get their module descriptor, as `vauban:modularize` does in its `all-automatic` mode [.tag-new]#NEW#: jlink refuses an automatic module. A project that ran `vauban:modularize` itself keeps its own copies and options; `-Dvidocq.jlink.modularize=false` turns it off.
 
 | `vidocq:jpackage`
 | Native OS bundle (`.app` macOS, `.exe`/`.msi` Windows, `.deb`/`.rpm` Linux) or cross-platform app-image.
