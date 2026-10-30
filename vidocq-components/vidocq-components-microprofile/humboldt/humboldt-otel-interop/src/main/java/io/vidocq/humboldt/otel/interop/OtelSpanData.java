@@ -131,9 +131,14 @@ record OtelSpanData(
         return instrumentationScopeInfo;
     }
 
-    /** Still abstract in {@link SpanData}: the scope, under its former name. */
+    /**
+     * Still abstract in {@link SpanData}: the scope, under its former name.
+     *
+     * @deprecated as {@link SpanData#getInstrumentationLibraryInfo()} is; use {@link #getInstrumentationScopeInfo()}.
+     *             It stays as long as the interface declares it abstract.
+     */
     @Override
-    @Deprecated
+    @Deprecated(since = "OpenTelemetry SDK 1.14")
     @SuppressWarnings("deprecation")
     public io.opentelemetry.sdk.common.InstrumentationLibraryInfo getInstrumentationLibraryInfo() {
         return io.opentelemetry.sdk.common.InstrumentationLibraryInfo.create(
