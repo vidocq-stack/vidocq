@@ -127,10 +127,9 @@ public final class Diagnostics {
                     "the project has no mvnw",
                     "Without it, builds run on whatever Maven the machine has.").asFixable();
         }
-        return Diagnostic.warn(
-                MAVEN_WRAPPER,
-                "no mvnw on this path",
-                "Run from a project that ships ./mvnw, or install Maven, to build and package.");
+        // Outside a project there is nothing to build yet, and the project vidocq create writes ships its wrapper:
+        // advising to install Maven there misled users who had it on their PATH.
+        return Diagnostic.ok(MAVEN_WRAPPER, "not needed outside a project: vidocq create writes ./mvnw");
     }
 
     private static Diagnostic checkProject(DoctorContext ctx) {
