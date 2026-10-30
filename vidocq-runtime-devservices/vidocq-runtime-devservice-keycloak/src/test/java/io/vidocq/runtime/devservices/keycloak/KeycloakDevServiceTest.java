@@ -36,6 +36,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -79,6 +80,17 @@ class KeycloakDevServiceTest {
             // App mappings: issuer fanned out + public URL injected.
             assertEquals(issuer, props.get("arago.oidc.issuer"));
             assertEquals("http://localhost:9999", props.get("arago.public.url"));
+            // The developer's coordinates, for the connection-information file (BUG-20261030-16).
+            assertEquals(issuer, props.get("vidocq.dev.keycloak.issuer"));
+            assertEquals(issuer + "/protocol/openid-connect/token", props.get("vidocq.dev.keycloak.token-url"));
+            assertEquals(issuer.substring(0, issuer.indexOf("/realms/")) + "/admin",
+                    props.get("vidocq.dev.keycloak.admin-console"));
+            assertEquals("admin", props.get("vidocq.dev.keycloak.admin-user"));
+            // The startup report and the dev console show the token endpoint and the admin console with its login.
+            Map<String, String> endpoints = svc.describe(props).endpoints();
+            assertEquals(issuer + "/protocol/openid-connect/token", endpoints.get("token"));
+            assertTrue(endpoints.get("admin").endsWith("/admin"), endpoints.toString());
+            assertEquals("admin / admin", endpoints.get("admin login"));
 
             // Prove the issuer is live: its realm endpoint answers 200 and exposes the realm's public
             // key. (The ephemeral master realm guards the deeper OIDC endpoints — discovery/certs — with
@@ -93,6 +105,15 @@ class KeycloakDevServiceTest {
         } finally {
             svc.stop();
         }
+    }
+
+    /** {@code vidocq.dev.keycloak.port} pins the host port, so the issuer stays the same across starts (BUG-20261030-16). */
+    @Test
+    void thePortKeyPinsTheHostPort() {
+        GenericContainer<?> c = KeycloakDevService.container(ctx(Map.of("vidocq.dev.keycloak.port", "8180")),
+                "quay.io/keycloak/keycloak:26.0", Optional.empty(), "master", false);
+
+        assertEquals(List.of("8180:8080/tcp"), c.getPortBindings());
     }
 
     @Test

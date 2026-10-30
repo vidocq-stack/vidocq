@@ -38,6 +38,8 @@ import java.util.TreeMap;
 public final class DevServicesReport {
 
     private static final String POOL_PREFIX = "vidocq.pool.";
+    /** A service's own coordinates, {@code vidocq.dev.<service>.<field>}, listed as {@code <service>.<field>}. */
+    private static final String DEV_PREFIX = "vidocq.dev.";
     private static final String URL = "url";
     private static final String USERNAME = "username";
     private static final String PASSWORD = "password";
@@ -102,11 +104,13 @@ public final class DevServicesReport {
     /** The console block lines (empty when no datasource was provisioned). The host logs each one. */
     public static List<String> consoleLines(Map<String, String> collected) {
         List<Coordinates> ds = datasources(collected);
-        if (ds.isEmpty()) {
+        Map<String, String> services = serviceCoordinates(collected);
+        if (ds.isEmpty() && services.isEmpty()) {
             return List.of();
         }
         List<String> lines = new ArrayList<>();
         lines.add(CONSOLE_HEADER);
+        services.forEach((key, value) -> lines.add("  " + key + " : " + value));
         for (Coordinates c : ds) {
             lines.add("  Datasource: " + c.name());
             lines.add("    JDBC URL : " + c.url());
@@ -139,6 +143,7 @@ public final class DevServicesReport {
             append(sb, p, USERNAME, c.username());
             append(sb, p, PASSWORD, c.password());
         }
+        serviceCoordinates(collected).forEach((key, value) -> sb.append(key).append('=').append(value).append('\n'));
         return sb.toString();
     }
 
@@ -214,5 +219,20 @@ public final class DevServicesReport {
             }
         }
         return true;
+    }
+
+    /**
+     * The coordinates a service published for the developer, {@code vidocq.dev.<service>.<field>}, as
+     * {@code <service>.<field>} in key order: the Keycloak token URL and admin console, for one (BUG-20261030-16).
+     */
+    static Map<String, String> serviceCoordinates(Map<String, String> collected) {
+        Map<String, String> out = new TreeMap<>();
+        collected.forEach((key, value) -> {
+            if (key.startsWith(DEV_PREFIX) && !key.startsWith(DEV_PREFIX + "provided.")
+                    && key.indexOf('.', DEV_PREFIX.length()) > 0) {
+                out.put(key.substring(DEV_PREFIX.length()), value);
+            }
+        });
+        return out;
     }
 }

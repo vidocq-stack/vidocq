@@ -125,4 +125,27 @@ class DevServicesReportTest {
         assertTrue(DevServicesReport.consoleLines(Map.of("foo", "bar")).isEmpty());
         assertFalse(DevServicesReport.fileContent(Map.of("foo", "bar")).contains("datasource."));
     }
+
+    /**
+     * A service's own coordinates, published as {@code vidocq.dev.<service>.<field>}, reach the console block and the
+     * file as {@code <service>.<field>}: the Keycloak token URL a developer needs for curl had to be read from the log
+     * (BUG-20261030-16).
+     */
+    @Test
+    void theServicesOwnCoordinatesAreListedToo() throws Exception {
+        Map<String, String> collected = new java.util.LinkedHashMap<>();
+        collected.put("mp.jwt.verify.issuer", "http://localhost:8180/realms/library");
+        collected.put("vidocq.dev.keycloak.issuer", "http://localhost:8180/realms/library");
+        collected.put("vidocq.dev.keycloak.token-url", "http://localhost:8180/realms/library/protocol/openid-connect/token");
+
+        String text = String.join("\n", DevServicesReport.consoleLines(collected));
+        Properties p = new Properties();
+        p.load(new StringReader(DevServicesReport.fileContent(collected)));
+
+        assertTrue(text.contains("Connection information:"), text);
+        assertTrue(text.contains("keycloak.token-url : http://localhost:8180/realms/library/protocol/openid-connect/token"),
+                text);
+        assertEquals("http://localhost:8180/realms/library", p.getProperty("keycloak.issuer"));
+        assertEquals(null, p.getProperty("mp.jwt.verify.issuer"), "the application's keys stay out");
+    }
 }

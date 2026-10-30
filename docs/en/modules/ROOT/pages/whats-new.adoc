@@ -4,6 +4,7 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
+* xref:dev-services.adoc[Keycloak dev service coordinates] — `target/vidocq-dev-services.properties` and the console block list `keycloak.issuer`, `keycloak.token-url` and `keycloak.admin-console`; `vidocq.dev.keycloak.port` pins the port, so the issuer stays the same across starts; the startup report and the dev console show the token endpoint and the admin login. See `DEV_SERVICES.md`, "Connection information".
 * xref:modules/vidocq-runtime-extensions.adoc#flyway-opens-migrations[`extension add flyway-migration` opens `db.migration`] — once the project has a migration; before that it says where the migrations go.
 * xref:modules/vidocq-runtime-maven-plugin.adoc#launcher-java-opts[`JAVA_OPTS` in the launchers] — `bin/<app>.sh` and `.cmd` pass `JAVA_OPTS` to the JVM, so a packaged application takes `-Xmx` or a `-D` without editing the script.
 * xref:testing.adoc#request-headers[`@VidocqTest` requests with headers] — `VidocqApplication.get(path, headers)` and `request(method, path, headers, contentType, body)` send a bearer token or any other header.

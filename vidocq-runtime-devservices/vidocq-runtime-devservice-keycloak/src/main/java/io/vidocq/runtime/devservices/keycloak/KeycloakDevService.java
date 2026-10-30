@@ -67,6 +67,8 @@ public final class KeycloakDevService implements DevService {
     private static final String BOOTSTRAP_ADMIN = "admin";
     /** The path, and the endpoint name, of Keycloak's administration console. */
     private static final String ADMIN_CONSOLE = "admin";
+    /** The prefix of the coordinates published for the developer, not for the application. */
+    private static final String DEV_PREFIX = "vidocq.dev.keycloak.";
 
     private GenericContainer<?> container;
     private String image;
@@ -107,6 +109,12 @@ public final class KeycloakDevService implements DevService {
         Map<String, String> props = new LinkedHashMap<>();
         props.put("mp.jwt.verify.issuer", issuer);
         props.put("mp.jwt.verify.publickey.location", issuer + "/protocol/openid-connect/certs");
+        // The developer's own coordinates, for target/vidocq-dev-services.properties and the tests: the token
+        // endpoint and the admin console a curl or a browser needs (BUG-20261030-16).
+        props.put(DEV_PREFIX + "issuer", issuer);
+        props.put(DEV_PREFIX + "token-url", issuer + "/protocol/openid-connect/token");
+        props.put(DEV_PREFIX + "admin-console", issuer.substring(0, issuer.indexOf("/realms/")) + "/" + ADMIN_CONSOLE);
+        props.put(DEV_PREFIX + "admin-user", BOOTSTRAP_ADMIN);
         // App-mapping: duplicate the issuer into extra app-specific keys (e.g. arago.oidc.issuer).
         ctx.property("vidocq.dev.keycloak.issuer-keys").ifPresent(csv -> {
             for (String key : csv.split(",")) {
@@ -132,6 +140,10 @@ public final class KeycloakDevService implements DevService {
             String realm, boolean reuse) {
         Path realmFile = realmImport.map(ctx::resolve).orElse(null);
         String reuseKey = reuse ? image + "\n" + realm + "\n" + realmDigest(realmFile) : null;
+        Optional<String> fixedPort = ctx.property(DEV_PREFIX + "port").map(String::trim).filter(p -> !p.isEmpty());
+        if (reuseKey != null && fixedPort.isPresent()) {
+            reuseKey += "\n" + fixedPort.get();
+        }
         String name = DevContainers.name(ctx, ID, null, reuseKey);
         // Configured on the instance itself, not through the fluent chain: the caller owns (and stops) this very
         // container, which a chained expression would hide behind the builder's return values.
@@ -151,6 +163,9 @@ public final class KeycloakDevService implements DevService {
         }
         container.waitingFor(Wait.forHttp("/realms/" + realm).forPort(KC_PORT).forStatusCode(200)
                 .withStartupTimeout(Duration.ofMinutes(3)));
+        // vidocq.dev.keycloak.port pins the host port: the issuer, and every token request of a tutorial or a
+        // script, stays the same across starts (BUG-20261030-16).
+        fixedPort.ifPresent(port -> container.setPortBindings(List.of(port + ":" + KC_PORT)));
         if (reuse) {
             container.withReuse(true);
         }
@@ -183,7 +198,9 @@ public final class KeycloakDevService implements DevService {
         if (container != null) {
             String base = "http://" + container.getHost() + ":" + container.getMappedPort(KC_PORT);
             endpoints.put("issuer", issuer);
+            endpoints.put("token", issuer + "/protocol/openid-connect/token");
             endpoints.put(ADMIN_CONSOLE, base + "/" + ADMIN_CONSOLE);
+            endpoints.put("admin login", BOOTSTRAP_ADMIN + " / " + BOOTSTRAP_ADMIN);
         }
         return new DevServiceState(id(), image, endpoints, List.copyOf(injected.keySet()));
     }

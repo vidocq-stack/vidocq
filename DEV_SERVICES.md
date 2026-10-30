@@ -299,6 +299,18 @@ The block and the file are **provider-agnostic**: they render whatever `vidocq.p
 coordinates the dev services published, host and port parsed from the JDBC URL (any user info in
 the URL is left out of the host).
 
+A dev service can also publish coordinates meant for the developer rather than the application, as
+`vidocq.dev.<service>.<field>`: they are listed in the block and the file as `<service>.<field>`. The
+Keycloak dev service publishes its issuer, the realm's token endpoint and the admin console, so a
+`curl` gets a token without reading the log:
+
+```properties
+keycloak.admin-console=http://localhost:8180/admin
+keycloak.admin-user=admin
+keycloak.issuer=http://localhost:8180/realms/library
+keycloak.token-url=http://localhost:8180/realms/library/protocol/openid-connect/token
+```
+
 ### Stable port for external tooling
 
 By default each container gets a **random** host port, so the coordinates change on every
@@ -311,6 +323,7 @@ needed on every `vidocq:dev`/`vidocq:run` invocation:
 # src/main/resources/vidocq.properties
 vidocq.dev.postgres.port=55432                 # @Default on a fixed port
 vidocq.dev.postgres.analytics.port=55433       # named datasource on its own fixed port
+vidocq.dev.keycloak.port=8180                  # Keycloak on a fixed port: the issuer stays the same
 vidocq.dev.reuse=true                          # keep the container between sessions
 ```
 

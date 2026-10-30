@@ -72,7 +72,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-16 — The Keycloak dev service publishes no issuer, token URL nor admin console, and has no fixed port
 
 - **Date**: 2026-10-30
-- **Status**: OPEN
+- **Status**: FIXED on `feat/keycloak-dev-service-dx`: the service publishes `vidocq.dev.keycloak.{issuer,token-url,admin-console,admin-user}`, which the connection-information block and file list as `keycloak.*`; `vidocq.dev.keycloak.port` pins the host port; `describe` adds the token endpoint and the admin login (`DevServicesReportTest.theServicesOwnCoordinatesAreListedToo`, `KeycloakDevServiceTest`)
 - **Reported by**: the vidocq-tutorial session (batch 6)
 - **Minimal reproduction**: `vidocq dev` with `vidocq.dev.keycloak.realm-import`: `target/vidocq-dev-services.properties` holds the datasource only; the issuer port changes at every start.
 - **Cause hypothesis**: `describe` and the published keys only cover what the application consumes; no `vidocq.dev.keycloak.port` key.
