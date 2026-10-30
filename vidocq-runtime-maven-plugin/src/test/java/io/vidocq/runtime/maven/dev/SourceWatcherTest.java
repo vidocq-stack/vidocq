@@ -25,6 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -199,8 +200,10 @@ class SourceWatcherTest {
             assertEquals(new SourceWatcher.Change(false, true), awaitWithin(watcher, 25),
                     "the new package's first file was missed");
 
-            Thread.sleep(1_100); // a modification time the polling watcher of macOS tells from the first one
+            FileTime first = Files.getLastModifiedTime(bookTest);
             Files.writeString(bookTest, "class BookTest { /* edit */ }");
+            // A modification time the polling watcher of macOS tells from the first one, without waiting a second.
+            Files.setLastModifiedTime(bookTest, FileTime.fromMillis(first.toMillis() + 2_000));
             assertEquals(new SourceWatcher.Change(false, true), awaitWithin(watcher, 25),
                     "an edit in the new package was missed");
         }
