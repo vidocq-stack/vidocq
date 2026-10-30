@@ -478,3 +478,22 @@ Track reproducible bugs with:
 - **Fix**: `ApplicationClasses.load` asks the thread context class loader, then Grimm's own; the two invokers and
   `ConfigApplier` use it.
 - **Regression test**: `ApplicationClassesTest` (red before the fix).
+
+## BUG-20261030-01 — the processor generates nothing under Maven: "No OASFactoryResolver implementation found!"
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/processor-oas-factory-resolver)
+- **Symptom**: with `grimm-processor` on an application's annotation processor path, no `$$GrimmModel` is generated.
+  Each `@Path` class gets a compiler warning, `Grimm fragment generation failed, runtime scan will handle it:
+  java.lang.IllegalStateException: No OASFactoryResolver implementation found!`, and the runtime scans every resource
+  by reflection. Found while wiring the processor into a Vidocq codegen bundle (vidocq-workspace#38).
+- **Minimal repro**: `GrimmModelProcessorOracleTest.aContextLoaderThatCannotSeeGrimmCoreStillGetsTheFragment`: the
+  same compilation as the other oracle tests, with the platform class loader as thread context class loader and the
+  API's cached resolver cleared.
+- **Root cause**: the processor builds the fragment with grimm-core's model objects, created through
+  `OASFactory`, whose `OASFactoryResolver` is looked up with `ServiceLoader` through the thread context class loader.
+  javac leaves its own loader there, which does not see the processor path. The oracle tests passed because they
+  compile in the test JVM, whose context loader sees grimm-core, and because the API caches the resolver it found.
+- **Fix**: `process` runs each round with the processor's class loader as thread context class loader, and restores
+  the previous one.
+- **Regression test**: the test above (red before the fix).

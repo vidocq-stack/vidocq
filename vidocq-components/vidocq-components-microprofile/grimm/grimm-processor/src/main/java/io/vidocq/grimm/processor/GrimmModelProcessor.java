@@ -94,8 +94,25 @@ public final class GrimmModelProcessor extends AbstractProcessor {
         return SourceVersion.latestSupported();
     }
 
+    /**
+     * Processes the round with the processor's class loader as the thread context class loader. The MicroProfile
+     * OpenAPI API looks its {@code OASFactoryResolver} up through that loader, and javac leaves its own there, which
+     * does not see the processor path: under Maven, every class failed with "No OASFactoryResolver implementation
+     * found!" and was left to the run-time scan (vidocq-workspace#38).
+     */
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        Thread thread = Thread.currentThread();
+        ClassLoader previous = thread.getContextClassLoader();
+        thread.setContextClassLoader(GrimmModelProcessor.class.getClassLoader());
+        try {
+            return processRound(roundEnv);
+        } finally {
+            thread.setContextClassLoader(previous);
+        }
+    }
+
+    private boolean processRound(RoundEnvironment roundEnv) {
         TypeElement pathAnnotation = processingEnv.getElementUtils().getTypeElement("jakarta.ws.rs.Path");
         if (pathAnnotation != null) {
             for (Element e : roundEnv.getElementsAnnotatedWith(pathAnnotation)) {

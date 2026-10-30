@@ -149,6 +149,44 @@ class GrimmModelProcessorOracleTest {
     // Oracle fixtures (M1 subset)
     // ------------------------------------------------------------------
 
+    /**
+     * Maven's javac leaves the thread context class loader on its own class loader, which does not see the
+     * processor path: the MicroProfile OpenAPI API looks its {@code OASFactoryResolver} up through that loader,
+     * and the processor failed on every class with "No OASFactoryResolver implementation found!", leaving them
+     * to the run-time scan (vidocq-workspace#38).
+     */
+    @Test
+    void aContextLoaderThatCannotSeeGrimmCoreStillGetsTheFragment() throws Exception {
+        File source = writeSource("t/EchoResource.java", """
+                package t;
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.Path;
+                import jakarta.ws.rs.Produces;
+
+                @Path("/echo")
+                public class EchoResource {
+
+                    @GET
+                    @Produces("text/plain")
+                    public String get() {
+                        return "echo";
+                    }
+                }
+                """);
+        // The API keeps the resolver it found: forget it, so that this compilation looks it up again.
+        org.eclipse.microprofile.openapi.spi.OASFactoryResolver.setInstance(null);
+        Thread thread = Thread.currentThread();
+        ClassLoader previous = thread.getContextClassLoader();
+        thread.setContextClassLoader(ClassLoader.getPlatformClassLoader());
+        Compilation compilation;
+        try {
+            compilation = compile(source);
+        } finally {
+            thread.setContextClassLoader(previous);
+        }
+        assertFragmentMatchesScan(compilation, "t.EchoResource");
+    }
+
     @Test
     void simpleGetResource_matchesScan() throws Exception {
         var compilation = compile(writeSource("t/PingResource.java", """
