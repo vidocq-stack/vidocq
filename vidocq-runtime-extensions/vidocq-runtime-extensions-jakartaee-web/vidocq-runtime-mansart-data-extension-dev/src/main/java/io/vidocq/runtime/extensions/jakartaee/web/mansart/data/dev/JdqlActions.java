@@ -27,6 +27,7 @@ import io.vidocq.runtime.extensions.jakartaee.web.mansart.data.live.MansartDataC
 import io.vidocq.runtime.spi.devconsole.PanelAction;
 
 import java.util.LinkedHashMap;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -105,7 +106,8 @@ final class JdqlActions {
     /** The two actions, {@value #QUERY} then {@value #WRITE}. */
     List<PanelAction> actions() {
         String names = entityNames();
-        PanelAction.Argument statement = PanelAction.Argument.json(STATEMENT, "Statement", schema());
+        PanelAction.Argument statement = PanelAction.Argument.json(STATEMENT, "Statement",
+                schema(exampleQuery(entities)));
         PanelAction query = new PanelAction(QUERY, QUERY_LABEL, null, List.of(statement),
                 given -> call(false, given), tabGroup, description("A JDQL query: FROM …, SELECT a, b FROM …, "
                         + "SELECT COUNT(this) FROM … or an aggregate such as SELECT MAX(price) FROM …; at most 100 "
@@ -121,10 +123,12 @@ final class JdqlActions {
     /**
      * The JSON Schema of {@value #STATEMENT}: {@code query}, which the page shows in its query editor with the
      * {@value JdqlLanguage#ID} language, and {@code params}, in its JSON editor whose schema follows the query.
+     *
+     * @param example the query the editor shows as an example, {@link #exampleQuery}
      */
-    static String schema() {
+    static String schema(String example) {
         return Json.write(Scalars.object("type", "object", "properties", Scalars.object(
-                        QUERY_MEMBER, queryProperty("FROM Product WHERE price > :min ORDER BY name"),
+                        QUERY_MEMBER, queryProperty(example),
                         PARAMS_MEMBER, params()),
                 "required", List.of(QUERY_MEMBER)));
     }
@@ -373,6 +377,24 @@ final class JdqlActions {
     /** The catalogue's names of its entities, in alphabetical order. */
     List<String> names() {
         return entities.stream().map(MansartDataCatalogue.Entity::name).sorted().toList();
+    }
+
+    /**
+     * The example of the query editor: {@code FROM} the application's first entity in name order, {@code ORDER BY} its
+     * id when the catalogue knows it, or {@code FROM <Entity>} without any entity. A constant {@code FROM Product}
+     * named an entity few applications have (BUG-20261030-15).
+     */
+    static String exampleQuery(List<MansartDataCatalogue.Entity> entities) {
+        return entities.stream().min(Comparator.comparing(MansartDataCatalogue.Entity::name))
+                .map(entity -> "FROM " + entity.name() + entity.columns().stream()
+                        .filter(column -> column.key() != null)
+                        .findFirst().map(column -> " ORDER BY " + column.field()).orElse(""))
+                .orElse("FROM <Entity>");
+    }
+
+    /** {@link #exampleQuery}, for this panel's entities. */
+    String exampleQuery() {
+        return exampleQuery(entities);
     }
 
     /** {@link #names()}, joined with commas. */

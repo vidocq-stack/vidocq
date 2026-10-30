@@ -257,7 +257,9 @@ the detailed report adds a row per service and, in a `dev` launch, every key it 
 secret (`vidocq.pool.password` above) always as `configured`, never its value, whatever the launch
 mode. Without a state file or the `vidocq.devservices.state` system property, the summary reads
 `no dev service: not started by vidocq:dev, vidocq:run or the test launcher` — not an anomaly, the
-ordinary state of an application nobody has started with a dev service yet. The extension never
+ordinary state of an application nobody has started with a dev service yet. Under `vidocq dev`, which did
+start the application, it reads `no dev service configured (no vidocq-runtime-devservice-* dependency, or
+vidocq.dev.devServices=false)` [.tag-new]#NEW#. The extension never
 scans `target/` for a stray file on its own: a killed session's leftover file is read again only
 when a later host overwrites `vidocq.devservices.state`, never merely because the file exists.
 

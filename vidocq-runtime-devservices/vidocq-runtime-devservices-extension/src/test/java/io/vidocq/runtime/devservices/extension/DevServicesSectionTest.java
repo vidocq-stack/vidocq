@@ -49,8 +49,22 @@ class DevServicesSectionTest {
     void noHostMeansNoDevServiceAndNoAnomaly() {
         RecordingSection section = new RecordingSection();
         DevServicesSection.write(DevServicesSnapshot.NONE, null, null,
-                new FakeReportContext(Verbosity.DETAILED), section);
+                new FakeReportContext(Verbosity.DETAILED, LaunchMode.PROD), section);
         assertEquals("no dev service: not started by vidocq:dev, vidocq:run or the test launcher", section.summary);
+        assertTrue(section.anomalies.isEmpty());
+    }
+
+    /**
+     * Under {@code vidocq dev}, the goal did start the application: without a state file, no dev service was
+     * configured, which "not started by vidocq:dev" denied (BUG-20261030-19).
+     */
+    @Test
+    void underVidocqDevNoStateFileMeansNoDevServiceConfigured() {
+        RecordingSection section = new RecordingSection();
+        DevServicesSection.write(DevServicesSnapshot.NONE, null, null,
+                new FakeReportContext(Verbosity.DETAILED, LaunchMode.DEV), section);
+        assertEquals("no dev service configured (no vidocq-runtime-devservice-* dependency, or"
+                + " vidocq.dev.devServices=false)", section.summary);
         assertTrue(section.anomalies.isEmpty());
     }
 

@@ -42,6 +42,10 @@ public final class DevServicesSection {
     /** Logged when the state file exists but could not be parsed; the boot goes on. */
     static final String UNREADABLE_STATE_FILE = "VIDOCQ-DEVS-001";
 
+    /** Under {@code vidocq dev} without a state file: the goal found nothing to start. */
+    static final String NOT_CONFIGURED =
+            "no dev service configured (no vidocq-runtime-devservice-* dependency, or vidocq.dev.devServices=false)";
+
     private DevServicesSection() {}
 
     /**
@@ -69,10 +73,14 @@ public final class DevServicesSection {
         List<DevServicesSnapshot.Skipped> skipped = snapshot.skipped();
         if (services.isEmpty()) {
             if (skipped.isEmpty()) {
-                section.summary(snapshot.host() == null
-                        ? "no dev service: not started by vidocq:dev, vidocq:run or the test launcher"
-                        : "no dev service: " + snapshot.host()
-                                + " found no provider (a vidocq-runtime-devservice-* dependency)");
+                section.summary(snapshot.host() != null
+                        ? "no dev service: " + snapshot.host()
+                                + " found no provider (a vidocq-runtime-devservice-* dependency)"
+                        // vidocq dev started this application and wrote no state file: no dev service to start
+                        // (BUG-20261030-19).
+                        : context.launchMode() == LaunchMode.DEV
+                                ? NOT_CONFIGURED
+                                : "no dev service: not started by vidocq:dev, vidocq:run or the test launcher");
                 return;
             }
             section.summary("no dev service started");
