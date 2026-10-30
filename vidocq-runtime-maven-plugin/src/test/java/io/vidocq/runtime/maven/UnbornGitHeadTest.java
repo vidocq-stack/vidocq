@@ -26,6 +26,8 @@ import org.apache.maven.model.Model;
 import org.apache.maven.project.MavenProject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -64,25 +66,15 @@ class UnbornGitHeadTest {
         assertTrue(CodegenPathsParticipant.unbornGitHead(project()));
     }
 
-    @Test
-    void aBranchWithACommitIsNotUnborn() throws Exception {
+    /** A file under {@code .git} that gives HEAD a commit: the branch ref, a packed ref, or a detached HEAD. */
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            "refs/heads/main|0123456789abcdef0123456789abcdef01234567",
+            "packed-refs|0123456789abcdef0123456789abcdef01234567 refs/heads/main",
+            "HEAD|0123456789abcdef0123456789abcdef01234567"})
+    void aHeadWithACommitIsNotUnborn(String file, String content) throws Exception {
         Path git = git();
-        Files.writeString(git.resolve("refs/heads/main"), "0123456789abcdef0123456789abcdef01234567\n");
-        assertFalse(CodegenPathsParticipant.unbornGitHead(project()));
-    }
-
-    @Test
-    void aBranchInPackedRefsIsNotUnborn() throws Exception {
-        Path git = git();
-        Files.writeString(git.resolve("packed-refs"),
-                "# pack-refs with: peeled fully-peeled sorted\n0123456789abcdef0123456789abcdef01234567 refs/heads/main\n");
-        assertFalse(CodegenPathsParticipant.unbornGitHead(project()));
-    }
-
-    @Test
-    void aDetachedHeadIsNotUnborn() throws Exception {
-        Path git = git();
-        Files.writeString(git.resolve("HEAD"), "0123456789abcdef0123456789abcdef01234567\n");
+        Files.writeString(git.resolve(file), content + "\n");
         assertFalse(CodegenPathsParticipant.unbornGitHead(project()));
     }
 
