@@ -37,6 +37,7 @@ import java.lang.module.ModuleDescriptor;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -51,6 +52,12 @@ import java.util.Set;
  * exact, copy-pasteable fix. Only {@code opens} is enforced: it is never inherited, whereas a
  * {@code requires} may be satisfied transitively and cannot be checked from declared directives
  * alone.</p>
+ *
+ * <p>It also reads the compiled classes for the packages a runtime module reaches by reflection — the
+ * JPA entities, and the types a REST resource or provider takes or returns, with the types their fields
+ * and getters hold (see {@link ReflectedPackages}) — and asks for an {@code opens} of each one the
+ * module neither opens nor exports: JSON-B binds those types by reflection, and the first request
+ * failed (BUG-20261030-24).</p>
  *
  * <p>Default phase: {@code process-classes} — after the module-info is compiled, so the check reads
  * the authoritative {@code module-info.class} rather than parsing source. Skip with
@@ -90,13 +97,13 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
 
         Set<Requirement> required = ModuleRequirementsCollector.applicableTo(
                 ModuleRequirementsCollector.collect(project.getArtifacts(), getLog()), outputDirectory);
-        if (required.isEmpty()) {
-            getLog().debug("Vidocq check-module-info: no applicable extension requirements for this module.");
-            return;
-        }
 
         File moduleInfo = new File(outputDirectory, "module-info.class");
         if (!moduleInfo.isFile()) {
+            if (required.isEmpty()) {
+                getLog().debug("Vidocq check-module-info: no applicable extension requirements for this module.");
+                return;
+            }
             List<String> issues = new ArrayList<>();
             issues.add("This module depends on Vidocq extensions that require JPMS directives, but it has "
                     + "no module-info.java (it is not modular). On the module path the extensions break. "
@@ -115,18 +122,38 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
             throw new MojoFailureException("Cannot read " + moduleInfo, e);
         }
 
-        List<Requirement> missing = ModuleInfoRequirements.missing(descriptor, required);
-        if (missing.isEmpty()) {
+        List<Requirement> missing = required.isEmpty() ? List.of() : ModuleInfoRequirements.missing(descriptor, required);
+        Map<String, String> reached;
+        try {
+            reached = ReflectedPackages.of(outputDirectory.toPath());
+        } catch (IOException e) {
+            throw new MojoFailureException("Cannot read the classes of " + outputDirectory, e);
+        }
+        List<String> unopened = ReflectedPackages.missing(descriptor, reached);
+        if (missing.isEmpty() && unopened.isEmpty()) {
             getLog().info("Vidocq check-module-info: module-info of '" + descriptor.name() + "' satisfies all "
-                    + required.size() + " extension requirement(s).");
+                    + required.size() + " extension requirement(s) and opens the " + reached.size()
+                    + " package(s) the runtime reaches by reflection.");
             return;
         }
 
         List<String> issues = new ArrayList<>();
-        issues.add("module-info of '" + descriptor.name() + "' is missing " + missing.size()
-                + " directive(s) required by its Vidocq extensions — add to src/main/java/module-info.java:");
-        for (Requirement r : missing) {
-            issues.add("    " + render(r));
+        if (!missing.isEmpty()) {
+            issues.add("module-info of '" + descriptor.name() + "' is missing " + missing.size()
+                    + " directive(s) required by its Vidocq extensions — add to src/main/java/module-info.java:");
+            for (Requirement r : missing) {
+                issues.add("    " + render(r));
+            }
+        }
+        if (!unopened.isEmpty()) {
+            // BUG-20261030-24: JSON-B binds these types by reflection, and the first request failed with an
+            // IllegalAccessException.
+            issues.add("module-info of '" + descriptor.name() + "' neither opens nor exports " + unopened.size()
+                    + " package(s) the runtime reaches by reflection (JSON-B, JPA): the first request using them"
+                    + " would fail — add to src/main/java/module-info.java:");
+            for (String pkg : unopened) {
+                issues.add("    opens " + pkg + ";   (" + reached.get(pkg) + ")");
+            }
         }
         report(issues);
     }

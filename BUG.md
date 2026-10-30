@@ -134,6 +134,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Cause hypothesis**: JWT had no codegen bundle; the Metrics and OpenAPI bundles carried their processor only, not the jar of their extension's BCE, nor the CDI API those jars leave `provided`.
 - **Still open**: _Unsatisfied dependency … JsonWebToken_ at build time. The producer is a bean of cervantes-cdi-vauban, which Vauban's build-time validation does not see; it defers to the runtime container, where injection works.
 
+## BUG-20261030-24 — A package the runtime reaches by reflection, and the module does not open, fails at the first request
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/opens-check-24`: `vidocq:check-module-info` reads the compiled classes (`ReflectedPackages`): JPA entities, and the types a REST resource or provider takes or returns, with the types their fields and getters hold. A package among them that the module neither opens nor exports fails the build with the `opens` line to add (`ReflectedPackagesTest`, 4 cases)
+- **Reported by**: the vidocq-tutorial session (batch 2, item 3)
+- **Minimal reproduction**: `vidocq create -x cassini-rest`, then a `BookResource` returning a `Book` DTO in `com.acme.shop.book` (the scaffold opens `com.acme.shop` only): the build passes, and `GET /books` answers 500 with _IllegalAccessException: … RuntimeBindingRegistry$MethodAccessor (in module io.vidocq.champollion.jsonb) cannot access class com.acme.shop.book.Book … because module com.acme.shop does not export com.acme.shop.book_.
+- **Cause hypothesis**: `check-module-info` only checked the directives the extensions declare (`opens db.migration`); the packages of the application itself were checked by nobody before the first request.
+
 ## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
 
 - **Date**: 2026-10-30
