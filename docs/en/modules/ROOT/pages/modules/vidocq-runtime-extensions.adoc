@@ -96,7 +96,7 @@
 
 | `vidocq-runtime-cervantes-jwt-extension`
 | `microprofile`
-| MicroProfile JWT Auth via xref:cervantes::index.adoc[Cervantes].
+| MicroProfile JWT Auth via xref:cervantes::index.adoc[Cervantes]. [[cervantes-jwt-codegen]]Companion `-codegen` artefact [.tag-new]#NEW#: it puts Cervantes' Build Compatible Extension, and the Config extension's codegen, on the processor path, so Vauban runs them when the application compiles instead of warning that they will not run. `vidocq:checkpom` asks for it.
 
 | `vidocq-runtime-cyrano-rest-client-extension`
 | `microprofile`

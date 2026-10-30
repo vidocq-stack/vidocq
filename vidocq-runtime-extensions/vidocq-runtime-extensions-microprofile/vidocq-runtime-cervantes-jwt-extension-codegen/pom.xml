@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+        <artifactId>vidocq-runtime-extensions-microprofile</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-cervantes-jwt-extension-codegen</artifactId>
+    <packaging>jar</packaging>
+    <name>Vidocq :: MicroProfile Extensions :: JWT (Cervantes) :: Codegen Bundle</name>
+    <description>
+        Companion codegen bundle for vidocq-runtime-cervantes-jwt-extension.
+        Declare this artifact in &lt;annotationProcessorPaths&gt; whenever the
+        application depends on the JWT extension; Maven resolves the
+        transitive APT dependencies below automatically.
+        Puts CervantesClaimExtension on the processor path, so that vauban-processor runs it at build time: the
+        JsonWebToken and @Claim beans it declares are known when the application's injection points are checked.
+    </description>
+
+    <dependencies>
+        <!-- CervantesClaimExtension, the Build Compatible Extension that produces JsonWebToken and the @Claim values:
+             on the processor path, vauban-processor runs it at build time, as the Ravel bundle does with
+             ravel-cdi-vauban. Without it Vauban warns that the extension is on the module path only, and that an
+             injected JsonWebToken is unsatisfied. -->
+        <dependency>
+            <groupId>io.vidocq.cervantes</groupId>
+            <artifactId>cervantes-cdi-vauban</artifactId>
+            <version>${cervantes.version}</version>
+        </dependency>
+        <!-- The JWT extension requires the Config extension (MP JWT 2.2 §6.1 reads mp.jwt.verify.* through MicroProfile
+             Config), so its codegen comes along: an application that declares JWT only gets Ravel's processors too. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- cervantes-cdi-vauban leaves the CDI API to the runtime (provided): on the processor path nothing else
+             brings it, and CervantesClaimExtension could not be loaded. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Only the empty module-info to compile: no processor, not even the
+                         inherited core-codegen path, which for core-codegen is this artifact. -->
+                    <proc>none</proc>
+                    <annotationProcessorPaths combine.self="override" />
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

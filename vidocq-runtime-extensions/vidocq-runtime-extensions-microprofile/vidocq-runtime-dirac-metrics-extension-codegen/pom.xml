@@ -30,6 +30,20 @@
             <artifactId>dirac-processor</artifactId>
             <version>${dirac.version}</version>
         </dependency>
+        <!-- DiracExtension, the Build Compatible Extension of dirac-cdi-vauban: on the processor path, vauban-processor runs it at
+             build time, as the Ravel bundle does with ravel-cdi-vauban. Without it Vauban warns that the extension is
+             on the module path only and will not run at build time. -->
+        <dependency>
+            <groupId>io.vidocq.dirac</groupId>
+            <artifactId>dirac-cdi-vauban</artifactId>
+            <version>${dirac.version}</version>
+        </dependency>
+        <!-- dirac-cdi-vauban leaves the CDI API to the runtime (provided): on the processor path nothing else brings it,
+             and DiracExtension could not be loaded. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
