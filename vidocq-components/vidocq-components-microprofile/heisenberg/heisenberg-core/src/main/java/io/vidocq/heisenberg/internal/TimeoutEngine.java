@@ -20,7 +20,7 @@
 package io.vidocq.heisenberg.internal;
 
 import java.time.Duration;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.eclipse.microprofile.faulttolerance.exceptions.TimeoutException;
@@ -92,14 +92,8 @@ public final class TimeoutEngine {
             // Interruptible blocking operations (Thread.sleep, NIO I/O) will be cancelled.
             vThread.interrupt();
 
-            // §4.1.2 (sync mode only): wait for the method to actually finish before
-            // propagating TimeoutException. For uninterruptible methods, the caller remains
-            // blocked until the real return. In async mode, control is returned immediately
-            // (the asynchronous virtual thread already carries the wait).
-            if (!asyncCall) {
-                vThread.join();
-            }
-
+            // Async mode only (a synchronous invocation runs on the caller's thread, above): control is
+            // returned at once, the asynchronous virtual thread already carries the wait.
             throw new TimeoutException(
                     "Invocation timed out after " + timeout.toMillis() + " ms"
             );
@@ -126,16 +120,17 @@ public final class TimeoutEngine {
     private static Object onCallerThread(PolicyComposer.Invocation invocation, Duration timeout) throws Exception {
         Thread caller = Thread.currentThread();
         AtomicInteger state = new AtomicInteger(RUNNING);
-        CountDownLatch interrupted = new CountDownLatch(1);
+        AtomicBoolean interrupted = new AtomicBoolean();
         Thread watchdog = Thread.ofVirtual().name("heisenberg-timeout").start(() -> {
             try {
                 Thread.sleep(timeout);
                 if (state.compareAndSet(RUNNING, TIMED_OUT)) {
                     caller.interrupt();
-                    interrupted.countDown();
+                    interrupted.set(true);
                 }
             } catch (InterruptedException _) {
-                // the invocation ended first
+                // The invocation ended first and stopped the watch; this thread ends here, interrupted as it was.
+                Thread.currentThread().interrupt();
             }
         });
         Object result;
@@ -157,20 +152,15 @@ public final class TimeoutEngine {
      * Ends the watch: {@code false} when the invocation ended first; {@code true} when the deadline passed first, once
      * the caller's interruption is cleared.
      */
-    private static boolean timedOut(AtomicInteger state, CountDownLatch interrupted, Thread watchdog) {
+    private static boolean timedOut(AtomicInteger state, AtomicBoolean interrupted, Thread watchdog) {
         if (state.compareAndSet(RUNNING, DONE)) {
             watchdog.interrupt();
             return false;
         }
-        // The deadline passed: wait until the watchdog has interrupted this thread, then clear it.
-        boolean waited = false;
-        while (!waited) {
-            try {
-                interrupted.await();
-                waited = true;
-            } catch (InterruptedException _) {
-                // the watchdog's own interruption, which the await clears; wait for its count-down
-            }
+        // The deadline passed: the watchdog is between its state change and the interrupt it sends this thread, a
+        // few instructions. Wait for the interrupt to be sent, then clear it.
+        while (!interrupted.get()) {
+            Thread.onSpinWait();
         }
         Thread.interrupted();
         return true;

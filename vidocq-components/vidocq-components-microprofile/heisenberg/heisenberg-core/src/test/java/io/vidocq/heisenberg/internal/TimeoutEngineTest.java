@@ -126,7 +126,7 @@ class TimeoutEngineTest {
         TimeoutConfig config = new TimeoutConfig(50, ChronoUnit.MILLIS);
 
         assertThrows(TimeoutException.class, () -> TimeoutEngine.execute(() -> {
-            Thread.sleep(5_000);
+            new java.util.concurrent.CountDownLatch(1).await(); // blocks until the watchdog interrupts it
             return "too-late";
         }, config));
         org.junit.jupiter.api.Assertions.assertFalse(Thread.currentThread().isInterrupted());
