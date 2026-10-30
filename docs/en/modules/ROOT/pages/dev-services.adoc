@@ -36,7 +36,8 @@ has no Testcontainers, no Maven API and no JSON library of its own.
 [#host-log]
 Under a Maven goal (`vidocq:dev`, `vidocq:run`, `vidocq:test`), the dev services and their providers log
 through the build's log [.tag-new]#NEW#: one `[INFO]` line like the rest of the build, in English whatever the
-machine's locale. Under a JUnit test run they log through `System.Logger`, logger `vidocq.test.devservices`.
+machine's locale. Under a JUnit test run (`vidocq-runtime-devservices-junit`, a plain `mvn test`) they write
+the same `[INFO]`, `[WARNING]` and `[ERROR]` lines to the standard output of the tests; debug messages are dropped.
 
 [#named-modules]
 Every dev services jar is a named module, as every published Vidocq jar is: none of them

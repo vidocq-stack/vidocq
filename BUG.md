@@ -109,6 +109,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Minimal reproduction**: an application on Flyway and PostgreSQL, no database running, `vidocq test` (or `mvn test` with `vidocq-runtime-devservices-junit`): the PostgreSQL container starts, then every `@VidocqTest` class fails with _Connection to localhost:5432 refused_, the URL of `vidocq.properties`.
 - **Cause hypothesis**: the session folds its keys into the system properties of the test JVM, where an in-process bootstrap reads them; since `@VidocqTest` starts the application in its own JVM (#350), it passed that JVM the annotation's `properties` only.
 
+## BUG-20261030-21 — Under `mvn test`, the dev services log in the JDK's two-line format, in the machine's language
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/devservices-junit-log`: the `vidocq-runtime-devservices-junit` listener logs through `ConsoleSystemLogger`, one `[INFO]`/`[WARNING]`/`[ERROR]` line as the goals do since BUG-20261030-07 (`ConsoleSystemLoggerTest`)
+- **Reported by**: the vidocq-tutorial session (batch 10, after the train #413-#417)
+- **Minimal reproduction**: `mvn test` on an application with `vidocq-runtime-devservices-junit` in test scope, on a French machine: _oct. 30, 2026 … INFOS: …_ in two lines.
+- **Cause hypothesis**: the listener used `System.getLogger`, the JDK's default (java.util.logging) format; #410 only changed the loggers of the Maven goals.
+
 ## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
 
 - **Date**: 2026-10-30

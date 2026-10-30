@@ -64,7 +64,7 @@ public final class DevServicesSessionListener implements LauncherSessionListener
                         ApplicationFiles.of(classes),
                         ApplicationFiles.allOf(classes),
                         onTestClasspath(Thread.currentThread().getContextClassLoader()),
-                        System.getLogger("vidocq.test.devservices"));
+                        new ConsoleSystemLogger(System.out));
             } catch (DevServicesException e) {
                 throw new IllegalStateException(e.getMessage(), e);
             }
