@@ -191,6 +191,11 @@
                             <artifactId>vidocq-runtime-dirac-metrics-extension-codegen</artifactId>
                             <version>${project.version}</version>
                         </path>
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                            <artifactId>vidocq-runtime-heisenberg-fault-tolerance-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>

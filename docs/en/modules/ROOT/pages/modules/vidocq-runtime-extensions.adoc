@@ -108,7 +108,7 @@
 
 | `vidocq-runtime-heisenberg-fault-tolerance-extension`
 | `microprofile`
-| MicroProfile Fault Tolerance via xref:heisenberg::index.adoc[Heisenberg] — `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Fallback` interceptors (pure CDI, no HTTP endpoint; Dirac metrics and Humboldt telemetry stay optional).
+| MicroProfile Fault Tolerance via xref:heisenberg::index.adoc[Heisenberg] — `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Fallback` interceptors (pure CDI, no HTTP endpoint; Dirac metrics and Humboldt telemetry stay optional). [[heisenberg-fault-tolerance-codegen]]Companion `-codegen` artefact [.tag-new]#NEW#: it runs Heisenberg's processor on the application, so each bean with Fault Tolerance annotations gets a `$$HeisenbergPolicies` companion holding them, and the interceptor reads them without reflection; a class compiled without it is read by reflection, with one warning per class. `vidocq:checkpom` asks for it.
 |===
 
 CDI (xref:vauban::index.adoc[Vauban]) and JSON (xref:champollion::index.adoc[Champollion]) are not standalone extensions: Vauban is the engine built into `vidocq-runtime-core`, and Champollion ships transitively with the REST extension.
