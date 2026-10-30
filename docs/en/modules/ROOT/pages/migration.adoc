@@ -301,8 +301,7 @@ application that declares the extension without it:
 
 The Metrics bundle now also brings its extension's Build Compatible Extension, `DiracExtension` [.tag-new]#NEW#:
 without it, Vauban warned at each build that the extension was on the module path only and would not run. The
-OpenAPI bundle does not bring `GrimmExtension` yet: run at build time, it registers its `ScannedTypes` bean a second
-time when the application starts.
+OpenAPI bundle brings `GrimmExtension` the same way [.tag-new]#NEW#.
 
 Add each one to the compiler's `annotationProcessorPaths`, as in xref:#config-rest-client-codegen[the previous
 section]; `checkpom` prints the `<path>` to paste, and `vidocq extension add` writes it. See
