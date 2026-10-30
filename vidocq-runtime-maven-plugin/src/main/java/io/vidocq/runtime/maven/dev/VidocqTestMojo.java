@@ -49,7 +49,7 @@ import java.util.function.Function;
  * {@code vidocq:test} (#122, spec §4): the application's tests on every change, without the application. No child
  * JVM, no dev console, no debug agent: the goal opens the dev services session once, runs every test, then watches
  * the main and test directories and runs them again on each change, a new change cancelling the run in flight. A
- * main change needs no separate recompile: the run's {@code test-compile} compiles and indexes the main sources.
+ * main change needs no separate recompile: the run's {@code process-test-classes} compiles and indexes the main sources.
  *
  * <p>Each run prints a summary; with a console, {@code r} runs every test, {@code f} the failed ones and {@code q}
  * quits. Ctrl+C always stops the goal, its run and its dev services.

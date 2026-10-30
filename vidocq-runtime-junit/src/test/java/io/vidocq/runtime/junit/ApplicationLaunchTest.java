@@ -41,7 +41,7 @@ class ApplicationLaunchTest {
                 "-Dgreeting=hi",
                 "-Dvidocq.app.module=com.acme.demo",
                 "-p", "/app/classes:/m2/core.jar",
-                "--add-modules", "com.acme.demo",
+                "--add-modules", "ALL-MODULE-PATH",
                 "-m", "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq"), command);
     }
 
@@ -81,10 +81,25 @@ class ApplicationLaunchTest {
 
     @Test
     void theApplicationRunsOnTheModulePathOfTheTests() {
-        assertEquals("/a:/b", ApplicationLaunch.modulePath("/a:/b"));
+        assertEquals("/a:/b", ApplicationLaunch.modulePath("/a:/b", null));
+        assertEquals("/a:/b", ApplicationLaunch.modulePath("/a:/b", " "));
 
-        var e = assertThrows(IllegalStateException.class, () -> ApplicationLaunch.modulePath(null));
+        var e = assertThrows(IllegalStateException.class, () -> ApplicationLaunch.modulePath(null, "/c.jar"));
         assertTrue(e.getMessage().startsWith("@VidocqTest starts the application from the module path of the tests,"
                 + " and they run on the class path"), e.getMessage());
+    }
+
+    /**
+     * A runtime dependency no module requires, a JDBC driver for one, is on the class path of the tests, where
+     * Surefire leaves it: the application gets it on its module path, as {@code vidocq:dev} and the packaged
+     * application do (BUG-20261030-06).
+     */
+    @Test
+    void theRuntimeDependenciesTheTestsLeaveOnTheClassPathJoinTheModulePath() {
+        String sep = java.io.File.pathSeparator;
+
+        assertEquals(String.join(sep, "/app/classes", "/m2/core.jar", "/m2/postgresql.jar"),
+                ApplicationLaunch.modulePath(String.join(sep, "/app/classes", "/m2/core.jar"),
+                        String.join(sep, "/m2/core.jar", "/m2/postgresql.jar")));
     }
 }

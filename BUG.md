@@ -5,6 +5,29 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261030-06 — `@VidocqTest` starts the application without its runtime-scope JDBC driver
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/junit-runtime-classpath-jars`
+- **Affected modules**: vidocq-runtime-junit, vidocq-runtime-maven-plugin, vidocq-runtime-parent
+- **Symptom**: a `@VidocqTest` of an application with Flyway and PostgreSQL fails at boot with
+  _FlywayException: No JDBC driver found_, while `vidocq:dev` runs the same application fine. Reported by the
+  tutorial session (batch 3, item 1).
+- **Minimal reproduction**: a created application with `org.postgresql:postgresql` in `runtime` scope, a resource
+  that lists `DriverManager.drivers()`, and a `@VidocqTest` that expects `org.postgresql.Driver` in it: the list is
+  empty.
+- **Cause**: Surefire puts on the module path only the dependencies the application module requires; the driver,
+  which no module requires, stays on the class path of the tests (checked: `jdk.module.path` holds 36 entries
+  without it, `java.class.path` has it). `ApplicationLaunch` started the application on `jdk.module.path` with
+  `--add-modules <module>`, so it never had the jar, nor would it have resolved it.
+- **Fix**: the new goal `vidocq:test-path` (`process-test-classes`, bound by `vidocq-runtime-parent`) puts the compile
+  and runtime jars in the project property `vidocq.test.runtimePath`; the parent's Surefire configuration passes it as
+  a system property (no default value, so that the expression is resolved when Surefire runs, as jacoco's
+  `argLine`). `ApplicationLaunch` adds the jars `jdk.module.path` lacks and resolves `ALL-MODULE-PATH`, as `vidocq:dev`
+  and the packaged application do. Continuous testing runs `process-test-classes surefire:test` instead of
+  `test-compile surefire:test`, which stopped before the goal. `ApplicationLaunchTest`, `VidocqTestPathMojoTest`,
+  `TestRunnerTest`; checked end to end on a created application: the driver test fails before, passes after.
+
 ## BUG-20261026-01 — `vidocq:dev` and `vidocq:run` start a Vaadin application from an empty `target/` and answer 404 / 500
 
 - **Date**: 2026-10-26

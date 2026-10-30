@@ -45,7 +45,7 @@ class TestRunnerTest {
 
     @Test
     void allTestsRunWithoutDevServicesOfTheirOwn() {
-        assertEquals(List.of("mvn", "-ntp", "-o", "-q", "test-compile", "surefire:test",
+        assertEquals(List.of("mvn", "-ntp", "-o", "-q", "process-test-classes", "surefire:test",
                         "-DfailIfNoTests=false", "-Dsurefire.failIfNoSpecifiedTests=false",
                         "-Dvidocq.dev.devServices=false"),
                 TestRunner.command("mvn", List.of(), Map.of()));
@@ -58,7 +58,7 @@ class TestRunnerTest {
         keys.put("vidocq.dev.provided.vidocq.pool.url", "postgres");
         keys.put("vidocq.dev.devServices", "true");
 
-        assertEquals(List.of("/w/mvnw", "-ntp", "-o", "-q", "test-compile", "surefire:test",
+        assertEquals(List.of("/w/mvnw", "-ntp", "-o", "-q", "process-test-classes", "surefire:test",
                         "-DfailIfNoTests=false", "-Dsurefire.failIfNoSpecifiedTests=false",
                         "-Dtest=com.acme.ATest#x,com.acme.BTest#y",
                         "-Dvidocq.pool.url=jdbc:postgresql://localhost:5432/dev",
@@ -90,7 +90,7 @@ class TestRunnerTest {
 
         assertFalse(Files.exists(reports.resolve("TEST-com.acme.Old.xml")), "a stale report");
         assertTrue(Files.exists(reports.resolve("notes.txt")), "only the reports are deleted");
-        assertTrue(Files.readString(log).contains("args: -ntp -o -q test-compile surefire:test"),
+        assertTrue(Files.readString(log).contains("args: -ntp -o -q process-test-classes surefire:test"),
                 Files.readString(log));
     }
 

@@ -61,6 +61,25 @@ class HelloResourceTest {
   that path holds `target/classes` and the main dependencies; JUnit and the other test dependencies stay on the
   class path, so the application never sees them. A `@Nested` class shares the application of the class that
   carries `@VidocqTest`.
+* [[runtime-dependencies]]**Every runtime dependency** [.tag-new]#NEW# is on the application's module path, and
+  every module of that path is resolved, as under `vidocq:dev` and in the packaged application: a JDBC driver in
+  `runtime` scope, which no module requires, is found without `requires org.postgresql.jdbc`. Surefire leaves such a
+  jar on the class path of the tests; `vidocq:test-path`, which `vidocq-runtime-parent` binds to
+  `process-test-classes`, names the runtime dependencies in `vidocq.test.runtimePath`, and the parent hands that
+  property to Surefire. An application without `vidocq-runtime-parent` binds the goal and passes the property
+  itself:
++
+[source,xml]
+----
+<plugin>
+    <artifactId>maven-surefire-plugin</artifactId>
+    <configuration>
+        <systemPropertyVariables>
+            <vidocq.test.runtimePath>${vidocq.test.runtimePath}</vidocq.test.runtimePath>
+        </systemPropertyVariables>
+    </configuration>
+</plugin>
+----
 * **Its HTTP listener** is the `default` Chappe listener, on a free port of `127.0.0.1`
   (`vidocq.chappe.listener.default.host` and `.port`, which win over `vidocq.properties`).
 * **The test starts** once that port listens. If the process exits first, or after 60 seconds, the class fails with
