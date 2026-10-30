@@ -69,7 +69,10 @@ public final class DevServicesSection {
         List<DevServicesSnapshot.Skipped> skipped = snapshot.skipped();
         if (services.isEmpty()) {
             if (skipped.isEmpty()) {
-                section.summary("no dev service: not started by vidocq:dev, vidocq:run or the test launcher");
+                section.summary(snapshot.host() == null
+                        ? "no dev service: not started by vidocq:dev, vidocq:run or the test launcher"
+                        : "no dev service: " + snapshot.host()
+                                + " found no provider (a vidocq-runtime-devservice-* dependency)");
                 return;
             }
             section.summary("no dev service started");

@@ -122,15 +122,20 @@ class DevServicesSectionTest {
         assertFalse(section.everything().contains("null"), section.everything());
     }
 
+    /**
+     * A host that wrote the state file but found no provider says so: "not started by vidocq:dev" was printed under
+     * vidocq:dev itself (BUG-20261030-05, reported by the vidocq-tutorial session).
+     */
     @Test
-    void anEmptySkippedListKeepsTheNoStateFileSummary() {
+    void aHostWithoutAnyProviderSaysSo() {
         DevServicesSnapshot snapshot = StateReader.parse(
-                "{\"host\":\"test\",\"state\":\"running\",\"startedAt\":\"x\",\"services\":[],\"skipped\":[]}");
+                "{\"host\":\"vidocq:dev\",\"state\":\"running\",\"startedAt\":\"x\",\"services\":[],\"skipped\":[]}");
         RecordingSection section = new RecordingSection();
 
         DevServicesSection.write(snapshot, null, null, new FakeReportContext(Verbosity.DETAILED), section);
 
-        assertEquals("no dev service: not started by vidocq:dev, vidocq:run or the test launcher", section.summary);
+        assertEquals("no dev service: vidocq:dev found no provider (a vidocq-runtime-devservice-* dependency)",
+                section.summary);
     }
 
     @Test

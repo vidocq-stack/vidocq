@@ -25,6 +25,7 @@ import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
+import io.vidocq.runtime.spi.report.Verbosity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -97,7 +98,14 @@ public final class ChappeEngineExtension implements VidocqExtension, StartupRepo
                 started.add(name + " " + url.get());
             }
         }
-        section.summary(started.isEmpty() ? "no listener started" : String.join(", ", started));
+        if (started.isEmpty()) {
+            section.summary("no listener started");
+        } else if (context.verbosity() == Verbosity.DETAILED) {
+            // Each listener has its line below the summary: naming them again printed every one twice.
+            section.summary(started.size() + (started.size() == 1 ? " listener" : " listeners"));
+        } else {
+            section.summary(String.join(", ", started));
+        }
     }
 
     @Override

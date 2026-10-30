@@ -5,6 +5,39 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261030-04 — The startup report counts and prints the same things twice, differently
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/startup-report-consistency`
+- **Affected modules**: vidocq-runtime-cassini-rest-extension (`CassiniExtension`), vidocq-runtime-chappe-webserver-extension
+  (`ChappeEngineExtension`)
+- **Symptom**: with one `HelloResource`, the log said "Cassini REST extension mounted … (2 resource class(es))" while
+  the `rest` section said "1 resource class, 1 route"; the `http` section printed the default listener twice, as its
+  summary ("default http://localhost:8080/") and as its line. Reported by the vidocq-tutorial session.
+- **Minimal reproduction**: `ChappeListenersSectionTest.declaresEachConfiguredListenerWithTheAddressItBound`; for the
+  log, a created application with one resource under `vidocq dev`.
+- **Cause**: the log counted every class the bean provider hands Cassini, `@Provider` classes included, where the
+  report separates resources from providers; the `http` summary named the listeners the detailed report also prints
+  one per line.
+- **Fix**: the log reads the counts from the `RestMount` the report reads ("1 resource class(es), 1 provider(s)"); in
+  the detailed report the `http` summary is a count ("1 listener"), and it keeps naming the listeners when the report
+  prints summaries only.
+
+## BUG-20261030-05 — The dev services section says "not started by vidocq:dev" under vidocq:dev
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/startup-report-consistency`
+- **Affected module**: vidocq-runtime-devservices-extension (`DevServicesSection`)
+- **Symptom**: under `vidocq dev`, with no dev service provider among the plugin's dependencies, the section said
+  "no dev service: not started by vidocq:dev, vidocq:run or the test launcher". Reported by the vidocq-tutorial
+  session.
+- **Minimal reproduction**: `DevServicesSectionTest.aHostWithoutAnyProviderSaysSo`.
+- **Cause**: the section said the same for a missing state file and for a state file a host wrote without any service
+  (a test even kept that summary on purpose).
+- **Fix**: a state file without services nor skipped providers now says "no dev service: vidocq:dev found no provider
+  (a vidocq-runtime-devservice-* dependency)", naming the host that wrote it; without a state file the summary is
+  unchanged.
+
 ## BUG-20261026-01 — `vidocq:dev` and `vidocq:run` start a Vaadin application from an empty `target/` and answer 404 / 500
 
 - **Date**: 2026-10-26

@@ -71,17 +71,25 @@ class ChappeListenersSectionTest {
         @Override public StartupReportSection anomaly(String c, String m, String h) { other.add(c); return this; }
     }
 
-    private static final StartupReportContext CONTEXT = new StartupReportContext() {
-        @Override public Verbosity verbosity() { return Verbosity.DETAILED; }
+    private static final StartupReportContext CONTEXT = context(Verbosity.DETAILED);
+
+    private static StartupReportContext context(Verbosity verbosity) {
+        return new StartupReportContext() {
+        @Override public Verbosity verbosity() { return verbosity; }
         @Override public LaunchMode launchMode() { return LaunchMode.DEV; }
         @Override public boolean hasBeanOfType(String typeName) { return false; }
         @Override public <T> Optional<T> lookup(Class<T> type) { return Optional.empty(); }
         @Override public List<String> routeUrls(String handlerClassName) { return List.of(); }
-    };
+        };
+    }
 
     private Recorded contribute() {
+        return contribute(CONTEXT);
+    }
+
+    private Recorded contribute(StartupReportContext context) {
         Recorded section = new Recorded();
-        new ChappeEngineExtension().contribute(CONTEXT, section);
+        new ChappeEngineExtension().contribute(context, section);
         return section;
     }
 
@@ -112,7 +120,10 @@ class ChappeListenersSectionTest {
 
         String url = "http://127.0.0.1:" + port + "/";
         assertEquals(Map.of("default", url), section.listeners);
-        assertEquals("default " + url, section.summary);
+        // The detailed report prints each listener's line: the summary does not repeat them (BUG-20261030-04).
+        assertEquals("1 listener", section.summary);
+        // The summary alone, as a later boot prints it, names them.
+        assertEquals("default " + url, contribute(context(Verbosity.SUMMARY)).summary);
         assertEquals(Optional.of(url), ChappeMountPoint.instance().boundUrl(ChappeListener.DEFAULT));
     }
 

@@ -143,12 +143,16 @@ public final class CassiniExtension implements VidocqExtension, StartupReportCon
         }
         String mountPrefix = "/".equals(effectiveContextPath) ? "" : effectiveContextPath;
         ChappeMountPoint.instance().mount(listener, mountPrefix, bridge);
-        RestMounts.register(RestMount.of(AUTO_MOUNT, listener, mountPrefix, true, resourceClasses, stack.routes(),
-                stack.statistics().orElse(null)));
+        RestMount mount = RestMount.of(AUTO_MOUNT, listener, mountPrefix, true, resourceClasses, stack.routes(),
+                stack.statistics().orElse(null));
+        RestMounts.register(mount);
 
+        // The classes the bean provider hands Cassini are its @Path resources and its @Provider classes: counted
+        // apart, as the rest section of the startup report counts them (BUG-20261030-04).
         LOG.log(System.Logger.Level.INFO,
-                "Cassini REST extension mounted on listener={0} prefix={1} ({2} resource class(es))",
-                listener, mountPrefix.isEmpty() ? "/" : mountPrefix, resourceClasses.size());
+                "Cassini REST extension mounted on listener={0} prefix={1} ({2} resource class(es), {3} provider(s))",
+                listener, mountPrefix.isEmpty() ? "/" : mountPrefix, mount.resources().size(),
+                mount.providers().size());
     }
 
     @Override
