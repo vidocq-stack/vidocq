@@ -61,6 +61,9 @@ public final class ProjectScaffolder {
      */
     static final String SNAPSHOT_REPOSITORY_URL = "https://maven.vidocq.dev/snapshots/";
 
+    /** A full copy of {@link #SNAPSHOT_REPOSITORY_URL} on another site, which Maven reads when the first is down. */
+    static final String SNAPSHOT_MIRROR_URL = "https://maven.bak.vidocq.dev/snapshots/";
+
     /** The extension whose scaffold writes a {@code HelloResource}. */
     private static final String REST_EXTENSION = "cassini-rest";
 
@@ -230,7 +233,7 @@ public final class ProjectScaffolder {
     }
 
     /**
-     * The Vidocq snapshot repository, for dependencies and for the SNAPSHOT
+     * The Vidocq snapshot repository and its mirror, for dependencies and for the SNAPSHOT
      * {@code vidocq-runtime-maven-plugin}. Releases stay on Maven Central.
      */
     private static String snapshotRepositories() {
@@ -243,6 +246,12 @@ public final class ProjectScaffolder {
                             <releases><enabled>false</enabled></releases>
                             <snapshots><enabled>true</enabled></snapshots>
                         </repository>
+                        <repository>
+                            <id>vidocq-snapshots-bak</id>
+                            <url>%2$s</url>
+                            <releases><enabled>false</enabled></releases>
+                            <snapshots><enabled>true</enabled></snapshots>
+                        </repository>
                     </repositories>
 
                     <pluginRepositories>
@@ -252,8 +261,14 @@ public final class ProjectScaffolder {
                             <releases><enabled>false</enabled></releases>
                             <snapshots><enabled>true</enabled></snapshots>
                         </pluginRepository>
+                        <pluginRepository>
+                            <id>vidocq-snapshots-bak</id>
+                            <url>%2$s</url>
+                            <releases><enabled>false</enabled></releases>
+                            <snapshots><enabled>true</enabled></snapshots>
+                        </pluginRepository>
                     </pluginRepositories>
-                """.formatted(SNAPSHOT_REPOSITORY_URL);
+                """.formatted(SNAPSHOT_REPOSITORY_URL, SNAPSHOT_MIRROR_URL);
     }
 
     /**

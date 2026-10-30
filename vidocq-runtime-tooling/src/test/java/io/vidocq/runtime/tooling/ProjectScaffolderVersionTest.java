@@ -139,6 +139,12 @@ class ProjectScaffolderVersionTest {
                             <releases><enabled>false</enabled></releases>
                             <snapshots><enabled>true</enabled></snapshots>
                         </repository>
+                        <repository>
+                            <id>vidocq-snapshots-bak</id>
+                            <url>https://maven.bak.vidocq.dev/snapshots/</url>
+                            <releases><enabled>false</enabled></releases>
+                            <snapshots><enabled>true</enabled></snapshots>
+                        </repository>
                     </repositories>
                 """;
         assertTrue(pom.contains(repository),
@@ -158,6 +164,8 @@ class ProjectScaffolderVersionTest {
 
         assertTrue(pom.contains("<id>vidocq-snapshots</id>"),
                 "the CLI's SNAPSHOT runtime must resolve from maven.vidocq.dev, pom was:\n" + pom);
+        assertTrue(pom.contains("<id>vidocq-snapshots-bak</id>"),
+                "maven.bak.vidocq.dev takes over when maven.vidocq.dev is down, pom was:\n" + pom);
     }
 
     @Test
