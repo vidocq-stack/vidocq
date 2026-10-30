@@ -44,10 +44,14 @@ xref:dev-services.adoc#in-tests[dev services host] included. Integration tests r
 
 [source,bash]
 ----
-mvn vidocq:dev                                        # the application, and its tests behind it
-mvn vidocq:dev -Dvidocq.dev.continuousTesting=false   # the application only
-mvn vidocq:test                                       # the tests only
+mvn process-classes vidocq:dev                                        # the application, and its tests behind it
+mvn process-classes vidocq:dev -Dvidocq.dev.continuousTesting=false   # the application only
+mvn process-classes vidocq:test                                       # the tests only
 ----
+
+Both goals read `target/classes/vidocq.properties` when they open the dev services, so run `process-classes` first:
+on a clean project, `vidocq:test` alone found no configuration, and the Keycloak dev service fell back to the
+`master` realm. `vidocq test` and `vidocq dev` do it for you [.tag-new]#NEW#.
 
 [#when-tests-run]
 == When tests run

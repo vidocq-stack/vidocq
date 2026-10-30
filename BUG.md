@@ -175,6 +175,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Minimal reproduction**: `vidocq create -x cassini-rest -x heisenberg-fault-tolerance -x dirac-metrics`, a bean with class-level `@Retry` and `@Counted` injected into a resource: _AmbiguousResolutionException: 2 beans match: [DiscoveredMetrics, DiscoveredMetrics]_ from `GaugeRegistrationBean.registerMetrics`, the application exits before it listens.
 - **Cause**: since the Metrics codegen bundle carries `dirac-cdi-vauban` (#426), `DiracExtension` runs at build time and again at boot; each run registers a synthetic `DiscoveredMetrics` bean listing the classes it saw. The lists differ, so Vauban keeps both, and `Instance.get()` was ambiguous. Same pattern as Grimm's `ScannedTypes` (grimm#44, BUG-20261030-23).
 
+## BUG-20261030-28 — `vidocq test` starts the Keycloak dev service on realm `master`, ignoring `vidocq.properties`
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/vidocq-test-process-classes`: `vidocq test` runs `process-classes vidocq:test` (`RunGoalsTest.testRunsTheContinuousTestingGoalAfterProcessClasses`)
+- **Reported by**: the vidocq-tutorial session (after the train vidocq#434), step 11
+- **Minimal reproduction**: a clean project whose `src/main/resources/vidocq.properties` sets `vidocq.dev.keycloak.realm=library` and a realm import; `vidocq test` logs _issuer …/realms/master_, and a test that asks the token URL for a realm user gets 401. `vidocq dev` and `mvn test` use the right realm.
+- **Cause hypothesis**: `vidocq:test` opens the dev services from `target/classes/vidocq.properties` before its first run, and the CLI ran the goal alone; a project without a previous build (here, after a history rewrite) had no such file. Not a regression of #434: an older `target/classes` hid it.
+
 ## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
 
 - **Date**: 2026-10-30

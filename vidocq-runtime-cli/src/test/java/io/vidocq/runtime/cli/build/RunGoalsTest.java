@@ -59,9 +59,14 @@ class RunGoalsTest {
     }
 
     /** Vidocq/vidocq#314: the commands of the goals the CLI had none for. */
+    /**
+     * The goal opens the dev services from {@code target/classes/vidocq.properties} before its first run: without
+     * {@code process-classes}, a clean project had none, and the Keycloak dev service fell back to realm
+     * {@code master} (BUG-20261030-28).
+     */
     @Test
-    void testRunsTheContinuousTestingGoal() {
-        assertEquals(List.of("vidocq:test"), RunGoals.test());
+    void testRunsTheContinuousTestingGoalAfterProcessClasses() {
+        assertEquals(List.of("process-classes", "vidocq:test"), RunGoals.test());
     }
 
     @Test

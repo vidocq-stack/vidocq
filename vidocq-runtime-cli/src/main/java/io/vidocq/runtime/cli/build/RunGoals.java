@@ -60,9 +60,13 @@ public final class RunGoals {
         return List.copyOf(args);
     }
 
-    /** {@code vidocq:test}, which compiles through the {@code test-compile} of each run. */
+    /**
+     * {@code vidocq:test} after {@code process-classes}: the goal opens the dev services from
+     * {@code target/classes/vidocq.properties} before its first run, which a clean project did not have yet
+     * (BUG-20261030-28). Each run then compiles through its own {@code process-test-classes}.
+     */
     public static List<String> test() {
-        return List.of("vidocq:test");
+        return List.of("process-classes", "vidocq:test");
     }
 
     /**
