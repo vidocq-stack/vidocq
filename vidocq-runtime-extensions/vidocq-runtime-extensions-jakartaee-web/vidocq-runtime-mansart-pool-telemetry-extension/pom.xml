@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-mansart-pool-telemetry-extension</artifactId>
+    <name>Vidocq :: Core Extensions :: Mansart Pool :: Telemetry</name>
+    <description>
+        Glue between the Mansart Pool and Telemetry (Humboldt) extensions: every statement run on a Vidocq
+        DataSource becomes an OpenTelemetry CLIENT span, child of the current one (BUG-20261030-25). It only
+        depends on the OpenTelemetry API that Humboldt already ships; without it, the pool adds nothing on the path.
+    </description>
+
+    <properties>
+        <!-- The Delegating* classes are generated from the java.sql interfaces by JdbcDelegatesGenerator (test
+             sources) and committed; JdbcDelegatesTest keeps them in sync. They delegate one call each, ~400 of
+             them: left out of the analysis, as generated code. -->
+        <sonar.exclusions>**/telemetry/Delegating*.java</sonar.exclusions>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-mansart-pool-extension</artifactId>
+        </dependency>
+        <!-- The OpenTelemetry API as Humboldt repackages it (named modules io.opentelemetry.api/.context); the
+             Telemetry extension brings the same jars. -->
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-api</artifactId>
+            <version>${humboldt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-otel-context</artifactId>
+            <version>${humboldt.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-sdk-trace</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.3.232</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

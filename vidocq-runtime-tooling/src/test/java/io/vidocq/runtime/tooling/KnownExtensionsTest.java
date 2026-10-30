@@ -358,4 +358,14 @@ class KnownExtensionsTest {
         var e = assertThrows(IllegalArgumentException.class, () -> ExtensionFamily.of("tools"));
         assertEquals("unknown extension family 'tools': one of jakarta-ee, microprofile, data, web", e.getMessage());
     }
+
+    /** Telemetry with the JDBC pool brings the glue that turns statements into spans (BUG-20261030-25). */
+    @Test
+    void theJdbcSpansGlueGoesWithTelemetryAndThePool() {
+        assertEquals(List.of("jdbc-telemetry"),
+                KnownExtensions.companions(Set.of("humboldt-telemetry", "mansart-pool", "cassini-rest")));
+        assertEquals(List.of(), KnownExtensions.companions(Set.of("humboldt-telemetry")));
+        assertEquals(List.of(), KnownExtensions.companions(
+                Set.of("humboldt-telemetry", "mansart-pool", "jdbc-telemetry")));
+    }
 }
