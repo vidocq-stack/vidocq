@@ -30,6 +30,20 @@
             <artifactId>heisenberg-processor</artifactId>
             <version>${heisenberg.version}</version>
         </dependency>
+        <!-- HeisenbergExtension, the Build Compatible Extension that binds the Fault Tolerance interceptor: on the
+             processor path, vauban-processor runs it at build time, as the Ravel bundle does with ravel-cdi-vauban.
+             Without it Vauban warns that the extension is on the module path only and will not run at build time. -->
+        <dependency>
+            <groupId>io.vidocq.heisenberg</groupId>
+            <artifactId>heisenberg-cdi-vauban</artifactId>
+            <version>${heisenberg.version}</version>
+        </dependency>
+        <!-- heisenberg-cdi-vauban leaves the CDI API to the runtime (excluded, BUG-006 of Heisenberg): on the
+             processor path nothing else brings it, and HeisenbergExtension could not be loaded. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
