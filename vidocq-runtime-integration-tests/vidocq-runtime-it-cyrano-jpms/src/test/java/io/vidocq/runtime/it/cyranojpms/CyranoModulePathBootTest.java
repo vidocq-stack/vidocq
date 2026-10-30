@@ -22,17 +22,16 @@ package io.vidocq.runtime.it.cyranojpms;
 import io.vidocq.runtime.core.VidocqBootstrap;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * VID-001: booting the Vidocq runtime with the Cyrano wrapper on the module
- * path must process the wrapper's {@code CyranoBuildCompatibleExtension}
+ * path must process Cyrano's {@code CyranoRestClientCdiExtension}
  * (instantiated reflectively by vauban-core's {@code BceProcessor}) without an
- * {@code IllegalAccessException}. Before the wrapper gained its
- * {@code opens ... to io.vidocq.vauban.core}, this boot failed with
- * "BCE processing failed ... does not export ... to module io.vidocq.vauban.core"
- * — exactly like the historical cervantes case, and invisible on the class path.
+ * {@code IllegalAccessException}, a failure invisible on the class path. The
+ * wrapper used to republish that extension through a subclass of its own, which
+ * needed an {@code opens ... to io.vidocq.vauban.core}; cyrano-cdi-vauban declares
+ * it itself, in an exported package, so the wrapper now adds neither.
  */
 class CyranoModulePathBootTest {
 
@@ -54,19 +53,15 @@ class CyranoModulePathBootTest {
     void bootsWithTheCyranoWrapperOnTheModulePath() {
         VidocqBootstrap bootstrap = VidocqBootstrap.create().configure().start();
         try {
-            // The boot itself is the assertion: BceProcessor instantiated the
-            // wrapper's BCE reflectively across module boundaries. Belt and
-            // braces: the wrapper module must still be strictly encapsulated
-            // apart from the single qualified opens to vauban-core.
+            // The boot itself is the assertion: BceProcessor instantiated Cyrano's
+            // BCE reflectively across module boundaries. Belt and braces: the
+            // wrapper module opens nothing, and publishes no BCE of its own.
             Module wrapper = ModuleLayer.boot()
                     .findModule("io.vidocq.runtime.extensions.microprofile.cyrano")
                     .orElseThrow();
             var descriptor = wrapper.getDescriptor();
-            assertFalse(descriptor.opens().isEmpty(),
-                    "the wrapper must carry the VID-001 qualified opens");
-            assertTrue(descriptor.opens().stream().allMatch(o ->
-                            o.isQualified() && o.targets().contains("io.vidocq.vauban.core")),
-                    "every opens must be qualified to io.vidocq.vauban.core only: " + descriptor.opens());
+            assertTrue(descriptor.opens().isEmpty(), "the wrapper opens nothing: " + descriptor.opens());
+            assertTrue(descriptor.provides().isEmpty(), "the wrapper provides nothing: " + descriptor.provides());
         } finally {
             bootstrap.shutdown();
         }

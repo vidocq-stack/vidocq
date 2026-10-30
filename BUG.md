@@ -117,6 +117,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Minimal reproduction**: `mvn test` on an application with `vidocq-runtime-devservices-junit` in test scope, on a French machine: _oct. 30, 2026 … INFOS: …_ in two lines.
 - **Cause hypothesis**: the listener used `System.getLogger`, the JDK's default (java.util.logging) format; #410 only changed the loggers of the Maven goals.
 
+## BUG-20261030-22 — The JWT and Rest Client extensions declare a second `BuildCompatibleExtension` beside their brick's
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/remove-bce-relays`: the relays `CervantesJwtBuildCompatibleExtension` and `CyranoBuildCompatibleExtension` are removed, with their `META-INF/services` entries, `provides` and `opens ... to io.vidocq.vauban.core` (`CervantesSingleExtensionTest`, `CyranoSingleExtensionTest`; JWT TCK 208/208, Rest Client TCK 235, 9 skipped, on the assembled runtime)
+- **Reported by**: found while adding the codegen bundles of the tutorial's batch 7
+- **Minimal reproduction**: list the `BuildCompatibleExtension` providers of the boot layer with `vidocq-runtime-cervantes-jwt-extension` (or the Rest Client one): `CervantesClaimExtension` and its empty subclass `CervantesJwtBuildCompatibleExtension` are both declared.
+- **Cause hypothesis**: the wrappers republished their brick's extension through a subclass when the brick did not declare it; `cervantes-cdi-vauban` and `cyrano-cdi-vauban` now declare it themselves, in an exported package. Two extensions doing the same work, and a codegen bundle putting the brick on the processor path saw both.
+
 ## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
 
 - **Date**: 2026-10-30

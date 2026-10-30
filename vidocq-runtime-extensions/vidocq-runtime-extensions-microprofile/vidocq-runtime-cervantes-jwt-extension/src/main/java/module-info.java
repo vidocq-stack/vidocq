@@ -23,8 +23,8 @@
  *
  * <p>Transitively re-exports Cervantes modules (api, core, cdi.vauban,
  * cassini) so that they are visible on the module-path of a jlink image
- * Vidocq, and republishes the {@code BuildCompatibleExtension} from cervantes-cdi-vauban
- * under the name of this module so that ServiceLoader discovers it.</p>
+ * Vidocq. The {@code BuildCompatibleExtension} is cervantes-cdi-vauban's own, which that module
+ * declares itself: this module adds none.</p>
  */
 module io.vidocq.runtime.extensions.microprofile.cervantes {
     requires transitive io.vidocq.cervantes.api;
@@ -39,12 +39,4 @@ module io.vidocq.runtime.extensions.microprofile.cervantes {
     requires transitive io.vidocq.runtime.extensions.microprofile.ravel;
 
     requires jakarta.cdi;
-
-    // vauban-core instantiates the BCE reflectively (getDeclaredConstructor + setAccessible +
-    // newInstance in BceProcessor) — `provides ... with` alone is not enough. The BCE lives in this
-    // wrapper's internal, non-exported package, so open it to vauban-core for that reflective access.
-    opens io.vidocq.runtime.extensions.microprofile.cervantes to io.vidocq.vauban.core;
-
-    provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
-            with io.vidocq.runtime.extensions.microprofile.cervantes.CervantesJwtBuildCompatibleExtension;
 }
