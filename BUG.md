@@ -134,6 +134,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Cause hypothesis**: JWT had no codegen bundle; the Metrics and OpenAPI bundles carried their processor only, not the jar of their extension's BCE, nor the CDI API those jars leave `provided`.
 - **Still open**: _Unsatisfied dependency … JsonWebToken_ at build time. The producer is a bean of cervantes-cdi-vauban, which Vauban's build-time validation does not see; it defers to the runtime container, where injection works.
 
+## BUG-20261030-27 — An application with Fault Tolerance and Metrics stops at boot on two `DiscoveredMetrics` beans
+
+- **Date**: 2026-10-30
+- **Status**: FIXED in Dirac, https://codefloe.com/Vidocq/dirac/pulls/40 (DRC-008): `GaugeRegistrationBean` registers the union of every `DiscoveredMetrics` bean, each metric once (`DiscoveredMetricsMergeTest`; MP Metrics TCK 127/127; `vidocq-runtime-tck-heisenberg-faulttolerance` 463/463). Nothing to change in this repository once Dirac's SNAPSHOT is published
+- **Reported by**: found while measuring the build noise of the tutorial application (BUG-20261030-26)
+- **Minimal reproduction**: `vidocq create -x cassini-rest -x heisenberg-fault-tolerance -x dirac-metrics`, a bean with class-level `@Retry` and `@Counted` injected into a resource: _AmbiguousResolutionException: 2 beans match: [DiscoveredMetrics, DiscoveredMetrics]_ from `GaugeRegistrationBean.registerMetrics`, the application exits before it listens.
+- **Cause**: since the Metrics codegen bundle carries `dirac-cdi-vauban` (#426), `DiracExtension` runs at build time and again at boot; each run registers a synthetic `DiscoveredMetrics` bean listing the classes it saw. The lists differ, so Vauban keeps both, and `Instance.get()` was ambiguous. Same pattern as Grimm's `ScannedTypes` (grimm#44, BUG-20261030-23).
+
 ## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
 
 - **Date**: 2026-10-30
