@@ -449,6 +449,12 @@
                         <version>${maven.javadoc.plugin.version}</version>
                         <configuration>
                             <doclint>none</doclint>
+                            <!-- JDK 23+ copies the DejaVu web fonts into every javadoc jar: 4 MB of the 4.2 MB of each
+                                 one, 97 % of a release's size on Central (0.4.0-RC1: 597 of 613 MB). The pages fall back to
+                                 the reader's fonts. -->
+                            <additionalOptions>
+                                <additionalOption>--no-fonts</additionalOption>
+                            </additionalOptions>
                             <!--
                                 Force legacy (non-modular) javadoc. Modules that keep
                                 module-info.java under src/main/module-info (the
@@ -577,6 +583,12 @@
                         <version>${maven.javadoc.plugin.version}</version>
                         <configuration>
                             <doclint>none</doclint>
+                            <!-- JDK 23+ copies the DejaVu web fonts into every javadoc jar: 4 MB of the 4.2 MB of each
+                                 one, 97 % of a release's size on Central (0.4.0-RC1: 597 of 613 MB). The pages fall back to
+                                 the reader's fonts. -->
+                            <additionalOptions>
+                                <additionalOption>--no-fonts</additionalOption>
+                            </additionalOptions>
                             <!-- See the release profile: legacy javadoc for every module style. -->
                             <sourcepath>${project.basedir}/src/main/java</sourcepath>
                         </configuration>
