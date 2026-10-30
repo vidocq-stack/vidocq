@@ -72,7 +72,7 @@
 
 | `vidocq-runtime-mansart-data-extension`
 | `jakartaee-web`
-| Jakarta Data 1.0 via Mansart — scans `@Repository`, implementations generated via APT (companion `-codegen` artefact). Its section of the startup report is the application's entities and repositories, a dev console panel(<<mansart-data-catalogue>>).
+| Jakarta Data 1.0 via Mansart — scans `@Repository`, implementations generated via APT (companion `-codegen` artefact). Its section of the startup report is the application's entities and repositories, a dev console panel(<<mansart-data-catalogue>>). [[mansart-data-apis]]The extension brings the Jakarta Persistence API and `requires transitive jakarta.persistence` and `jakarta.data` [.tag-new]#NEW#: an application that requires it compiles its `@Entity`, `@Id` and `@Column` and its repositories without a dependency or a `requires` of its own.
 
 | `vidocq-runtime-mansart-transactions-extension`
 | `jakartaee-web`
@@ -104,7 +104,7 @@
 
 | `vidocq-runtime-humboldt-telemetry-extension`
 | `microprofile`
-| MicroProfile Telemetry via xref:humboldt::index.adoc[Humboldt] — traces, metrics, logs, OTLP/HTTP export. [[humboldt-telemetry-apis]]The extension brings the Jakarta REST API, which `humboldt-rest` leaves to the runtime, so an application with Telemetry and no REST endpoint starts.
+| MicroProfile Telemetry via xref:humboldt::index.adoc[Humboldt] — traces, metrics, logs, OTLP/HTTP export. [[humboldt-telemetry-apis]]The extension brings the Jakarta REST API, which `humboldt-rest` leaves to the runtime, so an application with Telemetry and no REST endpoint starts. It also `requires transitive io.opentelemetry.api` and `io.opentelemetry.instrumentation_annotations` [.tag-new]#NEW#: an application that requires it uses `Span`, `Tracer` and `@WithSpan` without a `requires` of its own.
 
 | `vidocq-runtime-heisenberg-fault-tolerance-extension`
 | `microprofile`

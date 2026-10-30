@@ -33,6 +33,8 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.data {
     requires transitive io.vidocq.mansart.data.core;
     requires transitive io.vidocq.mansart.data.cdi;
     requires transitive jakarta.data;
+    // The application's entities carry @Entity, @Id, @Column (BUG-20261030-09).
+    requires transitive jakarta.persistence;
     requires jakarta.cdi;
     requires java.sql;        // javax.sql.DataSource
 

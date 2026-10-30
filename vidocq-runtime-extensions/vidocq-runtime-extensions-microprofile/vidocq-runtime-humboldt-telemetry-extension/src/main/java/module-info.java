@@ -34,7 +34,9 @@ module io.vidocq.runtime.extensions.microprofile.humboldt {
     requires io.vidocq.humboldt.api;
     requires io.vidocq.humboldt.otel.interop;
     requires io.vidocq.vauban.core;
-    requires io.opentelemetry.api;
+    // The application traces through the OpenTelemetry API (Span, Tracer) and @WithSpan (BUG-20261030-09).
+    requires transitive io.opentelemetry.api;
+    requires transitive io.opentelemetry.instrumentation_annotations;
     requires io.opentelemetry.context;
     requires jakarta.cdi;
     requires java.logging;

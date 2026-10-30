@@ -16,7 +16,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-09 — `vidocq extension add mansart-data` does not bring `jakarta.persistence-api` nor the `requires` it needs
 
 - **Date**: 2026-10-30
-- **Status**: OPEN
+- **Status**: FIXED on `fix/extension-add-requires-09`: `vidocq-runtime-mansart-data-extension` depends on `jakarta.persistence-api` and `requires transitive jakarta.persistence`; `vidocq-runtime-humboldt-telemetry-extension` `requires transitive io.opentelemetry.api` and `io.opentelemetry.instrumentation_annotations` (`ApplicationModuleReadsTest` in both modules). A created application with cassini-rest, mansart-data, mansart-transactions, cervantes-jwt and humboldt-telemetry compiles an entity, a repository, `@Transactional`, `@RolesAllowed`, `JsonWebToken`, `Span` and `@WithSpan` with no hand-written `requires`. `jakarta.data`, `jakarta.transaction`, `jakarta.annotation` and `org.eclipse.microprofile.jwt` were already readable through the extensions' transitive requires; the tutorial's `requires` for them are redundant
 - **Reported by**: the vidocq-tutorial session (batch 3, item 3)
 - **Minimal reproduction**: `vidocq extension add mansart-data` on a created application, then an `@Entity`: compilation fails until the dependency and `requires jakarta.persistence` are added by hand.
 - **Cause hypothesis**: the extension's catalog entry names its own artifact only; `module-info.requires` does not list the Persistence module.
