@@ -2,7 +2,7 @@
 :description: Vidocq Runtime Maven plugin — generate, package, dev, run, jlink, jpackage, docker, idea.
 
 [.lead]
-`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes twenty goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `vscode`, `eclipse`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`, `create`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
+`vidocq-runtime-maven-plugin` is the Maven plugin that turns an application into a deployable standalone distribution. It exposes twenty-one goals: `generate`, `analyze-deps`, `package`, `dev`, `run`, `test`, `test-path`, `checkpom`, `jlink`, `jpackage`, `docker`, `check-module-info`, `complete-module-info`, `idea`, `vscode`, `eclipse`, `add-extension`, `remove-extension`, `list-extensions`, `doctor`, `create`. (`modularize` moved to the Vauban plugin — see below.) Also see `vidocq/JLINK.md` for internal details.
 
 == Coordinates
 
@@ -56,6 +56,9 @@
 
 | `vidocq:complete-module-info`
 | Opt-in companion of `check-module-info` — rewrites `src/main/java/module-info.java` to add the missing directives.
+
+| `vidocq:test-path` [.tag-new]#NEW#
+| Names the compile and runtime jars in `vidocq.test.runtimePath` for the application `@VidocqTest` starts, so that a driver no module requires is on its module path. Bound to `process-test-classes` by `vidocq-runtime-parent`. xref:testing.adoc#runtime-dependencies[Details].
 
 | `vidocq:idea`
 | Experimental — writes one IntelliJ IDEA shared run configuration per application of the reactor into `.run/`, or checks them in CI. See <<idea,the `vidocq:idea` goal>>.

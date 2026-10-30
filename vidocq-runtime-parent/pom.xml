@@ -99,6 +99,15 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.5.5</version>
+                    <configuration>
+                        <!-- The runtime dependencies no module requires, a JDBC driver for one, which Surefire
+                             leaves on the class path: vidocq:test-path names them, and the application that
+                             @VidocqTest starts gets them on its module path (BUG-20261030-06). No default value
+                             in <properties>: the expression must stay unresolved until vidocq:test-path sets it. -->
+                        <systemPropertyVariables>
+                            <vidocq.test.runtimePath>${vidocq.test.runtimePath}</vidocq.test.runtimePath>
+                        </systemPropertyVariables>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -141,6 +150,13 @@
                             <phase>validate</phase>
                             <goals>
                                 <goal>checkpom</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>vidocq-test-path</id>
+                            <phase>process-test-classes</phase>
+                            <goals>
+                                <goal>test-path</goal>
                             </goals>
                         </execution>
                         <execution>

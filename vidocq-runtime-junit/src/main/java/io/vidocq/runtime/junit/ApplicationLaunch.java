@@ -19,25 +19,38 @@
  */
 package io.vidocq.runtime.junit;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The command that starts the application under test, and where its parts come from. The runtime's own main boots
  * the application module from the module path of the tests, as {@code vidocq:run} does: under Surefire it holds
- * {@code target/classes} and the main dependencies, while JUnit and the other test dependencies stay on the class
- * path, out of the application's sight.
+ * {@code target/classes} and the main dependencies the application module requires, while JUnit and the other test
+ * dependencies stay on the class path, out of the application's sight. Surefire also leaves there the runtime
+ * dependencies no module requires, a JDBC driver for one: {@code vidocq:test-path} names them in
+ * {@value #RUNTIME_PATH_PROPERTY}, and they join the application's module path.
  */
 final class ApplicationLaunch {
 
     /** The runtime's own main, which boots {@code vidocq.app.module}. */
     static final String RUNTIME_MAIN = "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq";
 
+    /**
+     * The runtime dependencies of the application, as {@code vidocq:test-path} hands them to the tests through
+     * Surefire: every jar the packaged application would have on its module path.
+     */
+    static final String RUNTIME_PATH_PROPERTY = "vidocq.test.runtimePath";
+
     private ApplicationLaunch() {}
 
     /**
      * {@code java} with the {@code default} Chappe listener on {@code 127.0.0.1:port}, then {@code properties}
-     * ({@code key=value}, as {@code -D}), then the application module on {@code modulePath}.
+     * ({@code key=value}, as {@code -D}), then the application module on {@code modulePath}. Every module of the
+     * path is resolved, as in {@code vidocq:dev} and the packaged application, so that a driver or a provider no
+     * module requires is still found through {@link java.util.ServiceLoader}.
      */
     static List<String> command(String java, String modulePath, String module, int port, List<String> properties) {
         List<String> command = new ArrayList<>(List.of(java,
@@ -52,7 +65,7 @@ final class ApplicationLaunch {
         }
         command.addAll(List.of("-Dvidocq.app.module=" + module,
                 "-p", modulePath,
-                "--add-modules", module,
+                "--add-modules", "ALL-MODULE-PATH",
                 "-m", RUNTIME_MAIN));
         return command;
     }
@@ -75,13 +88,25 @@ final class ApplicationLaunch {
                 + " named module. Name it with @VidocqTest(module = \"…\") or -Dvidocq.mainModule.");
     }
 
-    /** The module path of the tests ({@code jdk.module.path}), which the application runs on. */
-    static String modulePath(String jdkModulePath) {
+    /**
+     * The module path of the tests ({@code jdk.module.path}), which the application runs on, followed by the
+     * entries of {@code runtimePath} it does not hold yet.
+     */
+    static String modulePath(String jdkModulePath, String runtimePath) {
         if (jdkModulePath == null || jdkModulePath.isBlank()) {
             throw new IllegalStateException("@VidocqTest starts the application from the module path of the tests,"
                     + " and they run on the class path: give the application a module-info.java, and leave"
                     + " Surefire's useModulePath on.");
         }
-        return jdkModulePath;
+        if (runtimePath == null || runtimePath.isBlank()) {
+            return jdkModulePath;
+        }
+        Set<String> entries = new LinkedHashSet<>(List.of(jdkModulePath.split(File.pathSeparator)));
+        for (String entry : runtimePath.split(File.pathSeparator)) {
+            if (!entry.isBlank()) {
+                entries.add(entry);
+            }
+        }
+        return String.join(File.pathSeparator, entries);
     }
 }

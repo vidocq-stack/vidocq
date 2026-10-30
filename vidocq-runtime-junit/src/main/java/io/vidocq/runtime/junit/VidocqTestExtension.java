@@ -85,7 +85,8 @@ public final class VidocqTestExtension implements BeforeAllCallback, ParameterRe
         VidocqTest settings = testClass.getAnnotation(VidocqTest.class);
         String module = ApplicationLaunch.module(settings.module(), testClass.getModule().getName(),
                 System.getProperty("vidocq.mainModule"));
-        String modulePath = ApplicationLaunch.modulePath(System.getProperty("jdk.module.path"));
+        String modulePath = ApplicationLaunch.modulePath(System.getProperty("jdk.module.path"),
+                System.getProperty(ApplicationLaunch.RUNTIME_PATH_PROPERTY));
         String java = ProcessHandle.current().info().command()
                 .orElse(Path.of(System.getProperty("java.home"), "bin", "java").toString());
         try {

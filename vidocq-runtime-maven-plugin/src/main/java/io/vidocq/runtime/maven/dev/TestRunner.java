@@ -37,9 +37,10 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
 /**
- * One Surefire run as a subprocess (spec §2.3): {@code mvn test-compile surefire:test}, offline and quiet, so the
- * tests run exactly as {@code mvn test} runs them — the same module path, {@code argLine} and JUnit launcher
- * listeners. Its output goes to the log file, overwritten per run; the stale {@code TEST-*.xml} are deleted first,
+ * One Surefire run as a subprocess (spec §2.3): {@code mvn process-test-classes surefire:test}, offline and quiet,
+ * so the tests run exactly as {@code mvn test} runs them — the same module path, {@code argLine} and JUnit launcher
+ * listeners, and the runtime dependencies {@code vidocq:test-path} names at {@code process-test-classes} for the
+ * application {@code @VidocqTest} starts (BUG-20261030-06). Its output goes to the log file, overwritten per run; the stale {@code TEST-*.xml} are deleted first,
  * so that the reports found afterwards are this run's. The command line is never logged: it may hold a dev
  * service's password.
  */
@@ -71,7 +72,7 @@ final class TestRunner implements ContinuousTesting.Launcher {
      * {@code properties} is dropped: the tests use the dev session's containers, and never start their own.
      */
     static List<String> command(String maven, List<String> tests, Map<String, String> properties) {
-        List<String> cmd = new ArrayList<>(List.of(maven, "-ntp", "-o", "-q", "test-compile", "surefire:test",
+        List<String> cmd = new ArrayList<>(List.of(maven, "-ntp", "-o", "-q", "process-test-classes", "surefire:test",
                 "-DfailIfNoTests=false", "-Dsurefire.failIfNoSpecifiedTests=false"));
         if (!tests.isEmpty()) {
             cmd.add("-Dtest=" + String.join(",", tests));
