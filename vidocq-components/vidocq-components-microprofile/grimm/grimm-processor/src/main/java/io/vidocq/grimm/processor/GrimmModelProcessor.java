@@ -128,19 +128,8 @@ public final class GrimmModelProcessor extends AbstractProcessor {
         TypeElement pathAnnotation = processingEnv.getElementUtils().getTypeElement("jakarta.ws.rs.Path");
         if (pathAnnotation != null) {
             for (Element e : roundEnv.getElementsAnnotatedWith(pathAnnotation)) {
-                if (e.getKind() != ElementKind.CLASS) continue;
-                TypeElement type = (TypeElement) e;
-                try {
-                    generate(type);
-                } catch (SkipGeneration skip) {
-                    skippedClasses++;
-                    if (verbose()) {
-                        note(type, "skipping " + type.getQualifiedName() + SUFFIX + " — "
-                                + skip.getMessage() + " (runtime annotation scan will handle this class)");
-                    }
-                } catch (IOException | RuntimeException ex) {
-                    processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
-                            "Grimm fragment generation failed, runtime scan will handle it: " + ex, type);
+                if (e.getKind() == ElementKind.CLASS) {
+                    generateOrFallBack((TypeElement) e);
                 }
             }
         }
@@ -151,6 +140,22 @@ public final class GrimmModelProcessor extends AbstractProcessor {
             summarizeSkippedClasses();
         }
         return false;
+    }
+
+    /** The companion of {@code type}, or the reason the run-time scan describes it instead. */
+    private void generateOrFallBack(TypeElement type) {
+        try {
+            generate(type);
+        } catch (SkipGeneration skip) {
+            skippedClasses++;
+            if (verbose()) {
+                note(type, "skipping " + type.getQualifiedName() + SUFFIX + " — "
+                        + skip.getMessage() + " (runtime annotation scan will handle this class)");
+            }
+        } catch (IOException | RuntimeException ex) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
+                    "Grimm fragment generation failed, runtime scan will handle it: " + ex, type);
+        }
     }
 
     private static final class SkipGeneration extends Exception {
