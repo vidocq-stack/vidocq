@@ -37,6 +37,36 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Fix**: a state file without services nor skipped providers now says "no dev service: vidocq:dev found no provider
   (a vidocq-runtime-devservice-* dependency)", naming the host that wrote it; without a state file the summary is
   unchanged.
+## BUG-20261030-01 — A created application does not build in a git repository without commits
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/build-info-unborn-git-head`
+- **Affected module**: vidocq-runtime-maven-plugin (`CodegenPathsParticipant`), vidocq-runtime-parent (`vidocq-build-info`)
+- **Symptom**: the beginner's flow `vidocq create --name library -x cassini-rest && cd library && git init && ./mvnw
+  package` failed: `git-commit-id-maven-plugin:9.2.0:revision (vidocq-build-info): Could not get HEAD Ref, are you
+  sure you have some commits in the dotGitDirectory`. The same project outside any repository builds. Reported by
+  the vidocq-tutorial session.
+- **Minimal reproduction**: `UnbornGitHeadTest`; end to end, the flow above against the deployed SNAPSHOT.
+- **Cause**: `GitCommitIdMojo` turns the `GitCommitIdExecutionException` of an unborn `HEAD` into a
+  `MojoExecutionException` whatever `failOnNoGitDirectory` and `failOnUnableToExtractRepoInfo` say (both are already
+  `false` in the parent).
+- **Fix**: the plugin's lifecycle participant, which the parent loads as a build extension, sets
+  `maven.gitcommitid.skip=true` on a project whose repository's `HEAD` names a branch without any commit (no file under
+  `refs/`, no line in `packed-refs`). The build identity is then left out, as outside a repository; `BuildInfo` reads
+  it as unknown. A value the project sets itself is kept; a `.git` file (worktree, submodule) is left to the plugin.
+  After the first commit the identity is written again.
+
+## BUG-20261030-02 — `vidocq doctor` outside a project advises to install Maven
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/build-info-unborn-git-head`
+- **Affected module**: vidocq-runtime-tooling (`Diagnostics`)
+- **Symptom**: outside a project, `vidocq doctor` warned "Maven wrapper — no mvnw on this path ↳ Run from a project
+  that ships ./mvnw, or install Maven", with Maven 3.9.16 on the PATH. Reported by the vidocq-tutorial session.
+- **Minimal reproduction**: `DiagnosticsTest.noWrapperOutsideAProjectIsNotAWarning`.
+- **Cause**: the check treated a missing wrapper the same inside and outside a project.
+- **Fix**: outside a project the check is OK, "not needed outside a project: vidocq create writes ./mvnw"; inside a
+  project without `mvnw` it still warns and offers the fix.
 
 ## BUG-20261026-01 — `vidocq:dev` and `vidocq:run` start a Vaadin application from an empty `target/` and answer 404 / 500
 

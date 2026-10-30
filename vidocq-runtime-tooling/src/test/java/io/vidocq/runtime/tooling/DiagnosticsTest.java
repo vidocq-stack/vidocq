@@ -107,6 +107,18 @@ class DiagnosticsTest {
         assertEquals(Diagnostic.Status.WARN, byName(Diagnostics.run(ctx)).get("Maven wrapper").status());
     }
 
+    /** Outside a project there is nothing to build with a wrapper: {@code vidocq create} writes one. */
+    @Test
+    void noWrapperOutsideAProjectIsNotAWarning() {
+        DoctorContext ctx = new DoctorContext(
+                Diagnostics.MINIMUM_JAVA_VERSION, "25", Diagnostics.MINIMUM_JAVA_VERSION,
+                "/opt/jdk", true, false, false, false, 0);
+
+        Diagnostic wrapper = byName(Diagnostics.run(ctx)).get("Maven wrapper");
+        assertEquals(Diagnostic.Status.OK, wrapper.status());
+        assertEquals("not needed outside a project: vidocq create writes ./mvnw", wrapper.detail());
+    }
+
     @Test
     void missingPomWarnsOnProject() {
         DoctorContext ctx = new DoctorContext(
@@ -188,14 +200,14 @@ class DiagnosticsTest {
         assertEquals(0, healthy.fail());
         assertEquals(6, healthy.total());
 
-        // Old Java fails + JAVA_HOME unset/mvnw/pom warn; config absent and no extension → OK.
+        // Old Java fails + JAVA_HOME unset/pom warn; outside a project no mvnw, config absent and no extension → OK.
         DoctorContext mixed = new DoctorContext(
                 21, "21", Diagnostics.MINIMUM_JAVA_VERSION,
                 null, false, false, false, false, 0);
         Diagnostics.Summary s = Diagnostics.summarize(Diagnostics.run(mixed));
         assertEquals(1, s.fail());
-        assertEquals(3, s.warn());
-        assertEquals(2, s.ok());
+        assertEquals(2, s.warn());
+        assertEquals(3, s.ok());
         assertEquals(6, s.total());
     }
 
