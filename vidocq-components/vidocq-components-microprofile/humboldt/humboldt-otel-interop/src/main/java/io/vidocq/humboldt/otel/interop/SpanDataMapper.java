@@ -22,7 +22,6 @@ package io.vidocq.humboldt.otel.interop;
 import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.sdk.common.InstrumentationScopeInfo;
 import io.opentelemetry.sdk.resources.Resource;
-import io.opentelemetry.sdk.testing.trace.TestSpanData;
 import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.LinkData;
 import io.opentelemetry.sdk.trace.data.SpanData;
@@ -73,23 +72,8 @@ public final class SpanDataMapper {
                         .setVersion(scope.version()).setSchemaUrl(scope.schemaUrl()).build()
                 : InstrumentationScopeInfo.create(scope.name());
 
-        return TestSpanData.builder()
-                .setSpanContext(src.spanContext())
-                .setParentSpanContext(parent)
-                .setName(src.name())
-                .setKind(src.kind())
-                .setStartEpochNanos(src.startEpochNanos())
-                .setEndEpochNanos(src.endEpochNanos())
-                .setAttributes(src.attributes())
-                .setEvents(events)
-                .setLinks(links)
-                .setStatus(status)
-                .setResource(resource)
-                .setInstrumentationScopeInfo(scopeInfo)
-                .setHasEnded(src.hasEnded())
-                .setTotalRecordedEvents(events.size())
-                .setTotalRecordedLinks(links.size())
-                .setTotalAttributeCount(src.attributes().size())
-                .build();
+        return new OtelSpanData(src.name(), src.kind(), src.spanContext(), parent, status,
+                src.startEpochNanos(), src.endEpochNanos(), src.hasEnded(), src.attributes(), events, links,
+                resource, scopeInfo);
     }
 }

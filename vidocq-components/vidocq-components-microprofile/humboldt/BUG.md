@@ -696,3 +696,17 @@
 - **Fix**: an earlier bridge is removed and the new one installed.
 - **Regression test**: `JulBridgeReinstallTest`; MP Telemetry TCK 85/85.
 
+
+## BUG-20261030-04 — `opentelemetry-sdk-testing`, a test library, reaches every packaged application
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/span-data-without-sdk-testing)
+- **Symptom**: the `lib/` of an application packaged with the Telemetry extension holds `opentelemetry-sdk-testing`
+  (vidocq BUG-20261030-17, found by the vidocq-tutorial session).
+- **Minimal repro**: `SpanDataMapperTest.the_span_is_not_built_with_the_sdk_testing_library`: the span handed to an
+  OTel SDK exporter is a `TestSpanData`.
+- **Root cause**: `SpanDataMapper` built its spans with `TestSpanData`, the only public `SpanData` implementation of the
+  OTel SDK, so humboldt-otel-interop required `io.opentelemetry.sdk.testing` and the Vidocq extension shipped it.
+- **Fix**: `OtelSpanData`, Humboldt's own record implementing `SpanData`; `opentelemetry-sdk-testing` is test-scoped
+  and the module no longer requires it.
+- **Regression test**: `SpanDataMapperTest`; humboldt-otel-interop 77 tests; MP Telemetry TCK 85/85.

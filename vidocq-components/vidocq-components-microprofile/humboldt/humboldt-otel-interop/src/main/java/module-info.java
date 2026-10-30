@@ -41,7 +41,6 @@ module io.vidocq.humboldt.otel.interop {
     requires static io.opentelemetry.sdk.trace;
     requires static io.opentelemetry.sdk.metrics;
     requires static io.opentelemetry.sdk.autoconfigure.spi;
-    requires static io.opentelemetry.sdk.testing;
     requires static io.opentelemetry.extension.trace.propagation;
 
     uses io.opentelemetry.sdk.autoconfigure.spi.traces.ConfigurableSpanExporterProvider;

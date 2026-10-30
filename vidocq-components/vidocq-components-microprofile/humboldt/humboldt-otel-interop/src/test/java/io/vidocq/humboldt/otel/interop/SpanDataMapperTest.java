@@ -67,6 +67,22 @@ class SpanDataMapperTest {
         assertEquals(StatusCode.UNSET, out.getStatus().getStatusCode());
     }
 
+    /**
+     * The span handed to an OTel SDK exporter is Humboldt's own: building it with the SDK's TestSpanData put
+     * opentelemetry-sdk-testing, a test library, in every packaged application (vidocq BUG-20261030-17).
+     */
+    @Test
+    @SuppressWarnings("deprecation") // getInstrumentationLibraryInfo is still abstract in SpanData
+    void the_span_is_not_built_with_the_sdk_testing_library() {
+        SpanData src = newBuilder().name("own").kind(SpanKind.SERVER).build();
+
+        io.opentelemetry.sdk.trace.data.SpanData out = SpanDataMapper.toOtel(src);
+
+        assertEquals("io.vidocq.humboldt.otel.interop", out.getClass().getPackageName());
+        assertEquals(out.getInstrumentationScopeInfo().getName(), out.getInstrumentationLibraryInfo().getName());
+        assertEquals(out.getEvents().size(), out.getTotalRecordedEvents());
+    }
+
     @Test
     void converts_parent_span_context() {
         SpanContext parent = SpanContext.create(TRACE_ID, PARENT_SPAN_ID,

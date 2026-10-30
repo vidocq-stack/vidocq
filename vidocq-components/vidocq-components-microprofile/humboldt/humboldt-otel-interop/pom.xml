@@ -90,12 +90,12 @@
                 </exclusion>
             </exclusions>
         </dependency>
-        <!-- TestSpanData.builder() — the only concrete io.opentelemetry.sdk.trace.data.SpanData
-             implementation the OTel SDK exposes, used by SpanDataMapper. -->
+        <!-- The tests' in-memory exporters. SpanDataMapper builds Humboldt's own OtelSpanData: the main code no
+             longer needs this test library, which used to reach every packaged application. -->
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk-testing</artifactId>
-            <scope>provided</scope>
+            <scope>test</scope>
             <exclusions>
                 <exclusion>
                     <groupId>io.opentelemetry</groupId>
