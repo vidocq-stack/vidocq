@@ -68,6 +68,15 @@
             <version>1.0.1</version>
         </dependency>
 
+        <!-- @Entity, @Id, @Column: the annotations an application's entities carry, which Mansart reads at build time.
+             Annotations only, no JPA runtime. Exported to the application by `requires transitive jakarta.persistence`
+             (BUG-20261030-09). -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>3.2.0</version>
+        </dependency>
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
