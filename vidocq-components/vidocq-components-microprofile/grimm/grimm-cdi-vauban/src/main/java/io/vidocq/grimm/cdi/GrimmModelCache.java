@@ -56,8 +56,10 @@ public class GrimmModelCache {
     @Inject
     public GrimmModelCache(GrimmConfig config, Instance<ScannedTypes> scannedTypes) {
         // An Instance: ScannedTypes is a synthetic bean of GrimmExtension, which exists once the
-        // extension ran in this container, not when the Vauban processor validates the module.
-        this(config, scannedTypes != null && scannedTypes.isResolvable() ? scannedTypes.get() : ScannedTypes.empty());
+        // extension ran in this container, not when the Vauban processor validates the module. There can
+        // be two: one frozen when the application compiled (codegen bundle), one from the start-up run;
+        // the document covers the classes of both (BUG-20261030-05).
+        this(config, scannedTypes != null ? ScannedTypes.merge(scannedTypes) : ScannedTypes.empty());
     }
 
     /** Builds the cache over explicit inputs (tests, no-CDI usage). */

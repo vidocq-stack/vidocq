@@ -43,6 +43,18 @@ public record ScannedTypes(List<Class<?>> classes) {
         return new ScannedTypes(List.of());
     }
 
+    /**
+     * The classes of every {@code ScannedTypes}, once each, in order. {@link GrimmExtension} can run twice for one
+     * application: when it compiles, through the OpenAPI codegen bundle, and when it starts; each run gives one.
+     */
+    public static ScannedTypes merge(Iterable<ScannedTypes> all) {
+        var classes = new java.util.LinkedHashSet<Class<?>>();
+        for (var scanned : all) {
+            classes.addAll(scanned.classes());
+        }
+        return new ScannedTypes(List.copyOf(classes));
+    }
+
     /** Convenience factory from a collection. */
     public static ScannedTypes of(Collection<Class<?>> classes) {
         return new ScannedTypes(List.copyOf(classes));

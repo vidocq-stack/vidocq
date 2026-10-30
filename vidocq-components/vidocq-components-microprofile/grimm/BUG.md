@@ -541,3 +541,17 @@ Track reproducible bugs with:
 - **Fix**: the root fields are written in the specification's order (`openapi`, `info`, `jsonSchemaDialect`,
   `servers`, `paths`, `webhooks`, `components`, `security`, `tags`, `externalDocs`), then the others.
 - **Regression test**: `SerializationTest.theDocumentStartsWithItsVersionThenInfo` (JSON and YAML).
+
+## BUG-20261030-05 — two `ScannedTypes` beans (build-time and start-up runs of `GrimmExtension`) empty or break the document
+
+- **Date**: 2026-10-30
+- **Status**: FIXED (branch fix/merge-scanned-types)
+- **Symptom**: with `grimm-cdi-vauban` on the processor path (the OpenAPI codegen bundle of Vidocq), Vauban runs
+  `GrimmExtension` when the application compiles and freezes its `ScannedTypes` bean; the extension runs again when the
+  application starts and registers a second one, with other class names. `vidocq-runtime-it-grimm-openapi` failed with
+  _Ambiguous dependency: parameter 1 of GrimmModelCache() … ScannedTypes_ (a Vauban bug, VAU-DISC-003); once that is
+  fixed, `Instance<ScannedTypes>.isResolvable()` is false and the cache would have scanned nothing.
+- **Root cause**: `GrimmModelCache` read a single `ScannedTypes`.
+- **Fix**: `ScannedTypes.merge` reads the classes of every `ScannedTypes` bean, once each; the CDI constructor uses it.
+- **Regression test**: `GrimmModelCacheTest.theScannedTypesOfEveryRunAreMerged`; in Vidocq,
+  `vidocq-runtime-it-grimm-openapi` 5/5 and the MicroProfile OpenAPI TCK 364/364 with `GrimmExtension` run at build time.

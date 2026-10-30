@@ -72,6 +72,21 @@ class GrimmModelCacheTest {
         assertTrue(cache.getDocument().getPaths().hasPathItem("/pets"));
     }
 
+    /**
+     * The extension may run twice for one application: when it compiles, through the OpenAPI codegen bundle, and when it
+     * starts. Each run gives a {@code ScannedTypes}; the cache reads the classes of all of them, once each
+     * (BUG-20261030-05).
+     */
+    @Test
+    void theScannedTypesOfEveryRunAreMerged() {
+        var atBuild = new ScannedTypes(List.of(PetsResource.class));
+        var atBoot = new ScannedTypes(List.of(PetsResource.class, String.class));
+
+        assertEquals(List.of(PetsResource.class, String.class),
+                ScannedTypes.merge(List.of(atBuild, atBoot)).classes());
+        assertEquals(List.of(), ScannedTypes.merge(List.of()).classes());
+    }
+
     @Test
     void initialize_acceptsNullTypes() {
         GrimmModelCache cache = new GrimmModelCache();
