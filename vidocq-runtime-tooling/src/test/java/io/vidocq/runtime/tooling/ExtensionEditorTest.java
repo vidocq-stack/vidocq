@@ -409,19 +409,35 @@ class ExtensionEditorTest {
     }
 
     /**
-     * Without a migration the package does not exist yet, and opening it would fail the build: the edit says where
-     * the migrations go and what to declare then.
+     * Without a migration the package does not exist yet, and opening it alone would make the JVM refuse the module:
+     * the edit creates the folder with a README, which keeps the package in the module, and opens it at once — no
+     * second {@code extension add} once the first script is written (BUG-20261031-03).
      */
     @Test
-    void addingFlywayWithoutMigrationSaysWhereTheyGo() throws IOException {
+    void addingFlywayWithoutMigrationCreatesTheFolderAndOpensIt() throws IOException {
         writePom("");
         writeModuleInfo();
 
         edit(List.of("flyway-migration"), true);
 
-        assertFalse(Files.readString(moduleInfo()).contains("opens db.migration"), Files.readString(moduleInfo()));
-        assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("warning: ") && l.contains("src/main/resources/db/migration")
-                && l.contains("opens db.migration;")), reporter.lines.toString());
+        assertTrue(Files.readString(moduleInfo()).contains("opens db.migration; // vidocq:flyway-migration"),
+                Files.readString(moduleInfo()));
+        assertTrue(Files.isRegularFile(project.resolve("src/main/resources/db/migration/README.md")));
+        assertFalse(reporter.lines.stream().anyMatch(l -> l.startsWith("warning: ")), reporter.lines.toString());
+    }
+
+    /** A folder that already holds a migration keeps it as it is: no README is added next to the scripts. */
+    @Test
+    void addingFlywayLeavesAFolderWithMigrationsAsItIs() throws IOException {
+        writePom("");
+        writeModuleInfo();
+        Path migration = project.resolve("src/main/resources/db/migration/V1__init.sql");
+        Files.createDirectories(migration.getParent());
+        Files.writeString(migration, "create table book (id bigint primary key);\n");
+
+        edit(List.of("flyway-migration"), true);
+
+        assertFalse(Files.exists(migration.resolveSibling("README.md")));
     }
 
     private ExtensionEditor.Outcome edit(List<String> ids, boolean add) {

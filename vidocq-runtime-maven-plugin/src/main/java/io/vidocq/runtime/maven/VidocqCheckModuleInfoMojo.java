@@ -41,7 +41,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Verify that the application's {@code module-info.java} declares the JPMS directives its Vidocq
+ * Verify that the application's {@code module-info.java} declares the Java module directives its Vidocq
  * extensions need at runtime. Each extension ships a {@code META-INF/vidocq/module-requirements.properties}
  * descriptor (see {@link ModuleRequirementsDescriptor}); this goal unions the descriptors of every
  * resolved dependency and checks them against the compiled {@code module-info.class}.
@@ -100,7 +100,11 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
 
         File moduleInfo = new File(outputDirectory, "module-info.class");
         if (!moduleInfo.isFile()) {
-            reportNonModular(required);
+            boolean source = hasModuleInfoSource(project.getCompileSourceRoots());
+            if (source) {
+                getLog().warn(UNCOMPILED);
+            }
+            report(uncompiledIssues(required, source));
             return;
         }
         ModuleDescriptor descriptor = read(moduleInfo);
@@ -116,7 +120,8 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
         List<String> issues = new ArrayList<>();
         if (!missing.isEmpty()) {
             issues.add("module-info of '" + descriptor.name() + "' is missing " + missing.size()
-                    + " directive(s) required by its Vidocq extensions — add to src/main/java/module-info.java:");
+                    + " directive(s) required by its Vidocq extensions — `vidocq doctor --fix` adds them, or add to"
+                    + " src/main/java/module-info.java:");
             missing.forEach(r -> issues.add("    " + render(r)));
         }
         if (!unopened.isEmpty()) {
@@ -130,18 +135,34 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
         report(issues);
     }
 
-    /** A module without module-info: only the extensions' directives can be asked for, if there are any. */
-    private void reportNonModular(Set<Requirement> required) throws MojoFailureException {
-        if (required.isEmpty()) {
-            getLog().debug("Vidocq check-module-info: no applicable extension requirements for this module.");
-            return;
+    /**
+     * Logged instead of a verdict when the sources declare a {@code module-info.java} that {@code target/classes}
+     * lacks: the compilation stopped before it, under {@code vidocq dev} which goes on after a compile error
+     * (BUG-20261031-02).
+     */
+    static final String UNCOMPILED = "Vidocq check-module-info: skipped — module-info.java is not compiled yet"
+            + " (see the compilation errors above); the module's directives are checked once it compiles.";
+
+    /** Whether one of the compile source roots holds a {@code module-info.java}. */
+    static boolean hasModuleInfoSource(List<String> compileSourceRoots) {
+        return compileSourceRoots.stream().anyMatch(root -> new File(root, "module-info.java").isFile());
+    }
+
+    /**
+     * The issues of a module whose {@code module-info.class} is missing: none when its source exists (the
+     * compilation did not finish, and the compiler says why) or when its extensions ask for no directive; else
+     * the directives its {@code module-info.java} must declare.
+     */
+    static List<String> uncompiledIssues(Set<Requirement> required, boolean moduleInfoSource) {
+        if (moduleInfoSource || required.isEmpty()) {
+            return List.of();
         }
         List<String> issues = new ArrayList<>();
-        issues.add("This module depends on Vidocq extensions that require JPMS directives, but it has "
-                + "no module-info.java (it is not modular). On the module path the extensions break. "
+        issues.add("This module depends on Vidocq extensions that need Java module directives, but it has "
+                + "no module-info.java (it is not a Java module), and Vidocq runs an application as one. "
                 + "Add a module-info.java declaring:");
         required.forEach(r -> issues.add("    " + render(r)));
-        report(issues);
+        return issues;
     }
 
     private static ModuleDescriptor read(File moduleInfo) throws MojoFailureException {
@@ -165,6 +186,9 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
     }
 
     private void report(List<String> issues) throws MojoFailureException {
+        if (issues.isEmpty()) {
+            return;
+        }
         for (String issue : issues) {
             if (failOnMissing) {
                 getLog().error(issue);

@@ -280,7 +280,7 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
 | Generates `target/Dockerfile` distroless; optional Docker build via `vidocq.docker.build=true`.
 
 | `vidocq:check-module-info`
-| Verifies the application `module-info.java` declares the JPMS directives its Vidocq extensions need (e.g. `opens db.migration`).
+| Verifies the application `module-info.java` declares the Java module directives its Vidocq extensions need (e.g. `opens db.migration`).
 
 | `vidocq:complete-module-info`
 | Opt-in companion of `check-module-info` — rewrites `src/main/java/module-info.java` to add the missing directives.

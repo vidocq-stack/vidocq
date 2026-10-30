@@ -178,23 +178,39 @@ public final class ExtensionEditor {
     }
 
     /**
-     * The directives {@code id} needs, with the {@code opens} of the resource packages it reads that hold a file
-     * already. Opening a package the module lacks fails the build, so for one that does not exist yet the reporter
-     * says where its files go and what to declare then (BUG-20261030-11).
+     * The directives {@code id} needs, the {@code opens} of the resource packages it reads included: their folders
+     * are made to hold a file first, as the JVM refuses a module that opens a package it lacks (BUG-20261030-11,
+     * BUG-20261031-03).
      */
-    private static List<String> directives(Path projectDir, String id, String pkg, Reporter reporter) {
-        List<String> directives = new java.util.ArrayList<>(KnownExtensions.moduleDirectives(id, pkg));
+    private static List<String> directives(Path projectDir, String id, String pkg, Reporter reporter)
+            throws IOException {
         for (String resourcePackage : KnownExtensions.resourcePackagesToOpen(id)) {
-            Path dir = projectDir.resolve("src/main/resources").resolve(resourcePackage.replace('.', '/'));
-            if (holdsAFile(dir)) {
-                directives.add("opens " + resourcePackage);
-            } else {
-                String relative = "src/main/resources/" + resourcePackage.replace('.', '/');
-                reporter.warning(id + " reads " + relative + ": once it holds a file, add `opens " + resourcePackage
-                        + ";` to module-info.java, or add " + id + " again (vidocq:check-module-info checks it)");
-            }
+            keepResourcePackage(projectDir, resourcePackage, id, reporter);
         }
-        return directives;
+        return KnownExtensions.moduleDirectives(id, pkg);
+    }
+
+    /**
+     * Makes {@code src/main/resources/<resourcePackage>} a package of the module before any script is written: a
+     * folder without a file creates none, and a hidden one does not count for the exploded module {@code vidocq dev}
+     * runs. It gets a {@code README.md}, which the migration tools ignore; a folder holding a file is left as it is.
+     */
+    static void keepResourcePackage(Path projectDir, String resourcePackage, String id, Reporter reporter)
+            throws IOException {
+        String relative = "src/main/resources/" + resourcePackage.replace('.', '/');
+        Path dir = projectDir.resolve(relative);
+        if (holdsAFile(dir)) {
+            return;
+        }
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("README.md"), """
+                # %s
+
+                `%s` reads the files of this folder. This README keeps the folder a package of the application's \
+                module, which `module-info.java` opens (`opens %s;`): the JVM refuses a module that opens a package \
+                without a file. Delete it once the folder holds a script, if you like.
+                """.formatted(relative.substring("src/main/resources/".length()), id, resourcePackage));
+        reporter.success("Created " + relative, "where " + id + " reads its files; opened in module-info.java");
     }
 
     private static boolean holdsAFile(Path dir) {
@@ -202,7 +218,7 @@ public final class ExtensionEditor {
             return false;
         }
         try (var entries = Files.list(dir)) {
-            return entries.anyMatch(Files::isRegularFile);
+            return entries.anyMatch(f -> Files.isRegularFile(f) && !f.getFileName().toString().startsWith("."));
         } catch (IOException _) {
             return false;
         }

@@ -253,7 +253,9 @@ public final class KnownExtensions {
      * plus what the extension's descriptor says it leaves to the application — Cassini does not
      * re-export Jakarta REST, and its and Mansart Data's generated sources import {@code @Generated}.
      * {@code opens} is added only for an existing {@code applicationPackage}, when the descriptor
-     * asks for it (JAX-RS, JSON-B and Jakarta Persistence reflect on it). Empty for an id outside the catalog.
+     * asks for it (JAX-RS, JSON-B and Jakarta Persistence reflect on it), and for each of the
+     * {@link #resourcePackagesToOpen resource packages} the extension reads, whose folder the tooling
+     * creates with the directive (BUG-20261031-01, -03). Empty for an id outside the catalog.
      */
     public static List<String> moduleDirectives(String id, String applicationPackage) {
         Optional<String> module = moduleName(id);
@@ -269,6 +271,7 @@ public final class KnownExtensions {
                 && applicationPackage != null && !applicationPackage.isBlank()) {
             directives.add("opens " + applicationPackage);
         }
+        resourcePackagesToOpen(id).forEach(p -> directives.add("opens " + p));
         return List.copyOf(directives);
     }
 }

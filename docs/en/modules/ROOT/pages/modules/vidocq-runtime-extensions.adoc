@@ -32,7 +32,7 @@
 
 | `vidocq-runtime-flyway-migration-extension`
 | `essentials`
-| Flyway-based schema migrations. [[flyway-opens-migrations]]`vidocq extension add flyway-migration` [.tag-new]#NEW# writes `opens db.migration;` once `src/main/resources/db/migration` holds a migration; before that, opening the package would fail the build, so it says where the migrations go and what to declare then. `liquibase-migration` does the same.
+| Flyway-based schema migrations. [[flyway-opens-migrations]]`vidocq extension add flyway-migration` and `vidocq create -x flyway-migration` [.tag-new]#NEW# write `opens db.migration;` at once and create `src/main/resources/db/migration` with a `README.md`: the JVM refuses a module that opens a package without a file, and Flyway ignores everything but its scripts. A folder that already holds a script is left as it is. `liquibase-migration` does the same.
 
 | `vidocq-runtime-liquibase-migration-extension`
 | `essentials`

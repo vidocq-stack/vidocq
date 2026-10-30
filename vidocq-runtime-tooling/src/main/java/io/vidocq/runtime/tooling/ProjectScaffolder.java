@@ -121,6 +121,11 @@ public final class ProjectScaffolder {
             }
         }
         write(res.resolve("vidocq.properties"),                      BUILD_PROPERTIES);
+        for (String id : create.extensions()) {
+            for (String resourcePackage : KnownExtensions.resourcePackagesToOpen(id)) {
+                ExtensionEditor.keepResourcePackage(root, resourcePackage, id, reporter);
+            }
+        }
     }
 
     /**

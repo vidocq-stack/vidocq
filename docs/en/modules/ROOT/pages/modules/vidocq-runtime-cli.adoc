@@ -629,7 +629,7 @@ read what the pom and `module-info.java` declare.
 
 | **Codegen bundles** | ✔ every catalog extension the pom declares has its `-codegen` bundle on `annotationProcessorPaths`, or the plugin puts it there (a `vidocq-runtime-parent` from 0.4.0, or the plugin declared with `<extensions>true</extensions>`); ✘ a bundle is missing; ⚠ a bundle whose extension is gone.
 | **Vauban indexer** | ✔ the indexer, `vidocq-runtime-core-codegen`, is on the processor path; ✘ `annotationProcessorPaths` replace the parent's, which hold it, instead of appending (`combine.children="append"`), or, without the Vidocq parent, the pom does not declare it.
-| **Module directives** | ✔ `module-info.java` declares the `requires` (and `opens`) of each extension; ✘ one is missing; ⚠ no `module-info.java`.
+| **Module directives** | ✔ `module-info.java` declares the `requires` (and `opens`) of each extension, the `opens` of the resource packages it reads included, such as Flyway's `opens db.migration` [.tag-new]#NEW#; ✘ one is missing, which `vidocq:check-module-info` would fail the build on; ⚠ no `module-info.java`.
 | **Maven version** | ✔ the wrapper runs the Maven Vidocq is built with, or a newer one; ⚠ an older one. Shown when the project has a wrapper.
 | **HTTP port** | ✔ the port of `vidocq.chappe.listener.default.port`, else `vidocq.http.port`, else 8080, is free; ⚠ something listens there.
 |===
@@ -639,12 +639,14 @@ A fixable ✘ or ⚠ is followed by `↳ Fix: vidocq doctor --fix`. `--fix` firs
 * it wires the missing codegen bundles and removes those whose extension is gone, without a `<version>` when the BOM
   versions them; under a parent that wires them, it adds none;
 * it makes `annotationProcessorPaths` append to the parent's, or declares the indexer without the Vidocq parent;
-* it adds the missing `module-info.java` directives, each marked `// vidocq:<id>`, as `vidocq extension add` does;
+* it adds the missing `module-info.java` directives, each marked `// vidocq:<id>`, as `vidocq extension add` does,
+  and creates the folder of a resource package it opens, such as `src/main/resources/db/migration` [.tag-new]#NEW#;
 * it writes a missing Maven wrapper, and moves an older wrapper to the Maven Vidocq is built with.
 
-A created project reports no warning. The `opens` an extension asks of its dependencies, such as Flyway's
-`opens db.migration`, need the resolved dependencies: `vidocq:check-module-info` checks them at `process-classes`,
-and `vidocq:complete-module-info` adds them. `doctor` does not summarise `vidocq:analyze-deps` either: that
+A created project reports no warning. `doctor` asks for the `opens` the catalog extensions need, Flyway's
+`opens db.migration` included, as `vidocq:check-module-info` does at `process-classes` [.tag-new]#NEW#; an extension
+outside the catalog is known to the build only, through the descriptors of the resolved dependencies, and
+`vidocq:complete-module-info` adds what they ask for. `doctor` does not summarise `vidocq:analyze-deps` either: that
 report needs the compiled classes.
 
 `--verbose, -v` appends a per-status summary footer and the minimum Java version. Warnings
