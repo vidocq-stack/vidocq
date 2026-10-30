@@ -33,6 +33,9 @@ import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
 import io.vidocq.runtime.maven.depgen.ProcessorPath;
 import io.vidocq.runtime.maven.depgen.ProcessorPaths;
+import io.vidocq.runtime.tooling.DevServiceWiring;
+import io.vidocq.runtime.tooling.ExtensionCoordinate;
+import io.vidocq.runtime.tooling.KnownExtensions;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.artifact.Artifact;
@@ -142,6 +145,31 @@ public class VidocqCheckPomMojo extends AbstractMojo {
     }
 
     /**
+     * What the dev services of the catalog extensions among {@code dependencies} lack (BUG-20261031-05, -06, -07): the
+     * provider on {@code vidocqPlugin} (the effective one, a parent's dependencies included; {@code null} when the
+     * project does not build with it), the test-scope pair a plain {@code mvn test} needs, the pool's driver. A
+     * warning, never a failure: the application builds, and a URL of its own still gives it a database.
+     */
+    static List<String> findDevServiceGaps(List<Dependency> dependencies, Plugin vidocqPlugin) {
+        List<String> ids = new ArrayList<>();
+        Map<ExtensionCoordinate, String> scopes = new LinkedHashMap<>();
+        for (Dependency d : dependencies) {
+            ExtensionCoordinate coordinate = new ExtensionCoordinate(d.getGroupId(), d.getArtifactId());
+            scopes.putIfAbsent(coordinate, d.getScope() == null || d.getScope().isBlank() ? "compile" : d.getScope());
+            String id = KnownExtensions.idOf(coordinate);
+            if (KnownExtensions.isKnown(id) && KnownExtensions.resolve(id).equals(coordinate)) {
+                ids.add(id);
+            }
+        }
+        List<ExtensionCoordinate> onPlugin = vidocqPlugin == null ? List.of() : vidocqPlugin.getDependencies().stream()
+                .map(d -> new ExtensionCoordinate(d.getGroupId(), d.getArtifactId())).toList();
+        return DevServiceWiring.missing(ids, new DevServiceWiring.Declared(onPlugin, scopes)).stream()
+                .map(gap -> "Vidocq checkpom: " + gap + ". `vidocq doctor --fix` declares it, as `vidocq extension add`"
+                        + " does.")
+                .toList();
+    }
+
+    /**
      * Whether {@code project} builds a dev-only jar itself (a {@code -dev} companion, the console): its
      * maven-jar-plugin writes {@code Vidocq-Dev-Only: true} into the manifest. Such a module depends on dev tools by
      * design.
@@ -202,6 +230,11 @@ public class VidocqCheckPomMojo extends AbstractMojo {
             for (String issue : findDevOnlyDeclarations(project.getDependencies(), this::resolvedJar)) {
                 getLog().warn(issue);
             }
+        }
+
+        if (!devOnly) {
+            Plugin vidocqPlugin = project.getPlugin(VIDOCQ_RUNTIME_GROUP + ":" + DevServiceWiring.PLUGIN.artifactId());
+            findDevServiceGaps(project.getDependencies(), vidocqPlugin).forEach(getLog()::warn);
         }
 
         Map<String, String> extensionGroups = new LinkedHashMap<>();

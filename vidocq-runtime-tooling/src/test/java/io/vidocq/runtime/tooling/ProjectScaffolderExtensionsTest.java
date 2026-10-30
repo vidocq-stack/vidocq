@@ -25,8 +25,10 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -66,6 +68,16 @@ class ProjectScaffolderExtensionsTest {
         // BUG-20261024-07: no workaround for the 0.2.0 plugin (BUG-20260710-01, fixed by #40).
         assertFalse(pom.contains("<jvmArgs>"), pom);
         assertFalse(pom.contains("BUG-2026"), pom);
+    }
+
+    /** BUG-20261031-05, -06, -07: a created project with the pool gets its dev service as `extension add` wires it. */
+    @Test
+    void anExtensionWithADevServiceIsCreatedWithWhatItNeeds(@TempDir Path dir) throws IOException {
+        String pom = scaffoldPom(dir, Set.of("mansart-pool", "cervantes-jwt"));
+
+        assertEquals(List.of(), DevServiceWiring.missing(List.of("mansart-pool", "cervantes-jwt"),
+                DevServiceWiring.Declared.of(pom)), pom);
+        assertTrue(pom.contains("<goal>package</goal>"), "the plugin keeps its execution: " + pom);
     }
 
     @Test

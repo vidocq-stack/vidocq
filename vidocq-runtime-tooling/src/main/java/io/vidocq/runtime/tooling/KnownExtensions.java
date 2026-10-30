@@ -234,6 +234,32 @@ public final class KnownExtensions {
         return byId(id).map(e -> csv(property(e.id(), "companion-of"))).orElse(List.of());
     }
 
+    /**
+     * The dev service that provides what {@code id} connects to under {@code vidocq dev}, {@code vidocq test} and
+     * {@code mvn test}, from its descriptor's {@code devservice}: an {@code io.vidocq.runtime} artifact
+     * (BUG-20261031-05). Empty for most extensions.
+     */
+    public static Optional<ExtensionCoordinate> devService(String id) {
+        return byId(id).map(e -> property(e.id(), "devservice")).filter(artifact -> !artifact.isEmpty())
+                .map(artifact -> new ExtensionCoordinate("io.vidocq.runtime", artifact));
+    }
+
+    /**
+     * Whether the dev service of {@code id} also starts under {@code mvn test}, from the descriptor's
+     * {@code devservice.in-tests}: {@code true} unless it says {@code false}, as Telemetry's collector does.
+     */
+    public static boolean devServiceInTests(String id) {
+        return byId(id).map(e -> !"false".equalsIgnoreCase(property(e.id(), "devservice.in-tests"))).orElse(false);
+    }
+
+    /**
+     * The JDBC driver that dev service starts on, from the descriptor's {@code devservice.driver}, as
+     * {@code groupId:artifactId:version} (BUG-20261031-06); empty for an extension without one.
+     */
+    public static Optional<String> devServiceDriver(String id) {
+        return byId(id).map(e -> property(e.id(), "devservice.driver")).filter(driver -> !driver.isEmpty());
+    }
+
     /** The module a catalog extension ships, which an application {@code requires}; empty outside the catalog. */
     public static Optional<String> moduleName(String id) {
         return byId(id).map(e -> property(e.id(), "module")).filter(module -> !module.isEmpty());

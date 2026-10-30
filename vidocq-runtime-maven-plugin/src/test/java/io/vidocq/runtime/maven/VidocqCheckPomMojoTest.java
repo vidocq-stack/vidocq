@@ -531,6 +531,33 @@ class VidocqCheckPomMojoTest {
         return d;
     }
 
+    /**
+     * BUG-20261031-05, -06, -07: checkpom reads the effective model, the plugin's dependencies a parent declares
+     * included, and says which piece of the pool's dev service is missing.
+     */
+    @Test
+    void aDevServiceWithoutItsPiecesIsReported() {
+        Dependency pool = dep("io.vidocq.runtime.extensions.jakartaee.web", "vidocq-runtime-mansart-pool-extension",
+                "0.4.0");
+        Plugin plugin = new Plugin();
+        plugin.setGroupId("io.vidocq.runtime");
+        plugin.setArtifactId("vidocq-runtime-maven-plugin");
+
+        List<String> gaps = VidocqCheckPomMojo.findDevServiceGaps(List.of(pool), plugin);
+        assertEquals(3, gaps.size(), gaps.toString());
+        assertTrue(gaps.get(0).contains("vidocq-runtime-devservice-postgres"), gaps.toString());
+
+        plugin.addDependency(dep("io.vidocq.runtime", "vidocq-runtime-devservice-postgres", "0.4.0"));
+        Dependency host = dep("io.vidocq.runtime", "vidocq-runtime-devservices-junit", "0.4.0");
+        host.setScope("test");
+        Dependency provider = dep("io.vidocq.runtime", "vidocq-runtime-devservice-postgres", "0.4.0");
+        provider.setScope("test");
+        Dependency driver = dep("org.postgresql", "postgresql", "42.7.10");
+        driver.setScope("runtime");
+        assertEquals(List.of(), VidocqCheckPomMojo.findDevServiceGaps(List.of(pool, host, provider, driver), plugin));
+        assertEquals(List.of(), VidocqCheckPomMojo.findDevServiceGaps(List.of(dep("org.acme", "lib", "1")), null));
+    }
+
     private static void setProject(VidocqCheckPomMojo mojo, MavenProject project) throws Exception {
         Field f = VidocqCheckPomMojo.class.getDeclaredField("project");
         f.setAccessible(true);

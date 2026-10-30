@@ -101,6 +101,9 @@ public final class ExtensionEditor {
         if (add && droppedInheritedPaths) {
             reportProcessorPathsMode(pom, reporter);
         }
+        PomEditor.Result devServices = editDevServices(pom, ids, add, runtimeVersion, reporter);
+        pom = devServices.pom();
+        pomChanged |= devServices.changed();
 
         boolean moduleInfoChanged = updateModuleInfo(projectDir, ids, add, reporter);
         if (pomChanged) {
@@ -138,6 +141,23 @@ public final class ExtensionEditor {
             }
         }
         return List.copyOf(all);
+    }
+
+    /**
+     * The dev services of {@code ids} (BUG-20261031-05): on add, their provider on the plugin and in test scope with the
+     * JUnit host, and the pool's JDBC driver; on remove, the providers no extension left needs.
+     */
+    private static PomEditor.Result editDevServices(String pom, List<String> ids, boolean add, String runtimeVersion,
+                                                    Reporter reporter) {
+        if (add) {
+            return DevServiceWiring.wire(pom, ids, runtimeVersion, reporter);
+        }
+        List<String> remaining = PomDependencies.parse(pom).stream().map(KnownExtensions::idOf).toList();
+        String edited = pom;
+        for (String id : ids) {
+            edited = DevServiceWiring.unwire(edited, id, remaining, reporter).pom();
+        }
+        return new PomEditor.Result(edited, !edited.equals(pom));
     }
 
     /**

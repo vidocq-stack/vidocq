@@ -57,6 +57,7 @@ public final class ProjectDoctor {
     private static final String CODEGEN_CHECK = "Codegen bundles";
     private static final String INDEXER_CHECK = "Vauban indexer";
     private static final String MODULE_CHECK = "Module directives";
+    private static final String DEV_SERVICES_CHECK = "Dev services";
     private static final String MAVEN_CHECK = "Maven version";
     private static final String PORT_CHECK = "HTTP port";
 
@@ -120,6 +121,7 @@ public final class ProjectDoctor {
         diagnostics.add(checkCodegen(facts.pom(), extensions));
         diagnostics.add(checkIndexer(facts.pom(), !extensions.isEmpty()));
         diagnostics.add(checkModuleDirectives(facts, extensions));
+        diagnostics.add(checkDevServices(facts.pom(), extensions));
         if (facts.mavenVersion() != null) {
             diagnostics.add(checkMaven(facts.mavenVersion()));
         }
@@ -199,6 +201,23 @@ public final class ProjectDoctor {
                 + (extensions.size() == 1 ? " extension needs" : " extensions need"));
     }
 
+    /**
+     * The dev service of each extension that has one, with what it needs to start under {@code vidocq dev},
+     * {@code vidocq test} and {@code mvn test} (BUG-20261031-05, -06, -07). A warning: the application still builds,
+     * it gets no database, Keycloak or collector without a URL of its own.
+     */
+    private static Diagnostic checkDevServices(String pom, Map<String, ExtensionCoordinate> extensions) {
+        List<String> missing = DevServiceWiring.missing(extensions.keySet(), DevServiceWiring.Declared.of(pom));
+        if (!missing.isEmpty()) {
+            return Diagnostic.warn(DEV_SERVICES_CHECK, String.join("; ", missing),
+                    "Without them the application needs a URL of its own (vidocq.pool.url…) to start: vidocq doctor"
+                            + " --fix declares them, as vidocq extension add does.").asFixable();
+        }
+        long withOne = extensions.keySet().stream().filter(id -> DevServiceWiring.provider(id).isPresent()).count();
+        return Diagnostic.ok(DEV_SERVICES_CHECK, withOne == 0 ? "no extension of the project has one"
+                : withOne + " wired for vidocq dev, vidocq test and mvn test");
+    }
+
     private static Diagnostic checkMaven(String version) {
         if (olderThan(version, PINNED_MAVEN_VERSION)) {
             return Diagnostic.warn(MAVEN_CHECK,
@@ -224,7 +243,8 @@ public final class ProjectDoctor {
     /**
      * Repairs what the checks report as fixable in the project in {@code projectDir}: wires the missing codegen
      * bundles and drops the orphans, makes the processor paths append to the parent's or declares the indexer,
-     * adds the missing {@code module-info.java} directives, writes a missing Maven wrapper and upgrades an older
+     * declares what the dev services of the extensions need, adds the missing {@code module-info.java} directives,
+     * writes a missing Maven wrapper and upgrades an older
      * one. Paths carry no version when {@code vidocq-runtime-bom} versions them, else the runtime version of the
      * pom's parent, else {@code defaultRuntimeVersion}.
      *
@@ -254,7 +274,7 @@ public final class ProjectDoctor {
         String version = PomDependencies.versionsManaged(pom)
                 ? null
                 : PomDependencies.runtimeVersion(pom).orElse(defaultRuntimeVersion);
-        String fixed = pom;
+        String fixed = DevServiceWiring.wire(pom, extensions.keySet(), version, reporter).pom();
         List<ExtensionCoordinate> paths = PomDependencies.processorPaths(pom);
         for (ExtensionCoordinate orphan : orphanCodegens(paths, extensions)) {
             fixed = PomEditor.removeAnnotationProcessorPath(fixed, orphan).pom();

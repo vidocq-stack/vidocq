@@ -525,6 +525,18 @@ module-info.requires = jakarta.cdi, jakarta.inject, jakarta.ws.rs, jakarta.json.
 module-info.opens-application-package = true
 ----
 
+An extension with a dev service names it [.tag-new]#NEW#, and `add` declares it (xref:dev-services.adoc#declared-for-you[Declared for you]):
+
+[source,properties]
+----
+# The dev service (io.vidocq.runtime) that provides what the extension connects to
+devservice = vidocq-runtime-devservice-postgres
+# The JDBC driver it starts on, groupId:artifactId:version, written in runtime scope
+devservice.driver = org.postgresql:postgresql:42.7.10
+# false keeps it out of test scope, for a service no test needs (Telemetry's collector)
+devservice.in-tests = true
+----
+
 Only `id` and `description` are required. The `module-info.*` keys are what `add` writes for a new
 application. They are not checks: the directives a build must hold, which
 xref:modules/vidocq-runtime-maven-plugin.adoc#goals[`vidocq:check-module-info`] enforces, go in
@@ -630,6 +642,7 @@ read what the pom and `module-info.java` declare.
 | **Codegen bundles** | ✔ every catalog extension the pom declares has its `-codegen` bundle on `annotationProcessorPaths`, or the plugin puts it there (a `vidocq-runtime-parent` from 0.4.0, or the plugin declared with `<extensions>true</extensions>`); ✘ a bundle is missing; ⚠ a bundle whose extension is gone.
 | **Vauban indexer** | ✔ the indexer, `vidocq-runtime-core-codegen`, is on the processor path; ✘ `annotationProcessorPaths` replace the parent's, which hold it, instead of appending (`combine.children="append"`), or, without the Vidocq parent, the pom does not declare it.
 | **Module directives** | ✔ `module-info.java` declares the `requires` (and `opens`) of each extension; ✘ one is missing; ⚠ no `module-info.java`.
+| **Dev services** [.tag-new]#NEW# | ✔ each extension with a dev service (`mansart-pool`, `cervantes-jwt`, `humboldt-telemetry`) has its provider on `vidocq-runtime-maven-plugin`, the provider and `vidocq-runtime-devservices-junit` in test scope (not for the collector), and, for the pool, a JDBC driver; ⚠ one is missing (xref:dev-services.adoc#declared-for-you[Declared for you]).
 | **Maven version** | ✔ the wrapper runs the Maven Vidocq is built with, or a newer one; ⚠ an older one. Shown when the project has a wrapper.
 | **HTTP port** | ✔ the port of `vidocq.chappe.listener.default.port`, else `vidocq.http.port`, else 8080, is free; ⚠ something listens there.
 |===
@@ -639,6 +652,7 @@ A fixable ✘ or ⚠ is followed by `↳ Fix: vidocq doctor --fix`. `--fix` firs
 * it wires the missing codegen bundles and removes those whose extension is gone, without a `<version>` when the BOM
   versions them; under a parent that wires them, it adds none;
 * it makes `annotationProcessorPaths` append to the parent's, or declares the indexer without the Vidocq parent;
+* it declares what the dev services of the extensions need, as `vidocq extension add` does [.tag-new]#NEW#;
 * it adds the missing `module-info.java` directives, each marked `// vidocq:<id>`, as `vidocq extension add` does;
 * it writes a missing Maven wrapper, and moves an older wrapper to the Maven Vidocq is built with.
 

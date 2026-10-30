@@ -157,6 +157,13 @@ public final class ProjectScaffolder {
         }
         // From 0.4.0 the parent imports vidocq-runtime-bom, which versions every Vidocq artifact (#339).
         String vidocqVersion = ownVersion ? null : parentVersion;
+        // The dev services of the extensions, as `vidocq extension add` wires them (BUG-20261031-05).
+        return DevServiceWiring.wire(basePom(c, parentVersion, snapshot, ownVersion, vidocqVersion), c.extensions(),
+                vidocqVersion, reporter).pom();
+    }
+
+    private static String basePom(ProjectSpec c, String parentVersion, boolean snapshot, boolean ownVersion,
+                                  String vidocqVersion) {
         return """
                 <?xml version="1.0" encoding="UTF-8"?>
                 <project xmlns="http://maven.apache.org/POM/4.0.0"

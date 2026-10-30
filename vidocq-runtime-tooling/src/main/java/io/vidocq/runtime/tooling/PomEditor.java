@@ -64,6 +64,14 @@ public final class PomEditor {
      * name the runtime version itself.
      */
     public static Result add(String pom, ExtensionCoordinate coordinate, String version) {
+        return add(pom, coordinate, version, null);
+    }
+
+    /**
+     * {@link #add(String, ExtensionCoordinate, String)} in {@code scope} ({@code test}, {@code runtime}), none when
+     * {@code null}. A coordinate already declared, whatever its scope, is left as it is.
+     */
+    public static Result add(String pom, ExtensionCoordinate coordinate, String version, String scope) {
         if (PomDependencies.contains(pom, coordinate)) {
             return new Result(pom, false);
         }
@@ -74,7 +82,7 @@ public final class PomEditor {
             int lineStart = pom.lastIndexOf('\n', close) + 1;
             String baseIndent = pom.substring(lineStart, close);
             String childIndent = isBlank(baseIndent) ? baseIndent + "    " : TWO_INDENTS;
-            String block = coordinate.dependencyXml(childIndent, version) + "\n";
+            String block = coordinate.dependencyXml(childIndent, version, scope) + "\n";
             return new Result(pom.substring(0, lineStart) + block + pom.substring(lineStart), true);
         }
         // No <dependencies> element — create one before </project>.
@@ -86,9 +94,126 @@ public final class PomEditor {
         String projIndent = pom.substring(lineStart, proj);
         String depsIndent = isBlank(projIndent) ? projIndent + "    " : "    ";
         String block = depsIndent + "<dependencies>\n"
-                + coordinate.dependencyXml(depsIndent + "    ", version) + "\n"
+                + coordinate.dependencyXml(depsIndent + "    ", version, scope) + "\n"
                 + depsIndent + "</dependencies>\n";
         return new Result(pom.substring(0, lineStart) + block + pom.substring(lineStart), true);
+    }
+
+    private static final String PLUGIN_OPEN = "<plugin>";
+
+    /**
+     * Adds {@code dependency} to the {@code <dependencies>} of {@code plugin} in the project build, declaring the
+     * plugin there when the pom does not ({@code pluginVersion} then, none when {@code null}: a parent manages it).
+     * Idempotent. The dependency pins {@code version}: Maven versions no plugin dependency from a BOM.
+     */
+    public static Result addPluginDependency(String pom, ExtensionCoordinate plugin, ExtensionCoordinate dependency,
+                                             String version, String pluginVersion) {
+        if (PomDependencies.pluginDependencies(pom, plugin).contains(dependency)) {
+            return new Result(pom, false);
+        }
+        List<int[]> skipped = outsideProjectBuild(pom);
+        Span declared = pluginElement(pom, plugin, skipped);
+        if (declared == null) {
+            return addPlugin(pom, plugin, dependency, version, pluginVersion, skipped);
+        }
+        int deps = indexWithin(pom, DEPENDENCIES_OPEN, declared, skipped);
+        if (deps >= 0) {
+            int close = pom.indexOf(DEPENDENCIES_CLOSE, deps);
+            String indent = childIndent(pom, deps);
+            return new Result(insertBeforeLine(pom, close,
+                    dependency.dependencyXml(indent, version) + "\n"), true);
+        }
+        int pluginClose = declared.end() - PLUGIN_CLOSE.length();
+        String indent = childIndent(pom, declared.start());
+        String block = indent + DEPENDENCIES_OPEN + "\n"
+                + dependency.dependencyXml(indent + INDENT, version) + "\n"
+                + indent + DEPENDENCIES_CLOSE + "\n";
+        return new Result(insertBeforeLine(pom, pluginClose, block), true);
+    }
+
+    /** Declares {@code plugin} with {@code dependency} in the project build's {@code <plugins>}, created if needed. */
+    private static Result addPlugin(String pom, ExtensionCoordinate plugin, ExtensionCoordinate dependency,
+                                    String version, String pluginVersion, List<int[]> skipped) {
+        int plugins = indexOutside(pom, "<plugins>", 0, skipped);
+        String pluginIndent;
+        String prefix;
+        String suffix;
+        int at;
+        if (plugins >= 0) {
+            at = pom.indexOf("</plugins>", plugins);
+            pluginIndent = childIndent(pom, plugins);
+            prefix = "";
+            suffix = "";
+        } else {
+            int build = indexOutside(pom, "<build>", 0, skipped);
+            String pluginsIndent;
+            if (build >= 0) {
+                at = pom.indexOf("</build>", build);
+                pluginsIndent = childIndent(pom, build);
+                prefix = pluginsIndent + "<plugins>\n";
+                suffix = pluginsIndent + "</plugins>\n";
+            } else {
+                at = pom.indexOf("</project>");
+                if (at < 0) {
+                    throw new IllegalArgumentException("Not a valid pom.xml: missing </project>.");
+                }
+                pluginsIndent = INDENT + INDENT;
+                prefix = INDENT + "<build>\n" + pluginsIndent + "<plugins>\n";
+                suffix = pluginsIndent + "</plugins>\n" + INDENT + "</build>\n";
+            }
+            pluginIndent = pluginsIndent + INDENT;
+        }
+        String child = pluginIndent + INDENT;
+        String block = prefix
+                + pluginIndent + PLUGIN_OPEN + "\n"
+                + child + "<groupId>" + plugin.groupId() + "</groupId>\n"
+                + child + "<artifactId>" + plugin.artifactId() + "</artifactId>\n"
+                + (pluginVersion == null ? "" : child + "<version>" + pluginVersion + "</version>\n")
+                + child + DEPENDENCIES_OPEN + "\n"
+                + dependency.dependencyXml(child + INDENT, version) + "\n"
+                + child + DEPENDENCIES_CLOSE + "\n"
+                + pluginIndent + PLUGIN_CLOSE + "\n"
+                + suffix;
+        return new Result(insertBeforeLine(pom, at, block), true);
+    }
+
+    /** Removes {@code dependency} from the {@code <dependencies>} of {@code plugin}, then an emptied element. */
+    public static Result removePluginDependency(String pom, ExtensionCoordinate plugin,
+                                                ExtensionCoordinate dependency) {
+        if (!PomDependencies.pluginDependencies(pom, plugin).contains(dependency)) {
+            return new Result(pom, false);
+        }
+        List<int[]> skipped = outsideProjectBuild(pom);
+        Span declared = pluginElement(pom, plugin, skipped);
+        int open = indexWithin(pom, "<dependency>", declared, skipped);
+        while (open >= 0) {
+            int end = pom.indexOf("</dependency>", open) + "</dependency>".length();
+            if (matches(pom.substring(open, end), dependency)) {
+                String without = withoutLines(pom, open, end);
+                Span after = pluginElement(without, plugin, outsideProjectBuild(without));
+                int deps = indexWithin(without, DEPENDENCIES_OPEN, after, outsideProjectBuild(without));
+                String emptied = deps < 0 ? null
+                        : withoutEmptyElementAt(without, deps, DEPENDENCIES_OPEN, DEPENDENCIES_CLOSE, List.of());
+                return new Result(emptied == null ? without : emptied, true);
+            }
+            open = indexWithin(pom, "<dependency>", new Span(end, declared.end()), skipped);
+        }
+        return new Result(pom, false);
+    }
+
+    /** The project build's {@code plugin} element, or null. */
+    private static Span pluginElement(String pom, ExtensionCoordinate plugin, List<int[]> skipped) {
+        String artifact = "<artifactId>" + plugin.artifactId() + "</artifactId>";
+        for (int at = indexOutside(pom, artifact, 0, skipped); at >= 0;
+             at = indexOutside(pom, artifact, at + artifact.length(), skipped)) {
+            int open = pom.lastIndexOf(PLUGIN_OPEN, at);
+            int close = pom.indexOf(PLUGIN_CLOSE, at);
+            // The artifactId of the plugin itself, not of one of its dependencies.
+            if (open >= 0 && close >= 0 && pom.lastIndexOf("<dependency>", at) < open) {
+                return new Span(open, close + PLUGIN_CLOSE.length());
+            }
+        }
+        return null;
     }
 
     /**
