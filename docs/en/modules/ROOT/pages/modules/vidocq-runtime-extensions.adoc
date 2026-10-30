@@ -68,7 +68,7 @@
 
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
-| JDBC connection pooling via xref:mansart::index.adoc[Mansart] Pool (companion `-datasources-codegen` artefact for multi-datasource holders). Its section of the startup report is a live dev console panel(<<mansart-pool-panel>>).
+| JDBC connection pooling via xref:mansart::index.adoc[Mansart] Pool (companion `-datasources-codegen` artefact for multi-datasource holders). [[mansart-pool-connection-decorators]]Each connection the application gets, from the `@Default` pool and from each `@Named` one, goes through the `JdbcConnectionDecorator` services on the module path, with the datasource's name [.tag-new]#NEW#: the hook a telemetry glue module uses to trace SQL. Without any, the pool's own connection is returned. Its section of the startup report is a live dev console panel(<<mansart-pool-panel>>).
 
 | `vidocq-runtime-mansart-data-extension`
 | `jakartaee-web`

@@ -65,8 +65,8 @@ public class MansartPoolHolder implements DataSource {
         return ds;
     }
 
-    @Override public Connection  getConnection() throws SQLException                                  { return delegate().getConnection(); }
-    @Override public Connection  getConnection(String username, String password) throws SQLException  { return delegate().getConnection(username, password); }
+    @Override public Connection  getConnection() throws SQLException                                  { return JdbcConnectionDecorators.decorate(JdbcConnectionDecorators.DEFAULT_NAME, delegate().getConnection()); }
+    @Override public Connection  getConnection(String username, String password) throws SQLException  { return JdbcConnectionDecorators.decorate(JdbcConnectionDecorators.DEFAULT_NAME, delegate().getConnection(username, password)); }
     @Override public PrintWriter getLogWriter() throws SQLException                                   { return delegate().getLogWriter(); }
     @Override public void        setLogWriter(PrintWriter out) throws SQLException                    { delegate().setLogWriter(out); }
     @Override public void        setLoginTimeout(int seconds) throws SQLException                     { delegate().setLoginTimeout(seconds); }

@@ -40,6 +40,9 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.pool {
     exports io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.live
             to io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev;
 
+    // Connection decorators, a telemetry glue module's JDBC spans for one (BUG-20261030-25).
+    uses io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.JdbcConnectionDecorator;
+
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.MansartPoolExtension;
 }

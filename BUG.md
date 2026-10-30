@@ -134,6 +134,24 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Cause hypothesis**: JWT had no codegen bundle; the Metrics and OpenAPI bundles carried their processor only, not the jar of their extension's BCE, nor the CDI API those jars leave `provided`.
 - **Still open**: _Unsatisfied dependency … JsonWebToken_ at build time. The producer is a bean of cervantes-cdi-vauban, which Vauban's build-time validation does not see; it defers to the runtime container, where injection works.
 
+## BUG-20261030-25 — A request's trace has no database span
+
+- **Date**: 2026-10-30
+- **Status**: IN PROGRESS. Step 1 done on `fix/jdbc-spans-25`: the hook. Every connection the Vidocq DataSources hand out (the `@Default` pool and each `@Named` one) goes through the `JdbcConnectionDecorator`s found by `ServiceLoader`, given the datasource's name. With none installed, the pool's own connection comes back (`JdbcConnectionDecoratorsTest`). Step 2, the tracing decorator, is OPEN; design below.
+- **Reported by**: the vidocq-tutorial session (batch 7, item 5)
+- **Minimal reproduction**: an application with `humboldt-telemetry`, `mansart-data` and `mansart-pool` on PostgreSQL, OTLP to the otel-lgtm dev service. `GET /books/2/details` shows the HTTP server span and the REST client span in Tempo, but no span for the SQL the request runs.
+- **Cause hypothesis**: nothing instruments JDBC. Mansart Pool is zero-dependency and knows nothing of OpenTelemetry, and Humboldt instruments REST (server and client filters) and `@WithSpan` only.
+- **Design (step 2)**:
+  - **Where.** A glue module, `vidocq-runtime-mansart-pool-telemetry` (artifactId to confirm). It requires `io.opentelemetry.api` and the pool extension, and declares `provides JdbcConnectionDecorator`. Mansart and the pool extension keep no OpenTelemetry dependency. Without the glue module there is no overhead: the decorator list is empty.
+  - **How it gets in.** `vidocq extension add` and the scaffold add the glue module when both `humboldt-telemetry` and `mansart-pool` are declared: a catalog "companion" entry (a new catalog key). `vidocq:checkpom` warns when the pair is present without it.
+  - **Wrappers.** Hand-written delegating classes, no dynamic proxy: `TracingConnection` wraps `createStatement`, `prepareStatement` and `prepareCall`; `TracingStatement`, `TracingPreparedStatement` and `TracingCallableStatement` delegate every method. `execute*` and `executeBatch` run in a CLIENT span, a child of `Context.current()`. Generated once from the JDK interfaces by a build-time script and committed, about 400 one-line methods.
+  - **Span.**
+    - Name: `<db.operation.name> <db.collection.name>` when the statement parses (`SELECT books`), else `db.system.name`.
+    - Attributes, per the OpenTelemetry semantic conventions v1.26+: `db.system.name` (from the JDBC URL: postgresql, h2…), `db.namespace` (the database), `db.query.text` (the prepared SQL as is; for a plain `Statement`, literals replaced by `?`), `db.operation.name`, `server.address`, `server.port`, `db.response.status_code` on `SQLException`.
+    - The span records the exception and sets status ERROR. No span for `close`, `getConnection` or metadata calls.
+  - **Tests.** Unit tests on the sanitizer and on span names. A Humboldt in-memory exporter test: a `@VidocqTest` request that runs a query yields a server span with one database child span, on H2, then PostgreSQL via Testcontainers.
+  - **Threads.** No `ThreadLocal`; the span's scope is opened and closed within each `execute*` call, on the caller's virtual thread.
+
 ## BUG-20261030-07 — Dev services log in two localized lines among the `[INFO]` lines of `vidocq dev`
 
 - **Date**: 2026-10-30
