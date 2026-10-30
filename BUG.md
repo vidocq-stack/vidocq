@@ -80,7 +80,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-17 — `vidocq build` packaging: docker does not chain jlink, automatic modules stop jlink, test jars in the distribution, no JVM options hook, no `--help` per command, incomplete extension list
 
 - **Date**: 2026-10-30
-- **Status**: item 4 (no JVM options hook) FIXED on `feat/launcher-java-opts`: the launchers pass `JAVA_OPTS` after `<jvmArgs>` (`VidocqPackageMojoTest.javaOptsReachTheJvmAfterTheConfiguredJvmArgs`); the other items are OPEN
+- **Status**: item 4 (no JVM options hook) FIXED on `feat/launcher-java-opts`: the launchers pass `JAVA_OPTS` after `<jvmArgs>` (`VidocqPackageMojoTest.javaOptsReachTheJvmAfterTheConfiguredJvmArgs`); item 3 (test jars in `lib/`): `opentelemetry-sdk-testing` no longer reaches it, FIXED on `fix/packaging-17-lib-scope` with humboldt#46 (`NoTestLibraryTest`; the other jars listed, `flyway-database-cockroachdb`, `jackson-annotations`, `commons-text`, `annotations`, are Flyway's own runtime dependencies, not a scope error); items 1, 2, 5, 6 OPEN
 - **Reported by**: the vidocq-tutorial session (batch 8)
 - **Minimal reproduction**: `vidocq build docker --skip-tests` on the tutorial application (flyway + PostgreSQL + telemetry).
 - **Cause hypothesis**: six separate causes, listed in the batch; jlink refuses `flyway.core` (automatic module), `opentelemetry-sdk-testing` reaches `lib/` through a wrong scope, `bin/<app>.sh` passes `$@` after `--module`.

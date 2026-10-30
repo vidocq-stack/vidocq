@@ -46,7 +46,6 @@ module io.vidocq.runtime.extensions.microprofile.humboldt {
     requires io.opentelemetry.sdk.trace;
     requires io.opentelemetry.sdk.metrics;
     requires io.opentelemetry.sdk.autoconfigure.spi;
-    requires io.opentelemetry.sdk.testing;
     requires io.opentelemetry.extension.trace.propagation;
 
     // Export package to enable @Inject AutoConfiguredHumboldt from apps/tests
