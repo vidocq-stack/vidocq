@@ -21,9 +21,12 @@ package io.vidocq.heisenberg.cdi.internal;
 
 import io.vidocq.heisenberg.internal.CircuitBreakerState;
 import io.vidocq.heisenberg.internal.CircuitBreakerStateRegistry;
+import io.vidocq.heisenberg.internal.ConfigResolver;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Initialized;
+import jakarta.enterprise.event.Observes;
 
 /**
  * Global Circuit Breaker state registry — CDI {@code @ApplicationScoped} bean.
@@ -42,6 +45,14 @@ public class StateRegistryBean implements CircuitBreakerStateRegistry {
     }
 
     private final ConcurrentHashMap<String, CircuitBreakerSnapshot> states = new ConcurrentHashMap<>();
+
+    /**
+     * A deployment starts: the policies resolved from the configuration of a previous one, in the same JVM and
+     * possibly under the same {@code Config} instance, are resolved again on their next invocation.
+     */
+    void deploymentStarted(@Observes @Initialized(ApplicationScoped.class) Object event) {
+        ConfigResolver.configurationChanged();
+    }
 
     /**
      * Stable key for a circuit breaker.

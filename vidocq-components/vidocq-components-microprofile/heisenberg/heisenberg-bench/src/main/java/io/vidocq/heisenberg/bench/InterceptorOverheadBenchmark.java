@@ -23,6 +23,7 @@ import io.vidocq.heisenberg.internal.PolicyComposer;
 import java.lang.reflect.Method;
 import java.time.temporal.ChronoUnit;
 import java.util.concurrent.TimeUnit;
+import org.eclipse.microprofile.faulttolerance.Retry;
 import org.eclipse.microprofile.faulttolerance.Timeout;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -62,6 +63,8 @@ public class InterceptorOverheadBenchmark {
 
     private Method noFtMethod;
     private Method timeoutMethod;
+    private Method retryMethod;
+    private RetryService retryTarget;
     private NoFtService noFtTarget;
     private TimeoutService timeoutTarget;
 
@@ -71,6 +74,8 @@ public class InterceptorOverheadBenchmark {
         timeoutTarget = new TimeoutService();
         noFtMethod = NoFtService.class.getDeclaredMethod("call");
         timeoutMethod = TimeoutService.class.getDeclaredMethod("call");
+        retryTarget = new RetryService();
+        retryMethod = RetryService.class.getDeclaredMethod("call");
     }
 
     /** Baseline: direct call without any FT framework. */
@@ -97,9 +102,25 @@ public class InterceptorOverheadBenchmark {
         return PolicyComposer.invoke(() -> "ok", timeoutTarget, timeoutMethod, NO_ARGS);
     }
 
+    /**
+     * {@code PolicyComposer} with {@code @Retry} active — the method succeeds the first time. Measures the cost of
+     * reading the annotations and the nine {@code Retry} configuration keys around a call that needs no retry.
+     */
+    @Benchmark
+    public Object withRetryActive() throws Exception {
+        return PolicyComposer.invoke(() -> "ok", retryTarget, retryMethod, NO_ARGS);
+    }
+
     // ---- Embedded test services ----
 
     static class NoFtService {
+        String call() {
+            return "ok";
+        }
+    }
+
+    static class RetryService {
+        @Retry(maxRetries = 3)
         String call() {
             return "ok";
         }

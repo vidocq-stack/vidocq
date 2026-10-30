@@ -40,6 +40,8 @@ flowchart LR
 
 . `FaultToleranceInterceptor.around()` intercepts the `InvocationContext`. For `@Asynchronous`, it immediately switches onto a virtual thread.
 . `PolicyComposer` reads the resolved annotations (direct annotations + MP Config overrides) and builds the chain in canonical §2.5 order.
++
+What the annotations and MicroProfile Config say about a method is resolved on its first invocation and kept [.tag-new]#NEW#: `MethodPolicies` holds the enabled policies and their configurations per bean class and method, for the `Config` instance they were read from, and resolves them again under another instance (another deployment). The interceptor keeps, the same way, the method it resolved on the bean class, and the interceptor priority read from the configuration or, when it does not set it, from the class path. Until 0.4.0-RC1 all of it was read on every invocation: a `@Retry` method that succeeded at once cost about 4 µs and 16 KB (BENCH.md, BENCH-20261030-01).
 . Each engine applies its logic:
 .. `RetryEngine` loops up to `maxRetries` with `delay + jitter` randomness.
 .. `TimeoutEngine` runs the attempt on a virtual thread and calls `Thread.join(Duration)`; on expiry, it raises `TimeoutException` and interrupts the worker.

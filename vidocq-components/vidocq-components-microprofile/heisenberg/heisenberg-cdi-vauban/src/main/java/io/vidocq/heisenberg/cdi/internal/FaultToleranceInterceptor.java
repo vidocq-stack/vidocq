@@ -146,8 +146,26 @@ public class FaultToleranceInterceptor {
             return interceptedMethod;
         }
 
-        Class<?> current = BeanClasses.userClass(target.getClass());
+        Class<?> userClass = BeanClasses.userClass(target.getClass());
+        String name = methodName;
+        return RESOLVED_METHODS.get(userClass)
+                .computeIfAbsent(interceptedMethod, m -> declaredMethod(userClass, name, m));
+    }
 
+    /**
+     * The method a bean class declares for each intercepted method, found once per pair: the walk up the
+     * hierarchy used to run on every invocation, with a {@code NoSuchMethodException} per class without it.
+     * Held by the bean class, so it goes away with a deployment's class loader.
+     */
+    private static final ClassValue<ConcurrentHashMap<Method, Method>> RESOLVED_METHODS = new ClassValue<>() {
+        @Override
+        protected ConcurrentHashMap<Method, Method> computeValue(Class<?> type) {
+            return new ConcurrentHashMap<>();
+        }
+    };
+
+    private static Method declaredMethod(Class<?> userClass, String methodName, Method interceptedMethod) {
+        Class<?> current = userClass;
         while (current != null && current != Object.class) {
             try {
                 return current.getDeclaredMethod(methodName, interceptedMethod.getParameterTypes());

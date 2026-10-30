@@ -54,11 +54,13 @@ public final class HeisenbergAutoDiscovery extends ConfigProviderResolver {
     @Override
     public void registerConfig(Config config, ClassLoader classLoader) {
         getDelegate().registerConfig(config, classLoader);
+        io.vidocq.heisenberg.internal.ConfigResolver.configurationChanged();
     }
 
     @Override
     public void releaseConfig(Config config) {
         getDelegate().releaseConfig(config);
+        io.vidocq.heisenberg.internal.ConfigResolver.configurationChanged();
     }
 
     private ConfigProviderResolver getDelegate() {

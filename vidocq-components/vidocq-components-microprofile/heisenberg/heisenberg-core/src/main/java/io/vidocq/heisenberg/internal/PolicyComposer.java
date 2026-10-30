@@ -115,23 +115,12 @@ public final class PolicyComposer {
     private record EnabledPolicies(Retry retry, Timeout timeout, CircuitBreaker circuitBreaker,
                                    Bulkhead bulkhead, Fallback fallback) {
 
-        static EnabledPolicies of(AnnotationReader.FaultToleranceAnnotations annotations, Method method,
-                                  Class<?> beanClass, Services services) {
-            Retry retry = annotations.retry();
-            Timeout timeout = annotations.timeout();
-            CircuitBreaker cb = annotations.circuitBreaker();
-            Bulkhead bulkhead = annotations.bulkhead();
-            Fallback fallback = annotations.fallback();
-
-            boolean retryEnabled = retry != null && ConfigResolver.isRetryEnabled(method, beanClass);
-            boolean timeoutEnabled = timeout != null && ConfigResolver.isTimeoutEnabled(method, beanClass);
-            boolean cbEnabled = cb != null && ConfigResolver.isCircuitBreakerEnabled(method, beanClass)
-                    && services.cbRegistry() != null;
-            boolean bulkheadEnabled = bulkhead != null && ConfigResolver.isBulkheadEnabled(method, beanClass)
-                    && services.bhRegistry() != null;
-            boolean fallbackEnabled = fallback != null && ConfigResolver.isFallbackEnabled(method, beanClass);
-            return new EnabledPolicies(retryEnabled ? retry : null, timeoutEnabled ? timeout : null,
-                    cbEnabled ? cb : null, bulkheadEnabled ? bulkhead : null, fallbackEnabled ? fallback : null);
+        /** The policies {@code resolved} enables, without the circuit breaker or bulkhead when no registry holds their state. */
+        static EnabledPolicies of(MethodPolicies resolved, Services services) {
+            return new EnabledPolicies(resolved.retry(), resolved.timeout(),
+                    services.cbRegistry() != null ? resolved.circuitBreaker() : null,
+                    services.bhRegistry() != null ? resolved.bulkhead() : null,
+                    resolved.fallback());
         }
     }
 
@@ -149,31 +138,31 @@ public final class PolicyComposer {
         private final String beanClassName;
         private final String methodKey;
 
+        private final MethodPolicies resolved;
+
         Chain(Method method, Class<?> beanClass, Services services) {
             this.method = method;
             this.beanClass = beanClass;
             this.services = services;
             this.recorder = services.recorder();
-            this.beanClassName = beanClass.getName() + "@" + System.identityHashCode(beanClass.getClassLoader());
-            this.methodKey = method.toGenericString();
+            this.resolved = MethodPolicies.of(method, beanClass);
+            this.beanClassName = resolved.beanClassName();
+            this.methodKey = resolved.methodKey();
         }
 
         Object invoke(Invocation invocation, Object target, Object[] parameters) throws Exception {
-            AnnotationReader.FaultToleranceAnnotations annotations = AnnotationReader.read(method, beanClass);
-
             // M7 — @Asynchronous
-            boolean asyncActive = annotations.asynchronous() != null
-                    && ConfigResolver.isAsynchronousEnabled(method, beanClass);
-            boolean completionStageSemantics = CompletionStage.class.isAssignableFrom(method.getReturnType());
+            boolean asyncActive = resolved.asynchronous();
+            boolean completionStageSemantics = resolved.completionStage();
             AtomicBoolean asyncInvocationStarted = asyncActive ? new AtomicBoolean(false) : null;
             Invocation effectiveInvocation = asyncActive
                     ? markStarted(invocation, asyncInvocationStarted, completionStageSemantics)
                     : invocation;
 
             // Read the annotations and register the metrics upfront.
-            EnabledPolicies policies = EnabledPolicies.of(annotations, method, beanClass, services);
-            FallbackPolicy fallbackPolicy = policies.fallback() == null ? null : new FallbackPolicy(policies.fallback(),
-                    ConfigResolver.fallbackConfig(method, beanClass, policies.fallback()), FALLBACK_RESOLVER);
+            EnabledPolicies policies = EnabledPolicies.of(resolved, services);
+            FallbackPolicy fallbackPolicy = policies.fallback() == null ? null
+                    : new FallbackPolicy(policies.fallback(), resolved.fallbackConfig(), FALLBACK_RESOLVER);
             recorder.register(beanClass, method,
                     policies.retry() != null, policies.timeout() != null, policies.circuitBreaker() != null,
                     policies.bulkhead() != null, fallbackPolicy != null,
@@ -205,19 +194,18 @@ public final class PolicyComposer {
         private Invocation build(Invocation invocation, EnabledPolicies policies, boolean asyncActive) {
             Invocation chain = invocation;
             if (policies.bulkhead() != null) {
-                chain = withBulkhead(chain, ConfigResolver.bulkheadConfig(method, beanClass, policies.bulkhead()),
+                chain = withBulkhead(chain, resolved.bulkheadConfig(),
                         asyncActive);
             }
             if (policies.timeout() != null) {
-                chain = withTimeout(chain, ConfigResolver.timeoutConfig(method, beanClass, policies.timeout()),
+                chain = withTimeout(chain, resolved.timeoutConfig(),
                         asyncActive);
             }
             if (policies.circuitBreaker() != null) {
-                chain = withCircuitBreaker(chain,
-                        ConfigResolver.circuitBreakerConfig(method, beanClass, policies.circuitBreaker()));
+                chain = withCircuitBreaker(chain, resolved.circuitBreakerConfig());
             }
             if (policies.retry() != null) {
-                RetryConfig retryConfig = ConfigResolver.retryConfig(method, beanClass, policies.retry());
+                RetryConfig retryConfig = resolved.retryConfig();
                 Invocation withCBBase = chain;
                 chain = () -> RetryEngine.execute(withCBBase, retryConfig, recorder, beanClass, method);
             }

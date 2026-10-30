@@ -40,12 +40,12 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
 
 public final class ConfigResolver {
 
-    private static final String RETRY = "Retry";
-    private static final String TIMEOUT = "Timeout";
-    private static final String CIRCUIT_BREAKER = "CircuitBreaker";
-    private static final String BULKHEAD = "Bulkhead";
-    private static final String FALLBACK = "Fallback";
-    private static final String ASYNCHRONOUS = "Asynchronous";
+    static final String RETRY = "Retry";
+    static final String TIMEOUT = "Timeout";
+    static final String CIRCUIT_BREAKER = "CircuitBreaker";
+    static final String BULKHEAD = "Bulkhead";
+    static final String FALLBACK = "Fallback";
+    static final String ASYNCHRONOUS = "Asynchronous";
     private static final String VALUE = "value";
     private static final String PRIORITY_KEY = "mp.fault.tolerance.interceptor.priority";
 
@@ -242,7 +242,7 @@ public final class ConfigResolver {
      * M7 §9: global disablement via {@code mp.fault.tolerance.interceptor.priority}.
      */
     public static boolean isInterceptorGloballyDisabled() {
-        return isInterceptorGloballyDisabled(loadConfig());
+        return interceptorSettings().globallyDisabled();
     }
 
     static boolean isInterceptorGloballyDisabled(Config config) {
@@ -256,7 +256,30 @@ public final class ConfigResolver {
      * M8 §9: Fault Tolerance interceptor priority value.
      */
     public static int interceptorPriority() {
-        return interceptorPriority(loadConfig());
+        return interceptorSettings().priority();
+    }
+
+    /**
+     * The interceptor priority and global switch under one configuration: both interceptors read them on every
+     * invocation, and the priority falls back to reading every {@code META-INF/microprofile-config.properties} of
+     * the class path when the configuration does not set it, the common case. They are kept for the configuration
+     * instance and {@link #configurationChanged() generation} they were read from, and read again otherwise. Without a configuration implementation
+     * nothing is kept, the class path being the only source then.
+     */
+    private record InterceptorSettings(Config config, int generation, int priority, boolean globallyDisabled) {}
+
+    private static volatile InterceptorSettings interceptorSettings;
+
+    private static InterceptorSettings interceptorSettings() {
+        Config config = loadConfig();
+        int generation = GENERATION.get();
+        InterceptorSettings settings = interceptorSettings;
+        if (settings == null || settings.config() != config || settings.generation() != generation || config == null) {
+            settings = new InterceptorSettings(config, generation, interceptorPriority(config),
+                    isInterceptorGloballyDisabled(config));
+            if (config != null) interceptorSettings = settings;
+        }
+        return settings;
     }
 
     static int interceptorPriority(Config config) {
@@ -365,6 +388,28 @@ public final class ConfigResolver {
             String trimmed = value.trim().toLowerCase();
             return "true".equals(trimmed);
         });
+    }
+
+    /**
+     * Bumped whenever the configuration may have changed under the same {@link Config} instance: a new deployment
+     * starting in the same JVM, a configuration registered or released. What was resolved from the configuration
+     * before is resolved again.
+     */
+    private static final java.util.concurrent.atomic.AtomicInteger GENERATION = new java.util.concurrent.atomic.AtomicInteger();
+
+    /** Says that the configuration may have changed: everything resolved from it is resolved again. */
+    public static void configurationChanged() {
+        GENERATION.incrementAndGet();
+        interceptorSettings = null;
+    }
+
+    static int generation() {
+        return GENERATION.get();
+    }
+
+    /** The MicroProfile Config of the calling thread, or {@code null} without an implementation. */
+    static Config currentConfig() {
+        return loadConfig();
     }
 
     private static Config loadConfig() {
