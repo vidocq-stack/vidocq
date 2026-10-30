@@ -30,6 +30,20 @@
             <artifactId>grimm-processor</artifactId>
             <version>${grimm.version}</version>
         </dependency>
+        <!-- GrimmExtension, the Build Compatible Extension of grimm-cdi-vauban: on the processor path, vauban-processor
+             runs it at build time, as the Ravel bundle does with ravel-cdi-vauban. Without it Vauban warns that the
+             extension is on the module path only and will not run at build time. -->
+        <dependency>
+            <groupId>io.vidocq.grimm</groupId>
+            <artifactId>grimm-cdi-vauban</artifactId>
+            <version>${grimm.version}</version>
+        </dependency>
+        <!-- grimm-cdi-vauban leaves the CDI API to the runtime (provided): on the processor path nothing else brings it,
+             and GrimmExtension could not be loaded. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
