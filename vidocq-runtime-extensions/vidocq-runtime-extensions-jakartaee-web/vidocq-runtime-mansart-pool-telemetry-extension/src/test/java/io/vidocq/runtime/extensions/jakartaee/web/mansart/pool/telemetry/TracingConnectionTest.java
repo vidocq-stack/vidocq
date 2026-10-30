@@ -91,7 +91,7 @@ class TracingConnectionTest {
     @Test
     void aPreparedQueryInsideARequestIsAChildClientSpan() throws SQLException {
         Span request = tracer.spanBuilder("GET /books/{id}").setSpanKind(SpanKind.SERVER).startSpan();
-        try (Scope ignored = request.makeCurrent();
+        try (Scope _ = request.makeCurrent();
              PreparedStatement select = connection.prepareStatement("select title from books where id = ?")) {
             select.setInt(1, 7);
             try (ResultSet rs = select.executeQuery()) {
@@ -125,12 +125,10 @@ class TracingConnectionTest {
     }
 
     @Test
-    void aFailingStatementRecordsTheErrorAndRethrowsIt() {
-        assertThrows(SQLException.class, () -> {
-            try (Statement broken = connection.createStatement()) {
-                broken.executeQuery("select * from no_such_table");
-            }
-        });
+    void aFailingStatementRecordsTheErrorAndRethrowsIt() throws SQLException {
+        try (Statement broken = connection.createStatement()) {
+            assertThrows(SQLException.class, () -> broken.executeQuery("select * from no_such_table"));
+        }
 
         SpanData db = databaseSpans().getFirst();
         assertEquals(StatusCode.ERROR, db.status().code());

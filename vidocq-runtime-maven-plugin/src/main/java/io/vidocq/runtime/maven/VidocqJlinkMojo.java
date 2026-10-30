@@ -140,7 +140,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
      * {@code vauban:modularize} (BUG-20261030-17). Skipped when the project ran {@code vauban:modularize} itself.
      */
     @Parameter(defaultValue = "true", property = "vidocq.jlink.modularize")
-    private boolean modularize = true;
+    private boolean modularize;
 
     /** jlink compression level ({@code zip-0} to {@code zip-9}, default: {@code zip-6}). */
     @Parameter(defaultValue = "zip-6", property = "vidocq.compress")

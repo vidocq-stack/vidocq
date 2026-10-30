@@ -28,6 +28,7 @@ import io.opentelemetry.context.Scope;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -40,7 +41,7 @@ final class TracingExecution implements JdbcExecution {
     private final Supplier<Tracer> tracer;
     private final String dataSourceName;
     private final Connection connection;
-    private volatile DbTarget target;
+    private final AtomicReference<DbTarget> target = new AtomicReference<>();
 
     /** @param connection the pool's connection, whose URL names the database, read once, at the first statement */
     TracingExecution(Supplier<Tracer> tracer, String dataSourceName, Connection connection) {
@@ -72,11 +73,11 @@ final class TracingExecution implements JdbcExecution {
             builder.setAttribute("server.address", db.host());
         }
         if (db.port() > 0) {
-            builder.setAttribute("server.port", (long) db.port());
+            builder.setAttribute("server.port", db.port());
         }
         builder.setAttribute("vidocq.datasource.name", dataSourceName);
         Span span = builder.startSpan();
-        try (Scope ignored = span.makeCurrent()) {
+        try (Scope _ = span.makeCurrent()) {
             return call.call();
         } catch (SQLException e) {
             fail(span, e);
@@ -99,16 +100,16 @@ final class TracingExecution implements JdbcExecution {
 
     /** The database, from the connection's URL, read once; an unreadable URL gives {@code other_sql}. */
     private DbTarget target() {
-        DbTarget db = target;
+        DbTarget db = target.get();
         if (db == null) {
             String url;
             try {
                 url = connection.getMetaData().getURL();
-            } catch (SQLException | RuntimeException e) {
+            } catch (SQLException | RuntimeException _) {
                 url = null;
             }
             db = DbTarget.of(url);
-            target = db;
+            target.set(db);
         }
         return db;
     }

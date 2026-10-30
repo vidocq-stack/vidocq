@@ -57,4 +57,24 @@ class SqlStatementsTest {
                 SqlStatements.sanitize("select * from books where title = 'It''s' and id = 42 and price > 3.5"));
         assertEquals("select col1, t2.x from t2", SqlStatements.sanitize("select col1, t2.x from t2"));
     }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', quoteCharacter = '"', value = {
+            "where a = -1 and b = 2.5e-3 and c = 1E10 | where a = ? and b = ? and c = ?",
+            "where x-1 > 0                            | where x-? > ?",
+            "select $1, t.2col, 1.5.3, 1e5x, 12abc    | select $1, t.2col, 1.5.3, 1e5x, 12abc",
+            "where n = 1.5e+ and m = 7.               | where n = 1.5e+ and m = 7.",
+            "where s = 'a''b' and t = ''              | where s = ? and t = ?",
+            "where s = 'open and n = 3                | where s = 'open and n = ?",
+            "where s = 'a'' and n = 3                 | where s = ?' and n = ?"})
+    void numbersAndQuotedStringsAreTheOnlyLiterals(String sql, String sanitized) {
+        assertEquals(sanitized, SqlStatements.sanitize(sql));
+    }
+
+    @Test
+    void aLongStringLiteralDoesNotOverflowTheStack() {
+        String sql = "insert into notes values ('" + "x".repeat(200_000) + "')";
+
+        assertEquals("insert into notes values (?)", SqlStatements.sanitize(sql));
+    }
 }

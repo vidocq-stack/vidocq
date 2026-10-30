@@ -50,6 +50,12 @@ public final class CliParser {
     private static final String BUILD = "build";
     private static final String CLEAN = "clean";
     private static final String UPDATE = "update";
+    private static final String EXTENSION = "extension";
+    private static final String CONFIG = "config";
+    private static final String COMPLETION = "completion";
+    /** The built-in commands that show their own help on {@code --help}. */
+    private static final Set<String> HELP_TOPICS = Set.of(START, "dev", DOCTOR, "test", "idea", VSCODE, ECLIPSE, CREATE,
+            BUILD, CLEAN, CONFIG, COMPLETION, UPDATE, EXTENSION);
     private static final String DRY_RUN = "--dry-run";
     private static final String PORT = "--port";
     private static final String EXAMPLES = "Examples:";
@@ -75,9 +81,9 @@ public final class CliParser {
             case CREATE                     -> parseCreate(args, 1);
             case BUILD                      -> parseBuild(args, 1);
             case CLEAN                      -> parseClean(args, 1);
-            case "extension", "ext"           -> parseExtension(args, 1);
-            case "config"                     -> parseConfig(args, 1);
-            case "completion"                 -> parseCompletion(args, 1);
+            case EXTENSION, "ext"             -> parseExtension(args, 1);
+            case CONFIG                       -> parseConfig(args, 1);
+            case COMPLETION                   -> parseCompletion(args, 1);
             case UPDATE                     -> parseUpdate(args, 1);
             default -> new Command.Plugin(args[0], rest(args, 1));
         };
@@ -89,21 +95,18 @@ public final class CliParser {
      * a plugin parses its own.
      */
     private static String helpTopic(String[] args) {
-        String topic = switch (args[0]) {
-            case START, "dev", DOCTOR, "test", "idea", VSCODE, ECLIPSE, CREATE, BUILD, CLEAN, "config", "completion",
-                 UPDATE -> args[0];
-            case "extension", "ext" -> "extension";
-            default -> null;
-        };
-        if (topic == null) {
-            return null;
-        }
+        String topic = "ext".equals(args[0]) ? EXTENSION : args[0];
+        return HELP_TOPICS.contains(topic) && asksForHelp(args) ? topic : null;
+    }
+
+    /** Whether {@code --help} or {@code -h} comes after the command, before {@code --}. */
+    private static boolean asksForHelp(String[] args) {
         for (int i = 1; i < args.length && !"--".equals(args[i]); i++) {
             if ("--help".equals(args[i]) || "-h".equals(args[i])) {
-                return topic;
+                return true;
             }
         }
-        return null;
+        return false;
     }
 
     // -------------------------------------------------------------------------
@@ -528,7 +531,7 @@ public final class CliParser {
                 opt(DRY_RUN,     "Print the Maven command without running it");
                 opt("-- <args...>",  "Pass everything after -- straight to Maven");
             }
-            case "extension" -> {
+            case EXTENSION -> {
                 CliOutput.println(CliOutput.bold("vidocq extension") + " — Manage extensions");
                 CliOutput.println();
                 CliOutput.println("Sub-commands:");
@@ -544,7 +547,7 @@ public final class CliParser {
                 CliOutput.println("  " + CliOutput.cyan("vidocq extension list --available"));
                 CliOutput.println("  " + CliOutput.cyan("vidocq extension add cassini-rest knock-health"));
             }
-            case "config" -> {
+            case CONFIG -> {
                 CliOutput.println(CliOutput.bold("vidocq config") + " — Read & write vidocq.properties");
                 CliOutput.println();
                 CliOutput.println("Operates on the project's vidocq.properties (project root or");
@@ -574,7 +577,7 @@ public final class CliParser {
                 CliOutput.println("Environment: VIDOCQ_CENTRAL, VIDOCQ_SNAPSHOTS (repository mirrors),");
                 CliOutput.println("             VIDOCQ_BIN (launcher directory, default ~/.local/bin)");
             }
-            case "completion" -> {
+            case COMPLETION -> {
                 CliOutput.println(CliOutput.bold("vidocq completion") + " — Shell completion scripts");
                 CliOutput.println();
                 CliOutput.println("Prints a completion script to stdout for the given shell, or");

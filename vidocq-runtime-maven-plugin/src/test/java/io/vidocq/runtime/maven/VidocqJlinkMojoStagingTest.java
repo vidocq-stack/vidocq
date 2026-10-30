@@ -179,6 +179,7 @@ class VidocqJlinkMojoStagingTest {
         set(mojo, "buildDir", target().toFile());
         set(mojo, "modsDir", stage().toFile());
         set(mojo, "mergeSharedResources", mergeSharedResources);
+        set(mojo, "modularize", true);
         return mojo;
     }
 
