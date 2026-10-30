@@ -60,18 +60,28 @@
             <name>Maven Central</name>
             <url>https://central.sonatype.com/api/v1/publisher</url>
         </repository>
+        <!-- The Vidocq SNAPSHOTs go to our own repository since 2026-10-30; the CI passes the same target with
+             altSnapshotDeploymentRepository (Vidocq/ci deploy-maven). Releases stay on Central. -->
         <snapshotRepository>
-            <id>central-snapshots</id>
-            <name>Central Portal Snapshots</name>
-            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <id>vidocq-snapshots</id>
+            <name>Vidocq Snapshots</name>
+            <url>https://maven.vidocq.dev/snapshots/</url>
         </snapshotRepository>
     </distributionManagement>
 
+    <!-- maven.bak.vidocq.dev is a full copy of maven.vidocq.dev on another site, read when the first is down. -->
     <pluginRepositories>
         <pluginRepository>
-            <id>central-snapshots</id>
-            <name>Central Portal Snapshots</name>
-            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <id>vidocq-snapshots</id>
+            <name>Vidocq Snapshots</name>
+            <url>https://maven.vidocq.dev/snapshots/</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </pluginRepository>
+        <pluginRepository>
+            <id>vidocq-snapshots-bak</id>
+            <name>Vidocq Snapshots (mirror)</name>
+            <url>https://maven.bak.vidocq.dev/snapshots/</url>
             <releases><enabled>false</enabled></releases>
             <snapshots><enabled>true</enabled></snapshots>
         </pluginRepository>
