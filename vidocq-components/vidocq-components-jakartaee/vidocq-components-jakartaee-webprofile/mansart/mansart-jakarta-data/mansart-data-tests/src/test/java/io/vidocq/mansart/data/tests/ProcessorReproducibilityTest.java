@@ -52,7 +52,7 @@ class ProcessorReproducibilityTest {
 
     @BeforeAll
     static void compile() throws IOException {
-        result = InProcessCompilation.compileTree(MAIN_SOURCES, out);
+        result = InProcessCompilation.compileTree(MAIN_SOURCES, out, List.of("-Amansart.unresolvedMethods=warn"));
     }
 
     @Test
@@ -62,8 +62,8 @@ class ProcessorReproducibilityTest {
         // derives no query on purpose.
         assertThat(result.warnings()).containsExactly("Mansart could not derive a query for "
                 + "'io.vidocq.mansart.data.tests.TransactionalArticleRepository.findByTitleSensitive'; the generated "
-                + "method will throw UnsupportedOperationException at runtime. Check the method name and attribute "
-                + "spelling.");
+                + "method would throw UnsupportedOperationException at runtime. Check the method name and attribute "
+                + "spelling, or write a @Query.");
         assertThat(result.success()).isTrue();
     }
 

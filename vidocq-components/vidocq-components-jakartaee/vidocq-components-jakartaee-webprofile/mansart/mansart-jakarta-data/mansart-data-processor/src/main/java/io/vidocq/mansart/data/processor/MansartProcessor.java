@@ -23,6 +23,7 @@ import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
+import javax.annotation.processing.SupportedOptions;
 import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
@@ -36,11 +37,18 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 @SupportedSourceVersion(SourceVersion.RELEASE_25)
+@SupportedOptions(MansartProcessor.UNRESOLVED_METHODS)
 @SupportedAnnotationTypes({
         "jakarta.persistence.Entity",
         "jakarta.data.repository.Repository"
 })
 public final class MansartProcessor extends AbstractProcessor {
+
+    /**
+     * How a repository method no query derives from is reported: {@code error} (the default) fails the build,
+     * {@code warn} keeps a generated method that throws {@code UnsupportedOperationException} (MANSART-030).
+     */
+    static final String UNRESOLVED_METHODS = "mansart.unresolvedMethods";
 
     private EntityScanner             scanner;
     private MansartMetamodelWriter    mansartWriter;
@@ -63,7 +71,9 @@ public final class MansartProcessor extends AbstractProcessor {
                 ? new JpaMetamodelWriter(sink) : null;
         this.entityRegistry   = new EntityRegistry();
         this.repositoryWriter = new RepositoryWriter(sink,
-                env.getElementUtils(), env.getTypeUtils(), entityRegistry, env.getMessager());
+                env.getElementUtils(), env.getTypeUtils(), entityRegistry, env.getMessager(),
+                "warn".equalsIgnoreCase(env.getOptions().get(UNRESOLVED_METHODS))
+                        ? Diagnostic.Kind.WARNING : Diagnostic.Kind.ERROR);
     }
 
     @Override

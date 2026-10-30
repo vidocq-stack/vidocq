@@ -9,6 +9,34 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-030 — A repository method no query derives from compiles, then answers 500
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/derived-query-null-keyword`
+- **Severity**: medium (the mistake is only seen when the method is first called)
+- **Symptom**: a method name the processor cannot derive (an unsupported keyword, a misspelled attribute) compiles
+  with a warning, and the generated implementation throws _UnsupportedOperationException: … no matching CRUD or
+  derived-query rule_ at run time. Reported by the vidocq-tutorial session (batch 4).
+- **Minimal reproduction**: `List<Loan> findByMembr(String member);` on a `BasicRepository<Loan, Long>`.
+- **Cause**: MANSART-002 made the processor report the method as a WARNING, not an ERROR, because one test fixture
+  (`TransactionalArticleRepository.findByTitleSensitive`) relies on the stub.
+- **Fix**: an ERROR by default, since the implementation is generated at build time; the processor option
+  `-Amansart.unresolvedMethods=warn` keeps the warning and the stub, and `mansart-data-tests` sets it for its
+  fixture. `ProcessorDerivedQueryDiagnosticsTest`.
+
+## MANSART-029 — The Jakarta Data `Null` keyword is not supported in derived queries
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/derived-query-null-keyword`
+- **Severity**: medium (a spec keyword; the workaround is a `@Query`)
+- **Symptom**: `List<Loan> findByMemberAndReturnedOnNull(String member);` throws _UnsupportedOperationException:
+  findByMemberAndReturnedOnNull: no matching CRUD or derived-query rule_. Reported by the vidocq-tutorial session
+  (batch 4), worked around with `@Query("where member = :member and returnedOn is null")`.
+- **Cause**: `QueryMethodParser` knew `IsNull`, `IsNotNull` and `NotNull`, not `Null`, the keyword of the Jakarta
+  Data 1.0 "Query by Method Name" table.
+- **Fix**: `Null` is a suffix of `IS_NULL`. `ProcessorDerivedQueryDiagnosticsTest`, and `GadgetQueriesTest` on
+  both the generated and the run-time repository.
+
 ## MANSART-008 — The annotation processor ignored `@Param`, did not compile `@Find`, and required `FROM`
 
 - **Date**: 2026-10-18

@@ -21,7 +21,9 @@ public interface AuthorRepository extends CrudRepository<Author, Long> {
 
 === Derived queries (by method name)
 
-Mansart parses the name into a neutral AST, then produces SQL via the target dialect. Supported keywords: `findBy`, `existsBy`, `countBy`, `deleteBy`, operators `And`, `Or`, `Like`, `Between`, `LessThan`, `GreaterThan`, `LessThanEqual`, `GreaterThanEqual`, `IgnoreCase`, `OrderBy<Asc|Desc>`.
+Mansart parses the name into a neutral AST, then produces SQL via the target dialect. Supported keywords: `findBy`, `existsBy`, `countBy`, `deleteBy`, operators `And`, `Or`, `Not`, `Like`, `StartsWith`, `EndsWith`, `Contains`, `Between`, `In`, `LessThan`, `GreaterThan`, `LessThanEqual`, `GreaterThanEqual`, `True`, `False`, `Empty`, `Null` [.tag-new]#NEW# (also written `IsNull`), `NotNull`, `IgnoreCase`, `OrderBy<Asc|Desc>`.
+
+[[unresolved-methods]]A repository method the annotation processor derives no query from fails the build [.tag-new]#NEW#: _Mansart could not derive a query for '…'_. Fix the name, or write a `@Query`. The processor option `-Amansart.unresolvedMethods=warn` turns the error back into a warning, and the generated method then throws `UnsupportedOperationException` when called.
 
 [source,java]
 ----
@@ -29,6 +31,7 @@ List<Author> findByName(String name);
 Optional<Author> findOneByName(String name);
 List<Author> findByNameLike(String pattern);
 List<Author> findByNameIgnoreCase(String name);
+List<Loan> findByMemberAndReturnedOnNull(String member);
 List<Author> findAllByOrderByNameAsc();
 long deleteByName(String name);
 ----

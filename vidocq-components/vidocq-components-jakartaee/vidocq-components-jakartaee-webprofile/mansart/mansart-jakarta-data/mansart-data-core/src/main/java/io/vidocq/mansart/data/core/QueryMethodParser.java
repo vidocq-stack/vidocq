@@ -328,6 +328,7 @@ public final class QueryMethodParser {
     private enum Suffix {
         IS_NOT_NULL ("IsNotNull",        Comparator.IS_NOT_NULL),
         IS_NULL     ("IsNull",           Comparator.IS_NULL),
+        NULL        ("Null",             Comparator.IS_NULL),
         GTE         ("GreaterThanEqual", Comparator.GTE),
         LTE         ("LessThanEqual",    Comparator.LTE),
         GT          ("GreaterThan",      Comparator.GT),

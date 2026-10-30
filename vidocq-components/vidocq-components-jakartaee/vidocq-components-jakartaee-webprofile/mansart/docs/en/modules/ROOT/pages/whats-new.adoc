@@ -4,4 +4,5 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._
+* xref:usage.adoc#unresolved-methods[A method no query derives from fails the build] — the annotation processor reports it as an error instead of generating a method that throws at run time; `-Amansart.unresolvedMethods=warn` keeps the old behaviour.
+* xref:usage.adoc#_derived_queries_by_method_name[The `Null` keyword] — `findByReturnedOnNull()`, the Jakarta Data 1.0 spelling, derives an `IS NULL` condition, as `IsNull` did.

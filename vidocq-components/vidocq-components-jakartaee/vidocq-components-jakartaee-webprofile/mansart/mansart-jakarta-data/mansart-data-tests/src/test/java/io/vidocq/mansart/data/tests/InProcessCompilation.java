@@ -82,15 +82,25 @@ final class InProcessCompilation {
 
     /** Compiles every {@code .java} file under {@code sourceRoot}. */
     static Result compileTree(Path sourceRoot, Path out) throws IOException {
+        return compileTree(sourceRoot, out, List.of());
+    }
+
+    /** Compiles every {@code .java} file under {@code sourceRoot}, with extra javac {@code options}. */
+    static Result compileTree(Path sourceRoot, Path out, List<String> options) throws IOException {
         List<Path> sources;
         try (Stream<Path> walk = Files.walk(sourceRoot)) {
             sources = walk.filter(p -> p.toString().endsWith(JAVA)).sorted().toList();
         }
-        return compile(sources, out);
+        return compile(sources, out, options);
     }
 
     /** Writes each {@code fqn -> source} pair under {@code out/src} and compiles them. */
     static Result compileSources(Path out, String... fqnAndSourcePairs) throws IOException {
+        return compileSources(out, List.of(), fqnAndSourcePairs);
+    }
+
+    /** Writes each {@code fqn -> source} pair under {@code out/src} and compiles them with extra {@code options}. */
+    static Result compileSources(Path out, List<String> options, String... fqnAndSourcePairs) throws IOException {
         List<Path> sources = new ArrayList<>();
         for (int i = 0; i < fqnAndSourcePairs.length; i += 2) {
             Path file = out.resolve("src").resolve(fqnAndSourcePairs[i].replace('.', '/') + JAVA);
@@ -98,10 +108,10 @@ final class InProcessCompilation {
             Files.writeString(file, fqnAndSourcePairs[i + 1], StandardCharsets.UTF_8);
             sources.add(file);
         }
-        return compile(sources, out);
+        return compile(sources, out, options);
     }
 
-    private static Result compile(List<Path> sources, Path out) throws IOException {
+    private static Result compile(List<Path> sources, Path out, List<String> options) throws IOException {
         Path classes = Files.createDirectories(out.resolve("classes"));
         Path generated = Files.createDirectories(out.resolve("generated"));
         JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
@@ -112,7 +122,8 @@ final class InProcessCompilation {
             files.setLocationFromPaths(StandardLocation.SOURCE_OUTPUT, List.of(generated));
             files.setLocationFromPaths(StandardLocation.CLASS_PATH, dependencyClassPath());
             JavaCompiler.CompilationTask task = javac.getTask(null, files, diagnostics,
-                    List.of("-parameters", "-proc:full", "-Xlint:none"), null,
+                    Stream.concat(Stream.of("-parameters", "-proc:full", "-Xlint:none"), options.stream()).toList(),
+                    null,
                     files.getJavaFileObjectsFromPaths(sources));
             task.setProcessors(List.of(new MansartProcessor()));
             boolean success = task.call();

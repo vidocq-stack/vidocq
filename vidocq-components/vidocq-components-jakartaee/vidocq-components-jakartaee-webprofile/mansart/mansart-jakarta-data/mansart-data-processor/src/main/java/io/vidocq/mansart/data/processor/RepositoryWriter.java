@@ -71,12 +71,20 @@ final class RepositoryWriter {
     private final Types    types;
     private final EntityRegistry entityRegistry;
     private final Messager messager; // nullable — null in the Maven-plugin path
+    /** How a method no query derives from is reported: an error unless the processor option says warn. */
+    private final Diagnostic.Kind unresolvedMethods;
     /** The entity of the repository {@link #emit} is writing; APT runs single-threaded. */
     private TypeElement emittedEntity;
 
     RepositoryWriter(SourceSink sink, Elements elements, Types types, EntityRegistry entityRegistry,
                      Messager messager) {
+        this(sink, elements, types, entityRegistry, messager, Diagnostic.Kind.ERROR);
+    }
+
+    RepositoryWriter(SourceSink sink, Elements elements, Types types, EntityRegistry entityRegistry,
+                     Messager messager, Diagnostic.Kind unresolvedMethods) {
         this.sink = sink;
+        this.unresolvedMethods = unresolvedMethods;
         this.elements = elements;
         this.types = types;
         this.entityRegistry = entityRegistry;
@@ -270,12 +278,14 @@ final class RepositoryWriter {
         if (body == null) {
             // MANSART-002: never emit a runtime-throwing stub silently — surface it at build time so an
             // unresolved derived query (typo, unsupported keyword) is seen now, not on first invocation.
+            // MANSART-030: an error by default, since the implementation is generated at build time; the
+            // mansart.unresolvedMethods=warn processor option keeps the run-time stub.
             if (messager != null) {
-                messager.printMessage(Diagnostic.Kind.WARNING,
+                messager.printMessage(unresolvedMethods,
                         "Mansart could not derive a query for '"
                                 + ((TypeElement) m.getEnclosingElement()).getQualifiedName() + "." + name
-                                + "'; the generated method will throw UnsupportedOperationException at runtime."
-                                + " Check the method name and attribute spelling.", m);
+                                + "'; the generated method would throw UnsupportedOperationException at runtime."
+                                + " Check the method name and attribute spelling, or write a @Query.", m);
             }
             w.println("        throw new UnsupportedOperationException(\""
                     + name + ": no matching CRUD or derived-query rule. Check method name and attribute spelling.\");");

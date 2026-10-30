@@ -60,6 +60,11 @@ public interface GadgetRepository extends CrudRepository<Gadget, Long> {
 
     List<Gadget> findByCategoryIsNotNull();
 
+    /** The Jakarta Data 1.0 {@code Null} keyword, without {@code Is} (MANSART-029). */
+    List<Gadget> findByCategoryNull();
+
+    List<Gadget> findByActiveAndCategoryNull(boolean active);
+
     List<Gadget> findByActiveTrue();
 
     List<Gadget> findByActiveFalse();

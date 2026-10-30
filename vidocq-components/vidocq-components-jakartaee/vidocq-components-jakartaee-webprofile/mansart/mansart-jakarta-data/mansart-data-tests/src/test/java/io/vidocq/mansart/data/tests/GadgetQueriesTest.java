@@ -138,6 +138,9 @@ class GadgetQueriesTest {
         assertThat(names(repo.findByPriceBetween(10, 50))).containsExactlyInAnyOrder(ANVIL, COMPASS, EASEL);
         assertThat(names(repo.findByCategoryIsNull())).containsExactlyInAnyOrder(COMPASS, EASEL);
         assertThat(names(repo.findByCategoryIsNotNull())).containsExactlyInAnyOrder(ANVIL, BOLT, DRONE);
+        assertThat(names(repo.findByCategoryNull())).containsExactlyInAnyOrder(COMPASS, EASEL);
+        assertThat(names(repo.findByActiveAndCategoryNull(false))).containsExactlyInAnyOrder(COMPASS, EASEL);
+        assertThat(repo.findByActiveAndCategoryNull(true)).isEmpty();
         assertThat(names(repo.findByActiveTrue())).containsExactlyInAnyOrder(ANVIL, BOLT, DRONE);
         assertThat(names(repo.findByActiveFalse())).containsExactlyInAnyOrder(COMPASS, EASEL);
         assertThat(names(repo.findByStockLessThan(5))).containsExactlyInAnyOrder(COMPASS, DRONE);
