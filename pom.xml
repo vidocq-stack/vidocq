@@ -262,6 +262,16 @@
                 <version>0.4.0-SNAPSHOT</version>
             </dependency>
             <dependency>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                <artifactId>vidocq-runtime-dirac-metrics-extension-codegen</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                <artifactId>vidocq-runtime-grimm-openapi-extension-codegen</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
                 <version>0.4.0-SNAPSHOT</version>
@@ -755,6 +765,18 @@
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
                 <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                <artifactId>vidocq-runtime-dirac-metrics-extension-codegen</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                <artifactId>vidocq-runtime-grimm-openapi-extension-codegen</artifactId>
                 <version>0.4.0-SNAPSHOT</version>
                 <type>pom</type>
             </dependency>

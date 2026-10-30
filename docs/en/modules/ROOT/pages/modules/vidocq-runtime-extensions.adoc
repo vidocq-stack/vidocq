@@ -88,11 +88,11 @@
 
 | `vidocq-runtime-dirac-metrics-extension`
 | `microprofile`
-| {spec-mp-metrics} via xref:dirac::index.adoc[Dirac] — Prometheus endpoint. Its `metrics` section of the startup report, what the registries hold, is a live dev console panel(<<dirac-metrics-panel>>).
+| {spec-mp-metrics} via xref:dirac::index.adoc[Dirac] — Prometheus endpoint. [[dirac-metrics-codegen]]Companion `-codegen` artefact [.tag-new]#NEW#: it runs Dirac's processor on the application, so each bean with `@Counted` or `@Timed` gets a `$$DiracMetrics` companion listing its metrics, and the runtime registers them without scanning the bean's methods by reflection at start-up. `vidocq:checkpom` asks for it. Its `metrics` section of the startup report, what the registries hold, is a live dev console panel(<<dirac-metrics-panel>>).
 
 | `vidocq-runtime-grimm-openapi-extension`
 | `microprofile`
-| {spec-mp-openapi} via Grimm — document generated at compile time (`-ui` companion serves the viewer). Its `openapi` section counts the operations and offers to open the document and the Swagger UI; the `rest` panel of the dev console shows the same buttons. [[grimm-named-module]]The extension requires Grimm's named module, `io.vidocq.grimm.cdi.vauban`: with the automatic module it used to require, a packaged application whose `cassini:generate` sealed its modules lost every Grimm bean, and `/openapi` answered 404 (Vidocq/grimm#15). [[grimm-openapi-apis]]The extension brings the Jakarta REST API, which `grimm-cdi-vauban` leaves to the runtime, so an application with OpenAPI and no Cassini starts.
+| {spec-mp-openapi} via Grimm — document generated at compile time (`-ui` companion serves the viewer). [[grimm-openapi-codegen]]Companion `-codegen` artefact [.tag-new]#NEW#: it runs Grimm's processor on the application, so each JAX-RS resource gets a `$$GrimmModel` fragment of the document, and the runtime does not scan the resource by reflection. A resource outside the processor's subset (request bodies, MicroProfile OpenAPI annotations) is still scanned. `vidocq:checkpom` asks for it. Its `openapi` section counts the operations and offers to open the document and the Swagger UI; the `rest` panel of the dev console shows the same buttons. [[grimm-named-module]]The extension requires Grimm's named module, `io.vidocq.grimm.cdi.vauban`: with the automatic module it used to require, a packaged application whose `cassini:generate` sealed its modules lost every Grimm bean, and `/openapi` answered 404 (Vidocq/grimm#15). [[grimm-openapi-apis]]The extension brings the Jakarta REST API, which `grimm-cdi-vauban` leaves to the runtime, so an application with OpenAPI and no Cassini starts.
 
 | `vidocq-runtime-cervantes-jwt-extension`
 | `microprofile`

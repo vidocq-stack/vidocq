@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+        <artifactId>vidocq-runtime-extensions-microprofile</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-grimm-openapi-extension-codegen</artifactId>
+    <packaging>jar</packaging>
+    <name>Vidocq :: MicroProfile Extensions :: OpenAPI (Grimm) :: Codegen Bundle</name>
+    <description>
+        Companion codegen bundle for vidocq-runtime-grimm-openapi-extension.
+        Declare this artifact in &lt;annotationProcessorPaths&gt; whenever the
+        application depends on the OpenAPI extension; Maven resolves the transitive
+        APT dependencies below automatically.
+        Runs Grimm's processor on the application's classes: each JAX-RS resource gets
+        a $$GrimmModel contribution holding its part of the OpenAPI document, so the
+        runtime builds the document without scanning the resources and their schemas
+        by reflection (vidocq-workspace#38).
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.grimm</groupId>
+            <artifactId>grimm-processor</artifactId>
+            <version>${grimm.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Only the empty module-info to compile: no processor, not even the
+                         inherited core-codegen path, which for core-codegen is this artifact. -->
+                    <proc>none</proc>
+                    <annotationProcessorPaths combine.self="override" />
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

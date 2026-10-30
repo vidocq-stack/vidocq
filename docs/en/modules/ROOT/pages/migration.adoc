@@ -285,6 +285,21 @@ xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[Codegen bundles are 
 xref:modules/vidocq-runtime-extensions.adoc#ravel-config-codegen[the Config extension] and
 xref:modules/vidocq-runtime-extensions.adoc#cyrano-rest-client-codegen[the Rest Client extension].
 
+[#metrics-openapi-codegen]
+== Metrics and OpenAPI need their codegen bundle
+
+Two more extensions ship a `-codegen` bundle, so that their processor runs on the application's classes instead of
+a scan by reflection when the application starts (Vidocq/vidocq-workspace#38). `vidocq:checkpom` fails the build of an
+application that declares the extension without it:
+
+* `vidocq-runtime-dirac-metrics-extension` → `vidocq-runtime-dirac-metrics-extension-codegen`;
+* `vidocq-runtime-grimm-openapi-extension` → `vidocq-runtime-grimm-openapi-extension-codegen`.
+
+Add each one to the compiler's `annotationProcessorPaths`, as in xref:#config-rest-client-codegen[the previous
+section]; `checkpom` prints the `<path>` to paste, and `vidocq extension add` writes it. See
+xref:modules/vidocq-runtime-extensions.adoc#dirac-metrics-codegen[the Metrics extension] and
+xref:modules/vidocq-runtime-extensions.adoc#grimm-openapi-codegen[the OpenAPI extension].
+
 [#application-parent]
 == `vidocq-runtime-parent` is an application parent, with a BOM
 

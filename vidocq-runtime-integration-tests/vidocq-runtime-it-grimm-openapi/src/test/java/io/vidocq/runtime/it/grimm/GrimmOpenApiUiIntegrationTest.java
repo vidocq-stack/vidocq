@@ -56,7 +56,10 @@ class GrimmOpenApiUiIntegrationTest {
     @Deployment
     public static JavaArchive createDeployment() {
         return ShrinkWrap.create(JavaArchive.class, "vidocq-grimm-openapi-it.jar")
-                .addClass(GreetingResource.class);
+                .addClass(GreetingResource.class)
+                // Written by Grimm's processor (the codegen bundle of the extension): the runtime reads the
+                // resource's part of the document from it instead of scanning the resource by reflection.
+                .addClass(GreetingResource.class.getName() + "$$GrimmModel");
     }
 
     @Test
