@@ -21,6 +21,8 @@ package io.vidocq.heisenberg.spi.gen;
 
 import java.lang.annotation.Annotation;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.Objects;
 import org.eclipse.microprofile.faulttolerance.Asynchronous;
 import org.eclipse.microprofile.faulttolerance.Bulkhead;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
@@ -34,12 +36,34 @@ import org.eclipse.microprofile.faulttolerance.Timeout;
  * values, instead of reading them by reflection. Each is a record whose components are the annotation's members, so
  * its accessors implement them.
  *
- * <p>Heisenberg only reads their members. They do not follow the {@link Annotation#equals} contract for array
- * members, which a record compares by reference.</p>
+ * <p>Heisenberg only reads their members. Those with array members compare and print them by content, as an
+ * annotation does.</p>
  */
 public final class Literals {
 
     private Literals() {
+    }
+
+    /** Equality of two member values, arrays by content, as {@link Annotation#equals} compares them. */
+    private static boolean same(Object left, Object right) {
+        return left instanceof Object[] a && right instanceof Object[] b ? Arrays.equals(a, b) : Objects.equals(left, right);
+    }
+
+    /** A hash of member values, arrays by content. */
+    private static int hash(Object... members) {
+        return Arrays.deepHashCode(members);
+    }
+
+    /** {@code @Type(member=value, ...)}, arrays by content. */
+    private static String describe(Class<? extends Annotation> type, Object... namesAndValues) {
+        StringBuilder out = new StringBuilder("@").append(type.getName()).append('(');
+        for (int i = 0; i < namesAndValues.length; i += 2) {
+            if (i > 0) out.append(", ");
+            Object value = namesAndValues[i + 1];
+            out.append(namesAndValues[i]).append('=')
+                    .append(value instanceof Object[] array ? Arrays.toString(array) : String.valueOf(value));
+        }
+        return out.append(')').toString();
     }
 
     /** A {@link Retry}. */
@@ -50,6 +74,27 @@ public final class Literals {
         @Override
         public Class<? extends Annotation> annotationType() {
             return Retry.class;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Retry r && maxRetries == r.maxRetries() && delay == r.delay()
+                    && delayUnit == r.delayUnit() && maxDuration == r.maxDuration() && durationUnit == r.durationUnit()
+                    && jitter == r.jitter() && jitterDelayUnit == r.jitterDelayUnit()
+                    && same(retryOn, r.retryOn()) && same(abortOn, r.abortOn());
+        }
+
+        @Override
+        public int hashCode() {
+            return hash(maxRetries, delay, delayUnit, maxDuration, durationUnit, jitter, jitterDelayUnit, retryOn,
+                    abortOn);
+        }
+
+        @Override
+        public String toString() {
+            return describe(Retry.class, "maxRetries", maxRetries, "delay", delay, "delayUnit", delayUnit,
+                    "maxDuration", maxDuration, "durationUnit", durationUnit, "jitter", jitter,
+                    "jitterDelayUnit", jitterDelayUnit, "retryOn", retryOn, "abortOn", abortOn);
         }
     }
 
@@ -69,6 +114,26 @@ public final class Literals {
         public Class<? extends Annotation> annotationType() {
             return CircuitBreaker.class;
         }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof CircuitBreaker c && same(failOn, c.failOn()) && same(skipOn, c.skipOn())
+                    && delay == c.delay() && delayUnit == c.delayUnit()
+                    && requestVolumeThreshold == c.requestVolumeThreshold()
+                    && Double.compare(failureRatio, c.failureRatio()) == 0 && successThreshold == c.successThreshold();
+        }
+
+        @Override
+        public int hashCode() {
+            return hash(failOn, skipOn, delay, delayUnit, requestVolumeThreshold, failureRatio, successThreshold);
+        }
+
+        @Override
+        public String toString() {
+            return describe(CircuitBreaker.class, "failOn", failOn, "skipOn", skipOn, "delay", delay,
+                    "delayUnit", delayUnit, "requestVolumeThreshold", requestVolumeThreshold,
+                    "failureRatio", failureRatio, "successThreshold", successThreshold);
+        }
     }
 
     /** A {@link Bulkhead}. */
@@ -86,6 +151,24 @@ public final class Literals {
         @Override
         public Class<? extends Annotation> annotationType() {
             return Fallback.class;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Fallback f && Objects.equals(value, f.value())
+                    && Objects.equals(fallbackMethod, f.fallbackMethod())
+                    && same(applyOn, f.applyOn()) && same(skipOn, f.skipOn());
+        }
+
+        @Override
+        public int hashCode() {
+            return hash(value, fallbackMethod, applyOn, skipOn);
+        }
+
+        @Override
+        public String toString() {
+            return describe(Fallback.class, "value", value, "fallbackMethod", fallbackMethod, "applyOn", applyOn,
+                    "skipOn", skipOn);
         }
     }
 

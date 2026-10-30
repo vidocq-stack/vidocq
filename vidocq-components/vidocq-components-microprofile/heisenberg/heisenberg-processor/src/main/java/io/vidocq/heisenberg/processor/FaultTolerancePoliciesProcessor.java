@@ -65,6 +65,7 @@ public final class FaultTolerancePoliciesProcessor extends AbstractProcessor {
     private static final String COMPANION = "io.vidocq.heisenberg.spi.gen.FaultToleranceCompanion";
     private static final String LITERALS = "io.vidocq.heisenberg.spi.gen.Literals";
     private static final String FT = "org.eclipse.microprofile.faulttolerance.";
+    private static final String VALUE = "value";
 
     /** The six annotations, each with its members in the order of its literal's components. */
     private static final Map<String, List<String>> ANNOTATIONS = new LinkedHashMap<>();
@@ -72,11 +73,11 @@ public final class FaultTolerancePoliciesProcessor extends AbstractProcessor {
     static {
         ANNOTATIONS.put("Retry", List.of("maxRetries", "delay", "delayUnit", "maxDuration", "durationUnit", "jitter",
                 "jitterDelayUnit", "retryOn", "abortOn"));
-        ANNOTATIONS.put("Timeout", List.of("value", "unit"));
+        ANNOTATIONS.put("Timeout", List.of(VALUE, "unit"));
         ANNOTATIONS.put("CircuitBreaker", List.of("failOn", "skipOn", "delay", "delayUnit", "requestVolumeThreshold",
                 "failureRatio", "successThreshold"));
-        ANNOTATIONS.put("Bulkhead", List.of("value", "waitingTaskQueue"));
-        ANNOTATIONS.put("Fallback", List.of("value", "fallbackMethod", "applyOn", "skipOn"));
+        ANNOTATIONS.put("Bulkhead", List.of(VALUE, "waitingTaskQueue"));
+        ANNOTATIONS.put("Fallback", List.of(VALUE, "fallbackMethod", "applyOn", "skipOn"));
         ANNOTATIONS.put("Asynchronous", List.of());
     }
 
@@ -137,37 +138,7 @@ public final class FaultTolerancePoliciesProcessor extends AbstractProcessor {
             return;
         }
         List<TypeElement> chain = classChain(type);
-        Map<String, AnnotationMirror> classLevel = new LinkedHashMap<>();
-        for (String name : ANNOTATIONS.keySet()) {
-            for (TypeElement c : chain) {
-                AnnotationMirror found = mirror(c, name);
-                if (found != null) {
-                    classLevel.put(name, found);
-                    break;
-                }
-            }
-        }
-        Map<String, Map<String, AnnotationMirror>> byMethod = new LinkedHashMap<>();
-        Set<String> keys = new TreeSet<>();
-        for (TypeElement c : chain) {
-            for (ExecutableElement method : ElementFilter.methodsIn(c.getEnclosedElements())) {
-                if (method.getModifiers().contains(Modifier.STATIC)
-                        || method.getModifiers().contains(Modifier.PRIVATE)) {
-                    continue;
-                }
-                String key = methodKey(method);
-                if (!keys.add(key)) {
-                    continue; // a nearer declaration of the same method was seen first
-                }
-                Map<String, AnnotationMirror> resolved = new LinkedHashMap<>();
-                for (String name : ANNOTATIONS.keySet()) {
-                    AnnotationMirror found = mirror(method, name);
-                    if (found == null) found = classLevel.get(name);
-                    if (found != null) resolved.put(name, found);
-                }
-                if (!resolved.isEmpty()) byMethod.put(key, resolved);
-            }
-        }
+        Map<String, Map<String, AnnotationMirror>> byMethod = byMethod(chain, classLevel(chain));
         if (byMethod.isEmpty()) {
             return;
         }
@@ -175,6 +146,57 @@ public final class FaultTolerancePoliciesProcessor extends AbstractProcessor {
             throw new Skip("the class cannot be named from its package");
         }
         emit(type, byMethod);
+    }
+
+    /** Each annotation from the nearest class of the chain that carries it. */
+    private static Map<String, AnnotationMirror> classLevel(List<TypeElement> chain) {
+        Map<String, AnnotationMirror> classLevel = new LinkedHashMap<>();
+        for (String name : ANNOTATIONS.keySet()) {
+            AnnotationMirror found = nearest(chain, name);
+            if (found != null) classLevel.put(name, found);
+        }
+        return classLevel;
+    }
+
+    private static AnnotationMirror nearest(List<TypeElement> chain, String name) {
+        for (TypeElement c : chain) {
+            AnnotationMirror found = mirror(c, name);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    /** The annotations of every guardable method with any, by key; a nearer declaration hides a farther one. */
+    private Map<String, Map<String, AnnotationMirror>> byMethod(List<TypeElement> chain,
+                                                                Map<String, AnnotationMirror> classLevel) {
+        Map<String, Map<String, AnnotationMirror>> byMethod = new LinkedHashMap<>();
+        Set<String> keys = new TreeSet<>();
+        for (TypeElement c : chain) {
+            for (ExecutableElement method : ElementFilter.methodsIn(c.getEnclosedElements())) {
+                if (guardable(method) && keys.add(methodKey(method))) {
+                    Map<String, AnnotationMirror> resolved = resolve(method, classLevel);
+                    if (!resolved.isEmpty()) byMethod.put(methodKey(method), resolved);
+                }
+            }
+        }
+        return byMethod;
+    }
+
+    /** Interceptors guard neither static nor private methods. */
+    private static boolean guardable(ExecutableElement method) {
+        return !method.getModifiers().contains(Modifier.STATIC) && !method.getModifiers().contains(Modifier.PRIVATE);
+    }
+
+    /** Each annotation from the method, else from the class level. */
+    private static Map<String, AnnotationMirror> resolve(ExecutableElement method,
+                                                         Map<String, AnnotationMirror> classLevel) {
+        Map<String, AnnotationMirror> resolved = new LinkedHashMap<>();
+        for (String name : ANNOTATIONS.keySet()) {
+            AnnotationMirror found = mirror(method, name);
+            if (found == null) found = classLevel.get(name);
+            if (found != null) resolved.put(name, found);
+        }
+        return resolved;
     }
 
     /** The class and its superclasses, nearest first, {@code Object} excluded. */
@@ -316,23 +338,32 @@ public final class FaultTolerancePoliciesProcessor extends AbstractProcessor {
     }
 
     private String value(Object raw, String packageName) throws Skip {
-        if (raw instanceof Long l) return l + "L";
-        if (raw instanceof Double d) return Double.isFinite(d) ? d + "d" : "Double." + (d > 0 ? "POSITIVE_INFINITY" : "NEGATIVE_INFINITY");
-        if (raw instanceof Integer || raw instanceof Boolean) return raw.toString();
-        if (raw instanceof String s) return processingEnv.getElementUtils().getConstantExpression(s);
-        if (raw instanceof VariableElement constant) {
-            return ((TypeElement) constant.getEnclosingElement()).getQualifiedName() + "." + constant.getSimpleName();
+        return switch (raw) {
+            case Long l -> l + "L";
+            case Double d -> doubleLiteral(d);
+            case Integer i -> i.toString();
+            case Boolean b -> b.toString();
+            case String text -> processingEnv.getElementUtils().getConstantExpression(text);
+            case VariableElement constant ->
+                    ((TypeElement) constant.getEnclosingElement()).getQualifiedName() + "." + constant.getSimpleName();
+            case TypeMirror type -> classLiteral(type, packageName);
+            case List<?> list -> classArray(list, packageName);
+            default -> throw new Skip("unexpected annotation value " + raw);
+        };
+    }
+
+    private static String doubleLiteral(double d) {
+        if (Double.isFinite(d)) return d + "d";
+        return d > 0 ? "Double.POSITIVE_INFINITY" : "Double.NEGATIVE_INFINITY";
+    }
+
+    private String classArray(List<?> list, String packageName) throws Skip {
+        StringBuilder out = new StringBuilder("new Class[] {");
+        for (int i = 0; i < list.size(); i++) {
+            if (i > 0) out.append(", ");
+            out.append(value(((AnnotationValue) list.get(i)).getValue(), packageName));
         }
-        if (raw instanceof TypeMirror type) return classLiteral(type, packageName);
-        if (raw instanceof List<?> list) {
-            StringBuilder out = new StringBuilder("new Class[] {");
-            for (int i = 0; i < list.size(); i++) {
-                if (i > 0) out.append(", ");
-                out.append(value(((AnnotationValue) list.get(i)).getValue(), packageName));
-            }
-            return out.append('}').toString();
-        }
-        throw new Skip("unexpected annotation value " + raw);
+        return out.append('}').toString();
     }
 
     /** {@code Type.class}, when the companion's package can name it. */
