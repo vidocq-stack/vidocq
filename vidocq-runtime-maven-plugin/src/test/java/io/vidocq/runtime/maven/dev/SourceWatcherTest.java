@@ -179,6 +179,52 @@ class SourceWatcherTest {
         }
     }
 
+    /**
+     * A package directory created while the watcher runs, with a file written into it at once, as {@code mkdir -p}
+     * followed by an editor's save does: the file is seen, and so is a later edit of it (BUG-20261030-03, reported by
+     * the vidocq-tutorial session against {@code vidocq dev}).
+     */
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS)
+    void a_package_created_later_and_its_files_are_watched(@TempDir Path tmp) throws Exception {
+        Path test = Files.createDirectories(tmp.resolve("src/test/java"));
+        Path library = Files.createDirectories(test.resolve("com/example/library"));
+        Files.writeString(library.resolve("HelloTest.java"), "class HelloTest {}");
+
+        try (SourceWatcher watcher = SourceWatcher.on(List.of(), List.of(test), Duration.ofMillis(50))) {
+            Path book = library.resolve("book");
+            Files.createDirectories(book);
+            Path bookTest = book.resolve("BookTest.java");
+            Files.writeString(bookTest, "class BookTest {}");
+            assertEquals(new SourceWatcher.Change(false, true), awaitWithin(watcher, 25),
+                    "the new package's first file was missed");
+
+            Thread.sleep(1_100); // a modification time the polling watcher of macOS tells from the first one
+            Files.writeString(bookTest, "class BookTest { /* edit */ }");
+            assertEquals(new SourceWatcher.Change(false, true), awaitWithin(watcher, 25),
+                    "an edit in the new package was missed");
+        }
+    }
+
+    /** {@link SourceWatcher#awaitChanges} on another thread, or {@code null} after {@code seconds}. */
+    private static SourceWatcher.Change awaitWithin(SourceWatcher watcher, int seconds) throws InterruptedException {
+        AtomicReference<SourceWatcher.Change> change = new AtomicReference<>();
+        Thread t = new Thread(() -> {
+            try {
+                change.set(watcher.awaitChanges());
+            } catch (InterruptedException _) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+        t.join(TimeUnit.SECONDS.toMillis(seconds));
+        if (t.isAlive()) {
+            t.interrupt();
+        }
+        return change.get();
+    }
+
     /** The events of a burst, a main and a test edit and a new package, collapse into one change of both kinds. */
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
