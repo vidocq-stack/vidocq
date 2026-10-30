@@ -134,14 +134,7 @@ public final class GrimmModelProcessor extends AbstractProcessor {
                 }
             }
         }
-        TypeElement definitionAnnotation = processingEnv.getElementUtils().getTypeElement(OPENAPI_DEFINITION);
-        if (definitionAnnotation != null) {
-            for (Element e : roundEnv.getElementsAnnotatedWith(definitionAnnotation)) {
-                if (e instanceof TypeElement type) {
-                    definitionClasses.add(processingEnv.getElementUtils().getBinaryName(type).toString());
-                }
-            }
-        }
+        collectDefinitionClasses(roundEnv);
         if (roundEnv.processingOver()) {
             writeServicesFile();
             writeDefinitionsFile();
@@ -489,6 +482,16 @@ public final class GrimmModelProcessor extends AbstractProcessor {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING,
                     "Could not write OpenApiContribution services file (naming-convention "
                             + "resolution still applies): " + e);
+        }
+    }
+
+    private void collectDefinitionClasses(RoundEnvironment roundEnv) {
+        TypeElement definitionAnnotation = processingEnv.getElementUtils().getTypeElement(OPENAPI_DEFINITION);
+        if (definitionAnnotation == null) return;
+        for (Element e : roundEnv.getElementsAnnotatedWith(definitionAnnotation)) {
+            if (e instanceof TypeElement type) {
+                definitionClasses.add(processingEnv.getElementUtils().getBinaryName(type).toString());
+            }
         }
     }
 

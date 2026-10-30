@@ -83,19 +83,24 @@ public class ScannedTypesCreator implements SyntheticBeanCreator<ScannedTypes> {
                 try (var in = lists.nextElement().openStream()) {
                     for (String line : new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
                             .split("\\R")) {
-                        String name = line.strip();
-                        if (!name.isEmpty() && GrimmExtension.documented(name)) {
-                            try {
-                                classes.add(Class.forName(name, false, loader));
-                            } catch (ClassNotFoundException | LinkageError _) {
-                                LOG.log(System.Logger.Level.DEBUG, "Listed definition class {0} is not visible", name);
-                            }
-                        }
+                        addListed(line.strip(), loader, classes);
                     }
                 }
             }
         } catch (java.io.IOException e) {
             LOG.log(System.Logger.Level.DEBUG, () -> "OpenAPI definition lists could not be read: " + e);
+        }
+    }
+
+    /** Adds the class grimm-processor listed under {@code name}, a binary name read from the application's jar. */
+    private static void addListed(String name, ClassLoader loader, Set<Class<?>> classes) {
+        if (name.isEmpty() || !GrimmExtension.documented(name)) {
+            return;
+        }
+        try {
+            classes.add(Class.forName(name, false, loader));
+        } catch (ClassNotFoundException | LinkageError _) {
+            LOG.log(System.Logger.Level.DEBUG, "Listed definition class {0} is not visible", name);
         }
     }
 }

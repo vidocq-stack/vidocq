@@ -23,6 +23,7 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
 import org.eclipse.microprofile.openapi.models.PathItem;
 import org.eclipse.microprofile.openapi.models.Paths;
 import org.eclipse.microprofile.openapi.models.info.Info;
+import org.eclipse.microprofile.openapi.models.tags.Tag;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -102,7 +103,7 @@ class ModelBuilderTest {
     void theDefinitionOfAClassWithACompanionIsRead() {
         OpenAPI model = new ModelBuilder().build(GrimmConfig.defaults(), List.of(DefinedResource.class));
 
-        assertEquals(List.of("library"), model.getTags().stream().map(t -> t.getName()).toList());
+        assertEquals(List.of("library"), model.getTags().stream().map(Tag::getName).toList());
         assertNotNull(model.getPaths().getPathItem("/defined"));
     }
 }
