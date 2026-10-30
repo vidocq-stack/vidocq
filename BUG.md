@@ -5,6 +5,21 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261030-03 — `vidocq dev` misses the first files of a package created while it runs
+
+- **Date**: 2026-10-30
+- **Status**: FIXED on `fix/watcher-new-package-dirs`
+- **Affected module**: vidocq-runtime-maven-plugin (`dev.SourceWatcher`)
+- **Symptom**: while `vidocq dev` runs, `mkdir -p src/test/java/com/example/library/book` and a test written there
+  ran nothing; the same on the main side for the first files of a new `src/main/java/.../book/` package. Reported by
+  the vidocq-tutorial session.
+- **Minimal reproduction**: `SourceWatcherTest.a_package_created_later_and_its_files_are_watched`.
+- **Cause**: the watcher registered a new directory on its `ENTRY_CREATE` event, but a directory is not a watched
+  file, so the event changed nothing, and the files written into it before it was registered raised no event of their
+  own: on macOS the `WatchService` polls about every 10 s, so a `mkdir -p` and a save always land in between.
+- **Fix**: a directory registered on its creation is walked once, and a watched file already in it is a change of its
+  kind, as a watched root that appears already was (#138).
+
 ## BUG-20261026-01 — `vidocq:dev` and `vidocq:run` start a Vaadin application from an empty `target/` and answer 404 / 500
 
 - **Date**: 2026-10-26

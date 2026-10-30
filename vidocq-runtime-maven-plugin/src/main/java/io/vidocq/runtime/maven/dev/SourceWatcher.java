@@ -243,6 +243,9 @@ final class SourceWatcher implements AutoCloseable {
                 && !registered.contains(resolved)) {
             try {
                 registerRecursive(resolved);
+                // Files written into it before it was registered raised no event of their own: a `mkdir -p` and a
+                // save land well within the polling interval of macOS (BUG-20261030-03).
+                noteSourcesIn(resolved, touched);
             } catch (IOException _) {
                 // a new subdir we cannot register is not fatal
             }
@@ -252,6 +255,19 @@ final class SourceWatcher implements AutoCloseable {
                 touched.test = true;
             } else {
                 touched.main = true;
+            }
+        }
+    }
+
+    /** Notes the watched files already under {@code dir}, of a main or a test directory. */
+    private void noteSourcesIn(Path dir, Touched touched) throws IOException {
+        try (Stream<Path> files = Files.walk(dir)) {
+            if (files.anyMatch(file -> isWatchedExtension(file.getFileName().toString()))) {
+                if (under(dir, testRoots)) {
+                    touched.test = true;
+                } else {
+                    touched.main = true;
+                }
             }
         }
     }
@@ -269,17 +285,7 @@ final class SourceWatcher implements AutoCloseable {
             it.remove();
             try {
                 registerRecursive(root);
-                boolean sources;
-                try (Stream<Path> files = Files.walk(root)) {
-                    sources = files.anyMatch(file -> isWatchedExtension(file.getFileName().toString()));
-                }
-                if (sources) {
-                    if (under(root, testRoots)) {
-                        touched.test = true;
-                    } else {
-                        touched.main = true;
-                    }
-                }
+                noteSourcesIn(root, touched);
             } catch (IOException | UncheckedIOException _) {
                 // a root we cannot read yet is not fatal: its later events still count once registered
             }
