@@ -47,6 +47,9 @@ import java.util.stream.Stream;
  * their fields and getters hold, transitively. JSON-B binds those types by reflection, so their package must be
  * opened, or at least exported, or the first request fails with an {@code IllegalAccessException}.
  *
+ * <p>The CDI interceptors too (BUG-20261031-04): Vauban calls their interceptor methods by reflection. A public method
+ * of a public class only needs its package exported; any other needs the package opened.</p>
+ *
  * <p>The resources themselves are not listed: their dispatch is generated at build time.</p>
  */
 final class ReflectedPackages {
@@ -57,6 +60,12 @@ final class ReflectedPackages {
     private static final Set<String> ENTITY_ANNOTATIONS = Set.of(
             "Ljakarta/persistence/Entity;", "Ljakarta/persistence/Embeddable;",
             "Ljakarta/persistence/MappedSuperclass;");
+    private static final String INTERCEPTOR = "Ljakarta/interceptor/Interceptor;";
+    /** The annotations of the methods the container calls on an interceptor. */
+    private static final Set<String> INTERCEPTOR_METHOD_ANNOTATIONS = Set.of(
+            "Ljakarta/interceptor/AroundInvoke;", "Ljakarta/interceptor/AroundConstruct;",
+            "Ljakarta/interceptor/AroundTimeout;", "Ljakarta/annotation/PostConstruct;",
+            "Ljakarta/annotation/PreDestroy;");
 
     /** A class name inside a descriptor or a generic signature: {@code Lcom/acme/Book;}, {@code Lcom/acme/Box<}. */
     private static final Pattern CLASS_REF = Pattern.compile("L([\\w$/]+)[;<]");
@@ -64,13 +73,31 @@ final class ReflectedPackages {
     private ReflectedPackages() {}
 
     /**
-     * Each package to open, with the class that needs it and how it is reached, sorted by package.
+     * The packages the runtime reaches by reflection.
+     *
+     * @param reasons    each package, with the class that needs it and how it is reached, sorted by package
+     * @param needsOpens the packages an export does not satisfy: the runtime calls a non-public member there
+     */
+    record Reached(Map<String, String> reasons, Set<String> needsOpens) {}
+
+    /**
+     * The packages of the module's classes the runtime reaches by reflection.
      *
      * @param classes the module's compiled classes ({@code target/classes})
      */
-    static Map<String, String> of(Path classes) throws IOException {
+    static Reached of(Path classes) throws IOException {
         Map<String, ClassModel> application = read(classes);
         Map<String, String> reasons = new TreeMap<>();
+        Set<String> needsOpens = new HashSet<>();
+        for (ClassModel model : application.values()) {
+            if (annotations(model).contains(INTERCEPTOR)) {
+                String name = model.thisClass().asInternalName();
+                reasons.put(packageOf(name), dotted(name) + ", a CDI interceptor its container calls by reflection");
+                if (!publiclyCalled(model)) {
+                    needsOpens.add(packageOf(name));
+                }
+            }
+        }
         Deque<String[]> queue = new ArrayDeque<>();
         for (ClassModel model : application.values()) {
             queue.addAll(roots(model));
@@ -87,23 +114,41 @@ final class ReflectedPackages {
                 queue.add(new String[] {type, "reached through " + dotted(next[0])});
             }
         }
-        return reasons;
+        return new Reached(reasons, needsOpens);
+    }
+
+    /** Whether {@code interceptor} is public, and so is each method its container calls. */
+    private static boolean publiclyCalled(ClassModel interceptor) {
+        if ((interceptor.flags().flagsMask() & ClassFile.ACC_PUBLIC) == 0) {
+            return false;
+        }
+        for (MethodModel method : interceptor.methods()) {
+            boolean called = method.findAttribute(Attributes.runtimeVisibleAnnotations()).stream()
+                    .flatMap(a -> a.annotations().stream())
+                    .anyMatch(an -> INTERCEPTOR_METHOD_ANNOTATIONS.contains(an.className().stringValue()));
+            if (called && (method.flags().flagsMask() & ClassFile.ACC_PUBLIC) == 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
-     * The packages of {@code reached} the module neither opens (to anyone) nor exports to all; none for an open
-     * module.
+     * The packages of {@code reached} the module does not open (to anyone), nor export to all when an export is
+     * enough; none for an open module.
      */
-    static List<String> missing(ModuleDescriptor descriptor, Map<String, String> reached) {
+    static List<String> missing(ModuleDescriptor descriptor, Reached reached) {
         if (descriptor.isOpen()) {
             return List.of();
         }
         Set<String> opened = new HashSet<>();
         descriptor.opens().forEach(o -> opened.add(o.source()));
-        descriptor.exports().stream().filter(e -> !e.isQualified()).forEach(e -> opened.add(e.source()));
+        Set<String> exported = new HashSet<>();
+        descriptor.exports().stream().filter(e -> !e.isQualified()).forEach(e -> exported.add(e.source()));
         List<String> missing = new ArrayList<>();
-        for (String pkg : reached.keySet()) {
-            if (!opened.contains(pkg)) {
+        for (String pkg : reached.reasons().keySet()) {
+            boolean satisfied = opened.contains(pkg) || exported.contains(pkg) && !reached.needsOpens().contains(pkg);
+            if (!satisfied) {
                 missing.add(pkg);
             }
         }

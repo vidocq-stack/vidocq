@@ -95,7 +95,7 @@ class ReflectedPackagesTest {
                     mb.withCode(code -> code.aconst_null().areturn());
                 })));
 
-        Map<String, String> reached = ReflectedPackages.of(classes);
+        Map<String, String> reached = ReflectedPackages.of(classes).reasons();
 
         assertEquals(Set.of("com.acme.shop.book", "com.acme.shop.people"), reached.keySet());
         assertEquals("com.acme.shop.book.Book, reached through com.acme.shop.rest.BookResource",
@@ -107,19 +107,20 @@ class ReflectedPackagesTest {
         write(ClassDesc.of("com.acme.shop.data.Loan"), annotated("jakarta.persistence.Entity",
                 cb -> cb.withField("id", ConstantDescs.CD_long, ClassFile.ACC_PRIVATE)));
 
-        assertEquals(Set.of("com.acme.shop.data"), ReflectedPackages.of(classes).keySet());
+        assertEquals(Set.of("com.acme.shop.data"), ReflectedPackages.of(classes).reasons().keySet());
     }
 
     @Test
     void aClassNoResourceOrEntityReachesIsLeftAlone() throws IOException {
         bookAndAuthor();
 
-        assertEquals(Map.of(), ReflectedPackages.of(classes));
+        assertEquals(Map.of(), ReflectedPackages.of(classes).reasons());
     }
 
     @Test
     void aPackageOpenedOrExportedOrAnOpenModuleIsSatisfied() {
-        Map<String, String> reached = Map.of("a.open", "x", "a.exported", "y", "a.qualified", "z", "a.closed", "w");
+        var reached = new ReflectedPackages.Reached(
+                Map.of("a.open", "x", "a.exported", "y", "a.qualified", "z", "a.closed", "w"), Set.of());
         ModuleDescriptor descriptor = ModuleDescriptor.newModule("app")
                 .opens("a.open").exports("a.exported").opens("a.qualified", Set.of("io.vidocq.champollion.jsonb"))
                 .packages(Set.of("a.closed"))
@@ -128,5 +129,46 @@ class ReflectedPackagesTest {
         assertEquals(List.of("a.closed"), ReflectedPackages.missing(descriptor, reached));
         assertEquals(List.of(), ReflectedPackages.missing(
                 ModuleDescriptor.newOpenModule("app").packages(Set.of("a.closed")).build(), reached));
+    }
+
+    /** An interceptor whose {@code @AroundInvoke} is not public: Vauban calls it by reflection with deep access. */
+    private void interceptor(String name, int methodFlags) throws IOException {
+        write(ClassDesc.of(name), cb -> {
+            cb.withFlags(ClassFile.ACC_PUBLIC);
+            cb.with(RuntimeVisibleAnnotationsAttribute.of(Annotation.of(ClassDesc.of("jakarta.interceptor.Interceptor"))));
+            cb.withMethod("audit", MethodTypeDesc.of(ConstantDescs.CD_Object,
+                    ClassDesc.of("jakarta.interceptor.InvocationContext")), methodFlags, mb -> {
+                mb.with(RuntimeVisibleAnnotationsAttribute.of(
+                        Annotation.of(ClassDesc.of("jakarta.interceptor.AroundInvoke"))));
+                mb.withCode(code -> code.aconst_null().areturn());
+            });
+        });
+    }
+
+    @Test
+    void anInterceptorWithANonPublicMethodNeedsItsPackageOpenedNotOnlyExported() throws IOException {
+        interceptor("com.acme.shop.support.AuditedInterceptor", 0);
+
+        var reached = ReflectedPackages.of(classes);
+
+        assertEquals(Map.of("com.acme.shop.support",
+                        "com.acme.shop.support.AuditedInterceptor, a CDI interceptor its container calls by reflection"),
+                reached.reasons());
+        assertEquals(Set.of("com.acme.shop.support"), reached.needsOpens());
+        assertEquals(List.of("com.acme.shop.support"), ReflectedPackages.missing(
+                ModuleDescriptor.newModule("app").exports("com.acme.shop.support").build(), reached));
+    }
+
+    @Test
+    void anInterceptorWithPublicMethodsIsSatisfiedByAnExport() throws IOException {
+        interceptor("com.acme.shop.support.AuditedInterceptor", ClassFile.ACC_PUBLIC);
+
+        var reached = ReflectedPackages.of(classes);
+
+        assertEquals(Set.of(), reached.needsOpens());
+        assertEquals(List.of(), ReflectedPackages.missing(
+                ModuleDescriptor.newModule("app").exports("com.acme.shop.support").build(), reached));
+        assertEquals(List.of("com.acme.shop.support"), ReflectedPackages.missing(
+                ModuleDescriptor.newModule("app").packages(Set.of("com.acme.shop.support")).build(), reached));
     }
 }

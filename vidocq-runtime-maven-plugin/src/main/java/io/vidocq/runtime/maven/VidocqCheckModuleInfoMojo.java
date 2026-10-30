@@ -55,9 +55,9 @@ import java.util.Set;
  *
  * <p>It also reads the compiled classes for the packages a runtime module reaches by reflection — the
  * JPA entities, and the types a REST resource or provider takes or returns, with the types their fields
- * and getters hold (see {@link ReflectedPackages}) — and asks for an {@code opens} of each one the
- * module neither opens nor exports: JSON-B binds those types by reflection, and the first request
- * failed (BUG-20261030-24).</p>
+ * and getters hold, and the CDI interceptors (see {@link ReflectedPackages}) — and asks for an
+ * {@code opens} of each one the module does not open: JSON-B binds those types, and Vauban calls the
+ * interceptors, by reflection, and the first request failed (BUG-20261030-24, BUG-20261031-04).</p>
  *
  * <p>Default phase: {@code process-classes} — after the module-info is compiled, so the check reads
  * the authoritative {@code module-info.class} rather than parsing source. Skip with
@@ -105,11 +105,11 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
         }
         ModuleDescriptor descriptor = read(moduleInfo);
         List<Requirement> missing = required.isEmpty() ? List.of() : ModuleInfoRequirements.missing(descriptor, required);
-        Map<String, String> reached = reflectedPackages();
+        ReflectedPackages.Reached reached = reflectedPackages();
         List<String> unopened = ReflectedPackages.missing(descriptor, reached);
         if (missing.isEmpty() && unopened.isEmpty()) {
             getLog().info("Vidocq check-module-info: module-info of '" + descriptor.name() + "' satisfies all "
-                    + required.size() + " extension requirement(s) and opens the " + reached.size()
+                    + required.size() + " extension requirement(s) and opens the " + reached.reasons().size()
                     + " package(s) the runtime reaches by reflection.");
             return;
         }
@@ -120,12 +120,13 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
             missing.forEach(r -> issues.add("    " + render(r)));
         }
         if (!unopened.isEmpty()) {
-            // BUG-20261030-24: JSON-B binds these types by reflection, and the first request failed with an
-            // IllegalAccessException.
-            issues.add("module-info of '" + descriptor.name() + "' neither opens nor exports " + unopened.size()
-                    + " package(s) the runtime reaches by reflection (JSON-B, JPA): the first request using them"
-                    + " would fail — add to src/main/java/module-info.java:");
-            unopened.forEach(pkg -> issues.add("    opens " + pkg + ";   (" + reached.get(pkg) + ")"));
+            // BUG-20261030-24, BUG-20261031-04: JSON-B binds these types, and Vauban calls the interceptors, by
+            // reflection; the first request failed with an IllegalAccessException.
+            issues.add("module-info of '" + descriptor.name() + "' does not open " + unopened.size()
+                    + " package(s) the runtime reaches by reflection (JSON-B, JPA, CDI interceptors): the first"
+                    + " request using them would fail — `mvn vidocq:complete-module-info` adds them, or add to"
+                    + " src/main/java/module-info.java:");
+            unopened.forEach(pkg -> issues.add("    opens " + pkg + ";   (" + reached.reasons().get(pkg) + ")"));
         }
         report(issues);
     }
@@ -152,7 +153,7 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
         }
     }
 
-    private Map<String, String> reflectedPackages() throws MojoFailureException {
+    private ReflectedPackages.Reached reflectedPackages() throws MojoFailureException {
         try {
             return ReflectedPackages.of(outputDirectory.toPath());
         } catch (IOException e) {
