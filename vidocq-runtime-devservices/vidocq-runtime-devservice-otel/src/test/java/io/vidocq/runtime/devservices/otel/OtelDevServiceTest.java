@@ -83,7 +83,9 @@ class OtelDevServiceTest {
         assertEquals(java.util.List.of(3000, 4317, 4318), container.getExposedPorts());
         assertEquals("true", container.getLabels().get("io.vidocq.dev"));
         assertEquals("otel", container.getLabels().get("io.vidocq.dev.service"));
-        assertEquals("grafana/otel-lgtm:0.37.0", container.getDockerImageName());
+        // The image by its constant: getDockerImageName() resolves the image, which pulls it, and failed the build
+        // on a runner that could not reach Docker Hub.
+        assertEquals("grafana/otel-lgtm:0.37.0", OtelDevService.DEFAULT_IMAGE);
     }
 
     @Test
