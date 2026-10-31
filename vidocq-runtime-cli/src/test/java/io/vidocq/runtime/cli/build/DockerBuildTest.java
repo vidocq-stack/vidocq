@@ -21,10 +21,12 @@ package io.vidocq.runtime.cli.build;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -64,5 +66,35 @@ class DockerBuildTest {
     @Test
     void aProbeThatSucceedsIsAvailable() {
         assertTrue(DockerBuild.available(List.of("true")));
+    }
+
+    @Test
+    void aProbeThatHangsIsNotAvailable() {
+        assertFalse(DockerBuild.available(List.of("sleep", "5"), Duration.ofMillis(200)));
+    }
+
+    @Test
+    void anotherBuildKeepsItsArgumentsAndSaysDone() {
+        var plan = DockerBuild.plan(BuildType.JLINK, false, List.of("-X"));
+
+        assertEquals(List.of("-X"), plan.passthrough());
+        assertEquals("Done.", plan.done());
+    }
+
+    @Test
+    void aDockerBuildWithDockerBuildsTheImageAndSaysSo() {
+        var plan = DockerBuild.plan(BuildType.DOCKER, true, List.of("-X"));
+
+        assertEquals(List.of("-X", "-Dvidocq.docker.build=true"), plan.passthrough());
+        assertEquals("Docker image built.", plan.done());
+    }
+
+    /** No "Done." over an image nobody built: the CLI prints {@link DockerBuild#unavailableMessage()} instead. */
+    @Test
+    void aDockerBuildWithoutDockerSaysNothingDone() {
+        var plan = DockerBuild.plan(BuildType.DOCKER, false, List.of());
+
+        assertEquals(List.of(), plan.passthrough());
+        assertNull(plan.done());
     }
 }

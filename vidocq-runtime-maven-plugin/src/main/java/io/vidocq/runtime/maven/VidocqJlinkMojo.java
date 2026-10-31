@@ -500,7 +500,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
     }
 
     /** Copies the configuration files into the image's {@code conf/}; returns the files it copied. */
-    private List<Path> copyResources() throws IOException {
+    List<Path> copyResources() throws IOException {
         List<String> names = (includeResources == null || includeResources.isEmpty())
                 ? List.of("vidocq.properties", "logging.properties")
                 : includeResources;

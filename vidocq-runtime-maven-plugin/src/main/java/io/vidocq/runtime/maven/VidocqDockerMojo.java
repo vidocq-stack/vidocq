@@ -127,20 +127,7 @@ public class VidocqDockerMojo extends AbstractMojo {
         // the Linux container this goal describes (BUG-20260711-02, #199).
         String platform = nonLinuxPlatform(runtimeImage.toPath());
         boolean inContainer = linksInContainer(platform);
-        if (platform != null && !inContainer) {
-            String problem = "The runtime image " + runtimeImage + " was linked for " + platform
-                    + ", not Linux: the container would fail at start (exec format error). jlink links "
-                    + "against the JDK of the machine that runs it, so build the image on Linux, in CI "
-                    + "for instance, before wrapping it, or leave vidocq.docker.linkInContainer to auto.";
-            if (build) {
-                throw new MojoExecutionException(problem);
-            }
-            getLog().warn(problem + " The Dockerfile is generated anyway.");
-        }
-        if (inContainer && !PortableImage.exists(target)) {
-            throw new MojoExecutionException("No jlink recipe in " + target.resolve(PortableImage.DIRECTORY)
-                    + ": run vidocq:jlink first, it stages the modules the Dockerfile links inside a Linux JDK.");
-        }
+        checkPlatform(platform, inContainer, target);
 
         String entryPoint = PortableImage.entryPoint(target).orElse(null);
         String content;
@@ -172,6 +159,27 @@ public class VidocqDockerMojo extends AbstractMojo {
         if (build) {
             runDockerBuild(dockerfile, target);
             getLog().info("Run with: docker run --rm -p " + exposedPort + ":" + exposedPort + " " + imageTag);
+        }
+    }
+
+    /**
+     * Warns about, or with {@code vidocq.docker.build} refuses, an image linked for {@code platform} that the
+     * Dockerfile copies as it is; checks that the recipe of {@code vidocq:jlink} is there when the Dockerfile links.
+     */
+    private void checkPlatform(String platform, boolean inContainer, Path target) throws MojoExecutionException {
+        if (platform != null && !inContainer) {
+            String problem = "The runtime image " + runtimeImage + " was linked for " + platform
+                    + ", not Linux: the container would fail at start (exec format error). jlink links "
+                    + "against the JDK of the machine that runs it, so build the image on Linux, in CI "
+                    + "for instance, before wrapping it, or leave vidocq.docker.linkInContainer to auto.";
+            if (build) {
+                throw new MojoExecutionException(problem);
+            }
+            getLog().warn(problem + " The Dockerfile is generated anyway.");
+        }
+        if (inContainer && !PortableImage.exists(target)) {
+            throw new MojoExecutionException("No jlink recipe in " + target.resolve(PortableImage.DIRECTORY)
+                    + ": run vidocq:jlink first, it stages the modules the Dockerfile links inside a Linux JDK.");
         }
     }
 

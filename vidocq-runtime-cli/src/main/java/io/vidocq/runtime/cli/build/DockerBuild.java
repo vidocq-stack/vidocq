@@ -20,6 +20,8 @@
 package io.vidocq.runtime.cli.build;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -43,10 +45,15 @@ public final class DockerBuild {
 
     /** Whether {@code probe} runs and exits with 0 within 20 seconds. */
     static boolean available(List<String> probe) {
+        return available(probe, Duration.ofSeconds(20));
+    }
+
+    /** Whether {@code probe} runs and exits with 0 within {@code timeout}. */
+    static boolean available(List<String> probe, Duration timeout) {
         try {
             Process process = new ProcessBuilder(probe).redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
-            if (!process.waitFor(20, TimeUnit.SECONDS)) {
+            if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
                 process.destroyForcibly();
                 return false;
             }
@@ -62,6 +69,26 @@ public final class DockerBuild {
     /** The Maven properties of the build: {@code vidocq:docker} builds the image when Docker is available. */
     public static List<String> properties(boolean dockerAvailable) {
         return dockerAvailable ? List.of("-Dvidocq.docker.build=true") : List.of();
+    }
+
+    /**
+     * What {@code vidocq build} passes to Maven and says on success: a Docker build with Docker builds the image and
+     * says so; without Docker, {@code done} is {@code null}, and the CLI prints {@link #unavailableMessage()}.
+     *
+     * @param passthrough the arguments the user passed after {@code --}
+     * @param done        the success line, or {@code null}
+     */
+    public record Plan(List<String> passthrough, String done) {
+    }
+
+    /** The plan of a {@code type} build, Docker answering or not. */
+    public static Plan plan(BuildType type, boolean dockerAvailable, List<String> passthrough) {
+        if (type != BuildType.DOCKER) {
+            return new Plan(passthrough, "Done.");
+        }
+        List<String> arguments = new ArrayList<>(passthrough);
+        arguments.addAll(properties(dockerAvailable));
+        return new Plan(List.copyOf(arguments), dockerAvailable ? "Docker image built." : null);
     }
 
     /** What the CLI says when Docker does not answer: the Dockerfile is written, the image is not built. */
