@@ -238,6 +238,22 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Minimal reproduction**: the provider on the plugin, no `org.postgresql:postgresql`; `vidocq dev` logs `[INFO] DevService 'postgres' not started: no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path`, then fails with _is vidocq.pool.url set?_
 - **Cause hypothesis**: every skip reason was logged at INFO, including the one that leaves the application without a database.
 
+## BUG-20261031-12 — `vidocq extension add mansart-pool` writes no `vidocq.pool.*` settings
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/pool-config-and-config-set`: the pool's descriptor has a block of `config.<NN>` lines, the three keys commented, as the PostgreSQL dev service sets them under `vidocq dev` and the tests (`ExtensionConfigTest.thePoolWritesItsConnectionCommented`)
+- **Reported by**: the vidocq-tutorial session (full rebuild after BUG-20261031-09, T1)
+- **Minimal reproduction**: `vidocq extension add mansart-pool`: no `vidocq.pool.url`, `.username` or `.password` in `vidocq.properties`; the tutorial writes them by hand for `vidocq run`.
+- **Cause hypothesis**: BUG-20261031-09 gave a block to JWT and Telemetry only.
+
+## BUG-20261031-13 — `vidocq config set` on a key written commented appends a second line at the end
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/pool-config-and-config-set`: `PropertiesText.set` rewrites an active assignment in place, else uncomments the first `#key=value` assignment in place, else appends; a comment that only names the key is left alone (`PropertiesTextTest.setUncommentsACommentedAssignmentInPlace`, `anActiveAssignmentWinsAndProseIsNoAssignment`)
+- **Reported by**: the vidocq-tutorial session (full rebuild after BUG-20261031-09, T2)
+- **Minimal reproduction**: after `vidocq extension add cervantes-jwt`, `vidocq config set mp.jwt.verify.issuer https://idp/realms/app`: the block keeps `#mp.jwt.verify.issuer=…` and a new active line lands at the end of the file, away from the comment that explains it.
+- **Cause hypothesis**: `set` only knew active assignments.
+
 ## BUG-20261031-09 — `vidocq extension add cervantes-jwt humboldt-telemetry` leaves their settings to be written by hand
 
 - **Date**: 2026-10-31

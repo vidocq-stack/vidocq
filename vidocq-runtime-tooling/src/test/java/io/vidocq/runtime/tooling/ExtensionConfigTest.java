@@ -66,6 +66,20 @@ class ExtensionConfigTest {
         assertTrue(text.contains("#vidocq.dev.keycloak.realm=library\n"), text);
     }
 
+    /**
+     * BUG-20261031-12: the pool's connection, commented: the PostgreSQL dev service sets the three keys under vidocq dev
+     * and the tests, so a line the application uncomments is for everywhere else.
+     */
+    @Test
+    void thePoolWritesItsConnectionCommented() {
+        String text = ExtensionConfig.append(BASE, List.of("mansart-pool"), "library");
+
+        assertFalse(PropertiesText.entries(text).keySet().stream().anyMatch(k -> k.startsWith("vidocq.pool.")), text);
+        assertTrue(text.contains("#vidocq.pool.url=jdbc:postgresql://localhost:5432/library\n"), text);
+        assertTrue(text.contains("#vidocq.pool.username=library\n"), text);
+        assertTrue(text.contains("#vidocq.pool.password=library\n"), text);
+    }
+
     @Test
     void aBlockIsWrittenOnce() {
         String once = ExtensionConfig.append(BASE, List.of("humboldt-telemetry"), "library");

@@ -488,6 +488,12 @@ same blocks. `{app}` below is the project's artifactId.
   identity provider, and `vidocq.dev.keycloak.realm-import` / `vidocq.dev.keycloak.realm`, commented too: a realm
   import naming a file not there yet would stop the dev service. `vidocq doctor` warns until a verification key is
   set (<<doctor-project>>).
+
+| `mansart-pool` [.tag-new]#NEW#
+| Comments only: `vidocq.pool.url=jdbc:postgresql://localhost:5432/{app}`, `vidocq.pool.username={app}` and
+  `vidocq.pool.password={app}`. The PostgreSQL dev service sets the three keys under `vidocq dev`, `vidocq test`
+  and `mvn test`; uncommented, they are the database of `vidocq run` and of the packaged application. A
+  `jdbc:postgresql:` URL in the file never switches the dev service off (xref:dev-services.adoc#postgres-only-for-postgres[A PostgreSQL container only for a PostgreSQL application]).
 |===
 
 [#extension-codegen-path]
@@ -619,7 +625,7 @@ recognize (Vidocq/vidocq#314).
 | Sub-command | Description
 
 | `get <key>` | Print the value bound to `<key>`.
-| `set <key> <value>` | Set (or append) `<key>` to `<value>`.
+| `set <key> <value>` | Set `<key>` to `<value>`: its assignment is rewritten in place; else a commented one, `#key=value` as an extension's block writes it, is uncommented in place [.tag-new]#NEW#, under the comment that explains it; else the key is appended.
 | `list` | Print every `key=value` pair.
 |===
 

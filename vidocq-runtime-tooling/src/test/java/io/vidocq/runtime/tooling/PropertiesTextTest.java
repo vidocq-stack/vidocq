@@ -68,6 +68,25 @@ class PropertiesTextTest {
         assertEquals("port = 9090\n", out);
     }
 
+    /**
+     * BUG-20261031-13: a key an extension's block wrote commented ({@code #key=value}) is set where it is, so the
+     * block's comment still describes it, instead of a second line at the end of the file.
+     */
+    @Test
+    void setUncommentsACommentedAssignmentInPlace() {
+        String text = "a=1\n# The pool's database, everywhere else:\n#vidocq.pool.url=jdbc:postgresql://localhost/app\nb=2\n";
+
+        assertEquals("a=1\n# The pool's database, everywhere else:\nvidocq.pool.url=jdbc:postgresql://db/prod\nb=2\n",
+                PropertiesText.set(text, "vidocq.pool.url", "jdbc:postgresql://db/prod"));
+    }
+
+    /** An active assignment wins over a commented one, and a comment that only mentions the key is no assignment. */
+    @Test
+    void anActiveAssignmentWinsAndProseIsNoAssignment() {
+        assertEquals("#k=old\nk=new\n", PropertiesText.set("#k=old\nk=1\n", "k", "new"));
+        assertEquals("# set k=1 to switch it on\nk=2\n", PropertiesText.set("# set k=1 to switch it on\n", "k", "2"));
+    }
+
     @Test
     void setAppendsNewKey() {
         String out = PropertiesText.set("port=8080\n", "host", "localhost");
