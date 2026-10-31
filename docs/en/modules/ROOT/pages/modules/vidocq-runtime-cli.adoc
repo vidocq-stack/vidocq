@@ -428,7 +428,7 @@ Maven's output streams straight to the terminal.
 | `package` _(default)_ | `mvn package` | Standalone distribution ZIP.
 | `jlink` | `mvn package vidocq:jlink` | Self-contained jlink runtime image (no `java` on target).
 | `jpackage` | `mvn package vidocq:jpackage` | Native installer (`.dmg`/`.deb`/`.msi`) or app-image.
-| `docker` | `mvn package vidocq:jlink vidocq:docker` | Dockerfile around the jlink image, which it builds first [.tag-new]#NEW#.
+| `docker` | `mvn package vidocq:jlink vidocq:docker` | Dockerfile around the jlink image, which it builds first [.tag-new]#NEW#; when Docker answers, the image itself (`-Dvidocq.docker.build=true`), linked for Linux even on macOS or Windows. Without Docker, the CLI says the image is not built and how to build it [.tag-new]#NEW#.
 |===
 
 Shared options:

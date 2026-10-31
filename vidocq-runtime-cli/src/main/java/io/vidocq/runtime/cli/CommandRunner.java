@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.cli;
 
+import io.vidocq.runtime.cli.build.BuildType;
+import io.vidocq.runtime.cli.build.DockerBuild;
 import io.vidocq.runtime.cli.build.MavenInvocation;
 import io.vidocq.runtime.cli.build.MavenLauncher;
 import io.vidocq.runtime.cli.build.RunGoals;
@@ -327,10 +329,24 @@ public final class CommandRunner {
 
     private static int runBuild(Command.Build build) {
         List<String> goals = build.type().goals();
-        MavenInvocation.Options opts = new MavenInvocation.Options(
-                build.offline(), build.skipTests(), build.passthrough());
-        return runMaven(goals, opts, build.dryRun(),
-                "Building " + CliOutput.bold(build.type().label()) + "…");
+        List<String> passthrough = build.passthrough();
+        // vidocq build docker builds the image when Docker answers, and says it did not otherwise (BUG-20261030-17).
+        boolean docker = build.type() == BuildType.DOCKER && DockerBuild.available();
+        if (build.type() == BuildType.DOCKER) {
+            passthrough = new java.util.ArrayList<>(passthrough);
+            passthrough.addAll(DockerBuild.properties(docker));
+        }
+        MavenInvocation.Options opts = new MavenInvocation.Options(build.offline(), build.skipTests(), passthrough);
+        String done = "Done.";
+        if (build.type() == BuildType.DOCKER) {
+            done = docker ? "Docker image built." : null;
+        }
+        int code = runMaven(goals, opts, build.dryRun(),
+                "Building " + CliOutput.bold(build.type().label()) + "…", done);
+        if (code == 0 && done == null && !build.dryRun()) {
+            CliOutput.warning(DockerBuild.unavailableMessage());
+        }
+        return code;
     }
 
     private static int runClean(Command.Clean clean) {
@@ -341,6 +357,12 @@ public final class CommandRunner {
 
     private static int runMaven(List<String> goals, MavenInvocation.Options opts,
                                 boolean dryRun, String banner) {
+        return runMaven(goals, opts, dryRun, banner, "Done.");
+    }
+
+    /** Runs Maven; on success prints {@code done}, unless it is {@code null} (the caller says what happened). */
+    private static int runMaven(List<String> goals, MavenInvocation.Options opts,
+                                boolean dryRun, String banner, String done) {
         Path cwd = Path.of("").toAbsolutePath();
         String executable = MavenLauncher.resolveExecutable(cwd);
         List<String> command = MavenInvocation.command(executable, goals, opts);
@@ -353,7 +375,9 @@ public final class CommandRunner {
         }
         int code = MavenLauncher.run(command, cwd);
         if (code == 0) {
-            CliOutput.success("Done.");
+            if (done != null) {
+                CliOutput.success(done);
+            }
         } else {
             CliOutput.error("Maven exited with code " + code + ".");
         }
