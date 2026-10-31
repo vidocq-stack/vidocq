@@ -464,7 +464,30 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#extension-goals[`mvn vidocq:add-ex
 
 | `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` lists the catalog built into the CLI, by family (Jakarta EE, MicroProfile, Data, Web); `--all` shows both. xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:list-extensions`] gives the same list.
 | `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when it ships one, and its directives into `src/main/java/module-info.java`. The dependency and the codegen path carry the parent's version, written out.
-| `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add`.
+| `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add`. The settings `add` wrote into `vidocq.properties` stay: they are the application's.
+|===
+
+[#extension-settings]
+`add` also appends the settings an extension needs to `vidocq.properties` [.tag-new]#NEW#, as one block opened by
+`# <id>: settings written by the Vidocq CLI, yours to edit`, written once: a second `add` finds the block, and a key the
+application already sets, active or commented, is left out, so nothing is overwritten. `vidocq create -x` writes the
+same blocks. `{app}` below is the project's artifactId.
+
+[cols="1,3"]
+|===
+| Extension | Block
+
+| `humboldt-telemetry`
+| `otel.sdk.disabled=false`, `otel.service.name={app}`, `otel.exporter.otlp.endpoint=http://localhost:4318` and
+  `otel.exporter.otlp.protocol=http/protobuf`: a local collector. Under `vidocq dev`, the OpenTelemetry dev service
+  sets the endpoint and the protocol to its own, as system properties, which outrank the file.
+
+| `cervantes-jwt`
+| Comments only. The Keycloak dev service sets `mp.jwt.verify.issuer` and `mp.jwt.verify.publickey.location` under
+  `vidocq dev`, `vidocq test` and `mvn test`; the block shows them, commented, for a realm named `{app}` on your
+  identity provider, and `vidocq.dev.keycloak.realm-import` / `vidocq.dev.keycloak.realm`, commented too: a realm
+  import naming a file not there yet would stop the dev service. `vidocq doctor` warns until a verification key is
+  set (<<doctor-project>>).
 |===
 
 [#extension-codegen-path]
@@ -535,6 +558,15 @@ devservice = vidocq-runtime-devservice-postgres
 devservice.driver = org.postgresql:postgresql:42.7.10
 # false keeps it out of test scope, for a service no test needs (Telemetry's collector)
 devservice.in-tests = true
+----
+
+Its settings are lines, in key order, which `add` appends as a block to `vidocq.properties` [.tag-new]#NEW#
+(<<extension-settings>>); `{app}` is the project's artifactId:
+
+[source,properties]
+----
+config.01 = # Traces, metrics and logs leave through OTLP.
+config.02 = otel.service.name={app}
 ----
 
 Only `id` and `description` are required. The `module-info.*` keys are what `add` writes for a new
@@ -642,6 +674,7 @@ read what the pom and `module-info.java` declare.
 | **Codegen bundles** | ✔ every catalog extension the pom declares has its `-codegen` bundle on `annotationProcessorPaths`, or the plugin puts it there (a `vidocq-runtime-parent` from 0.4.0, or the plugin declared with `<extensions>true</extensions>`); ✘ a bundle is missing; ⚠ a bundle whose extension is gone.
 | **Vauban indexer** | ✔ the indexer, `vidocq-runtime-core-codegen`, is on the processor path; ✘ `annotationProcessorPaths` replace the parent's, which hold it, instead of appending (`combine.children="append"`), or, without the Vidocq parent, the pom does not declare it.
 | **Module directives** | ✔ `module-info.java` declares the `requires` (and `opens`) of each extension, the `opens` of the resource packages it reads included, such as Flyway's `opens db.migration` [.tag-new]#NEW#, and, once the application is compiled, the `opens` of the packages the runtime reaches by reflection, read from `target/classes` as `vidocq:check-module-info` reads them (JPA entities, the types a REST resource returns, interceptors with a private method) [.tag-new]#NEW#; before a compile it says to compile for those; ✘ one is missing, which `vidocq:check-module-info` would fail the build on; ⚠ no `module-info.java`.
+| **JWT verification** [.tag-new]#NEW# | Shown with `cervantes-jwt`. ✔ `vidocq.properties` sets `mp.jwt.verify.publickey.location` or `mp.jwt.verify.publickey`, in any profile; ⚠ none: the Keycloak dev service sets it under `vidocq dev` and the tests, and production would reject every token. Not fixable: only the application knows its identity provider.
 | **Dev services** [.tag-new]#NEW# | ✔ each extension with a dev service (`mansart-pool`, `cervantes-jwt`, `humboldt-telemetry`) has its provider on `vidocq-runtime-maven-plugin`, the provider and `vidocq-runtime-devservices-junit` in test scope (not for the collector), and, for the pool, a JDBC driver; ⚠ one is missing (xref:dev-services.adoc#declared-for-you[Declared for you]).
 | **Maven version** | ✔ the wrapper runs the Maven Vidocq is built with, or a newer one; ⚠ an older one. Shown when the project has a wrapper.
 | **HTTP port** | ✔ the port of `vidocq.chappe.listener.default.port`, else `vidocq.http.port`, else 8080, is free; ⚠ something listens there.

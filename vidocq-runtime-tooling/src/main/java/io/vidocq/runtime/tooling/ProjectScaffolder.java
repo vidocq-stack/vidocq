@@ -120,7 +120,9 @@ public final class ProjectScaffolder {
                         + " (vidocq-runtime-junit) comes with 0.4.0.");
             }
         }
-        write(res.resolve("vidocq.properties"),                      BUILD_PROPERTIES);
+        // The settings of the extensions, as `vidocq extension add` appends them (BUG-20261031-09).
+        write(res.resolve("vidocq.properties"),
+                ExtensionConfig.append(BUILD_PROPERTIES, create.extensions(), create.name()));
         for (String id : create.extensions()) {
             for (String resourcePackage : KnownExtensions.resourcePackagesToOpen(id)) {
                 ExtensionEditor.keepResourcePackage(root, resourcePackage, id, reporter);
