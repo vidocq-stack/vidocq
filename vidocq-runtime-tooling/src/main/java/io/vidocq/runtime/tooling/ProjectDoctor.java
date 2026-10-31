@@ -257,7 +257,8 @@ public final class ProjectDoctor {
      */
     private static Diagnostic checkJwtVerification(Map<String, String> config) {
         boolean set = config.keySet().stream()
-                .map(key -> key.startsWith("%") && key.indexOf('.') > 0 ? key.substring(key.indexOf('.') + 1) : key)
+                // A %<profile>. prefix counts: %prod.mp.jwt.verify.publickey.location is production's key.
+                .map(key -> key.startsWith("%") ? key.substring(key.indexOf('.') + 1) : key)
                 .anyMatch(JWT_KEYS::contains);
         if (set) {
             return Diagnostic.ok(JWT_CHECK, "vidocq.properties names the key tokens are verified with");

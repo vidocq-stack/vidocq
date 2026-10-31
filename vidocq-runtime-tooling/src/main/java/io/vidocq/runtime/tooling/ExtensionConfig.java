@@ -46,28 +46,37 @@ public final class ExtensionConfig {
     public static String append(String text, Collection<String> ids, String app) {
         StringBuilder out = new StringBuilder(text);
         for (String id : ids) {
-            List<String> lines = KnownExtensions.configLines(id);
-            if (lines.isEmpty() || out.toString().contains(header(id))) {
-                continue;
-            }
-            Map<String, String> set = PropertiesText.entries(out.toString());
-            List<String> kept = new ArrayList<>();
-            for (String line : lines) {
-                String filled = line.replace(APP, app);
-                if (!set.containsKey(key(filled))) {
-                    kept.add(filled);
+            List<String> block = block(out.toString(), id, app);
+            if (!block.isEmpty()) {
+                if (!out.isEmpty() && out.charAt(out.length() - 1) != '\n') {
+                    out.append('\n');
                 }
+                out.append('\n').append(header(id)).append('\n');
+                block.forEach(line -> out.append(line).append('\n'));
             }
-            if (kept.stream().noneMatch(line -> !key(line).isEmpty())) {
-                continue; // every key is the application's already
-            }
-            if (!out.isEmpty() && out.charAt(out.length() - 1) != '\n') {
-                out.append('\n');
-            }
-            out.append('\n').append(header(id)).append('\n');
-            kept.forEach(line -> out.append(line).append('\n'));
         }
         return out.toString();
+    }
+
+    /**
+     * The lines of the block of {@code id} that {@code text} lacks; empty when {@code id} has none, when its block is
+     * there already, or when the application sets every key of it.
+     */
+    private static List<String> block(String text, String id, String app) {
+        List<String> lines = KnownExtensions.configLines(id);
+        if (lines.isEmpty() || text.contains(header(id))) {
+            return List.of();
+        }
+        Map<String, String> set = PropertiesText.entries(text);
+        List<String> kept = new ArrayList<>();
+        for (String line : lines) {
+            String filled = line.replace(APP, app);
+            if (!set.containsKey(key(filled))) {
+                kept.add(filled);
+            }
+        }
+        // Only comments left: every key is the application's already.
+        return kept.stream().allMatch(line -> key(line).isEmpty()) ? List.of() : kept;
     }
 
     /**
