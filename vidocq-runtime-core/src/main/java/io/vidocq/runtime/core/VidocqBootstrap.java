@@ -211,6 +211,9 @@ public final class VidocqBootstrap {
         // configuration sources below read through the loader installed here. No-op when
         // the property is absent or the layer is already in place.
         VidocqAppLayer.installIfConfigured();
+        // A library reflecting into a package the application does not open fails at run time, where the build
+        // checks cannot look: the logged failure then names the opens line (BUG-20261031-15).
+        ModuleAccessDiagnostics.install();
 
         this.config = new VidocqConfigImpl();
         // vidocq.properties is visible from here: vidocq.log.console and vidocq.console.color.

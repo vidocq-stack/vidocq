@@ -1,0 +1,88 @@
+= Java modules in a Vidocq application
+:description: Why a Vidocq application opens some of its packages, what the tooling detects and writes for you, what it cannot see, and what the runtime says when a package is missing.
+
+[.lead]
+[.tag-new]#NEW# A Vidocq application is a named Java module: its `src/main/java/module-info.java` says which modules it reads (`requires`) and which of its packages other modules may reach. Most of the time you do not touch the `opens` part of it: the tooling writes it. This page explains what happens underneath, for the day you need it.
+
+[#why]
+== Why `opens` exists
+
+Some libraries of the runtime look inside your classes by reflection: JSON-B reads and fills the fields of your DTOs, Jakarta Persistence builds your entities, Vauban calls a `private` interceptor method. Reaching private fields and constructors of a named module is *deep reflection*, and the Java module system only allows it on a package the module **opens**:
+
+[source,java]
+----
+module com.example.library {
+    requires io.vidocq.runtime.extensions.jakartaee.core.cassini; // vidocq:cassini-rest
+    // added by vidocq: the runtime reaches these packages by reflection
+    opens com.example.library.book; // vidocq:reflection
+}
+----
+
+Without that line nothing fails at build time: the first request that serializes a `Book` fails with an `IllegalAccessException` or an `InaccessibleObjectException`.
+
+[#what-is-written-for-you]
+== What the tooling writes for you
+
+[cols="1,3"]
+|===
+| When | What happens
+
+| `vidocq create`, `vidocq extension add`
+| The `requires` and `opens` an extension needs (for instance `opens db.migration;` for Flyway, its folder created) are written at once, each line marked `// vidocq:<extension id>`.
+
+| `vidocq dev`
+| After each compile, a package the runtime will reach by reflection and the module does not open is opened, in `module-info.java` and in the compiled `module-info.class`; the console prints `✔ module-info.java: opens com.example.library.book;   (…)` and the application starts.
+
+| `./mvnw package`, the CI
+| `vidocq:check-module-info` fails the build with the exact line to add, and names `vidocq doctor --fix` and `./mvnw vidocq:complete-module-info`, which write it. A build never rewrites your sources.
+
+| `vidocq doctor`
+| Runs the same check after a compile; `--fix` writes the missing lines.
+|===
+
+The lines the tooling adds for reflection go in one block, last in the file, each marked `// vidocq:reflection` (see xref:modules/vidocq-runtime-cli.adoc#module-info-layout[the layout of `module-info.java`]). A line you wrote yourself is left where it is.
+
+[#what-is-detected]
+== What the build check detects
+
+`vidocq:check-module-info` and `vidocq doctor` read the compiled classes of `target/classes` (nothing is loaded or run) and start from three kinds of classes:
+
+* a JPA entity, embeddable or mapped superclass (`@Entity`, `@Embeddable`, `@MappedSuperclass`): its package;
+* a REST resource or provider (`@Path`, `@Provider`): the types its methods take and return, which JSON-B binds — not the resource itself, whose dispatch is generated;
+* a CDI interceptor with a `private` interceptor method (`@AroundInvoke`, `@AroundConstruct`, a lifecycle callback): its package. Other interceptor methods are called through code generated in their package and need nothing.
+
+From each type reached, the check follows the declared types of its fields and of its getters, generic arguments included, as long as they are classes of the application:
+
+----
+BookResource ──returns──▶ List<Book> ──▶ Book ──field──▶ Author ──field──▶ Address
+ (not listed)                       com.example.book   com.example.author   com.example.common
+----
+
+Three packages must be opened here, and each is reported with the type that brought it in.
+
+[#limits]
+== What it cannot see
+
+The check works from the declared types it finds in your compiled classes. It cannot see a use decided while the application runs:
+
+* JSON-B called by hand, `JsonbBuilder.create().toJson(report)`, on a type no resource takes or returns;
+* `Class.forName(…)`, or a resource read with `getResource(…)` from a package of the application;
+* a third-party library that does its own reflection;
+* the actual class behind a field typed by an interface or by `Object`: the check follows the declared type only — an interface of the application has its package opened, its implementations do not;
+* the superclass of a type it reaches: a DTO that extends a class of another package of the application does not bring that package in.
+
+For these cases, the runtime tells you what to add, below.
+
+[#runtime-message]
+== What the runtime says
+
+[.tag-new]#NEW# When a library fails to reach a package of your application by reflection, the failure the runtime logs — a request's `500`, a failed start-up — is followed by one error that names the package and the line, once per package:
+
+----
+[ERROR] Module com.example.library does not open package com.example.library.report to
+io.vidocq.champollion.jsonb, which reached class com.example.library.report.Report by reflection
+at run time. The build checks cannot see this use: add `opens com.example.library.report;`
+to module-info.java (or make it an `open module`).
+----
+
+Under `vidocq dev` you have nothing to do: the plugin writes `opens com.example.library.report; // vidocq:reflection` to `module-info.java`, prints `✔ module-info.java: opens com.example.library.report;   (reached by reflection at run time)`, and the application reloads; retry the request once it has. Only a package of your application is named: a denial between two libraries, or into the JDK, is left to its stack trace.

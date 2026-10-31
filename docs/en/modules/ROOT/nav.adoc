@@ -6,6 +6,7 @@
 *** xref:dev-console-panels.adoc[Writing a dev console panel]
 *** xref:testing.adoc[Testing an application]
 *** xref:continuous-testing.adoc[Continuous testing]
+*** xref:java-modules.adoc[Java modules]
 ** xref:dev-services.adoc[Dev services]
 ** xref:vaadin.adoc[Vaadin]
 ** xref:concepts.adoc[Concepts]

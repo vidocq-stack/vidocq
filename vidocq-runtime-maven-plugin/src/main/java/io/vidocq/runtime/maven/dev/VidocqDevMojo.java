@@ -336,8 +336,23 @@ public class VidocqDevMojo extends AbstractMojo {
                 getLog()::warn, getLog()::info, devToolsOnPath));
 
         Testing testing = startContinuousTesting(projectDir, sysProps, applicationFiles, devs);
+        // A library that fails to reach an application package by reflection at run time: the application names the
+        // package in this file, and the line is written to module-info.java (BUG-20261031-15).
+        Path opensFile = buildDir.toPath().resolve(OpensRequestFile.FILE_NAME).toAbsolutePath();
+        sysProps.put(OpensRequestFile.PROPERTY, opensFile.toString());
         ChildLaunch launch = new ChildLaunch(modulePath, layered.appPath(), jvmArgs, sysProps, projectDir);
-        runSession(launch, watch, testing, devs, reloadFile, inJvmReload);
+        try (OpensRequestFile opens = OpensRequestFile.poll(opensFile, moduleInfoSource(), getLog()::info,
+                getLog()::warn)) {
+            runSession(launch, watch, testing, devs, reloadFile, inJvmReload);
+        } catch (IOException e) {
+            throw new MojoExecutionException("Cannot watch " + opensFile, e);
+        }
+    }
+
+    /** The application's {@code module-info.java}, among the compile source roots; {@code null} when it has none. */
+    private Path moduleInfoSource() {
+        return project.getCompileSourceRoots().stream().map(root -> Path.of(root, "module-info.java"))
+                .filter(Files::isRegularFile).findFirst().orElse(null);
     }
 
     /** {@code vidocq.app.layer}, checked against {@code vidocq.dev.layer}. */

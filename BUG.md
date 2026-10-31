@@ -5,6 +5,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261031-15 — A package a library reaches by reflection at run time fails with a bare IllegalAccessException
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `feat/module-access-diagnostics`. Follow-up of BUG-20261031-10/-14: the build check finds the packages the runtime is known to reflect on (JPA entities, the types of REST resources, interceptors with a private method), not a use decided at run time. `ModuleAccessDiagnostics` (vidocq-runtime-core), installed on the root logger by every boot, reads the cause chain of each logged failure — a request's 500, a failed boot — and on an `InaccessibleObjectException` or `IllegalAccessException` into a package of the application's module logs, once per package, the package and the `opens` line to add. Under `vidocq dev` the application writes the package to `target/vidocq-dev-opens.request`; the plugin (`OpensRequestFile`) opens it in `module-info.java` (`// vidocq:reflection`), and the source watcher recompiles and reloads. `ModuleAccessDiagnosticsTest` (a real non-opened module: field and method denials, no message for the JDK or another module, once per package, the request file), `OpensRequestFileTest`. Checked on a generated application whose resource calls `JsonbBuilder.create().toJson(new Report())`, `Report` in a package nothing opens: `vidocq dev` answers 500, logs the error, writes `opens com.example.m.report; // vidocq:reflection`, reloads, and the next request answers 200 six seconds later. Page "Java modules in a Vidocq application".
+- **Reported by**: the maintainer, after the tutorial replay (what remains when the build check cannot see a use)
+- **Minimal reproduction**: a resource returning `JsonbBuilder.create().toJson(new Report())`, `Report` in a package the module does not open: the build passes, the request answers 500 with `IllegalAccessException … does not export com.example.m.report`.
+- **Cause hypothesis**: static detection cannot see reflection decided at run time (programmatic JSON-B, `Class.forName`, third-party libraries); the error came from deep in the library, with no word of `opens`.
+
 ## BUG-20261031-14 — Each fix adds another "added by vidocq" block to `module-info.java`, with extension lines between them
 
 - **Date**: 2026-10-31
