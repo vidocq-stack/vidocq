@@ -29,7 +29,6 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 
 /**
  * The plugin's side of the runtime's module-access diagnostic (BUG-20261031-15). Under {@code vidocq dev}, when a
@@ -46,9 +45,6 @@ final class OpensRequestFile implements AutoCloseable {
     static final String PROPERTY = "vidocq.dev.opens.file";
     /** How often the file is looked for. */
     static final long POLL_MILLIS = 250;
-
-    private static final Pattern PACKAGE = Pattern.compile("[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*"
-            + "(\\.[\\p{javaJavaIdentifierStart}][\\p{javaJavaIdentifierPart}]*)*");
 
     private final Path file;
     private final Path moduleInfo;
@@ -97,7 +93,7 @@ final class OpensRequestFile implements AutoCloseable {
         try {
             for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
                 String pkg = line.strip();
-                if (PACKAGE.matcher(pkg).matches()) {
+                if (isPackageName(pkg)) {
                     packages.add(pkg);
                 }
             }
@@ -106,6 +102,24 @@ final class OpensRequestFile implements AutoCloseable {
             // no request (the file is absent) or none readable yet: looked for again on the next poll
         }
         return packages;
+    }
+
+    /** Whether {@code name} is a Java package name: dot-separated identifiers, checked without a regular expression. */
+    static boolean isPackageName(String name) {
+        if (name.isEmpty()) {
+            return false;
+        }
+        for (String part : name.split("\\.", -1)) {
+            if (part.isEmpty() || !Character.isJavaIdentifierStart(part.charAt(0))) {
+                return false;
+            }
+            for (int i = 1; i < part.length(); i++) {
+                if (!Character.isJavaIdentifierPart(part.charAt(i))) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /**

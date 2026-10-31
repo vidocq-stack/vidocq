@@ -61,8 +61,8 @@ class ModuleAccessDiagnosticsTest {
     @Test
     void namesThePackageAFieldIsDeniedIn() throws Exception {
         Class<?> book = applicationClass();
-        var denied = assertThrows(InaccessibleObjectException.class,
-                () -> book.getDeclaredField("title").setAccessible(true));
+        var title = book.getDeclaredField("title");
+        var denied = assertThrows(InaccessibleObjectException.class, () -> title.setAccessible(true));
         // as a library reports it: wrapped, as the cause of its own exception
         var failure = new IllegalStateException("cannot bind shop.book.Book", denied);
 
@@ -79,7 +79,8 @@ class ModuleAccessDiagnosticsTest {
     @Test
     void namesThePackageAPublicMethodIsDeniedIn() throws Exception {
         Class<?> book = applicationClass();
-        var denied = assertThrows(IllegalAccessException.class, () -> book.getMethod("label").invoke(null));
+        var label = book.getMethod("label");
+        var denied = assertThrows(IllegalAccessException.class, () -> label.invoke(null));
 
         var denial = ModuleAccessDiagnostics.find(denied, "shop"::equals).orElseThrow();
 
@@ -90,10 +91,10 @@ class ModuleAccessDiagnosticsTest {
     @Test
     void saysNothingAboutAModuleOfTheRuntimeOrTheJdk() throws Exception {
         Class<?> book = applicationClass();
-        var denied = assertThrows(InaccessibleObjectException.class,
-                () -> book.getDeclaredField("title").setAccessible(true));
-        var jdk = assertThrows(InaccessibleObjectException.class,
-                () -> String.class.getDeclaredField("value").setAccessible(true));
+        var title = book.getDeclaredField("title");
+        var denied = assertThrows(InaccessibleObjectException.class, () -> title.setAccessible(true));
+        var value = String.class.getDeclaredField("value");
+        var jdk = assertThrows(InaccessibleObjectException.class, () -> value.setAccessible(true));
 
         assertTrue(ModuleAccessDiagnostics.find(denied, "other.app"::equals).isEmpty());
         assertTrue(ModuleAccessDiagnostics.find(jdk, "shop"::equals).isEmpty());
@@ -103,8 +104,8 @@ class ModuleAccessDiagnosticsTest {
     @Test
     void aLoggedFailureGetsTheMessageOnceAndTheDevFileThePackage() throws Exception {
         Class<?> book = applicationClass();
-        var denied = assertThrows(InaccessibleObjectException.class,
-                () -> book.getDeclaredField("title").setAccessible(true));
+        var title = book.getDeclaredField("title");
+        var denied = assertThrows(InaccessibleObjectException.class, () -> title.setAccessible(true));
         Path request = dir.resolve("target").resolve(ModuleAccessDiagnostics.OPENS_FILE_NAME);
         var handler = new ModuleAccessDiagnostics("shop"::equals, request);
 
@@ -124,8 +125,8 @@ class ModuleAccessDiagnosticsTest {
     @Test
     void outsideDevTheMessageNamesTheLineOnly() throws Exception {
         Class<?> book = applicationClass();
-        var denied = assertThrows(InaccessibleObjectException.class,
-                () -> book.getDeclaredField("title").setAccessible(true));
+        var title = book.getDeclaredField("title");
+        var denied = assertThrows(InaccessibleObjectException.class, () -> title.setAccessible(true));
         var handler = new ModuleAccessDiagnostics("shop"::equals, null);
 
         try (var records = new LogRecords(LOGGER)) {
@@ -149,6 +150,49 @@ class ModuleAccessDiagnosticsTest {
         assertEquals(1, handlers);
     }
 
+    @Test
+    void aMessageItCannotReadIsNoDenial() {
+        for (String message : List.of("Unable to make x", "Unable to make x accessible: module m does not",
+                "a cannot access b (in module m", "a cannot access b (in module m) because module m does not",
+                "Unable to make f accessible: module two words does not \"opens p\" to module r")) {
+            assertTrue(ModuleAccessDiagnostics.parse(message).isEmpty(), message);
+        }
+        var noReader = ModuleAccessDiagnostics.parse(
+                "x cannot access class a.B (in module app) because module app does not export a").orElseThrow();
+        assertEquals("a", noReader.pkg());
+        assertEquals("a class on the class path", noReader.reader());
+    }
+
+    @Test
+    void theRuntimeTheJdkAndJakartaAreNeverTheApplication() {
+        for (String name : List.of("java.base", "jdk.unsupported", "jakarta.json.bind", "io.vidocq.runtime.core")) {
+            assertTrue(ModuleAccessDiagnostics.platformModule(name), name);
+        }
+        assertFalse(ModuleAccessDiagnostics.platformModule("com.example.shop"));
+        // no application layer and no Vidocq.run in this JVM
+        assertFalse(ModuleAccessDiagnostics.isApplicationModule("com.example.shop"));
+    }
+
+    @Test
+    void aRequestFileItCannotWriteLeavesTheMessageOutsideDev() throws Exception {
+        Class<?> book = applicationClass();
+        var title = book.getDeclaredField("title");
+        var denied = assertThrows(InaccessibleObjectException.class, () -> title.setAccessible(true));
+        Path notADirectory = Files.writeString(dir.resolve("target"), "a file");
+        var handler = new ModuleAccessDiagnostics("shop"::equals, notADirectory.resolve("request"));
+
+        try (var records = new LogRecords(LOGGER)) {
+            var logged = new LogRecord(Level.SEVERE, "Boot failed");
+            logged.setThrown(denied);
+            handler.publish(logged);
+            handler.publish(new LogRecord(Level.INFO, "no failure"));
+            handler.flush();
+            handler.close();
+            String error = records.messages(LOGGER, Level.SEVERE).getFirst();
+            assertFalse(error.contains("vidocq dev adds"), error);
+        }
+    }
+
     /**
      * Class {@code shop.book.Book} of a module {@code shop} that neither exports nor opens {@code shop.book}: a private
      * field {@code title} and a public static method {@code label()}.
@@ -162,9 +206,8 @@ class ModuleAccessDiagnosticsTest {
         Files.write(root.resolve("shop/book/Book.class"), ClassFile.of().build(ClassDesc.of("shop.book.Book"), cb -> cb
                 .withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER)
                 .withField("title", ConstantDescs.CD_String, ClassFile.ACC_PRIVATE)
-                .withMethod("label", MethodTypeDesc.of(ConstantDescs.CD_String),
-                        ClassFile.ACC_PUBLIC | ClassFile.ACC_STATIC,
-                        mb -> mb.withCode(code -> code.ldc("Vidocq").areturn()))));
+                .withMethodBody("label", MethodTypeDesc.of(ConstantDescs.CD_String),
+                        ClassFile.ACC_PUBLIC | ClassFile.ACC_STATIC, code -> code.ldc("Vidocq").areturn())));
         ModuleLayer boot = ModuleLayer.boot();
         Configuration configuration = boot.configuration()
                 .resolve(ModuleFinder.of(root), ModuleFinder.of(), Set.of("shop"));

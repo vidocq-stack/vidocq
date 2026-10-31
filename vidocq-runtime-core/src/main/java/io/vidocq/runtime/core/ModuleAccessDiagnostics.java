@@ -34,8 +34,6 @@ import java.util.function.Predicate;
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Names the {@code opens} line an application is missing when a library reaches one of its packages by reflection at
@@ -59,12 +57,14 @@ final class ModuleAccessDiagnostics extends Handler {
 
     private static final System.Logger LOG = System.getLogger(ModuleAccessDiagnostics.class.getName());
     /** {@code AccessibleObject.setAccessible}: {@code Unable to make <what> accessible: module m does not "opens p" to <reader>}. */
-    private static final Pattern INACCESSIBLE = Pattern.compile(
-            "Unable to make (.+) accessible: module (\\S+) does not \"(?:opens|exports) ([\\w.$]+)\" to (.+)$");
+    private static final String UNABLE = "Unable to make ";
+    private static final String ACCESSIBLE = " accessible: module ";
     /** {@code Reflection.newIllegalAccessException}: {@code <reader> cannot access <what> (in module m) because module m does not export p to <reader>}. */
-    private static final Pattern ILLEGAL = Pattern.compile(
-            "cannot access (.+?) \\(in module (\\S+)\\) because module \\S+ does not (?:export|open) ([\\w.$]+)"
-                    + "(?: to (.+))?$");
+    private static final String CANNOT_ACCESS = " cannot access ";
+    private static final String IN_MODULE = " (in module ";
+    private static final String BECAUSE = ") because module ";
+    private static final String DOES_NOT = " does not ";
+    private static final String TO = " to ";
     private static final int MAX_CAUSES = 32;
 
     private static Handler installed;
@@ -97,7 +97,7 @@ final class ModuleAccessDiagnostics extends Handler {
         Logger.getLogger("").addHandler(installed);
     }
 
-    private static boolean isApplicationModule(String name) {
+    static boolean isApplicationModule(String name) {
         Module app = Vidocq.applicationModule();
         if (app != null && app.getName().equals(name)) {
             return true;
@@ -106,7 +106,7 @@ final class ModuleAccessDiagnostics extends Handler {
         return layer != null && layer.findModule(name).isPresent() && !platformModule(name);
     }
 
-    private static boolean platformModule(String name) {
+    static boolean platformModule(String name) {
         return name.startsWith("java.") || name.startsWith("jdk.") || name.startsWith("jakarta.")
                 || name.startsWith("io.vidocq.");
     }
@@ -142,21 +142,70 @@ final class ModuleAccessDiagnostics extends Handler {
         return Optional.empty();
     }
 
-    private static Optional<Denial> parse(String message) {
+    /** The denial a JDK access message describes; read with plain string searches, the message being untrusted text. */
+    static Optional<Denial> parse(String message) {
         if (message == null) {
             return Optional.empty();
         }
-        Matcher inaccessible = INACCESSIBLE.matcher(message);
-        if (inaccessible.find()) {
-            return Optional.of(new Denial(inaccessible.group(2), inaccessible.group(3), reader(inaccessible.group(4)),
-                    inaccessible.group(1)));
+        Optional<Denial> inaccessible = parseInaccessible(message);
+        return inaccessible.isPresent() ? inaccessible : parseIllegal(message);
+    }
+
+    /** {@code Unable to make <what> accessible: module <m> does not "opens <p>" to <reader>}. */
+    private static Optional<Denial> parseInaccessible(String message) {
+        int start = message.indexOf(UNABLE);
+        int accessible = start < 0 ? -1 : message.indexOf(ACCESSIBLE, start);
+        if (accessible < 0) {
+            return Optional.empty();
         }
-        Matcher illegal = ILLEGAL.matcher(message);
-        if (illegal.find()) {
-            return Optional.of(new Denial(illegal.group(2), illegal.group(3), reader(illegal.group(4)),
-                    illegal.group(1)));
+        String what = message.substring(start + UNABLE.length(), accessible);
+        int moduleStart = accessible + ACCESSIBLE.length();
+        int doesNot = message.indexOf(DOES_NOT + "\"", moduleStart);
+        if (doesNot < 0) {
+            return Optional.empty();
         }
-        return Optional.empty();
+        String module = message.substring(moduleStart, doesNot);
+        int directive = doesNot + DOES_NOT.length() + 1;
+        int space = message.indexOf(' ', directive);
+        int quote = space < 0 ? -1 : message.indexOf('"', space);
+        if (quote < 0) {
+            return Optional.empty();
+        }
+        String pkg = message.substring(space + 1, quote);
+        int to = message.indexOf(TO, quote);
+        String reader = to < 0 ? null : message.substring(to + TO.length());
+        return denial(module, pkg, reader, what);
+    }
+
+    /** {@code <reader> cannot access <what> (in module <m>) because module <m> does not export <p> to <reader>}. */
+    private static Optional<Denial> parseIllegal(String message) {
+        int cannot = message.indexOf(CANNOT_ACCESS);
+        int in = cannot < 0 ? -1 : message.indexOf(IN_MODULE, cannot);
+        int because = in < 0 ? -1 : message.indexOf(BECAUSE, in);
+        if (because < 0) {
+            return Optional.empty();
+        }
+        String what = message.substring(cannot + CANNOT_ACCESS.length(), in);
+        String module = message.substring(in + IN_MODULE.length(), because);
+        int doesNot = message.indexOf(DOES_NOT, because);
+        if (doesNot < 0) {
+            return Optional.empty();
+        }
+        int verbEnd = message.indexOf(' ', doesNot + DOES_NOT.length());
+        if (verbEnd < 0) {
+            return Optional.empty();
+        }
+        int to = message.indexOf(TO, verbEnd);
+        String pkg = to < 0 ? message.substring(verbEnd + 1) : message.substring(verbEnd + 1, to);
+        String reader = to < 0 ? null : message.substring(to + TO.length());
+        return denial(module, pkg, reader, what);
+    }
+
+    private static Optional<Denial> denial(String module, String pkg, String reader, String what) {
+        if (module.isBlank() || pkg.isBlank() || module.contains(" ") || pkg.contains(" ")) {
+            return Optional.empty();
+        }
+        return Optional.of(new Denial(module, pkg, reader(reader), what));
     }
 
     /** {@code module io.x} → {@code io.x}; an unnamed module → the class path. */

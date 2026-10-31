@@ -82,4 +82,32 @@ class OpensRequestFileTest {
         assertEquals(1, warnings.size());
         assertTrue(warnings.getFirst().contains("opens shop.report;"), warnings.getFirst());
     }
+
+    @Test
+    void pollingOpensARequestWrittenWhileItRuns() throws Exception {
+        Path moduleInfo = Files.writeString(dir.resolve("module-info.java"), "module shop {\n}\n");
+        Path request = dir.resolve(OpensRequestFile.FILE_NAME);
+        Files.writeString(request, "left.by.an.earlier.session\n");
+        try (var opens = OpensRequestFile.poll(request, moduleInfo, _ -> { }, _ -> { })) {
+            assertFalse(Files.exists(request), "an earlier session's request is dropped");
+            Files.writeString(request, "shop.report\n");
+            long deadline = System.nanoTime() + 10_000_000_000L;
+            while (!Files.readString(moduleInfo).contains("opens shop.report;") && System.nanoTime() < deadline) {
+                Thread.sleep(50);
+            }
+            opens.close();
+        }
+        String source = Files.readString(moduleInfo);
+        assertTrue(source.contains("opens shop.report; // vidocq:reflection"), source);
+        assertFalse(source.contains("left.by.an.earlier.session"), source);
+    }
+
+    @Test
+    void onlyPackageNamesAreRead() {
+        assertTrue(OpensRequestFile.isPackageName("com.example.report"));
+        assertTrue(OpensRequestFile.isPackageName("single"));
+        for (String bad : List.of("", "a..b", ".a", "a.", "1a", "a b", "a;drop", "a.b-c")) {
+            assertFalse(OpensRequestFile.isPackageName(bad), bad);
+        }
+    }
 }
