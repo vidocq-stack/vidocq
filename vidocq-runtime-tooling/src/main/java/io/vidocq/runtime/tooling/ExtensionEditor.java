@@ -30,9 +30,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Adds or removes extensions on a project: the dependency, the codegen bundle's processor path, and the
- * {@code module-info.java} directives. {@code vidocq extension add|remove} and
- * {@code vidocq:add-extension|remove-extension} both run it, so either tool makes the same edit (Vidocq/vidocq#314).
+ * Adds or removes extensions on a project: the dependency, the codegen bundle's processor path, the
+ * {@code module-info.java} directives, and on add the settings of {@link ExtensionConfig}.
+ * {@code vidocq extension add|remove} and {@code vidocq:add-extension|remove-extension} both run it, so either tool
+ * makes the same edit (Vidocq/vidocq#314).
  */
 public final class ExtensionEditor {
 
@@ -106,6 +107,10 @@ public final class ExtensionEditor {
         pomChanged |= devServices.changed();
 
         boolean moduleInfoChanged = updateModuleInfo(projectDir, ids, add, reporter);
+        if (add) {
+            // The settings each extension needs, once; a removal leaves the application's configuration alone.
+            ExtensionConfig.update(projectDir, ids, appName(pom, projectDir), reporter);
+        }
         if (pomChanged) {
             try {
                 Files.writeString(pomPath, pom);
@@ -115,6 +120,12 @@ public final class ExtensionEditor {
             }
         }
         return new Outcome(true, pomChanged, moduleInfoChanged);
+    }
+
+    /** The project's artifactId, which names it in the settings an extension writes; else its directory's name. */
+    private static String appName(String pom, Path projectDir) {
+        return PomDependencies.artifactId(pom)
+                .orElseGet(() -> projectDir.toAbsolutePath().normalize().getFileName().toString());
     }
 
     /**

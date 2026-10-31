@@ -80,6 +80,16 @@ class ProjectScaffolderExtensionsTest {
         assertTrue(pom.contains("<goal>package</goal>"), "the plugin keeps its execution: " + pom);
     }
 
+    /** BUG-20261031-09: `create -x` writes the configuration of its extensions, as `extension add` does. */
+    @Test
+    void aCreatedProjectGetsTheConfigurationOfItsExtensions(@TempDir Path dir) throws IOException {
+        scaffoldPom(dir, Set.of("humboldt-telemetry"));
+
+        String config = Files.readString(dir.resolve("demo/src/main/resources/vidocq.properties"));
+        assertEquals("demo", PropertiesText.entries(config).get("otel.service.name"), config);
+        assertEquals("8080", PropertiesText.entries(config).get("vidocq.http.port"), config);
+    }
+
     @Test
     void fromParent040AnExtensionIsItsDependencyAlone(@TempDir Path dir) throws IOException {
         String pom = scaffoldPom(dir, Set.of("cassini-rest"));

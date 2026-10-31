@@ -508,4 +508,25 @@ class ExtensionEditorTest {
         assertEquals(List.of(), after.plugin(), pom());
         assertFalse(after.scopes().containsKey(DevServiceWiring.JUNIT_HOST), pom());
     }
+
+    /** BUG-20261031-09: the configuration Telemetry needs comes with it, and stays when it goes. */
+    @Test
+    void anExtensionWritesItsConfigurationOnceAndRemovingItLeavesIt() throws IOException {
+        writePom("");
+        writeModuleInfo();
+        Path config = project.resolve("src/main/resources/vidocq.properties");
+        Files.createDirectories(config.getParent());
+        Files.writeString(config, "vidocq.http.port=8080\n");
+
+        edit(List.of("humboldt-telemetry"), true);
+
+        String written = Files.readString(config);
+        assertEquals("demo", PropertiesText.entries(written).get("otel.service.name"), written);
+        assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("success: vidocq.properties")),
+                reporter.lines.toString());
+
+        edit(List.of("humboldt-telemetry"), false);
+
+        assertEquals(written, Files.readString(config), "the application's configuration is its own");
+    }
 }
