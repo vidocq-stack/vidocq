@@ -100,6 +100,22 @@ class ImageLaunchMojosTest {
         assertTrue(args.contains("--compress=zip-6"), args.toString());
     }
 
+    /** The recipe vidocq:docker links again inside a Linux JDK names no path of the build host (BUG-20261030-17). */
+    @Test
+    void theRecipeArgumentsNameNoPathOfTheBuildHost() throws Exception {
+        VidocqJlinkMojo mojo = jlink("acme.app", null, new Infos());
+        set(VidocqJlinkMojo.class, mojo, "stripDebug", true);
+
+        List<String> args = mojo.portableJlinkArgs("acme.app,java.base", ImageLaunch.of("acme.app", null));
+
+        assertTrue(args.stream().noneMatch(a -> a.equals("--module-path") || a.equals("--output")
+                || a.contains(dir.toString())), args.toString());
+        assertEquals("acme.app,java.base", args.get(args.indexOf("--add-modules") + 1));
+        assertEquals("app=" + RUNTIME_MAIN, args.get(args.indexOf("--launcher") + 1));
+        assertTrue(args.contains("--add-options=--add-modules=acme.app -Dvidocq.app.module=acme.app"), args.toString());
+        assertTrue(args.contains("--strip-debug") && args.contains("--compress=zip-6"), args.toString());
+    }
+
     @Test
     void theJlinkRunOfATrampolineAddsNoOption() throws Exception {
         VidocqJlinkMojo mojo = jlink("acme.app", "acme.app.App", new Infos());

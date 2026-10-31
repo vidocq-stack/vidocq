@@ -49,7 +49,7 @@
 | Native OS bundle (`.app` macOS, `.exe`/`.msi` Windows, `.deb`/`.rpm` Linux) or cross-platform app-image.
 
 | `vidocq:docker`
-| Generates `target/Dockerfile` distroless based on `distroless/base-debian12:nonroot`. Optional build via `vidocq.docker.build=true`.
+| Generates `target/Dockerfile` distroless based on `distroless/base-debian12:nonroot`. Optional build via `vidocq.docker.build=true`. [.tag-new]#NEW# On macOS or Windows, the Dockerfile links the image inside a Linux JDK (<<docker-linux-image,details>>).
 
 | `vidocq:check-module-info`
 | Verifies the application `module-info.java` declares the Java module directives its Vidocq extensions need (e.g. `opens db.migration` for Flyway migrations); the failure names `vidocq doctor --fix`, which adds those of the catalog extensions. [[check-module-info-uncompiled]][.tag-new]#NEW# When `module-info.java` did not compile, as under `vidocq dev` after a compile error, the goal says so and checks nothing, instead of reporting a module without `module-info.java`. [[check-module-info-reflected]][.tag-new]#NEW# It also opens the packages the runtime reaches by reflection: the JPA entities, and the types a REST resource or provider takes or returns, with the types their fields and getters hold, which JSON-B binds by reflection. [[check-module-info-interceptors]][.tag-new]#NEW# The package of a CDI interceptor too when a method its container calls is `private`: Vauban calls the other interceptor methods through the provider generated in their package, which needs no directive, but a private one by reflection. Such a package that the module does not open fails the build with the line to add, for instance `opens com.acme.shop.book;   (com.acme.shop.book.Book, reached through com.acme.shop.book.BookResource)`; before, the first request failed with an `IllegalAccessException`. `-Dvidocq.moduleinfo.failOnMissing=false` turns it into a warning.
@@ -584,10 +584,23 @@ docker run --rm -p 8080:8080 \
 ----
 
 [#docker-linux-image]
-The image must be linked on Linux. `vidocq:jlink` links against the JDK of the machine that runs it, so on macOS
-or Windows the image holds a Mach-O or PE `bin/java` that a Linux container cannot start. The goal reads that
-header: when the image is not Linux it logs a warning and still writes the `Dockerfile`, and with
-`-Dvidocq.docker.build=true` it fails before running `docker build`. Build the image on Linux, in CI for instance.
+*An image built on macOS or Windows* [.tag-new]#NEW#. `vidocq:jlink` links against the JDK of the machine that runs
+it, so on macOS or Windows `target/dist` holds a Mach-O or PE `bin/java` that a Linux container cannot start. The goal
+reads that header, and then writes a two-stage `Dockerfile`: the first stage links the image again inside a Linux JDK,
+`eclipse-temurin:<build JDK version>-jdk`, from the modules `vidocq:jlink` staged in `target/jlink-mods/` and the
+recipe it left in `target/jlink-image/` (the host-independent jlink arguments, the entry point, the `conf/` files);
+the second stage is the distroless image, as on Linux. The same `vidocq build docker` therefore gives an image that
+starts, whatever the machine (BUG-20261030-17). A `target/.dockerignore` sends the daemon only what the `Dockerfile`
+copies.
+
+* `-Dvidocq.docker.linkInContainer=auto` (default) links in the container only when the image is not Linux; `true`
+  always does; `false` never does, and the goal then warns about a macOS or Windows image and, with
+  `-Dvidocq.docker.build=true`, fails before running `docker build`.
+* `-Dvidocq.docker.jdkImage=…` names another Linux JDK image for the first stage. A JDK with `jmods/` and one linked
+  without them (JEP 493, as Temurin 25) both work.
+
+The entry point runs the image's `bin/java -m <module>/<class>`, not the launcher script of `bin/`: the distroless base
+has no shell to run it. The JVM options the application needs are already in the image (`jlink --add-options`).
 
 [#run]
 == `vidocq:run` goal

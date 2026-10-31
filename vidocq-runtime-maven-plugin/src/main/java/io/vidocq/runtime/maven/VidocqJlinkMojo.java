@@ -181,7 +181,8 @@ public class VidocqJlinkMojo extends AbstractMojo {
             stageModules();
             String addModules = resolveAddModules();
             runJlink(addModules, launch);
-            copyResources();
+            List<Path> conf = copyResources();
+            PortableImage.write(buildDir.toPath(), portableJlinkArgs(addModules, launch), launch.entryPoint(), conf);
             getLog().info("jlink image ready: " + distDir.toPath().toAbsolutePath());
             getLog().info("Run with: " + distDir.toPath().toAbsolutePath() + "/bin/" + launcher);
         } catch (IOException e) {
@@ -463,9 +464,19 @@ public class VidocqJlinkMojo extends AbstractMojo {
         String modulePath = modsDir.toPath() + File.pathSeparator + System.getProperty("java.home") + "/jmods";
         List<String> args = new ArrayList<>();
         args.add("--module-path"); args.add(modulePath);
+        args.add("--output"); args.add(distDir.toPath().toString());
+        args.addAll(portableJlinkArgs(addModules, launch));
+        return args;
+    }
+
+    /**
+     * The arguments of the {@code jlink} run that name no path of the build host: those of the recipe
+     * {@code vidocq:docker} links again inside a Linux JDK ({@link PortableImage}).
+     */
+    List<String> portableJlinkArgs(String addModules, ImageLaunch launch) {
+        List<String> args = new ArrayList<>();
         args.add("--add-modules"); args.add(addModules);
         args.addAll(launcherArgs(launcher, launch));
-        args.add("--output"); args.add(distDir.toPath().toString());
         args.add("--no-header-files");
         args.add("--no-man-pages");
         if (stripDebug) args.add("--strip-debug");
@@ -488,19 +499,23 @@ public class VidocqJlinkMojo extends AbstractMojo {
         }
     }
 
-    private void copyResources() throws IOException {
+    /** Copies the configuration files into the image's {@code conf/}; returns the files it copied. */
+    private List<Path> copyResources() throws IOException {
         List<String> names = (includeResources == null || includeResources.isEmpty())
                 ? List.of("vidocq.properties", "logging.properties")
                 : includeResources;
         Path conf = distDir.toPath().resolve("conf");
         Files.createDirectories(conf);
+        List<Path> copied = new ArrayList<>();
         for (String name : names) {
             Path src = classesDir.toPath().resolve(name);
             if (Files.isRegularFile(src)) {
                 Files.copy(src, conf.resolve(name), StandardCopyOption.REPLACE_EXISTING);
+                copied.add(src);
                 getLog().info("Copied resource: " + name + " -> conf/");
             }
         }
+        return copied;
     }
 
     private static void deleteRecursive(Path root) throws IOException {
