@@ -5,6 +5,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261031-11 — `check-module-info` throws a NullPointerException on its session; the hand-written plugin.xml did not declare it
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/check-module-info-session`: `plugin.xml` declares `session` and `dev` (`vidocq.moduleinfo.dev`) for `check-module-info`, and also the parameters other goals had lost the same way: `linkInContainer` and `jdkImage` of `vidocq:docker` (`-Dvidocq.docker.linkInContainer=false` was ignored), the `vidocq.includeResources` property of `vidocq:jlink`. `PluginDescriptorCompletenessTest` reads every mojo's `@Parameter` fields from the class files and fails when the descriptor misses one or its property/default value. Checked through Maven on a generated application with a JSON-B type in a package it does not open: `package` fails with the `opens` line and `vidocq doctor --fix`, `-Dvidocq.moduleinfo.dev=true` writes the line and builds.
+- **Reported by**: the vidocq-tutorial session (replay of SNAPSHOT 0.4.0-20261031.051920-15)
+- **Minimal reproduction**: `vidocq create -x cassini-rest`, a JSON-B record and a resource returning it in a new package, no `opens`: `./mvnw package` and `vidocq dev` fail with `Cannot invoke "org.apache.maven.execution.MavenSession.getGoals()" because "this.session" is null` at `VidocqCheckModuleInfoMojo.execute`, no message on what to add (regression of BUG-20261031-10).
+- **Cause hypothesis**: the plugin descriptor is written by hand; a field annotated `@Parameter` but missing from it is never set by Maven, while the unit tests build the mojo and set the field themselves.
+
 ## BUG-20261031-10 — `vidocq dev` stops on a package the runtime reaches by reflection and the module does not open
 
 - **Date**: 2026-10-31
