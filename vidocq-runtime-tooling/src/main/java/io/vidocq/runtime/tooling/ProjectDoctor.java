@@ -60,6 +60,10 @@ public final class ProjectDoctor {
     private static final String DEV_SERVICES_CHECK = "Dev services";
     private static final String MAVEN_CHECK = "Maven version";
     private static final String PORT_CHECK = "HTTP port";
+    private static final String JWT_CHECK = "JWT verification";
+    private static final String JWT = "cervantes-jwt";
+    /** The keys MicroProfile JWT verifies a token's signature with: without one, it accepts none. */
+    private static final List<String> JWT_KEYS = List.of("mp.jwt.verify.publickey", "mp.jwt.verify.publickey.location");
 
     private static final String POM_XML = "pom.xml";
     private static final String WRAPPER_PROPERTIES = ".mvn/wrapper/maven-wrapper.properties";
@@ -80,9 +84,10 @@ public final class ProjectDoctor {
      * @param mavenVersion       the Maven the project's wrapper runs, or {@code null} without a wrapper
      * @param httpPort           the port of the default HTTP listener
      * @param httpPortFree       whether that port could be bound when the facts were read
+     * @param config             the entries of the project's {@code vidocq.properties}, empty without one
      */
     public record Facts(String pom, String moduleInfo, String applicationPackage, String mavenVersion, int httpPort,
-                        boolean httpPortFree) {}
+                        boolean httpPortFree, Map<String, String> config) {}
 
     /**
      * The facts of the project in {@code projectDir}, {@code portFree} telling whether a port is free; {@code null}
@@ -105,7 +110,7 @@ public final class ProjectDoctor {
             Path wrapper = wrapperProperties(projectDir);
             String maven = wrapper == null ? null : mavenVersion(Files.readString(wrapper)).orElse(null);
             int port = httpPort(projectDir);
-            return new Facts(pom, moduleInfo, pkg, maven, port, portFree.test(port));
+            return new Facts(pom, moduleInfo, pkg, maven, port, portFree.test(port), config(projectDir));
         } catch (IOException e) {
             throw new java.io.UncheckedIOException("Could not read the project in " + projectDir, e);
         }
@@ -126,6 +131,9 @@ public final class ProjectDoctor {
             diagnostics.add(checkMaven(facts.mavenVersion()));
         }
         diagnostics.add(checkPort(facts));
+        if (extensions.containsKey(JWT)) {
+            diagnostics.add(checkJwtVerification(facts.config()));
+        }
         return diagnostics;
     }
 
@@ -225,6 +233,24 @@ public final class ProjectDoctor {
                     "Older Mavens print JDK 25 warnings on every build.").asFixable();
         }
         return Diagnostic.ok(MAVEN_CHECK, "Maven " + version + " (wrapper)");
+    }
+
+    /**
+     * The Keycloak dev service sets the verification keys under {@code vidocq dev} and the tests only: without one in
+     * the configuration, in any profile, production rejects every token (BUG-20261031-09). Not fixable: only the
+     * application knows its identity provider.
+     */
+    private static Diagnostic checkJwtVerification(Map<String, String> config) {
+        boolean set = config.keySet().stream()
+                .map(key -> key.startsWith("%") && key.indexOf('.') > 0 ? key.substring(key.indexOf('.') + 1) : key)
+                .anyMatch(JWT_KEYS::contains);
+        if (set) {
+            return Diagnostic.ok(JWT_CHECK, "vidocq.properties names the key tokens are verified with");
+        }
+        return Diagnostic.warn(JWT_CHECK, "no mp.jwt.verify.publickey.location (nor mp.jwt.verify.publickey) in"
+                        + " vidocq.properties",
+                "The Keycloak dev service sets it under vidocq dev and the tests; in production every token would be"
+                        + " rejected. Set it, or set it in the environment, to your identity provider.");
     }
 
     private static Diagnostic checkPort(Facts facts) {
@@ -412,6 +438,12 @@ public final class ProjectDoctor {
             }
         }
         return numbers;
+    }
+
+    /** The entries of the project's configuration file; empty without one. */
+    private static Map<String, String> config(Path projectDir) throws IOException {
+        Optional<Path> file = ConfigFile.locate(projectDir, Files::isRegularFile);
+        return file.isEmpty() ? Map.of() : PropertiesText.entries(Files.readString(file.get()));
     }
 
     /**

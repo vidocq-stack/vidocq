@@ -344,6 +344,35 @@ public final class PomDependencies {
                 : Optional.of(new Parent(groupId, artifactId, version));
     }
 
+    /**
+     * The project's own {@code <project>/<artifactId>}, not its parent's; empty when the pom names none.
+     *
+     * @throws IllegalArgumentException if the XML cannot be parsed
+     */
+    public static Optional<String> artifactId(String pomXml) {
+        XMLInputFactory factory = XMLInputFactory.newFactory();
+        factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+        try (QuietlyClosed pom = new QuietlyClosed(factory.createXMLStreamReader(new StringReader(pomXml)))) {
+            XMLStreamReader reader = pom.reader();
+            int depth = 0;
+            while (reader.hasNext()) {
+                int event = reader.next();
+                if (event == XMLStreamConstants.START_ELEMENT) {
+                    depth++;
+                    if (depth == 2 && ARTIFACT_ID.equals(reader.getLocalName())) {
+                        return Optional.of(reader.getElementText().strip()).filter(a -> !a.isEmpty());
+                    }
+                } else if (event == XMLStreamConstants.END_ELEMENT) {
+                    depth--;
+                }
+            }
+            return Optional.empty();
+        } catch (XMLStreamException e) {
+            throw new IllegalArgumentException("Invalid pom.xml: " + e.getMessage(), e);
+        }
+    }
+
     /** {@code reader} closed by a try-with-resources, best effort: a failure to close is ignored. */
     private record QuietlyClosed(XMLStreamReader reader) implements AutoCloseable {
         @Override

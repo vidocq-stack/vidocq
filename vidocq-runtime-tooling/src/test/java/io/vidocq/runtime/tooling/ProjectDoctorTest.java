@@ -103,6 +103,30 @@ class ProjectDoctorTest {
     }
 
     // -------------------------------------------------------------------------
+    // JWT verification
+    // -------------------------------------------------------------------------
+
+    /**
+     * BUG-20261031-09: the Keycloak dev service sets the verification keys under vidocq dev and the tests only; an
+     * application with JWT and none of them in its configuration would reject every token in production.
+     */
+    @Test
+    void jwtWithoutAVerificationKeyWarnsUntilTheApplicationSetsOne(@TempDir Path dir) throws IOException {
+        assertFalse(check(create(dir.resolve("rest"), Set.of("cassini-rest"), false)).containsKey("JWT verification"));
+        Path project = create(dir.resolve("jwt"), Set.of("cervantes-jwt"), false);
+
+        Diagnostic jwt = check(project).get("JWT verification");
+        assertEquals(Diagnostic.Status.WARN, jwt.status());
+        assertTrue(jwt.detail().contains("mp.jwt.verify.publickey.location"), jwt.detail());
+        assertFalse(jwt.fixable(), "only the application knows its identity provider");
+
+        Path config = project.resolve("src/main/resources/vidocq.properties");
+        Files.writeString(config, Files.readString(config)
+                + "%prod.mp.jwt.verify.publickey.location=https://idp.example.com/certs\n");
+        assertEquals(Diagnostic.Status.OK, check(project).get("JWT verification").status());
+    }
+
+    // -------------------------------------------------------------------------
     // Dev services
     // -------------------------------------------------------------------------
 
