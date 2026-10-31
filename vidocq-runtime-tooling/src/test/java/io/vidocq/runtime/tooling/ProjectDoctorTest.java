@@ -23,11 +23,23 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.lang.classfile.Annotation;
+import java.lang.classfile.AnnotationElement;
+import java.lang.classfile.ClassBuilder;
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.attribute.ModuleAttribute;
+import java.lang.classfile.attribute.RuntimeVisibleAnnotationsAttribute;
+import java.lang.constant.ClassDesc;
+import java.lang.constant.ConstantDescs;
+import java.lang.constant.MethodTypeDesc;
+import java.lang.constant.ModuleDesc;
+import java.lang.constant.PackageDesc;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -325,6 +337,69 @@ class ProjectDoctorTest {
         assertTrue(Files.readString(moduleInfo).contains("opens db.migration; // vidocq:flyway-migration"),
                 Files.readString(moduleInfo));
         assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
+    }
+
+    /**
+     * BUG-20261031-01, second part: with compiled classes, {@code doctor} runs the check of {@code check-module-info} on
+     * the packages the runtime reaches by reflection, and {@code --fix} opens them as {@code complete-module-info}
+     * does. The check reads {@code module-info.java} too, so the fix is seen before the next compile.
+     */
+    @Test
+    void aPackageReachedByReflectionAndClosedFailsAndIsOpened(@TempDir Path dir) throws IOException {
+        Path project = create(dir, Set.of("cassini-rest"), true);
+        Path classes = project.resolve("target/classes");
+        writeClass(classes, ClassDesc.of("com.acme.demo.book.Book"),
+                cb -> cb.withField("title", ConstantDescs.CD_String, ClassFile.ACC_PRIVATE));
+        writeClass(classes, ClassDesc.of("com.acme.demo.BookResource"), cb -> {
+            cb.with(RuntimeVisibleAnnotationsAttribute.of(Annotation.of(ClassDesc.of("jakarta.ws.rs.Path"),
+                    AnnotationElement.ofString("value", "/books"))));
+            cb.withMethodBody("one", MethodTypeDesc.of(ClassDesc.of("com.acme.demo.book.Book")), ClassFile.ACC_PUBLIC,
+                    code -> code.aconst_null().areturn());
+        });
+        Files.write(classes.resolve("module-info.class"), ClassFile.of().buildModule(
+                ModuleAttribute.of(ModuleDesc.of("com.acme.demo"), mb -> mb
+                        .requires(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null)
+                        .opens(PackageDesc.of("com.acme.demo"), 0))));
+
+        Diagnostic directives = check(project).get("Module directives");
+        assertEquals(Diagnostic.Status.FAIL, directives.status());
+        assertTrue(directives.detail().contains("opens com.acme.demo.book"), directives.detail());
+        assertTrue(directives.fixable());
+
+        ProjectDoctor.fix(project, RUNTIME, new RecordingReporter());
+
+        Path moduleInfo = project.resolve("src/main/java/module-info.java");
+        assertTrue(Files.readString(moduleInfo).contains("    opens com.acme.demo.book;"), Files.readString(moduleInfo));
+        assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
+    }
+
+    /** Without compiled classes, the packages reached by reflection cannot be read: the check says to compile. */
+    @Test
+    void withoutCompiledClassesTheReflectedPackagesWaitForACompile(@TempDir Path dir) throws IOException {
+        Path project = create(dir, Set.of("cassini-rest"), true);
+
+        Diagnostic directives = check(project).get("Module directives");
+        assertEquals(Diagnostic.Status.OK, directives.status());
+        assertTrue(directives.detail().contains("compile"), directives.detail());
+    }
+
+    /**
+     * The check names no count of extensions: the pom's catalog extensions (8 in the tutorial, {@code jdbc-telemetry}
+     * included) are not the {@code VidocqExtension} providers the Extensions check counts (7), and two numbers side
+     * by side read as a contradiction.
+     */
+    @Test
+    void theModuleDirectivesCheckCountsNoExtensions(@TempDir Path dir) throws IOException {
+        Path project = create(dir, Set.of("cassini-rest"), true);
+
+        assertFalse(check(project).get("Module directives").detail().matches(".*\\d+ extensions?.*"),
+                check(project).get("Module directives").detail());
+    }
+
+    private static void writeClass(Path classes, ClassDesc type, Consumer<ClassBuilder> body) throws IOException {
+        Path file = classes.resolve(type.packageName().replace('.', '/')).resolve(type.displayName() + ".class");
+        Files.createDirectories(file.getParent());
+        Files.write(file, ClassFile.of().build(type, body));
     }
 
     /** BUG-20261031-03: a created project with a migration extension has its folder, opened, before any script. */

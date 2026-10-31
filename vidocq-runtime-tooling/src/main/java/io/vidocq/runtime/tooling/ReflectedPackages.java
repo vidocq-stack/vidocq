@@ -17,7 +17,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
-package io.vidocq.runtime.maven;
+package io.vidocq.runtime.tooling;
 
 import java.io.IOException;
 import java.lang.classfile.Attributes;
@@ -53,7 +53,7 @@ import java.util.stream.Stream;
  *
  * <p>The resources themselves are not listed: their dispatch is generated at build time.</p>
  */
-final class ReflectedPackages {
+public final class ReflectedPackages {
 
     /** Class annotations that make the runtime reach the class, or the types of its methods, by reflection. */
     private static final Set<String> RESOURCE_ANNOTATIONS = Set.of(
@@ -79,14 +79,14 @@ final class ReflectedPackages {
      * @param reasons    each package, with the class that needs it and how it is reached, sorted by package
      * @param needsOpens the packages an export does not satisfy: the runtime calls a non-public member there
      */
-    record Reached(Map<String, String> reasons, Set<String> needsOpens) {}
+    public record Reached(Map<String, String> reasons, Set<String> needsOpens) {}
 
     /**
      * The packages of the module's classes the runtime reaches by reflection.
      *
      * @param classes the module's compiled classes ({@code target/classes})
      */
-    static Reached of(Path classes) throws IOException {
+    public static Reached of(Path classes) throws IOException {
         Map<String, ClassModel> application = read(classes);
         Map<String, String> reasons = new TreeMap<>();
         Set<String> needsOpens = new HashSet<>();
@@ -136,7 +136,7 @@ final class ReflectedPackages {
      * The packages of {@code reached} the module does not open (to anyone), nor export to all when an export is
      * enough; none for an open module.
      */
-    static List<String> missing(ModuleDescriptor descriptor, Reached reached) {
+    public static List<String> missing(ModuleDescriptor descriptor, Reached reached) {
         if (descriptor.isOpen()) {
             return List.of();
         }
@@ -152,6 +152,35 @@ final class ReflectedPackages {
             }
         }
         return missing;
+    }
+
+    /**
+     * The packages of the compiled module in {@code classes} that the runtime reaches by reflection and that neither
+     * its {@code module-info.class} nor {@code moduleInfoSource} opens (or exports, when that is enough), each with the
+     * reason, sorted; {@code null} when {@code classes} holds no {@code module-info.class} yet. The source is read too,
+     * so a directive added since the last compile counts: what {@code vidocq doctor} asks (BUG-20261031-01).
+     */
+    public static Map<String, String> unopened(Path classes, String moduleInfoSource) throws IOException {
+        Path moduleInfo = classes.resolve("module-info.class");
+        if (!Files.isRegularFile(moduleInfo)) {
+            return null;
+        }
+        ModuleDescriptor descriptor;
+        try (var in = Files.newInputStream(moduleInfo)) {
+            descriptor = ModuleDescriptor.read(in);
+        }
+        Reached reached = of(classes);
+        Map<String, String> unopened = new TreeMap<>();
+        for (String pkg : missing(descriptor, reached)) {
+            List<String> satisfying = reached.needsOpens().contains(pkg)
+                    ? List.of("opens " + pkg) : List.of("opens " + pkg, "exports " + pkg);
+            boolean declared = moduleInfoSource != null
+                    && ModuleInfoEditor.missing(moduleInfoSource, satisfying).size() < satisfying.size();
+            if (!declared) {
+                unopened.put(pkg, reached.reasons().get(pkg));
+            }
+        }
+        return unopened;
     }
 
     /**

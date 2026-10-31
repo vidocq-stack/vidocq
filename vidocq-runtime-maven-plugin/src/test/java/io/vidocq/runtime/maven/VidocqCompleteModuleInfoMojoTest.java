@@ -20,6 +20,7 @@
 package io.vidocq.runtime.maven;
 
 import io.vidocq.runtime.codegen.commons.Requirement;
+import io.vidocq.runtime.tooling.ReflectedPackages;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

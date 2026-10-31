@@ -21,6 +21,8 @@ package io.vidocq.runtime.maven;
 
 import io.vidocq.runtime.codegen.commons.ModuleInfoRequirements;
 import io.vidocq.runtime.codegen.commons.Requirement;
+import io.vidocq.runtime.tooling.ModuleInfoEditor;
+import io.vidocq.runtime.tooling.ReflectedPackages;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -191,15 +193,7 @@ public class VidocqCompleteModuleInfoMojo extends AbstractMojo {
 
     /** Inserts the directives (with a marker comment) just before the module's closing brace. */
     static String inject(String source, List<String> directives) {
-        int close = source.lastIndexOf('}');
-        if (close < 0 || directives.isEmpty()) {
-            return source;
-        }
-        StringBuilder block = new StringBuilder("\n    ").append(MARKER).append('\n');
-        for (String directive : directives) {
-            block.append("    ").append(directive).append('\n');
-        }
-        return source.substring(0, close) + block + source.substring(close);
+        return ModuleInfoEditor.appendBlock(source, MARKER, directives);
     }
 
     private static String stripLineComment(String line) {

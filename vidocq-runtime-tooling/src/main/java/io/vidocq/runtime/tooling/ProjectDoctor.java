@@ -64,6 +64,9 @@ public final class ProjectDoctor {
     private static final String POM_XML = "pom.xml";
     private static final String WRAPPER_PROPERTIES = ".mvn/wrapper/maven-wrapper.properties";
     private static final String MODULE_INFO = "src/main/java/module-info.java";
+    private static final String CLASSES = "target/classes";
+    /** The comment over the {@code opens} written for reflection, shared with {@code vidocq:complete-module-info}. */
+    public static final String REFLECTION_MARKER = "// added by vidocq: the runtime reaches these packages by reflection";
     private static final ExtensionCoordinate INDEXER =
             new ExtensionCoordinate("io.vidocq.runtime", "vidocq-runtime-core-codegen");
     private static final String PORT_KEY = "vidocq.http.port";
@@ -80,9 +83,12 @@ public final class ProjectDoctor {
      * @param mavenVersion       the Maven the project's wrapper runs, or {@code null} without a wrapper
      * @param httpPort           the port of the default HTTP listener
      * @param httpPortFree       whether that port could be bound when the facts were read
+     * @param unopenedPackages   the packages of {@code target/classes} the runtime reaches by reflection and the module
+     *                           does not open, with the reason, as {@code vidocq:check-module-info} reads them; {@code
+     *                           null} before a compile
      */
     public record Facts(String pom, String moduleInfo, String applicationPackage, String mavenVersion, int httpPort,
-                        boolean httpPortFree) {}
+                        boolean httpPortFree, Map<String, String> unopenedPackages) {}
 
     /**
      * The facts of the project in {@code projectDir}, {@code portFree} telling whether a port is free; {@code null}
@@ -105,7 +111,9 @@ public final class ProjectDoctor {
             Path wrapper = wrapperProperties(projectDir);
             String maven = wrapper == null ? null : mavenVersion(Files.readString(wrapper)).orElse(null);
             int port = httpPort(projectDir);
-            return new Facts(pom, moduleInfo, pkg, maven, port, portFree.test(port));
+            Map<String, String> unopened = moduleInfo == null ? null
+                    : ReflectedPackages.unopened(projectDir.resolve(CLASSES), moduleInfo);
+            return new Facts(pom, moduleInfo, pkg, maven, port, portFree.test(port), unopened);
         } catch (IOException e) {
             throw new java.io.UncheckedIOException("Could not read the project in " + projectDir, e);
         }
@@ -193,12 +201,19 @@ public final class ProjectDoctor {
         List<String> missing = new ArrayList<>();
         missingDirectives(facts, extensions).forEach((id, directives) ->
                 directives.forEach(d -> missing.add(id + ": " + d)));
+        if (facts.unopenedPackages() != null) {
+            facts.unopenedPackages().forEach((pkg, reason) -> missing.add("opens " + pkg + " (" + reason + ")"));
+        }
         if (!missing.isEmpty()) {
             return Diagnostic.fail(MODULE_CHECK, "missing from module-info.java — " + String.join(", ", missing),
-                    "The application does not compile, or the module path refuses it.").asFixable();
+                    "The application does not compile, the module path refuses it, or its first request fails:"
+                            + " vidocq:check-module-info fails the build on it.").asFixable();
         }
-        return Diagnostic.ok(MODULE_CHECK, "module-info.java declares what " + extensions.size()
-                + (extensions.size() == 1 ? " extension needs" : " extensions need"));
+        // No count: the pom's extensions are not the VidocqExtension providers the Extensions check counts.
+        return Diagnostic.ok(MODULE_CHECK, facts.unopenedPackages() == null
+                ? "module-info.java declares what the extensions need; compile to check the packages reached by"
+                        + " reflection"
+                : "module-info.java declares what the extensions need and opens the packages reached by reflection");
     }
 
     /**
@@ -265,8 +280,26 @@ public final class ProjectDoctor {
         if (facts.moduleInfo() != null) {
             List<String> ids = List.copyOf(missingDirectives(facts, extensions).keySet());
             changed |= !ids.isEmpty() && ExtensionEditor.updateModuleInfo(projectDir, ids, true, reporter);
+            changed |= openReflectedPackages(projectDir, facts.unopenedPackages(), reporter);
         }
         return changed;
+    }
+
+    /**
+     * Opens the packages the runtime reaches by reflection, in the block {@code vidocq:complete-module-info} writes
+     * (BUG-20261031-01).
+     */
+    private static boolean openReflectedPackages(Path projectDir, Map<String, String> unopened, Reporter reporter)
+            throws IOException {
+        if (unopened == null || unopened.isEmpty()) {
+            return false;
+        }
+        Path file = projectDir.resolve(MODULE_INFO);
+        List<String> directives = unopened.keySet().stream().map(pkg -> "opens " + pkg + ";").toList();
+        Files.writeString(file, ModuleInfoEditor.appendBlock(Files.readString(file), REFLECTION_MARKER, directives));
+        reporter.success("module-info.java opens " + String.join(", ", unopened.keySet()),
+                "the runtime reaches them by reflection");
+        return true;
     }
 
     private static String fixPom(String pom, Map<String, ExtensionCoordinate> extensions,

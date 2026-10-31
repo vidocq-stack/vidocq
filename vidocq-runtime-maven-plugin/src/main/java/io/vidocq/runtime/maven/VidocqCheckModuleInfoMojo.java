@@ -22,6 +22,7 @@ package io.vidocq.runtime.maven;
 import io.vidocq.runtime.codegen.commons.ModuleInfoRequirements;
 import io.vidocq.runtime.codegen.commons.ModuleRequirementsDescriptor;
 import io.vidocq.runtime.codegen.commons.Requirement;
+import io.vidocq.runtime.tooling.ReflectedPackages;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;

@@ -97,6 +97,23 @@ public final class ModuleInfoEditor {
         return directives.stream().filter(d -> !declared.contains(normalize(d))).toList();
     }
 
+    /**
+     * Inserts {@code directives} (written with their {@code ;}) before the module's closing brace, under a
+     * {@code comment} line: the block {@code vidocq:complete-module-info} and {@code vidocq doctor --fix} write for
+     * the {@code opens} no extension owns. The source is returned as is without a directive or a closing brace.
+     */
+    public static String appendBlock(String source, String comment, List<String> directives) {
+        int close = source.lastIndexOf('}');
+        if (close < 0 || directives.isEmpty()) {
+            return source;
+        }
+        StringBuilder block = new StringBuilder("\n    ").append(comment).append('\n');
+        for (String directive : directives) {
+            block.append("    ").append(directive).append('\n');
+        }
+        return source.substring(0, close) + block + source.substring(close);
+    }
+
     private static String marker(String id) {
         return "// vidocq:" + id;
     }
@@ -108,7 +125,8 @@ public final class ModuleInfoEditor {
             String code = line.contains("//") ? line.substring(0, line.indexOf("//")) : line;
             for (String statement : code.split(";")) {
                 String normalized = normalize(statement);
-                if (normalized.startsWith("requires ") || normalized.startsWith("opens ")) {
+                if (normalized.startsWith("requires ") || normalized.startsWith("opens ")
+                        || normalized.startsWith("exports ")) {
                     declared.add(normalized);
                 }
             }
