@@ -97,4 +97,22 @@ class DockerBuildTest {
         assertEquals(List.of(), plan.passthrough());
         assertNull(plan.done());
     }
+
+    @Test
+    void anInterruptedProbeIsNotAvailableAndKeepsTheInterrupt() {
+        Thread.currentThread().interrupt();
+        try {
+            assertFalse(DockerBuild.available(List.of("sleep", "5"), Duration.ofSeconds(5)));
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    /** The real probe answers true or false, whatever the machine, and never throws. */
+    @Test
+    void theDockerProbeAnswers() {
+        boolean available = DockerBuild.available();
+        assertEquals(available, DockerBuild.properties(available).size() == 1);
+    }
 }

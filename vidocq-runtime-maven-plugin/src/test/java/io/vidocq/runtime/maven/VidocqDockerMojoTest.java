@@ -139,6 +139,33 @@ class VidocqDockerMojoTest {
         assertFalse(failure.getMessage().contains("docker build failed"), "docker must not have run");
     }
 
+    @Test
+    void linkingInsideAJdkCanBeForcedForALinuxImage(@TempDir Path target) throws Exception {
+        var mojo = mojo(target, "java", ELF, "TRUE", false, new Warnings());
+        set(mojo, "jdkImage", " eclipse-temurin:25-jdk-noble ");
+        mojo.execute();
+
+        assertTrue(Files.readString(target.resolve("Dockerfile")).contains("FROM eclipse-temurin:25-jdk-noble AS link"));
+    }
+
+    @Test
+    void anUnknownLinkingModeIsRefused(@TempDir Path target) throws Exception {
+        var mojo = mojo(target, "java", ELF, "sometimes", false, new Warnings());
+
+        var failure = assertThrows(MojoExecutionException.class, mojo::execute);
+        assertTrue(failure.getMessage().contains("auto, true or false"), failure.getMessage());
+    }
+
+    /** An image linked before the recipe existed keeps its launcher as the entry point. */
+    @Test
+    void anImageWithoutARecipeStartsWithItsLauncher(@TempDir Path target) throws Exception {
+        var mojo = mojo(target, "java", ELF, null, false, new Warnings());
+        deleteRecursive(target.resolve(PortableImage.DIRECTORY));
+        mojo.execute();
+
+        assertTrue(Files.readString(target.resolve("Dockerfile")).contains("ENTRYPOINT [\"/opt/app/bin/app\"]"));
+    }
+
     private static VidocqDockerMojo mojo(Path target, String javaName, byte[] header, String linkInContainer,
             boolean build, Warnings log) throws Exception {
         Path bin = Files.createDirectories(target.resolve("dist/bin"));
