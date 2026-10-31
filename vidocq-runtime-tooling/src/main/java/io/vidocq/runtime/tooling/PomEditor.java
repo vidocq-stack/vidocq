@@ -627,7 +627,7 @@ public final class PomEditor {
         if (artifact < 0) {
             return null;
         }
-        int open = pom.lastIndexOf("<plugin>", artifact);
+        int open = pom.lastIndexOf(PLUGIN_OPEN, artifact);
         int close = pom.indexOf(PLUGIN_CLOSE, artifact);
         return open < 0 || close < 0 ? null : new Span(open, close + PLUGIN_CLOSE.length());
     }
