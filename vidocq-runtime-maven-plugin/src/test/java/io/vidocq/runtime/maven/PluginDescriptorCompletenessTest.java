@@ -40,7 +40,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * The hand-written plugin.xml must declare every {@code @Parameter} of every mojo, with its property or default value,
@@ -91,7 +91,7 @@ class PluginDescriptorCompletenessTest {
                 }
             }
         }
-        assertFalse(mojos == 0, "no mojo found in " + CLASSES);
+        assertNotEquals(0, mojos, "no mojo found in " + CLASSES);
         assertEquals(List.of(), missing);
     }
 
