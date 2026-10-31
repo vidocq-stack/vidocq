@@ -131,7 +131,7 @@ class ReflectedPackagesTest {
                 ModuleDescriptor.newOpenModule("app").packages(Set.of("a.closed")).build(), reached));
     }
 
-    /** An interceptor whose {@code @AroundInvoke} is not public: Vauban calls it by reflection with deep access. */
+    /** An interceptor with one {@code @AroundInvoke} method of the given access flags. */
     private void interceptor(String name, int methodFlags) throws IOException {
         write(ClassDesc.of(name), cb -> {
             cb.withFlags(ClassFile.ACC_PUBLIC);
@@ -146,29 +146,39 @@ class ReflectedPackagesTest {
     }
 
     @Test
-    void anInterceptorWithANonPublicMethodNeedsItsPackageOpenedNotOnlyExported() throws IOException {
-        interceptor("com.acme.shop.support.AuditedInterceptor", 0);
+    void aPrivateInterceptorMethodNeedsItsPackageOpenedNotOnlyExported() throws IOException {
+        interceptor("com.acme.shop.support.AuditedInterceptor", ClassFile.ACC_PRIVATE);
 
         var reached = ReflectedPackages.of(classes);
 
         assertEquals(Map.of("com.acme.shop.support",
-                        "com.acme.shop.support.AuditedInterceptor, a CDI interceptor its container calls by reflection"),
+                        "com.acme.shop.support.AuditedInterceptor, a CDI interceptor with a private method its container "
+                                + "calls by reflection"),
                 reached.reasons());
         assertEquals(Set.of("com.acme.shop.support"), reached.needsOpens());
         assertEquals(List.of("com.acme.shop.support"), ReflectedPackages.missing(
                 ModuleDescriptor.newModule("app").exports("com.acme.shop.support").build(), reached));
     }
 
+    /** Vauban calls a package-private interceptor method through the generated provider of its package (VAU-INT-011). */
     @Test
-    void anInterceptorWithPublicMethodsIsSatisfiedByAnExport() throws IOException {
+    void aPackagePrivateInterceptorMethodNeedsNoDirective() throws IOException {
+        interceptor("com.acme.shop.support.AuditedInterceptor", 0);
+
+        var reached = ReflectedPackages.of(classes);
+
+        assertEquals(Map.of(), reached.reasons());
+        assertEquals(List.of(), ReflectedPackages.missing(
+                ModuleDescriptor.newModule("app").packages(Set.of("com.acme.shop.support")).build(), reached));
+    }
+
+    @Test
+    void aPublicInterceptorMethodNeedsNoDirective() throws IOException {
         interceptor("com.acme.shop.support.AuditedInterceptor", ClassFile.ACC_PUBLIC);
 
         var reached = ReflectedPackages.of(classes);
 
+        assertEquals(Map.of(), reached.reasons());
         assertEquals(Set.of(), reached.needsOpens());
-        assertEquals(List.of(), ReflectedPackages.missing(
-                ModuleDescriptor.newModule("app").exports("com.acme.shop.support").build(), reached));
-        assertEquals(List.of("com.acme.shop.support"), ReflectedPackages.missing(
-                ModuleDescriptor.newModule("app").packages(Set.of("com.acme.shop.support")).build(), reached));
     }
 }

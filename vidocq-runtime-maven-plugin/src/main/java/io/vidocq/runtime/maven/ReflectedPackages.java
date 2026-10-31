@@ -47,8 +47,9 @@ import java.util.stream.Stream;
  * their fields and getters hold, transitively. JSON-B binds those types by reflection, so their package must be
  * opened, or at least exported, or the first request fails with an {@code IllegalAccessException}.
  *
- * <p>The CDI interceptors too (BUG-20261031-04): Vauban calls their interceptor methods by reflection. A public method
- * of a public class only needs its package exported; any other needs the package opened.</p>
+ * <p>The CDI interceptors too (BUG-20261031-04), when one of the methods their container calls is private: Vauban calls
+ * the others through the provider generated in their package (VAU-INT-011), but a private one by reflection, which
+ * needs the package opened.</p>
  *
  * <p>The resources themselves are not listed: their dispatch is generated at build time.</p>
  */
@@ -92,8 +93,9 @@ final class ReflectedPackages {
         for (ClassModel model : application.values()) {
             if (annotations(model).contains(INTERCEPTOR)) {
                 String name = model.thisClass().asInternalName();
-                reasons.put(packageOf(name), dotted(name) + ", a CDI interceptor its container calls by reflection");
-                if (!publiclyCalled(model)) {
+                if (hasPrivateCalledMethod(model)) {
+                    reasons.put(packageOf(name), dotted(name)
+                            + ", a CDI interceptor with a private method its container calls by reflection");
                     needsOpens.add(packageOf(name));
                 }
             }
@@ -117,20 +119,17 @@ final class ReflectedPackages {
         return new Reached(reasons, needsOpens);
     }
 
-    /** Whether {@code interceptor} is public, and so is each method its container calls. */
-    private static boolean publiclyCalled(ClassModel interceptor) {
-        if ((interceptor.flags().flagsMask() & ClassFile.ACC_PUBLIC) == 0) {
-            return false;
-        }
+    /** Whether a method the container calls on {@code interceptor} is private: no generated provider can call it. */
+    private static boolean hasPrivateCalledMethod(ClassModel interceptor) {
         for (MethodModel method : interceptor.methods()) {
             boolean called = method.findAttribute(Attributes.runtimeVisibleAnnotations()).stream()
                     .flatMap(a -> a.annotations().stream())
                     .anyMatch(an -> INTERCEPTOR_METHOD_ANNOTATIONS.contains(an.className().stringValue()));
-            if (called && (method.flags().flagsMask() & ClassFile.ACC_PUBLIC) == 0) {
-                return false;
+            if (called && (method.flags().flagsMask() & ClassFile.ACC_PRIVATE) != 0) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     /**
