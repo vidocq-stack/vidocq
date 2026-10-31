@@ -71,32 +71,33 @@ public final class PropertiesText {
     public static String set(String text, String key, String value) {
         String[] lines = text.split("\n", -1);
         int commented = -1;
+        Entry commentedEntry = null;
         for (int i = 0; i < lines.length; i++) {
             Entry entry = parse(lines[i]);
             if (entry != null && entry.key().equals(key)) {
                 lines[i] = key + entry.separator() + value;
                 return String.join("\n", lines);
             }
-            if (commented < 0 && isCommentedAssignment(lines[i], key)) {
+            if (commentedEntry == null) {
+                commentedEntry = commentedAssignment(lines[i], key);
                 commented = i;
             }
         }
-        if (commented >= 0) {
-            Entry entry = parse(lines[commented].stripLeading().substring(1));
-            lines[commented] = key + entry.separator() + value;
+        if (commentedEntry != null) {
+            lines[commented] = key + commentedEntry.separator() + value;
             return String.join("\n", lines);
         }
         return append(text, key + "=" + value);
     }
 
-    /** Whether {@code line} is {@code key}'s assignment behind a {@code #}, not a comment that only names the key. */
-    private static boolean isCommentedAssignment(String line, String key) {
+    /** {@code key}'s assignment behind a {@code #} on {@code line}; null for a comment that only names the key. */
+    private static Entry commentedAssignment(String line, String key) {
         String trimmed = line.stripLeading();
         if (!trimmed.startsWith("#")) {
-            return false;
+            return null;
         }
         Entry entry = parse(trimmed.substring(1));
-        return entry != null && entry.key().equals(key);
+        return entry != null && entry.key().equals(key) ? entry : null;
     }
 
     private static String append(String text, String line) {
