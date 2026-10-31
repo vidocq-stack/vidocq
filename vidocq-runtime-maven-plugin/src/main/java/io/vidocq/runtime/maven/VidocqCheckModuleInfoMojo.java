@@ -22,7 +22,9 @@ package io.vidocq.runtime.maven;
 import io.vidocq.runtime.codegen.commons.ModuleInfoRequirements;
 import io.vidocq.runtime.codegen.commons.ModuleRequirementsDescriptor;
 import io.vidocq.runtime.codegen.commons.Requirement;
+import io.vidocq.runtime.tooling.ModuleInfoOpener;
 import io.vidocq.runtime.tooling.ReflectedPackages;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -38,6 +40,7 @@ import java.lang.module.ModuleDescriptor;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -85,6 +88,17 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
     @Parameter(property = "vidocq.moduleinfo.failOnMissing", defaultValue = "true")
     private boolean failOnMissing;
 
+    /**
+     * Set by the recompile of {@code vidocq dev}; a {@code vidocq:dev} among the goals sets it too. The goal then opens
+     * a package the runtime reaches by reflection, in {@code module-info.java} and in the compiled descriptor, instead
+     * of failing the build (BUG-20261031-10).
+     */
+    @Parameter(property = "vidocq.moduleinfo.dev", defaultValue = "false")
+    private boolean dev;
+
+    @Parameter(defaultValue = "${session}", readonly = true, required = true)
+    private MavenSession session;
+
     @Override
     public void execute() throws MojoFailureException {
         if (skip) {
@@ -111,6 +125,9 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
         List<Requirement> missing = required.isEmpty() ? List.of() : ModuleInfoRequirements.missing(descriptor, required);
         ReflectedPackages.Reached reached = reflectedPackages();
         List<String> unopened = ReflectedPackages.missing(descriptor, reached);
+        if (!unopened.isEmpty() && underDev(session.getGoals(), dev)) {
+            unopened = openUnderDev(moduleInfo, unopened, reached);
+        }
         if (missing.isEmpty() && unopened.isEmpty()) {
             getLog().info("Vidocq check-module-info: module-info of '" + descriptor.name() + "' satisfies all "
                     + required.size() + " extension requirement(s) and opens the " + reached.reasons().size()
@@ -124,16 +141,51 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
                     + " src/main/java/module-info.java:");
             missing.forEach(r -> issues.add("    " + render(r)));
         }
-        if (!unopened.isEmpty()) {
-            // BUG-20261030-24, BUG-20261031-04: JSON-B binds these types, and Vauban calls the interceptors, by
-            // reflection; the first request failed with an IllegalAccessException.
-            issues.add("module-info of '" + descriptor.name() + "' does not open " + unopened.size()
-                    + " package(s) the runtime reaches by reflection (JSON-B, JPA, CDI interceptors): the first"
-                    + " request using them would fail — `mvn vidocq:complete-module-info` adds them, or add to"
-                    + " src/main/java/module-info.java:");
-            unopened.forEach(pkg -> issues.add("    opens " + pkg + ";   (" + reached.reasons().get(pkg) + ")"));
-        }
+        issues.addAll(unopenedIssues(descriptor.name(), unopened, reached.reasons()));
         report(issues);
+    }
+
+    /** Whether the goal runs under {@code vidocq dev}: its recompile sets {@code property}, a direct run has the goal. */
+    static boolean underDev(List<String> goals, boolean property) {
+        return property || goals.stream().anyMatch(goal -> goal.equals("vidocq:dev") || goal.endsWith(":dev")
+                && goal.contains("vidocq-runtime-maven-plugin"));
+    }
+
+    /**
+     * The issues of the packages the runtime reaches by reflection that {@code module} does not open: JSON-B binds
+     * these types, and Vauban calls a private interceptor method, by reflection (BUG-20261030-24, BUG-20261031-04).
+     */
+    static List<String> unopenedIssues(String module, List<String> unopened, Map<String, String> reasons) {
+        if (unopened.isEmpty()) {
+            return List.of();
+        }
+        List<String> issues = new ArrayList<>();
+        issues.add("module-info of '" + module + "' does not open " + unopened.size()
+                + " package(s) the runtime reaches by reflection (JSON-B, JPA, CDI interceptors) — `vidocq doctor"
+                + " --fix` or `./mvnw vidocq:complete-module-info` adds them, `vidocq dev` too; or add to"
+                + " src/main/java/module-info.java:");
+        unopened.forEach(pkg -> issues.add("    opens " + pkg + ";   (" + reasons.get(pkg) + ")"));
+        return issues;
+    }
+
+    /**
+     * Opens {@code unopened} in {@code module-info.java} and in {@code moduleInfo}, the compiled descriptor, so the
+     * application starts on this build; the packages it could not open, without a source to write to, are returned.
+     */
+    private List<String> openUnderDev(File moduleInfo, List<String> unopened, ReflectedPackages.Reached reached)
+            throws MojoFailureException {
+        File source = moduleInfoSource(project.getCompileSourceRoots());
+        if (source == null) {
+            return unopened;
+        }
+        try {
+            ModuleInfoOpener.open(source.toPath(), moduleInfo.toPath(), unopened);
+        } catch (IOException | IllegalArgumentException e) {
+            throw new MojoFailureException("Cannot open the packages in " + source + ": " + e.getMessage(), e);
+        }
+        unopened.forEach(pkg -> getLog().info("✔ module-info.java: opens " + pkg + ";   ("
+                + reached.reasons().get(pkg) + ")"));
+        return List.of();
     }
 
     /**
@@ -146,7 +198,13 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
 
     /** Whether one of the compile source roots holds a {@code module-info.java}. */
     static boolean hasModuleInfoSource(List<String> compileSourceRoots) {
-        return compileSourceRoots.stream().anyMatch(root -> new File(root, "module-info.java").isFile());
+        return moduleInfoSource(compileSourceRoots) != null;
+    }
+
+    /** The {@code module-info.java} of the compile source roots, else {@code null}. */
+    private static File moduleInfoSource(List<String> compileSourceRoots) {
+        return compileSourceRoots.stream().map(root -> new File(root, "module-info.java")).filter(File::isFile)
+                .findFirst().orElse(null);
     }
 
     /**

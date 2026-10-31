@@ -22,7 +22,6 @@ package io.vidocq.runtime.maven.dev;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -56,19 +55,20 @@ public final class RecompileRunner {
      * return the process exit code. {@code 0} means compilation succeeded.
      */
     public int run() throws IOException, InterruptedException {
-        List<String> cmd = new ArrayList<>();
-        cmd.add(mavenExecutable);
-        cmd.add("-ntp");
-        cmd.add("-q");
-        cmd.add("process-classes");
-        cmd.add("-DskipTests");
-
-        Process p = new ProcessBuilder(cmd)
+        Process p = new ProcessBuilder(command())
                 .directory(projectDir.toFile())
                 .redirectErrorStream(true)
                 .inheritIO()
                 .start();
         return p.waitFor();
+    }
+
+    /**
+     * The Maven command line: {@code check-module-info} runs in dev mode, so it opens a package the runtime reaches
+     * by reflection instead of failing the recompile (BUG-20261031-10).
+     */
+    List<String> command() {
+        return List.of(mavenExecutable, "-ntp", "-q", "process-classes", "-DskipTests", "-Dvidocq.moduleinfo.dev=true");
     }
 
     /**

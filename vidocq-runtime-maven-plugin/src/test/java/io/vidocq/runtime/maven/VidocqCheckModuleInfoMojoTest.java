@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -76,5 +77,33 @@ class VidocqCheckModuleInfoMojoTest {
     @Test
     void withoutRequirementsAModuleWithoutModuleInfoIsLeftAlone() {
         assertTrue(VidocqCheckModuleInfoMojo.uncompiledIssues(Set.of(), false).isEmpty());
+    }
+
+    /** BUG-20261031-10: a {@code vidocq:dev} in the goals, or the recompile's property, puts the check in dev mode. */
+    @Test
+    void theCheckRunsInDevModeUnderVidocqDevOrItsRecompile() {
+        assertTrue(VidocqCheckModuleInfoMojo.underDev(List.of("process-classes", "vidocq:dev"), false));
+        assertTrue(VidocqCheckModuleInfoMojo.underDev(
+                List.of("io.vidocq.runtime:vidocq-runtime-maven-plugin:0.4.0-SNAPSHOT:dev"), false));
+        assertTrue(VidocqCheckModuleInfoMojo.underDev(List.of("process-classes"), true));
+        assertFalse(VidocqCheckModuleInfoMojo.underDev(List.of("package"), false));
+        assertFalse(VidocqCheckModuleInfoMojo.underDev(List.of("vidocq:devservices"), false));
+    }
+
+    /**
+     * BUG-20261031-10: outside dev the failure names the commands that add the lines, the wrapper included, and no
+     * longer speaks of a first request: the build fails before any.
+     */
+    @Test
+    void theUnopenedPackagesNameTheCommandsThatOpenThem() {
+        List<String> issues = VidocqCheckModuleInfoMojo.unopenedIssues("com.example.lib",
+                List.of("com.example.lib.book"), Map.of("com.example.lib.book", "com.example.lib.book.Book, a JPA entity"));
+
+        String text = String.join("\n", issues);
+        assertTrue(text.contains("vidocq doctor --fix"), text);
+        assertTrue(text.contains("./mvnw vidocq:complete-module-info"), text);
+        assertFalse(text.contains("first request"), text);
+        assertFalse(text.contains("`mvn "), text);
+        assertTrue(text.contains("opens com.example.lib.book;   (com.example.lib.book.Book, a JPA entity)"), text);
     }
 }

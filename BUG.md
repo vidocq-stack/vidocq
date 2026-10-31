@@ -5,6 +5,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261031-10 — `vidocq dev` stops on a package the runtime reaches by reflection and the module does not open
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/dev-writes-opens`: under `vidocq dev` (a `vidocq:dev` among the goals, or the recompile, which passes `-Dvidocq.moduleinfo.dev=true`), `check-module-info` opens such a package in `module-info.java`, in the block `vidocq doctor --fix` and `complete-module-info` write, and in the compiled `module-info.class` (`ModuleInfoOpener`, Class-File API; `ModulePackages` updated when present), prints `✔ module-info.java: opens …;   (reason)` and goes on, so the application starts on that build (`ModuleInfoOpenerTest`, `VidocqCheckModuleInfoMojoTest.theCheckRunsInDevModeUnderVidocqDevOrItsRecompile`, `RecompileRunnerTest.the_recompile_runs_check_module_info_in_dev_mode`). Outside dev the failure names `vidocq doctor --fix` and `./mvnw vidocq:complete-module-info` instead of a bare `mvn`, and no longer says "the first request using them would fail": the build fails before any (`theUnopenedPackagesNameTheCommandsThatOpenThem`)
+- **Reported by**: the vidocq-tutorial session (S1)
+- **Minimal reproduction**: under `vidocq dev`, drop `opens com.example.lib.book;` (or add a package of entities, as the loan, health and enrich chapters do): "[ERROR] module-info … does not open 1 package(s) … `mvn vidocq:complete-module-info` adds them", BUILD FAILURE, no application.
+- **Cause hypothesis**: the check reported and failed in every context; under dev, where the tooling may edit the project, it can write the line itself.
+
 ## BUG-20261031-01 — `vidocq doctor` says ✔ Module directives while `vidocq:check-module-info` fails the build
 
 - **Date**: 2026-10-31

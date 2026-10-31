@@ -50,6 +50,17 @@ class RecompileRunnerTest {
                 "should prefer ./mvnw when it exists and is executable");
     }
 
+    /**
+     * BUG-20261031-10: the recompile of {@code vidocq dev} tells {@code check-module-info} it runs under dev, so that
+     * the goal opens a package the runtime reaches by reflection instead of failing the recompile.
+     */
+    @Test
+    void the_recompile_runs_check_module_info_in_dev_mode(@TempDir Path tmp) {
+        assertEquals(java.util.List.of("mvn", "-ntp", "-q", "process-classes", "-DskipTests",
+                        "-Dvidocq.moduleinfo.dev=true"),
+                new RecompileRunner(tmp, "mvn").command());
+    }
+
     @Test
     void detect_falls_back_to_path_when_no_wrapper(@TempDir Path tmp) {
         String resolved = RecompileRunner.detectMavenExecutable(tmp);
