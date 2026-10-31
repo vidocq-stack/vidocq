@@ -341,7 +341,7 @@ public class VidocqDevMojo extends AbstractMojo {
         Path opensFile = buildDir.toPath().resolve(OpensRequestFile.FILE_NAME).toAbsolutePath();
         sysProps.put(OpensRequestFile.PROPERTY, opensFile.toString());
         ChildLaunch launch = new ChildLaunch(modulePath, layered.appPath(), jvmArgs, sysProps, projectDir);
-        try (OpensRequestFile _ = OpensRequestFile.poll(opensFile, moduleInfoSource(), getLog()::info,
+        try (var _ = OpensRequestFile.poll(opensFile, moduleInfoSource(), getLog()::info,
                 getLog()::warn)) {
             runSession(launch, watch, testing, devs, reloadFile, inJvmReload);
         } catch (IOException e) {

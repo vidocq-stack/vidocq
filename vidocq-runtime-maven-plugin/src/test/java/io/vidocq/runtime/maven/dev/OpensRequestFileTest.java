@@ -88,13 +88,11 @@ class OpensRequestFileTest {
         Path moduleInfo = Files.writeString(dir.resolve("module-info.java"), "module shop {\n}\n");
         Path request = dir.resolve(OpensRequestFile.FILE_NAME);
         Files.writeString(request, "left.by.an.earlier.session\n");
-        try (var opens = OpensRequestFile.poll(request, moduleInfo, _ -> { }, _ -> { })) {
+        var opened = new java.util.concurrent.CountDownLatch(1);
+        try (var opens = OpensRequestFile.poll(request, moduleInfo, _ -> opened.countDown(), _ -> { })) {
             assertFalse(Files.exists(request), "an earlier session's request is dropped");
             Files.writeString(request, "shop.report\n");
-            long deadline = System.nanoTime() + 10_000_000_000L;
-            while (!Files.readString(moduleInfo).contains("opens shop.report;") && System.nanoTime() < deadline) {
-                Thread.sleep(50);
-            }
+            assertTrue(opened.await(10, java.util.concurrent.TimeUnit.SECONDS), "the request was not read");
             opens.close();
         }
         String source = Files.readString(moduleInfo);
