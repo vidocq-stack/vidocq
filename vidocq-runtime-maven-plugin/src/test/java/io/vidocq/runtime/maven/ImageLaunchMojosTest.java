@@ -116,6 +116,20 @@ class ImageLaunchMojosTest {
         assertTrue(args.contains("--strip-debug") && args.contains("--compress=zip-6"), args.toString());
     }
 
+    /** The configuration files reach the image's conf/ and the recipe vidocq:docker links again (BUG-20261030-17). */
+    @Test
+    void theConfigurationFilesGoToTheImageAndToTheRecipe() throws Exception {
+        VidocqJlinkMojo mojo = jlink("acme.app", null, new Infos());
+        Path classes = Files.createDirectories(dir.resolve("classes"));
+        Files.writeString(classes.resolve("vidocq.properties"), "vidocq.http.port=8080\n");
+        set(VidocqJlinkMojo.class, mojo, "classesDir", classes.toFile());
+
+        List<Path> copied = mojo.copyResources();
+
+        assertEquals(List.of(classes.resolve("vidocq.properties")), copied);
+        assertTrue(Files.isRegularFile(dir.resolve("dist/conf/vidocq.properties")));
+    }
+
     @Test
     void theJlinkRunOfATrampolineAddsNoOption() throws Exception {
         VidocqJlinkMojo mojo = jlink("acme.app", "acme.app.App", new Infos());

@@ -328,22 +328,13 @@ public final class CommandRunner {
     }
 
     private static int runBuild(Command.Build build) {
-        List<String> goals = build.type().goals();
-        List<String> passthrough = build.passthrough();
         // vidocq build docker builds the image when Docker answers, and says it did not otherwise (BUG-20261030-17).
-        boolean docker = build.type() == BuildType.DOCKER && DockerBuild.available();
-        if (build.type() == BuildType.DOCKER) {
-            passthrough = new java.util.ArrayList<>(passthrough);
-            passthrough.addAll(DockerBuild.properties(docker));
-        }
-        MavenInvocation.Options opts = new MavenInvocation.Options(build.offline(), build.skipTests(), passthrough);
-        String done = "Done.";
-        if (build.type() == BuildType.DOCKER) {
-            done = docker ? "Docker image built." : null;
-        }
-        int code = runMaven(goals, opts, build.dryRun(),
-                "Building " + CliOutput.bold(build.type().label()) + "…", done);
-        if (code == 0 && done == null && !build.dryRun()) {
+        var plan = DockerBuild.plan(build.type(), build.type() == BuildType.DOCKER && DockerBuild.available(),
+                build.passthrough());
+        MavenInvocation.Options opts = new MavenInvocation.Options(build.offline(), build.skipTests(), plan.passthrough());
+        int code = runMaven(build.type().goals(), opts, build.dryRun(),
+                "Building " + CliOutput.bold(build.type().label()) + "…", plan.done());
+        if (code == 0 && plan.done() == null && !build.dryRun()) {
             CliOutput.warning(DockerBuild.unavailableMessage());
         }
         return code;
