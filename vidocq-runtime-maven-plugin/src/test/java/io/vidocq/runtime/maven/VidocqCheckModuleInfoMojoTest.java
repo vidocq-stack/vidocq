@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -105,5 +106,48 @@ class VidocqCheckModuleInfoMojoTest {
         assertFalse(text.contains("first request"), text);
         assertFalse(text.contains("`mvn "), text);
         assertTrue(text.contains("opens com.example.lib.book;   (com.example.lib.book.Book, a JPA entity)"), text);
+    }
+
+    /** BUG-20261031-10: under dev the package is opened in the source and in the compiled descriptor, and printed. */
+    @Test
+    void underDevThePackageIsOpenedAndPrinted(@TempDir Path dir) throws Exception {
+        Path sources = Files.createDirectories(dir.resolve("src/main/java"));
+        Path source = Files.writeString(sources.resolve("module-info.java"), "module demo {\n}\n");
+        Path compiled = Files.write(dir.resolve("module-info.class"), java.lang.classfile.ClassFile.of().buildModule(
+                java.lang.classfile.attribute.ModuleAttribute.of(java.lang.constant.ModuleDesc.of("demo"), mb -> mb
+                        .requires(java.lang.constant.ModuleDesc.of("java.base"),
+                                java.lang.classfile.ClassFile.ACC_MANDATED, null))));
+        List<String> printed = new java.util.ArrayList<>();
+
+        List<String> left = VidocqCheckModuleInfoMojo.openUnderDev(
+                VidocqCheckModuleInfoMojo.moduleInfoSource(List.of(sources.toString())), compiled.toFile(),
+                List.of("demo.book"), Map.of("demo.book", "demo.book.Book, a JPA entity"), printed::add);
+
+        assertTrue(left.isEmpty(), left.toString());
+        assertTrue(Files.readString(source).contains("opens demo.book;"), Files.readString(source));
+        assertEquals(List.of("✔ module-info.java: opens demo.book;   (demo.book.Book, a JPA entity)"), printed);
+        try (var in = Files.newInputStream(compiled)) {
+            assertTrue(java.lang.module.ModuleDescriptor.read(in).opens().stream()
+                    .anyMatch(o -> o.source().equals("demo.book")));
+        }
+    }
+
+    /** Without a {@code module-info.java} to write to, the packages stay for the report. */
+    @Test
+    void underDevWithoutASourceThePackagesAreReported() throws Exception {
+        assertEquals(List.of("demo.book"), VidocqCheckModuleInfoMojo.openUnderDev(null, new java.io.File("x"),
+                List.of("demo.book"), Map.of(), line -> { }));
+    }
+
+    /** A file that is no module descriptor fails the goal with the source it could not complete. */
+    @Test
+    void underDevABrokenDescriptorFailsTheGoal(@TempDir Path dir) throws Exception {
+        Path source = Files.writeString(dir.resolve("module-info.java"), "module demo {\n}\n");
+        Path compiled = Files.write(dir.resolve("module-info.class"), new byte[] {1, 2, 3});
+
+        org.junit.jupiter.api.Assertions.assertThrows(org.apache.maven.plugin.MojoFailureException.class,
+                () -> VidocqCheckModuleInfoMojo.openUnderDev(source.toFile(), compiled.toFile(), List.of("demo.book"),
+                        Map.of(), line -> { }));
+        assertEquals("module demo {\n}\n", Files.readString(source));
     }
 }

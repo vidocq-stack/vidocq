@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * Verify that the application's {@code module-info.java} declares the Java module directives its Vidocq
@@ -126,7 +127,8 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
         ReflectedPackages.Reached reached = reflectedPackages();
         List<String> unopened = ReflectedPackages.missing(descriptor, reached);
         if (!unopened.isEmpty() && underDev(session.getGoals(), dev)) {
-            unopened = openUnderDev(moduleInfo, unopened, reached);
+            unopened = openUnderDev(moduleInfoSource(project.getCompileSourceRoots()), moduleInfo, unopened,
+                    reached.reasons(), getLog()::info);
         }
         if (missing.isEmpty() && unopened.isEmpty()) {
             getLog().info("Vidocq check-module-info: module-info of '" + descriptor.name() + "' satisfies all "
@@ -172,9 +174,8 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
      * Opens {@code unopened} in {@code module-info.java} and in {@code moduleInfo}, the compiled descriptor, so the
      * application starts on this build; the packages it could not open, without a source to write to, are returned.
      */
-    private List<String> openUnderDev(File moduleInfo, List<String> unopened, ReflectedPackages.Reached reached)
-            throws MojoFailureException {
-        File source = moduleInfoSource(project.getCompileSourceRoots());
+    static List<String> openUnderDev(File source, File moduleInfo, List<String> unopened, Map<String, String> reasons,
+                                     Consumer<String> log) throws MojoFailureException {
         if (source == null) {
             return unopened;
         }
@@ -183,8 +184,7 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
         } catch (IOException | IllegalArgumentException e) {
             throw new MojoFailureException("Cannot open the packages in " + source + ": " + e.getMessage(), e);
         }
-        unopened.forEach(pkg -> getLog().info("✔ module-info.java: opens " + pkg + ";   ("
-                + reached.reasons().get(pkg) + ")"));
+        unopened.forEach(pkg -> log.accept("✔ module-info.java: opens " + pkg + ";   (" + reasons.get(pkg) + ")"));
         return List.of();
     }
 
@@ -202,7 +202,7 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
     }
 
     /** The {@code module-info.java} of the compile source roots, else {@code null}. */
-    private static File moduleInfoSource(List<String> compileSourceRoots) {
+    static File moduleInfoSource(List<String> compileSourceRoots) {
         return compileSourceRoots.stream().map(root -> new File(root, "module-info.java")).filter(File::isFile)
                 .findFirst().orElse(null);
     }
