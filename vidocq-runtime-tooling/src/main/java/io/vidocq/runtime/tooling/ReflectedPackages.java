@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
@@ -157,13 +158,13 @@ public final class ReflectedPackages {
     /**
      * The packages of the compiled module in {@code classes} that the runtime reaches by reflection and that neither
      * its {@code module-info.class} nor {@code moduleInfoSource} opens (or exports, when that is enough), each with the
-     * reason, sorted; {@code null} when {@code classes} holds no {@code module-info.class} yet. The source is read too,
+     * reason, sorted; empty when {@code classes} holds no {@code module-info.class} yet. The source is read too,
      * so a directive added since the last compile counts: what {@code vidocq doctor} asks (BUG-20261031-01).
      */
-    public static Map<String, String> unopened(Path classes, String moduleInfoSource) throws IOException {
+    public static Optional<Map<String, String>> unopened(Path classes, String moduleInfoSource) throws IOException {
         Path moduleInfo = classes.resolve("module-info.class");
         if (!Files.isRegularFile(moduleInfo)) {
-            return null;
+            return Optional.empty();
         }
         ModuleDescriptor descriptor;
         try (var in = Files.newInputStream(moduleInfo)) {
@@ -180,7 +181,7 @@ public final class ReflectedPackages {
                 unopened.put(pkg, reached.reasons().get(pkg));
             }
         }
-        return unopened;
+        return Optional.of(unopened);
     }
 
     /**

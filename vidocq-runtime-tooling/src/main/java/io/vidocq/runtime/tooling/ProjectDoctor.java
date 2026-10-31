@@ -112,7 +112,7 @@ public final class ProjectDoctor {
             String maven = wrapper == null ? null : mavenVersion(Files.readString(wrapper)).orElse(null);
             int port = httpPort(projectDir);
             Map<String, String> unopened = moduleInfo == null ? null
-                    : ReflectedPackages.unopened(projectDir.resolve(CLASSES), moduleInfo);
+                    : ReflectedPackages.unopened(projectDir.resolve(CLASSES), moduleInfo).orElse(null);
             return new Facts(pom, moduleInfo, pkg, maven, port, portFree.test(port), unopened);
         } catch (IOException e) {
             throw new java.io.UncheckedIOException("Could not read the project in " + projectDir, e);
