@@ -24,7 +24,6 @@ import io.opentelemetry.api.trace.SpanBuilder;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
-import io.opentelemetry.context.Scope;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -77,7 +76,7 @@ final class TracingExecution implements JdbcExecution {
         }
         builder.setAttribute("vidocq.datasource.name", dataSourceName);
         Span span = builder.startSpan();
-        try (Scope _ = span.makeCurrent()) {
+        try (var _ = span.makeCurrent()) {
             return call.call();
         } catch (SQLException e) {
             fail(span, e);

@@ -24,7 +24,6 @@ import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
-import io.opentelemetry.context.Scope;
 import io.vidocq.humboldt.sdk.trace.SdkTracerProvider;
 import io.vidocq.humboldt.sdk.trace.SimpleSpanProcessor;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
@@ -91,7 +90,7 @@ class TracingConnectionTest {
     @Test
     void aPreparedQueryInsideARequestIsAChildClientSpan() throws SQLException {
         Span request = tracer.spanBuilder("GET /books/{id}").setSpanKind(SpanKind.SERVER).startSpan();
-        try (Scope _ = request.makeCurrent();
+        try (var _ = request.makeCurrent();
              PreparedStatement select = connection.prepareStatement("select title from books where id = ?")) {
             select.setInt(1, 7);
             try (ResultSet rs = select.executeQuery()) {
