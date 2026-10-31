@@ -260,6 +260,20 @@ public final class KnownExtensions {
         return byId(id).map(e -> property(e.id(), "devservice.driver")).filter(driver -> !driver.isEmpty());
     }
 
+    /**
+     * The lines {@code id} adds to the application's {@code vidocq.properties}, from its descriptor's
+     * {@code config.<NN>} keys in their order; {@code {app}} stands for the project's artifactId
+     * (BUG-20261031-09). Empty for most extensions.
+     */
+    public static List<String> configLines(String id) {
+        return byId(id).map(e -> DESCRIPTORS.stringPropertyNames().stream()
+                        .filter(key -> key.startsWith(e.id() + ".config."))
+                        .sorted()
+                        .map(key -> DESCRIPTORS.getProperty(key).strip())
+                        .toList())
+                .orElse(List.of());
+    }
+
     /** The module a catalog extension ships, which an application {@code requires}; empty outside the catalog. */
     public static Optional<String> moduleName(String id) {
         return byId(id).map(e -> property(e.id(), "module")).filter(module -> !module.isEmpty());

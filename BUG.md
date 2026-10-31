@@ -230,6 +230,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Minimal reproduction**: the provider on the plugin, no `org.postgresql:postgresql`; `vidocq dev` logs `[INFO] DevService 'postgres' not started: no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path`, then fails with _is vidocq.pool.url set?_
 - **Cause hypothesis**: every skip reason was logged at INFO, including the one that leaves the application without a database.
 
+## BUG-20261031-09 — `vidocq extension add cervantes-jwt humboldt-telemetry` leaves their settings to be written by hand
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/extension-config-keys`: an extension descriptor lists the settings it needs (`config.<NN>` lines, `{app}` for the artifactId); `vidocq extension add` and `vidocq create -x` append them to `vidocq.properties` as one block, once, leaving out every key the application sets (`ExtensionConfigTest`, `ExtensionEditorTest.anExtensionWritesItsConfigurationOnceAndRemovingItLeavesIt`, `ProjectScaffolderExtensionsTest.aCreatedProjectGetsTheConfigurationOfItsExtensions`). Telemetry gets `otel.sdk.disabled=false`, its service name and a local collector; JWT gets comments only, as the Keycloak dev service sets the verification keys and a realm import of a missing file would stop it. `vidocq doctor` warns about JWT without a verification key (`ProjectDoctorTest.jwtWithoutAVerificationKeyWarnsUntilTheApplicationSetsOne`). `remove` leaves the file alone
+- **Reported by**: the vidocq-tutorial session (replay of chapters 4-11, S2)
+- **Minimal reproduction**: `vidocq extension add cervantes-jwt humboldt-telemetry`: `vidocq.properties` still holds `vidocq.http.port` only; the tutorial writes `mp.jwt.verify.issuer`, `mp.jwt.verify.publickey.location`, `vidocq.dev.keycloak.realm-import`, `vidocq.dev.keycloak.realm` (chapter 8) and `otel.sdk.disabled`, `otel.service.name`, `otel.exporter.otlp.endpoint`, `otel.exporter.otlp.protocol` (chapter 9) by hand.
+- **Cause hypothesis**: the catalog knew an extension's dependency, codegen bundle, directives and dev service, not its configuration.
+
 ## BUG-20261031-07 — A plain `mvn test` needs the dev-service provider again, in test scope, with `vidocq-runtime-devservices-junit`
 
 - **Date**: 2026-10-31
