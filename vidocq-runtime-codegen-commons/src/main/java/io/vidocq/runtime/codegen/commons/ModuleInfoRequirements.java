@@ -77,8 +77,13 @@ public final class ModuleInfoRequirements {
                 }
             }
         }
+        boolean openModule = consumer.isOpen();
         List<Requirement> unmet = new ArrayList<>();
         for (Requirement r : required) {
+            // An `open module` opens every package unqualified, satisfying any opens requirement.
+            if (r.kind() == Requirement.Kind.OPENS && openModule) {
+                continue;
+            }
             if (!isSatisfied(r, requiresDeclared, opensDeclared)) {
                 unmet.add(r);
             }

@@ -85,6 +85,13 @@ class ModuleInfoRequirementsTest {
     }
 
     @Test
+    void anOpenModuleSatisfiesEveryOpensRequirement() throws Exception {
+        // an open module opens every package, and javac refuses an opens line inside it
+        Result r = compile("open module", "requires java.sql;", true);
+        assertTrue(r.success(), "an open module needs no opens; diagnostics:\n" + r.messages());
+    }
+
+    @Test
     void qualifiedOpensDoesNotSatisfyAnUnqualifiedRequirement() throws Exception {
         // a qualified `opens ... to X` must NOT satisfy a required unqualified `opens`
         Result r = compile("requires java.sql; opens db.migration to java.base;", true);
@@ -110,9 +117,13 @@ class ModuleInfoRequirementsTest {
     }
 
     private Result compile(String moduleInfoBody, boolean withMigrationPackage) throws Exception {
+        return compile("module", moduleInfoBody, withMigrationPackage);
+    }
+
+    private Result compile(String declaration, String moduleInfoBody, boolean withMigrationPackage) throws Exception {
         Path src = Files.createDirectories(tempDir.resolve("src"));
         Path moduleInfo = src.resolve("module-info.java");
-        Files.writeString(moduleInfo, "module sample.app {\n    " + moduleInfoBody + "\n}\n");
+        Files.writeString(moduleInfo, declaration + " sample.app {\n    " + moduleInfoBody + "\n}\n");
 
         Path appDir = Files.createDirectories(src.resolve("sample"));
         Path app = appDir.resolve("App.java");

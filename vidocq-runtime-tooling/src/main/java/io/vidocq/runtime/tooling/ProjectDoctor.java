@@ -204,6 +204,14 @@ public final class ProjectDoctor {
             return Diagnostic.warn(MODULE_CHECK, "no " + MODULE_INFO,
                     "Vidocq runs an application as a Java module: declare one, as vidocq create does.");
         }
+        if (ModuleInfoEditor.isOpenModule(facts.moduleInfo())) {
+            List<String> opens = ModuleInfoEditor.toOpenModule(facts.moduleInfo()).removed();
+            if (!opens.isEmpty()) {
+                return Diagnostic.fail(MODULE_CHECK, "an open module declares " + String.join(", ", opens),
+                        "An open module opens every package, and javac refuses an opens line inside it.")
+                        .asFixable();
+            }
+        }
         List<String> missing = new ArrayList<>();
         missingDirectives(facts, extensions).forEach((id, directives) ->
                 directives.forEach(d -> missing.add(id + ": " + d)));
@@ -303,11 +311,33 @@ public final class ProjectDoctor {
             changed = true;
         }
         if (facts.moduleInfo() != null) {
+            changed |= dropOpensOfOpenModule(projectDir, facts.moduleInfo(), reporter);
             List<String> ids = List.copyOf(missingDirectives(facts, extensions).keySet());
             changed |= !ids.isEmpty() && ExtensionEditor.updateModuleInfo(projectDir, ids, true, reporter);
             changed |= openReflectedPackages(projectDir, facts.unopenedPackages(), reporter);
         }
         return changed;
+    }
+
+    /**
+     * Drops the {@code opens} lines of an open module, which javac refuses there; the packages the developer wrote are
+     * named, since the open module opens them already.
+     */
+    private static boolean dropOpensOfOpenModule(Path projectDir, String moduleInfo, Reporter reporter)
+            throws IOException {
+        if (!ModuleInfoEditor.isOpenModule(moduleInfo)) {
+            return false;
+        }
+        ModuleInfoEditor.OpenModule opened = ModuleInfoEditor.toOpenModule(moduleInfo);
+        if (opened.removed().isEmpty()) {
+            return false;
+        }
+        Files.writeString(projectDir.resolve(MODULE_INFO), opened.source());
+        opened.handWritten().forEach(pkg -> reporter.warning("module-info.java: removed your `opens " + pkg
+                + ";` — the open module opens " + pkg + " already"));
+        reporter.success("module-info.java: an open module, " + opened.removed().size() + " opens line(s) removed",
+                "javac refuses them in an open module");
+        return true;
     }
 
     /**

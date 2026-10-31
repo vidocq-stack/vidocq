@@ -5,6 +5,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261031-16 — Every package an application reflects on needs its own `opens` line; there was no way to opt out
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `feat/open-module`. Follow-up of BUG-20261031-10/-14/-15, asked by the maintainer: `vidocq create --open-module` (and `vidocq:create -DopenModule=true`, `ProjectSpec.openModule`) declares an `open module`, which opens every package. `ModuleInfoEditor` knows an open module (`isOpenModule`, comments skipped): `add` writes its `requires` and no `opens`, `openForReflection` changes nothing, `missing` asks for no `opens` — so `extension add`, `create -x`, `doctor --fix`, `vidocq:complete-module-info` and the `vidocq dev` writer never put an `opens` line where javac refuses it. `vidocq doctor` fails, fixable, on an open module that keeps `opens` lines; `--fix` drops them (`toOpenModule`) and names the hand-written ones. `ModuleInfoRequirements.missing(ModuleElement, …)`, the annotation-processor variant, now lets an open module satisfy every `opens` requirement, as the `ModuleDescriptor` variant already did. The Flyway folder's README and the CLI's messages no longer claim an `opens` for an open module. Tests: `ModuleInfoEditorTest` (5), `ProjectDoctorTest` (2), `CliParserCreateTest` (3), `VidocqCreateMojoTest`, `ExtensionEditorTest`, `ModuleInfoRequirementsTest`. Checked with the CLI built from the branch: `vidocq create --open-module -x cassini-rest`, `extension add flyway-migration mansart-data mansart-pool`, an entity package and a DTO package — `module-info.java` holds no `opens`, `mvn package` passes, `vidocq dev` starts PostgreSQL and `GET /books` answers 200; an existing module made `open module` by hand: `vidocq doctor` fails on its 3 `opens`, `--fix` removes them, `package` passes.
+- **Reported by**: the maintainer (simplest path for an application)
+- **Minimal reproduction**: a new application had no way to declare an open module through the CLI, and the tooling would write `opens` lines into one made open by hand, which then fails to compile ("'opens' not allowed in an open module").
+- **Cause hypothesis**: the module tooling assumed a plain module.
+
 ## BUG-20261031-15 — A package a library reaches by reflection at run time fails with a bare IllegalAccessException
 
 - **Date**: 2026-10-31

@@ -221,6 +221,7 @@ public final class CliParser {
         String pkg = null;
         String parentVersion = null;
         boolean main = false;
+        boolean openModule = false;
         Set<String> extensions = new LinkedHashSet<>();
         Iterator<String> it = tokens(args, from);
         while (it.hasNext()) {
@@ -232,14 +233,15 @@ public final class CliParser {
                 case "--extension", "-x" -> extensions.add(next(it, "--extension"));
                 case "--parent-version"  -> parentVersion = next(it, "--parent-version");
                 case "--main"            -> main = true;
+                case "--open-module"     -> openModule = true;
                 default                  -> unknownOpt(arg, CREATE);
             }
         }
         if (name == null) {
-            return new Command.CreateInteractively(groupId, pkg, extensions, parentVersion, main);
+            return new Command.CreateInteractively(groupId, pkg, extensions, parentVersion, main, openModule);
         }
         try {
-            return new Command.Create(ProjectSpec.of(name, groupId, pkg, extensions, parentVersion, main,
+            return new Command.Create(ProjectSpec.of(name, groupId, pkg, extensions, parentVersion, main, openModule,
                     "--package <pkg>"));
         } catch (IllegalArgumentException e) {
             throw new CliException(e.getMessage());
@@ -495,6 +497,8 @@ public final class CliParser {
                 opt("",                           "a SNAPSHOT adds the Central snapshot repository to the pom");
                 opt("--main",                     "Also write an @VidocqMain trampoline (default: none, the runtime");
                 opt("",                           "boots the app) — for an IDE Run or a VidocqApp");
+                opt("--open-module",              "Declare an open module: every package open to reflection, so no");
+                opt("",                           "opens line is ever needed (an application, not a library)");
                 CliOutput.println();
                 CliOutput.println("Example:");
                 CliOutput.println("  " + CliOutput.cyan(

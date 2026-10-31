@@ -86,3 +86,26 @@ to module-info.java (or make it an `open module`).
 ----
 
 Under `vidocq dev` you have nothing to do: the plugin writes `opens com.example.library.report; // vidocq:reflection` to `module-info.java`, prints `✔ module-info.java: opens com.example.library.report;   (reached by reflection at run time)`, and the application reloads; retry the request once it has. Only a package of your application is named: a denial between two libraries, or into the JDK, is left to its stack trace.
+
+[#open-module]
+== Or: an open module
+
+[.tag-new]#NEW# If you would rather never think about `opens`, make the application an **open module**:
+
+[source,bash]
+----
+vidocq create --name library --group-id com.example -x cassini-rest --open-module
+----
+
+[source,java]
+----
+open module com.example.library {
+    requires io.vidocq.runtime.extensions.jakartaee.core.cassini; // vidocq:cassini-rest
+}
+----
+
+An open module opens every one of its packages to reflection, at run time. Nothing else changes: `requires` and `exports` work as before, and code outside the module still compiles only against the packages you export. The tooling follows it: `vidocq extension add`, `vidocq dev`, `vidocq doctor --fix` and `vidocq:complete-module-info` write no `opens` line (javac refuses one inside an open module), the build check has nothing to ask for, and the runtime message above cannot happen.
+
+The trade-off is encapsulation: any library may reflect into any package of the module. For an application that is usually fine — it is the end of the chain, nothing depends on it. For a library others use, keep a plain module and its `opens` lines.
+
+To make an existing application open, change `module` to `open module` in `module-info.java`, then run `vidocq doctor --fix`: it removes the `opens` lines javac now refuses, and names those you wrote yourself. To go back, remove `open` and run `vidocq doctor --fix` again (or let `vidocq dev` and the build check ask for the lines again).

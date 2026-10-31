@@ -95,7 +95,7 @@ public sealed interface Command {
      * the group id and the extensions the command line left out (Vidocq/vidocq#339).
      */
     record CreateInteractively(String groupId, String pkg, java.util.Set<String> extensions, String parentVersion,
-                               boolean main) implements Command {
+                               boolean main, boolean openModule) implements Command {
         public CreateInteractively {
             extensions = java.util.Collections.unmodifiableSet(new java.util.LinkedHashSet<>(extensions));
         }

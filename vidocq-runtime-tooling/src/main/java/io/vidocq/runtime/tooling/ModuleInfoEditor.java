@@ -58,7 +58,98 @@ public final class ModuleInfoEditor {
     /** Outcome of an edit: the (possibly unchanged) source and whether it changed. */
     public record Result(String source, boolean changed) {}
 
+    /**
+     * Outcome of {@link #toOpenModule}: the source, the {@code opens} lines it dropped as they were written, and the
+     * packages of those no {@code // vidocq:} marker claimed, which the developer wrote.
+     */
+    public record OpenModule(String source, List<String> removed, List<String> handWritten) {}
+
     private ModuleInfoEditor() {}
+
+    /**
+     * Whether the source declares an {@code open module}, which opens every package: an {@code opens} line inside it
+     * does not compile. Comments are skipped.
+     */
+    public static boolean isOpenModule(String source) {
+        int module = moduleKeyword(source);
+        if (module < 0) {
+            return false;
+        }
+        int end = module;
+        while (end > 0 && Character.isWhitespace(source.charAt(end - 1))) {
+            end--;
+        }
+        int start = end;
+        while (start > 0 && Character.isJavaIdentifierPart(source.charAt(start - 1))) {
+            start--;
+        }
+        return source.substring(start, end).equals("open");
+    }
+
+    /**
+     * The source as an {@code open module}: the keyword added, and every {@code opens} line dropped — javac refuses
+     * them in an open module — with the header of the block of packages opened for reflection. Each dropped line is
+     * returned as written; those no {@code // vidocq:} marker claimed are named by package, the developer wrote them.
+     */
+    public static OpenModule toOpenModule(String source) {
+        String body = split(source).rest();
+        List<String> removed = new ArrayList<>();
+        List<String> handWritten = new ArrayList<>();
+        for (String line : source.split(LINE_ENDS)) {
+            String stripped = line.strip();
+            if (code(stripped).startsWith(OPENS)) {
+                removed.add(stripped);
+            }
+        }
+        StringBuilder kept = new StringBuilder();
+        for (String line : body.split(LINE_ENDS)) {
+            String stripped = line.strip();
+            String code = code(stripped);
+            if (code.startsWith(OPENS)) {
+                if (!stripped.contains(MARKER_PREFIX)) {
+                    handWritten.add(SPACES.split(code)[1]);
+                }
+            } else {
+                kept.append(line);
+            }
+        }
+        String opened = kept.toString();
+        if (!isOpenModule(opened)) {
+            int module = moduleKeyword(opened);
+            if (module >= 0) {
+                opened = opened.substring(0, module) + "open " + opened.substring(module);
+            }
+        }
+        return new OpenModule(opened, removed, handWritten);
+    }
+
+    /** Where the {@code module} keyword of the declaration starts, outside comments; -1 when there is none. */
+    private static int moduleKeyword(String source) {
+        int i = 0;
+        int length = source.length();
+        while (i < length) {
+            if (source.startsWith("//", i)) {
+                int eol = source.indexOf('\n', i);
+                i = eol < 0 ? length : eol + 1;
+            } else if (source.startsWith("/*", i)) {
+                int close = source.indexOf("*/", i + 2);
+                i = close < 0 ? length : close + 2;
+            } else if (source.startsWith("module", i) && keywordAt(source, i, "module".length())) {
+                return i;
+            } else {
+                i++;
+            }
+        }
+        return -1;
+    }
+
+    /** Whether the word of {@code length} characters at {@code at} stands alone, followed by a blank. */
+    private static boolean keywordAt(String source, int at, int length) {
+        boolean before = at == 0 || !Character.isJavaIdentifierPart(source.charAt(at - 1));
+        int after = at + length;
+        return before && after < source.length() && Character.isWhitespace(source.charAt(after))
+                && (at == 0 || source.charAt(at - 1) != '.');
+    }
 
     /**
      * Inserts the missing {@code directives} (written without their {@code ;}) before the
@@ -69,7 +160,7 @@ public final class ModuleInfoEditor {
     public static Result add(String source, String id, List<String> directives) {
         List<String> declared = declared(source);
         StringBuilder block = new StringBuilder();
-        for (String directive : directives) {
+        for (String directive : withoutOpensIfOpen(source, directives)) {
             String normalized = normalize(directive);
             if (!declared.contains(normalized)) {
                 block.append("    ").append(directive).append("; ").append(marker(id)).append('\n');
@@ -95,6 +186,9 @@ public final class ModuleInfoEditor {
      * source is returned as is when every package is opened already, or without a closing brace.
      */
     public static String openForReflection(String source, Collection<String> packages) {
+        if (isOpenModule(source)) {
+            return source;
+        }
         List<String> toOpen = new ArrayList<>();
         List<String> declared = declared(source);
         for (String pkg : new LinkedHashSet<>(packages)) {
@@ -143,7 +237,15 @@ public final class ModuleInfoEditor {
     /** The {@code directives} (written without their {@code ;}) that {@code source} does not declare, in order. */
     public static List<String> missing(String source, List<String> directives) {
         List<String> declared = declared(source);
-        return directives.stream().filter(d -> !declared.contains(normalize(d))).toList();
+        return withoutOpensIfOpen(source, directives).stream().filter(d -> !declared.contains(normalize(d))).toList();
+    }
+
+    /** {@code directives} without their {@code opens} when the source is an open module, which opens every package. */
+    private static List<String> withoutOpensIfOpen(String source, List<String> directives) {
+        if (!isOpenModule(source)) {
+            return directives;
+        }
+        return directives.stream().filter(d -> !normalize(d).startsWith(OPENS)).toList();
     }
 
     /** A source without its block of packages opened for reflection, and that block's directives, in order. */

@@ -199,8 +199,8 @@ public final class ExtensionEditor {
                 return false;
             }
             Files.writeString(file, updated);
-            reporter.success("module-info.java updated",
-                    (add ? "requires/opens for " : "dropped ") + String.join(", ", ids));
+            String added = ModuleInfoEditor.isOpenModule(updated) ? "requires for " : "requires/opens for ";
+            reporter.success("module-info.java updated", (add ? added : "dropped ") + String.join(", ", ids));
             return true;
         } catch (IOException | IllegalArgumentException e) {
             reporter.warning("Could not update module-info.java: " + e.getMessage());
@@ -234,14 +234,31 @@ public final class ExtensionEditor {
             return;
         }
         Files.createDirectories(dir);
+        String folder = relative.substring("src/main/resources/".length());
+        if (openModule(projectDir)) {
+            Files.writeString(dir.resolve("README.md"), """
+                    # %s
+
+                    `%s` reads the files of this folder. The application's module is an open module, so it reaches \
+                    them without any directive. Delete this README once the folder holds a script, if you like.
+                    """.formatted(folder, id));
+            reporter.success("Created " + relative, "where " + id + " reads its files");
+            return;
+        }
         Files.writeString(dir.resolve("README.md"), """
                 # %s
 
                 `%s` reads the files of this folder. This README keeps the folder a package of the application's \
                 module, which `module-info.java` opens (`opens %s;`): the JVM refuses a module that opens a package \
                 without a file. Delete it once the folder holds a script, if you like.
-                """.formatted(relative.substring("src/main/resources/".length()), id, resourcePackage));
+                """.formatted(folder, id, resourcePackage));
         reporter.success("Created " + relative, "where " + id + " reads its files; opened in module-info.java");
+    }
+
+    /** Whether the project's {@code module-info.java} declares an open module. */
+    private static boolean openModule(Path projectDir) throws IOException {
+        Path file = projectDir.resolve("src").resolve("main").resolve("java").resolve("module-info.java");
+        return Files.isRegularFile(file) && ModuleInfoEditor.isOpenModule(Files.readString(file));
     }
 
     private static boolean holdsAFile(Path dir) {

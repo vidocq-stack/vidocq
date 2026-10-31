@@ -66,7 +66,7 @@ class CreatePromptsTest {
     }
 
     private static final Command.CreateInteractively NOTHING_GIVEN =
-            new Command.CreateInteractively(null, null, Set.of(), null, false);
+            new Command.CreateInteractively(null, null, Set.of(), null, false, false);
 
     @Test
     void asksTheNameTheGroupAndTheExtensions() {
@@ -128,7 +128,7 @@ class CreatePromptsTest {
         Scripted prompter = new Scripted("todo");
 
         ProjectSpec spec = CreatePrompts.ask(
-                new Command.CreateInteractively("com.acme", null, Set.of("knock-health"), "0.4.0", true), prompter);
+                new Command.CreateInteractively("com.acme", null, Set.of("knock-health"), "0.4.0", true, false), prompter);
 
         assertEquals(List.of("Project name"), prompter.questions);
         assertEquals("com.acme", spec.groupId());

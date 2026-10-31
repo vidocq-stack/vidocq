@@ -426,6 +426,24 @@ class ExtensionEditorTest {
         assertFalse(reporter.lines.stream().anyMatch(l -> l.startsWith("warning: ")), reporter.lines.toString());
     }
 
+    /** An open module opens every package: Flyway's folder is created, and nothing claims an opens line. */
+    @Test
+    void addingFlywayToAnOpenModuleWritesNoOpensAndSaysNone() throws IOException {
+        writePom("");
+        Files.createDirectories(moduleInfo().getParent());
+        Files.writeString(moduleInfo(), "open module com.acme.demo {\n}\n");
+
+        edit(List.of("flyway-migration"), true);
+
+        String source = Files.readString(moduleInfo());
+        assertTrue(source.contains("// vidocq:flyway-migration"), source);
+        assertFalse(source.contains("opens "), source);
+        assertTrue(Files.isRegularFile(project.resolve("src/main/resources/db/migration/README.md")));
+        assertFalse(Files.readString(project.resolve("src/main/resources/db/migration/README.md")).contains("opens"));
+        assertFalse(reporter.lines.stream().anyMatch(l -> l.contains("opened in module-info.java")
+                || l.contains("requires/opens")), reporter.lines.toString());
+    }
+
     /** A folder that already holds a migration keeps it as it is: no README is added next to the scripts. */
     @Test
     void addingFlywayLeavesAFolderWithMigrationsAsItIs() throws IOException {

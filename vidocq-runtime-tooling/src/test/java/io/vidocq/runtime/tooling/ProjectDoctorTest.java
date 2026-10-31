@@ -568,4 +568,42 @@ class ProjectDoctorTest {
         int end = text.indexOf("</dependency>", at) + "</dependency>".length() + 1;
         Files.writeString(pom, text.substring(0, start) + text.substring(end));
     }
+
+    // -------------------------------------------------------------------------
+    // Open module (an `open module` opens every package)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void anOpenModuleIsCreatedWithoutOpensAndPassesTheModuleCheck(@TempDir Path dir) throws IOException {
+        ProjectScaffolder.scaffold(new ProjectSpec("demo", "com.acme", "com.acme.demo",
+                Set.of("cassini-rest", "flyway-migration"), null, false, true), dir, RUNTIME, new RecordingReporter());
+        Path project = dir.resolve("demo");
+        String moduleInfo = Files.readString(project.resolve("src/main/java/module-info.java"));
+
+        assertTrue(moduleInfo.contains("open module com.acme.demo {"), moduleInfo);
+        assertFalse(moduleInfo.contains("opens "), moduleInfo);
+        assertTrue(moduleInfo.contains("// vidocq:flyway-migration"), moduleInfo);
+        assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
+    }
+
+    @Test
+    void anOpenModuleThatKeepsItsOpensLinesFailsAndFixLeavesOnlyRequires(@TempDir Path dir) throws IOException {
+        Path project = create(dir, Set.of("cassini-rest"), false);
+        Path moduleInfo = project.resolve("src/main/java/module-info.java");
+        edit(moduleInfo, "module com.acme.demo {", "open module com.acme.demo {\n    opens com.acme.demo.legacy;");
+
+        Diagnostic module = check(project).get("Module directives");
+        assertEquals(Diagnostic.Status.FAIL, module.status());
+        assertTrue(module.fixable());
+        assertTrue(module.detail().contains("open module"), module.detail());
+
+        var reporter = new RecordingReporter();
+        assertTrue(ProjectDoctor.fix(project, RUNTIME, reporter));
+
+        String fixed = Files.readString(moduleInfo);
+        assertTrue(fixed.contains("open module com.acme.demo {"), fixed);
+        assertFalse(fixed.contains("opens "), fixed);
+        assertTrue(reporter.lines.stream().anyMatch(l -> l.contains("com.acme.demo.legacy")), reporter.lines.toString());
+        assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
+    }
 }

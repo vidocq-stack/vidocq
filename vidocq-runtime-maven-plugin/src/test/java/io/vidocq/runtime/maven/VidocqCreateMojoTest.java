@@ -37,6 +37,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** {@code vidocq:create}, the project {@code vidocq create} writes (Vidocq/vidocq#314). */
@@ -64,6 +65,17 @@ class VidocqCreateMojoTest {
         }
         assertTrue(Files.readString(byGoal.resolve("todo/pom.xml")).contains("<version>1.2.3</version>"));
         assertTrue(infos.contains("Project 'todo' created: cd todo && ./mvnw vidocq:dev"), infos.toString());
+    }
+
+    @Test
+    void openModuleWritesAnOpenModule() throws Exception {
+        VidocqCreateMojo mojo = create(dir, "demo", "com.acme", null, "flyway-migration", false);
+        set(mojo, "openModule", true);
+        mojo.execute();
+
+        String moduleInfo = Files.readString(dir.resolve("demo/src/main/java/module-info.java"));
+        assertTrue(moduleInfo.contains("open module com.acme.demo {"), moduleInfo);
+        assertFalse(moduleInfo.contains("opens "), moduleInfo);
     }
 
     @Test

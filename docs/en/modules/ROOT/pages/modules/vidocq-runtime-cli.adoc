@@ -300,6 +300,7 @@ From 0.4.0 the project is finished(Vidocq/vidocq#339):
 | `--extension, -x <id>` | Extension to enable; repeatable.
 | `--parent-version <version>` | Version of `vidocq-runtime-parent` the project inherits (default: the runtime version of the CLI). From 0.4.0 the parent's BOM versions the Vidocq dependencies, which carry no `<version>`; under an older parent each one names this version.
 | `--main`| Also write an `@VidocqMain` trampoline and set `vidocq.mainClass` to it (default: no main class, the runtime's own main boots the application). For a right-click Run in the IDE or a `VidocqApp`.
+| [[create-open-module]]`--open-module` [.tag-new]#NEW# | Declare an `open module`: every package of the application is open to reflection, so no `opens` line is ever written or asked for — not by `extension add`, `vidocq dev`, `doctor --fix` nor the build check. The simplest choice for an application; a library keeps its packages closed. See xref:java-modules.adoc#open-module[Java modules in a Vidocq application]. `vidocq:create` takes `-DopenModule=true`.
 |===
 
 [source,bash]

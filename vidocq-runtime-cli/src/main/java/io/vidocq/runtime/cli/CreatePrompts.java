@@ -140,7 +140,7 @@ final class CreatePrompts {
         if (name.isBlank()) {
             throw new IllegalArgumentException("A project needs a name.");
         }
-        return ProjectSpec.of(name, groupId, given.pkg(), extensions, given.parentVersion(), given.main(),
+        return ProjectSpec.of(name, groupId, given.pkg(), extensions, given.parentVersion(), given.main(), given.openModule(),
                 PACKAGE_OPTION);
     }
 }

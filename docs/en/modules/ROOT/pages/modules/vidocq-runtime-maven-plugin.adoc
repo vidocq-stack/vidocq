@@ -231,6 +231,7 @@ mvn io.vidocq.runtime:vidocq-runtime-maven-plugin:{project-version}:create \
 | `extensions` | The catalog ids of the extensions to enable, comma-separated, written in this order.
 | `parentVersion` | The `vidocq-runtime-parent` version; the plugin's own by default. From 0.4.0 its BOM versions the Vidocq dependencies, written without a `<version>`.
 | `main` | `true` also writes an `@VidocqMain` trampoline, for an IDE Run or a `VidocqApp`.
+| `openModule` [.tag-new]#NEW# | `true` declares an `open module`, which opens every package to reflection: no `opens` line is ever needed. See xref:java-modules.adoc#open-module[Java modules in a Vidocq application].
 |===
 
 The project is created in the current directory, which must not hold a directory of that name yet. See

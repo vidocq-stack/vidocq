@@ -34,9 +34,11 @@ import java.util.Set;
  * @param extensions    the catalog ids of the extensions to enable, written in this order
  * @param parentVersion the {@code vidocq-runtime-parent} version, or {@code null} for the tool's runtime version
  * @param main          whether to write an {@code @VidocqMain} trampoline
+ * @param openModule    whether {@code module-info.java} declares an {@code open module}, which opens every package
+ *                      and so needs no {@code opens} line
  */
 public record ProjectSpec(String name, String groupId, String pkg, Set<String> extensions, String parentVersion,
-                          boolean main) {
+                          boolean main, boolean openModule) {
 
     /** The groupId of a project that names none. */
     public static final String DEFAULT_GROUP_ID = "io.example";
@@ -56,6 +58,18 @@ public record ProjectSpec(String name, String groupId, String pkg, Set<String> e
         extensions = Collections.unmodifiableSequencedSet(new LinkedHashSet<>(extensions));
     }
 
+    /** A spec whose module is not open. */
+    public ProjectSpec(String name, String groupId, String pkg, Set<String> extensions, String parentVersion,
+                       boolean main) {
+        this(name, groupId, pkg, extensions, parentVersion, main, false);
+    }
+
+    /** {@link #of(String, String, String, Collection, String, boolean, boolean, String)} for a module that is not open. */
+    public static ProjectSpec of(String name, String groupId, String pkg, Collection<String> extensions,
+                                 String parentVersion, boolean main, String packageOption) {
+        return of(name, groupId, pkg, extensions, parentVersion, main, false, packageOption);
+    }
+
     /**
      * The spec with its defaults: the groupId {@value #DEFAULT_GROUP_ID}, the package {@code <groupId>.<name>}.
      *
@@ -64,7 +78,7 @@ public record ProjectSpec(String name, String groupId, String pkg, Set<String> e
      *                                  extension is neither a catalog id nor a {@code groupId:artifactId}
      */
     public static ProjectSpec of(String name, String groupId, String pkg, Collection<String> extensions,
-                                 String parentVersion, boolean main, String packageOption) {
+                                 String parentVersion, boolean main, boolean openModule, String packageOption) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("a project needs a name");
         }
@@ -85,7 +99,7 @@ public record ProjectSpec(String name, String groupId, String pkg, Set<String> e
         }
         Set<String> ids = new LinkedHashSet<>(extensions);
         ids.addAll(KnownExtensions.companions(ids));
-        return new ProjectSpec(name, gid, p, ids, parentVersion, main);
+        return new ProjectSpec(name, gid, p, ids, parentVersion, main, openModule);
     }
 
     /** Whether {@code name} is a qualified Java name usable as a package and module name. */

@@ -72,6 +72,10 @@ public class VidocqCreateMojo extends AbstractMojo {
     @Parameter(property = "main", defaultValue = "false")
     private boolean main;
 
+    /** Declare an {@code open module}: every package open to reflection, so no {@code opens} line is ever needed. */
+    @Parameter(property = "openModule", defaultValue = "false")
+    private boolean openModule;
+
     @Parameter(defaultValue = "${plugin.version}", readonly = true, required = true)
     private String runtimeVersion;
 
@@ -85,7 +89,8 @@ public class VidocqCreateMojo extends AbstractMojo {
                 .map(String::strip).filter(id -> !id.isEmpty()).toList();
         ProjectSpec spec;
         try {
-            spec = ProjectSpec.of(name.strip(), groupId, pkg, ids, parentVersion, main, "-Dpackage=<pkg>");
+            spec = ProjectSpec.of(name.strip(), groupId, pkg, ids, parentVersion, main, openModule,
+                    "-Dpackage=<pkg>");
         } catch (IllegalArgumentException e) {
             throw new MojoFailureException(e.getMessage());
         }

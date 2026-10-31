@@ -360,16 +360,8 @@ public final class ProjectScaffolder {
      * package is opened only when the scaffold writes a class into it.
      */
     private static String buildModuleInfo(ProjectSpec c, Reporter reporter) {
-        String source = c.main()
-                ? """
-                module %s {
-                    requires io.vidocq.runtime.core;
-                }
-                """.formatted(moduleName(c))
-                : """
-                module %s {
-                }
-                """.formatted(moduleName(c));
+        String declaration = (c.openModule() ? "open module " : "module ") + moduleName(c) + " {\n";
+        String source = declaration + (c.main() ? "    requires io.vidocq.runtime.core;\n" : "") + "}\n";
         String openable = writesApplicationClass(c) ? c.pkg() : null;
         List<String> ordered = new ArrayList<>();
         KnownExtensions.catalog().forEach(e -> {
@@ -380,7 +372,8 @@ public final class ProjectScaffolder {
         c.extensions().stream().filter(id -> !ordered.contains(id)).sorted().forEach(ordered::add);
         for (String id : ordered) {
             source = ModuleInfoEditor.add(source, id, KnownExtensions.moduleDirectives(id, openable)).source();
-            if (openable == null && KnownExtensions.moduleDirectives(id, c.pkg()).contains("opens " + c.pkg())) {
+            if (openable == null && !c.openModule()
+                    && KnownExtensions.moduleDirectives(id, c.pkg()).contains("opens " + c.pkg())) {
                 reporter.warning(id + " reflects on the application package, which has no class yet: add opens "
                         + c.pkg() + "; to module-info.java once it has one.");
             }

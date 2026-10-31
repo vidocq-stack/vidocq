@@ -204,4 +204,71 @@ class ModuleInfoEditorTest {
 
         assertEquals(src, ModuleInfoEditor.openForReflection(src, List.of("com.acme.todo.book")));
     }
+
+    // An open module (`open module app { … }`) opens every package: an `opens` line inside it does not compile.
+
+    private static final String OPEN = """
+            /* the application */
+            open module com.acme.todo {
+                requires jakarta.ws.rs; // vidocq:cassini-rest
+            }
+            """;
+
+    @Test
+    void anOpenModuleIsRecognisedWhateverPrecedesIt() {
+        assertTrue(ModuleInfoEditor.isOpenModule(OPEN));
+        assertTrue(ModuleInfoEditor.isOpenModule("import a.B;\n@Deprecated\nopen   module x {\n}\n"));
+        assertFalse(ModuleInfoEditor.isOpenModule("module x {\n    opens x.y; // open module once\n}\n"));
+        assertFalse(ModuleInfoEditor.isOpenModule("// open module x\nmodule x {\n}\n"));
+    }
+
+    @Test
+    void anExtensionAddsItsRequiresButNoOpensToAnOpenModule() {
+        var result = ModuleInfoEditor.add(OPEN, "flyway-migration",
+                List.of("requires org.flywaydb.core", "opens db.migration"));
+
+        assertTrue(result.changed());
+        assertTrue(result.source().contains("requires org.flywaydb.core; // vidocq:flyway-migration"), result.source());
+        assertFalse(result.source().contains("opens "), result.source());
+    }
+
+    @Test
+    void anOpenModuleNeedsNoOpensAndIsNeverGivenOne() {
+        assertEquals(List.of("requires org.flywaydb.core"), ModuleInfoEditor.missing(OPEN,
+                List.of("opens db.migration", "requires org.flywaydb.core", "requires jakarta.ws.rs")));
+        assertEquals(OPEN, ModuleInfoEditor.openForReflection(OPEN, List.of("com.acme.todo.book")));
+    }
+
+    @Test
+    void openingTheModuleDropsEveryOpensLineAndNamesTheHandWrittenOnes() {
+        String src = """
+                module com.acme.todo {
+                    requires jakarta.ws.rs; // vidocq:cassini-rest
+                    opens com.acme.todo; // vidocq:cassini-rest
+                    opens com.acme.todo.legacy;
+
+                    // added by vidocq: the runtime reaches these packages by reflection
+                    opens com.acme.todo.book; // vidocq:reflection
+                }
+                """;
+
+        var opened = ModuleInfoEditor.toOpenModule(src);
+
+        assertTrue(ModuleInfoEditor.isOpenModule(opened.source()), opened.source());
+        assertFalse(opened.source().contains("opens "), opened.source());
+        assertFalse(opened.source().contains("added by vidocq"), opened.source());
+        assertTrue(opened.source().contains("requires jakarta.ws.rs; // vidocq:cassini-rest"), opened.source());
+        assertEquals(List.of("com.acme.todo.legacy"), opened.handWritten());
+        assertEquals(3, opened.removed().size(), opened.removed().toString());
+    }
+
+    @Test
+    void anOpenModuleWithOpensLinesHasThemDroppedToo() {
+        String src = "open module x {\n    requires y;\n    opens x.z;\n}\n";
+
+        var opened = ModuleInfoEditor.toOpenModule(src);
+
+        assertEquals("open module x {\n    requires y;\n}\n", opened.source());
+        assertEquals(List.of("x.z"), opened.handWritten());
+    }
 }

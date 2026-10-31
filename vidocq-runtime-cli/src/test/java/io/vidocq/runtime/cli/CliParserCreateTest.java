@@ -67,6 +67,28 @@ class CliParserCreateTest {
     }
 
     @Test
+    void openModuleOptionAsksForAnOpenModule() {
+        Command.Create c = assertInstanceOf(Command.Create.class,
+                CliParser.parse(new String[]{"create", "--name", "demo", "--open-module"}));
+        assertTrue(c.spec().openModule());
+        Command.Create plain = assertInstanceOf(Command.Create.class,
+                CliParser.parse(new String[]{"create", "--name", "demo"}));
+        assertFalse(plain.spec().openModule());
+    }
+
+    @Test
+    void openModuleOptionReachesTheQuestionsToo() {
+        var asked = assertInstanceOf(Command.CreateInteractively.class,
+                CliParser.parse(new String[]{"create", "--open-module"}));
+        assertTrue(asked.openModule());
+    }
+
+    @Test
+    void theHelpListsTheOpenModuleOption() {
+        assertTrue(help("create").contains("--open-module"), help("create"));
+    }
+
+    @Test
     void theHelpListsTheMainOption() {
         assertTrue(help("create").contains("--main"), help("create"));
     }

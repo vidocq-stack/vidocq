@@ -993,6 +993,7 @@
                 <parameter><name>extensions</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The extensions to enable, comma-separated catalog ids</description></parameter>
                 <parameter><name>parentVersion</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The vidocq-runtime-parent version; this plugin's own by default</description></parameter>
                 <parameter><name>main</name><type>boolean</type><required>false</required><editable>true</editable><description>Also write an @VidocqMain trampoline</description></parameter>
+                <parameter><name>openModule</name><type>boolean</type><required>false</required><editable>true</editable><description>Declare an open module: every package open to reflection, so no opens line is ever needed</description></parameter>
                 <parameter><name>runtimeVersion</name><type>java.lang.String</type><required>true</required><editable>false</editable><description>This plugin's own version</description></parameter>
             </parameters>
             <configuration>
@@ -1003,6 +1004,7 @@
                 <extensions implementation="java.lang.String">${extensions}</extensions>
                 <parentVersion implementation="java.lang.String">${parentVersion}</parentVersion>
                 <main implementation="boolean" default-value="false">${main}</main>
+                <openModule implementation="boolean" default-value="false">${openModule}</openModule>
                 <runtimeVersion implementation="java.lang.String" default-value="${plugin.version}"/>
             </configuration>
         </mojo>
