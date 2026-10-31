@@ -86,7 +86,7 @@ public final class ExtensionEditor {
         boolean wiredByPlugin = PomDependencies.codegenWiredByPlugin(pom);
         boolean droppedInheritedPaths = !wiredByPlugin && PomEditor.dropsInheritedProcessorPaths(pom);
         boolean pomChanged = false;
-        ids = withCompanions(pom, ids, add);
+        ids = withCompanions(pom, ids, add, reporter);
         for (String id : ids) {
             ExtensionCoordinate coordinate;
             try {
@@ -132,19 +132,30 @@ public final class ExtensionEditor {
      * {@code ids} and the companions they bring or leave (BUG-20261030-25): on add, the catalog extensions that go
      * with the extensions the project will then declare; on remove, the declared companions whose pair breaks.
      */
-    private static List<String> withCompanions(String pom, List<String> ids, boolean add) {
+    private static List<String> withCompanions(String pom, List<String> ids, boolean add, Reporter reporter) {
         Set<String> declared = new LinkedHashSet<>();
         for (ExtensionCoordinate coordinate : PomDependencies.parse(pom)) {
             declared.add(KnownExtensions.idOf(coordinate));
         }
-        List<String> all = new ArrayList<>(ids);
         if (add) {
-            declared.addAll(ids);
+            List<String> all = new ArrayList<>();
+            for (String id : KnownExtensions.withRequired(ids)) {
+                if (!ids.contains(id) && declared.contains(id)) {
+                    continue;
+                }
+                if (!ids.contains(id)) {
+                    reporter.note(id + " added too: " + neededBy(id, ids) + " needs it");
+                }
+                all.add(id);
+            }
+            declared.addAll(all);
             all.addAll(KnownExtensions.companions(declared));
             return List.copyOf(all);
         }
+        List<String> all = new ArrayList<>(ids);
         Set<String> remaining = new LinkedHashSet<>(declared);
         ids.forEach(remaining::remove);
+        reportRequired(ids, remaining, reporter);
         for (String id : remaining) {
             List<String> of = KnownExtensions.companionOf(id);
             if (!of.isEmpty() && !remaining.containsAll(of)) {
@@ -152,6 +163,33 @@ public final class ExtensionEditor {
             }
         }
         return List.copyOf(all);
+    }
+
+    /** The extensions of {@code ids} that require {@code required}, joined for a message. */
+    private static String neededBy(String required, List<String> ids) {
+        return String.join(", ", ids.stream()
+                .filter(id -> KnownExtensions.withRequired(List.of(id)).contains(required)).toList());
+    }
+
+    /**
+     * On remove: an extension the removed ones required stays, as it works alone, and the output says how to drop it;
+     * one a remaining extension requires is removed with a warning, as that extension then lacks it.
+     */
+    private static void reportRequired(List<String> removed, Set<String> remaining, Reporter reporter) {
+        for (String id : removed) {
+            for (String required : KnownExtensions.requiredExtensions(id)) {
+                if (remaining.contains(required)) {
+                    reporter.note(required + " stays, it works without " + id + ": `vidocq extension remove "
+                            + required + "` drops it too");
+                }
+            }
+            for (String other : remaining) {
+                if (KnownExtensions.requiredExtensions(other).contains(id)) {
+                    reporter.warning(other + " needs " + id + ": without it, " + other
+                            + " has nothing to read from unless the application provides it itself");
+                }
+            }
+        }
     }
 
     /**

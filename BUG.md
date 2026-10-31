@@ -5,6 +5,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261031-17 — The build check missed superclasses and implementations; `extension add mansart-data` left the application without a DataSource
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `feat/reflection-supertypes-pool-companion`. (1) `ReflectedPackages` follows the superclass of every type it reaches (application classes only), whose fields and getters JSON-B and JPA read too, and, for an interface or an abstract class, the application classes that implement or extend it directly: a field typed by an application interface holds one of them. Over-opening an implementation's package is safe (it only allows reflection), so every direct implementation is opened rather than none; a field typed by `Object`, by a JDK or library interface, or by a concrete class whose subclass it holds stays out of reach (`ReflectedPackagesTest`: superclass with the types it holds, interface implementation). (2) A new descriptor key, `requires-extensions`: `mansart-data` requires `mansart-pool`. `extension add`, `create -x` and `ProjectSpec` add the required extensions transitively, before the extension needing them, so the pool comes with its dev service, driver and test block; `remove mansart-data` keeps the pool, which works alone, and names the command that drops it; removing the pool while `mansart-data` stays warns; `vidocq doctor` shows **Required extensions** (warning, not fixable: the application may produce its own DataSource). Catalog regenerated. Checked with the CLI built from the branch: `extension add mansart-data` alone adds the pool, the PostgreSQL driver and dev service; an entity extending a `@MappedSuperclass` and a DTO extending `shared.Labeled` in another package — `mvn package` lists `opens com.example.lib.shared;   (… superclass of com.example.lib.api.LoanView)`, `doctor --fix` writes it, `vidocq dev` starts PostgreSQL and `GET /loans` answers 200 with the inherited `label`.
+- **Reported by**: the maintainer, after BUG-20261031-15/-16 (limits documented in "Java modules in a Vidocq application"; `mansart-data` without a DataSource found while checking #462)
+- **Minimal reproduction**: (1) a DTO `api.LoanView extends shared.Labeled` returned by a resource: the build passed, the request failed on `shared`. (2) `vidocq extension add mansart-data`, `vidocq dev`: "Mansart Data extension is enabled but no DataSource bean is exposed by CDI".
+- **Cause hypothesis**: (1) the traversal followed fields and getters only; (2) the catalog had no notion of an extension requiring another, only of glue added with a pair (`companion-of`).
+
 ## BUG-20261031-16 — Every package an application reflects on needs its own `opens` line; there was no way to opt out
 
 - **Date**: 2026-10-31

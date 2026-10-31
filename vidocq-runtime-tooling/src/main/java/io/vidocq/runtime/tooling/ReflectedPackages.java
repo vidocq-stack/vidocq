@@ -105,6 +105,7 @@ public final class ReflectedPackages {
         for (ClassModel model : application.values()) {
             queue.addAll(roots(model));
         }
+        Map<String, List<String>> subtypes = subtypes(application);
         Set<String> seen = new HashSet<>();
         while (!queue.isEmpty()) {
             String[] next = queue.poll();
@@ -116,8 +117,36 @@ public final class ReflectedPackages {
             for (String type : heldTypes(model)) {
                 queue.add(new String[] {type, "reached through " + dotted(next[0])});
             }
+            // JSON-B and JPA read the inherited fields and getters too.
+            model.superclass().ifPresent(superclass -> queue.add(
+                    new String[] {superclass.asInternalName(), "superclass of " + dotted(next[0])}));
+            // A field typed by an interface or an abstract class holds one of the application's implementations.
+            if (polymorphic(model)) {
+                String verb = (model.flags().flagsMask() & ClassFile.ACC_INTERFACE) != 0 ? "implements " : "extends ";
+                for (String subtype : subtypes.getOrDefault(next[0], List.of())) {
+                    queue.add(new String[] {subtype, verb + dotted(next[0])});
+                }
+            }
         }
         return new Reached(reasons, needsOpens);
+    }
+
+    /** Whether a reached type stands for its implementations: an interface or an abstract class. */
+    private static boolean polymorphic(ClassModel model) {
+        return (model.flags().flagsMask() & (ClassFile.ACC_INTERFACE | ClassFile.ACC_ABSTRACT)) != 0;
+    }
+
+    /** The application classes that directly extend or implement each application type. */
+    private static Map<String, List<String>> subtypes(Map<String, ClassModel> application) {
+        Map<String, List<String>> subtypes = new HashMap<>();
+        for (ClassModel model : application.values()) {
+            String name = model.thisClass().asInternalName();
+            model.superclass().ifPresent(superclass ->
+                    subtypes.computeIfAbsent(superclass.asInternalName(), _ -> new ArrayList<>()).add(name));
+            model.interfaces().forEach(implemented ->
+                    subtypes.computeIfAbsent(implemented.asInternalName(), _ -> new ArrayList<>()).add(name));
+        }
+        return subtypes;
     }
 
     /** Whether a method the container calls on {@code interceptor} is private: no generated provider can call it. */

@@ -426,6 +426,53 @@ class ExtensionEditorTest {
         assertFalse(reporter.lines.stream().anyMatch(l -> l.startsWith("warning: ")), reporter.lines.toString());
     }
 
+    /** Mansart Data reads its DataSource from the pool: adding it brings the pool, its dev service and driver. */
+    @Test
+    void addingMansartDataBringsThePoolItNeeds() throws IOException {
+        writePom("");
+        writeModuleInfo();
+
+        edit(List.of("mansart-data"), true);
+
+        String pom = pom();
+        assertTrue(pom.contains("<artifactId>vidocq-runtime-mansart-pool-extension</artifactId>"), pom);
+        assertTrue(pom.contains("<artifactId>postgresql</artifactId>"), pom);
+        assertTrue(pom.contains("<artifactId>vidocq-runtime-devservice-postgres</artifactId>"), pom);
+        assertTrue(reporter.lines.stream().anyMatch(l -> l.contains("mansart-pool") && l.contains("mansart-data needs")),
+                reporter.lines.toString());
+    }
+
+    /** Removing Mansart Data keeps the pool, which works alone; the output says how to drop it too. */
+    @Test
+    void removingMansartDataKeepsThePoolAndSaysSo() throws IOException {
+        writePom("");
+        writeModuleInfo();
+        edit(List.of("mansart-data"), true);
+        reporter.lines.clear();
+
+        edit(List.of("mansart-data"), false);
+
+        String pom = pom();
+        assertFalse(pom.contains("<artifactId>vidocq-runtime-mansart-data-extension</artifactId>"), pom);
+        assertTrue(pom.contains("<artifactId>vidocq-runtime-mansart-pool-extension</artifactId>"), pom);
+        assertTrue(reporter.lines.stream().anyMatch(l -> l.contains("vidocq extension remove mansart-pool")),
+                reporter.lines.toString());
+    }
+
+    /** Removing the pool while Mansart Data stays leaves it without a DataSource: the output warns. */
+    @Test
+    void removingThePoolMansartDataNeedsWarns() throws IOException {
+        writePom("");
+        writeModuleInfo();
+        edit(List.of("mansart-data"), true);
+        reporter.lines.clear();
+
+        edit(List.of("mansart-pool"), false);
+
+        assertTrue(reporter.lines.stream().anyMatch(l -> l.startsWith("warning: ") && l.contains("mansart-data")),
+                reporter.lines.toString());
+    }
+
     /** An open module opens every package: Flyway's folder is created, and nothing claims an opens line. */
     @Test
     void addingFlywayToAnOpenModuleWritesNoOpensAndSaysNone() throws IOException {

@@ -97,7 +97,7 @@ public record ProjectSpec(String name, String groupId, String pkg, Set<String> e
                 throw new IllegalArgumentException("unknown extension '" + id + "': " + e.getMessage(), e);
             }
         }
-        Set<String> ids = new LinkedHashSet<>(extensions);
+        Set<String> ids = new LinkedHashSet<>(KnownExtensions.withRequired(extensions));
         ids.addAll(KnownExtensions.companions(ids));
         return new ProjectSpec(name, gid, p, ids, parentVersion, main, openModule);
     }

@@ -606,4 +606,28 @@ class ProjectDoctorTest {
         assertTrue(reporter.lines.stream().anyMatch(l -> l.contains("com.acme.demo.legacy")), reporter.lines.toString());
         assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
     }
+
+    /** Mansart Data without the pool has no DataSource, unless the application produces its own: a warning. */
+    @Test
+    void mansartDataWithoutThePoolWarns(@TempDir Path dir) throws IOException {
+        Path project = create(dir, Set.of("cassini-rest", "mansart-data"), false);
+        ExtensionEditor.edit(project, List.of("mansart-pool"), false, RUNTIME, new RecordingReporter());
+
+        Diagnostic required = check(project).get("Required extensions");
+
+        assertEquals(Diagnostic.Status.WARN, required.status());
+        assertTrue(required.detail().contains("mansart-data needs mansart-pool"), required.detail());
+        assertFalse(required.fixable());
+    }
+
+    @Test
+    void mansartDataWithThePoolHasNothingToSay(@TempDir Path dir) throws IOException {
+        // as vidocq create does: ProjectSpec.of brings the pool mansart-data requires
+        ProjectScaffolder.scaffold(ProjectSpec.of("demo", "com.acme", "com.acme.demo",
+                List.of("cassini-rest", "mansart-data"), null, false, "--package"), dir, RUNTIME, new RecordingReporter());
+        Path project = dir.resolve("demo");
+
+        Diagnostic required = check(project).get("Required extensions");
+        assertEquals(null, required, () -> required.detail());
+    }
 }

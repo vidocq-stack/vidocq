@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.IntPredicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -61,6 +62,7 @@ public final class ProjectDoctor {
     private static final String MAVEN_CHECK = "Maven version";
     private static final String PORT_CHECK = "HTTP port";
     private static final String JWT_CHECK = "JWT verification";
+    private static final String REQUIRED_CHECK = "Required extensions";
     private static final String JWT = "cervantes-jwt";
     /** The keys MicroProfile JWT verifies a token's signature with: without one, it accepts none. */
     private static final List<String> JWT_KEYS = List.of("mp.jwt.verify.publickey", "mp.jwt.verify.publickey.location");
@@ -140,6 +142,7 @@ public final class ProjectDoctor {
         if (extensions.containsKey(JWT)) {
             diagnostics.add(checkJwtVerification(facts.config()));
         }
+        checkRequiredExtensions(extensions.keySet()).ifPresent(diagnostics::add);
         return diagnostics;
     }
 
@@ -261,6 +264,24 @@ public final class ProjectDoctor {
      * the configuration, in any profile, production rejects every token (BUG-20261031-09). Not fixable: only the
      * application knows its identity provider.
      */
+    /**
+     * An extension declared without one it requires (Mansart Data without the pool): a warning, shown only then. Not
+     * fixable: the application may provide what the missing extension would, its own DataSource for instance.
+     */
+    private static Optional<Diagnostic> checkRequiredExtensions(Set<String> declared) {
+        List<String> missing = new ArrayList<>();
+        for (String id : declared) {
+            KnownExtensions.requiredExtensions(id).stream().filter(required -> !declared.contains(required))
+                    .forEach(required -> missing.add(id + " needs " + required));
+        }
+        if (missing.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(Diagnostic.warn(REQUIRED_CHECK, String.join(", ", missing),
+                "Add it with vidocq extension add, unless the application provides it itself"
+                        + " (mansart-data: a @Produces DataSource)."));
+    }
+
     private static Diagnostic checkJwtVerification(Map<String, String> config) {
         boolean set = config.keySet().stream()
                 // A %<profile>. prefix counts: %prod.mp.jwt.verify.publickey.location is production's key.

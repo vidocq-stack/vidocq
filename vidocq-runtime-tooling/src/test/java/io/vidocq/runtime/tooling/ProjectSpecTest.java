@@ -95,7 +95,9 @@ class ProjectSpecTest {
     /** BUG-20261024-01: the extensions are written in the order given, the same on every run. */
     @Test
     void theExtensionsKeepTheOrderGiven() {
-        List<String> ids = List.of("mansart-data", "cassini-rest", "knock-health", "ravel-config", "foy-servlet");
+        // mansart-data comes after the pool it requires, which -x does not name
+        List<String> ids = List.of("mansart-pool", "mansart-data", "cassini-rest", "knock-health", "ravel-config",
+                "foy-servlet");
 
         ProjectSpec spec = ProjectSpec.of("demo", null, null, ids, null, false, "-");
 
@@ -111,5 +113,14 @@ class ProjectSpecTest {
 
         assertEquals(List.of("humboldt-telemetry", "mansart-pool", "jdbc-telemetry"),
                 List.copyOf(spec.extensions()));
+    }
+
+    /** Mansart Data reads its DataSource from the pool: {@code -x mansart-data} brings it, before itself. */
+    @Test
+    void aProjectWithMansartDataGetsThePoolItNeeds() {
+        ProjectSpec spec = ProjectSpec.of("library", null, null, List.of("cassini-rest", "mansart-data"), null,
+                false, "--package");
+
+        assertEquals(List.of("cassini-rest", "mansart-pool", "mansart-data"), List.copyOf(spec.extensions()));
     }
 }

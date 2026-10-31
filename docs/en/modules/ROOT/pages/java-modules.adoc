@@ -51,7 +51,7 @@ The lines the tooling adds for reflection go in one block, last in the file, eac
 * a REST resource or provider (`@Path`, `@Provider`): the types its methods take and return, which JSON-B binds — not the resource itself, whose dispatch is generated;
 * a CDI interceptor with a `private` interceptor method (`@AroundInvoke`, `@AroundConstruct`, a lifecycle callback): its package. Other interceptor methods are called through code generated in their package and need nothing.
 
-From each type reached, the check follows the declared types of its fields and of its getters, generic arguments included, as long as they are classes of the application:
+From each type reached, the check follows the declared types of its fields and of its getters, generic arguments included, as long as they are classes of the application. [.tag-new]#NEW# It also follows the superclass of each type it reaches, whose fields and getters JSON-B and Jakarta Persistence read too, and, for a type that is an interface or an abstract class, the application classes that implement or extend it directly, one of which is what the field actually holds:
 
 ----
 BookResource ──returns──▶ List<Book> ──▶ Book ──field──▶ Author ──field──▶ Address
@@ -68,8 +68,7 @@ The check works from the declared types it finds in your compiled classes. It ca
 * JSON-B called by hand, `JsonbBuilder.create().toJson(report)`, on a type no resource takes or returns;
 * `Class.forName(…)`, or a resource read with `getResource(…)` from a package of the application;
 * a third-party library that does its own reflection;
-* the actual class behind a field typed by an interface or by `Object`: the check follows the declared type only — an interface of the application has its package opened, its implementations do not;
-* the superclass of a type it reaches: a DTO that extends a class of another package of the application does not bring that package in.
+* the actual class behind a field typed by `Object`, by a JDK or library interface (`Serializable`, `Comparable`…), or by a concrete class of the application whose subclass the field holds: the check follows the declared type and, for an application interface or abstract class only, its implementations.
 
 For these cases, the runtime tells you what to add, below.
 

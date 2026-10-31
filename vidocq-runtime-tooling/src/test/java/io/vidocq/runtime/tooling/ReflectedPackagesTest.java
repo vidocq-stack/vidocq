@@ -110,6 +110,51 @@ class ReflectedPackagesTest {
         assertEquals(Set.of("com.acme.shop.data"), ReflectedPackages.of(classes).reasons().keySet());
     }
 
+    /** JSON-B and JPA read the inherited fields too: the superclass, and what its fields hold, need their packages. */
+    @Test
+    void theSuperclassOfAReachedTypeAndWhatItHoldsAreReachedToo() throws IOException {
+        ClassDesc audited = ClassDesc.of("com.acme.shop.base.Audited");
+        write(audited, cb -> {
+            cb.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_ABSTRACT);
+            cb.withField("author", AUTHOR, ClassFile.ACC_PRIVATE);
+        });
+        write(AUTHOR, cb -> cb.withField("name", ConstantDescs.CD_String, ClassFile.ACC_PRIVATE));
+        write(ClassDesc.of("com.acme.shop.data.Loan"), annotated("jakarta.persistence.Entity", cb -> {
+            cb.withSuperclass(audited);
+            cb.withField("id", ConstantDescs.CD_long, ClassFile.ACC_PRIVATE);
+        }));
+
+        Map<String, String> reached = ReflectedPackages.of(classes).reasons();
+
+        assertEquals(Set.of("com.acme.shop.data", "com.acme.shop.base", "com.acme.shop.people"), reached.keySet());
+        assertEquals("com.acme.shop.base.Audited, superclass of com.acme.shop.data.Loan",
+                reached.get("com.acme.shop.base"));
+    }
+
+    /**
+     * A field typed by an interface of the application: JSON-B binds the object it holds, whose class is one of the
+     * application's implementations, so their packages are reached too.
+     */
+    @Test
+    void theApplicationImplementationsOfAReachedInterfaceAreReachedToo() throws IOException {
+        ClassDesc priced = ClassDesc.of("com.acme.shop.api.Priced");
+        write(priced, cb -> cb.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_INTERFACE | ClassFile.ACC_ABSTRACT));
+        write(ClassDesc.of("com.acme.shop.pricing.FixedPrice"), cb -> {
+            cb.withInterfaceSymbols(priced);
+            cb.withField("amount", ConstantDescs.CD_long, ClassFile.ACC_PRIVATE);
+        });
+        write(BOOK, cb -> cb.withField("price", priced, ClassFile.ACC_PRIVATE));
+        write(ClassDesc.of("com.acme.shop.rest.BookResource"), annotated("jakarta.ws.rs.Path", cb ->
+                cb.withMethodBody("one", MethodTypeDesc.of(BOOK), ClassFile.ACC_PUBLIC,
+                        code -> code.aconst_null().areturn())));
+
+        Map<String, String> reached = ReflectedPackages.of(classes).reasons();
+
+        assertEquals(Set.of("com.acme.shop.book", "com.acme.shop.api", "com.acme.shop.pricing"), reached.keySet());
+        assertEquals("com.acme.shop.pricing.FixedPrice, implements com.acme.shop.api.Priced",
+                reached.get("com.acme.shop.pricing"));
+    }
+
     @Test
     void aClassNoResourceOrEntityReachesIsLeftAlone() throws IOException {
         bookAndAuthor();

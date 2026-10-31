@@ -27,6 +27,7 @@ import java.util.Collection;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -227,6 +228,33 @@ public final class KnownExtensions {
                     return !of.isEmpty() && declared.containsAll(of);
                 })
                 .toList();
+    }
+
+    /**
+     * The extensions {@code id} cannot work without, from its descriptor's {@code requires-extensions}: Mansart Data
+     * reads the pool's DataSource. Empty for most.
+     */
+    public static List<String> requiredExtensions(String id) {
+        return byId(id).map(e -> csv(property(e.id(), "requires-extensions"))).orElse(List.of());
+    }
+
+    /** {@code ids} with the extensions they require, transitively, each required one before the first that needs it. */
+    public static List<String> withRequired(Collection<String> ids) {
+        Set<String> ordered = new LinkedHashSet<>();
+        for (String id : ids) {
+            addWithRequired(id, ordered);
+        }
+        return List.copyOf(ordered);
+    }
+
+    private static void addWithRequired(String id, Set<String> ordered) {
+        if (ordered.contains(id)) {
+            return;
+        }
+        for (String required : requiredExtensions(id)) {
+            addWithRequired(required, ordered);
+        }
+        ordered.add(id);
     }
 
     /** The extensions {@code id} goes with, from its descriptor's {@code companion-of}; empty for most. */
