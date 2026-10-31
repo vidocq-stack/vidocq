@@ -47,6 +47,15 @@ public final class PomEditor {
             Pattern.compile("<artifactId>([^<]*)</artifactId>");
     private static final String INDENT = "    ";
     private static final String TWO_INDENTS = INDENT + INDENT;
+    private static final String PROJECT_CLOSE = "</project>";
+    private static final String PLUGINS_OPEN = "<plugins>";
+    private static final String PLUGINS_CLOSE = "</plugins>";
+    private static final String BUILD_OPEN = "<build>";
+    private static final String BUILD_CLOSE = "</build>";
+    private static final String DEPENDENCY_OPEN = "<dependency>";
+    private static final String DEPENDENCY_CLOSE = "</dependency>";
+    private static final String ARTIFACT_ID_OPEN = "<artifactId>";
+    private static final String ARTIFACT_ID_CLOSE = "</artifactId>";
 
     /**
      * Inserts {@code coordinate} as a project dependency. Idempotent: if the
@@ -86,7 +95,7 @@ public final class PomEditor {
             return new Result(pom.substring(0, lineStart) + block + pom.substring(lineStart), true);
         }
         // No <dependencies> element — create one before </project>.
-        int proj = pom.indexOf("</project>");
+        int proj = pom.indexOf(PROJECT_CLOSE);
         if (proj < 0) {
             throw new IllegalArgumentException("Not a valid pom.xml: missing </project>.");
         }
@@ -134,32 +143,32 @@ public final class PomEditor {
     /** Declares {@code plugin} with {@code dependency} in the project build's {@code <plugins>}, created if needed. */
     private static Result addPlugin(String pom, ExtensionCoordinate plugin, ExtensionCoordinate dependency,
                                     String version, String pluginVersion, List<int[]> skipped) {
-        int plugins = indexOutside(pom, "<plugins>", 0, skipped);
+        int plugins = indexOutside(pom, PLUGINS_OPEN, 0, skipped);
         String pluginIndent;
         String prefix;
         String suffix;
         int at;
         if (plugins >= 0) {
-            at = pom.indexOf("</plugins>", plugins);
+            at = pom.indexOf(PLUGINS_CLOSE, plugins);
             pluginIndent = childIndent(pom, plugins);
             prefix = "";
             suffix = "";
         } else {
-            int build = indexOutside(pom, "<build>", 0, skipped);
+            int build = indexOutside(pom, BUILD_OPEN, 0, skipped);
             String pluginsIndent;
             if (build >= 0) {
-                at = pom.indexOf("</build>", build);
+                at = pom.indexOf(BUILD_CLOSE, build);
                 pluginsIndent = childIndent(pom, build);
-                prefix = pluginsIndent + "<plugins>\n";
-                suffix = pluginsIndent + "</plugins>\n";
+                prefix = pluginsIndent + PLUGINS_OPEN + "\n";
+                suffix = pluginsIndent + PLUGINS_CLOSE + "\n";
             } else {
-                at = pom.indexOf("</project>");
+                at = pom.indexOf(PROJECT_CLOSE);
                 if (at < 0) {
                     throw new IllegalArgumentException("Not a valid pom.xml: missing </project>.");
                 }
                 pluginsIndent = INDENT + INDENT;
-                prefix = INDENT + "<build>\n" + pluginsIndent + "<plugins>\n";
-                suffix = pluginsIndent + "</plugins>\n" + INDENT + "</build>\n";
+                prefix = INDENT + BUILD_OPEN + "\n" + pluginsIndent + PLUGINS_OPEN + "\n";
+                suffix = pluginsIndent + PLUGINS_CLOSE + "\n" + INDENT + BUILD_CLOSE + "\n";
             }
             pluginIndent = pluginsIndent + INDENT;
         }
@@ -167,7 +176,7 @@ public final class PomEditor {
         String block = prefix
                 + pluginIndent + PLUGIN_OPEN + "\n"
                 + child + "<groupId>" + plugin.groupId() + "</groupId>\n"
-                + child + "<artifactId>" + plugin.artifactId() + "</artifactId>\n"
+                + child + ARTIFACT_ID_OPEN + plugin.artifactId() + ARTIFACT_ID_CLOSE + "\n"
                 + (pluginVersion == null ? "" : child + "<version>" + pluginVersion + "</version>\n")
                 + child + DEPENDENCIES_OPEN + "\n"
                 + dependency.dependencyXml(child + INDENT, version) + "\n"
@@ -185,31 +194,36 @@ public final class PomEditor {
         }
         List<int[]> skipped = outsideProjectBuild(pom);
         Span declared = pluginElement(pom, plugin, skipped);
-        int open = indexWithin(pom, "<dependency>", declared, skipped);
+        if (declared == null) {
+            // Declared where the project build does not read it, a comment or a profile: nothing to edit.
+            return new Result(pom, false);
+        }
+        int open = indexWithin(pom, DEPENDENCY_OPEN, declared, skipped);
         while (open >= 0) {
-            int end = pom.indexOf("</dependency>", open) + "</dependency>".length();
+            int end = pom.indexOf(DEPENDENCY_CLOSE, open) + DEPENDENCY_CLOSE.length();
             if (matches(pom.substring(open, end), dependency)) {
                 String without = withoutLines(pom, open, end);
                 Span after = pluginElement(without, plugin, outsideProjectBuild(without));
-                int deps = indexWithin(without, DEPENDENCIES_OPEN, after, outsideProjectBuild(without));
+                int deps = after == null ? -1
+                        : indexWithin(without, DEPENDENCIES_OPEN, after, outsideProjectBuild(without));
                 String emptied = deps < 0 ? null
                         : withoutEmptyElementAt(without, deps, DEPENDENCIES_OPEN, DEPENDENCIES_CLOSE, List.of());
                 return new Result(emptied == null ? without : emptied, true);
             }
-            open = indexWithin(pom, "<dependency>", new Span(end, declared.end()), skipped);
+            open = indexWithin(pom, DEPENDENCY_OPEN, new Span(end, declared.end()), skipped);
         }
         return new Result(pom, false);
     }
 
     /** The project build's {@code plugin} element, or null. */
     private static Span pluginElement(String pom, ExtensionCoordinate plugin, List<int[]> skipped) {
-        String artifact = "<artifactId>" + plugin.artifactId() + "</artifactId>";
+        String artifact = ARTIFACT_ID_OPEN + plugin.artifactId() + ARTIFACT_ID_CLOSE;
         for (int at = indexOutside(pom, artifact, 0, skipped); at >= 0;
              at = indexOutside(pom, artifact, at + artifact.length(), skipped)) {
             int open = pom.lastIndexOf(PLUGIN_OPEN, at);
             int close = pom.indexOf(PLUGIN_CLOSE, at);
             // The artifactId of the plugin itself, not of one of its dependencies.
-            if (open >= 0 && close >= 0 && pom.lastIndexOf("<dependency>", at) < open) {
+            if (open >= 0 && close >= 0 && pom.lastIndexOf(DEPENDENCY_OPEN, at) < open) {
                 return new Span(open, close + PLUGIN_CLOSE.length());
             }
         }
@@ -231,12 +245,12 @@ public final class PomEditor {
         int limit = region == null ? sb.length() : region.end();
 
         int open;
-        while ((open = sb.indexOf("<dependency>", search)) >= 0 && open < limit) {
-            int closeTag = sb.indexOf("</dependency>", open);
+        while ((open = sb.indexOf(DEPENDENCY_OPEN, search)) >= 0 && open < limit) {
+            int closeTag = sb.indexOf(DEPENDENCY_CLOSE, open);
             if (closeTag < 0) {
                 break;
             }
-            int blockEnd = closeTag + "</dependency>".length();
+            int blockEnd = closeTag + DEPENDENCY_CLOSE.length();
             String block = sb.substring(open, blockEnd);
             if (matches(block, coordinate)) {
                 int removeStart = sb.lastIndexOf("\n", open) + 1;
@@ -300,30 +314,30 @@ public final class PomEditor {
             return addToCompilerPlugin(pom, plugin, skipped, codegen, version);
         }
 
-        int pluginsClose = indexOutside(pom, "</plugins>", 0, skipped);
+        int pluginsClose = indexOutside(pom, PLUGINS_CLOSE, 0, skipped);
         if (pluginsClose >= 0) {
             return new Result(insertBeforeLine(pom, pluginsClose,
                     compilerPluginXml(codegen, version, childIndent(pom, pluginsClose))), true);
         }
 
-        int buildClose = indexOutside(pom, "</build>", 0, skipped);
+        int buildClose = indexOutside(pom, BUILD_CLOSE, 0, skipped);
         if (buildClose >= 0) {
             String indent = childIndent(pom, buildClose);
-            return new Result(insertBeforeLine(pom, buildClose, indent + "<plugins>\n"
+            return new Result(insertBeforeLine(pom, buildClose, indent + PLUGINS_OPEN + "\n"
                     + compilerPluginXml(codegen, version, indent + "    ")
-                    + indent + "</plugins>\n"), true);
+                    + indent + PLUGINS_CLOSE + "\n"), true);
         }
 
-        int proj = pom.indexOf("</project>");
+        int proj = pom.indexOf(PROJECT_CLOSE);
         if (proj < 0) {
             throw new IllegalArgumentException("Not a valid pom.xml: missing </project>.");
         }
         String base = childIndent(pom, proj);
-        String block = base + "<build>\n"
+        String block = base + BUILD_OPEN + "\n"
                 + base + "    <plugins>\n"
                 + compilerPluginXml(codegen, version, base + TWO_INDENTS)
                 + base + "    </plugins>\n"
-                + base + "</build>\n";
+                + base + BUILD_CLOSE + "\n";
         return new Result(insertBeforeLine(pom, proj, block), true);
     }
 
@@ -422,7 +436,7 @@ public final class PomEditor {
 
     /** The {@code <artifactId>} element naming {@code artifactId}. */
     private static String artifactIdElement(String artifactId) {
-        return "<artifactId>" + artifactId + "</artifactId>";
+        return ARTIFACT_ID_OPEN + artifactId + ARTIFACT_ID_CLOSE;
     }
 
     /** Whether an {@code <annotationProcessorPaths ...>} start tag keeps the inherited paths. */
@@ -479,8 +493,8 @@ public final class PomEditor {
                 p -> withoutEmptyPluginElement(p, APPENDING_APT_OPEN, APT_CLOSE),
                 p -> withoutEmptyPluginElement(p, CONFIGURATION_OPEN, CONFIGURATION_CLOSE),
                 PomEditor::withoutBareCompilerPlugin,
-                p -> withoutEmptyBuildElement(p, "<plugins>", "</plugins>"),
-                p -> withoutEmptyBuildElement(p, "<build>", "</build>"));
+                p -> withoutEmptyBuildElement(p, PLUGINS_OPEN, PLUGINS_CLOSE),
+                p -> withoutEmptyBuildElement(p, BUILD_OPEN, BUILD_CLOSE));
         String cleaned = pom;
         for (UnaryOperator<String> step : steps) {
             String next = step.apply(cleaned);
@@ -531,7 +545,7 @@ public final class PomEditor {
     private static String pathXml(ExtensionCoordinate codegen, String version, String indent) {
         return indent + "<path>\n"
                 + indent + "    <groupId>" + codegen.groupId() + "</groupId>\n"
-                + indent + "    <artifactId>" + codegen.artifactId() + "</artifactId>\n"
+                + indent + "    <artifactId>" + codegen.artifactId() + ARTIFACT_ID_CLOSE + "\n"
                 + (version == null ? "" : indent + "    <version>" + version + "</version>\n")
                 + indent + "</path>\n";
     }

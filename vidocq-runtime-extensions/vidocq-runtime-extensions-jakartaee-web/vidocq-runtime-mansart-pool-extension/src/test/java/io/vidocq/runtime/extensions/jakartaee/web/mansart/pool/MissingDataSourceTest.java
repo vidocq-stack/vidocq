@@ -33,9 +33,9 @@ class MissingDataSourceTest {
     @Test
     void theDefaultPoolNamesTheUrlTheDevServiceAndTheTestListener() {
         MansartPoolHolder.INSTANCE.set(null);
+        MansartPoolHolder holder = new MansartPoolHolder();
 
-        String message = assertThrows(IllegalStateException.class, () -> new MansartPoolHolder().getConnection())
-                .getMessage();
+        String message = assertThrows(IllegalStateException.class, holder::getConnection).getMessage();
 
         assertTrue(message.contains("set vidocq.pool.url"), message);
         assertTrue(message.contains("vidocq-runtime-devservice-postgres"), message);

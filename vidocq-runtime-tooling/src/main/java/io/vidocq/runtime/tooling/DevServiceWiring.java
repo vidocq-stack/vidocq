@@ -150,44 +150,56 @@ public final class DevServiceWiring {
         String edited = pom;
         for (String id : ids) {
             Optional<ExtensionCoordinate> provider = provider(id);
-            if (provider.isEmpty() || onAnotherDatabase(id, Declared.of(edited))) {
-                continue;
-            }
-            List<String> wrote = new ArrayList<>();
-            PomEditor.Result onPlugin = PomEditor.addPluginDependency(edited, PLUGIN, provider.get(),
-                    pluginDependencyVersion(edited, runtimeVersion), pluginVersion(edited, runtimeVersion));
-            if (onPlugin.changed()) {
-                wrote.add("on " + PLUGIN.artifactId());
-            }
-            edited = onPlugin.pom();
-            if (KnownExtensions.devServiceInTests(id)) {
-                PomEditor.Result host = PomEditor.add(edited, JUNIT_HOST, runtimeVersion, TEST);
-                PomEditor.Result inTests = PomEditor.add(host.pom(), provider.get(), runtimeVersion, TEST);
-                if (host.changed() || inTests.changed()) {
-                    wrote.add("in test scope with " + JUNIT_HOST.artifactId());
-                }
-                edited = inTests.pom();
-            }
-            Optional<Driver> driver = Driver.of(id);
-            if (driver.isPresent()) {
-                PomEditor.Result withDriver = PomEditor.add(edited, driver.get().coordinate(), driver.get().version(),
-                        RUNTIME);
-                if (withDriver.changed()) {
-                    reporter.success("Added " + driver.get().coordinate(), "the JDBC driver of the "
-                            + provider.get().artifactId() + " dev service");
-                }
-                edited = withDriver.pom();
-            }
-            if (!wrote.isEmpty()) {
-                reporter.success("Wired " + provider.get().artifactId(), String.join(", ", wrote));
+            if (provider.isPresent() && !onAnotherDatabase(id, Declared.of(edited))) {
+                edited = wireOne(edited, id, provider.get(), runtimeVersion, reporter);
             }
         }
         return new PomEditor.Result(edited, !edited.equals(pom));
     }
 
+    /** {@link #wire} for the extension {@code id}, whose dev service is {@code provider}. */
+    private static String wireOne(String pom, String id, ExtensionCoordinate provider, String runtimeVersion,
+                                  Reporter reporter) {
+        List<String> wrote = new ArrayList<>();
+        PomEditor.Result onPlugin = PomEditor.addPluginDependency(pom, PLUGIN, provider,
+                pluginDependencyVersion(pom, runtimeVersion), pluginVersion(pom, runtimeVersion));
+        if (onPlugin.changed()) {
+            wrote.add("on " + PLUGIN.artifactId());
+        }
+        String edited = onPlugin.pom();
+        if (KnownExtensions.devServiceInTests(id)) {
+            PomEditor.Result host = PomEditor.add(edited, JUNIT_HOST, runtimeVersion, TEST);
+            PomEditor.Result inTests = PomEditor.add(host.pom(), provider, runtimeVersion, TEST);
+            if (host.changed() || inTests.changed()) {
+                wrote.add("in test scope with " + JUNIT_HOST.artifactId());
+            }
+            edited = inTests.pom();
+        }
+        edited = withDriver(edited, id, provider, reporter);
+        if (!wrote.isEmpty()) {
+            reporter.success("Wired " + provider.artifactId(), String.join(", ", wrote));
+        }
+        return edited;
+    }
+
+    /** {@code pom} with the JDBC driver of the dev service of {@code id}, when it has one, in runtime scope. */
+    private static String withDriver(String pom, String id, ExtensionCoordinate provider, Reporter reporter) {
+        Optional<Driver> driver = Driver.of(id);
+        if (driver.isEmpty()) {
+            return pom;
+        }
+        PomEditor.Result added = PomEditor.add(pom, driver.get().coordinate(), driver.get().version(), RUNTIME);
+        if (added.changed()) {
+            reporter.success("Added " + driver.get().coordinate(),
+                    "the JDBC driver of the " + provider.artifactId() + " dev service");
+        }
+        return added.pom();
+    }
+
     /**
      * Takes away the provider of {@code removedId} unless one of {@code remainingIds} has the same, and the JUnit
-     * host when none of them has a dev service that starts under {@code mvn test}. The driver stays: the application may query the database itself.
+     * host when none of them has a dev service that starts under {@code mvn test}. The driver stays: the application
+     * may query the database itself.
      */
     public static PomEditor.Result unwire(String pom, String removedId, Collection<String> remainingIds,
                                           Reporter reporter) {

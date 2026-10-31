@@ -49,6 +49,8 @@ public final class PomDependencies {
     private static final String GROUP_ID = "groupId";
     private static final String ARTIFACT_ID = "artifactId";
     private static final String DEPENDENCY = "dependency";
+    private static final String DEPENDENCIES = "dependencies";
+    private static final String PROJECT = "project";
 
     /** A reader {@code try} closes, {@link XMLStreamReader} not being {@link AutoCloseable}. */
     private interface ClosingReader extends AutoCloseable {
@@ -122,7 +124,7 @@ public final class PomDependencies {
      */
     public static Map<ExtensionCoordinate, String> scopes(String pomXml) {
         Map<ExtensionCoordinate, String> scopes = new LinkedHashMap<>();
-        for (Map<String, String> dependency : dependencies(pomXml, List.of("project", "dependencies"))) {
+        for (Map<String, String> dependency : dependencies(pomXml, List.of(PROJECT, DEPENDENCIES))) {
             String scope = dependency.get("scope");
             coordinate(dependency).ifPresent(c -> scopes.putIfAbsent(c,
                     scope == null || scope.isBlank() ? "compile" : scope));
@@ -147,7 +149,7 @@ public final class PomDependencies {
                 continue;
             }
             for (Map<String, String> dependency : dependencies("<plugin>" + content + "</plugin>",
-                    List.of("plugin", "dependencies"))) {
+                    List.of("plugin", DEPENDENCIES))) {
                 coordinate(dependency).ifPresent(result::add);
             }
         }
@@ -412,8 +414,8 @@ public final class PomDependencies {
             return false;
         }
         var it = path.iterator();
-        return "project".equals(it.next())
-                && "dependencies".equals(it.next())
+        return PROJECT.equals(it.next())
+                && DEPENDENCIES.equals(it.next())
                 && DEPENDENCY.equals(it.next());
     }
 
@@ -423,8 +425,8 @@ public final class PomDependencies {
             return false;
         }
         var it = path.iterator();
-        return "project".equals(it.next())
-                && "dependencies".equals(it.next())
+        return PROJECT.equals(it.next())
+                && DEPENDENCIES.equals(it.next())
                 && DEPENDENCY.equals(it.next())
                 && child.equals(it.next());
     }

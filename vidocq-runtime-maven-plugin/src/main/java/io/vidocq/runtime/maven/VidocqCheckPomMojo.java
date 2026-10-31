@@ -92,6 +92,7 @@ import java.util.stream.Stream;
 public class VidocqCheckPomMojo extends AbstractMojo {
 
     private static final String VIDOCQ_RUNTIME_GROUP = "io.vidocq.runtime";
+    private static final String LOG_PREFIX = "Vidocq checkpom: ";
     private static final String CORE_CODEGEN = "vidocq-runtime-core-codegen";
     private static final String MAVEN_JAR_KEY = "org.apache.maven.plugins:maven-jar-plugin";
     private static final String MAVEN_COMPILER_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
@@ -164,7 +165,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         List<ExtensionCoordinate> onPlugin = vidocqPlugin == null ? List.of() : vidocqPlugin.getDependencies().stream()
                 .map(d -> new ExtensionCoordinate(d.getGroupId(), d.getArtifactId())).toList();
         return DevServiceWiring.missing(ids, new DevServiceWiring.Declared(onPlugin, scopes)).stream()
-                .map(gap -> "Vidocq checkpom: " + gap + ". `vidocq doctor --fix` declares it, as `vidocq extension add`"
+                .map(gap -> LOG_PREFIX + gap + ". `vidocq doctor --fix` declares it, as `vidocq extension add`"
                         + " does.")
                 .toList();
     }
@@ -252,7 +253,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         // core-codegen inherited from the parent has nothing actionable to verify.
         boolean hasOnlyCoreCodegen = codegenPaths.size() == 1 && codegenPaths.containsKey(CORE_CODEGEN);
         if (extensions.isEmpty() && (codegenPaths.isEmpty() || hasOnlyCoreCodegen)) {
-            getLog().debug("Vidocq checkpom: " + project.getArtifactId()
+            getLog().debug(LOG_PREFIX + project.getArtifactId()
                     + " has no Vidocq extension/codegen coupling, nothing to check");
             return;
         }
@@ -268,7 +269,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         issues.addAll(findVersionDrifts(extensions, codegenPaths));
 
         if (issues.isEmpty()) {
-            getLog().info("Vidocq checkpom: " + extensions.size() + " extension(s) and "
+            getLog().info(LOG_PREFIX + extensions.size() + " extension(s) and "
                     + codegenPaths.size() + " codegen path(s) — all aligned.");
             return;
         }
