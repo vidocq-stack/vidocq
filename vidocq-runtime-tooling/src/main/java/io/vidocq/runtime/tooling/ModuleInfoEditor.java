@@ -37,6 +37,10 @@ import java.util.regex.Pattern;
 public final class ModuleInfoEditor {
 
     private static final Pattern SPACES = Pattern.compile("\\s+");
+    private static final String OPENS = "opens ";
+    private static final String MARKER_PREFIX = "// vidocq:";
+    /** Splits a source into its lines, each with its line feed. */
+    private static final String LINE_ENDS = "(?<=\n)";
 
     /**
      * The id that marks a package opened for reflection — by {@code vidocq doctor --fix}, {@code
@@ -94,8 +98,8 @@ public final class ModuleInfoEditor {
         List<String> toOpen = new ArrayList<>();
         List<String> declared = declared(source);
         for (String pkg : new LinkedHashSet<>(packages)) {
-            if (!declared.contains("opens " + pkg)) {
-                toOpen.add("opens " + pkg);
+            if (!declared.contains(OPENS + pkg)) {
+                toOpen.add(OPENS + pkg);
             }
         }
         if (toOpen.isEmpty() || source.lastIndexOf('}') < 0) {
@@ -122,7 +126,7 @@ public final class ModuleInfoEditor {
         String requiresModule = module == null ? null : normalize("requires " + module);
         StringBuilder out = new StringBuilder();
         boolean changed = false;
-        for (String line : source.split("(?<=\n)")) {
+        for (String line : source.split(LINE_ENDS)) {
             String code = line.contains("//") ? line.substring(0, line.indexOf("//")) : line;
             boolean marked = line.stripTrailing().endsWith(marker);
             boolean ofModule = requiresModule != null
@@ -151,34 +155,44 @@ public final class ModuleInfoEditor {
      * the blank line before each.
      */
     private static Split split(String source) {
-        List<String> lines = new ArrayList<>(List.of(source.split("(?<=\n)")));
         List<String> reflection = new ArrayList<>();
         List<String> kept = new ArrayList<>();
         boolean underHeader = false;
-        String reflectionMarker = marker(REFLECTION);
-        for (String line : lines) {
+        for (String line : source.split(LINE_ENDS)) {
             String stripped = line.strip();
             if (stripped.equals(REFLECTION_HEADER) || stripped.equals(LEGACY_COMPLETE_HEADER)) {
                 if (!kept.isEmpty() && kept.getLast().isBlank()) {
                     kept.removeLast();
                 }
                 underHeader = true;
-                continue;
-            }
-            String code = normalize((line.contains("//") ? line.substring(0, line.indexOf("//")) : line)
-                    .replace(";", ""));
-            boolean marked = stripped.endsWith(reflectionMarker);
-            boolean opens = code.startsWith("opens ");
-            if (marked || underHeader && opens && !stripped.contains("// vidocq:")) {
+            } else if (opensForReflection(stripped, underHeader)) {
+                String code = code(stripped);
                 if (!reflection.contains(code)) {
                     reflection.add(code);
                 }
-                continue;
+            } else {
+                underHeader = false;
+                kept.add(line);
             }
-            underHeader = false;
-            kept.add(line);
         }
         return new Split(String.join("", kept), reflection);
+    }
+
+    /**
+     * Whether a line opens a package for reflection: marked {@code // vidocq:reflection}, or, right under a header, an
+     * {@code opens} that no extension marks, as earlier versions wrote them.
+     */
+    private static boolean opensForReflection(String stripped, boolean underHeader) {
+        if (stripped.endsWith(marker(REFLECTION))) {
+            return true;
+        }
+        return underHeader && code(stripped).startsWith(OPENS) && !stripped.contains(MARKER_PREFIX);
+    }
+
+    /** The directive of a line, without its comment nor its {@code ;}, normalized. */
+    private static String code(String line) {
+        int comment = line.indexOf("//");
+        return normalize((comment < 0 ? line : line.substring(0, comment)).replace(";", ""));
     }
 
     /** {@code rest} with the block of {@code reflection} directives before its closing brace, after a blank line. */
@@ -204,9 +218,9 @@ public final class ModuleInfoEditor {
     private static int afterLastExtensionLine(String source) {
         int at = -1;
         int offset = 0;
-        for (String line : source.split("(?<=\n)")) {
+        for (String line : source.split(LINE_ENDS)) {
             offset += line.length();
-            if (line.contains("// vidocq:")) {
+            if (line.contains(MARKER_PREFIX)) {
                 at = offset;
             }
         }
@@ -218,7 +232,7 @@ public final class ModuleInfoEditor {
     }
 
     private static String marker(String id) {
-        return "// vidocq:" + id;
+        return MARKER_PREFIX + id;
     }
 
     /** The directives a source declares, normalized. */
@@ -228,7 +242,7 @@ public final class ModuleInfoEditor {
             String code = line.contains("//") ? line.substring(0, line.indexOf("//")) : line;
             for (String statement : code.split(";")) {
                 String normalized = normalize(statement);
-                if (normalized.startsWith("requires ") || normalized.startsWith("opens ")
+                if (normalized.startsWith("requires ") || normalized.startsWith(OPENS)
                         || normalized.startsWith("exports ")) {
                     declared.add(normalized);
                 }
