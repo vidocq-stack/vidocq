@@ -60,8 +60,6 @@ import java.util.Set;
       threadSafe = true)
 public class VidocqCompleteModuleInfoMojo extends AbstractMojo {
 
-    private static final String MARKER = "// added by vidocq:complete-module-info";
-
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
 
@@ -193,7 +191,9 @@ public class VidocqCompleteModuleInfoMojo extends AbstractMojo {
 
     /** Inserts the directives (with a marker comment) just before the module's closing brace. */
     static String inject(String source, List<String> directives) {
-        return ModuleInfoEditor.appendBlock(source, MARKER, directives);
+        // The block vidocq doctor --fix and vidocq dev write, one for the module (BUG-20261031-14).
+        return ModuleInfoEditor.openForReflection(source, directives.stream()
+                .map(d -> d.replaceFirst("^opens\\s+", "").replace(";", "").strip()).toList());
     }
 
     private static String stripLineComment(String line) {

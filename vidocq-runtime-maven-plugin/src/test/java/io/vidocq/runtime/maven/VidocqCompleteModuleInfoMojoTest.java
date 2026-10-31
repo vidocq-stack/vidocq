@@ -44,7 +44,9 @@ class VidocqCompleteModuleInfoMojoTest {
 
         String updated = VidocqCompleteModuleInfoMojo.inject(MODULE_INFO, add);
         assertTrue(updated.contains("opens db.migration;"), updated);
-        assertTrue(updated.contains("added by vidocq:complete-module-info"), updated);
+        // One block for the module, the one vidocq doctor --fix and vidocq dev write, each line marked.
+        assertTrue(updated.contains(io.vidocq.runtime.tooling.ModuleInfoEditor.REFLECTION_HEADER), updated);
+        assertTrue(updated.contains("opens db.migration; // vidocq:reflection"), updated);
         // inserted before the module's closing brace
         assertTrue(updated.indexOf("opens db.migration;") < updated.lastIndexOf('}'), updated);
         // existing content preserved

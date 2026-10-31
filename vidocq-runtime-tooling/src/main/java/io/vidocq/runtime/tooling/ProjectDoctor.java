@@ -69,8 +69,6 @@ public final class ProjectDoctor {
     private static final String WRAPPER_PROPERTIES = ".mvn/wrapper/maven-wrapper.properties";
     private static final String MODULE_INFO = "src/main/java/module-info.java";
     private static final String CLASSES = "target/classes";
-    /** The comment over the {@code opens} written for reflection, shared with {@code vidocq:complete-module-info}. */
-    public static final String REFLECTION_MARKER = "// added by vidocq: the runtime reaches these packages by reflection";
     private static final ExtensionCoordinate INDEXER =
             new ExtensionCoordinate("io.vidocq.runtime", "vidocq-runtime-core-codegen");
     private static final String PORT_KEY = "vidocq.http.port";
@@ -322,8 +320,7 @@ public final class ProjectDoctor {
             return false;
         }
         Path file = projectDir.resolve(MODULE_INFO);
-        List<String> directives = unopened.keySet().stream().map(pkg -> "opens " + pkg + ";").toList();
-        Files.writeString(file, ModuleInfoEditor.appendBlock(Files.readString(file), REFLECTION_MARKER, directives));
+        Files.writeString(file, ModuleInfoEditor.openForReflection(Files.readString(file), unopened.keySet()));
         reporter.success("module-info.java opens " + String.join(", ", unopened.keySet()),
                 "the runtime reaches them by reflection");
         return true;

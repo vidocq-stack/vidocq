@@ -67,8 +67,7 @@ public final class ModuleInfoOpener {
         List<String> directives = toOpen.stream().map(pkg -> "opens " + pkg + ";").toList();
         // The descriptor first: one that cannot be read leaves the source as it was.
         byte[] patched = withOpens(Files.readAllBytes(moduleInfoClass), toOpen);
-        Files.writeString(moduleInfoSource,
-                ModuleInfoEditor.appendBlock(source, ProjectDoctor.REFLECTION_MARKER, directives));
+        Files.writeString(moduleInfoSource, ModuleInfoEditor.openForReflection(source, toOpen));
         Files.write(moduleInfoClass, patched);
         return directives;
     }

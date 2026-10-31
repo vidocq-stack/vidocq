@@ -697,6 +697,15 @@ A fixable ✘ or ⚠ is followed by `↳ Fix: vidocq doctor --fix`. `--fix` firs
 * it opens the packages the runtime reaches by reflection, in the block `vidocq:complete-module-info` writes [.tag-new]#NEW#;
 * it writes a missing Maven wrapper, and moves an older wrapper to the Maven Vidocq is built with.
 
+[#module-info-layout]
+[.tag-new]#NEW# The tooling keeps `module-info.java` in one layout, whatever wrote it last: the lines of each extension,
+marked `// vidocq:<id>`, together after the lines you wrote; then one block, last, of the packages opened for
+reflection, under `// added by vidocq: the runtime reaches these packages by reflection`, each marked
+`// vidocq:reflection`. `vidocq extension add` puts its lines with the other extensions', and `doctor --fix`,
+`vidocq:complete-module-info` and `vidocq dev` extend that block instead of writing another. No extension has the id
+`reflection`, so `extension remove` never takes such a line away. A file written before, with several blocks, is
+merged into that layout on the next write.
+
 A created project reports no warning. `doctor` asks for the `opens` the catalog extensions need, Flyway's
 `opens db.migration` included, and for those of the packages reached by reflection, with the same code as
 `vidocq:check-module-info` at `process-classes` [.tag-new]#NEW#; an extension

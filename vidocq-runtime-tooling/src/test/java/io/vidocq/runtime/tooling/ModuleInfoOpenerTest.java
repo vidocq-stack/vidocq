@@ -80,7 +80,8 @@ class ModuleInfoOpenerTest {
 
         assertEquals(List.of("opens com.acme.demo.book;"), written);
         String text = Files.readString(source);
-        assertTrue(text.contains(ProjectDoctor.REFLECTION_MARKER + "\n    opens com.acme.demo.book;\n}"), text);
+        assertTrue(text.contains(ModuleInfoEditor.REFLECTION_HEADER
+                + "\n    opens com.acme.demo.book; // vidocq:reflection\n}"), text);
         assertEquals(Set.of("com.acme.demo", "com.acme.demo.book"), opens(compiled));
     }
 

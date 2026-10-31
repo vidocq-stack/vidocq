@@ -20,6 +20,8 @@
 package io.vidocq.runtime.tooling;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -35,6 +37,19 @@ import java.util.regex.Pattern;
 public final class ModuleInfoEditor {
 
     private static final Pattern SPACES = Pattern.compile("\\s+");
+
+    /**
+     * The id that marks a package opened for reflection — by {@code vidocq doctor --fix}, {@code
+     * vidocq:complete-module-info} or {@code vidocq dev} — as {@code // vidocq:<id>} marks an extension's lines. No
+     * extension has it, so {@code extension remove} never takes such a line away.
+     */
+    public static final String REFLECTION = "reflection";
+
+    /** The comment over the block of packages opened for reflection, which comes last in the module. */
+    public static final String REFLECTION_HEADER = "// added by vidocq: the runtime reaches these packages by reflection";
+
+    /** The header {@code vidocq:complete-module-info} wrote before BUG-20261031-14; its block is merged too. */
+    private static final String LEGACY_COMPLETE_HEADER = "// added by vidocq:complete-module-info";
 
     /** Outcome of an edit: the (possibly unchanged) source and whether it changed. */
     public record Result(String source, boolean changed) {}
@@ -60,12 +75,36 @@ public final class ModuleInfoEditor {
         if (block.isEmpty()) {
             return new Result(source, false);
         }
-        int close = source.lastIndexOf('}');
-        if (close < 0) {
+        if (source.lastIndexOf('}') < 0) {
             throw new IllegalArgumentException("Not a valid module-info.java: missing closing brace.");
         }
-        int lineStart = source.lastIndexOf('\n', close) + 1;
-        return new Result(source.substring(0, lineStart) + block + source.substring(lineStart), true);
+        Split split = split(source);
+        String rest = split.rest();
+        int at = afterLastExtensionLine(rest);
+        return new Result(emit(rest.substring(0, at) + block + rest.substring(at), split.reflection()), true);
+    }
+
+    /**
+     * Opens each of {@code packages} the source does not open yet, in the one block of packages opened for
+     * reflection, last in the module, each line marked {@code // vidocq:reflection}. Older blocks — several headers,
+     * extension lines between them, the header {@code vidocq:complete-module-info} wrote — are merged into it. The
+     * source is returned as is when every package is opened already, or without a closing brace.
+     */
+    public static String openForReflection(String source, Collection<String> packages) {
+        List<String> toOpen = new ArrayList<>();
+        List<String> declared = declared(source);
+        for (String pkg : new LinkedHashSet<>(packages)) {
+            if (!declared.contains("opens " + pkg)) {
+                toOpen.add("opens " + pkg);
+            }
+        }
+        if (toOpen.isEmpty() || source.lastIndexOf('}') < 0) {
+            return source;
+        }
+        Split split = split(source);
+        List<String> reflection = new ArrayList<>(split.reflection());
+        reflection.addAll(toOpen);
+        return emit(split.rest(), reflection);
     }
 
     /**
@@ -73,6 +112,12 @@ public final class ModuleInfoEditor {
      * {@code module} however it was written: the module is gone with the dependency.
      */
     public static Result remove(String source, String id, String module) {
+        Split split = split(source);
+        Result removed = removeFrom(split.rest(), id, module);
+        return removed.changed() ? new Result(emit(removed.source(), split.reflection()), true) : new Result(source, false);
+    }
+
+    private static Result removeFrom(String source, String id, String module) {
         String marker = marker(id);
         String requiresModule = module == null ? null : normalize("requires " + module);
         StringBuilder out = new StringBuilder();
@@ -97,21 +142,79 @@ public final class ModuleInfoEditor {
         return directives.stream().filter(d -> !declared.contains(normalize(d))).toList();
     }
 
+    /** A source without its block of packages opened for reflection, and that block's directives, in order. */
+    private record Split(String rest, List<String> reflection) {}
+
     /**
-     * Inserts {@code directives} (written with their {@code ;}) before the module's closing brace, under a
-     * {@code comment} line: the block {@code vidocq:complete-module-info} and {@code vidocq doctor --fix} write for
-     * the {@code opens} no extension owns. The source is returned as is without a directive or a closing brace.
+     * Takes the packages opened for reflection out of {@code source}: the lines marked {@code // vidocq:reflection},
+     * and the unmarked {@code opens} right under a header, as earlier versions wrote them; the headers go too, with
+     * the blank line before each.
      */
-    public static String appendBlock(String source, String comment, List<String> directives) {
+    private static Split split(String source) {
+        List<String> lines = new ArrayList<>(List.of(source.split("(?<=\n)")));
+        List<String> reflection = new ArrayList<>();
+        List<String> kept = new ArrayList<>();
+        boolean underHeader = false;
+        String reflectionMarker = marker(REFLECTION);
+        for (String line : lines) {
+            String stripped = line.strip();
+            if (stripped.equals(REFLECTION_HEADER) || stripped.equals(LEGACY_COMPLETE_HEADER)) {
+                if (!kept.isEmpty() && kept.getLast().isBlank()) {
+                    kept.removeLast();
+                }
+                underHeader = true;
+                continue;
+            }
+            String code = normalize((line.contains("//") ? line.substring(0, line.indexOf("//")) : line)
+                    .replace(";", ""));
+            boolean marked = stripped.endsWith(reflectionMarker);
+            boolean opens = code.startsWith("opens ");
+            if (marked || underHeader && opens && !stripped.contains("// vidocq:")) {
+                if (!reflection.contains(code)) {
+                    reflection.add(code);
+                }
+                continue;
+            }
+            underHeader = false;
+            kept.add(line);
+        }
+        return new Split(String.join("", kept), reflection);
+    }
+
+    /** {@code rest} with the block of {@code reflection} directives before its closing brace, after a blank line. */
+    private static String emit(String rest, List<String> reflection) {
+        if (reflection.isEmpty()) {
+            return rest;
+        }
+        int close = rest.lastIndexOf('}');
+        int lineStart = rest.lastIndexOf('\n', close) + 1;
+        // One blank line before the block, whatever the source left before its closing brace.
+        String before = rest.substring(0, lineStart).stripTrailing() + "\n";
+        StringBuilder block = new StringBuilder("\n    ").append(REFLECTION_HEADER).append('\n');
+        for (String directive : reflection) {
+            block.append("    ").append(directive).append("; ").append(marker(REFLECTION)).append('\n');
+        }
+        return before + block + rest.substring(lineStart);
+    }
+
+    /**
+     * Where an extension's lines go in {@code source}: after the last line marked for an extension, so that they stay
+     * together, else on the line of the closing brace.
+     */
+    private static int afterLastExtensionLine(String source) {
+        int at = -1;
+        int offset = 0;
+        for (String line : source.split("(?<=\n)")) {
+            offset += line.length();
+            if (line.contains("// vidocq:")) {
+                at = offset;
+            }
+        }
+        if (at >= 0) {
+            return at;
+        }
         int close = source.lastIndexOf('}');
-        if (close < 0 || directives.isEmpty()) {
-            return source;
-        }
-        StringBuilder block = new StringBuilder("\n    ").append(comment).append('\n');
-        for (String directive : directives) {
-            block.append("    ").append(directive).append('\n');
-        }
-        return source.substring(0, close) + block + source.substring(close);
+        return source.lastIndexOf('\n', close) + 1;
     }
 
     private static String marker(String id) {

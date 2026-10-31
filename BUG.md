@@ -5,6 +5,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261031-14 — Each fix adds another "added by vidocq" block to `module-info.java`, with extension lines between them
+
+- **Date**: 2026-10-31
+- **Status**: FIXED on `fix/module-info-one-block`: `ModuleInfoEditor` keeps one layout. The extension lines (`// vidocq:<id>`) stay together after the hand-written ones; the packages opened for reflection go in one block, last, under one header, each line marked `// vidocq:reflection` (an id no extension has, so `extension remove` keeps them). `openForReflection` extends that block for `doctor --fix`, `vidocq:complete-module-info` and the dev writer of BUG-20261031-10; `add` and `remove` merge older blocks (several headers, unmarked `opens` under them, the `complete-module-info` header) on the next write (`ModuleInfoEditorTest.openingForReflectionTwiceExtendsTheOneBlock`, `anExtensionAddedAfterAFixGoesBeforeTheBlock`, `severalOldBlocksAreMergedOnTheNextWrite`, `removingAnExtensionKeepsTheBlock`). Checked with the CLI built from the branch on a created application: five chapters (doctor --fix, extension add, doctor --fix, complete-module-info, the dev writer, extension add), then a step-11 file with three headers, one block each time, `package` green
+- **Reported by**: the vidocq-tutorial session (T3)
+- **Minimal reproduction**: after several chapters, `module-info.java` holds three identical "// added by vidocq: the runtime reaches these packages by reflection" headers, with the `requires` of later `extension add` between them.
+- **Cause hypothesis**: each fix appended a new block before the closing brace, and `extension add` wrote before the closing brace too, so after the latest block.
+
 ## BUG-20261031-11 — `check-module-info` throws a NullPointerException on its session; the hand-written plugin.xml did not declare it
 
 - **Date**: 2026-10-31

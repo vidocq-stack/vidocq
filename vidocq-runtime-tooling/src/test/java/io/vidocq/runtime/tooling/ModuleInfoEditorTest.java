@@ -90,4 +90,118 @@ class ModuleInfoEditorTest {
         assertFalse(r.changed());
         assertEquals(src, r.source());
     }
+
+    // -------------------------------------------------------------------------
+    // One block of tool-written lines (BUG-20261031-14, tutorial T3)
+    // -------------------------------------------------------------------------
+
+    private static final String HEADER = ModuleInfoEditor.REFLECTION_HEADER;
+
+    /** The packages opened for reflection go in one block, last, each line marked so the tools recognise it. */
+    @Test
+    void openingForReflectionTwiceExtendsTheOneBlock() {
+        String once = ModuleInfoEditor.openForReflection(BARE, List.of("com.acme.todo.book"));
+        String twice = ModuleInfoEditor.openForReflection(once, List.of("com.acme.todo.loan", "com.acme.todo.book"));
+
+        assertEquals("""
+                module com.acme.todo {
+                    requires io.vidocq.runtime.core;
+
+                    %s
+                    opens com.acme.todo.book; // vidocq:reflection
+                    opens com.acme.todo.loan; // vidocq:reflection
+                }
+                """.formatted(HEADER), twice);
+    }
+
+    /** An extension added after a fix goes with the other extension lines, before the block. */
+    @Test
+    void anExtensionAddedAfterAFixGoesBeforeTheBlock() {
+        String fixed = ModuleInfoEditor.openForReflection(
+                ModuleInfoEditor.add(BARE, "cassini-rest", List.of("requires jakarta.ws.rs")).source(),
+                List.of("com.acme.todo.book"));
+
+        String added = ModuleInfoEditor.add(fixed, "knock-health",
+                List.of("requires io.vidocq.runtime.extensions.microprofile.knock")).source();
+
+        assertEquals("""
+                module com.acme.todo {
+                    requires io.vidocq.runtime.core;
+                    requires jakarta.ws.rs; // vidocq:cassini-rest
+                    requires io.vidocq.runtime.extensions.microprofile.knock; // vidocq:knock-health
+
+                    %s
+                    opens com.acme.todo.book; // vidocq:reflection
+                }
+                """.formatted(HEADER), added);
+    }
+
+    /**
+     * A file written before, with several headers and extension lines between them (the tutorial's step 11), is
+     * tidied on the next write: one header, the extension lines together, the opened packages marked.
+     */
+    @Test
+    void severalOldBlocksAreMergedOnTheNextWrite() {
+        String old = """
+                module com.acme.todo {
+                    requires io.vidocq.runtime.core;
+                    requires jakarta.ws.rs; // vidocq:cassini-rest
+
+                    %1$s
+                    opens com.acme.todo.book;
+                    requires jakarta.data; // vidocq:mansart-data
+
+                    %1$s
+                    opens com.acme.todo.loan;
+
+                    // added by vidocq:complete-module-info
+                    opens com.acme.todo.support;
+                }
+                """.formatted(HEADER);
+
+        String tidied = ModuleInfoEditor.add(old, "knock-health",
+                List.of("requires io.vidocq.runtime.extensions.microprofile.knock")).source();
+
+        assertEquals("""
+                module com.acme.todo {
+                    requires io.vidocq.runtime.core;
+                    requires jakarta.ws.rs; // vidocq:cassini-rest
+                    requires jakarta.data; // vidocq:mansart-data
+                    requires io.vidocq.runtime.extensions.microprofile.knock; // vidocq:knock-health
+
+                    %s
+                    opens com.acme.todo.book; // vidocq:reflection
+                    opens com.acme.todo.loan; // vidocq:reflection
+                    opens com.acme.todo.support; // vidocq:reflection
+                }
+                """.formatted(HEADER), tidied);
+    }
+
+    /** Removing an extension leaves the opened packages, which no extension owns, and a hand-written line alone. */
+    @Test
+    void removingAnExtensionKeepsTheBlock() {
+        String src = ModuleInfoEditor.openForReflection(
+                ModuleInfoEditor.add(BARE, "cassini-rest", List.of("requires jakarta.ws.rs")).source(),
+                List.of("com.acme.todo.book"));
+
+        String removed = ModuleInfoEditor.remove(src, "cassini-rest", "jakarta.ws.rs").source();
+
+        assertEquals("""
+                module com.acme.todo {
+                    requires io.vidocq.runtime.core;
+
+                    %s
+                    opens com.acme.todo.book; // vidocq:reflection
+                }
+                """.formatted(HEADER), removed);
+    }
+
+    /** A package the developer opened by hand is not opened again, nor moved. */
+    @Test
+    void aPackageOpenedByHandIsLeftWhereItIs() {
+        String src = BARE.replace("requires io.vidocq.runtime.core;",
+                "requires io.vidocq.runtime.core;\n    opens com.acme.todo.book;");
+
+        assertEquals(src, ModuleInfoEditor.openForReflection(src, List.of("com.acme.todo.book")));
+    }
 }
