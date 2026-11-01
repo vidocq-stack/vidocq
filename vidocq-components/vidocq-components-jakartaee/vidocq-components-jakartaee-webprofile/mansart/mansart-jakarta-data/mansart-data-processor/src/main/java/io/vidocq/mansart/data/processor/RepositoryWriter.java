@@ -1246,12 +1246,6 @@ final class RepositoryWriter {
     }
 
     /** Walk the supertype chain looking for {@code BasicRepository<T, K>} or {@code CrudRepository<T, K>}. */
-    /** The entity {@code repo} stores, or {@code null} when it is not a repository of one entity. */
-    TypeElement entityOf(TypeElement repo) {
-        TypeArgs args = findEntityAndKey(repo);
-        return args == null ? null : (TypeElement) args.entity.asElement();
-    }
-
     private TypeArgs findEntityAndKey(TypeElement repo) {
         for (TypeMirror itf : allInterfaces(repo)) {
             if (itf instanceof DeclaredType dt

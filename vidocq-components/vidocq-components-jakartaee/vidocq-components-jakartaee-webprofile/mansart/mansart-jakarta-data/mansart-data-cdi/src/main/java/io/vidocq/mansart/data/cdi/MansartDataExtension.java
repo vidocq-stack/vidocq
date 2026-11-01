@@ -199,7 +199,12 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
      * constructor of Mansart's. A class the application writes keeps its own name and stays a bean.
      */
     static boolean isForeignImplementation(Class<?> impl, Class<?> itf) {
-        if (!impl.getName().equals(itf.getName() + "_")) return false;
+        // A naming convention, not a class identity: the binary name of the interface followed by '_'.
+        String name = impl.getName();
+        String repository = itf.getName();
+        if (name.length() != repository.length() + 1 || !name.startsWith(repository) || !name.endsWith("_")) {
+            return false;
+        }
         try {
             for (var constructor : impl.getDeclaredConstructors()) {
                 var params = constructor.getParameterTypes();

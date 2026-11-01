@@ -163,7 +163,7 @@ public final class MansartProcessor extends AbstractProcessor {
      * entity's {@code _Entity}.
      */
     private void writeMissingMetamodel(TypeElement repo) {
-        TypeElement entity = repositoryWriter.entityOf(repo);
+        TypeElement entity = repositoryWriter.entityTypeOf(repo);
         if (entity == null || entityRegistry.get(entity.getQualifiedName().toString()) != null) return;
         String pkg = processingEnv.getElementUtils().getPackageOf(entity).getQualifiedName().toString();
         String metamodel = (pkg.isEmpty() ? "" : pkg + ".") + "_" + entity.getSimpleName();

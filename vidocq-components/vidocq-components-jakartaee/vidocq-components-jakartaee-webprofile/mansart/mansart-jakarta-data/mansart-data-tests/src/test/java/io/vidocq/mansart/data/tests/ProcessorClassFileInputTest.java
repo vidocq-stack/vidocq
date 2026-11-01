@@ -22,6 +22,8 @@ package io.vidocq.mansart.data.tests;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import io.vidocq.mansart.data.processor.DependencyHints;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -98,6 +100,25 @@ class ProcessorClassFileInputTest {
         assertThat(Files.readString(result.classes().resolve("META-INF/mansart-repositories.list"),
                 StandardCharsets.UTF_8)).contains("lib.Books=lib.BooksImpl");
         assertThat(result.classes().resolve(MARKER)).exists();
+        // The values the Vidocq codegen bundle declares for vidocq:generate.
+        assertThat(DependencyHints.CLASS_BYTE_HINTS).containsExactly("jakarta/data/repository/Repository");
+        assertThat(result.classes().resolve(DependencyHints.INDEX)).exists();
+    }
+
+    @Test
+    void aFindParameterOfATypeNoAttributeHasIsAnErrorNamingTheMethod() throws IOException {
+        var library = InProcessCompilation.compileLibrary(out.resolve("lib"), false, BOOK, BOOK_SOURCE, BOOKS,
+                repository("""
+                    @Find
+                    List<Book> publishedIn(Integer year);
+                """));
+        assertThat(library.success()).as(library.errors().toString()).isTrue();
+
+        var result = InProcessCompilation.processClassFiles(library.classes(), out.resolve("gen"), BOOK, BOOKS);
+
+        assertThat(result.errors()).anySatisfy(error -> assertThat(error)
+                .contains("lib.Books.publishedIn")
+                .contains("has no attribute of type java.lang.Integer"));
     }
 
     /**
