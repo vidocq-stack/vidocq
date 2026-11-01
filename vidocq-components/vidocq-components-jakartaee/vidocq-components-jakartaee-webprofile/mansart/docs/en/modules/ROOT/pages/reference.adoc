@@ -105,6 +105,34 @@ What the jars rely on:
 
 Entities use the **standard `jakarta.persistence` annotations**: `@Entity`, `@Table`, `@Id`, `@GeneratedValue`, `@Column`, `@Version`, `@Enumerated`, `@Embedded`/`@Embeddable`, `@ManyToOne`, `@OneToOne`, `@JoinColumn`, `@Transient`. The processor reads them at compile time; no other annotation set is recognized (the early zero-dep Mansart annotations were retired in M7-29).
 
+[#table-names]
+=== Table and column names [.tag-new]#NEW#
+
+Mansart chooses table and column names itself; the annotations change them.
+
+[cols="1,2,2",options="header"]
+|===
+| Name | Default | Examples
+| Table | the entity's simple class name in snake_case, plural | `Book` -> `books`, `OrderLine` -> `order_lines`, `Category` -> `categories`, `Address` -> `addresses`
+| Column | the attribute name in snake_case | `publishedOn` -> `published_on`
+| Foreign key column (`@ManyToOne`, `@OneToOne`) | the attribute name in snake_case, then `_id` | `author` -> `author_id`
+|===
+
+`@Table(name = "...")` (and its `schema`) chooses the table, `@Column(name = "...")` the column, `@JoinColumn(name = "...")` the foreign key column.
+
+IMPORTANT: The table default is **not** Jakarta Persistence's. Although entities use `@jakarta.persistence.Entity`, a Jakarta Persistence provider names the table after the entity name (`Book`), Mansart after the plural (`books`). `@Entity(name = "...")` does not change Mansart's table either: to keep a schema made for Jakarta Persistence, or created after the class name, put `@Table(name = "book")` on the entity.
+
+Mansart quotes every table and column name in its SQL, so the database must hold them in the same case. PostgreSQL stores unquoted names in lower case, which matches. H2 stores them in upper case: a migration's `CREATE TABLE books (...)` makes `BOOKS`. With H2, quote the names in the migration (`CREATE TABLE "books" (...)`) or add `DATABASE_TO_LOWER=TRUE` to the JDBC URL.
+
+When the table does not exist, the repository's first statement fails with a `MansartDataException` that names the entity, the table it looked for, how that name was chosen, and the ways out:
+
+----
+The table "books" of entity com.example.shelf.book.Book does not exist. Mansart names an entity's table after its
+class, in snake_case and plural (Book → books), not after the entity name as Jakarta Persistence does by default;
+@Entity(name = …) does not change it. Create the table (with Flyway, a migration in src/main/resources/db/migration),
+or give the existing one with @Table(name = "…") on Book.
+----
+
 [#enum-storage]
 An enum attribute is stored as `@Enumerated` says: `@Enumerated(EnumType.ORDINAL)`, or a bare `@Enumerated`, stores the constant's index in an integer column; `@Enumerated(EnumType.STRING)` stores its name. An enum with **no** `@Enumerated` stores its name — unlike Jakarta Persistence, whose default is the index. Mansart keeps the name because it survives a reordering of the constants and because existing tables already hold names. Declare `@Enumerated(EnumType.ORDINAL)` to get the index.
 

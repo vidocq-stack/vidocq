@@ -200,6 +200,23 @@ class PostgresqlCrudIntegrationTest {
         assertThat(p3.hasNext()).isFalse();
     }
 
+    /** MANSART-036: PostgreSQL's undefined_table (42P01) names the entity and the table Mansart looked for. */
+    @Test
+    void aMissingTableIsNamedWithTheEntityAndTheFixes() throws Exception {
+        try (Connection c = dataSource.getConnection(); Statement s = c.createStatement()) {
+            s.execute("DROP TABLE \"authors\"");
+        }
+
+        assertThatThrownBy(() -> authors.findAll())
+                .isInstanceOf(io.vidocq.mansart.data.core.MansartDataException.class)
+                .hasMessageContaining(Author.class.getName())
+                .hasMessageContaining("\"authors\"")
+                .hasMessageContaining("@Table(name = ");
+        assertThatThrownBy(() -> authors.save(newAuthor("Zola")))
+                .isInstanceOf(io.vidocq.mansart.data.core.MansartDataException.class)
+                .hasMessageContaining("\"authors\"");
+    }
+
     private static Author newAuthor(String name) {
         Author a = new Author();
         a.setName(name);

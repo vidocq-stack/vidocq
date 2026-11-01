@@ -84,6 +84,8 @@ public class Author {
 }
 ----
 
+TIP: `@Table(name = "authors")` is the default here: Mansart names a table after its class, in snake_case and plural (`Author` -> `authors`), not after the entity name as Jakarta Persistence does. xref:reference.adoc#table-names[Table and column names] gives the rules and the error a missing table raises.
+
 == A repository
 
 [source,java]

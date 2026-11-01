@@ -97,4 +97,20 @@ public interface Dialect {
 
     /** Maps a JDBC {@link SQLException} to a Jakarta-Data-shaped runtime exception. */
     RuntimeException translate(SQLException e);
+
+    /**
+     * Whether {@code e} says that the table a statement names does not exist (MANSART-036), so that the repository can
+     * name the table it looked for. The default recognises the SQL standard state {@code 42S02} (base table not found).
+     */
+    default boolean isUndefinedTable(SQLException e) {
+        return "42S02".equals(e.getSQLState());
+    }
+
+    /**
+     * A dialect's own advice for an undefined table {@code e}, added to the repository's message, or {@code null}
+     * (MANSART-036).
+     */
+    default String undefinedTableHint(SQLException e) {
+        return null;
+    }
 }

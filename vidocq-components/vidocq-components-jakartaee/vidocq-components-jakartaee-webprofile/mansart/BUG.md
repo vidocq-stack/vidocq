@@ -9,6 +9,29 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-036 — A missing table fails with a bare "SQL error", and the table naming rule is not documented
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `fix/missing-table-message`
+- **Severity**: medium (a schema made after the class name fails at the first request, with no hint)
+- **Symptom**: an entity `Book` without `@Table` and a Flyway migration creating `book`: the first repository call
+  failed with `MansartDataException: SQL error` (or "PostgreSQL SQL error", "H2 SQL error"), the table name only in the
+  driver's cause. Mansart looks for `books`; the rule (snake_case plural of the simple class name, `SqlNames`) was
+  documented only in `mansart-jakarta-data/README.md` and PLAN.md, not in the docs, and differs from Jakarta
+  Persistence's default (the entity name), although entities use `@jakarta.persistence.Entity`. Found while checking
+  MANSART-035 with a Vidocq application.
+- **Minimal reproduction**: `MissingTableTest` (H2: empty database, other tables, a table named by `@Table`, an
+  unquoted table stored in upper case); `PostgresqlCrudIntegrationTest.aMissingTableIsNamedWithTheEntityAndTheFixes`
+  (`pg-it`).
+- **Cause**: `RepositoryRuntime` ran every statement through `ConnectionScope.withConnection`, which wraps any
+  `SQLException` in a generic message; the dialects' `translate` knew no "undefined table" state.
+- **Fix**: `Dialect.isUndefinedTable` (default `42S02`; PostgreSQL `42P01`; H2 2.x `42S02`, `42S04` on an empty
+  database, `42S03` when a table of another case exists) and `Dialect.undefinedTableHint` (H2: quote the name or
+  `DATABASE_TO_LOWER=TRUE`); `RepositoryRuntime` runs its statements through one helper that turns such a failure into
+  a `MansartDataException` naming the entity, the table, whether the name is the default or `@Table`'s, and the fix
+  (`@Table(name = …)` or a migration). Docs: reference "Table and column names" (NEW), a tip in Getting started,
+  What's new.
+
 ## MANSART-035 — The exclusions on `vauban-api` strip the CDI API from a Vidocq codegen bundle's processor path
 
 - **Date**: 2026-11-01

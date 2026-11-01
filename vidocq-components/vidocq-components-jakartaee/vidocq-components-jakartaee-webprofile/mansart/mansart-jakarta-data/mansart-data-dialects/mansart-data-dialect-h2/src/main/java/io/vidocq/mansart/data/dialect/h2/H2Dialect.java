@@ -54,6 +54,28 @@ public final class H2Dialect extends AbstractSqlDialect {
         return new SqlFragment(sql, java.util.List.of());
     }
 
+    /** H2 2.x: a table of another case exists (a name created unquoted, so upper-cased). */
+    private static final String OTHER_CASE = "42S03";
+
+    /**
+     * H2 2.x: {@code 42S02} (error 42102) when the database has other tables, {@code 42S04} (error 42104) when it has
+     * none at all, {@code 42S03} (error 42103) when a table of another case exists.
+     */
+    @Override
+    public boolean isUndefinedTable(SQLException e) {
+        String state = e.getSQLState();
+        return "42S02".equals(state) || "42S04".equals(state) || OTHER_CASE.equals(state);
+    }
+
+    @Override
+    public String undefinedTableHint(SQLException e) {
+        return OTHER_CASE.equals(e.getSQLState())
+                ? "H2 has a table of another case: an unquoted CREATE TABLE stores its name in upper case, and Mansart"
+                        + " quotes its names. Quote the name in the migration, or add DATABASE_TO_LOWER=TRUE to the JDBC"
+                        + " URL."
+                : null;
+    }
+
     @Override
     public RuntimeException translate(SQLException e) {
         String state = e.getSQLState();

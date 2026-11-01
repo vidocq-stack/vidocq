@@ -115,7 +115,7 @@ public final class RepositoryRuntime {
         }
         sb.append(')');
         String sql = sb.toString();
-        ConnectionScope.withConnection(bridge, dataSource, c -> {
+        withConnection(model, c -> {
             try (Statement s = c.createStatement()) { s.execute(sql); return null; }
         });
     }
@@ -135,7 +135,7 @@ public final class RepositoryRuntime {
         }
         // Existing id → upsert via dialect-specific MERGE.
         SqlFragment frag = dialect.merge(model);
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 bindAllAttributes(ps, model, entity);
                 ps.executeUpdate();
@@ -150,7 +150,7 @@ public final class RepositoryRuntime {
         // Use the explicit-column form so PostgreSQL returns only the id column (PG with the
         // RETURN_GENERATED_KEYS flag returns RETURNING * which would expose every column).
         String[] keyColumns = new String[]{ model.id().columnName() };
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql(), keyColumns)) {
                 bindWritableAttributes(ps, model, entity);
                 ps.executeUpdate();
@@ -175,7 +175,7 @@ public final class RepositoryRuntime {
     public <E, K> Optional<E> findById(EntityModel<E> model, K id) {
         Where where = Where.eq(model.id());
         SqlFragment frag = dialect.select(model, where, OrderBy.NONE, Pagination.NONE);
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 dialect.bind(ps, 1, id, model.id().javaType());
                 try (ResultSet rs = ps.executeQuery()) {
@@ -188,7 +188,7 @@ public final class RepositoryRuntime {
 
     public <E> List<E> findAll(EntityModel<E> model) {
         SqlFragment frag = dialect.select(model, Where.ALWAYS_TRUE, OrderBy.NONE, Pagination.NONE);
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql());
                  ResultSet rs = ps.executeQuery()) {
                 List<E> result = new ArrayList<>();
@@ -200,7 +200,7 @@ public final class RepositoryRuntime {
 
     public <E, K> boolean deleteById(EntityModel<E> model, K id) {
         SqlFragment frag = dialect.delete(model, Where.eq(model.id()));
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 dialect.bind(ps, 1, id, model.id().javaType());
                 return ps.executeUpdate() > 0;
@@ -217,7 +217,7 @@ public final class RepositoryRuntime {
 
     public <E> long count(EntityModel<E> model) {
         String sql = "SELECT COUNT(*) FROM " + qualifiedTable(model);
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(sql);
                  ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? rs.getLong(1) : 0L;
@@ -238,7 +238,7 @@ public final class RepositoryRuntime {
     /** {@link #queryList(EntityModel, Where, OrderBy, Object...)} with a SQL page, such as a LIMIT. */
     <E> List<E> queryList(EntityModel<E> model, Where where, OrderBy orderBy, Pagination pagination, Object... args) {
         SqlFragment frag = dialect.select(model, where, orderBy, pagination);
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
@@ -252,7 +252,7 @@ public final class RepositoryRuntime {
 
     public <E> Optional<E> queryOne(EntityModel<E> model, Where where, Object... args) {
         SqlFragment frag = dialect.select(model, where, OrderBy.NONE, Pagination.NONE);
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
@@ -275,7 +275,7 @@ public final class RepositoryRuntime {
         SqlFragment frag = dialect.selectColumns(model,
                 java.util.List.of(new io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn.Expr("COUNT(*)")),
                 where, OrderBy.NONE, Pagination.NONE);
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
@@ -314,7 +314,7 @@ public final class RepositoryRuntime {
         SqlFragment frag = dialect.selectColumns(model,
                 java.util.List.of(new io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn.Leaf(attr)),
                 where, orderBy, pagination);
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
@@ -353,7 +353,7 @@ public final class RepositoryRuntime {
             cols.add(new io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn.Leaf(a));
         }
         SqlFragment frag = dialect.selectColumns(model, cols, where, orderBy, pagination);
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
@@ -376,7 +376,7 @@ public final class RepositoryRuntime {
                                   io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn col,
                                   Class<T> resultType, Where where, Object[] args) {
         SqlFragment frag = dialect.selectColumns(model, java.util.List.of(col), where, OrderBy.NONE, Pagination.NONE);
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
@@ -398,7 +398,7 @@ public final class RepositoryRuntime {
                 (pageRequest.page() - 1) * pageRequest.size(),
                 pageRequest.size());
         SqlFragment frag = dialect.select(model, where, orderBy, pag);
-        List<E> content = ConnectionScope.withConnection(bridge, dataSource, c -> {
+        List<E> content = withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
@@ -456,7 +456,7 @@ public final class RepositoryRuntime {
         Where finalWhere = combined;
         Object[] finalArgs = effectiveArgs;
 
-        List<E> queryResult = ConnectionScope.withConnection(bridge, dataSource, c -> {
+        List<E> queryResult = withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, finalWhere, finalArgs, 1, new int[]{0});
                 try (ResultSet rs = ps.executeQuery()) {
@@ -548,7 +548,7 @@ public final class RepositoryRuntime {
 
     public <E> long deleteWhere(EntityModel<E> model, Where where, Object... args) {
         SqlFragment frag = dialect.delete(model, where);
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 WhereBinder.bind(dialect, ps, where, args, 1, new int[]{0});
                 return (long) ps.executeUpdate();
@@ -572,7 +572,7 @@ public final class RepositoryRuntime {
         int whereIdx = selFrag.sql().indexOf(" WHERE ");
         if (whereIdx >= 0) sb.append(selFrag.sql().substring(whereIdx));
         String sql = sb.toString();
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(sql)) {
                 int idx = 1;
                 for (int i = 0; i < setArgs.size(); i++) {
@@ -588,7 +588,7 @@ public final class RepositoryRuntime {
     public <E> long executeUpdate(EntityModel<E> model, java.util.List<Attribute<?, ?>> attributes,
                                   Where where, Object... args) {
         SqlFragment frag = dialect.updateSet(model, attributes, where);
-        return ConnectionScope.withConnection(bridge, dataSource, c -> {
+        return withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 int idx = 1;
                 for (int i = 0; i < attributes.size(); i++) {
@@ -639,7 +639,7 @@ public final class RepositoryRuntime {
         Object oldVersion = ver == null ? null : bumpVersion(model, ver, entity);
         Where where = ver == null ? Where.eq(model.id()) : Where.and(Where.eq(model.id()), Where.eq(ver));
         SqlFragment frag = dialect.update(model, where);
-        int updated = ConnectionScope.withConnection(bridge, dataSource, c -> {
+        int updated = withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 int idx = bindNonIdAttributes(ps, model, entity);
                 dialect.bind(ps, idx++, id, model.id().javaType());
@@ -668,7 +668,7 @@ public final class RepositoryRuntime {
         Object version = ver == null ? null : readAttribute(ver, entity);
         Where where = ver == null ? Where.eq(model.id()) : Where.and(Where.eq(model.id()), Where.eq(ver));
         SqlFragment frag = dialect.delete(model, where);
-        int affected = ConnectionScope.withConnection(bridge, dataSource, c -> {
+        int affected = withConnection(model, c -> {
             try (PreparedStatement ps = c.prepareStatement(frag.sql())) {
                 dialect.bind(ps, 1, id, model.id().javaType());
                 if (ver != null) dialect.bind(ps, 2, version, ver.javaType());
@@ -790,6 +790,23 @@ public final class RepositoryRuntime {
 
     private Class<?> bindType(Attribute<?, ?> a) {
         return ColumnValues.columnType(a); // a reference binds its FK id as Long — M3b refines.
+    }
+
+    /**
+     * Runs {@code action} on a connection for {@code model}'s statements; a failure because the entity's table does not
+     * exist becomes a {@link MissingTable} error naming the entity and the table (MANSART-036).
+     */
+    private <T> T withConnection(EntityModel<?> model, ConnectionScope.SqlAction<T> action) {
+        try {
+            return ConnectionScope.withConnection(bridge, dataSource, action);
+        } catch (RuntimeException e) {
+            for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+                if (cause instanceof SQLException sql && dialect.isUndefinedTable(sql)) {
+                    throw MissingTable.of(model, qualifiedTable(model), dialect.undefinedTableHint(sql), e);
+                }
+            }
+            throw e;
+        }
     }
 
     private String qualifiedTable(EntityModel<?> model) {

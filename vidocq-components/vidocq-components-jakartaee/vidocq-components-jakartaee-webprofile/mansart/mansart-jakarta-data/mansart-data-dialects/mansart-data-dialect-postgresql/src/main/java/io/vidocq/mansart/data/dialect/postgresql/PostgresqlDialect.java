@@ -62,6 +62,12 @@ public final class PostgresqlDialect extends AbstractSqlDialect {
         return new SqlFragment(sql, java.util.List.of());
     }
 
+    /** PostgreSQL's {@code undefined_table}. */
+    @Override
+    public boolean isUndefinedTable(SQLException e) {
+        return "42P01".equals(e.getSQLState());
+    }
+
     @Override
     public RuntimeException translate(SQLException e) {
         String state = e.getSQLState();
