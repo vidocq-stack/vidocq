@@ -110,8 +110,60 @@ class ProjectDoctorTest {
 
     @Test
     void theProjectChecksAreNamed(@TempDir Path dir) throws IOException {
-        assertEquals(Set.of("Codegen bundles", "Vauban indexer", "Module directives", "Dev services", "Maven version",
-                "HTTP port"), check(create(dir, Set.of("cassini-rest"), false)).keySet());
+        assertEquals(Set.of("Codegen bundles", "Vauban indexer", "Dependency codegen", "Module directives",
+                "Dev services", "Maven version", "HTTP port"), check(create(dir, Set.of("cassini-rest"), false)).keySet());
+    }
+
+    // -------------------------------------------------------------------------
+    // Dependency codegen (vidocq:generate)
+    // -------------------------------------------------------------------------
+
+    /** From 0.4.0 the parent runs vidocq:generate on every build: a created project needs nothing of its own. */
+    @Test
+    void theParentRunsTheDependencyCodegen(@TempDir Path dir) throws IOException {
+        Diagnostic d = check(create(dir, Set.of("cassini-rest"), false)).get("Dependency codegen");
+
+        assertEquals(Diagnostic.Status.OK, d.status());
+        assertTrue(d.detail().contains("vidocq-runtime-parent"), d.detail());
+    }
+
+    @Test
+    void anOlderParentLeavesTheDependencyJarsAsTheyAre(@TempDir Path dir) throws IOException {
+        Diagnostic d = check(create(dir, Set.of("cassini-rest"), false, OLD_PARENT)).get("Dependency codegen");
+
+        assertEquals(Diagnostic.Status.WARN, d.status());
+        assertTrue(d.hint().contains("<goal>generate</goal>"), d.hint());
+    }
+
+    /** 0.4.0-RC1 came before the parent bound the goal. */
+    @Test
+    void theFirstReleaseCandidateDoesNotRunIt() {
+        assertFalse(ProjectScaffolder.parentRunsGenerate("0.4.0-RC1"));
+        assertTrue(ProjectScaffolder.parentRunsGenerate("0.4.0-RC2"));
+        assertTrue(ProjectScaffolder.parentRunsGenerate("0.4.0-SNAPSHOT"));
+        assertTrue(ProjectScaffolder.parentRunsGenerate("0.4.0"));
+        assertTrue(ProjectScaffolder.parentRunsGenerate("1.0.0"));
+        assertFalse(ProjectScaffolder.parentRunsGenerate("0.3.0"));
+    }
+
+    @Test
+    void anExecutionOfItsOwnRunsItUnderAnOlderParent(@TempDir Path dir) throws IOException {
+        Path project = create(dir, Set.of("cassini-rest"), false, OLD_PARENT);
+        edit(project.resolve("pom.xml"), "<goal>package</goal>", "<goal>generate</goal><goal>package</goal>");
+
+        assertEquals(Diagnostic.Status.OK, check(project).get("Dependency codegen").status());
+    }
+
+    @Test
+    void skippingItIsAWarning(@TempDir Path dir) throws IOException {
+        Path project = create(dir, Set.of("cassini-rest"), false);
+        edit(project.resolve("pom.xml"), "<properties>",
+                "<properties>\n        <vidocq.generate.skip>true</vidocq.generate.skip>");
+
+        Diagnostic d = check(project).get("Dependency codegen");
+
+        assertEquals(Diagnostic.Status.WARN, d.status());
+        assertTrue(d.detail().contains("vidocq.generate.skip"), d.detail());
     }
 
     // -------------------------------------------------------------------------

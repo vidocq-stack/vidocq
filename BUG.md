@@ -5,6 +5,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261101-03 — A created application never ran `vidocq:generate`: a library's repositories and beans got no generated code
+
+- **Date**: 2026-11-01
+- **Status**: FIXED on `feat/generate-by-default`. `vidocq-runtime-parent` binds `vidocq:generate` (execution id `generate`, `process-classes`, before `check-module-info`), so every application build enriches the dependency jars its bricks select, with no goal in the pom. The goal takes `-Dvidocq.generate.skip` and runs once per project build: a pom that also names it under another id (`default`, as `reader` did by hand) runs it once, and `vidocq:checkpom` names that execution for removal. `vidocq:test-path` names the enriched copy of a dependency, and `@VidocqTest` puts it on the application's module path in place of the jar Surefire put there (same file name): `mvn test` and `vidocq test` now run the code `dev` and `package` run. `vidocq doctor` shows **Dependency codegen** (OK under a parent from 0.4.0 except 0.4.0-RC1, or with an execution of its own; a warning when skipped or absent). Tests: `VidocqGenerateMojoTest` (skip, second execution), `VidocqTestPathMojoTest`, `ApplicationLaunchTest`, `VidocqCheckPomMojoTest`, `ProjectDoctorTest`. Checked with the CLI built from the branch: `vidocq create -x cassini-rest -x mansart-data -x flyway-migration` plus the `bookshelf-lib` jar (compiled without processor nor `-parameters`) and nothing else — `mvn package` logs `bookshelf-lib-1.0.0.jar — Mansart (3 classes, generated)`, `mvn test` runs a `@VidocqTest` on the library's repository green (red with `-Dvidocq.generate.skip`: the boot fails), `vidocq dev` answers by-title 1, by-author 2, exact 1. Timings (M-series laptop, JDK 25, Maven 3.9.16, median of 3): an application with no such dependency, `clean package` 1.82 s with the goal vs 1.78 s skipped, a no-change `package` 1.38 s vs 1.34 s; with the library, the cached processor output keeps a clean build at 2.08 s vs 2.02 s skipped (2.51 s on a cold cache).
+- **Reported by**: the maintainer, after mansart#40 (the E2E needed `<goal>generate</goal>` added by hand)
+- **Minimal reproduction**: `vidocq create -x mansart-data …`, add a dependency jar holding a `@Repository` interface, inject it: the build never runs `vidocq:generate`, the jar gets no implementation, and the boot fails on the unsatisfied repository.
+- **Cause hypothesis**: the parent bound `checkpom`, `test-path`, `check-module-info` and `package` but not `generate`, which the examples and the docs declared by hand; and the tests' module path took the original jars, not the enriched copies.
+
 ## BUG-20261101-01 — The DTOs a REST resource exchanges are bound by reflection, so their packages need `opens`
 
 - **Date**: 2026-11-01

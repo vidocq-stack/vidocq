@@ -28,6 +28,7 @@ import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -57,18 +58,26 @@ public class VidocqTestPathMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     MavenProject project;
 
+    @Parameter(defaultValue = "${project.build.directory}", readonly = true)
+    File buildDirectory;
+
     @Override
     public void execute() {
-        project.getProperties().setProperty(PROPERTY, runtimePath(project.getArtifacts()));
+        project.getProperties().setProperty(PROPERTY,
+                runtimePath(project.getArtifacts(), buildDirectory.toPath()));
     }
 
-    /** The jars of the compile and runtime dependencies, in the order Maven resolved them. */
-    static String runtimePath(Collection<Artifact> artifacts) {
+    /**
+     * The jars of the compile and runtime dependencies, in the order Maven resolved them; a jar {@code vidocq:generate}
+     * enriched is named by its copy under {@code buildDir}, which holds the classes generated for it.
+     */
+    static String runtimePath(Collection<Artifact> artifacts, Path buildDir) {
         List<String> jars = new ArrayList<>();
         for (Artifact artifact : artifacts) {
             File file = artifact.getFile();
             if (RUNTIME_SCOPES.contains(artifact.getScope()) && file != null && file.getName().endsWith(".jar")) {
-                jars.add(file.getPath());
+                jars.add(EnrichedJars.isEnriched(buildDir, file.toPath())
+                        ? EnrichedJars.resolve(buildDir, file.toPath()).toString() : file.getPath());
             }
         }
         return String.join(File.pathSeparator, jars);

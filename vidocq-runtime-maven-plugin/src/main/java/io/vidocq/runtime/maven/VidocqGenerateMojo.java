@@ -80,6 +80,9 @@ import java.util.Set;
       requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class VidocqGenerateMojo extends AbstractMojo {
 
+    /** The project context key that tells a later execution of the goal in the same build that one already ran. */
+    static final String DONE = VidocqGenerateMojo.class.getName() + ".done";
+
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
 
@@ -121,6 +124,13 @@ public class VidocqGenerateMojo extends AbstractMojo {
     @Parameter(property = "vidocq.generate.cacheDir")
     private String cacheDir;
 
+    /**
+     * Skips the goal: no dependency is enriched, no stamp is written, what an earlier run left stays. The boot then
+     * warns that the application was built without {@code vidocq:generate} (VIDOCQ-GEN-001).
+     */
+    @Parameter(property = "vidocq.generate.skip", defaultValue = "false")
+    private boolean skip;
+
     @Parameter(defaultValue = "${repositorySystemSession}", readonly = true, required = true)
     private RepositorySystemSession repoSession;
 
@@ -132,6 +142,16 @@ public class VidocqGenerateMojo extends AbstractMojo {
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
+        if (skip) {
+            getLog().info("Vidocq - vidocq:generate skipped (vidocq.generate.skip)");
+            return;
+        }
+        // vidocq-runtime-parent binds the goal; a pom written before it did may declare an execution of its own.
+        if (project.getContextValue(DONE) != null) {
+            getLog().info("Vidocq - vidocq:generate already ran in this build of the project, skipping this execution");
+            return;
+        }
+        project.setContextValue(DONE, Boolean.TRUE);
         generate();
         // Last, once the index is final, on every path that did not fail: the stamp records that index, and the
         // boot reads a missing or stale stamp as "built without vidocq:generate" (Vidocq/vidocq#241).

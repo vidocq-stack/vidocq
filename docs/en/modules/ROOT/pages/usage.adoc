@@ -208,7 +208,9 @@ cd vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
 Hexagonal and multi-module applications typically keep their business and adapter modules
 *spec-only* — Jakarta EE / MicroProfile APIs only, no Vidocq dependency, no Vidocq APT — and
 concentrate everything runtime-specific in a small main module. That main module asks
-`vidocq:generate` to scan the app modules and produce the CDI/REST glue for them:
+`vidocq:generate` to scan the app modules and produce the CDI/REST glue for them. The id `generate` is the one of the
+execution `vidocq-runtime-parent` binds [.tag-new]#NEW#: the configuration below merges into it, and the goal still runs
+once.
 
 [source,xml]
 ----

@@ -135,10 +135,10 @@
                     <version>3.1.4</version>
                 </plugin>
 
-                <!-- An application declares the plugin, groupId and artifactId only, and gets the three. A library
-                     module of a multi-module application leaves it out. As a build extension, the plugin also puts
-                     the codegen bundle of each Vidocq extension the application depends on on the compiler's
-                     processor path, next to the indexer below: an extension is one dependency (#339). -->
+                <!-- An application declares the plugin, groupId and artifactId only, and gets the executions
+                     below. A library module of a multi-module application leaves it out. As a build extension, the
+                     plugin also puts the codegen bundle of each Vidocq extension the application depends on on the
+                     compiler's processor path, next to the indexer below: an extension is one dependency (#339). -->
                 <plugin>
                     <groupId>io.vidocq.runtime</groupId>
                     <artifactId>vidocq-runtime-maven-plugin</artifactId>
@@ -157,6 +157,17 @@
                             <phase>process-test-classes</phase>
                             <goals>
                                 <goal>test-path</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <!-- Enriches the dependency jars a brick has code to generate for (repositories, JSON-B
+                                 bindings, beans) on every build, as the application's own classes; cheap when none
+                                 needs it. -Dvidocq.generate.skip turns it off. "generate": the id the examples and
+                                 earlier poms gave their own execution, which merges with this one. -->
+                            <id>generate</id>
+                            <phase>process-classes</phase>
+                            <goals>
+                                <goal>generate</goal>
                             </goals>
                         </execution>
                         <execution>

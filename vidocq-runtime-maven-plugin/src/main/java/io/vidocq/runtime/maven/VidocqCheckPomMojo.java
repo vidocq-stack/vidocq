@@ -94,6 +94,9 @@ public class VidocqCheckPomMojo extends AbstractMojo {
     private static final String VIDOCQ_RUNTIME_GROUP = "io.vidocq.runtime";
     private static final String LOG_PREFIX = "Vidocq checkpom: ";
     private static final String CORE_CODEGEN = "vidocq-runtime-core-codegen";
+    /** The id of the execution of {@code vidocq:generate} vidocq-runtime-parent binds. */
+    static final String GENERATE_EXECUTION = "generate";
+    private static final String GENERATE_GOAL = "generate";
     private static final String MAVEN_JAR_KEY = "org.apache.maven.plugins:maven-jar-plugin";
     private static final String MAVEN_COMPILER_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
     /** Matches a runtime extension artifact, e.g. {@code vidocq-runtime-cassini-rest-extension}. */
@@ -143,6 +146,27 @@ public class VidocqCheckPomMojo extends AbstractMojo {
             }
         }
         return issues;
+    }
+
+    /**
+     * The executions of {@code vidocq:generate} on {@code vidocqPlugin} (the effective one; {@code null} when the
+     * project does not build with it) besides the {@value #GENERATE_EXECUTION} one vidocq-runtime-parent binds: the
+     * goal runs once per build all the same, and each note names an execution to remove. None without the parent's.
+     */
+    static List<String> findRedundantGenerateExecutions(Plugin vidocqPlugin) {
+        if (vidocqPlugin == null) {
+            return List.of();
+        }
+        boolean byParent = vidocqPlugin.getExecutions().stream()
+                .anyMatch(e -> GENERATE_EXECUTION.equals(e.getId()) && e.getGoals().contains(GENERATE_GOAL));
+        if (!byParent) {
+            return List.of();
+        }
+        return vidocqPlugin.getExecutions().stream()
+                .filter(e -> !GENERATE_EXECUTION.equals(e.getId()) && e.getGoals().contains(GENERATE_GOAL))
+                .map(e -> LOG_PREFIX + "vidocq-runtime-parent runs vidocq:generate on every build: the execution '"
+                        + e.getId() + "' of the pom need not name the goal, remove <goal>generate</goal> from it.")
+                .toList();
     }
 
     /**
@@ -236,6 +260,7 @@ public class VidocqCheckPomMojo extends AbstractMojo {
         if (!devOnly) {
             Plugin vidocqPlugin = project.getPlugin(VIDOCQ_RUNTIME_GROUP + ":" + DevServiceWiring.PLUGIN.artifactId());
             findDevServiceGaps(project.getDependencies(), vidocqPlugin).forEach(getLog()::warn);
+            findRedundantGenerateExecutions(vidocqPlugin).forEach(getLog()::info);
         }
 
         Map<String, String> extensionGroups = new LinkedHashMap<>();

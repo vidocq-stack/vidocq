@@ -100,6 +100,39 @@ class VidocqGenerateMojoTest {
         assertTrue(Files.isRegularFile(EnrichedJars.resolve(target(), lib)), "the scanned jar has its copy");
     }
 
+    @Test
+    void skipLeavesTheBuildAsItWas() throws Exception {
+        Files.createDirectories(target().resolve("classes"));
+        Path stale = target().resolve(EnrichedJars.DIR_NAME).resolve("old.jar");
+        Files.createDirectories(stale.getParent());
+        Files.writeString(stale, "stale");
+        VidocqGenerateMojo mojo = mojo(plainJar());
+        set(mojo, "skip", true);
+
+        mojo.execute();
+
+        assertTrue(Files.exists(stale), "a skipped run touches nothing");
+        assertFalse(Files.exists(target().resolve("classes").resolve(io.vidocq.runtime.core.GenerateStamp.PATH)),
+                "no stamp: the boot tells the application was built without vidocq:generate");
+    }
+
+    @Test
+    void aSecondExecutionInTheSameBuildDoesNothing() throws Exception {
+        Files.createDirectories(target().resolve("classes"));
+        Path stamp = target().resolve("classes").resolve(io.vidocq.runtime.core.GenerateStamp.PATH);
+        VidocqGenerateMojo first = mojo(plainJar());
+        first.execute();
+        assertTrue(Files.isRegularFile(stamp), "the first execution runs");
+        Files.delete(stamp);
+
+        // The parent binds vidocq:generate, and a pom written before 0.4.0 may declare it again under its own id.
+        VidocqGenerateMojo second = mojo(plainJar());
+        set(second, "project", get(first, "project"));
+        second.execute();
+
+        assertFalse(Files.exists(stamp), "the second execution of the project's build is skipped");
+    }
+
     private Artifact plainJar() throws IOException {
         Path jar = dir.resolve("plain-1.0.jar");
         try (var out = new JarOutputStream(Files.newOutputStream(jar), manifest())) {
@@ -138,6 +171,12 @@ class VidocqGenerateMojoTest {
         Field f = VidocqGenerateMojo.class.getDeclaredField(field);
         f.setAccessible(true);
         f.set(mojo, value);
+    }
+
+    private static Object get(VidocqGenerateMojo mojo, String field) throws Exception {
+        Field f = VidocqGenerateMojo.class.getDeclaredField(field);
+        f.setAccessible(true);
+        return f.get(mojo);
     }
 
     private static Manifest manifest() {

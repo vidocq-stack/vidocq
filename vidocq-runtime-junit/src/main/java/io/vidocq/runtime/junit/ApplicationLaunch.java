@@ -20,6 +20,7 @@
 package io.vidocq.runtime.junit;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -55,6 +56,9 @@ final class ApplicationLaunch {
 
     /** Copy of {@code io.vidocq.runtime.devservices.host.StateFile.PROPERTY}, for the same reason. */
     static final String STATE_PROPERTY = "vidocq.devservices.state";
+
+    /** Copy of {@code io.vidocq.runtime.maven.EnrichedJars.DIR_NAME}: where {@code vidocq:generate} writes its copies. */
+    static final String ENRICHED_DIR = "vidocq-enriched";
 
     private ApplicationLaunch() {}
 
@@ -134,7 +138,9 @@ final class ApplicationLaunch {
 
     /**
      * The module path of the tests ({@code jdk.module.path}), which the application runs on, followed by the
-     * entries of {@code runtimePath} it does not hold yet.
+     * entries of {@code runtimePath} it does not hold yet. An entry of {@code runtimePath} under
+     * {@code vidocq-enriched/}, the copy {@code vidocq:generate} wrote of a dependency, replaces the jar of the same
+     * file name.
      */
     static String modulePath(String jdkModulePath, String runtimePath) {
         if (jdkModulePath == null || jdkModulePath.isBlank()) {
@@ -145,12 +151,21 @@ final class ApplicationLaunch {
         if (runtimePath == null || runtimePath.isBlank()) {
             return jdkModulePath;
         }
-        Set<String> entries = new LinkedHashSet<>(List.of(jdkModulePath.split(File.pathSeparator)));
-        for (String entry : runtimePath.split(File.pathSeparator)) {
-            if (!entry.isBlank()) {
-                entries.add(entry);
-            }
+        List<String> runtime = List.of(runtimePath.split(File.pathSeparator)).stream()
+                .filter(entry -> !entry.isBlank()).toList();
+        Set<String> entries = new LinkedHashSet<>();
+        for (String entry : jdkModulePath.split(File.pathSeparator)) {
+            // An enriched copy, same file name, runs in place of the jar Surefire put there.
+            entries.add(runtime.stream().filter(r -> isCopyOf(r, entry)).findFirst().orElse(entry));
         }
+        entries.addAll(runtime);
         return String.join(File.pathSeparator, entries);
+    }
+
+    private static boolean isCopyOf(String runtimeEntry, String entry) {
+        Path copy = Path.of(runtimeEntry);
+        Path parent = copy.getParent();
+        return parent != null && ENRICHED_DIR.equals(String.valueOf(parent.getFileName()))
+                && !runtimeEntry.equals(entry) && copy.getFileName().equals(Path.of(entry).getFileName());
     }
 }

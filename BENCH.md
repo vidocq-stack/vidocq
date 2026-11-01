@@ -6,6 +6,22 @@
 
 ---
 
+## 2026-11-01 — `vidocq:generate` on every build (BUG-20261101-03)
+
+- **Hardware/JVM**: Apple M5 Max, macOS, Temurin 25, Maven 3.9.16, local repository warm, offline-equivalent (all artifacts resolved).
+- **Projects**: `plain` = `vidocq create -x cassini-rest` (no dependency a brick selects); `reader2` = `vidocq create -x cassini-rest -x mansart-data -x flyway-migration` + `bookshelf-lib` (one `@Repository`, compiled without processor).
+- **Command**: `mvn -ntp clean package -DskipTests` and `mvn -ntp package -DskipTests` (no change), each with the goal (now the default) and with `-Dvidocq.generate.skip=true` (the build before this change), alternated, 3 runs; wall time.
+
+| Project | Run | With `generate` (s) | Skipped (s) |
+|---|---|---|---|
+| plain | clean package | 1.83 / 1.81 / 1.82 | 1.78 / 1.77 / 1.84 |
+| plain | package, no change | 1.38 / 1.38 / 1.47 | 1.34 / 1.41 / 1.31 |
+| reader2 | clean package, processor cache warm | 1.96 / 2.08 / 2.33 | 2.02 / 1.94 / 2.19 |
+| reader2 | package, no change | 1.57 / 1.60 / 1.65 | — |
+| reader2 | clean package, empty `cacheDir` | 2.51 | — |
+
+- **Delta**: no previous entry for this goal. An application with no selected dependency pays ≈ 0.04 s (within noise); a library jar costs ≈ 0.4 s on a cold processor cache, then ≈ 0.1 s.
+
 ## 2026-10-25 — A created application: `vidocq start` and its `vidocq:jlink` image
 
 Startup of the application of the 0.4.0 getting started (Vidocq/vidocq#339): `vidocq create --name todo -g com.example

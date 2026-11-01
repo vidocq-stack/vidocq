@@ -25,8 +25,11 @@ import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.model.Model;
 import org.apache.maven.project.MavenProject;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -59,7 +62,7 @@ class VidocqTestPathMojoTest {
                 artifact("bom", Artifact.SCOPE_COMPILE, "pom"));
 
         assertEquals(String.join(File.pathSeparator, "/m2/core.jar", "/m2/postgresql.jar"),
-                VidocqTestPathMojo.runtimePath(artifacts));
+                VidocqTestPathMojo.runtimePath(artifacts, Path.of("/nowhere")));
     }
 
     @Test
@@ -69,9 +72,25 @@ class VidocqTestPathMojoTest {
         project.setArtifacts(artifacts);
         VidocqTestPathMojo mojo = new VidocqTestPathMojo();
         mojo.project = project;
+        mojo.buildDirectory = new File("/nowhere");
 
         mojo.execute();
 
         assertEquals("/m2/postgresql.jar", project.getProperties().getProperty(VidocqTestPathMojo.PROPERTY));
+    }
+
+    /**
+     * The application {@code @VidocqTest} starts runs the copy {@code vidocq:generate} enriched of a dependency, as
+     * {@code vidocq dev} and the packaged application do: the generated classes are in the copy only.
+     */
+    @Test
+    void anEnrichedDependencyIsNamedByItsCopy(@TempDir Path build) throws Exception {
+        Path copy = build.resolve(EnrichedJars.DIR_NAME).resolve("books.jar");
+        Files.createDirectories(copy.getParent());
+        Files.writeString(copy, "enriched");
+
+        assertEquals(String.join(File.pathSeparator, copy.toString(), "/m2/core.jar"),
+                VidocqTestPathMojo.runtimePath(List.of(artifact("books", Artifact.SCOPE_COMPILE, "jar"),
+                        artifact("core", Artifact.SCOPE_COMPILE, "jar")), build));
     }
 }

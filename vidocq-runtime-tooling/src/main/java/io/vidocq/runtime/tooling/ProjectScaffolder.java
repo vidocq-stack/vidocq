@@ -225,6 +225,14 @@ public final class ProjectScaffolder {
     }
 
     /**
+     * Whether {@code vidocq-runtime-parent} at {@code parentVersion} runs {@code vidocq:generate} on every build: from
+     * 0.4.0, the first release candidate aside, which came before.
+     */
+    static boolean parentRunsGenerate(String parentVersion) {
+        return parentPinsItsVersion(parentVersion) && !parentVersion.equals("0.4.0-RC1");
+    }
+
+    /**
      * Whether the application can have a version of its own under {@code parentVersion}. Before 0.4.0 the parent's
      * dependencyManagement named the runtime version {@code ${project.version}}, which Maven interpolates in the
      * child, so an application of its own version asked for every runtime artifact at that version

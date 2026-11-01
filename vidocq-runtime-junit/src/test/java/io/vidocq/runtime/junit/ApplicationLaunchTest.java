@@ -105,6 +105,20 @@ class ApplicationLaunchTest {
     }
 
     /**
+     * A dependency {@code vidocq:generate} enriched runs from its copy under {@code target/vidocq-enriched}, as in
+     * {@code vidocq dev} and the packaged application: the copy, which {@code vidocq:test-path} names, takes the
+     * place of the jar Surefire put on the module path, same file name.
+     */
+    @Test
+    void anEnrichedCopyTakesThePlaceOfItsJar() {
+        String sep = java.io.File.pathSeparator;
+
+        assertEquals(String.join(sep, "/app/classes", "/app/target/vidocq-enriched/books-1.0.jar", "/m2/core.jar"),
+                ApplicationLaunch.modulePath(String.join(sep, "/app/classes", "/m2/books-1.0.jar", "/m2/core.jar"),
+                        String.join(sep, "/app/target/vidocq-enriched/books-1.0.jar", "/m2/core.jar")));
+    }
+
+    /**
      * The dev services the test run started, through {@code vidocq test}, {@code vidocq dev} or the JUnit listener,
      * reach the application: each key the session injected, which its {@code vidocq.dev.provided.<key>} marker names,
      * the marker itself and the state file, and nothing else of the test JVM (BUG-20261030-20).

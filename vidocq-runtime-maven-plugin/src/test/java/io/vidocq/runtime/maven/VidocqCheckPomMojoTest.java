@@ -23,6 +23,7 @@ import org.apache.maven.model.Build;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Plugin;
+import org.apache.maven.model.PluginExecution;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.apache.maven.project.MavenProject;
@@ -562,5 +563,49 @@ class VidocqCheckPomMojoTest {
         Field f = VidocqCheckPomMojo.class.getDeclaredField("project");
         f.setAccessible(true);
         f.set(mojo, project);
+    }
+
+    /**
+     * vidocq-runtime-parent runs vidocq:generate on every build: an execution a pom declares under an id of its own,
+     * as poms written before it did, is redundant. The goal runs once all the same; the note names it for removal.
+     */
+    @Test
+    void anExecutionOfGenerateBesideTheParentsIsNamedRedundant() {
+        Plugin plugin = new Plugin();
+        plugin.addExecution(execution("generate", "generate"));
+        plugin.addExecution(execution("default", "generate", "package"));
+        plugin.addExecution(execution("vidocq-checkpom", "checkpom"));
+
+        List<String> notes = VidocqCheckPomMojo.findRedundantGenerateExecutions(plugin);
+
+        assertEquals(1, notes.size(), notes.toString());
+        assertTrue(notes.getFirst().contains("'default'"), notes.getFirst());
+        assertTrue(notes.getFirst().contains("vidocq-runtime-parent"), notes.getFirst());
+    }
+
+    @Test
+    void theParentsExecutionAloneIsNoNote() {
+        Plugin plugin = new Plugin();
+        plugin.addExecution(execution("generate", "generate"));
+        plugin.addExecution(execution("default", "package"));
+
+        assertEquals(List.of(), VidocqCheckPomMojo.findRedundantGenerateExecutions(plugin));
+        assertEquals(List.of(), VidocqCheckPomMojo.findRedundantGenerateExecutions(null));
+    }
+
+    /** Without the parent's execution (another parent), the pom's own is the one that runs: nothing redundant. */
+    @Test
+    void aPomOfItsOwnWithoutTheParentsExecutionIsNoNote() {
+        Plugin plugin = new Plugin();
+        plugin.addExecution(execution("default", "generate", "package"));
+
+        assertEquals(List.of(), VidocqCheckPomMojo.findRedundantGenerateExecutions(plugin));
+    }
+
+    private static PluginExecution execution(String id, String... goals) {
+        PluginExecution execution = new PluginExecution();
+        execution.setId(id);
+        execution.setGoals(new ArrayList<>(List.of(goals)));
+        return execution;
     }
 }

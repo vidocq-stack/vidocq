@@ -57,6 +57,7 @@ public final class ProjectDoctor {
 
     private static final String CODEGEN_CHECK = "Codegen bundles";
     private static final String INDEXER_CHECK = "Vauban indexer";
+    private static final String GENERATE_CHECK = "Dependency codegen";
     private static final String MODULE_CHECK = "Module directives";
     private static final String DEV_SERVICES_CHECK = "Dev services";
     private static final String MAVEN_CHECK = "Maven version";
@@ -133,6 +134,7 @@ public final class ProjectDoctor {
         Map<String, ExtensionCoordinate> extensions = catalogExtensions(facts.pom());
         diagnostics.add(checkCodegen(facts.pom(), extensions));
         diagnostics.add(checkIndexer(facts.pom(), !extensions.isEmpty()));
+        diagnostics.add(checkGenerate(facts.pom()));
         diagnostics.add(checkModuleDirectives(facts, extensions));
         diagnostics.add(checkDevServices(facts.pom(), extensions));
         if (facts.mavenVersion() != null) {
@@ -200,6 +202,28 @@ public final class ProjectDoctor {
                     : Diagnostic.warn(INDEXER_CHECK, detail, hint)).asFixable();
         }
         return Diagnostic.ok(INDEXER_CHECK, INDEXER.artifactId() + " on the processor path");
+    }
+
+    /**
+     * Whether {@code vidocq:generate} runs on the build, which gives the dependency jars the code the bricks generate
+     * for them — repositories, JSON-B bindings, beans — as for the application's own classes.
+     */
+    private static Diagnostic checkGenerate(String pom) {
+        String compact = pom.replaceAll("\\s", "");
+        if (compact.contains("<vidocq.generate.skip>true</vidocq.generate.skip>")) {
+            return Diagnostic.warn(GENERATE_CHECK, "off (vidocq.generate.skip)",
+                    "The dependency jars get no generated code: a repository or a bean a library ships falls back to"
+                            + " reflection at run time, or is not found.");
+        }
+        if (PomDependencies.runtimeVersion(pom).filter(ProjectScaffolder::parentRunsGenerate).isPresent()) {
+            return Diagnostic.ok(GENERATE_CHECK, "vidocq:generate runs on every build (vidocq-runtime-parent)");
+        }
+        if (compact.contains("<goal>generate</goal>")) {
+            return Diagnostic.ok(GENERATE_CHECK, "vidocq:generate declared in the pom");
+        }
+        return Diagnostic.warn(GENERATE_CHECK, "vidocq:generate does not run",
+                "The dependency jars get no generated code. Upgrade vidocq-runtime-parent, or add"
+                        + " <goal>generate</goal> to an execution of vidocq-runtime-maven-plugin.");
     }
 
     private static Diagnostic checkModuleDirectives(Facts facts, Map<String, ExtensionCoordinate> extensions) {
