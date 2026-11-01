@@ -30,6 +30,12 @@
             <artifactId>mansart-transactions-cdi</artifactId>
             <version>${mansart.version}</version>
         </dependency>
+        <!-- mansart-transactions-cdi leaves the Jakarta platform APIs to the runtime (provided, vidocq-workspace#17, mansart#35):
+             on the processor path nothing else brings them, and MansartTransactionsExtension could not be loaded. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
