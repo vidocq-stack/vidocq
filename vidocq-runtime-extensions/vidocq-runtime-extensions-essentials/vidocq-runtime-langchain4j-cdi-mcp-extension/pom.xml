@@ -164,6 +164,10 @@
                     <scanDependencies>
                         <scanDependency>dev.langchain4j.cdi.mcp:langchain4j-cdi-mcp-server</scanDependency>
                     </scanDependencies>
+                    <!-- The list names the langchain4j-cdi jar's beans only: the other bean archives this module
+                         depends on (Champollion's JSON-B CDI registry, through the REST extension) are each
+                         application's to scan, not this module's to ship. -->
+                    <autoScan>false</autoScan>
                 </configuration>
                 <executions>
                     <execution>
