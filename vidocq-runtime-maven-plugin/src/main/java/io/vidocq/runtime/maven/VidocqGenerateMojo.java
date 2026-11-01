@@ -198,7 +198,8 @@ public class VidocqGenerateMojo extends AbstractMojo {
             int peanoProviders=PeanoAccessorRegistration.apply(classesDir);
             if (peanoProviders>0) getLog().info("Peano accessor providers registered: "+peanoProviders);
             // The bricks select first: a jar a brick selects is scanned by Vauban too, its components being CDI beans.
-            List<Brick> brickList = DependencyBricks.of(project, repoSystem, repoSession, remoteRepos);
+            List<Brick> brickList = DependencyBricks.withApplication(
+                    DependencyBricks.of(project, repoSystem, repoSession, remoteRepos), classesDir);
             var dependencies = ScanSelection.dependenciesOf(project.getArtifacts());
             var brickSelection = DependencyCodegenPass.select(brickList, dependencies, orEmpty(scanExcludes),
                     DependencyCodegenPass.selectionMemo(cacheDirectory()), true);

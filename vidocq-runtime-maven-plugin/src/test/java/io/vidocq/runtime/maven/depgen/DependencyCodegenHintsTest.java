@@ -34,6 +34,7 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -82,7 +83,7 @@ class DependencyCodegenHintsTest {
         Properties unknownKey = props("brick", "foy", "resources", "a", "bogus", "1");
         var e = assertThrows(IllegalArgumentException.class, () -> DependencyCodegenHints.parse(unknownKey, "foy-bundle"));
         assertEquals("foy-bundle: unknown key 'bogus' in META-INF/vidocq/dependency-codegen.properties "
-                + "(allowed: brick, resources, class-bytes, markers, merge, whole-jar)", e.getMessage());
+                + "(allowed: brick, resources, class-bytes, markers, merge, whole-jar, application-classes, application-classes-option)", e.getMessage());
     }
 
     @Test
@@ -91,6 +92,20 @@ class DependencyCodegenHintsTest {
         var e = assertThrows(IllegalArgumentException.class, () -> DependencyCodegenHints.parse(markers, "foy-bundle"));
         assertTrue(e.getMessage().contains("foy-bundle"), e.getMessage());
         assertTrue(e.getMessage().contains("resources") && e.getMessage().contains("class-bytes"), e.getMessage());
+    }
+
+    @Test
+    void theApplicationClassesSelectAloneAndAreReadFromTheApplicationsClasses(@TempDir
+                                                                              Path classes) throws IOException {
+        var hints = DependencyCodegenHints.parse(props("brick", "Champollion",
+                "application-classes", "META-INF/champollion/dependency-types",
+                "application-classes-option", "champollion.jsonb.types"), "rest-bundle");
+        assertEquals("champollion.jsonb.types", hints.application().option());
+        assertTrue(hints.application().names().isEmpty());
+        assertSame(hints, hints.withApplication(classes), "no list: unchanged");
+        Files.createDirectories(classes.resolve("META-INF/champollion"));
+        Files.writeString(classes.resolve("META-INF/champollion/dependency-types"), "lib.Book\n\nlib.Author\n");
+        assertEquals(java.util.Set.of("lib.Book", "lib.Author"), hints.withApplication(classes).application().names());
     }
 
     @Test

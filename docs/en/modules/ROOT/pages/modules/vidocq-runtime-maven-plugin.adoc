@@ -264,7 +264,7 @@ Last, it writes `META-INF/vidocq/generate.stamp`, which records the `META-INF/va
 | Any jar with a `META-INF/beans.xml` whose `bean-discovery-mode` is not `none`. On by default; `-Dvidocq.generate.autoScan=false` or `<autoScan>false</autoScan>` turns it off.
 
 | A brick
-| A brick whose codegen bundle declares `META-INF/vidocq/dependency-codegen.properties` selects the jars it can process: a jar with one of its `resources`, or with one of its `class-bytes` in a class file. See <<brick-processors>>.
+| A brick whose codegen bundle declares `META-INF/vidocq/dependency-codegen.properties` selects the jars it can process: a jar with one of its `resources`, or with one of its `class-bytes` in a class file, or [.tag-new]#NEW# holding a class the application lists for it. See <<brick-processors>>.
 |===
 
 The dependencies considered are the compile-scope and runtime-scope ones: everything the module path holds at run time. A selected jar is left out when it already carries generated code (a Vidocq brick compiled with the Vauban processor), when `<scanExcludes>` names it, or when it is signed and `<scanDependencies>` does not name it: the build log says which, and why.
@@ -293,9 +293,9 @@ The dev console's CDI panel shows the result: a scanned jar's beans read `Class-
 [#brick-processors]
 === Brick processors on dependency jars
 
-Besides Vauban's own code, `vidocq:generate` runs the annotation processors of every brick whose codegen bundle is on the project (Foy's, for instance) over the dependency jars that brick selects. A library compiled without the brick's processor, such as a `@WebListener` or a `ServletContainerInitializer` in a plain jar, then works as if it had been: the processor's output, classes and resources, goes into the jar's enriched copy, and the brick finds it at run time. [.tag-new]#NEW# Mansart takes part too: a jar whose classes name `jakarta.data.repository.Repository` gets the implementation of each of its `@Repository` interfaces, with its entity's metamodel and the repository index — see xref:mansart::usage.adoc#dependency-repositories[repositories shipped in a library] for what the library must keep (parameter names, or `@By` / `@Param`).
+Besides Vauban's own code, `vidocq:generate` runs the annotation processors of every brick whose codegen bundle is on the project (Foy's, for instance) over the dependency jars that brick selects. A library compiled without the brick's processor, such as a `@WebListener` or a `ServletContainerInitializer` in a plain jar, then works as if it had been: the processor's output, classes and resources, goes into the jar's enriched copy, and the brick finds it at run time. [.tag-new]#NEW# Mansart takes part too: a jar whose classes name `jakarta.data.repository.Repository` gets the implementation of each of its `@Repository` interfaces, with its entity's metamodel and the repository index — see xref:mansart::usage.adoc#dependency-repositories[repositories shipped in a library] for what the library must keep (parameter names, or `@By` / `@Param`). [.tag-new]#NEW# So does Champollion, through the REST extension's codegen bundle: the types of a library that the application's REST resources take or return — a DTO jar shared with a client, say — get their JSON-B binding generated in the library's enriched copy, with the types they hold, so JSON-B maps them without reflection and the library's packages need no `opens` (xref:java-modules.adoc#json-b-at-build-time[JSON-B without reflection]).
 
-The processors see only the classes the hints point at: the top-level classes whose class file holds one of the brick's `class-bytes`, and the classes listed in the service files among its matched `resources`. The other classes of the jar are not compiled, so a class that needs an optional API missing from the build, such as a websocket endpoint without `jakarta.websocket`, does not fail it.
+The processors see only the classes the hints point at: the top-level classes whose class file holds one of the brick's `class-bytes`, the classes listed in the service files among its matched `resources`, and [.tag-new]#NEW# the classes the application lists for the brick. The other classes of the jar are not compiled, so a class that needs an optional API missing from the build, such as a websocket endpoint without `jakarta.websocket`, does not fail it.
 
 A jar that a brick selects is also scanned by Vauban, so that its beans get their generated code too. Vauban scans such a jar with annotated discovery, even without a `beans.xml`: its classes with a bean-defining annotation become beans. `vidocq:analyze-deps` and the scan log show the source as `selected by a brick (Foy)`. Such a jar, when it has no module descriptor, stays an automatic module in its enriched copy even when Vauban generates providers for it: the providers are listed in its `META-INF/services` files, and an automatic module may use any service, which a synthesized descriptor cannot guarantee. [[brick-automatic-packaging]]`vidocq:package` ships that automatic copy, even when `vauban:modularize` gave the jar a descriptor: it used to rebuild the copy on that descriptor, which can miss a `uses`. The copy's manifest says so with `Vidocq-Automatic: brick-selected`, and its module name is the automatic one, not a name configured for `vauban:modularize`. Only `vidocq:jlink`, which refuses automatic modules, rebuilds it on the `vauban:modularize` descriptor (Vidocq/vidocq#251).
 
@@ -336,7 +336,7 @@ The whole javac output is in `target/vidocq-depgen/<artifactId>.log`. A generate
 [#brick-authors]
 ==== For brick authors
 
-A brick opts in with `META-INF/vidocq/dependency-codegen.properties` in its codegen bundle, next to its processors. The keys are `brick`, `resources`, `class-bytes`, `markers`, `merge` and `whole-jar`; any other key fails the build. Lists are comma-separated.
+A brick opts in with `META-INF/vidocq/dependency-codegen.properties` in its codegen bundle, next to its processors. The keys are `brick`, `resources`, `class-bytes`, `markers`, `merge`, `whole-jar`, `application-classes` and `application-classes-option`; any other key fails the build. Lists are comma-separated.
 
 [cols="1,3"]
 |===
@@ -349,7 +349,13 @@ A brick opts in with `META-INF/vidocq/dependency-codegen.properties` in its code
 | Jar entries whose presence selects the jar.
 
 | `class-bytes`
-| Strings searched in the class files of a jar, typically the internal name of an annotation or a prefix of it (`jakarta/servlet/annotation/Web`). A jar that defines classes with that prefix is not selected. At least one of `resources` and `class-bytes` is required, or nothing would select a jar.
+| Strings searched in the class files of a jar, typically the internal name of an annotation or a prefix of it (`jakarta/servlet/annotation/Web`). A jar that defines classes with that prefix is not selected. At least one of `resources`, `class-bytes` and `application-classes` is required, or nothing would select a jar.
+
+| `application-classes`
+| [.tag-new]#NEW# A resource of the application's compiled classes that lists classes, one binary name per line, for the brick to process in the dependencies that hold them: a jar holding one of them is selected, and the processors see them. The brick's processor writes it when it compiles the application; the list is part of the cache key and of the enriched copy's inputs.
+
+| `application-classes-option`
+| [.tag-new]#NEW# The processor option that gets, as `-Aoption=a.B,c.D`, the listed classes a jar holds.
 
 | `markers`
 | Jar entries that show the jar was already processed by the brick: such a jar is skipped.
@@ -376,6 +382,17 @@ class-bytes=jakarta/servlet/annotation/Web,jakarta/servlet/annotation/HandlesTyp
 markers=META-INF/io.vidocq.foy/generated,META-INF/foy/class-index.list,META-INF/services/io.vidocq.foy.spi.gen.WebComponent
 merge=META-INF/services/io.vidocq.foy.spi.gen.WebComponent
 whole-jar=META-INF/foy/class-index.list
+----
+
+Champollion's file, in the REST extension's codegen bundle, selects by the application's list only:
+
+[source,properties]
+----
+brick=Champollion
+application-classes=META-INF/champollion/dependency-types
+application-classes-option=champollion.jsonb.types
+markers=META-INF/champollion/rest-bindings
+merge=META-INF/services/io.vidocq.champollion.jsonb.spi.JsonbBinding
 ----
 
 Foy's `merge` file is also among its `markers`: a jar that already has it was built with Foy's processor, so it is skipped rather than merged. Its `class-index.list` is a marker too, and `whole-jar`: Foy scans a jar without one for `@HandlesTypes` at run time, which a partial index would prevent.

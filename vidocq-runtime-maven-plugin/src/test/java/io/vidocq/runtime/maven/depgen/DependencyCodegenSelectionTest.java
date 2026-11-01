@@ -280,4 +280,30 @@ class DependencyCodegenSelectionTest {
 
         assertEquals(List.of("com.acme.Listener"), memoized.matches().getFirst().classes());
     }
+
+    private static DependencyCodegenHints listing(String... names) {
+        return new DependencyCodegenHints("Champollion", List.of(), List.of(), List.of("META-INF/champollion/rest-bindings"),
+                List.of(), List.of(), new DependencyCodegenHints.ApplicationClasses(
+                        "META-INF/champollion/dependency-types", "champollion.jsonb.types", java.util.Set.of(names)));
+    }
+
+    @Test
+    void aClassTheApplicationListsSelectsItsJar() throws IOException {
+        var jar = jar("dto.jar", "lib/Book.class", "Êþ..", "lib/Book$Part.class", "Êþ..", "lib/Other.class", "Êþ..");
+        var d = DependencyCodegenSelection.decide(jar, List.of(listing("lib.Book$Part", "elsewhere.X")));
+        assertTrue(d.selected());
+        assertEquals("class lib.Book$Part, listed by the application in META-INF/champollion/dependency-types",
+                d.matches().getFirst().reason());
+        assertEquals(List.of("lib.Book"), d.matches().getFirst().classes());
+        assertFalse(DependencyCodegenSelection.decide(jar, List.of(listing("elsewhere.X"))).selected());
+    }
+
+    @Test
+    void anotherListIsAnotherMemoEntry() throws IOException {
+        var jar = jar("dto.jar", "lib/Book.class", "Êþ..", "lib/Other.class", "Êþ..");
+        Path memo = dir.resolve("memo-list");
+        DependencyCodegenSelection.decide(jar, List.of(listing("lib.Book")), memo, true);
+        var other = DependencyCodegenSelection.decide(jar, List.of(listing("lib.Other")), memo, true);
+        assertEquals(List.of("lib.Other"), other.matches().getFirst().classes());
+    }
 }

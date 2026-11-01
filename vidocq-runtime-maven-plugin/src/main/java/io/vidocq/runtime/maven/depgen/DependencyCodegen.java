@@ -139,6 +139,27 @@ public final class DependencyCodegen {
         }
     }
 
+    /**
+     * The {@code -Aoption=names} of the bricks that take the application classes they process: the names, among
+     * those the application lists, of the classes the processors see (a nested class by its top-level one).
+     */
+    static List<String> applicationOptions(List<Brick> bricks, List<String> classNames) {
+        List<String> options = new ArrayList<>();
+        for (Brick brick : bricks) {
+            var application = brick.hints().application();
+            if (application.option() == null) {
+                continue;
+            }
+            String names = application.names().stream().sorted()
+                    .filter(n -> classNames.contains(n.contains("$") ? n.substring(0, n.indexOf('$')) : n))
+                    .collect(Collectors.joining(","));
+            if (!names.isEmpty()) {
+                options.add("-A" + application.option() + "=" + names);
+            }
+        }
+        return options;
+    }
+
     /** One jar's two javac passes, and the failure and warning lines they produce. */
     private static final class Job {
         private final JavaCompiler javac;
@@ -166,10 +187,12 @@ public final class DependencyCodegen {
                 fm.setLocationFromPaths(StandardLocation.CLASS_PATH, classpath);
                 fm.setLocationFromPaths(StandardLocation.SOURCE_OUTPUT, List.of(src));
                 fm.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, List.of(res));
+                List<String> options = new ArrayList<>(
+                        List.of("-proc:only", "-implicit:none", "--release", release, "-Xlint:none"));
+                options.addAll(applicationOptions(bricks, classNames));
                 Result result = processors.reports().isEmpty()
-                        ? compile(fm, diagnostics, "annotation processing",
-                                List.of("-proc:only", "-implicit:none", "--release", release, "-Xlint:none"),
-                                classNames, null, processors.processors())
+                        ? compile(fm, diagnostics, "annotation processing", options, classNames, null,
+                                processors.processors())
                         : new Result(false, null);
                 List<String> reported = addReports(processors.reports());
                 addUnreportedErrors(diagnostics, reported);

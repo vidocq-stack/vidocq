@@ -79,7 +79,8 @@ public class VidocqAnalyzeDepsMojo extends AbstractMojo {
                     System.getProperty("user.home"));
             // Read-only: the memo of the selection is read, never written.
             var selections = DependencyCodegenPass.select(
-                    DependencyBricks.of(project, repoSystem, repoSession, remoteRepos), dependencies, excludes,
+                    DependencyBricks.withApplication(DependencyBricks.of(project, repoSystem, repoSession,
+                            remoteRepos), Path.of(project.getBuild().getOutputDirectory())), dependencies, excludes,
                     DependencyCodegenPass.selectionMemo(cacheDirectory), false);
             var decisions = ScanSelection.decide(dependencies,
                     scanDependencies == null ? List.of() : scanDependencies, excludes, autoScan,

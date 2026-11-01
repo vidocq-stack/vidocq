@@ -89,6 +89,17 @@ class DependencyCodegenTest {
     // --- tests -------------------------------------------------------------------------------------------------
 
     @Test
+    void theProcessorsGetTheApplicationClassesTheJarHolds() {
+        var hints = new DependencyCodegenHints("Champollion", List.of(), List.of(), List.of(), List.of(), List.of(),
+                new DependencyCodegenHints.ApplicationClasses("META-INF/champollion/dependency-types",
+                        "champollion.jsonb.types", java.util.Set.of("lib.Book", "lib.Shelf$Row", "other.X")));
+        var brick = new Brick(hints, "io.vidocq:rest-codegen:1.0", List.of());
+        assertEquals(List.of("-Achampollion.jsonb.types=lib.Book,lib.Shelf$Row"),
+                DependencyCodegen.applicationOptions(List.of(brick), List.of("lib.Book", "lib.Shelf")));
+        assertEquals(List.of(), DependencyCodegen.applicationOptions(List.of(brick), List.of("lib.Other")));
+    }
+
+    @Test
     void generatesClassesAndResources() throws Exception {
         var output = run(acme(), brick("Alpha", "ProcessorA"));
 

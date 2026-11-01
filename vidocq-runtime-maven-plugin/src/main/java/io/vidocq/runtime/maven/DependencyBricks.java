@@ -69,6 +69,19 @@ final class DependencyBricks {
     private DependencyBricks() {
     }
 
+    /**
+     * {@code bricks} with the classes the application lists for them in its compiled classes, {@code classesDir}
+     * ({@link DependencyCodegenHints#withApplication}).
+     */
+    static List<Brick> withApplication(List<Brick> bricks, Path classesDir) throws IOException {
+        List<Brick> bound = new ArrayList<>();
+        for (Brick brick : bricks) {
+            bound.add(new Brick(brick.hints().withApplication(classesDir), brick.coordinates(),
+                    brick.processorPath()));
+        }
+        return bound;
+    }
+
     /** The project's bricks: the codegen bundles of its {@code annotationProcessorPaths} that declare hints. */
     static List<Brick> of(MavenProject project, RepositorySystem system, RepositorySystemSession session,
                           List<RemoteRepository> repositories) throws MojoExecutionException {
@@ -76,10 +89,16 @@ final class DependencyBricks {
                 repositories == null ? List.of() : repositories));
     }
 
-    /** {@code brick <name> <bundle coordinates> sha256:<processor classpath digest>}. */
+    /**
+     * {@code brick <name> <bundle coordinates> sha256:<processor classpath digest>}, then the application classes
+     * the brick gets, if any.
+     */
     static String inputLine(Brick brick) throws IOException {
-        return "brick " + brick.hints().brick() + " " + brick.coordinates() + " sha256:"
+        String line = "brick " + brick.hints().brick() + " " + brick.coordinates() + " sha256:"
                 + DependencyCodegenCache.classpathDigest(brick.processorPath());
+        // The classes the application lists are the processors' input too: another list, another enriched copy.
+        var names = brick.hints().application().names();
+        return names.isEmpty() ? line : line + " application:" + String.join(",", new java.util.TreeSet<>(names));
     }
 
     /** The input lines of {@code bricks}, sorted. */

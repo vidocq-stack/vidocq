@@ -89,7 +89,9 @@ public final class DependencyCodegenCache {
         List<String> lines = new java.util.ArrayList<>();
         lines.add("jar " + sha256(jar));
         for (Brick brick : bricks) {
-            lines.add("brick " + brick.hints().brick() + " " + classpathDigest(brick.processorPath()));
+            // The application classes become a processor option: another list is another output.
+            lines.add("brick " + brick.hints().brick() + " " + classpathDigest(brick.processorPath()) + " "
+                    + String.join(",", new java.util.TreeSet<>(brick.hints().application().names())));
         }
         lines.subList(1, lines.size()).sort(Comparator.naturalOrder());
         classpath.stream().sorted().distinct().forEach(c -> lines.add("classpath " + c));

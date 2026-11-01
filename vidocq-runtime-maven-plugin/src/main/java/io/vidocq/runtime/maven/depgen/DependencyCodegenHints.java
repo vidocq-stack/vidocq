@@ -44,17 +44,40 @@ import java.util.jar.JarFile;
  * @param merge      jar entries merged across the jars the brick processes
  * @param wholeJar   generated entries that describe every class of the jar: the processors see only the hinted
  *                   classes, so these would be partial, and the pass drops them
+ * @param application the classes the application's own compilation names for the brick: a jar holding one of them
+ *                   is selected, and the processors get their names
  */
 public record DependencyCodegenHints(String brick, List<String> resources, List<String> classBytes,
-                                     List<String> markers, List<String> merge, List<String> wholeJar) {
+                                     List<String> markers, List<String> merge, List<String> wholeJar,
+                                     ApplicationClasses application) {
+
+    /**
+     * Classes the application's compilation lists, in a resource of its output, for the brick to process in the
+     * dependencies that hold them: Champollion's {@code META-INF/champollion/dependency-types}, the types of a
+     * dependency the application's REST resources exchange.
+     *
+     * @param resource where the application's output lists them, one binary name per line; {@code null} for none
+     * @param option   the processor option ({@code -Aoption=a.B,c.D}) that gets the names of those a jar holds;
+     *                 {@code null} for none
+     * @param names    the names read from the resource ({@link #withApplication}); empty until then
+     */
+    public record ApplicationClasses(String resource, String option, Set<String> names) {
+
+        public static final ApplicationClasses NONE = new ApplicationClasses(null, null, Set.of());
+
+        public ApplicationClasses {
+            names = Set.copyOf(names);
+        }
+    }
 
     /** Where a bundle declares its hints. */
     public static final String PATH = "META-INF/vidocq/dependency-codegen.properties";
 
     private static final Set<String> KEYS = Set.of("brick", "resources", "class-bytes", "markers", "merge",
-            "whole-jar");
+            "whole-jar", "application-classes", "application-classes-option");
 
     public DependencyCodegenHints {
+        application = application == null ? ApplicationClasses.NONE : application;
         resources = List.copyOf(resources);
         classBytes = List.copyOf(classBytes);
         markers = List.copyOf(markers);
@@ -68,6 +91,34 @@ public record DependencyCodegenHints(String brick, List<String> resources, List<
         this(brick, resources, classBytes, markers, merge, List.of());
     }
 
+    /** Hints without application classes. */
+    public DependencyCodegenHints(String brick, List<String> resources, List<String> classBytes,
+                                  List<String> markers, List<String> merge, List<String> wholeJar) {
+        this(brick, resources, classBytes, markers, merge, wholeJar, ApplicationClasses.NONE);
+    }
+
+    /**
+     * These hints with the application classes that {@code classesDir}, the application's compiled classes, lists
+     * in {@link ApplicationClasses#resource}; these hints unchanged when they name no resource or it is absent.
+     */
+    public DependencyCodegenHints withApplication(Path classesDir) throws IOException {
+        if (application.resource() == null || classesDir == null) {
+            return this;
+        }
+        Path listed = classesDir.resolve(application.resource());
+        if (!Files.isRegularFile(listed)) {
+            return this;
+        }
+        Set<String> names = new java.util.TreeSet<>();
+        for (String line : Files.readAllLines(listed, StandardCharsets.UTF_8)) {
+            if (!line.isBlank()) {
+                names.add(line.strip());
+            }
+        }
+        return new DependencyCodegenHints(brick, resources, classBytes, markers, merge, wholeJar,
+                new ApplicationClasses(application.resource(), application.option(), names));
+    }
+
     /**
      * Parses a hints file.
      *
@@ -78,7 +129,8 @@ public record DependencyCodegenHints(String brick, List<String> resources, List<
         for (String key : p.stringPropertyNames()) {
             if (!KEYS.contains(key)) {
                 throw new IllegalArgumentException(origin + ": unknown key '" + key + "' in " + PATH
-                        + " (allowed: brick, resources, class-bytes, markers, merge, whole-jar)");
+                        + " (allowed: brick, resources, class-bytes, markers, merge, whole-jar, application-classes,"
+                        + " application-classes-option)");
             }
         }
         String brick = p.getProperty("brick");
@@ -87,12 +139,15 @@ public record DependencyCodegenHints(String brick, List<String> resources, List<
         }
         var resources = list(p.getProperty("resources"));
         var classBytes = list(p.getProperty("class-bytes"));
-        if (resources.isEmpty() && classBytes.isEmpty()) {
-            throw new IllegalArgumentException(origin + ": " + PATH
-                    + " declares neither 'resources' nor 'class-bytes': nothing would select a jar");
+        String applicationClasses = blankToNull(p.getProperty("application-classes"));
+        if (resources.isEmpty() && classBytes.isEmpty() && applicationClasses == null) {
+            throw new IllegalArgumentException(origin + ": " + PATH + " declares none of 'resources', 'class-bytes'"
+                    + " and 'application-classes': nothing would select a jar");
         }
+        String option = blankToNull(p.getProperty("application-classes-option"));
         return new DependencyCodegenHints(brick.strip(), resources, classBytes, list(p.getProperty("markers")),
-                list(p.getProperty("merge")), list(p.getProperty("whole-jar")));
+                list(p.getProperty("merge")), list(p.getProperty("whole-jar")),
+                new ApplicationClasses(applicationClasses, option, Set.of()));
     }
 
     /** The hints file of a bundle jar or directory; empty when it has none. */
@@ -118,6 +173,10 @@ public record DependencyCodegenHints(String brick, List<String> resources, List<
             }
         }
         return Optional.of(parse(props, bundleJarOrDir.getFileName().toString()));
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
     }
 
     private static List<String> list(String value) {

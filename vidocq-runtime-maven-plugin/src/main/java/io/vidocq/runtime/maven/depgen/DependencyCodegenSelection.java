@@ -161,6 +161,14 @@ public final class DependencyCodegenSelection {
                     listed.addAll(listedClasses(file, resource, names));
                 }
             }
+            String applicationResource = brick.application().resource();
+            for (String name : brick.application().names()) {
+                if (names.contains(name.replace('.', '/') + CLASS_SUFFIX)) {
+                    resourceReasons.putIfAbsent(brick, "class " + name + ", listed by the application in "
+                            + applicationResource);
+                    listed.add(topLevelClass(name.replace('.', '/') + CLASS_SUFFIX));
+                }
+            }
             List<String> own = brick.classBytes().stream()
                     .filter(hint -> names.stream().noneMatch(n -> n.startsWith(hint))).toList();
             if (!own.isEmpty()) {
@@ -318,7 +326,8 @@ public final class DependencyCodegenSelection {
             text.append("\nbrick ").append(brick.brick())
                     .append("\nresources ").append(String.join(",", brick.resources()))
                     .append("\nclass-bytes ").append(String.join(",", brick.classBytes()))
-                    .append("\nmarkers ").append(String.join(",", brick.markers()));
+                    .append("\nmarkers ").append(String.join(",", brick.markers()))
+                    .append("\napplication ").append(String.join(",", new TreeSet<>(brick.application().names())));
         }
         return HexFormat.of().formatHex(sha256().digest(text.toString().getBytes(StandardCharsets.UTF_8)));
     }
