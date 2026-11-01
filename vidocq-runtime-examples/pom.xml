@@ -44,10 +44,32 @@
                     <skipPublishing>true</skipPublishing>
                 </configuration>
             </plugin>
-            <!-- Inherits the checkpom execution from vidocq-runtime-build/pluginManagement. -->
+            <!-- Inherits the checkpom execution from vidocq-runtime-build/pluginManagement. test-path, bound as
+                 vidocq-runtime-parent binds it: @VidocqTest starts the example on the jars a real application runs,
+                 the copies vidocq:generate enriched included, not the originals Surefire resolved. -->
             <plugin>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>vidocq-test-path</id>
+                        <phase>process-test-classes</phase>
+                        <goals>
+                            <goal>test-path</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- No default value in <properties>: the expression must stay unresolved until vidocq:test-path sets
+                 it, as in vidocq-runtime-parent. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <vidocq.test.runtimePath>${vidocq.test.runtimePath}</vidocq.test.runtimePath>
+                    </systemPropertyVariables>
+                </configuration>
             </plugin>
         </plugins>
     </build>
