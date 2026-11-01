@@ -106,7 +106,8 @@ For these cases, the runtime tells you what to add, below.
 [ERROR] Module com.example.library does not open package com.example.library.report to
 io.vidocq.champollion.jsonb, which reached class com.example.library.report.Report by reflection
 at run time. The build checks cannot see this use: add `opens com.example.library.report;`
-to module-info.java (or make it an `open module`).
+to module-info.java (or make it an `open module`). See "Java modules in a Vidocq application"
+in the documentation.
 ----
 
 Under `vidocq dev` you have nothing to do: the plugin writes `opens com.example.library.report; // vidocq:reflection` to `module-info.java`, prints `✔ module-info.java: opens com.example.library.report;   (reached by reflection at run time)`, and the application reloads; retry the request once it has. Only a package of your application is named: a denial between two libraries, or into the JDK, is left to its stack trace.
