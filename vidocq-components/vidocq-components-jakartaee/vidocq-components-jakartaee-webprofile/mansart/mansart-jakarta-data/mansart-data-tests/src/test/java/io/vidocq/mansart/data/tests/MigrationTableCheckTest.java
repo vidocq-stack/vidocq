@@ -108,6 +108,54 @@ class MigrationTableCheckTest {
     }
 
     @Test
+    void backQuotedBracketedAndSpacedNamesAreRecognised() throws IOException {
+        migration("V1__a.sql", "CREATE TABLE `books` (id BIGINT);");
+        assertThat(warnings("")).isEmpty();
+
+        migration("V1__a.sql", "CREATE TABLE [books] (id BIGINT);");
+        assertThat(warnings("")).isEmpty();
+
+        migration("V1__a.sql", "create   table   app . books (id bigint);");
+        assertThat(warnings("")).isEmpty();
+    }
+
+    @Test
+    void viewsAndTableModifiersAreRecognised() throws IOException {
+        migration("V1__a.sql", "CREATE OR REPLACE VIEW books AS SELECT 1;");
+        assertThat(warnings("")).isEmpty();
+
+        migration("V1__a.sql", "CREATE GLOBAL TEMPORARY TABLE books (id BIGINT);");
+        assertThat(warnings("")).isEmpty();
+    }
+
+    @Test
+    void literalsCommentsAndOtherStatementsCreateNoTable() throws IOException {
+        migration("V1__a.sql", """
+                INSERT INTO notes VALUES ('CREATE TABLE books (id INT)');
+                CREATE INDEX books ON book (id);
+                ALTER TABLE book RENAME COLUMN title TO books;
+                -- CREATE TABLE books
+                CREATE TABLE book (id BIGINT); /* CREATE TABLE books""");
+        migration("notes.txt", "CREATE TABLE books (id BIGINT);");
+
+        assertThat(warnings("")).hasSize(1);
+    }
+
+    @Test
+    void aQuotedNameMatchesOnlyItsExactCase() throws IOException {
+        migration("V1__a.sql", "CREATE TABLE \"BOOKS\" (id BIGINT);");
+
+        assertThat(warnings("")).hasSize(1);
+    }
+
+    @Test
+    void aRenameToAQuotedNameWithIfExistsCounts() throws IOException {
+        migration("V1__a.sql", "CREATE TABLE book (id BIGINT); ALTER TABLE IF EXISTS book RENAME TO \"books\";");
+
+        assertThat(warnings("")).isEmpty();
+    }
+
+    @Test
     void aTableRenamedByALaterMigrationCounts() throws IOException {
         migration("V1__book.sql", "CREATE TABLE book (id BIGINT);");
         migration("V2__rename.sql", "ALTER TABLE book RENAME TO books;");

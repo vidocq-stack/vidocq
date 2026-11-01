@@ -170,38 +170,51 @@ final class MigrationTables {
     private static List<String> tokens(String sql) {
         List<String> tokens = new ArrayList<>();
         int i = 0;
-        int n = sql.length();
-        while (i < n) {
-            char c = sql.charAt(i);
-            if (sql.startsWith("--", i)) {
-                int eol = sql.indexOf('\n', i);
-                i = eol < 0 ? n : eol + 1;
-            } else if (sql.startsWith("/*", i)) {
-                int end = sql.indexOf("*/", i + 2);
-                i = end < 0 ? n : end + 2;
-            } else if (c == '\'') {
-                int end = sql.indexOf('\'', i + 1);
-                i = end < 0 ? n : end + 1;
-            } else if (c == '"' || c == '`' || c == '[') {
-                char close = c == '[' ? ']' : c;
-                int end = sql.indexOf(close, i + 1);
-                int stop = end < 0 ? n : end + 1;
-                tokens.add(sql.substring(i, stop));
-                i = stop;
-            } else if (Character.isLetter(c) || c == '_') {
-                int start = i;
-                while (i < n && (Character.isLetterOrDigit(sql.charAt(i)) || sql.charAt(i) == '_' || sql.charAt(i) == '$')) {
-                    i++;
-                }
-                tokens.add(sql.substring(start, i));
-            } else {
-                if (c == '.') {
-                    tokens.add(".");
-                }
-                i++;
-            }
+        while (i < sql.length()) {
+            i = next(sql, i, tokens);
         }
         return tokens;
+    }
+
+    /** Reads what starts at {@code i}, adds its token if it has one, and returns where the next one starts. */
+    private static int next(String sql, int i, List<String> tokens) {
+        char c = sql.charAt(i);
+        if (sql.startsWith("--", i)) {
+            return after(sql, "\n", i + 2);
+        }
+        if (sql.startsWith("/*", i)) {
+            return after(sql, "*/", i + 2);
+        }
+        if (c == '\'') {
+            return after(sql, "'", i + 1);
+        }
+        if (c == '"' || c == '`' || c == '[') {
+            int stop = after(sql, c == '[' ? "]" : String.valueOf(c), i + 1);
+            tokens.add(sql.substring(i, stop));
+            return stop;
+        }
+        if (Character.isLetter(c) || c == '_') {
+            int stop = i;
+            while (stop < sql.length() && isWordPart(sql.charAt(stop))) {
+                stop++;
+            }
+            tokens.add(sql.substring(i, stop));
+            return stop;
+        }
+        if (c == '.') {
+            tokens.add(".");
+        }
+        return i + 1;
+    }
+
+    /** The index just past the next {@code end} from {@code from}, or the end of {@code sql}. */
+    private static int after(String sql, String end, int from) {
+        int at = sql.indexOf(end, from);
+        return at < 0 ? sql.length() : at + end.length();
+    }
+
+    private static boolean isWordPart(char c) {
+        return Character.isLetterOrDigit(c) || c == '_' || c == '$';
     }
 
     private static Table table(String ident) {
