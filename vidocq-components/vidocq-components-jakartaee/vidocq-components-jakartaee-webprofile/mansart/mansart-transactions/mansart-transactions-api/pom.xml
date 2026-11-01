@@ -17,16 +17,19 @@
             <groupId>jakarta.transaction</groupId>
             <artifactId>jakarta.transaction-api</artifactId>
         </dependency>
-        <!-- jakarta.transaction-api 2.0 module-info requires jakarta.cdi + jakarta.interceptor
-             (à cause de @TransactionScoped et @Transactional). Sans ces deux deps en compile,
-             tout module qui requires jakarta.transaction casse à la compilation. -->
+        <!-- jakarta.transaction-api 2.0's module-info requires jakarta.cdi and jakarta.interceptor
+             (for @TransactionScoped and @Transactional): they must be on the module path to compile.
+             Provided: the CDI container brings them at run time (vidocq-workspace#17), so each
+             module compiling against this API declares them too. -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>jakarta.interceptor</groupId>
             <artifactId>jakarta.interceptor-api</artifactId>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
 </project>

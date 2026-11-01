@@ -22,10 +22,12 @@ package io.vidocq.mansart.data.cdi;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.Discovery;
 import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
+import jakarta.enterprise.inject.build.compatible.spi.Registration;
 import jakarta.enterprise.inject.build.compatible.spi.ScannedClasses;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.data.repository.Repository;
+import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 
 import java.io.BufferedReader;
@@ -36,6 +38,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -67,6 +70,9 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
 
     private final List<RepoEntry> entries = new ArrayList<>();
     private final Set<String> runtimeRepoFqns = new LinkedHashSet<>();
+    /** Bean classes the container itself manages, seen at {@code @Registration}; per instance (DRC-005). */
+    private final Set<String> managedBeanClasses = new HashSet<>();
+    private boolean registrationSeen;
 
     record RepoEntry(String itfFqn, String implFqn) {}
 
@@ -180,6 +186,21 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         }
     }
 
+    /**
+     * MANSART-031 — records the bean classes the container manages itself, so that {@code @Synthesis}
+     * registers a repository only when no managed bean implements it. The generated
+     * {@code *RepositoryImpl} is {@code @Singleton}, a pseudo-scope that is not a bean defining
+     * annotation: Vauban manages it, but Weld or Open Liberty in an {@code annotated} bean archive do
+     * not discover it, and the repository was then left unsatisfied (mansart-it-weld).
+     */
+    @Registration(types = Object.class)
+    public void recordManagedBeans(BeanInfo bean) {
+        registrationSeen = true;
+        if (bean.isClassBean()) {
+            managedBeanClasses.add(bean.declaringClass().name());
+        }
+    }
+
     @Synthesis
     public void registerRepositories(SyntheticComponents components) {
         ClassLoader cl = currentClassLoader();
@@ -191,7 +212,16 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         for (String fqn : runtimeRepoFqns) registerRuntimeEntry(components, cl, fqn);
     }
 
-    private static void registerCompileTimeEntry(SyntheticComponents components, ClassLoader cl, RepoEntry e) {
+    /**
+     * Whether the container manages {@code impl} as a bean of its own. Decided from what
+     * {@code @Registration} saw; a container that never ran that phase keeps the former rule, the
+     * bean scope annotations the processor emits.
+     */
+    boolean isManagedBean(Class<?> impl) {
+        return registrationSeen ? managedBeanClasses.contains(impl.getName()) : isAlreadyManagedBean(impl);
+    }
+
+    private void registerCompileTimeEntry(SyntheticComponents components, ClassLoader cl, RepoEntry e) {
         Class<?> itf;
         try {
             itf = cl.loadClass(e.itfFqn());
@@ -222,11 +252,11 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         // synthetic bean would create an ambiguous dependency for @Inject MyRepository.
         // Non-default dataStore (MANSART-005): the impl was vetoed at @Enhancement, so the
         // synthetic bean below is the only one and its creator routes via DataStoreResolver.
-        if (!routed && isAlreadyManagedBean(impl)) return;
+        if (!routed && isManagedBean(impl)) return;
         registerCompileTime(components, itf, impl);
     }
 
-    private static void registerRuntimeEntry(SyntheticComponents components, ClassLoader cl, String fqn) {
+    private void registerRuntimeEntry(SyntheticComponents components, ClassLoader cl, String fqn) {
         Class<?> itf;
         try {
             itf = cl.loadClass(fqn);
@@ -253,13 +283,13 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
                 && !Repository.DEFAULT_DATA_STORE.equals(dataStore);
     }
 
-    private static boolean hasManagedImplFor(ClassLoader cl, String itfFqn) {
+    private boolean hasManagedImplFor(ClassLoader cl, String itfFqn) {
         // Convention: APT-generated implementation lives next to the interface as <Itf>Impl.
         // We accept multi-package layouts only via the explicit compile-time list above; this
         // heuristic is the runtime-path twin and only checks the conventional sibling name.
         try {
             Class<?> impl = cl.loadClass(itfFqn + "Impl");
-            return isAlreadyManagedBean(impl);
+            return isManagedBean(impl);
         } catch (ClassNotFoundException _) {
             return false;
         }

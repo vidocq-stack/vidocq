@@ -23,6 +23,13 @@
     </properties>
 
     <dependencies>
+        <!-- Jakarta platform API, needed to compile against the Mansart APIs: provided by the CDI
+             container at run time (vidocq-workspace#17). -->
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-external-lib</artifactId>

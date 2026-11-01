@@ -57,6 +57,13 @@
             <artifactId>jakarta.persistence-api</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- The generated implementations use @Singleton/@Inject: an application's compile class path
+             holds jakarta.inject (the CDI container's API, vidocq-workspace#17), so the test's does. -->
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

@@ -12,18 +12,26 @@
     <name>Mansart :: Data :: CDI bootstrap</name>
     <description>CDI 4.1 BuildCompatibleExtension that exposes generated repositories as beans. Implementation in M3.</description>
 
+    <properties>
+        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-core</artifactId>
         </dependency>
+        <!-- Jakarta platform API: provided by the CDI container (vidocq-workspace#17); the Vidocq
+             runtime extension brings it under Vidocq. -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>jakarta.inject</groupId>
             <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <!-- M7-4: needed at compile time so the BCE @Enhancement filter can call
              ClassInfo.hasAnnotation(Repository.class) without scanning every annotation
@@ -47,10 +55,63 @@
             <version>${project.version}</version>
             <optional>true</optional>
         </dependency>
+        <!-- Supplies the VaubanComponentProvider service type of the generated _VaubanComponents
+             (module-info `provides`). API types only, no code runs outside Vauban; inert on a class
+             path (Weld, Open Liberty). Its Jakarta CDI dependencies are excluded: the container
+             brings the CDI API. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <version>${vauban.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own bean, the default
+                RepositoryRuntime producer: the compile generates an in-module _VaubanComponents that
+                instantiates it and invokes its producer method, so Vauban needs no
+                `opens io.vidocq.mansart.data.cdi` (mansart#35). The synthetic-bean creators are public
+                classes of an exported package, reached without deep reflection. Inert under a
+                standard CDI container.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

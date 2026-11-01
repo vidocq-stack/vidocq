@@ -9,6 +9,47 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-033 — On Weld, Mansart Transactions publishes no TransactionManager: its producer cannot be loaded
+
+- **Date**: 2026-11-01
+- **Status**: FIXED on `test/portability-35` (mansart#35)
+- **Severity**: high on another CDI container (every `@Transactional` bean and every injection of
+  `TransactionManager` fails); none under Vidocq
+- **Symptom**: under Weld SE, `MansartTransactionsProducer` fails to load with
+  _NoClassDefFoundError: io/vidocq/vauban/api/ProxyLink_; Weld drops the bean. Found by `mansart-it-weld`.
+- **Cause**: the Vauban build weaves a `(ProxyLink)` entry constructor into the normal-scoped producer, while
+  `vauban-api` was a `provided` dependency, absent outside Vauban (the rule of vidocq-workspace#17).
+- **Fix**: `vauban-api` is a runtime dependency of `mansart-transactions-cdi` (its Jakarta CDI dependencies
+  excluded) and a plain `requires`. `WeldPortabilityTest`.
+
+## MANSART-032 — On Weld, every injection of TransactionManager is ambiguous
+
+- **Date**: 2026-11-01
+- **Status**: FIXED on `test/portability-35` (mansart#35)
+- **Severity**: high on another CDI container; none under Vidocq
+- **Symptom**: _WELD-001409: Ambiguous dependencies for type TransactionManager with qualifiers @Default_ at
+  deployment. Found by `mansart-it-weld`.
+- **Cause**: `MansartTransactionsExtension` adds the producer and the six `@Transactional` interceptors at
+  `@Discovery` (`ScannedClasses.add`, the route Vauban's build-time index sees), and the jar's `beans.xml` made a
+  container that scans the archive discover them a second time.
+- **Fix**: the `beans.xml` of `mansart-transactions-cdi` excludes its package from the scan; the extension stays
+  the only source of these beans on every container. `WeldPortabilityTest`.
+
+## MANSART-031 — On Weld or Open Liberty, a generated repository is never a bean
+
+- **Date**: 2026-11-01
+- **Status**: FIXED on `test/portability-35` (mansart#35)
+- **Severity**: high on another CDI container (_WELD-001408: Unsatisfied dependencies for type Books_); none
+  under Vidocq
+- **Symptom**: an application on Weld SE with a `@Repository` whose implementation the processor generated fails
+  at deployment, the repository unsatisfied. Found by `mansart-it-weld`.
+- **Cause**: the generated `*Impl` is `@Singleton`, a pseudo-scope that is not a bean defining annotation: Vauban
+  manages it, a container in an `annotated` bean archive does not discover it. `MansartDataExtension` skipped the
+  synthetic bean for any implementation carrying `@Singleton`, assuming the container managed it.
+- **Fix**: the extension records at `@Registration` the classes the container really manages as beans, and
+  `@Synthesis` registers the synthetic bean for every implementation that is not one of them. A container that
+  never runs `@Registration` keeps the former rule. `WeldPortabilityTest`, `OpenLibertyPortabilityIT`.
+
 ## MANSART-030 — A repository method no query derives from compiles, then answers 500
 
 - **Date**: 2026-10-30

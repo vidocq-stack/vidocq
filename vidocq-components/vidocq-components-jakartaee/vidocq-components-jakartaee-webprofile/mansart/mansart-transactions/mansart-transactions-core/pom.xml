@@ -13,6 +13,18 @@
     <description>Local TransactionManager + UserTransaction + TransactionSynchronizationRegistry — virtual-thread-native, ScopedValue-bound, 1PC first then 2PC.</description>
 
     <dependencies>
+        <!-- Jakarta platform API, needed to compile against the Mansart APIs: provided by the CDI
+             container at run time (vidocq-workspace#17). -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.interceptor</groupId>
+            <artifactId>jakarta.interceptor-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-transactions-api</artifactId>

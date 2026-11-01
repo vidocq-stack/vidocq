@@ -25,30 +25,48 @@
             <groupId>jakarta.transaction</groupId>
             <artifactId>jakarta.transaction-api</artifactId>
         </dependency>
+        <!-- Jakarta platform APIs: provided by the CDI container (vidocq-workspace#17). The Vidocq
+             runtime extension of Mansart Transactions brings them under Vidocq. -->
         <dependency>
             <groupId>jakarta.enterprise</groupId>
             <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>jakarta.inject</groupId>
             <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>jakarta.interceptor</groupId>
             <artifactId>jakarta.interceptor-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
         </dependency>
-        <!-- Compile-only: supplies the VaubanComponentProvider service type referenced by the
-             APT-generated _VaubanComponents. Provided scope: no runtime dependency on Vauban
-             (vauban-core stays test-scope; a non-Vauban CDI container ignores the provider). -->
+        <!-- Runtime dependency under any CDI container, not only Vauban: the build weaves a
+             `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped
+             MansartTransactionsProducer. Without this jar Weld cannot load the class and drops the
+             bean (WELD-000119), then no TransactionManager is published (mansart-it-weld). API types
+             only, no code runs outside Vauban (vidocq-workspace#15). Its Jakarta CDI dependencies are
+             excluded: the container brings the CDI API. -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-api</artifactId>
             <version>${vauban.version}</version>
-            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- ====== Test dependencies ====== -->

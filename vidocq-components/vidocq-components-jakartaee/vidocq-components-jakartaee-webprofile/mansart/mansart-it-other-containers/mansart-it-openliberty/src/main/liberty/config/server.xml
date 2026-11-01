@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Mansart Data on Open Liberty (Jakarta EE 11 Web Profile distribution). data-1.0 stays off,
+    otherwise Liberty's own Jakarta Data provider would implement the repository.
+-->
+<server description="mansart-it-openliberty">
+    <featureManager>
+        <feature>cdi-4.1</feature>
+        <feature>restfulWS-4.0</feature>
+        <feature>jdbc-4.3</feature>
+        <feature>jndi-1.0</feature>
+    </featureManager>
+
+    <httpEndpoint id="defaultHttpEndpoint" host="localhost" httpPort="${http.port}" httpsPort="${https.port}"/>
+
+    <library id="h2">
+        <fileset dir="${shared.resource.dir}/h2" includes="*.jar"/>
+    </library>
+
+    <!-- java:comp/DefaultDataSource, the store the application's repository names. -->
+    <dataSource id="DefaultDataSource">
+        <jdbcDriver libraryRef="h2" javax.sql.XADataSource="org.h2.jdbcx.JdbcDataSource"/>
+        <properties URL="jdbc:h2:mem:mansart-it;DB_CLOSE_DELAY=-1" user="sa" password=""/>
+    </dataSource>
+
+    <webApplication location="mansart-it-openliberty.war" contextRoot="/mansart"/>
+</server>

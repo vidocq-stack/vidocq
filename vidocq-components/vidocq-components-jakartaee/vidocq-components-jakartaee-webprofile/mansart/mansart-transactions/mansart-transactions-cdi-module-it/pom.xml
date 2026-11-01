@@ -104,6 +104,19 @@
                             <artifactId>mansart-transactions-cdi</artifactId>
                             <version>${project.version}</version>
                         </path>
+                        <!-- The Jakarta APIs it reads are provided by the container at run time
+                             (vidocq-workspace#17), so they no longer come through it: the processor
+                             path names them. -->
+                        <path>
+                            <groupId>jakarta.enterprise</groupId>
+                            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                            <version>${jakarta.cdi.version}</version>
+                        </path>
+                        <path>
+                            <groupId>jakarta.interceptor</groupId>
+                            <artifactId>jakarta.interceptor-api</artifactId>
+                            <version>${jakarta.interceptor.version}</version>
+                        </path>
                     </annotationProcessorPaths>
                     <compilerArgs>
                         <!-- TxService injects TransactionManager, produced by mansart-transactions-cdi

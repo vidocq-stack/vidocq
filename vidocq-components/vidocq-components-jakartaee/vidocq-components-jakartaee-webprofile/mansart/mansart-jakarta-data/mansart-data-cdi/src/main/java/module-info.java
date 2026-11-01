@@ -37,10 +37,15 @@ module io.vidocq.mansart.data.cdi {
 
     exports io.vidocq.mansart.data.cdi;
 
-    // Vauban (or any compliant CDI Lite container) instantiates beans of this jar via
-    // MethodHandles.privateLookupIn. In module-path mode this requires opens-to. We open
-    // narrowly to vauban-core only — the package stays sealed for everyone else.
-    opens io.vidocq.mansart.data.cdi to io.vidocq.vauban.core;
+    // Required with the `provides` below: supplies the VaubanComponentProvider service type.
+    requires io.vidocq.vauban.api;
+
+    // No `opens` (mansart#35): the default RepositoryRuntime producer is instantiated and its
+    // producer method invoked in-module by the APT-generated _VaubanComponents provider below; the
+    // synthetic-bean creators are public classes of this exported package. Other CDI containers
+    // run on a class path, where the descriptor is ignored.
+    provides io.vidocq.vauban.api.VaubanComponentProvider
+            with io.vidocq.mansart.data.cdi._VaubanComponents;
 
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
             with io.vidocq.mansart.data.cdi.MansartDataExtension;

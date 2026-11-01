@@ -24,13 +24,14 @@
             <groupId>jakarta.data</groupId>
             <artifactId>jakarta.data-api</artifactId>
         </dependency>
-        <!-- mansart-data-processor APT emits @Singleton + @Inject on every *RepositoryImpl, so any
-             user module driving the processor needs jakarta.inject on its compile classpath. We
-             expose it transitively from core to keep the user POM minimal — they declare
-             mansart-data-* and CDI annotations resolve out of the box. -->
+        <!-- mansart-data-processor emits @Singleton + @Inject on every *RepositoryImpl, so a user
+             module driving the processor needs jakarta.inject to compile. Provided: the CDI
+             container brings it (vidocq-workspace#17) — under Vidocq the runtime extension, on
+             another container the container itself. -->
         <dependency>
             <groupId>jakarta.inject</groupId>
             <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
         </dependency>
         <!-- jakarta.transaction-api will be re-added in M3 when the runtime uses UserTransaction. -->
     </dependencies>

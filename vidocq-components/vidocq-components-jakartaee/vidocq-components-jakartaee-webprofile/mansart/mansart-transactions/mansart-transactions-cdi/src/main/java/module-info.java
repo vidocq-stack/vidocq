@@ -36,8 +36,11 @@ module io.vidocq.mansart.transactions.cdi {
     requires jakarta.inject;
     requires jakarta.interceptor;
     requires jakarta.annotation;
-    // Compile-only (optional at runtime): supplies the VaubanComponentProvider service type.
-    requires static io.vidocq.vauban.api;
+    // Required at runtime under any CDI container, not only Vauban: the build weaves a
+    // `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped
+    // MansartTransactionsProducer, so its class cannot be loaded without this module. It also
+    // supplies the VaubanComponentProvider service type.
+    requires io.vidocq.vauban.api;
 
     exports io.vidocq.mansart.transactions.cdi;
 
