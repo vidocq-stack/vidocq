@@ -263,21 +263,15 @@ public final class ReflectedPackages {
         if (!Files.isRegularFile(services)) {
             return bound;
         }
-        for (String line : Files.readAllLines(services)) {
-            String binding = line.strip();
-            if (binding.isEmpty() || binding.startsWith("#")) {
-                continue;
-            }
-            ClassModel model = application.get(binding.replace('.', '/'));
-            if (model == null) {
-                continue;
-            }
-            model.findAttribute(Attributes.signature()).ifPresent(signature -> {
-                Matcher m = BOUND_TYPE.matcher(signature.signature().stringValue());
-                if (m.find()) {
-                    bound.add(m.group(1));
-                }
-            });
+        try (Stream<String> lines = Files.lines(services)) {
+            lines.map(String::strip)
+                    .filter(binding -> !binding.isEmpty() && !binding.startsWith("#"))
+                    .map(binding -> application.get(binding.replace('.', '/')))
+                    .filter(java.util.Objects::nonNull)
+                    .flatMap(model -> model.findAttribute(Attributes.signature()).stream())
+                    .map(signature -> BOUND_TYPE.matcher(signature.signature().stringValue()))
+                    .filter(Matcher::find)
+                    .forEach(m -> bound.add(m.group(1)));
         }
         return bound;
     }
