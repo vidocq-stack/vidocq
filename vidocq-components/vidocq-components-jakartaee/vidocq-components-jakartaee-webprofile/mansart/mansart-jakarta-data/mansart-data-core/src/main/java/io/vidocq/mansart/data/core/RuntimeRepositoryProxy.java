@@ -626,8 +626,19 @@ public final class RuntimeRepositoryProxy {
                 Attribute<?, ?> match = consumed.contains(i) ? null
                         : singleAttributeOfType(model, paramTypes[i], attributes);
                 if (match != null) { paramIndexes.add(i); attributes.add(match); }
+                // mansart#40: a parameter left unbound would be dropped from the query, which would then return
+                // every row; a repository compiled without -parameters reaches this when its type is ambiguous.
+                else if (!consumed.contains(i)) throw unbound(m, i, paramTypes[i]);
             }
             return new FindBindings(List.copyOf(paramIndexes), List.copyOf(attributes), orderBySorts(m));
+        }
+
+        private static MansartDataException unbound(Method m, int index, Class<?> type) {
+            return new MansartDataException("Cannot run " + m.getDeclaringClass().getName() + "." + m.getName()
+                    + ": its @Find parameter " + index + " (" + type.getSimpleName() + ") matches no attribute — its"
+                    + " name is not an attribute of the entity, or is missing from the class file (compiled without"
+                    + " -parameters), and the entity has no single attribute of that type. Annotate the parameter"
+                    + " with @By, or compile the repository with -parameters.");
         }
 
         private static List<jakarta.data.Sort<?>> orderBySorts(Method m) {

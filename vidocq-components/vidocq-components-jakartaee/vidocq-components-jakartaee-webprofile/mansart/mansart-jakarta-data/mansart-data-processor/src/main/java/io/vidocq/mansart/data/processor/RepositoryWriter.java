@@ -437,7 +437,9 @@ final class RepositoryWriter {
      */
     private String findAttribute(ExecutableElement m, javax.lang.model.element.VariableElement param) {
         String attribute = annotationValue(param, "jakarta.data.repository.By");
-        if (attribute == null) return param.getSimpleName().toString();
+        if (attribute == null) {
+            return withoutParameterNames(m) ? attributeOfType(m, param) : param.getSimpleName().toString();
+        }
         if (!attribute.equals("id(this)")) return attribute;
         TypeElement entity = entityForRepo(m);
         for (var member : entity.getEnclosedElements()) {
@@ -447,6 +449,57 @@ final class RepositoryWriter {
             }
         }
         return "id";
+    }
+
+    /**
+     * Whether {@code m} comes from a class file compiled without {@code -parameters} (mansart#40): javac then names
+     * its parameters {@code arg0}, {@code arg1}… and a {@code @Find} cannot match them to attributes by name.
+     */
+    private boolean withoutParameterNames(ExecutableElement m) {
+        javax.tools.JavaFileObject file = elements.getFileObjectOf(m.getEnclosingElement());
+        if (file == null || file.getKind() != javax.tools.JavaFileObject.Kind.CLASS) return false;
+        var params = m.getParameters();
+        for (int i = 0; i < params.size(); i++) {
+            if (!params.get(i).getSimpleName().contentEquals("arg" + i)) return false;
+        }
+        return !params.isEmpty();
+    }
+
+    /**
+     * The attribute a nameless {@code @Find} parameter is compared to: the entity's only attribute of its type, as
+     * the run-time path resolves it. Two candidates, or none, and the method cannot be implemented: the error names
+     * it, and no query is guessed (mansart#40).
+     */
+    private String attributeOfType(ExecutableElement m, javax.lang.model.element.VariableElement param) {
+        TypeElement entity = entityForRepo(m);
+        String match = null;
+        for (var member : entity.getEnclosedElements()) {
+            if (member.getKind() == javax.lang.model.element.ElementKind.FIELD
+                    && !member.getModifiers().contains(javax.lang.model.element.Modifier.STATIC)
+                    && types.isSameType(boxed(member.asType()), boxed(param.asType()))) {
+                if (match != null) {
+                    throw new IllegalStateException(nameless(m, "has several attributes of type " + param.asType()));
+                }
+                match = member.getSimpleName().toString();
+            }
+        }
+        if (match == null) {
+            throw new IllegalStateException(nameless(m, "has no attribute of type " + param.asType()));
+        }
+        return match;
+    }
+
+    private javax.lang.model.type.TypeMirror boxed(javax.lang.model.type.TypeMirror type) {
+        return type instanceof javax.lang.model.type.PrimitiveType primitive
+                ? types.boxedClass(primitive).asType() : types.erasure(type);
+    }
+
+    private static String nameless(ExecutableElement m, String why) {
+        TypeElement repo = (TypeElement) m.getEnclosingElement();
+        return "cannot implement " + repo.getQualifiedName() + "." + m.getSimpleName() + ": its parameters have no"
+                + " names in the class file (the library was compiled without -parameters) and the entity " + why
+                + ", so the attribute each parameter is compared to is unknown. Annotate the parameters with @By,"
+                + " or compile the library with -parameters.";
     }
 
     /** The {@code ORDER BY} list of a {@code @Find} method's {@code @OrderBy} annotations, in declaration order. */
@@ -1193,6 +1246,12 @@ final class RepositoryWriter {
     }
 
     /** Walk the supertype chain looking for {@code BasicRepository<T, K>} or {@code CrudRepository<T, K>}. */
+    /** The entity {@code repo} stores, or {@code null} when it is not a repository of one entity. */
+    TypeElement entityOf(TypeElement repo) {
+        TypeArgs args = findEntityAndKey(repo);
+        return args == null ? null : (TypeElement) args.entity.asElement();
+    }
+
     private TypeArgs findEntityAndKey(TypeElement repo) {
         for (TypeMirror itf : allInterfaces(repo)) {
             if (itf instanceof DeclaredType dt

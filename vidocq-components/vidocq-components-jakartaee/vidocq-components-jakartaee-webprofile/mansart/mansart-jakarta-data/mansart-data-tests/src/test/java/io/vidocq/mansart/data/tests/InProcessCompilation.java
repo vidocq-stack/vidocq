@@ -131,6 +131,84 @@ final class InProcessCompilation {
         }
     }
 
+    /**
+     * Compiles a library the way a third party would, with no annotation processing: each {@code fqn -> source}
+     * pair under {@code out/src}, into {@code out/classes}, with or without {@code -parameters}.
+     */
+    static Result compileLibrary(Path out, boolean parameterNames, String... fqnAndSourcePairs) throws IOException {
+        List<Path> sources = new ArrayList<>();
+        for (int i = 0; i < fqnAndSourcePairs.length; i += 2) {
+            Path file = out.resolve("src").resolve(fqnAndSourcePairs[i].replace('.', '/') + JAVA);
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, fqnAndSourcePairs[i + 1], StandardCharsets.UTF_8);
+            sources.add(file);
+        }
+        Path classes = Files.createDirectories(out.resolve("classes"));
+        JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
+        DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
+        try (StandardJavaFileManager files = javac.getStandardFileManager(diagnostics, Locale.ROOT,
+                StandardCharsets.UTF_8)) {
+            files.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, List.of(classes));
+            files.setLocationFromPaths(StandardLocation.CLASS_PATH, dependencyClassPath());
+            List<String> options = new ArrayList<>(List.of("-proc:none", "-Xlint:none"));
+            if (parameterNames) {
+                options.add("-parameters");
+            }
+            boolean success = javac.getTask(null, files, diagnostics, options, null,
+                    files.getJavaFileObjectsFromPaths(sources)).call();
+            return new Result(success, List.copyOf(diagnostics.getDiagnostics()), classes, out.resolve("generated"));
+        }
+    }
+
+    /**
+     * Runs Mansart's processor over compiled classes, as {@code vidocq:generate} does on a dependency jar:
+     * {@code javac -proc:only} given the binary names, the library's classes on the class path. The generated
+     * sources go to {@code out/generated}, the resources to {@code out/classes}.
+     */
+    static Result processClassFiles(Path libraryClasses, Path out, String... binaryNames) throws IOException {
+        Path classes = Files.createDirectories(out.resolve("classes"));
+        Path generated = Files.createDirectories(out.resolve("generated"));
+        JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
+        DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
+        try (StandardJavaFileManager files = javac.getStandardFileManager(diagnostics, Locale.ROOT,
+                StandardCharsets.UTF_8)) {
+            files.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, List.of(classes));
+            files.setLocationFromPaths(StandardLocation.SOURCE_OUTPUT, List.of(generated));
+            List<Path> classPath = new ArrayList<>(dependencyClassPath());
+            classPath.add(libraryClasses);
+            files.setLocationFromPaths(StandardLocation.CLASS_PATH, classPath);
+            JavaCompiler.CompilationTask task = javac.getTask(null, files, diagnostics,
+                    List.of("-proc:only", "-implicit:none", "-Xlint:none"), List.of(binaryNames), null);
+            task.setProcessors(List.of(new MansartProcessor()));
+            boolean success = task.call();
+            return new Result(success, List.copyOf(diagnostics.getDiagnostics()), classes, generated);
+        }
+    }
+
+    /**
+     * Compiles the sources a {@link #processClassFiles} run generated against the library's classes, as
+     * {@code vidocq:generate} does before it writes them into the enriched copy.
+     */
+    static Result compileGenerated(Result processed, Path libraryClasses, Path out) throws IOException {
+        List<Path> sources;
+        try (Stream<Path> walk = Files.walk(processed.generated())) {
+            sources = walk.filter(p -> p.toString().endsWith(JAVA)).sorted().toList();
+        }
+        Path classes = Files.createDirectories(out.resolve("classes"));
+        JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
+        DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
+        try (StandardJavaFileManager files = javac.getStandardFileManager(diagnostics, Locale.ROOT,
+                StandardCharsets.UTF_8)) {
+            files.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, List.of(classes));
+            List<Path> classPath = new ArrayList<>(dependencyClassPath());
+            classPath.add(libraryClasses);
+            files.setLocationFromPaths(StandardLocation.CLASS_PATH, classPath);
+            boolean success = javac.getTask(null, files, diagnostics, List.of("-proc:none", "-Xlint:none"), null,
+                    files.getJavaFileObjectsFromPaths(sources)).call();
+            return new Result(success, List.copyOf(diagnostics.getDiagnostics()), classes, processed.generated());
+        }
+    }
+
     /** The test class path without this module's {@code target/classes} and {@code target/test-classes}. */
     private static List<Path> dependencyClassPath() {
         Path target = Path.of("target").toAbsolutePath().normalize();

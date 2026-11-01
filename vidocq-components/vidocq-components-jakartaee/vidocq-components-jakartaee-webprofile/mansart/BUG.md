@@ -9,6 +9,22 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-034 — A `@Find` without parameter names ran a query without its condition, returning every row
+
+- **Date**: 2026-11-01
+- **Status**: FIXED on `feat/repositories-from-dependency-jars-40` (mansart#40)
+- **Severity**: high (a wrong result, silently)
+- **Symptom**: a repository compiled without `-parameters` (a library jar), `@Find List<Book> byAuthor(String author)`
+  on an entity with two `String` attributes: the run-time path left the parameter unbound and `byAuthor("Zola")`
+  returned every book; the processor, run over the class file, matched the parameter to an attribute named `arg0`.
+- **Minimal reproduction**: `RuntimeFindWithoutParameterNamesTest`, `ProcessorClassFileInputTest`.
+- **Cause**: without a `MethodParameters` attribute, javac and reflection name the parameters `arg0`, `arg1`…; the
+  run-time `FindBindings` fell back to the single attribute of the parameter's type and, when there was none or
+  several, dropped the parameter; the processor used the name as the attribute.
+- **Fix**: both bind a nameless parameter to the entity's only attribute of its type, as the run-time path did, and
+  otherwise fail naming the method and suggesting `@By` or `-parameters` — the processor at build time, the run-time
+  path when it creates the repository.
+
 ## MANSART-033 — On Weld, Mansart Transactions publishes no TransactionManager: its producer cannot be loaded
 
 - **Date**: 2026-11-01

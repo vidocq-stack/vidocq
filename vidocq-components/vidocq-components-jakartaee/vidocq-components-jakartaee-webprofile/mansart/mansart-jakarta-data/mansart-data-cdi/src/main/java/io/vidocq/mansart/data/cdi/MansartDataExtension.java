@@ -180,10 +180,37 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
             if (ann != null) {
                 if (isRouted(ann.dataStore())) {
                     clazz.addAnnotation(jakarta.enterprise.inject.Vetoed.class);
+                } else if (isForeignImplementation(impl, itf)) {
+                    // mansart#40 — another provider's generated implementation, shipped in a library jar: Mansart
+                    // implements the repository, so this class must not become a second bean (ambiguous, and
+                    // needing a provider that is not there).
+                    LOG.log(System.Logger.Level.INFO, "{0} is another Jakarta Data provider''s implementation of {1};"
+                            + " Mansart implements {1} instead.", impl.getName(), itf.getName());
+                    clazz.addAnnotation(jakarta.enterprise.inject.Vetoed.class);
                 }
                 return;
             }
         }
+    }
+
+    /**
+     * Whether {@code impl} is the implementation another provider's processor generated for {@code itf}: named by
+     * Hibernate Processor's convention, {@code <repository>_}, and without the {@code (RepositoryRuntime)}
+     * constructor of Mansart's. A class the application writes keeps its own name and stays a bean.
+     */
+    static boolean isForeignImplementation(Class<?> impl, Class<?> itf) {
+        if (!impl.getName().equals(itf.getName() + "_")) return false;
+        try {
+            for (var constructor : impl.getDeclaredConstructors()) {
+                var params = constructor.getParameterTypes();
+                if (params.length == 1 && params[0] == io.vidocq.mansart.data.core.RepositoryRuntime.class) {
+                    return false;
+                }
+            }
+        } catch (LinkageError _) {
+            // Its constructor names a type of the other provider, absent here: certainly not Mansart's.
+        }
+        return true;
     }
 
     /**
