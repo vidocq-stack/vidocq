@@ -97,7 +97,8 @@
              champollion-api brings jakarta.json-api + jakarta.json.bind-api transitively;
              champollion-jsonb provides the JsonbProvider and pulls champollion-jsonp
              (JsonProvider) at runtime. Discovered through ServiceLoader — replaces the
-             Yasson + Parsson stack used by the other examples. -->
+             Yasson + Parsson stack used by the other examples. Compile scope: the JSON-B bindings
+             champollion-codegen-apt generates for the resources' types implement its SPI. -->
         <dependency>
             <groupId>io.vidocq.champollion</groupId>
             <artifactId>champollion-api</artifactId>
@@ -107,7 +108,6 @@
             <groupId>io.vidocq.champollion</groupId>
             <artifactId>champollion-jsonb</artifactId>
             <version>${champollion.version}</version>
-            <scope>runtime</scope>
         </dependency>
 
         <!-- jakarta.persistence-api: @Entity, @Id, etc. (annotations only, no JPA runtime) -->

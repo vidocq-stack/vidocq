@@ -40,6 +40,13 @@
             <artifactId>cassini-cdi</artifactId>
             <version>${cassini.version}</version>
         </dependency>
+        <!-- Champollion's processor: the JSON-B binding of every record and final class a resource takes or returns,
+             generated at build time, so JSON-B maps them without reflection and their packages need no `opens`. -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-codegen-apt</artifactId>
+            <version>${champollion.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
