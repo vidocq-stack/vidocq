@@ -52,7 +52,10 @@ import java.util.stream.Stream;
  * the others through the provider generated in their package (VAU-INT-011), but a private one by reflection, which
  * needs the package opened.</p>
  *
- * <p>The resources themselves are not listed: their dispatch is generated at build time.</p>
+ * <p>The resources themselves are not listed: their dispatch is generated at build time. Nor are the types that have
+ * a JSON-B binding generated at build time (champollion-codegen-apt, listed in the {@code JsonbBinding} services
+ * file): JSON-B maps them without reflection, and the processor generates one only when every type they hold has one
+ * too. A JPA entity still needs its package opened for JPA.</p>
  */
 public final class ReflectedPackages {
 
@@ -68,6 +71,12 @@ public final class ReflectedPackages {
             "Ljakarta/interceptor/AroundInvoke;", "Ljakarta/interceptor/AroundConstruct;",
             "Ljakarta/interceptor/AroundTimeout;", "Ljakarta/annotation/PostConstruct;",
             "Ljakarta/annotation/PreDestroy;");
+
+    private static final String JSONB_BINDING = "io/vidocq/champollion/jsonb/spi/JsonbBinding";
+    private static final String JSONB_BINDING_SERVICES = "META-INF/services/io.vidocq.champollion.jsonb.spi.JsonbBinding";
+    private static final String JPA_ENTITY = "a JPA entity";
+    /** The type argument of {@code JsonbBinding<T>} in a binding's class signature. */
+    private static final Pattern BOUND_TYPE = Pattern.compile("L" + JSONB_BINDING + "<L([\\w$/]+);>;");
 
     /** A class name inside a descriptor or a generic signature: {@code Lcom/acme/Book;}, {@code Lcom/acme/Box<}. */
     private static final Pattern CLASS_REF = Pattern.compile("L([\\w$/]+)[;<]");
@@ -106,11 +115,12 @@ public final class ReflectedPackages {
             queue.addAll(roots(model));
         }
         Map<String, List<String>> subtypes = subtypes(application);
+        Set<String> bound = boundTypes(classes, application);
         Set<String> seen = new HashSet<>();
         while (!queue.isEmpty()) {
             String[] next = queue.poll();
             ClassModel model = application.get(next[0]);
-            if (model == null || !seen.add(next[0])) {
+            if (model == null || bound.contains(next[0]) && !JPA_ENTITY.equals(next[1]) || !seen.add(next[0])) {
                 continue;
             }
             reasons.putIfAbsent(packageOf(next[0]), dotted(next[0]) + ", " + next[1]);
@@ -232,7 +242,7 @@ public final class ReflectedPackages {
         Set<String> annotations = annotations(model);
         List<String[]> roots = new ArrayList<>();
         if (annotations.stream().anyMatch(ENTITY_ANNOTATIONS::contains)) {
-            roots.add(new String[] {name, "a JPA entity"});
+            roots.add(new String[] {name, JPA_ENTITY});
         }
         if (annotations.stream().anyMatch(RESOURCE_ANNOTATIONS::contains)) {
             model.methods().stream()
@@ -241,6 +251,35 @@ public final class ReflectedPackages {
                     .forEach(type -> roots.add(new String[] {type, "reached through " + dotted(name)}));
         }
         return roots;
+    }
+
+    /**
+     * The types JSON-B maps through a binding generated at build time: those of the classes the {@code JsonbBinding}
+     * services file lists, read from their {@code JsonbBinding<T>} signature.
+     */
+    private static Set<String> boundTypes(Path classes, Map<String, ClassModel> application) throws IOException {
+        Path services = classes.resolve(JSONB_BINDING_SERVICES);
+        Set<String> bound = new HashSet<>();
+        if (!Files.isRegularFile(services)) {
+            return bound;
+        }
+        for (String line : Files.readAllLines(services)) {
+            String binding = line.strip();
+            if (binding.isEmpty() || binding.startsWith("#")) {
+                continue;
+            }
+            ClassModel model = application.get(binding.replace('.', '/'));
+            if (model == null) {
+                continue;
+            }
+            model.findAttribute(Attributes.signature()).ifPresent(signature -> {
+                Matcher m = BOUND_TYPE.matcher(signature.signature().stringValue());
+                if (m.find()) {
+                    bound.add(m.group(1));
+                }
+            });
+        }
+        return bound;
     }
 
     /** The types the non-static fields and the getters of {@code model} hold. */

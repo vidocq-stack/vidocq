@@ -102,6 +102,44 @@ class ReflectedPackagesTest {
                 reached.get("com.acme.shop.book"));
     }
 
+    /** A generated JSON-B binding, as champollion-codegen-apt writes it, listed in the services file. */
+    private void generatedBinding(ClassDesc type) throws IOException {
+        ClassDesc binding = ClassDesc.of(type.packageName(), type.displayName() + "$$Binding");
+        write(binding, cb -> cb.withInterfaceSymbols(ClassDesc.of("io.vidocq.champollion.jsonb.spi.JsonbBinding"))
+                .with(SignatureAttribute.of(java.lang.classfile.ClassSignature.of(
+                        java.lang.classfile.Signature.ClassTypeSig.of(ConstantDescs.CD_Object),
+                        java.lang.classfile.Signature.ClassTypeSig.of(
+                                ClassDesc.of("io.vidocq.champollion.jsonb.spi.JsonbBinding"),
+                                java.lang.classfile.Signature.TypeArg.of(java.lang.classfile.Signature.ClassTypeSig.of(type)))))));
+        Path services = classes.resolve("META-INF/services/io.vidocq.champollion.jsonb.spi.JsonbBinding");
+        Files.createDirectories(services.getParent());
+        Files.writeString(services, (Files.exists(services) ? Files.readString(services) : "")
+                + type.packageName() + "." + type.displayName() + "$$Binding\n");
+    }
+
+    @Test
+    void aTypeWithAGeneratedJsonbBindingNeedsNoDirective() throws IOException {
+        bookAndAuthor();
+        generatedBinding(BOOK);
+        write(ClassDesc.of("com.acme.shop.rest.BookResource"), annotated("jakarta.ws.rs.Path", cb ->
+                cb.withMethod("all", MethodTypeDesc.of(ConstantDescs.CD_List), ClassFile.ACC_PUBLIC, mb -> {
+                    mb.with(SignatureAttribute.of(MethodSignature.parseFrom("()Ljava/util/List<Lcom/acme/shop/book/Book;>;")));
+                    mb.withCode(code -> code.aconst_null().areturn());
+                })));
+
+        // Book has its binding, and so does everything it holds (the processor generates one only then): neither
+        // its package nor its author's is reached by reflection.
+        assertEquals(Map.of(), ReflectedPackages.of(classes).reasons());
+    }
+
+    @Test
+    void aJpaEntityWithABindingStillNeedsItsPackageOpenedForJpa() throws IOException {
+        write(BOOK, annotated("jakarta.persistence.Entity", cb -> { }));
+        generatedBinding(BOOK);
+
+        assertEquals(Set.of("com.acme.shop.book"), ReflectedPackages.of(classes).reasons().keySet());
+    }
+
     @Test
     void aJpaEntityNeedsItsPackageOpened() throws IOException {
         write(ClassDesc.of("com.acme.shop.data.Loan"), annotated("jakarta.persistence.Entity",

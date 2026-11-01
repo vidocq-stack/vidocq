@@ -5,6 +5,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261101-01 — The DTOs a REST resource exchanges are bound by reflection, so their packages need `opens`
+
+- **Date**: 2026-11-01
+- **Status**: FIXED on `feat/jsonb-build-time-bindings`, with champollion#63 (champollion BUG-20261101-02): the REST codegen bundle (`vidocq-runtime-cassini-rest-extension-codegen`) brings `champollion-codegen-apt`, which generates at build time the JSON-B binding of every record and final Object-rooted class a resource takes or returns, and of the types they hold. The REST extension reads `champollion-jsonb` at compile scope and `requires transitive io.vidocq.champollion.jsonb`, so the application compiles the bindings without a new `requires`. `ReflectedPackages` (check-module-info, doctor) skips the types the `JsonbBinding` services file binds, except as JPA entities (`ReflectedPackagesTest.aTypeWithAGeneratedJsonbBindingNeedsNoDirective`, `aJpaEntityWithABindingStillNeedsItsPackageOpenedForJpa`). Checked end to end on a `vidocq create -x cassini-rest` application with `record Book`/`record Author` in `com.example.jb.book` and no `opens`: `package` passes, GET and POST answer 200; with the services file emptied the same request answers 500 "does not open package com.example.jb.book"; `vidocq dev` reloads a changed record. The petstore example's own `champollion-jsonb` dependency lost its `runtime` scope.
+- **Reported by**: Yann (the goal: in a Vidocq environment, avoid reflection; generate at build time)
+- **Minimal reproduction**: a resource returning a record of a package the module does not open: the build asked for `opens`, and without it the first request failed (BUG-20261030-24).
+- **Cause hypothesis**: Champollion's processor only handled `@JsonbStatic` records, and nothing wired it into an application.
+
 ## BUG-20261031-17 — The build check missed superclasses and implementations; `extension add mansart-data` left the application without a DataSource
 
 - **Date**: 2026-10-31

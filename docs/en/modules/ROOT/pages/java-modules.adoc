@@ -7,7 +7,7 @@
 [#why]
 == Why `opens` exists
 
-Some libraries of the runtime look inside your classes by reflection: JSON-B reads and fills the fields of your DTOs, Jakarta Persistence builds your entities, Vauban calls a `private` interceptor method. Reaching private fields and constructors of a named module is *deep reflection*, and the Java module system only allows it on a package the module **opens**:
+Some libraries of the runtime look inside your classes by reflection: JSON-B reads and fills the fields of the DTOs it has no generated binding for (see <<json-b-at-build-time>>), Jakarta Persistence builds your entities, Vauban calls a `private` interceptor method. Reaching private fields and constructors of a named module is *deep reflection*, and the Java module system only allows it on a package the module **opens**:
 
 [source,java]
 ----
@@ -58,7 +58,32 @@ BookResource ──returns──▶ List<Book> ──▶ Book ──field──�
  (not listed)                       com.example.book   com.example.author   com.example.common
 ----
 
-Three packages must be opened here, and each is reported with the type that brought it in.
+Three packages must be opened here, and each is reported with the type that brought it in — unless JSON-B maps those types without reflection, below.
+
+[#json-b-at-build-time]
+== JSON-B without reflection: records and final classes
+
+[.tag-new]#NEW# The REST extension's codegen bundle runs Champollion's processor: every **record**, and every **`final` class** that extends `Object` and has a no-argument constructor, that a resource takes or returns gets its JSON-B binding generated at build time, with the types it holds. JSON-B then reads and writes it through plain generated code, with no reflection, so its package needs no `opens` for JSON-B, and the check does not ask for one. In the diagram above, with `Book`, `Author` and `Address` written as records, nothing is opened at all:
+
+[source,java]
+----
+public record Book(String isbn, String title, Author author, LocalDate published, List<String> tags) {}
+public record Author(String name, int born) {}
+----
+
+A type the generated code cannot map keeps the reflective mapping, and the compiler says why, as an `[INFO]` line of the build:
+
+----
+Champollion: com.example.shop.Legacy keeps the reflective JSON-B mapping at run time: not final: an instance of a subclass would be written without its own properties
+----
+
+The usual reasons, and what to do:
+
+* a class that is not `final` — make it a record, or `final`;
+* a superclass other than `Object`, an array, an interface or `Object` as a property type — or a JSON-B customisation the generated code does not implement (`@JsonbDateFormat`, `@JsonbNumberFormat`, `@JsonbTypeAdapter`, `@JsonbCreator`, polymorphism…): keep it, and keep the `opens` the check asks for;
+* a JPA entity: Jakarta Persistence reaches it by reflection anyway, its package stays opened.
+
+The output is the same as the reflective mapping, character for character (`@JsonbProperty`, `@JsonbTransient` and `@JsonbNillable` included). The details are in Champollion's reference, xref:champollion::reference.adoc#rest-bindings[Bindings for the types REST resources exchange].
 
 [#limits]
 == What it cannot see
