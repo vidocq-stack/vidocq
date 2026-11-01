@@ -260,11 +260,6 @@ public final class ProjectDoctor {
     }
 
     /**
-     * The Keycloak dev service sets the verification keys under {@code vidocq dev} and the tests only: without one in
-     * the configuration, in any profile, production rejects every token (BUG-20261031-09). Not fixable: only the
-     * application knows its identity provider.
-     */
-    /**
      * An extension declared without one it requires (Mansart Data without the pool): a warning, shown only then. Not
      * fixable: the application may provide what the missing extension would, its own DataSource for instance.
      */
@@ -282,6 +277,11 @@ public final class ProjectDoctor {
                         + " (mansart-data: a @Produces DataSource)."));
     }
 
+    /**
+     * The Keycloak dev service sets the verification keys under {@code vidocq dev} and the tests only: without one in
+     * the configuration, in any profile, production rejects every token (BUG-20261031-09). Not fixable: only the
+     * application knows its identity provider.
+     */
     private static Diagnostic checkJwtVerification(Map<String, String> config) {
         boolean set = config.keySet().stream()
                 // A %<profile>. prefix counts: %prod.mp.jwt.verify.publickey.location is production's key.

@@ -628,6 +628,6 @@ class ProjectDoctorTest {
         Path project = dir.resolve("demo");
 
         Diagnostic required = check(project).get("Required extensions");
-        assertEquals(null, required, () -> required.detail());
+        assertNull(required, String.valueOf(required));
     }
 }

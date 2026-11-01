@@ -114,21 +114,31 @@ public final class ReflectedPackages {
                 continue;
             }
             reasons.putIfAbsent(packageOf(next[0]), dotted(next[0]) + ", " + next[1]);
-            for (String type : heldTypes(model)) {
-                queue.add(new String[] {type, "reached through " + dotted(next[0])});
-            }
-            // JSON-B and JPA read the inherited fields and getters too.
-            model.superclass().ifPresent(superclass -> queue.add(
-                    new String[] {superclass.asInternalName(), "superclass of " + dotted(next[0])}));
-            // A field typed by an interface or an abstract class holds one of the application's implementations.
-            if (polymorphic(model)) {
-                String verb = (model.flags().flagsMask() & ClassFile.ACC_INTERFACE) != 0 ? "implements " : "extends ";
-                for (String subtype : subtypes.getOrDefault(next[0], List.of())) {
-                    queue.add(new String[] {subtype, verb + dotted(next[0])});
-                }
-            }
+            queue.addAll(reachedFrom(model, subtypes));
         }
         return new Reached(reasons, needsOpens);
+    }
+
+    /**
+     * What a reached type leads to, as {@code {class, how it is reached}}: the types its fields and getters hold, its
+     * superclass, whose inherited fields and getters JSON-B and JPA read too, and, for an interface or an abstract
+     * class, the application classes that implement or extend it directly — a field of that type holds one of them.
+     */
+    private static List<String[]> reachedFrom(ClassModel model, Map<String, List<String>> subtypes) {
+        String name = model.thisClass().asInternalName();
+        List<String[]> reached = new ArrayList<>();
+        for (String type : heldTypes(model)) {
+            reached.add(new String[] {type, "reached through " + dotted(name)});
+        }
+        model.superclass().ifPresent(superclass ->
+                reached.add(new String[] {superclass.asInternalName(), "superclass of " + dotted(name)}));
+        if (polymorphic(model)) {
+            String verb = (model.flags().flagsMask() & ClassFile.ACC_INTERFACE) != 0 ? "implements " : "extends ";
+            for (String subtype : subtypes.getOrDefault(name, List.of())) {
+                reached.add(new String[] {subtype, verb + dotted(name)});
+            }
+        }
+        return reached;
     }
 
     /** Whether a reached type stands for its implementations: an interface or an abstract class. */
