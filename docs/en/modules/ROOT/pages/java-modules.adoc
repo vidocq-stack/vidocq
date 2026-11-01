@@ -61,26 +61,39 @@ BookResource ──returns──▶ List<Book> ──▶ Book ──field──�
 Three packages must be opened here, and each is reported with the type that brought it in — unless JSON-B maps those types without reflection, below.
 
 [#json-b-at-build-time]
-== JSON-B without reflection: records and final classes
+== JSON-B without reflection
 
-[.tag-new]#NEW# The REST extension's codegen bundle runs Champollion's processor: every **record**, and every **`final` class** that extends `Object` and has a no-argument constructor, that a resource takes or returns gets its JSON-B binding generated at build time, with the types it holds. JSON-B then reads and writes it through plain generated code, with no reflection, so its package needs no `opens` for JSON-B, and the check does not ask for one. In the diagram above, with `Book`, `Author` and `Address` written as records, nothing is opened at all:
+[.tag-new]#NEW# The REST extension's codegen bundle runs Champollion's processor: every **record**, and every **class** with a no-argument constructor — `final` or not, with a superclass or not — that a resource takes or returns gets its JSON-B binding generated at build time, with the types it holds. JSON-B then reads and writes it through plain generated code, with no reflection, so its package needs no `opens` for JSON-B, and the check does not ask for one. Classic DTOs work as they are:
 
 [source,java]
 ----
-public record Book(String isbn, String title, Author author, LocalDate published, List<String> tags) {}
-public record Author(String name, int born) {}
+public class BaseEntity {                       // com.example.shop.common
+    private Long id;
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+}
+
+public class Product extends BaseEntity {       // com.example.shop.catalog
+    private String name;
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+}
 ----
+
+Neither `com.example.shop.catalog` nor `com.example.shop.common` is opened: the binding of `Product` calls the public getters and setters, inherited ones included, and writes the superclass's properties first, as the reflective mapping does.
+
+*Subclasses.* JSON-B maps a value by its declared type: a resource declared to return `Product` that returns a `SpecialProduct` writes `Product`'s properties, by reflection or by the binding alike. So a subclass needs nothing either. A subclass compiled with the application gets its own binding too, used where it is the declared type. One case escapes the check: a method that returns a `Response` — JAX-RS then hands JSON-B the class of the entity it holds, which the build cannot know; the runtime message below names its package if it lacks a binding.
 
 A type the generated code cannot map keeps the reflective mapping, and the compiler says why, as an `[INFO]` line of the build:
 
 ----
-Champollion: com.example.shop.Legacy keeps the reflective JSON-B mapping at run time: not final: an instance of a subclass would be written without its own properties
+Champollion: com.example.shop.Shape keeps the reflective JSON-B mapping at run time: abstract
 ----
 
 The usual reasons, and what to do:
 
-* a class that is not `final` — make it a record, or `final`;
-* a superclass other than `Object`, an array, an interface or `Object` as a property type — or a JSON-B customisation the generated code does not implement (`@JsonbDateFormat`, `@JsonbNumberFormat`, `@JsonbTypeAdapter`, `@JsonbCreator`, polymorphism…): keep it, and keep the `opens` the check asks for;
+* an abstract class, an interface or `Object` as a property type, an array — or a JSON-B customisation the generated code does not implement yet (`@JsonbDateFormat`, `@JsonbNumberFormat`, `@JsonbTypeAdapter`, `@JsonbCreator`, polymorphism…): keep it, and keep the `opens` the check asks for;
+* a property declared on several classes of a hierarchy (a getter overridden in a subclass), an interface with a default getter: same;
 * a JPA entity: Jakarta Persistence reaches it by reflection anyway, its package stays opened.
 
 The output is the same as the reflective mapping, character for character (`@JsonbProperty`, `@JsonbTransient` and `@JsonbNillable` included). The details are in Champollion's reference, xref:champollion::reference.adoc#rest-bindings[Bindings for the types REST resources exchange].
@@ -93,7 +106,8 @@ The check works from the declared types it finds in your compiled classes. It ca
 * JSON-B called by hand, `JsonbBuilder.create().toJson(report)`, on a type no resource takes or returns;
 * `Class.forName(…)`, or a resource read with `getResource(…)` from a package of the application;
 * a third-party library that does its own reflection;
-* the actual class behind a field typed by `Object`, by a JDK or library interface (`Serializable`, `Comparable`…), or by a concrete class of the application whose subclass the field holds: the check follows the declared type and, for an application interface or abstract class only, its implementations.
+* the actual class behind a field typed by `Object` or by a JDK or library interface (`Serializable`, `Comparable`…): the check follows the declared type and, for an application interface or abstract class, its implementations;
+* the entity of a `Response`, whose class JAX-RS hands JSON-B at run time.
 
 For these cases, the runtime tells you what to add, below.
 

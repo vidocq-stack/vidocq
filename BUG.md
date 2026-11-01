@@ -5,6 +5,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261101-04 — Plain POJO DTOs (non-final, with a base class) still needed `opens`
+
+- **Date**: 2026-11-01
+- **Status**: FIXED with champollion#66 (champollion BUG-20261101-03, -01): the REST codegen bundle's processor now generates the binding of any concrete class with a no-argument constructor a resource exchanges, inherited properties included; the runtime no longer overflows on a type that holds itself. `ReflectedPackages` needs no change — it already skips bound types — and `aSubclassOfABoundTypeNeedsNoDirective` pins the rule for subclasses: JSON-B maps a value by its declared type, so a subclass returned under a bound type is written by that binding and needs no `opens`. Only the entity of a `Response`, whose class JAX-RS hands JSON-B at run time, stays outside the check (documented). Checked end to end on `vidocq create -x cassini-rest` with `Product extends BaseEntity` in two packages and no `opens`: `package` passes, `GET /products` and `POST /products` answer 200, `BaseEntity`'s properties first. BENCH.md: same startup, first request ≈ 2 ms faster, ≈ +3 % req/s.
+- **Reported by**: the maintainer (JSON-B at build time, step A)
+- **Minimal reproduction**: a resource returning `class Product extends BaseEntity`: after BUG-20261101-01 the build still asked for `opens` on both packages.
+- **Cause hypothesis**: the generated bindings covered records and final Object-rooted classes only.
+
 ## BUG-20261101-03 — A created application never ran `vidocq:generate`: a library's repositories and beans got no generated code
 
 - **Date**: 2026-11-01

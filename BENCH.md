@@ -6,6 +6,20 @@
 
 ---
 
+## 2026-11-01 — JSON-B: generated bindings vs the reflective mapping, on a plain-POJO REST endpoint
+
+- **Hardware/JVM**: Apple M5 Max (18 cores, 128 GB), macOS, Temurin 25+36, Maven 3.9.16, local repository warm.
+- **Project**: `vidocq create --name pj -x cassini-rest`; `com.example.pj.catalog.Product extends com.example.pj.common.BaseEntity` (non-final, getters/setters: `id`, `createdAt` `LocalDateTime`, `name`, `price` `BigDecimal`, `tags` `List<String>`, `available`); `GET /products` returns 50 of them (≈ 6.3 KB of JSON). Champollion with champollion#66 (bindings for non-final classes and hierarchies).
+- **Variants**: *generated* — as built, `Product$$Binding` listed, no `opens`; *reflective* — `opens` for both packages added, the `JsonbBinding` services file emptied, so the same build maps `Product` by reflection.
+- **Command**: `mvn -o vidocq:run`; startup = the runtime's `Started in … ms`; first request = one `GET /products` timed from a client right after start; throughput = `ab -k -c 32 -n 30000 http://localhost:8080/products` after `-n 5000` of warm-up; 3 starts per variant (`perf/bench-json.sh`).
+
+| Variant | Startup (ms) | First `GET` (ms) | Throughput (req/s) |
+|---|---|---|---|
+| generated | 103.4 / 99.2 / 100.7 | 45.5 / 45.4 / 47.2 | 85 535 / 85 891 / 86 051 |
+| reflective | 99.3 / 101.9 / 101.8 | 50.0 / 48.1 / 46.7 | 82 220 / 82 894 / 84 997 |
+
+- **Delta**: no previous entry. Startup is the same (bindings are instantiated at first use); the first request is ≈ 2 ms faster (no introspection of `Product`); steady throughput ≈ +3 % (85.8 k vs 83.4 k req/s median) — the runtime's reflective mapping was already cached `MethodHandle`s, so the gain is small on the hot path. The real gain is structural: no `opens`, no reflection, AOT-friendly.
+
 ## 2026-11-01 — `vidocq:generate` on every build (BUG-20261101-03)
 
 - **Hardware/JVM**: Apple M5 Max, macOS, Temurin 25, Maven 3.9.16, local repository warm, offline-equivalent (all artifacts resolved).

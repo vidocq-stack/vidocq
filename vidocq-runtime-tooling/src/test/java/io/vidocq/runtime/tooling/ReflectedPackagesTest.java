@@ -132,6 +132,23 @@ class ReflectedPackagesTest {
         assertEquals(Map.of(), ReflectedPackages.of(classes).reasons());
     }
 
+    /**
+     * JSON-B maps a value by its declared type: a subclass of a bound type, even without a binding of its own, is
+     * written by the declared type's binding, so its package is not asked for.
+     */
+    @Test
+    void aSubclassOfABoundTypeNeedsNoDirective() throws IOException {
+        bookAndAuthor();
+        generatedBinding(BOOK);
+        write(ClassDesc.of("com.acme.shop.special.SpecialBook"), cb -> cb.withSuperclass(BOOK)
+                .withField("badge", ConstantDescs.CD_String, ClassFile.ACC_PRIVATE));
+        write(ClassDesc.of("com.acme.shop.rest.BookResource"), annotated("jakarta.ws.rs.Path", cb ->
+                cb.withMethod("one", MethodTypeDesc.of(BOOK), ClassFile.ACC_PUBLIC,
+                        mb -> mb.withCode(code -> code.aconst_null().areturn()))));
+
+        assertEquals(Map.of(), ReflectedPackages.of(classes).reasons());
+    }
+
     @Test
     void aJpaEntityWithABindingStillNeedsItsPackageOpenedForJpa() throws IOException {
         write(BOOK, annotated("jakarta.persistence.Entity", cb -> { }));
