@@ -42,6 +42,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The packages of the application that a runtime module reaches by reflection: the JSON-B binding of a REST
@@ -208,6 +209,32 @@ class ReflectedPackagesTest {
         assertEquals(Set.of("com.acme.shop.book", "com.acme.shop.api", "com.acme.shop.pricing"), reached.keySet());
         assertEquals("com.acme.shop.pricing.FixedPrice, implements com.acme.shop.api.Priced",
                 reached.get("com.acme.shop.pricing"));
+    }
+
+    /** The entity of a {@code Response} shows in no signature: Champollion lists it, and its package is reached. */
+    @Test
+    void anEntityGivenAResponseIsReachedFromChampollionsList() throws IOException {
+        bookAndAuthor();
+        Path listed = classes.resolve(ReflectedPackages.RESPONSE_ENTITIES);
+        Files.createDirectories(listed.getParent());
+        Files.writeString(listed, "com.acme.shop.book.Book\n");
+
+        Map<String, String> reached = ReflectedPackages.of(classes).reasons();
+        assertEquals(Set.of("com.acme.shop.book", "com.acme.shop.people"), reached.keySet());
+        assertTrue(reached.get("com.acme.shop.book").contains("the entity of a JAX-RS Response"),
+                reached.toString());
+    }
+
+    /** With its binding generated, a listed entity needs no directive. */
+    @Test
+    void aBoundEntityGivenAResponseNeedsNoDirective() throws IOException {
+        bookAndAuthor();
+        generatedBinding(BOOK);
+        Path listed = classes.resolve(ReflectedPackages.RESPONSE_ENTITIES);
+        Files.createDirectories(listed.getParent());
+        Files.writeString(listed, "com.acme.shop.book.Book\n");
+
+        assertEquals(Map.of(), ReflectedPackages.of(classes).reasons());
     }
 
     @Test

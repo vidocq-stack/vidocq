@@ -109,7 +109,7 @@ The check works from the declared types it finds in your compiled classes. It ca
 * `Class.forName(…)`, or a resource read with `getResource(…)` from a package of the application;
 * a third-party library that does its own reflection;
 * the actual class behind a field typed by `Object` or by a JDK or library interface (`Serializable`, `Comparable`…): the check follows the declared type and, for an application interface or abstract class, its implementations;
-* the entity of a `Response`, whose class JAX-RS hands JSON-B at run time.
+* the entity of a `Response` whose static type is `Object`: [.tag-new]#NEW# Champollion's processor reads the method bodies for the entity given to `Response.ok(…)`, `accepted(…)`, `ResponseBuilder.entity(…)` and `GenericEntity<T>`, generates its binding and lists it (`META-INF/champollion/rest-entity-types`); the check reads that list, so it covers a `Response` entity it cannot bind. Only an entity typed `Object`, whose class is known at run time only, escapes it.
 
 For these cases, the runtime tells you what to add, below.
 

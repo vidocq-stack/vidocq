@@ -76,6 +76,8 @@ public final class ReflectedPackages {
     private static final String JSONB_BINDING_SERVICES = "META-INF/services/io.vidocq.champollion.jsonb.spi.JsonbBinding";
     private static final String JPA_ENTITY = "a JPA entity";
     /** The type argument of {@code JsonbBinding<T>} in a binding's class signature. */
+    /** Where Champollion's processor lists the entities the code gives a JAX-RS {@code Response}. */
+    static final String RESPONSE_ENTITIES = "META-INF/champollion/rest-entity-types";
     private static final Pattern BOUND_TYPE = Pattern.compile("L" + JSONB_BINDING + "<L([\\w$/]+);>;");
 
     /** A class name inside a descriptor or a generic signature: {@code Lcom/acme/Book;}, {@code Lcom/acme/Box<}. */
@@ -114,6 +116,7 @@ public final class ReflectedPackages {
         for (ClassModel model : application.values()) {
             queue.addAll(roots(model));
         }
+        queue.addAll(responseEntities(classes));
         Map<String, List<String>> subtypes = subtypes(application);
         Set<String> bound = boundTypes(classes, application);
         Set<String> seen = new HashSet<>();
@@ -251,6 +254,21 @@ public final class ReflectedPackages {
                     .forEach(type -> roots.add(new String[] {type, "reached through " + dotted(name)}));
         }
         return roots;
+    }
+
+    /**
+     * The entities the code gives a JAX-RS {@code Response}, as Champollion's processor lists them from the method
+     * bodies ({@value #RESPONSE_ENTITIES}): JAX-RS hands them to JSON-B at run time, which no signature shows.
+     */
+    private static List<String[]> responseEntities(Path classes) throws IOException {
+        Path listed = classes.resolve(RESPONSE_ENTITIES);
+        if (!Files.isRegularFile(listed)) {
+            return List.of();
+        }
+        try (Stream<String> lines = Files.lines(listed)) {
+            return lines.map(String::strip).filter(name -> !name.isEmpty())
+                    .map(name -> new String[] {name.replace('.', '/'), "the entity of a JAX-RS Response"}).toList();
+        }
     }
 
     /**
