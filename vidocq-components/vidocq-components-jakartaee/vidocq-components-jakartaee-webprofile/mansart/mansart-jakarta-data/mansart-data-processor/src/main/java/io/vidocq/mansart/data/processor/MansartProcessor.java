@@ -37,7 +37,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 @SupportedSourceVersion(SourceVersion.RELEASE_25)
-@SupportedOptions(MansartProcessor.UNRESOLVED_METHODS)
+@SupportedOptions({MansartProcessor.UNRESOLVED_METHODS, MansartProcessor.MIGRATION_CHECK, MansartProcessor.MIGRATIONS})
 @SupportedAnnotationTypes({
         "jakarta.persistence.Entity",
         "jakarta.data.repository.Repository"
@@ -49,6 +49,15 @@ public final class MansartProcessor extends AbstractProcessor {
      * {@code warn} keeps a generated method that throws {@code UnsupportedOperationException} (MANSART-030).
      */
     static final String UNRESOLVED_METHODS = "mansart.unresolvedMethods";
+
+    /**
+     * {@code off} turns off the warning about an entity whose table no Flyway SQL migration creates (MANSART-037); any
+     * other value, or none, keeps it.
+     */
+    static final String MIGRATION_CHECK = "mansart.migrationCheck";
+
+    /** Comma-separated directories of SQL migrations to read instead of {@code <class output>/db/migration}. */
+    static final String MIGRATIONS = "mansart.migrations";
 
     private EntityScanner             scanner;
     private MansartMetamodelWriter    mansartWriter;
@@ -63,6 +72,8 @@ public final class MansartProcessor extends AbstractProcessor {
     static final String MARKER = DependencyHints.MARKER;
     private boolean generated;
     private boolean failed;
+    /** The application's migrations, read on the first entity; empty when the check is off or there are none. */
+    private java.util.Optional<MigrationTables> migrations;
 
     @Override
     public synchronized void init(ProcessingEnvironment env) {
@@ -117,6 +128,7 @@ public final class MansartProcessor extends AbstractProcessor {
         // M8-3i — register the entity facet so RepositoryWriter can resolve
         // method-name path expressions (findByAuthorName) in the same round.
         entityRegistry.register(type.getQualifiedName().toString(), descriptor);
+        checkTable(descriptor);
         try {
             mansartWriter.write(descriptor);
             if (jpaWriter != null) jpaWriter.write(descriptor);
@@ -127,6 +139,44 @@ public final class MansartProcessor extends AbstractProcessor {
                     "[mansart-data] Failed to write metamodel for "
                             + type.getQualifiedName() + ": " + ex.getMessage(), type);
         }
+    }
+
+    /**
+     * Warns when the application ships SQL migrations and none creates the entity's table (MANSART-037): a warning,
+     * since the database may be managed elsewhere.
+     */
+    private void checkTable(EntityScanner.EntityDescriptor descriptor) {
+        if (migrations == null) {
+            migrations = "off".equalsIgnoreCase(processingEnv.getOptions().get(MIGRATION_CHECK))
+                    ? java.util.Optional.empty()
+                    : MigrationTables.read(processingEnv.getFiler(), processingEnv.getOptions().get(MIGRATIONS));
+        }
+        if (migrations.isEmpty() || migrations.get().creates(descriptor.tableName())) {
+            return;
+        }
+        MigrationTables tables = migrations.get();
+        TypeElement type = descriptor.type();
+        String simple = type.getSimpleName().toString();
+        String table = descriptor.tableName();
+        StringBuilder message = new StringBuilder("[mansart-data] No migration in ").append(tables.where())
+                .append(" creates the table \"").append(table).append('"');
+        if (table.equals(io.vidocq.mansart.data.dialect.SqlNames.tableName(simple))) {
+            message.append(" of entity ").append(type.getQualifiedName())
+                    .append(": Mansart names a table after its class, in snake_case and plural (")
+                    .append(simple).append(" → ").append(table).append(").");
+            tables.madeAfterTheClassName(simple).ifPresentOrElse(
+                    made -> message.append(" A migration creates \"").append(made).append("\": add @Table(name = \"")
+                            .append(made).append("\") to ").append(simple).append(", or create \"").append(table)
+                            .append("\"."),
+                    () -> message.append(" Create it in a migration, or name the existing table with")
+                            .append(" @Table(name = \"…\")."));
+        } else {
+            message.append(" that @Table names on ").append(type.getQualifiedName())
+                    .append(". Correct @Table(name = \"…\"), or create it in a migration.");
+        }
+        message.append(" If the database is managed elsewhere, ignore this, or turn the check off with -A")
+                .append(MIGRATION_CHECK).append("=off.");
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, message, type);
     }
 
     private void writeRepository(TypeElement repo) {

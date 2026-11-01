@@ -133,6 +133,22 @@ class, in snake_case and plural (Book → books), not after the entity name as J
 or give the existing one with @Table(name = "…") on Book.
 ----
 
+[#migration-check]
+==== Checked at build time [.tag-new]#NEW#
+
+When the application ships Flyway SQL migrations, the annotation processor reads them and warns, while compiling, about an entity whose table none of them creates — the usual case being a table made after the class name:
+
+----
+[WARNING] [mansart-data] No migration in db/migration creates the table "books" of entity com.example.shelf.book.Book:
+Mansart names a table after its class, in snake_case and plural (Book → books). A migration creates "book": add
+@Table(name = "book") to Book, or create "books". If the database is managed elsewhere, ignore this, or turn the
+check off with -Amansart.migrationCheck=off.
+----
+
+* It reads `db/migration` in the class output, where Maven copies `src/main/resources/db/migration` before compiling (Flyway's default location). `-Amansart.migrations=<dir>[,<dir>…]` names other directories.
+* It understands `CREATE TABLE` and `CREATE VIEW` (with `IF NOT EXISTS`, a schema prefix, quoted names) and `ALTER TABLE … RENAME TO`, comments aside. A quoted name must match exactly, an unquoted one in any case.
+* It is a warning, not an error: the database may be created elsewhere (another service, a script, Java migrations). With no SQL migration at all, there is nothing to check and nothing is said. `-Amansart.migrationCheck=off` turns it off.
+
 [#enum-storage]
 An enum attribute is stored as `@Enumerated` says: `@Enumerated(EnumType.ORDINAL)`, or a bare `@Enumerated`, stores the constant's index in an integer column; `@Enumerated(EnumType.STRING)` stores its name. An enum with **no** `@Enumerated` stores its name — unlike Jakarta Persistence, whose default is the index. Mansart keeps the name because it survives a reordering of the constants and because existing tables already hold names. Declare `@Enumerated(EnumType.ORDINAL)` to get the index.
 

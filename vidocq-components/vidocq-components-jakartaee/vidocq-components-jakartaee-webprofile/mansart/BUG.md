@@ -9,6 +9,23 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-037 — A table made after the class name was only found missing at the first request
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `feat/migration-table-check` (follow-up of MANSART-036)
+- **Severity**: low (the run-time message of MANSART-036 names the fix; this moves it to the build)
+- **Symptom**: an entity `Book` without `@Table` and a Flyway migration creating `book`: the build passed, the first
+  repository call failed (`"books"` does not exist).
+- **Minimal reproduction**: `MigrationTableCheckTest`.
+- **Cause**: nothing compared the entities' tables with the application's migrations before run time.
+- **Fix**: when the application ships SQL migrations (`<class output>/db/migration`, where Maven copies
+  `src/main/resources/db/migration` before compiling; `-Amansart.migrations` names other directories), the processor
+  reads their `CREATE TABLE` / `CREATE VIEW` / `ALTER TABLE … RENAME TO` (comments skipped; schema prefix, quotes,
+  `IF NOT EXISTS`; a quoted name matches exactly, an unquoted one in any case) and warns about an entity whose table
+  none creates, naming the table a migration made after the class name and the `@Table` fix. A warning, not an error;
+  silent without SQL migrations; `-Amansart.migrationCheck=off` turns it off. Checked with a Vidocq application:
+  `Book` without `@Table` and a migration creating `book` warns at `mvn compile`; with `@Table(name = "book")`, silent.
+
 ## MANSART-036 — A missing table fails with a bare "SQL error", and the table naming rule is not documented
 
 - **Date**: 2026-11-02
