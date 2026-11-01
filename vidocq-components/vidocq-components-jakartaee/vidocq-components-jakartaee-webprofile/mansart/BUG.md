@@ -9,6 +9,31 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-035 — The exclusions on `vauban-api` strip the CDI API from a Vidocq codegen bundle's processor path
+
+- **Date**: 2026-11-01
+- **Status**: FIXED on `fix/vauban-api-no-exclusions`
+- **Severity**: medium (latent: masked in Vidocq by vidocq#465, which declares the CDI API on the Mansart codegen bundles)
+- **Symptom**: `mansart-data-cdi` and `mansart-transactions-cdi` declared `vauban-api` with exclusions of
+  `jakarta.enterprise:*` and `jakarta.inject:*`. On a processor path where `vauban-api` is the only route to the CDI API
+  (a Vidocq codegen bundle), the Mansart BCEs cannot be loaded: "VaubanProcessor could not be instantiated:
+  NoClassDefFoundError: jakarta/enterprise/inject/build/compatible/spi/BuildCompatibleExtension". The same trap broke
+  `champollion-jsonb-cdi` (champollion#76), whose fix this follows.
+- **Minimal reproduction**: in Vidocq, remove the `jakarta.enterprise.cdi-api` dependency vidocq#465 added to
+  `vidocq-runtime-mansart-data-extension-codegen` and `vidocq-runtime-mansart-transactions-extension-codegen`, then
+  `mvn dependency:tree -Dscope=runtime` on them: before the fix, `vauban-api` is there without
+  `jakarta.enterprise.cdi-api` nor `jakarta.inject-api`; after it, both come with `vauban-api`.
+- **Cause**: exclusions on a declaration also apply to the transitive dependencies Maven's mediation keeps for that
+  artifact in a consumer's graph; on the bundle, the excluded `vauban-api` node is the only path to the CDI API.
+  Making `vauban-api` optional is no fix: Weld loads every class of the bean archive and drops the components when
+  `_VaubanComponents` cannot load.
+- **Fix**: `vauban-api` is a plain compile dependency, without exclusions, in both modules (as in champollion#76). The
+  CDI APIs it brings are the ones every CDI container provides; the brick still declares the Jakarta platform APIs it
+  uses directly as `provided` (mansart#35). Checked: mansart reactor 634 tests, Weld 5/5 and Open Liberty 2/2
+  portability tests, Jakarta Data TCK 74/74, and a Vidocq application (`cassini-rest`, `mansart-data`, `mansart-pool`,
+  `mansart-transactions`, `flyway-migration`) built with these jars and booted with `vidocq:dev` on PostgreSQL:
+  `@Transactional` save then derived query answer 200.
+
 ## MANSART-034 — A `@Find` without parameter names ran a query without its condition, returning every row
 
 - **Date**: 2026-11-01

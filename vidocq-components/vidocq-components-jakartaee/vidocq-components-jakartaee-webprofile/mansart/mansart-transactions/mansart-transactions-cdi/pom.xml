@@ -51,22 +51,14 @@
              `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped
              MansartTransactionsProducer. Without this jar Weld cannot load the class and drops the
              bean (WELD-000119), then no TransactionManager is published (mansart-it-weld). API types
-             only, no code runs outside Vauban (vidocq-workspace#15). Its Jakarta CDI dependencies are
-             excluded: the container brings the CDI API. -->
+             only, no code runs outside Vauban (vidocq-workspace#15). Not trimmed of its Jakarta CDI
+             dependencies (MANSART-035): exclusions on this declaration win Maven's mediation in a consumer
+             and strip the CDI API from a Vidocq codegen bundle's processor path. The CDI APIs it brings are
+             the ones the container provides. -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-api</artifactId>
             <version>${vauban.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>jakarta.enterprise</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>jakarta.inject</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <!-- ====== Test dependencies ====== -->
