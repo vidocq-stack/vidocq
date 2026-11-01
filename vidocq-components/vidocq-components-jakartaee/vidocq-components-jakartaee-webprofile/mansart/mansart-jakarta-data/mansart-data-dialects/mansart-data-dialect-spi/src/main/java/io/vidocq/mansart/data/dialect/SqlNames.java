@@ -46,7 +46,7 @@ public final class SqlNames {
         return toSnakeCase(attributeName) + "_id";
     }
 
-    static String toSnakeCase(String camel) {
+    public static String toSnakeCase(String camel) {
         if (camel == null || camel.isEmpty()) return camel;
         StringBuilder sb = new StringBuilder(camel.length() + 4);
         for (int i = 0; i < camel.length(); i++) {

@@ -33,8 +33,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -43,19 +41,10 @@ import java.util.stream.Stream;
  * output before compiling, so the default location, Flyway's {@code classpath:db/migration}, is
  * {@code <class output>/db/migration}; {@code -Amansart.migrations=<dir>[,<dir>…]} names others.
  *
- * <p>Only {@code CREATE TABLE}, {@code CREATE VIEW} and {@code ALTER TABLE … RENAME TO} are read, comments skipped. A
- * quoted name must match exactly, an unquoted one in any case (databases fold unquoted names).</p>
+ * <p>Only {@code CREATE TABLE}, {@code CREATE VIEW} and {@code ALTER TABLE … RENAME TO} are read, comments and string
+ * literals skipped. A quoted name must match exactly, an unquoted one in any case (databases fold unquoted names).</p>
  */
 final class MigrationTables {
-
-    private static final String IDENT = "(\"[^\"]+\"|`[^`]+`|\\[[^\\]]+\\]|[A-Za-z_][A-Za-z0-9_$]*)";
-    private static final String NAME = IDENT + "(?:\\s*\\.\\s*" + IDENT + ")?";
-    private static final Pattern CREATE = Pattern.compile("\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?"
-            + "(?:(?:GLOBAL|LOCAL|TEMP|TEMPORARY|UNLOGGED|CACHED|MEMORY)\\s+)*(?:TABLE|VIEW)\\s+"
-            + "(?:IF\\s+NOT\\s+EXISTS\\s+)?" + NAME, Pattern.CASE_INSENSITIVE);
-    private static final Pattern RENAME = Pattern.compile("\\bALTER\\s+TABLE\\s+(?:IF\\s+EXISTS\\s+)?" + NAME
-            + "\\s+RENAME\\s+TO\\s+" + NAME, Pattern.CASE_INSENSITIVE);
-    private static final Pattern COMMENTS = Pattern.compile("--[^\\n]*|/\\*.*?\\*/", Pattern.DOTALL);
 
     /** One table name as a migration spells it. */
     private record Table(String name, boolean quoted) {
@@ -117,7 +106,7 @@ final class MigrationTables {
      */
     Optional<String> madeAfterTheClassName(String simpleClassName) {
         String snake = SqlNames.tableName(simpleClassName);
-        String singular = snakeSingular(simpleClassName);
+        String singular = SqlNames.toSnakeCase(simpleClassName);
         return tables.stream()
                 .filter(t -> t.matches(simpleClassName) || t.matches(singular))
                 .map(t -> t.name().toLowerCase(Locale.ROOT).equals(snake) ? null : t.name())
@@ -125,32 +114,94 @@ final class MigrationTables {
                 .findFirst();
     }
 
-    private static String snakeSingular(String camel) {
-        StringBuilder sb = new StringBuilder(camel.length() + 4);
-        for (int i = 0; i < camel.length(); i++) {
-            char c = camel.charAt(i);
-            if (Character.isUpperCase(c)) {
-                if (i > 0) {
-                    sb.append('_');
+    /** Reads the {@code CREATE TABLE|VIEW} and {@code ALTER TABLE … RENAME TO} statements of {@code sql}. */
+    private static void collect(String sql, List<Table> tables) {
+        List<String> tokens = tokens(sql);
+        for (int i = 0; i < tokens.size(); i++) {
+            String token = tokens.get(i);
+            if (token.equalsIgnoreCase("CREATE")) {
+                int j = i + 1;
+                while (j < tokens.size() && MODIFIERS.contains(tokens.get(j).toUpperCase(Locale.ROOT))) {
+                    j++;
                 }
-                sb.append(Character.toLowerCase(c));
-            } else {
-                sb.append(c);
+                if (j < tokens.size() && (tokens.get(j).equalsIgnoreCase("TABLE") || tokens.get(j).equalsIgnoreCase("VIEW"))) {
+                    nameAt(tokens, skipIfNotExists(tokens, j + 1)).ifPresent(tables::add);
+                }
+            } else if (token.equalsIgnoreCase("RENAME") && i + 1 < tokens.size()
+                    && tokens.get(i + 1).equalsIgnoreCase("TO")) {
+                nameAt(tokens, i + 2).ifPresent(tables::add);
             }
         }
-        return sb.toString();
     }
 
-    private static void collect(String sql, List<Table> tables) {
-        String text = COMMENTS.matcher(sql).replaceAll(" ");
-        Matcher create = CREATE.matcher(text);
-        while (create.find()) {
-            tables.add(table(create.group(2) != null ? create.group(2) : create.group(1)));
+    /** The words that may sit between {@code CREATE} and {@code TABLE}. */
+    private static final java.util.Set<String> MODIFIERS = java.util.Set.of(
+            "OR", "REPLACE", "GLOBAL", "LOCAL", "TEMP", "TEMPORARY", "UNLOGGED", "CACHED", "MEMORY");
+
+    private static int skipIfNotExists(List<String> tokens, int at) {
+        if (at + 2 < tokens.size() && tokens.get(at).equalsIgnoreCase("IF")
+                && tokens.get(at + 1).equalsIgnoreCase("NOT") && tokens.get(at + 2).equalsIgnoreCase("EXISTS")) {
+            return at + 3;
         }
-        Matcher rename = RENAME.matcher(text);
-        while (rename.find()) {
-            tables.add(table(rename.group(3)));
+        return at;
+    }
+
+    /** The table of a possibly schema-qualified name starting at {@code at}: its last part. */
+    private static Optional<Table> nameAt(List<String> tokens, int at) {
+        if (at >= tokens.size() || !isName(tokens.get(at))) {
+            return Optional.empty();
         }
+        int last = at;
+        while (last + 2 < tokens.size() && tokens.get(last + 1).equals(".") && isName(tokens.get(last + 2))) {
+            last += 2;
+        }
+        return Optional.of(table(tokens.get(last)));
+    }
+
+    private static boolean isName(String token) {
+        char first = token.charAt(0);
+        return first == '"' || first == '`' || first == '[' || Character.isLetter(first) || first == '_';
+    }
+
+    /**
+     * The words, quoted names and dots of {@code sql}, comments and literals left out: enough to read the names a
+     * statement creates.
+     */
+    private static List<String> tokens(String sql) {
+        List<String> tokens = new ArrayList<>();
+        int i = 0;
+        int n = sql.length();
+        while (i < n) {
+            char c = sql.charAt(i);
+            if (sql.startsWith("--", i)) {
+                int eol = sql.indexOf('\n', i);
+                i = eol < 0 ? n : eol + 1;
+            } else if (sql.startsWith("/*", i)) {
+                int end = sql.indexOf("*/", i + 2);
+                i = end < 0 ? n : end + 2;
+            } else if (c == '\'') {
+                int end = sql.indexOf('\'', i + 1);
+                i = end < 0 ? n : end + 1;
+            } else if (c == '"' || c == '`' || c == '[') {
+                char close = c == '[' ? ']' : c;
+                int end = sql.indexOf(close, i + 1);
+                int stop = end < 0 ? n : end + 1;
+                tokens.add(sql.substring(i, stop));
+                i = stop;
+            } else if (Character.isLetter(c) || c == '_') {
+                int start = i;
+                while (i < n && (Character.isLetterOrDigit(sql.charAt(i)) || sql.charAt(i) == '_' || sql.charAt(i) == '$')) {
+                    i++;
+                }
+                tokens.add(sql.substring(start, i));
+            } else {
+                if (c == '.') {
+                    tokens.add(".");
+                }
+                i++;
+            }
+        }
+        return tokens;
     }
 
     private static Table table(String ident) {
@@ -165,7 +216,7 @@ final class MigrationTables {
         try {
             URI uri = filer.getResource(StandardLocation.CLASS_OUTPUT, "", "mansart-migration-check").toUri();
             return "file".equals(uri.getScheme()) ? Optional.of(Path.of(uri).getParent()) : Optional.empty();
-        } catch (IOException | IllegalArgumentException e) {
+        } catch (IOException | IllegalArgumentException _) {
             return Optional.empty();
         }
     }

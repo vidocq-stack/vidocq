@@ -72,8 +72,9 @@ public final class MansartProcessor extends AbstractProcessor {
     static final String MARKER = DependencyHints.MARKER;
     private boolean generated;
     private boolean failed;
-    /** The application's migrations, read on the first entity; empty when the check is off or there are none. */
-    private java.util.Optional<MigrationTables> migrations;
+    /** The application's migrations, read on the first entity; {@code null} when the check is off or there are none. */
+    private MigrationTables migrationTables;
+    private boolean migrationTablesRead;
 
     @Override
     public synchronized void init(ProcessingEnvironment env) {
@@ -146,15 +147,17 @@ public final class MansartProcessor extends AbstractProcessor {
      * since the database may be managed elsewhere.
      */
     private void checkTable(EntityScanner.EntityDescriptor descriptor) {
-        if (migrations == null) {
-            migrations = "off".equalsIgnoreCase(processingEnv.getOptions().get(MIGRATION_CHECK))
-                    ? java.util.Optional.empty()
-                    : MigrationTables.read(processingEnv.getFiler(), processingEnv.getOptions().get(MIGRATIONS));
+        if (!migrationTablesRead) {
+            migrationTablesRead = true;
+            if (!"off".equalsIgnoreCase(processingEnv.getOptions().get(MIGRATION_CHECK))) {
+                migrationTables = MigrationTables.read(processingEnv.getFiler(),
+                        processingEnv.getOptions().get(MIGRATIONS)).orElse(null);
+            }
         }
-        if (migrations.isEmpty() || migrations.get().creates(descriptor.tableName())) {
+        MigrationTables tables = migrationTables;
+        if (tables == null || tables.creates(descriptor.tableName())) {
             return;
         }
-        MigrationTables tables = migrations.get();
         TypeElement type = descriptor.type();
         String simple = type.getSimpleName().toString();
         String table = descriptor.tableName();
