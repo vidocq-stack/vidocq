@@ -75,9 +75,9 @@ public final class ReflectedPackages {
     private static final String JSONB_BINDING = "io/vidocq/champollion/jsonb/spi/JsonbBinding";
     private static final String JSONB_BINDING_SERVICES = "META-INF/services/io.vidocq.champollion.jsonb.spi.JsonbBinding";
     private static final String JPA_ENTITY = "a JPA entity";
-    /** The type argument of {@code JsonbBinding<T>} in a binding's class signature. */
     /** Where Champollion's processor lists the entities the code gives a JAX-RS {@code Response}. */
     static final String RESPONSE_ENTITIES = "META-INF/champollion/rest-entity-types";
+    /** The type argument of {@code JsonbBinding<T>} in a binding's class signature. */
     private static final Pattern BOUND_TYPE = Pattern.compile("L" + JSONB_BINDING + "<L([\\w$/]+);>;");
 
     /** A class name inside a descriptor or a generic signature: {@code Lcom/acme/Book;}, {@code Lcom/acme/Box<}. */
