@@ -29,6 +29,8 @@ module io.vidocq.runtime.extensions.jakartaee.core.cassini {
     // The application's generated JSON-B bindings implement io.vidocq.champollion.jsonb.spi.JsonbBinding: an
     // application that requires this module reads Champollion's SPI.
     requires transitive io.vidocq.champollion.jsonb;
+    // Champollion's registry of the container's JSON-B adapters and serializers: brought into the module graph.
+    requires io.vidocq.champollion.jsonb.cdi;
     // The @ApplicationPath descriptors cassini-processor generates (Vidocq/vidocq#219).
     uses io.vidocq.cassini.spi.gen.ApplicationDescriptor;
     requires io.vidocq.cassini.chappe;

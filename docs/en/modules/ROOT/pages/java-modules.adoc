@@ -92,9 +92,11 @@ Champollion: com.example.shop.Shape keeps the reflective JSON-B mapping at run t
 
 The usual reasons, and what to do:
 
-* an abstract class, an interface or `Object` as a property type — or a JSON-B customisation the generated code cannot honour (an adapter or a serializer that is a CDI bean, a `@JsonbCreator` parameter without a `@JsonbProperty` name, `@JsonbTypeInfo` on an interface that is not sealed, `@JsonbVisibility`, `@JsonbPropertyOrder`…): keep it, and keep the `opens` the check asks for. [.tag-new]#NEW# Date and number formats, arrays, adapters, serializers and deserializers, creators, and `@JsonbTypeInfo` on a sealed interface over records are generated;
+* an abstract class, an interface or `Object` as a property type — or a JSON-B customisation the generated code cannot honour (a `@JsonbCreator` parameter without a `@JsonbProperty` name in a dependency compiled without `-parameters`, `@JsonbTypeInfo` on an interface that is not sealed, `@JsonbVisibility`, `@JsonbPropertyOrder`…): keep it, and keep the `opens` the check asks for. [.tag-new]#NEW# Date and number formats, arrays, adapters, serializers and deserializers, creators, and `@JsonbTypeInfo` on a sealed interface over records are generated;
 * a property declared on several classes of a hierarchy (a getter overridden in a subclass), an interface with a default getter: same;
 * a JPA entity: Jakarta Persistence reaches it by reflection anyway, its package stays opened.
+
+[.tag-new]#NEW# An adapter, serializer or deserializer that is a CDI bean — injections included — is called by the generated binding too: the REST extension brings `champollion-jsonb-cdi`, whose registry hands the bindings the container's instances, one per application, destroyed when it stops, and whose build compatible extension, run by Vauban at build, fails the build when such a class is ambiguous or injects without being a bean (its injections would stay null) — xref:champollion::reference.adoc#jsonb-cdi[JSON-B and CDI].
 
 [.tag-new]#NEW# A type of a dependency — a DTO jar your resources return — cannot get its binding in your compilation. The processor lists it, with the types it holds, in `META-INF/champollion/dependency-types`, and `vidocq:generate` runs the processor over that jar: the bindings go into the jar's enriched copy (xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[brick processors]), so the library's packages need no `opens` either, not even a package it does not export.
 

@@ -77,6 +77,14 @@
             <artifactId>champollion-jsonb</artifactId>
             <version>${champollion.version}</version>
         </dependency>
+        <!-- The CDI side of JSON-B: the registry that hands the generated bindings and the runtime the container's
+             adapters, serializers and deserializers (one per container, destroyed when it stops), and the build
+             compatible extension that validates them. -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonb-cdi</artifactId>
+            <version>${champollion.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>

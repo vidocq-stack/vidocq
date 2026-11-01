@@ -47,6 +47,13 @@
             <artifactId>champollion-codegen-apt</artifactId>
             <version>${champollion.version}</version>
         </dependency>
+        <!-- Champollion's build compatible extension: Vauban's processor runs it at build, so an adapter or a
+             serializer the container cannot provide properly fails the build, not the first request. -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonb-cdi</artifactId>
+            <version>${champollion.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
