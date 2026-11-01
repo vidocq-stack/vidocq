@@ -143,8 +143,8 @@ class ReflectedPackagesTest {
         write(ClassDesc.of("com.acme.shop.special.SpecialBook"), cb -> cb.withSuperclass(BOOK)
                 .withField("badge", ConstantDescs.CD_String, ClassFile.ACC_PRIVATE));
         write(ClassDesc.of("com.acme.shop.rest.BookResource"), annotated("jakarta.ws.rs.Path", cb ->
-                cb.withMethod("one", MethodTypeDesc.of(BOOK), ClassFile.ACC_PUBLIC,
-                        mb -> mb.withCode(code -> code.aconst_null().areturn()))));
+                cb.withMethodBody("one", MethodTypeDesc.of(BOOK), ClassFile.ACC_PUBLIC,
+                        code -> code.aconst_null().areturn())));
 
         assertEquals(Map.of(), ReflectedPackages.of(classes).reasons());
     }
