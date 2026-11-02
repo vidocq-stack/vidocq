@@ -46,7 +46,7 @@
     <scm>
         <url>https://codefloe.com/Vidocq/dirac</url>
         <connection>scm:git:https://codefloe.com/Vidocq/dirac.git</connection>
-        <developerConnection>scm:git:git@forge.vidocq.dev:vidocq/dirac.git</developerConnection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/dirac.git</developerConnection>
     </scm>
 
     <properties>
