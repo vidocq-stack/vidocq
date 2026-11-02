@@ -33,7 +33,8 @@ class HealthCheckRegistrarTest {
     @Test
     void theClientProxyConstructorLeavesTheDependenciesUnset() {
         var proxyOnly = new HealthCheckRegistrar();
+        var applicationStarted = new Object();
 
-        assertThrows(NullPointerException.class, () -> proxyOnly.onApplicationStart(new Object()));
+        assertThrows(NullPointerException.class, () -> proxyOnly.onApplicationStart(applicationStarted));
     }
 }
