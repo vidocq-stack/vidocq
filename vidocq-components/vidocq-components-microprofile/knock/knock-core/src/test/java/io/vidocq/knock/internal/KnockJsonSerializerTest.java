@@ -65,9 +65,8 @@ class KnockJsonSerializerTest {
     /**
      * {@code Json.createObjectBuilder()} looks the provider up through {@code ServiceLoader} and creates it by
      * reflection at every call: the serializer builds through one factory resolved when it is created
-     * (BUG-20261102-01).
+     * (BUG-20261102-01). The /health resource creates a serializer per request: they share one factory.
      */
-    /** The /health resource creates a serializer per request: they share one factory. */
     @Test
     void serializers_share_the_factory_resolved_once() {
         assertSame(new KnockJsonSerializer().factory(), new KnockJsonSerializer().factory());
