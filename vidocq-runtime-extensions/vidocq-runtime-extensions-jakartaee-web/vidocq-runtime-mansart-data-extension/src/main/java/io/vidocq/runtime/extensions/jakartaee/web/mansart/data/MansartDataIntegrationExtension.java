@@ -105,7 +105,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
      * What {@code onStart} found, to build the catalogue from when it is asked for: {@code null} before
      * {@code onStart}, after {@code onStop}, and once the catalogue is built.
      */
-    private volatile Pending pending;
+    private final AtomicReference<Pending> pending = new AtomicReference<>();
 
     /** The repositories {@code onStart} found, and how to read an entity's model. */
     private record Pending(List<Class<?>> repositories, Function<Class<?>, EntityModel<?>> models) {}
@@ -161,16 +161,16 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
         logRepositoryInventory(repositories);
         catalogue.set(null);
         unavailable = null;
-        pending = new Pending(List.copyOf(repositories), models);
+        pending.set(new Pending(List.copyOf(repositories), models));
         MansartDataLive.publishRepositories(repositories);
         MansartDataLive.publishSource(this::catalogueOnDemand);
     }
 
     /** The catalogue, built from what {@code onStart} found the first time it is asked for; {@code null} without. */
     synchronized MansartDataCatalogue catalogueOnDemand() {
-        Pending found = pending;
+        Pending found = pending.get();
         if (catalogue.get() == null && found != null) {
-            pending = null;
+            pending.set(null);
             catalogue(found.repositories(), found.models());
         }
         return catalogue.get();
@@ -202,7 +202,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
         MansartDataLive.clear();
         catalogue.set(null);
         unavailable = null;
-        pending = null;
+        pending.set(null);
     }
 
     /**
@@ -211,7 +211,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
      */
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        Pending found = pending;
+        Pending found = pending.get();
         if (found != null && context.launchMode() != LaunchMode.DEV && context.verbosity() != Verbosity.DETAILED) {
             // A production boot: the repositories only, without reading their methods and entities.
             section.summary(count(found.repositories().size(), "repository", "repositories"));
