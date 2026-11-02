@@ -84,7 +84,7 @@
 
 | `vidocq-runtime-ravel-config-extension`
 | `microprofile`
-| {spec-mp-config} via xref:ravel::index.adoc[Ravel] — external sources, profiles, typed conversion. [[ravel-config-codegen]]Companion `-codegen` artefact: it runs Ravel's extension in the compiler, so `@Inject @ConfigProperty` points are satisfied when Vauban validates the application at build time; the values themselves are checked when the application starts.
+| {spec-mp-config} via xref:ravel::index.adoc[Ravel] — external sources, profiles, typed conversion. [[ravel-config-codegen]]Companion `-codegen` artefact: it runs Ravel's extension in the compiler, so `@Inject @ConfigProperty` points are satisfied when Vauban validates the application at build time; the values themselves are checked when the application starts. [[ravel-config-release]]The configuration of the application layer is released when the layer stops [.tag-new]#NEW#: Ravel keeps one `Config` per class loader for the life of the JVM, so each `vidocq dev` hot reload used to keep the stopped layer reachable; the extension now takes the layer's configurations out of that registry at stop.
 
 | `vidocq-runtime-knock-health-extension`
 | `microprofile`

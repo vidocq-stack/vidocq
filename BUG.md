@@ -5,6 +5,26 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261102-06 — A hot reload kept the stopped layer reachable through Ravel's configuration registry
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `fix/release-ravel-config-at-stop`: the new `RavelConfigExtension` (Ravel config extension)
+  takes hold of the layer's class loader in `configure` and, in `onStop`, has Ravel's resolver release the
+  configuration of that loader and of every loader built on top of it (`LayeredConfigProviderResolver`, new in the
+  Ravel SPI; another resolver gets a plain `releaseConfig` of the configuration of the layer's loader);
+  `RavelConfigExtensionTest` (red, then green: the class loader of a stopped layer is collected after `System.gc()`).
+- **Reported by**: the static audit of item 23 of vidocq-workspace#40 (heap dump of 15 hot reloads: 16 live
+  `VaubanClassLoader` instead of 1)
+- **Minimal reproduction**: `vidocq dev` on any application with the Config extension, touch a source file 15
+  times, count the `VaubanClassLoader` instances with `jcmd <pid> GC.class_histogram`.
+- **Cause**: `ConfigProviderResolver.instance` (a JVM-wide static) holds `RavelConfigProviderResolver.registry`, a map
+  keyed by class loader whose values reference their key (the generated converters and custom sources of the
+  layer); nothing called `releaseConfig`, so no entry was ever removed. A weak key cannot work, the value keeps the
+  key alive, and the entries were keyed by loaders the container builds on top of the layer's
+  (`VaubanContainerBuilder$CompositeClassLoader`), which the standard `releaseConfig(Config)` cannot reach without
+  the `Config` itself.
+- **Weld/Liberty**: unaffected, the extension is a Vidocq runtime extension; the resolver behaves as before.
+
 ## BUG-20261102-05 — A JSP could not read a @Named CDI bean by name
 
 - **Date**: 2026-11-02

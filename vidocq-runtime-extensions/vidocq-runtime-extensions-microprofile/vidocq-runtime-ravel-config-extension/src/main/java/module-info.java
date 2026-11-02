@@ -18,6 +18,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 import io.vidocq.runtime.extensions.microprofile.ravel.ApplicationPropertiesConfigSource;
+import io.vidocq.runtime.extensions.microprofile.ravel.RavelConfigExtension;
 import io.vidocq.runtime.extensions.microprofile.ravel.RavelConfigSourceProvider;
 import io.vidocq.runtime.extensions.microprofile.ravel.VidocqPropertiesConfigSource;
 
@@ -45,6 +46,11 @@ module io.vidocq.runtime.extensions.microprofile.ravel {
     // vidocq-runtime-core is bypassed entirely — Ravel takes over.
     provides io.vidocq.runtime.spi.config.ConfigSourceProvider
             with RavelConfigSourceProvider;
+
+    // Releases the configuration of the application layer when the layer stops: Ravel's registry lives as long
+    // as the JVM, so without it every dev hot reload kept one more stopped layer reachable.
+    provides io.vidocq.runtime.spi.VidocqExtension
+            with RavelConfigExtension;
 
     // MP Config SPI: backwards-compatibility for the historical Vidocq files
     // (vidocq.properties, application.properties) — Ravel doesn't read them

@@ -4,6 +4,7 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
+* xref:modules/vidocq-runtime-extensions.adoc#ravel-config-release[`vidocq dev` frees the configuration of a stopped layer] — the Config extension takes the layer's MicroProfile Config out of Ravel's registry at stop, so a hot reload no longer keeps the previous application layer in memory.
 * xref:continuous-testing.adoc#once[`vidocq test --once`] — runs every test once and exits with the verdict (status 1 when a test fails), for CI and scripts, instead of watching the sources.
 * xref:internals.adoc#generated-code[Generated code and reflective fallback] — what Vidocq does so the bricks' generators run on every build (the codegen bundles on the processor path, `vidocq:generate` for the dependency jars, the generate stamp), a table of every bundle with the processors it brings and a link to the matching section of each brick, and how to tell which path ran.
 * xref:modules/vidocq-runtime-extensions.adoc#pages-cdi-beans[A JSP reads a `@Named` CDI bean by name] — `${cart.total}` resolves the bean `cart` in its scope, as Jakarta EE requires; it went unresolved before (BUG-20261102-05).
