@@ -462,6 +462,14 @@ Track reproducible bugs with:
 - **status**: FIXED — 2026-10-28. The pattern is `\d+(?:\.\d*)?`, which accepts the same language (the
   YAML 1.2 core-schema float) with a single way to match the digits. Regression test: `YamlDeserializerTest`.
 
+## BUG-20261102-01 — every request to /openapi serializes the whole model by reflection
+
+- **Date**: 2026-11-02
+- **Symptom**: the reflection audit of 2026-11-02 traced about 1,900 `Method.invoke` (and 210 `getMethods`) per `GET /openapi`: `OpenApiResource.render` serialized the document again on every request, and the serializer walks the model's getters by reflection.
+- **Repro**: `OpenApiResourceRenderOnceTest.theSameDocumentIsSerializedOncePerFormat`: two renders gave two strings.
+- **Cause**: nothing kept the rendered text, although the document only changes when it is built again.
+- **Status**: FIXED (branch `fix/openapi-render-once`) — the text is kept per format with the document it was rendered from; a new document instance (a reload in dev mode, the model built after an early request) is rendered again. The serializer itself still uses reflection once per document; replacing it with a generated or hand-written writer is part of wave 4 (build-time model). MP OpenAPI TCK unchanged.
+
 ## BUG-20261029-01 — the configured model reader and filter are looked up in Grimm's loader only
 
 - **Date**: 2026-10-29

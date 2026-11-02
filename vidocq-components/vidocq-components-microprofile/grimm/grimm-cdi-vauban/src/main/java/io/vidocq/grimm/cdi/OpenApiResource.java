@@ -33,6 +33,8 @@ import org.eclipse.microprofile.openapi.models.OpenAPI;
 
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -97,9 +99,30 @@ public class OpenApiResource {
         OutputFormat outputFormat = resolveOutputFormat(format, accept);
         OpenAPI document = documentSupplier.get();
         if (outputFormat == OutputFormat.JSON) {
-            return new RenderedDocument(OpenApiSerializers.toJson(document), MEDIA_TYPE_JSON);
+            return rendered(json, document, OpenApiSerializers::toJson, MEDIA_TYPE_JSON);
         }
-        return new RenderedDocument(OpenApiSerializers.toYaml(document), MEDIA_TYPE_YAML);
+        return rendered(yaml, document, OpenApiSerializers::toYaml, MEDIA_TYPE_YAML);
+    }
+
+    /** A document and its serialized form. */
+    private record Serialized(OpenAPI document, RenderedDocument rendered) {}
+
+    /**
+     * The last document served in each format: serializing walks the whole model by reflection, so it is done once per
+     * document; a new document, as after a reload, is serialized again.
+     */
+    private final AtomicReference<Serialized> json = new AtomicReference<>();
+    private final AtomicReference<Serialized> yaml = new AtomicReference<>();
+
+    private static RenderedDocument rendered(AtomicReference<Serialized> slot, OpenAPI document,
+                                             Function<OpenAPI, String> serializer, String mediaType) {
+        Serialized last = slot.get();
+        if (last != null && last.document() == document) {
+            return last.rendered();
+        }
+        Serialized fresh = new Serialized(document, new RenderedDocument(serializer.apply(document), mediaType));
+        slot.set(fresh);
+        return fresh.rendered();
     }
 
     private OutputFormat resolveOutputFormat(String format, String accept) {
