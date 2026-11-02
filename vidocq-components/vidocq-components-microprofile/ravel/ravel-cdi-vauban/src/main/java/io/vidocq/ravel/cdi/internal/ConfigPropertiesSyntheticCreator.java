@@ -45,15 +45,41 @@ import java.util.OptionalLong;
  */
 public class ConfigPropertiesSyntheticCreator implements SyntheticBeanCreator<Object> {
 
+    /**
+     * The factory Ravel's processor generated for a {@code @ConfigProperties} class, in the class's package: it
+     * creates and fills the instance with plain code, so the class's package needs no {@code opens}. A class
+     * compiled without the processor (another container, a library) keeps the reflective path below.
+     */
+    private static final ClassValue<java.util.Optional<io.vidocq.ravel.spi.GeneratedConfigProperties>> GENERATED =
+            new ClassValue<>() {
+                @Override
+                protected java.util.Optional<io.vidocq.ravel.spi.GeneratedConfigProperties> computeValue(
+                        Class<?> type) {
+                    for (var factory : java.util.ServiceLoader.load(
+                            io.vidocq.ravel.spi.GeneratedConfigProperties.class, type.getClassLoader())) {
+                        if (factory.typeName().equals(type.getName())) {
+                            return java.util.Optional.of(factory);
+                        }
+                    }
+                    return java.util.Optional.empty();
+                }
+            };
+
     @Override
     public Object create(Instance<Object> lookup, Parameters params) {
         InjectionPoint ip = lookup.select(InjectionPoint.class).get();
         Class<?> beanClass = resolveBeanClass(ip.getType());
         String fieldPrefix = resolveFieldPrefix(ip);
-        String resolvedPrefix = resolvePrefix(beanClass, fieldPrefix);
-
-        Object instance = newInstance(beanClass);
         Config config = ConfigProvider.getConfig();
+
+        var generated = GENERATED.get(beanClass);
+        if (generated.isPresent()) {
+            var factory = generated.get();
+            return factory.create(effectivePrefix(fieldPrefix, factory.classPrefix()), config);
+        }
+
+        String resolvedPrefix = resolvePrefix(beanClass, fieldPrefix);
+        Object instance = newInstance(beanClass);
         for (Field field : beanClass.getDeclaredFields()) {
             if (Modifier.isStatic(field.getModifiers())) continue;
             populateField(instance, field, resolvedPrefix, config);
@@ -84,6 +110,14 @@ public class ConfigPropertiesSyntheticCreator implements SyntheticBeanCreator<Ob
             }
         }
         return ConfigProperties.UNCONFIGURED_PREFIX;
+    }
+
+    /** The injection point's prefix, else the class's, else none (MP Config 3.1 §6.4). */
+    private static String effectivePrefix(String fieldPrefix, String classPrefix) {
+        if (!ConfigProperties.UNCONFIGURED_PREFIX.equals(fieldPrefix)) {
+            return fieldPrefix;
+        }
+        return ConfigProperties.UNCONFIGURED_PREFIX.equals(classPrefix) ? "" : classPrefix;
     }
 
     private static String resolvePrefix(Class<?> beanClass, String fieldPrefix) {

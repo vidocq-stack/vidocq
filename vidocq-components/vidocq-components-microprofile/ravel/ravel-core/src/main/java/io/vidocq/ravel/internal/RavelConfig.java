@@ -81,6 +81,9 @@ public final class RavelConfig implements Config, java.io.Serializable {
     /** Cache for derived converters (arrays, implicit), resolved on first lookup. */
     private final ConcurrentMap<Class<?>, Converter<?>> derivedConverters = new ConcurrentHashMap<>();
 
+    /** The implicit converters generated at build for the application's types, loaded on first need. */
+    private transient volatile List<io.vidocq.ravel.spi.GeneratedConverters> generatedConverters;
+
     public RavelConfig(List<ConfigSource> sources,
                        Map<Class<?>, Converter<?>> converters,
                        ClassLoader classLoader) {
@@ -382,6 +385,26 @@ public final class RavelConfig implements Config, java.io.Serializable {
             }
             return new ArrayConverter(component, elem);
         }
-        return ImplicitConverter.create(type);
+        Converter<T> generated = generatedConverter(type);
+        return generated != null ? generated : ImplicitConverter.create(type);
+    }
+
+    /** The implicit converter Ravel's processor generated for {@code type}, called directly (no reflection). */
+    private <T> Converter<T> generatedConverter(Class<T> type) {
+        var known = generatedConverters;
+        if (known == null) {
+            var loader = classLoader != null ? classLoader : Thread.currentThread().getContextClassLoader();
+            var found = new ArrayList<io.vidocq.ravel.spi.GeneratedConverters>();
+            java.util.ServiceLoader.load(io.vidocq.ravel.spi.GeneratedConverters.class, loader).forEach(found::add);
+            known = List.copyOf(found);
+            generatedConverters = known;
+        }
+        for (var converters : known) {
+            Converter<T> converter = converters.converter(type);
+            if (converter != null) {
+                return converter;
+            }
+        }
+        return null;
     }
 }

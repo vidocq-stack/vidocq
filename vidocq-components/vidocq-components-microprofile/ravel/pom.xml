@@ -103,6 +103,7 @@
         <module>ravel-api</module>
         <module>ravel-core</module>
         <module>ravel-cdi-vauban</module>
+        <module>ravel-processor</module>
         <module>ravel-it-other-containers</module>
         <module>ravel-bench</module>
     </modules>
@@ -171,6 +172,11 @@
             <dependency>
                 <groupId>io.vidocq.ravel</groupId>
                 <artifactId>ravel-cdi-vauban</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.ravel</groupId>
+                <artifactId>ravel-processor</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

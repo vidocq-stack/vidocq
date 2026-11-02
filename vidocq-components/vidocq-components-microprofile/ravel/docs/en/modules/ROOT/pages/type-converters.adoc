@@ -97,6 +97,7 @@ Optional<List<Integer>> ids = config.getOptionalValues("app.ids", Integer.class)
 
 In CDI beans, `List<T>` and `Set<T>` can be injected directly with `@ConfigProperty` (comma split plus element-wise conversion).
 
+[#implicit-converters]
 == Implicit converters
 
 If no registered converter matches a type, Ravel falls back to an **implicit converter** (MicroProfile Config §5.2):

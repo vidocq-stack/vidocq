@@ -45,6 +45,8 @@ module io.vidocq.ravel.cdi.vauban {
     provides io.vidocq.vauban.api.VaubanComponentProvider
             with io.vidocq.ravel.cdi._VaubanComponents;
 
+    // @ConfigProperties factories generated at build in the application's packages (Ravel's processor).
+    uses io.vidocq.ravel.spi.GeneratedConfigProperties;
     exports io.vidocq.ravel.cdi;
     exports io.vidocq.ravel.cdi.internal;
 }

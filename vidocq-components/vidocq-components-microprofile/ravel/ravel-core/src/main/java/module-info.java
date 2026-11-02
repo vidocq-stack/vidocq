@@ -31,4 +31,6 @@ module io.vidocq.ravel.core {
     uses org.eclipse.microprofile.config.spi.ConfigSource;
     uses org.eclipse.microprofile.config.spi.ConfigSourceProvider;
     uses org.eclipse.microprofile.config.spi.Converter;
+    // Implicit converters generated at build for the application's types (Ravel's processor).
+    uses io.vidocq.ravel.spi.GeneratedConverters;
 }

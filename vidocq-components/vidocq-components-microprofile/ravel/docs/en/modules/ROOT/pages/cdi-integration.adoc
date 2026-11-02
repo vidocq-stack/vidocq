@@ -182,6 +182,23 @@ the environment, the system properties of its JVM — which the compiler does no
 fails the container start, as above. The extension asks Vauban which of the two it is running in
 (`io.vidocq.vauban.api.ExtensionPhase`).
 
+[#generated-code]
+=== Generated code instead of reflection [.tag-new]#NEW#
+
+`ravel-processor`, on the same processor path (the Vidocq codegen bundle brings it too), writes into the
+application's own packages the code Ravel otherwise runs by reflection:
+
+* for each `@ConfigProperties` class, a factory (`<Class>$$RavelConfigProperties`) that creates the instance and
+  sets its fields with plain assignments — a `private` field through a `VarHandle` the application's module grants
+  itself, so the class's package needs no `opens`;
+* for the types injected with `@ConfigProperty` or held by a `@ConfigProperties` field, the
+  xref:type-converters.adoc#implicit-converters[implicit converter] the specification picks, called directly.
+
+Ravel finds them through `ServiceLoader`. A class the generated code cannot fill (abstract, with a `final` or
+type-variable field, without a non-private no-argument constructor) and a type without a generated converter keep
+the reflective path, which is also the path on every container where the processor did not run (Weld,
+Open Liberty, a CDI 3 container): it is unchanged.
+
 == Grouped configuration
 
 A common pattern is grouping related config in a `@Dependent` bean:
