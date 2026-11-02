@@ -47,9 +47,9 @@
     </licenses>
 
     <scm>
-        <url>https://forge.vidocq.dev/vidocq/heisenberg</url>
-        <connection>scm:git:https://forge.vidocq.dev/vidocq/heisenberg.git</connection>
-        <developerConnection>scm:git:git@forge.vidocq.dev:vidocq/heisenberg.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/heisenberg</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/heisenberg.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/heisenberg.git</developerConnection>
     </scm>
 
     <properties>
