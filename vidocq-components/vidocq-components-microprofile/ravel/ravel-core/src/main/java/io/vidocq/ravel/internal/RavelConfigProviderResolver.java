@@ -19,6 +19,7 @@
  */
 package io.vidocq.ravel.internal;
 
+import io.vidocq.ravel.spi.LayeredConfigProviderResolver;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.spi.ConfigBuilder;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
@@ -39,7 +40,7 @@ import java.util.concurrent.ConcurrentMap;
  * <p><b>Thread-safety</b>: uses {@link ConcurrentHashMap} and atomic
  * {@code computeIfAbsent}; no {@code synchronized} and no {@code ThreadLocal}.</p>
  */
-public final class RavelConfigProviderResolver extends ConfigProviderResolver {
+public final class RavelConfigProviderResolver extends ConfigProviderResolver implements LayeredConfigProviderResolver {
 
     private final ConcurrentMap<ClassLoader, Config> registry = new ConcurrentHashMap<>();
 
@@ -81,6 +82,24 @@ public final class RavelConfigProviderResolver extends ConfigProviderResolver {
             }
         }
         // Silent no-op if config is not found in the registry.
+    }
+
+    @Override
+    public void releaseConfigs(ClassLoader root) {
+        if (root == null) {
+            return;
+        }
+        registry.keySet().removeIf(loader -> isSameOrDescendant(loader, root));
+    }
+
+    /** Whether {@code root} is {@code loader} or one of its ancestors. */
+    private static boolean isSameOrDescendant(ClassLoader loader, ClassLoader root) {
+        for (ClassLoader cl = loader; cl != null; cl = cl.getParent()) {
+            if (cl == root) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // -------- internals --------

@@ -1,3 +1,21 @@
+## BUG-20261102-01 — The configuration registry kept every stopped application layer reachable
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `fix/release-config-at-stop`: `RavelConfigProviderResolver` implements the new
+  `io.vidocq.ravel.spi.LayeredConfigProviderResolver#releaseConfigs(ClassLoader)`, which removes the configuration of
+  a class loader and of every loader that has it among its ancestors; `RavelLayeredReleaseTest` (red, then green,
+  including a `WeakReference` on the released loader). The Vidocq runtime calls it when a layer stops
+  (vidocq BUG-20261102-06).
+- **Reported by**: the static audit of vidocq-workspace#40 item 23 (heap dump of 15 hot reloads: 16 live layer
+  class loaders instead of 1)
+- **Minimal reproduction**: `getConfig(loader)` for a throw-away class loader and one built on it, drop both,
+  `System.gc()`: the loaders are never collected.
+- **Cause**: the registry is a `ConcurrentHashMap<ClassLoader, Config>` held by the JVM-wide
+  `ConfigProviderResolver.instance`; a `Config` references the application's classes (sources, generated
+  converters), hence its key, so a weak key cannot work, and the standard `releaseConfig(Config)` needs the
+  `Config` of each loader, among them the ones a container builds on top of the layer's.
+- **Other resolvers**: unaffected; nothing changes for Weld or Open Liberty (portability ITs unchanged).
+
 
 ## BUG-20260712-01 — hardcoded implementation version constant in the published api artifact
 
