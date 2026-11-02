@@ -6,6 +6,55 @@ Peano combines a lexer/parser, immutable AST, resolver-backed interpreter and AP
 provider with build-time accessor and expression generation. The full design is
 `PLAN.md` in {repo-peano}[the repository].
 
+[#generated-code]
+== Generated code and reflective fallback [.tag-new]#NEW#
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. For Peano that is the accessor table of each model
+type an expression reaches, and the expressions known at build time; the reflective member access of the
+specification's resolvers stays as the fallback, unchanged.
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| `pkg.Type__PeanoAccessors`, an `AccessorProvider` whose `AccessorTable` reads and writes the type's properties,
+  calls its public methods and describes them (`MethodDescriptor`, annotation literals), all by direct calls
+| `peano-processor` in javac, for the types `@ELAccessible` or `-Apeano.accessorTypes` select and, with no
+  annotation, the `@Named` and `@Model` beans a page reaches by name and the application types their properties hold
+  (xref:reference.adoc#automatic-selection[Reference]); on Vidocq the `vidocq-runtime-peano-el-extension-codegen`
+  bundle puts it on the processor path
+| `AccessorCatalog`, loaded once per factory and context class loader through the `ServiceLoader` of
+  `AccessorProvider`; its resolver sits in the chain before the specification's built-in resolvers
+| The `BeanELResolver` / `RecordELResolver` of the EL API read the member by reflection, which needs the type
+  exported to `jakarta.el`.
+
+| The table that serves a container's client proxy
+| The bean's own table, when a `ProxyUnwrapper` service names the proxied class
+  (xref:reference.adoc#container-proxies[Reference]); Vidocq provides the unwrapper for Vauban's proxies
+| `AccessorCatalog`
+| The proxy falls through to the rest of the chain, as any subclass does.
+
+| Compiled expressions: the classes of the EL templates known at build
+| `peano-compiler` (`ExpressionCompiler`), called by xref:ibarra::internals.adoc#generated-code[Ibarra]'s page
+  compiler
+| The page that evaluates them
+| The expression is parsed and interpreted.
+|===
+
+=== When the fallback runs
+
+* A type from a dependency or the JDK: the processor sees only the sources of the module it compiles.
+* A type the automatic selection leaves out without an error: abstract, an ambiguous setter, a type-variable
+  property, a private enclosing class. A generated table also serves its exact class only; a subclass needs its own.
+* A static member without a table, and a serialized function restored after deserialization.
+
+=== Which path ran
+
+`-Dpeano.reflection=deny` makes every remaining reflective access fail with an `ELException` that names the type
+(`Reflection fallback denied for ...`); the default, `allow`, reflects silently. A test suite run with `deny` proves a
+page never needs the fallback.
+
 == Modules
 
 [cols="1,1,3",options="header"]
@@ -124,7 +173,9 @@ superclass serve every subtype that has no closer table.
 
 == APT property generation (implemented)
 
-ELAccessible or the peano.accessorTypes option selects owned model types.
+ELAccessible or the peano.accessorTypes option selects owned model types; with no annotation, the processor also
+selects the beans a page reaches by name and the types their properties hold
+(xref:reference.adoc#automatic-selection[automatic selection]).
 PeanoAccessorProcessor is discovered on javac's processor module path and generates
 one provider per selected type through Filer, with the model as originating element.
 Source names include the application module; resource fragments target that
