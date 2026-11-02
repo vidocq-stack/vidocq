@@ -27,7 +27,6 @@ import io.opentelemetry.api.trace.SpanBuilder;
 import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
-import io.opentelemetry.context.Scope;
 import io.opentelemetry.context.propagation.TextMapPropagator;
 import io.opentelemetry.context.propagation.TextMapSetter;
 import jakarta.annotation.Priority;
@@ -55,8 +54,12 @@ import java.net.URI;
  * client semconv which does not template the route on the client side (the full URL
  * is sufficient; the pattern is only known server-side via {@code @Path}).</p>
  *
- * <p>The span and scope are stored in the {@link ClientRequestContext} properties
- * for symmetric retrieval by {@link HumboldtClientResponseFilter} which ends them.</p>
+ * <p>The span is stored in the {@link ClientRequestContext} properties for retrieval by
+ * {@link HumboldtClientResponseFilter}, which ends it. No scope is held across the call: only the
+ * header injection needs the span as the current one, the filter injects from the context it builds, and a call
+ * that gets no response (timeout, connection error, interrupt) never runs the response filter — a scope left
+ * attached on the calling thread would then be found by the next scope closed on that thread, as an
+ * attach/detach order mismatch (BUG-20261102-01).</p>
  *
  * <p>Priority {@link Priorities#HEADER_DECORATOR} (3000) — runs after authentication
  * filters (1000) so that the span covers the auth header cost, but before USER
@@ -66,6 +69,10 @@ import java.net.URI;
 public class HumboldtClientRequestFilter implements ClientRequestFilter {
 
     public static final String SPAN_PROPERTY = "io.vidocq.humboldt.rest.client.span";
+    /**
+     * Property under which a scope used to be stored; the filter no longer holds one, the response filter still
+     * closes a scope found under it.
+     */
     public static final String SCOPE_PROPERTY = "io.vidocq.humboldt.rest.client.scope";
 
     static final AttributeKey<String> HTTP_REQUEST_METHOD = AttributeKey.stringKey("http.request.method");
@@ -103,16 +110,15 @@ public class HumboldtClientRequestFilter implements ClientRequestFilter {
         }
 
         Span span = spanBuilder.startSpan();
-        Scope scope = Context.current().with(span).makeCurrent();
+        Context withSpan = Context.current().with(span);
 
         // Propagation: uses the Humboldt global TextMapPropagator. Includes W3C
         // (TraceContext + Baggage) by default + custom propagators declared via SPI
         // ConfigurablePropagatorProvider (MP Telemetry §3.3 / cluster D).
         TextMapPropagator propagator = otel.getPropagators().getTextMapPropagator();
-        propagator.inject(Context.current(), requestContext, HEADER_SETTER);
+        propagator.inject(withSpan, requestContext, HEADER_SETTER);
 
         requestContext.setProperty(SPAN_PROPERTY, span);
-        requestContext.setProperty(SCOPE_PROPERTY, scope);
     }
 
     /**

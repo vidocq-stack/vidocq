@@ -24,6 +24,11 @@ import io.opentelemetry.context.ContextKey;
 import io.opentelemetry.context.Scope;
 import org.junit.jupiter.api.Test;
 
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.ResourceBundle;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -110,6 +115,88 @@ class HumboldtContextStorageTest {
         }
         assertEquals("wrapped-value", seenInChild.get(),
                 "Context.wrap() must propagate captured context to VT");
+    }
+
+    /** Closes the outer scope while an inner one that is never closed is still attached; returns what was logged. */
+    private static List<Entry> outOfOrderClose(boolean debug) {
+        List<Entry> logged = new ArrayList<>();
+        System.Logger recording = new System.Logger() {
+            @Override public String getName() { return "recording"; }
+            @Override public boolean isLoggable(System.Logger.Level level) { return true; }
+            @Override public void log(System.Logger.Level level, ResourceBundle bundle, String msg, Throwable thrown) {
+                logged.add(new Entry(level, msg, thrown));
+            }
+            @Override public void log(System.Logger.Level level, ResourceBundle bundle, String format, Object... params) {
+                logged.add(new Entry(level, params == null || params.length == 0 ? format : MessageFormat.format(format, params), null));
+            }
+        };
+        System.Logger previousLogger = HumboldtContextStorage.useLogger(recording);
+        boolean previousDebug = HumboldtContextStorage.debug(debug);
+        try {
+            Scope outer = Context.root().with(KEY, "outer").makeCurrent();
+            Context.root().with(KEY, "inner").makeCurrent(); // never closed, as after a call that got no response
+            outer.close();
+        } finally {
+            HumboldtContextStorage.debug(previousDebug);
+            HumboldtContextStorage.useLogger(previousLogger);
+        }
+        return logged;
+    }
+
+    private record Entry(System.Logger.Level level, String message, Throwable thrown) { }
+
+    @Test
+    void out_of_order_close_warns_and_names_the_debug_property() {
+        List<Entry> logged = outOfOrderClose(false);
+
+        assertEquals(1, logged.size());
+        assertEquals(System.Logger.Level.WARNING, logged.getFirst().level());
+        assertTrue(logged.getFirst().message().contains("order mismatch"));
+        assertTrue(logged.getFirst().message().contains("-Dhumboldt.context.debug=true"),
+                "the warning says how to get the stacks");
+        assertNull(logged.getFirst().thrown(), "no stack is built unless asked for");
+        assertNull(Context.current().get(KEY), "the storage recovers: the thread ends up without context");
+    }
+
+    @Test
+    void out_of_order_close_logs_the_detach_and_attach_stacks_under_the_debug_property() {
+        List<Entry> logged = outOfOrderClose(true);
+
+        assertEquals(1, logged.size());
+        Throwable detach = logged.getFirst().thrown();
+        assertTrue(detach != null && detach.getMessage().contains("detached here"));
+        assertEquals(1, detach.getSuppressed().length);
+        assertTrue(detach.getSuppressed()[0].getMessage().contains("attached here"),
+                "the stack of the attach that was not closed comes with it");
+        assertTrue(Arrays.stream(detach.getSuppressed()[0].getStackTrace())
+                        .anyMatch(f -> f.getMethodName().equals("outOfOrderClose")),
+                "the attach stack reaches the code that attached");
+    }
+
+    @Test
+    void in_order_close_logs_nothing_under_the_debug_property() {
+        List<Entry> logged = new ArrayList<>();
+        System.Logger recording = new System.Logger() {
+            @Override public String getName() { return "recording"; }
+            @Override public boolean isLoggable(System.Logger.Level level) { return true; }
+            @Override public void log(System.Logger.Level level, ResourceBundle bundle, String msg, Throwable thrown) {
+                logged.add(new Entry(level, msg, thrown));
+            }
+            @Override public void log(System.Logger.Level level, ResourceBundle bundle, String format, Object... params) {
+                logged.add(new Entry(level, format, null));
+            }
+        };
+        System.Logger previousLogger = HumboldtContextStorage.useLogger(recording);
+        boolean previousDebug = HumboldtContextStorage.debug(true);
+        try (var _ = Context.root().with(KEY, "outer").makeCurrent()) {
+            try (var _ = Context.root().with(KEY, "inner").makeCurrent()) {
+                assertEquals("inner", Context.current().get(KEY));
+            }
+        } finally {
+            HumboldtContextStorage.debug(previousDebug);
+            HumboldtContextStorage.useLogger(previousLogger);
+        }
+        assertTrue(logged.isEmpty());
     }
 
     @Test

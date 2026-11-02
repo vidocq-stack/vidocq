@@ -302,6 +302,20 @@ Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent syst
 
 The runtime reads **no** `mp.telemetry.*` key: enabling/disabling goes through `OTEL_SDK_DISABLED` (see the SDK gate above), and propagators default to W3C TraceContext + Baggage. The single exception lives in the optional `humboldt-otel-interop` bridge, whose SPI autoconfiguration accepts `mp.telemetry.propagators` as an alias of `otel.propagators` (MP Telemetry §3.3).
 
+[[context-debug]]
+=== Context diagnostics [.tag-new]#NEW#
+
+[cols="2,1,3",options="header"]
+|===
+| System property | Default | Effect
+
+| `humboldt.context.debug`
+| `false`
+| Records, for every attach of a context, the stack it was made from, and adds the stacks to the `Context attach/detach order mismatch` warning: the stack of the detach, and, as a suppressed exception, the stack of the attach that was found current and never closed.
+|===
+
+The warning is logged when a scope is closed while another context, attached after it, is still current on the thread; the storage restores the context that preceded the scope, so nothing fails. Without the property the warning names the two spans only. The recording costs one exception per attach, so leave it off in production. A client span is no longer a cause: the CLIENT filter does not hold a scope across the call, and a call that gets no response (timeout, connection error, shutdown) leaves the calling thread's context as it found it.
+
 == Applied semantic conventions
 
 `humboldt-rest` applies the OpenTelemetry HTTP semantic conventions automatically on the server side. It does not depend on `opentelemetry-semconv`: the attribute names are written in its code, against conventions 1.27. The REST tests of the official MicroProfile Telemetry 2.2-RC3 TCK check them, with `opentelemetry-semconv` 1.44.0 in the runner, and pass:

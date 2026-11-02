@@ -120,6 +120,22 @@ class HumboldtClientTracingTest {
         assertFalse(Span.current().getSpanContext().isValid(), "the client scope is closed");
     }
 
+    /**
+     * A call that never gets a response (timeout, connection error, interrupt at shutdown) does not run the response
+     * filter: the request filter must therefore not leave its scope attached on the calling thread, or the next
+     * scope closed on that thread reports an attach/detach order mismatch.
+     */
+    @Test
+    void request_filter_leaves_no_scope_attached_when_the_call_gets_no_response() {
+        MultivaluedMap<String, Object> headers = new MultivaluedHashMap<>();
+        Map<String, Object> props = new HashMap<>();
+
+        filter().filter(clientRequest(METHOD_GET, URI.create("http://api.example.com/x"), headers, props));
+
+        assertFalse(Span.current().getSpanContext().isValid(), "no scope stays attached on the calling thread");
+        assertTrue(headers.getFirst("traceparent") instanceof String, "the client span is still propagated");
+    }
+
     @Test
     void url_full_drops_user_info_and_fragment() {
         String url = traced(URI.create("https://user:secret@api.example.com/p?q=1#frag"));
@@ -167,6 +183,22 @@ class HumboldtClientTracingTest {
                 clientResponse(200));
         assertTrue(exporter.getFinishedSpans().isEmpty());
         assertEquals(1, props.size());
+    }
+
+    @Test
+    void response_filter_still_closes_a_scope_found_in_the_request_properties() {
+        Map<String, Object> props = new HashMap<>();
+        Span span = provider.get("test").spanBuilder("held").startSpan();
+        props.put(HumboldtClientRequestFilter.SPAN_PROPERTY, span);
+        props.put(HumboldtClientRequestFilter.SCOPE_PROPERTY, span.makeCurrent());
+
+        new HumboldtClientResponseFilter().filter(
+                clientRequest(METHOD_GET, URI.create("http://x/"), new MultivaluedHashMap<>(), props),
+                clientResponse(200));
+
+        assertFalse(Span.current().getSpanContext().isValid(), "the scope found in the properties is closed");
+        assertEquals("held", exporter.getFinishedSpans().getFirst().name());
+        assertTrue(props.isEmpty());
     }
 
     @Test

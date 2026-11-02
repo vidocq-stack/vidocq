@@ -25,6 +25,7 @@ import io.opentelemetry.context.Scope;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Humboldt {@link ContextStorage} implementation — backed by {@link ThreadLocal}.
@@ -38,6 +39,11 @@ import java.lang.System.Logger.Level;
  *       (aligned with the reference OTel implementation — no exception is thrown).</li>
  * </ul>
  *
+ * <p><strong>Finding an out-of-order close</strong> — the warning names the two contexts but not the code that
+ * left a scope open. With {@code -Dhumboldt.context.debug=true} the storage records, for every attach, the
+ * stack it was made from, and the warning carries the stack of the detach with the stack of the attach that was
+ * never closed as a suppressed exception. The recording costs one exception per attach, so it is off by default.</p>
+ *
  * <p><strong>Virtual threads</strong> — since JDK 21 (JEP 444),
  * {@link ThreadLocal} no longer pins the carrier thread during pure Java
  * blocking operations (sleep, NIO I/O, etc.). The only remaining pinning cases
@@ -47,13 +53,33 @@ import java.lang.System.Logger.Level;
  */
 public final class HumboldtContextStorage implements ContextStorage {
 
+    /** System property that turns on the attach and detach stacks of the order mismatch warning. */
+    static final String DEBUG_PROPERTY = "humboldt.context.debug";
+
     static final HumboldtContextStorage INSTANCE = new HumboldtContextStorage();
 
-    private static final Logger LOG = System.getLogger(HumboldtContextStorage.class.getName());
+    private static final AtomicReference<Logger> LOG =
+            new AtomicReference<>(System.getLogger(HumboldtContextStorage.class.getName()));
     private static final ThreadLocal<Context> THREAD_LOCAL = new ThreadLocal<>();
+    /** The stack the current context was attached from; only set while {@link #debug} is on. */
+    private static final ThreadLocal<Throwable> ATTACH_SITE = new ThreadLocal<>();
+
+    private static volatile boolean debug = Boolean.getBoolean(DEBUG_PROPERTY);
 
     private HumboldtContextStorage() {
         // singleton via ServiceLoader
+    }
+
+    /** Replaces the logger the warnings go to, and returns the previous one (tests). */
+    static Logger useLogger(Logger logger) {
+        return LOG.getAndSet(logger);
+    }
+
+    /** Turns the attach and detach stacks on or off, and returns the previous setting (tests). */
+    static boolean debug(boolean on) {
+        boolean previous = debug;
+        debug = on;
+        return previous;
     }
 
     @Override
@@ -66,7 +92,13 @@ public final class HumboldtContextStorage implements ContextStorage {
             return Scope.noop();
         }
         THREAD_LOCAL.set(toAttach);
-        return new HumboldtScope(before, toAttach);
+        if (!debug) {
+            return new HumboldtScope(before, toAttach, null, null);
+        }
+        Throwable previousSite = ATTACH_SITE.get();
+        Throwable site = new IllegalStateException("Context attached here");
+        ATTACH_SITE.set(site);
+        return new HumboldtScope(before, toAttach, site, previousSite);
     }
 
     @Override
@@ -79,11 +111,16 @@ public final class HumboldtContextStorage implements ContextStorage {
 
         private final Context previous;
         private final Context attached;
+        /** The stack of this attach, and the one of the context it replaced; {@code null} without the debug property. */
+        private final Throwable site;
+        private final Throwable previousSite;
         private boolean closed;
 
-        HumboldtScope(Context previous, Context attached) {
+        HumboldtScope(Context previous, Context attached, Throwable site, Throwable previousSite) {
             this.previous = previous;
             this.attached = attached;
+            this.site = site;
+            this.previousSite = previousSite;
         }
 
         @Override
@@ -93,20 +130,48 @@ public final class HumboldtContextStorage implements ContextStorage {
             }
             closed = true;
             detach(attached, previous);
+            if (site != null) {
+                restoreSite(previousSite);
+            }
+        }
+
+        private static void restoreSite(Throwable previousSite) {
+            if (previousSite == null) {
+                ATTACH_SITE.remove();
+            } else {
+                ATTACH_SITE.set(previousSite);
+            }
         }
 
         private static void detach(Context expected, Context previous) {
             Context actual = THREAD_LOCAL.get();
             if (actual != expected) {
-                LOG.log(Level.WARNING,
-                        "Context attach/detach order mismatch — expected {0}, found {1}. "
-                                + "Possible cause: out-of-order Scope.close(), or context captured via an uninstrumented third-party library.",
-                        expected, actual);
+                warnOutOfOrder(expected, actual);
             }
             if (previous == null || previous == Context.root()) {
                 THREAD_LOCAL.remove();
             } else {
                 THREAD_LOCAL.set(previous);
+            }
+        }
+
+        private static void warnOutOfOrder(Context expected, Context actual) {
+            String message = "Context attach/detach order mismatch — expected " + expected + ", found " + actual
+                    + ". Possible cause: out-of-order Scope.close(), or context captured via an uninstrumented"
+                    + " third-party library. Run with -D" + DEBUG_PROPERTY + "=true to log the stacks of the attach"
+                    + " that was not closed and of this detach.";
+            Throwable stacks = null;
+            if (debug) {
+                stacks = new IllegalStateException("Context detached here");
+                Throwable openSite = ATTACH_SITE.get();
+                if (openSite != null) {
+                    stacks.addSuppressed(openSite);
+                }
+            }
+            if (stacks == null) {
+                LOG.get().log(Level.WARNING, message);
+            } else {
+                LOG.get().log(Level.WARNING, message, stacks);
             }
         }
     }
