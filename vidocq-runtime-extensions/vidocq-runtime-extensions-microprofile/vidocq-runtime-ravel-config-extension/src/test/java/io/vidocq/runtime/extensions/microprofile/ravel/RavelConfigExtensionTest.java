@@ -39,8 +39,25 @@ import static org.junit.jupiter.api.Assertions.assertSame;
  * configuration of an application layer stays reachable, and the layer with it, until somebody releases it:
  * the runtime never did, and every hot reload of {@code vidocq dev} kept one more layer in memory.
  */
+
 @DisplayName("RavelConfigExtension - the configuration of a layer does not outlive it")
 class RavelConfigExtensionTest {
+
+    private static ClassLoader loader(ClassLoader parent) {
+        return new URLClassLoader(new URL[0], parent);
+    }
+
+    /** Runs {@code body} with {@code layer} as the context class loader, as the runtime boots a layer. */
+    private static void inLayer(ClassLoader layer, Runnable body) {
+        Thread thread = Thread.currentThread();
+        ClassLoader previous = thread.getContextClassLoader();
+        thread.setContextClassLoader(layer);
+        try {
+            body.run();
+        } finally {
+            thread.setContextClassLoader(previous);
+        }
+    }
 
     @Test
     @DisplayName("a stopped layer can be garbage collected")
@@ -56,12 +73,10 @@ class RavelConfigExtensionTest {
     @Test
     @DisplayName("onStop releases the configuration the layer was booted with")
     void stopReleasesTheLayerConfig() {
-        ClassLoader previous = Thread.currentThread().getContextClassLoader();
-        ClassLoader layer = new URLClassLoader(new URL[0], getClass().getClassLoader());
-        RavelConfigExtension extension = new RavelConfigExtension();
+        ClassLoader layer = loader(getClass().getClassLoader());
         ConfigProviderResolver resolver = ConfigProviderResolver.instance();
-        try {
-            Thread.currentThread().setContextClassLoader(layer);
+        inLayer(layer, () -> {
+            RavelConfigExtension extension = new RavelConfigExtension();
             extension.configure(null);
             Config booted = resolver.getConfig(layer);
             assertSame(booted, resolver.getConfig(layer), "the layer keeps one configuration while it runs");
@@ -71,20 +86,16 @@ class RavelConfigExtensionTest {
             Config afterStop = resolver.getConfig(layer);
             assertNotSame(booted, afterStop, "the registry still held the configuration of the stopped layer");
             resolver.releaseConfig(afterStop);
-        } finally {
-            Thread.currentThread().setContextClassLoader(previous);
-        }
+        });
     }
 
     @Test
     @DisplayName("onStop also releases the configuration of a loader built on top of the layer's")
     void stopReleasesTheLoadersBuiltOnTheLayer() {
-        ClassLoader previous = Thread.currentThread().getContextClassLoader();
-        ClassLoader layer = new URLClassLoader(new URL[0], getClass().getClassLoader());
-        ClassLoader composite = new URLClassLoader(new URL[0], layer);
+        ClassLoader layer = loader(getClass().getClassLoader());
+        ClassLoader composite = loader(layer);
         ConfigProviderResolver resolver = ConfigProviderResolver.instance();
-        try {
-            Thread.currentThread().setContextClassLoader(layer);
+        inLayer(layer, () -> {
             RavelConfigExtension extension = new RavelConfigExtension();
             extension.configure(null);
             Config underComposite = resolver.getConfig(composite);
@@ -94,9 +105,7 @@ class RavelConfigExtensionTest {
             Config afterStop = resolver.getConfig(composite);
             assertNotSame(underComposite, afterStop, "the configuration read under the composite loader stayed");
             resolver.releaseConfig(afterStop);
-        } finally {
-            Thread.currentThread().setContextClassLoader(previous);
-        }
+        });
     }
 
     @Test
@@ -105,57 +114,44 @@ class RavelConfigExtensionTest {
         RavelConfigExtension neverConfigured = new RavelConfigExtension();
         assertDoesNotThrow(neverConfigured::onStop);
 
-        ClassLoader previous = Thread.currentThread().getContextClassLoader();
-        ClassLoader layer = new URLClassLoader(new URL[0], getClass().getClassLoader());
-        try {
-            Thread.currentThread().setContextClassLoader(layer);
+        inLayer(loader(getClass().getClassLoader()), () -> {
             RavelConfigExtension extension = new RavelConfigExtension();
             extension.configure(null);
             extension.onStop();
             assertDoesNotThrow(extension::onStop);
-        } finally {
-            Thread.currentThread().setContextClassLoader(previous);
-        }
+        });
     }
 
     @Test
     @DisplayName("the stop of a layer leaves the configuration of another loader alone")
     void stopLeavesOtherLoadersAlone() {
-        ClassLoader previous = Thread.currentThread().getContextClassLoader();
-        ClassLoader first = new URLClassLoader(new URL[0], getClass().getClassLoader());
-        ClassLoader second = new URLClassLoader(new URL[0], getClass().getClassLoader());
+        ClassLoader first = loader(getClass().getClassLoader());
+        ClassLoader second = loader(getClass().getClassLoader());
         ConfigProviderResolver resolver = ConfigProviderResolver.instance();
-        try {
-            Config other = resolver.getConfig(second);
-            Thread.currentThread().setContextClassLoader(first);
+        Config other = resolver.getConfig(second);
+        inLayer(first, () -> {
             RavelConfigExtension extension = new RavelConfigExtension();
             extension.configure(null);
             extension.onStop();
+        });
 
-            assertSame(other, resolver.getConfig(second));
-        } finally {
-            Thread.currentThread().setContextClassLoader(previous);
-            resolver.releaseConfig(resolver.getConfig(second));
-            resolver.releaseConfig(resolver.getConfig(first));
-        }
+        assertSame(other, resolver.getConfig(second));
+        resolver.releaseConfig(other);
+        resolver.releaseConfig(resolver.getConfig(first));
     }
 
     /** Boots then stops a layer through the extension, and returns a weak handle on its class loader. */
     private WeakReference<ClassLoader> bootAndStopOneLayer() {
-        ClassLoader previous = Thread.currentThread().getContextClassLoader();
-        ClassLoader layer = new URLClassLoader(new URL[0], getClass().getClassLoader());
-        try {
-            Thread.currentThread().setContextClassLoader(layer);
+        ClassLoader layer = loader(getClass().getClassLoader());
+        inLayer(layer, () -> {
             RavelConfigExtension extension = new RavelConfigExtension();
             extension.configure(null);
             // the application reads its configuration while it runs, under the layer's loader and under one
             // the container builds on it
             ConfigProvider.getConfig();
-            ConfigProviderResolver.instance().getConfig(new URLClassLoader(new URL[0], layer));
+            ConfigProviderResolver.instance().getConfig(loader(layer));
             extension.onStop();
-        } finally {
-            Thread.currentThread().setContextClassLoader(previous);
-        }
+        });
         return new WeakReference<>(layer);
     }
 }
