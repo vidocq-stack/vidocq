@@ -114,7 +114,7 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
                     generate(type);
                 });
         if (!"false".equalsIgnoreCase(processingEnv.getOptions().getOrDefault("peano.autoAccessors", "true"))) {
-            selectReachable(round);
+            selectReachable(round, selected);
         }
         for (TypeElement type : new ArrayList<>(deferredTypes.values())) generate(type);
         for (TypeElement candidate : sourceTypes.values()) {
@@ -157,12 +157,12 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
 
     /**
      * The automatic selection: the beans a page reaches by name ({@code @Named}, {@code @Model}, on a class or on a
-     * producer method) and, transitively, the application types their properties hold, element types of collections,
+     * producer method) and the explicitly selected types, then, transitively, the application types their properties hold, element types of collections,
      * maps, optionals and arrays included. A type that cannot get a table is left to the reflective fallback without
      * an error: it was not asked for.
      */
-    private void selectReachable(RoundEnvironment round) {
-        var queue = new java.util.ArrayDeque<TypeElement>();
+    private void selectReachable(RoundEnvironment round, List<TypeElement> selected) {
+        var queue = new java.util.ArrayDeque<TypeElement>(selected);
         for (Element root : round.getRootElements()) collectNamed(root, queue);
         while (!queue.isEmpty()) {
             TypeElement type = queue.poll();

@@ -14,8 +14,8 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
   `ProxyUnwrapperTest.aRegisteredUnwrapperLetsTheBeanTableServeItsProxyAndNothingElse`.
 - Cause: selection was explicit only; the exact-class check had no notion of a container proxy.
 - Status: fixed on branch `feat/el-auto-accessors`: the processor also selects the classes and producer methods
-  annotated `@jakarta.inject.Named` or `@jakarta.enterprise.inject.Model` and, transitively, the application
-  classes and records their properties hold (through collections, maps, optionals and arrays); a type that cannot
+  annotated `@jakarta.inject.Named` or `@jakarta.enterprise.inject.Model` and, transitively from them and from the
+  explicitly selected types, the application classes and records their properties hold (through collections, maps, optionals and arrays); a type that cannot
   get a table is left to the reflective fallback without an error; `-Apeano.autoAccessors=false` turns the
   selection off. Generated tables check their target through `AccessorTable.serves`, which also accepts a
   container proxy a registered `ProxyUnwrapper` (found with the accessor providers) names.

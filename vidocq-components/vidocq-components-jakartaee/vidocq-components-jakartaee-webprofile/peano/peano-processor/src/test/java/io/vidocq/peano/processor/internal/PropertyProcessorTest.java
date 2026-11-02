@@ -412,6 +412,21 @@ class PropertyProcessorTest {
         assertFalse(log.contains("error"), log);
     }
 
+    /** The application types an explicitly selected type holds get their tables too: no annotation on each of them. */
+    @Test
+    void followsThePropertiesOfAnExplicitlySelectedType() throws Exception {
+        Path source = temporary.resolve("sources");
+        Files.createDirectories(source);
+        Files.writeString(source.resolve("module-info.java"), "module peano.autoexplicit { requires io.vidocq.peano.api; }");
+        Files.writeString(source.resolve("Receipt.java"), """
+                package demo;
+                @io.vidocq.peano.annotation.ELAccessible public record Receipt(java.util.List<Line> lines) {}""");
+        Files.writeString(source.resolve("Line.java"), "package demo; public record Line(String dish) {}");
+        var compilation = compile(source);
+        assertEquals(0, compilation.status(), compilation.log());
+        assertTrue(Files.exists(compilation.generated().resolve("demo/Line__PeanoAccessors.java")), compilation.log());
+    }
+
     /** The automatic selection can be switched off: only @ELAccessible and peano.accessorTypes select. */
     @Test
     void theAutomaticSelectionCanBeSwitchedOff() throws Exception {

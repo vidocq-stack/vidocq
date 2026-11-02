@@ -408,7 +408,7 @@ incremental processing.
 * `io.vidocq.peano.annotation.ELAccessible`: SOURCE-retained TYPE annotation on an owned class or record.
 * [[automatic-selection]][.tag-new]#NEW# Automatic selection, with no annotation: the classes and producer methods
   annotated `@jakarta.inject.Named` or `@jakarta.enterprise.inject.Model` — the beans a page reaches by name — and,
-  transitively, the classes and records of the module their readable or writable properties hold, through
+  transitively from them and from the types selected above, the classes and records of the module their readable or writable properties hold, through
   collections, maps, optionals and arrays. A reached type that cannot get a table (abstract, ambiguous setter,
   type-variable property, private enclosing class) is left to the reflective fallback without an error.
   `-Apeano.autoAccessors=false` turns it off.
