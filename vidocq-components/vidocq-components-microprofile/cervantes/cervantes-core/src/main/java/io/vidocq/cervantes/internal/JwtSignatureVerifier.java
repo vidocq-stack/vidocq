@@ -27,9 +27,9 @@ import java.security.PublicKey;
 import java.security.Signature;
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Checks the signature of a JWT via the JCA ({@code java.security.Signature}) — zero third-party cryptography dependency.
@@ -54,7 +54,7 @@ final class JwtSignatureVerifier {
      * Idle signatures by JCA name. {@code Signature.getInstance} looks the provider up and builds the engine
      * reflectively on every call; {@code initVerify} resets a signature completely, so one is reused by the next token.
      */
-    private final ConcurrentHashMap<String, BlockingQueue<Signature>> idle = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, IdleSignatures> idle = new ConcurrentHashMap<>();
 
     JwtSignatureVerifier() {
         this(Signature::getInstance);
@@ -67,7 +67,7 @@ final class JwtSignatureVerifier {
     boolean verify(ParsedJwt jwt, PublicKey key, SignatureAlgorithm alg) throws JwtValidationException {
         requireKeyFamily(key, alg);
         try {
-            BlockingQueue<Signature> pool = idle.computeIfAbsent(alg.jcaName(), _ -> new ArrayBlockingQueue<>(IDLE_PER_ALGORITHM));
+            IdleSignatures pool = idle.computeIfAbsent(alg.jcaName(), _ -> new IdleSignatures());
             Signature signature = pool.poll();
             if (signature == null) {
                 signature = factory.create(alg.jcaName());
@@ -79,13 +79,35 @@ final class JwtSignatureVerifier {
                 sigBytes = EcdsaSignatures.joseToDer(sigBytes, alg.ecCoordinateOctets());
             }
             boolean valid = signature.verify(sigBytes);
-            pool.offer(signature); // only after a clean run: a signature that threw is dropped
+            pool.giveBack(signature); // only after a clean run: a signature that threw is dropped
             return valid;
         } catch (IllegalArgumentException _) {
             //poorly sized EC signature (transcoding impossible) → invalid signature, not server error
             return false;
         } catch (GeneralSecurityException e) {
             throw new JwtValidationException("signature verification error for " + alg.name(), e);
+        }
+    }
+
+    /** The idle signatures of one algorithm, at most {@link #IDLE_PER_ALGORITHM}: a signature beyond that is dropped. */
+    static final class IdleSignatures {
+        private final ConcurrentLinkedQueue<Signature> queue = new ConcurrentLinkedQueue<>();
+        private final AtomicInteger count = new AtomicInteger();
+
+        Signature poll() {
+            Signature signature = queue.poll();
+            if (signature != null) {
+                count.decrementAndGet();
+            }
+            return signature;
+        }
+
+        void giveBack(Signature signature) {
+            if (count.incrementAndGet() <= IDLE_PER_ALGORITHM) {
+                queue.add(signature);
+            } else {
+                count.decrementAndGet();
+            }
         }
     }
 

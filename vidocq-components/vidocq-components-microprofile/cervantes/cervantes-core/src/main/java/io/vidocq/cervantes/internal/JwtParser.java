@@ -27,6 +27,7 @@ import jakarta.json.spi.JsonProvider;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -42,7 +43,7 @@ final class JwtParser {
 
     private final Supplier<JsonProvider> providerLookup;
     /** The JSON-P provider, looked up on the first token: {@code JsonProvider.provider()} runs a ServiceLoader each time. */
-    private volatile JsonProvider provider;
+    private final AtomicReference<JsonProvider> provider = new AtomicReference<>();
 
     JwtParser() {
         this(JsonProvider::provider);
@@ -53,10 +54,10 @@ final class JwtParser {
     }
 
     private JsonProvider provider() {
-        JsonProvider found = provider;
+        JsonProvider found = provider.get();
         if (found == null) {
-            found = providerLookup.get();
-            provider = found;
+            provider.compareAndSet(null, providerLookup.get());
+            found = provider.get();
         }
         return found;
     }

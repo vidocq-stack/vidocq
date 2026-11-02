@@ -126,4 +126,19 @@ class JwtSignatureVerifierTest {
             }
         }
     }
+
+    @Test
+    void idleSignaturesBeyondTheBound_areDropped() throws Exception {
+        var idle = new JwtSignatureVerifier.IdleSignatures();
+        for (int i = 0; i < 40; i++) {
+            idle.giveBack(Signature.getInstance("SHA256withRSA"));
+        }
+
+        int kept = 0;
+        while (idle.poll() != null) {
+            kept++;
+        }
+
+        assertEquals(32, kept);
+    }
 }
