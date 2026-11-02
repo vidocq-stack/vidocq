@@ -4,6 +4,61 @@
 [.lead]
 Grimm refuses per-request classpath scanning: all the work happens once, at CDI container startup, and the result is cached. This page describes the exact pipeline sequence, the role of the Vauban BCE, and the threading invariants.
 
+[#generated-code]
+== Generated code and reflective fallback [.tag-new]#NEW#
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. For Grimm that is the OpenAPI fragment of each
+resource class, built at compile time; the annotation scan of the <<build-pipeline>> stays as the fallback, unchanged.
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| `<Resource>$$GrimmModel`, an `OpenApiContribution`: the class's OpenAPI fragment as a JSON literal, built in
+  javac with Grimm's own model objects and schema generator, so it matches what the scan would produce
+| `grimm-processor` in javac, for the resource classes within its subset (class and method `@Path`, HTTP verbs,
+  scalar path, query and header parameters without Bean Validation constraints, `@Produces`, inferred 200
+  responses); on Vidocq the `vidocq-runtime-grimm-openapi-extension-codegen` bundle puts it on the processor path
+| Step 3 of the pipeline, once when the container activates: `ContributionRegistry` tries the `ServiceLoader` of
+  `OpenApiContribution` (module layer aware), then `Class.forName(<resource>$$GrimmModel)`, and `FragmentMerger`
+  folds the fragments in
+| `AnnotationScanner` reads the class by reflection when the container activates.
+
+| `META-INF/grimm/openapi-definitions`, the classes carrying `@OpenAPIDefinition`
+| `grimm-processor`
+| The pipeline, which reads the definition from those classes
+| The scan finds the definition.
+
+| The list of application classes the scan covers
+| `GrimmExtension`, a Build Compatible Extension that Vauban runs in javac when `grimm-cdi-vauban` is on the
+  processor path; `ScannedTypesCreator` adds the classes listed in the processor's service file
+| `GrimmModelCache` when it builds the document
+| The extension runs at boot.
+
+| The dispatch of Grimm's own `/openapi` endpoint
+| `cassini-processor`, at Grimm's own build (xref:cassini::internals.adoc#generated-code[Cassini])
+| Cassini
+| Cassini's fallback.
+|===
+
+Not generated yet, so described by the scan: a resource class that returns or takes a non-scalar type (an
+application POJO), consumes a request body, has a sub-resource locator, is nested or generic, or carries MicroProfile
+OpenAPI annotations or Bean Validation constraints on its methods. Most real resources return a POJO, so on most
+applications the scan still does the bulk of the work.
+
+=== When the fallback runs
+
+* A resource class outside the subset: the processor skips the whole class rather than describe it in part.
+* A class compiled without `grimm-processor`, such as the TCK's classes.
+
+=== Which path ran
+
+* The build says in one compiler note how many classes it left to the scan; `-Agrimm.processor.verbose=true` lists
+  them with their reason (xref:reference.adoc#processor-verbose[Reference]).
+* `ContributionRegistry.serviceLoaderHits()`, `preGeneratedHits()` and `scanFallbacks()` count which tier described
+  each class.
+
 == `grimm-core` / `grimm-cdi-vauban` separation
 
 `grimm-core` is plain Java. It knows nothing about CDI or JAX-RS runtime — only the spec types (`@Path` is read as an annotation, not as a handler). It is usable outside any container, for example by a Maven tool that produces an OpenAPI document at build time.
