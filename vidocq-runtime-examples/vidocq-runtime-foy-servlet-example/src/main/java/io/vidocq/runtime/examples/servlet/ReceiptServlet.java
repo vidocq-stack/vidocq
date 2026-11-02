@@ -47,7 +47,10 @@ public class ReceiptServlet extends HttpServlet {
             Dish dish = line.getKey();
             lines.add(new ReceiptLine(dish.name(), line.getValue(), Html.euros(dish.cents() * line.getValue())));
         }
-        req.setAttribute("receipt", new Receipt(lines, Html.euros(basket.totalCents())));
+        Receipt receipt = new Receipt(lines, Html.euros(basket.totalCents()));
+        req.setAttribute("receipt", receipt);
+        // <bistro:each in="receiptLines"> iterates them: no expression in a tag attribute.
+        req.setAttribute("receiptLines", receipt.lines());
         try {
             req.getRequestDispatcher("/WEB-INF/views/receipt.jsp").forward(req, resp);
         } catch (ServletException | IOException e) {

@@ -37,6 +37,12 @@ public final class EachTag extends SimpleTagSupport {
         this.items = items;
     }
 
+    /** @param name the page, request, session or application attribute holding the items, instead of {@code items} */
+    public void setIn(String name) {
+        Object found = getJspContext().findAttribute(name);
+        this.items = found instanceof Iterable<?> iterable ? iterable : null;
+    }
+
     public void setVar(String variable) {
         this.variable = variable;
     }

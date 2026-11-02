@@ -7,6 +7,11 @@
     <short-name>strings</short-name>
     <uri>https://vidocq.io/it/strings</uri>
     <function>
+        <name>escapeXml</name>
+        <function-class>io.vidocq.runtime.it.ibarrapages.Strings</function-class>
+        <function-signature>java.lang.String escapeXml(java.lang.String)</function-signature>
+    </function>
+    <function>
         <name>upper</name>
         <function-class>io.vidocq.runtime.it.ibarrapages.Strings</function-class>
         <function-signature>java.lang.String upper(java.lang.String)</function-signature>

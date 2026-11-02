@@ -12,9 +12,13 @@
         <body-content>scriptless</body-content>
         <attribute>
             <name>items</name>
-            <required>true</required>
+            <required>false</required>
             <rtexprvalue>true</rtexprvalue>
             <type>java.lang.Iterable</type>
+        </attribute>
+        <attribute>
+            <name>in</name>
+            <required>false</required>
         </attribute>
         <attribute>
             <name>var</name>

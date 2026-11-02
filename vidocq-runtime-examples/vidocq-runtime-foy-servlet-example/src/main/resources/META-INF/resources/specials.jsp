@@ -5,7 +5,6 @@
 <body>
 <h1>Tonight's special</h1>
 <p>
-<bistro:out value="${specials.dish}" escapeXml="true"/>,
-<bistro:out value="${bistro:euros(specials.priceCents)}" escapeXml="true"/>.
+<bistro:out value="${specials.dish}" escapeXml="true"/>, <bistro:out value="${bistro:euros(specials.priceCents)}" escapeXml="true"/>.
 </p>
 </body></html>
