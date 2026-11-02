@@ -53,7 +53,7 @@ it currently fails (skeleton) to bootstrap the red → green → refactor cycle.
 ## Vidocq integration
 
 On the Vidocq Runtime side, activation is done via a single dependency — the
-[`vidocq-runtime-mansart-transactions-extension`](https://forge.vidocq.dev/vidocq/vidocq/src/branch/main/vidocq-runtime-core-extensions/vidocq-runtime-mansart-transactions-extension)
+[`vidocq-runtime-mansart-transactions-extension`](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-runtime-core-extensions/vidocq-runtime-mansart-transactions-extension)
 extension which transitively pulls `mansart-transactions-cdi` and does a sanity-check
 `TransactionManager` at boot (priority 250, between `mansart-pool` and `mansart-data`).
 The application then only needs `requires jakarta.transaction;` in its `module-info.java`
