@@ -6,6 +6,14 @@ minimal repro, cause hypothesis, status.
 
 ---
 
+## DRC-009 — Metrics re-resolved by reflection on every call and every bean construction; companions loaded once per class at boot
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `perf/metric-ids-at-build`: the metric of an intercepted method, of a constructor, and the list a bean class pre-registers are resolved once per class (`ClassValue`, so a reloaded class is released), shared by every interceptor instance; `CompanionRegistry` indexes the companions of a module layer or class loader once instead of loading and instantiating all of them for each discovered class (`InterceptorResolutionCacheTest`, `CompanionIndexTest`). MP Metrics TCK 127/127.
+- **Reported by**: the reflection audit of 2026-11-02 (wave 3)
+- **Minimal reproduction**: a `@RequestScoped` resource with `@Counted`/`@Timed`: each request created the interceptors and their instance caches anew, so `findCounted`/`findTimed` (`getAnnotation`, `getDeclaredMethod`), the constructor annotations and the `getDeclaredMethods` pre-registration scan ran on every request; at boot, `DiracExtension`'s enhancement of every type made `CompanionRegistry` iterate (and instantiate) every provided `MetricsCompanion` per class.
+- **Cause**: the caches lived in the interceptor instance, created per bean instance; the companion lookup searched the `ServiceLoader` linearly for each class.
+
 ## DRC-008 — Two `DiscoveredMetrics` beans make metric registration fail at start-up
 
 - **Date**: 2026-10-30

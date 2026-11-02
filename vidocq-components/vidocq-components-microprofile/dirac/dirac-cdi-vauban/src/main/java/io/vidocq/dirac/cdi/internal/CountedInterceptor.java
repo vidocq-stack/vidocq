@@ -44,7 +44,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Counted
 @Priority(4020)
 public class CountedInterceptor {
-    private final ConcurrentHashMap<CacheKey, ResolvedCounter> counters = new ConcurrentHashMap<>();
 
     private final MetricRegistryProducerBean registries;
 
@@ -56,24 +55,12 @@ public class CountedInterceptor {
     @AroundConstruct
     public void aroundConstruct(InvocationContext context) throws Exception {
         var constructor = context.getConstructor();
-        Class<?> beanClass = constructor.getDeclaringClass();
-        if (beanClass.getName().contains("$$")) beanClass = beanClass.getSuperclass();
-        var classCounted = beanClass.getAnnotation(Counted.class);
-        var constructorCounted = constructor.getAnnotation(Counted.class);
-        final Counted effective = constructorCounted != null ? constructorCounted : classCounted;
-
-        if (effective != null && !java.lang.reflect.Modifier.isPrivate(constructor.getModifiers())) {
-            boolean classLevel = (constructorCounted == null);
-            var metricName = classLevel
-                    ? DiracExtension.resolveClassLevelConstructorMetricName(beanClass, effective.name(), effective.absolute())
-                    : DiracExtension.resolveConstructorLevelMetricName(beanClass, effective.name(), effective.absolute());
-            var tags = parseTags(effective.tags());
-            var metadata = Metadata.builder()
-                    .withName(metricName).withDescription(effective.description())
-                    .withUnit(effective.unit()).build();
-            var scope = normalizeScope(effective.scope());
+        var resolved = CONSTRUCTORS.get(constructor.getDeclaringClass())
+                .computeIfAbsent(constructor, c -> java.util.Optional.ofNullable(constructorCounter(c)));
+        if (resolved.isPresent()) {
+            var metric = resolved.get();
             context.proceed();
-            registries.registry(scope).counter(metadata, tags).inc();
+            registries.registry(metric.scope()).counter(metric.metadata(), metric.metricID().getTagsAsArray()).inc();
         } else {
             context.proceed();
         }
@@ -85,18 +72,61 @@ public class CountedInterceptor {
         preRegisterCounters(actualClass);
     }
 
-    void preRegisterCounters(Class<?> beanClass) {
+    /** The counter of a constructor, resolved by reflection once per constructor, not per bean instance. */
+    private static final ClassValue<ConcurrentHashMap<java.lang.reflect.Constructor<?>, java.util.Optional<ResolvedCounter>>>
+            CONSTRUCTORS = new ClassValue<>() {
+                @Override
+                protected ConcurrentHashMap<java.lang.reflect.Constructor<?>, java.util.Optional<ResolvedCounter>>
+                computeValue(Class<?> type) {
+                    return new ConcurrentHashMap<>();
+                }
+            };
+
+    private static ResolvedCounter constructorCounter(java.lang.reflect.Constructor<?> constructor) {
+        Class<?> beanClass = constructor.getDeclaringClass();
+        if (beanClass.getName().contains("$$")) beanClass = beanClass.getSuperclass();
         var classCounted = beanClass.getAnnotation(Counted.class);
-        // Scan all methods including inherited ones (excluding Object methods)
-        for (var method : getAllDeclaredMethods(beanClass)) {
-            var counted = preRegisteredCounted(method, classCounted);
-            if (counted != null) {
-                var resolved = counters.computeIfAbsent(new CacheKey(beanClass, method),
-                        _ -> createResolvedCounter(beanClass, method, counted));
-                registries.registry(resolved.scope()).counter(resolved.metadata(), resolved.metricID().getTagsAsArray());
-            }
+        var constructorCounted = constructor.getAnnotation(Counted.class);
+        final Counted effective = constructorCounted != null ? constructorCounted : classCounted;
+        if (effective == null || java.lang.reflect.Modifier.isPrivate(constructor.getModifiers())) {
+            return null;
+        }
+        boolean classLevel = (constructorCounted == null);
+        var metricName = classLevel
+                ? DiracExtension.resolveClassLevelConstructorMetricName(beanClass, effective.name(), effective.absolute())
+                : DiracExtension.resolveConstructorLevelMetricName(beanClass, effective.name(), effective.absolute());
+        var metadata = Metadata.builder()
+                .withName(metricName).withDescription(effective.description())
+                .withUnit(effective.unit()).build();
+        return new ResolvedCounter(new MetricID(metricName, parseTags(effective.tags())), metadata,
+                normalizeScope(effective.scope()));
+    }
+
+    void preRegisterCounters(Class<?> beanClass) {
+        for (var resolved : PRE_REGISTERED.get(beanClass)) {
+            registries.registry(resolved.scope()).counter(resolved.metadata(), resolved.metricID().getTagsAsArray());
         }
     }
+
+    /**
+     * The metrics a bean class pre-registers, scanned by reflection once per class: the scan ran on every
+     * construction of the bean, per request for a request-scoped one.
+     */
+    private static final ClassValue<java.util.List<ResolvedCounter>> PRE_REGISTERED = new ClassValue<>() {
+        @Override
+        protected java.util.List<ResolvedCounter> computeValue(Class<?> beanClass) {
+            var classCounted = beanClass.getAnnotation(Counted.class);
+            var out = new java.util.ArrayList<ResolvedCounter>();
+            // Scan all methods including inherited ones (excluding Object methods)
+            for (var method : getAllDeclaredMethods(beanClass)) {
+                var counted = preRegisteredCounted(method, classCounted);
+                if (counted != null) {
+                    out.add(createResolvedCounter(beanClass, method, counted));
+                }
+            }
+            return java.util.List.copyOf(out);
+        }
+    };
 
     /** The annotation that makes {@code method} carry a metric, or {@code null}. */
     private static Counted preRegisteredCounted(Method method, Counted classCounted) {
@@ -141,19 +171,39 @@ public class CountedInterceptor {
     private ResolvedCounter resolveCounter(InvocationContext context) {
         Objects.requireNonNull(context, "context must not be null");
         var method = Objects.requireNonNull(context.getMethod(), "InvocationContext method must not be null");
-        var beanClass = context.getTarget() != null ? context.getTarget().getClass() : method.getDeclaringClass();
+        var targetClass = context.getTarget() != null ? context.getTarget().getClass() : method.getDeclaringClass();
+        return resolution(targetClass, method).orElse(null);
+    }
+
+    /**
+     * The metric of an intercepted method of {@code targetClass}, resolved by reflection once per class and method:
+     * an interceptor instance is created per bean instance — per request for a request-scoped bean — so a cache held
+     * by the instance would resolve again on every request. {@link ClassValue} lets a reloaded class go.
+     */
+    static java.util.Optional<ResolvedCounter> resolution(Class<?> targetClass, Method method) {
+        return INVOCATIONS.get(targetClass).computeIfAbsent(method,
+                m -> java.util.Optional.ofNullable(resolveUncached(targetClass, m)));
+    }
+
+    private static final ClassValue<ConcurrentHashMap<Method, java.util.Optional<ResolvedCounter>>> INVOCATIONS =
+            new ClassValue<>() {
+                @Override
+                protected ConcurrentHashMap<Method, java.util.Optional<ResolvedCounter>> computeValue(Class<?> type) {
+                    return new ConcurrentHashMap<>();
+                }
+            };
+
+    private static ResolvedCounter resolveUncached(Class<?> targetClass, Method intercepted) {
+        var beanClass = targetClass;
         if (beanClass.getName().contains("$$")) {
             beanClass = beanClass.getSuperclass();
         }
-        method = normalizeInterceptedMethod(beanClass, method);
-        final Class<?> resolvedBeanClass = beanClass;
+        var method = normalizeInterceptedMethod(beanClass, intercepted);
         var counted = findCounted(method, beanClass);
         if (counted == null) {
             return null;
         }
-        var sourceMethod = counted.sourceMethod();
-        return counters.computeIfAbsent(new CacheKey(resolvedBeanClass, sourceMethod),
-                ignored -> createResolvedCounter(resolvedBeanClass, sourceMethod, counted.counted()));
+        return createResolvedCounter(beanClass, counted.sourceMethod(), counted.counted());
     }
 
     private static FoundCounted findCounted(Method method, Class<?> beanClass) {
@@ -280,10 +330,8 @@ public class CountedInterceptor {
         }
     }
 
-    private record CacheKey(Class<?> beanClass, Method method) {
-    }
 
-    private record ResolvedCounter(MetricID metricID, Metadata metadata, String scope) {
+    record ResolvedCounter(MetricID metricID, Metadata metadata, String scope) {
     }
 
     private record FoundCounted(Method sourceMethod, Counted counted) {

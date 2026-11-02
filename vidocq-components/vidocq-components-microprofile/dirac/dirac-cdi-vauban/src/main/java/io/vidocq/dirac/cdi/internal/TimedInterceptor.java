@@ -45,7 +45,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Timed
 @Priority(4021)
 public class TimedInterceptor {
-    private final ConcurrentHashMap<CacheKey, ResolvedTimer> timers = new ConcurrentHashMap<>();
 
     private final MetricRegistryProducerBean registries;
 
@@ -57,26 +56,16 @@ public class TimedInterceptor {
     @AroundConstruct
     public void aroundConstruct(InvocationContext context) throws Exception {
         var constructor = context.getConstructor();
-        Class<?> beanClass = constructor.getDeclaringClass();
-        if (beanClass.getName().contains("$$")) beanClass = beanClass.getSuperclass();
-        var classTimed = beanClass.getAnnotation(Timed.class);
-        var constructorTimed = constructor.getAnnotation(Timed.class);
-        final Timed effective = constructorTimed != null ? constructorTimed : classTimed;
-
-        if (effective != null && !java.lang.reflect.Modifier.isPrivate(constructor.getModifiers())) {
-            boolean classLevel = (constructorTimed == null);
-            var metricName = classLevel
-                    ? DiracExtension.resolveClassLevelConstructorMetricName(beanClass, effective)
-                    : DiracExtension.resolveConstructorLevelMetricName(beanClass, effective.name(), effective.absolute());
-            var tags = parseTags(effective.tags());
-            var metadata = Metadata.builder()
-                    .withName(metricName).withDescription(effective.description()).withUnit(effective.unit()).build();
-            var scope = normalizeScope(effective.scope());
+        var resolved = CONSTRUCTORS.get(constructor.getDeclaringClass())
+                .computeIfAbsent(constructor, c -> java.util.Optional.ofNullable(constructorTimer(c)));
+        if (resolved.isPresent()) {
+            var metric = resolved.get();
             var start = System.nanoTime();
             try {
                 context.proceed();
             } finally {
-                registries.registry(scope).timer(metadata, tags).update(Duration.ofNanos(System.nanoTime() - start));
+                registries.registry(metric.scope()).timer(metric.metadata(), metric.metricID().getTagsAsArray())
+                        .update(Duration.ofNanos(System.nanoTime() - start));
             }
         } else {
             context.proceed();
@@ -89,18 +78,60 @@ public class TimedInterceptor {
         preRegisterTimers(actualClass);
     }
 
-    void preRegisterTimers(Class<?> beanClass) {
+    /** The timer of a constructor, resolved by reflection once per constructor, not per bean instance. */
+    private static final ClassValue<ConcurrentHashMap<java.lang.reflect.Constructor<?>, java.util.Optional<ResolvedTimer>>>
+            CONSTRUCTORS = new ClassValue<>() {
+                @Override
+                protected ConcurrentHashMap<java.lang.reflect.Constructor<?>, java.util.Optional<ResolvedTimer>>
+                computeValue(Class<?> type) {
+                    return new ConcurrentHashMap<>();
+                }
+            };
+
+    private static ResolvedTimer constructorTimer(java.lang.reflect.Constructor<?> constructor) {
+        Class<?> beanClass = constructor.getDeclaringClass();
+        if (beanClass.getName().contains("$$")) beanClass = beanClass.getSuperclass();
         var classTimed = beanClass.getAnnotation(Timed.class);
-        // Scan all methods including inherited ones (excluding Object methods)
-        for (var method : getAllDeclaredMethods(beanClass)) {
-            var timed = preRegisteredTimed(method, classTimed);
-            if (timed != null) {
-                var resolved = timers.computeIfAbsent(new CacheKey(beanClass, method),
-                        _ -> createResolvedTimer(beanClass, method, timed));
-                registries.registry(resolved.scope()).timer(resolved.metadata(), resolved.metricID().getTagsAsArray());
-            }
+        var constructorTimed = constructor.getAnnotation(Timed.class);
+        final Timed effective = constructorTimed != null ? constructorTimed : classTimed;
+        if (effective == null || java.lang.reflect.Modifier.isPrivate(constructor.getModifiers())) {
+            return null;
+        }
+        boolean classLevel = (constructorTimed == null);
+        var metricName = classLevel
+                ? DiracExtension.resolveClassLevelConstructorMetricName(beanClass, effective)
+                : DiracExtension.resolveConstructorLevelMetricName(beanClass, effective.name(), effective.absolute());
+        var metadata = Metadata.builder()
+                .withName(metricName).withDescription(effective.description()).withUnit(effective.unit()).build();
+        return new ResolvedTimer(new MetricID(metricName, parseTags(effective.tags())), metadata,
+                normalizeScope(effective.scope()));
+    }
+
+    void preRegisterTimers(Class<?> beanClass) {
+        for (var resolved : PRE_REGISTERED.get(beanClass)) {
+            registries.registry(resolved.scope()).timer(resolved.metadata(), resolved.metricID().getTagsAsArray());
         }
     }
+
+    /**
+     * The metrics a bean class pre-registers, scanned by reflection once per class: the scan ran on every
+     * construction of the bean, per request for a request-scoped one.
+     */
+    private static final ClassValue<java.util.List<ResolvedTimer>> PRE_REGISTERED = new ClassValue<>() {
+        @Override
+        protected java.util.List<ResolvedTimer> computeValue(Class<?> beanClass) {
+            var classTimed = beanClass.getAnnotation(Timed.class);
+            var out = new java.util.ArrayList<ResolvedTimer>();
+            // Scan all methods including inherited ones (excluding Object methods)
+            for (var method : getAllDeclaredMethods(beanClass)) {
+                var timed = preRegisteredTimed(method, classTimed);
+                if (timed != null) {
+                    out.add(createResolvedTimer(beanClass, method, timed));
+                }
+            }
+            return java.util.List.copyOf(out);
+        }
+    };
 
     /** The annotation that makes {@code method} carry a metric, or {@code null}. */
     private static Timed preRegisteredTimed(Method method, Timed classTimed) {
@@ -186,19 +217,39 @@ public class TimedInterceptor {
     private ResolvedTimer resolveTimer(InvocationContext context) {
         Objects.requireNonNull(context, "context must not be null");
         var method = Objects.requireNonNull(context.getMethod(), "InvocationContext method must not be null");
-        var beanClass = context.getTarget() != null ? context.getTarget().getClass() : method.getDeclaringClass();
+        var targetClass = context.getTarget() != null ? context.getTarget().getClass() : method.getDeclaringClass();
+        return resolution(targetClass, method).orElse(null);
+    }
+
+    /**
+     * The metric of an intercepted method of {@code targetClass}, resolved by reflection once per class and method:
+     * an interceptor instance is created per bean instance — per request for a request-scoped bean — so a cache held
+     * by the instance would resolve again on every request. {@link ClassValue} lets a reloaded class go.
+     */
+    static java.util.Optional<ResolvedTimer> resolution(Class<?> targetClass, Method method) {
+        return INVOCATIONS.get(targetClass).computeIfAbsent(method,
+                m -> java.util.Optional.ofNullable(resolveUncached(targetClass, m)));
+    }
+
+    private static final ClassValue<ConcurrentHashMap<Method, java.util.Optional<ResolvedTimer>>> INVOCATIONS =
+            new ClassValue<>() {
+                @Override
+                protected ConcurrentHashMap<Method, java.util.Optional<ResolvedTimer>> computeValue(Class<?> type) {
+                    return new ConcurrentHashMap<>();
+                }
+            };
+
+    private static ResolvedTimer resolveUncached(Class<?> targetClass, Method intercepted) {
+        var beanClass = targetClass;
         if (beanClass.getName().contains("$$")) {
             beanClass = beanClass.getSuperclass();
         }
-        method = normalizeInterceptedMethod(beanClass, method);
-        final Class<?> resolvedBeanClass = beanClass;
+        var method = normalizeInterceptedMethod(beanClass, intercepted);
         var timed = findTimed(method, beanClass);
         if (timed == null) {
             return null;
         }
-        var sourceMethod = timed.sourceMethod();
-        return timers.computeIfAbsent(new CacheKey(resolvedBeanClass, sourceMethod),
-                ignored -> createResolvedTimer(resolvedBeanClass, sourceMethod, timed.timed()));
+        return createResolvedTimer(beanClass, timed.sourceMethod(), timed.timed());
     }
 
     private static FoundTimed findTimed(Method method, Class<?> beanClass) {
@@ -325,10 +376,8 @@ public class TimedInterceptor {
         }
     }
 
-    private record CacheKey(Class<?> beanClass, Method method) {
-    }
 
-    private record ResolvedTimer(MetricID metricID, Metadata metadata, String scope) {
+    record ResolvedTimer(MetricID metricID, Metadata metadata, String scope) {
     }
 
     private record FoundTimed(Method sourceMethod, Timed timed) {

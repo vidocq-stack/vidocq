@@ -22,6 +22,8 @@ package io.vidocq.dirac.cdi.internal;
 import io.vidocq.dirac.spi.gen.MetricsCompanion;
 
 import java.util.LinkedHashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -73,7 +75,7 @@ final class CompanionRegistry {
             return null;
         }
         try {
-            return find(ServiceLoader.load(layer, MetricsCompanion.class), beanClass);
+            return indexOf(layer, () -> ServiceLoader.load(layer, MetricsCompanion.class)).get(beanClass);
         } catch (java.util.ServiceConfigurationError e) {
             LOG.log(System.Logger.Level.DEBUG, () -> "MetricsCompanion layer scan failed: " + e);
             return null;
@@ -83,7 +85,8 @@ final class CompanionRegistry {
     private static MetricsCompanion fromServiceLoaders(Class<?> beanClass) {
         for (ClassLoader loader : candidateLoaders(beanClass)) {
             try {
-                MetricsCompanion companion = find(ServiceLoader.load(MetricsCompanion.class, loader), beanClass);
+                MetricsCompanion companion = indexOf(loader,
+                        () -> ServiceLoader.load(MetricsCompanion.class, loader)).get(beanClass);
                 if (companion != null) {
                     return companion;
                 }
@@ -95,14 +98,37 @@ final class CompanionRegistry {
         return null;
     }
 
-    private static MetricsCompanion find(Iterable<MetricsCompanion> companions, Class<?> beanClass) {
-        for (MetricsCompanion companion : companions) {
-            if (companion.beanClass() == beanClass) {
-                return companion;
+    /**
+     * The companions a layer or a class loader provides, by bean class. The discovery resolves every class of the
+     * deployment, and each lookup used to load and instantiate every provided companion again: the index is built once
+     * per source. Only the few sources of the last deployment are kept, so a reloaded application releases the previous
+     * ones (a {@code WeakHashMap} would not: its values reach their own class loader).
+     */
+    static Map<Class<?>, MetricsCompanion> indexOf(Object source,
+                                                           java.util.function.Supplier<Iterable<MetricsCompanion>> provided) {
+        synchronized (INDEXES) {
+            for (var entry : INDEXES) {
+                if (entry.source() == source) {
+                    return entry.byBeanClass();
+                }
             }
+            var byBeanClass = new HashMap<Class<?>, MetricsCompanion>();
+            for (MetricsCompanion companion : provided.get()) {
+                byBeanClass.putIfAbsent(companion.beanClass(), companion);
+            }
+            if (INDEXES.size() == MAX_INDEXES) {
+                INDEXES.removeFirst();
+            }
+            INDEXES.addLast(new Index(source, byBeanClass));
+            return byBeanClass;
         }
-        return null;
     }
+
+    private record Index(Object source, Map<Class<?>, MetricsCompanion> byBeanClass) {}
+
+    /** A module layer and up to three class loaders take part in one deployment. */
+    private static final int MAX_INDEXES = 4;
+    private static final java.util.ArrayDeque<Index> INDEXES = new java.util.ArrayDeque<>();
 
     private static MetricsCompanion byNamingConvention(Class<?> beanClass) {
         String generatedName = beanClass.getName() + SUFFIX;
@@ -159,5 +185,8 @@ final class CompanionRegistry {
         SERVICE_LOADER_HITS.set(0);
         PRE_GENERATED_HITS.set(0);
         SCAN_FALLBACKS.set(0);
+        synchronized (INDEXES) {
+            INDEXES.clear();
+        }
     }
 }
