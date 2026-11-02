@@ -211,10 +211,14 @@ class TransactionalInterceptorTest {
 
     @Transactional(Transactional.TxType.MANDATORY)
     static class ClassLevel {
-        public void inherited() { }
+        public void inherited() {
+            // Only its annotations matter: the test never calls it.
+        }
 
         @Transactional(Transactional.TxType.NEVER)
-        public void own() { }
+        public void own() {
+            // Only its annotations matter: the test never calls it.
+        }
     }
 
     static class SubclassOfClassLevel extends ClassLevel { }
