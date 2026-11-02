@@ -113,13 +113,19 @@ public class DiracExtension implements BuildCompatibleExtension {
      * test.
      */
     static boolean namesAMetric(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
-        for (var type = classInfo; type != null; type = type.superClassDeclaration()) {
+        var type = classInfo;
+        while (true) {
             if (carriesAMetric(type.annotations())) {
                 return true;
             }
-            if (type.superClassDeclaration() == null && hasUnreadableSuperclass(type)) {
-                return true; // an inherited class annotation cannot be ruled out: the reflective scan decides
+            var superclass = type.superClassDeclaration();
+            if (superclass == null) {
+                if (hasUnreadableSuperclass(type)) {
+                    return true; // an inherited class annotation cannot be ruled out: the reflective scan decides
+                }
+                break;
             }
+            type = superclass;
         }
         for (var method : classInfo.methods()) {
             if (carriesAMetric(method.annotations())) {
@@ -175,7 +181,7 @@ public class DiracExtension implements BuildCompatibleExtension {
                 }
             }
             return false;
-        } catch (RuntimeException unreadable) {
+        } catch (RuntimeException _) {
             return true; // the reflective scan decides
         }
     }

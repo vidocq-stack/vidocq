@@ -88,7 +88,7 @@ class BootScanPrefilterTest {
         static final java.util.Map<String, Boolean> DECISIONS = new java.util.concurrent.ConcurrentHashMap<>();
 
         @jakarta.enterprise.inject.build.compatible.spi.Enhancement(types = Object.class, withSubtypes = true)
-        public void record(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
+        public void decide(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
             DECISIONS.put(classInfo.name(), DiracExtension.namesAMetric(classInfo));
         }
     }
