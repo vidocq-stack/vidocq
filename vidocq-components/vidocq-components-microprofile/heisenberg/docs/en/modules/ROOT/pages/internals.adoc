@@ -4,6 +4,55 @@
 [.lead]
 Heisenberg strictly separates pure automata (`heisenberg-core`) from the CDI integration (`heisenberg-cdi-vauban`). This page describes the invocation sequence, the role of each engine, the shared state management for `@CircuitBreaker` and `@Bulkhead`, and the threading invariants required by virtual threads.
 
+[#generated-code]
+== Generated code and reflective fallback [.tag-new]#NEW#
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. For Heisenberg that is the Fault Tolerance
+annotations of each bean class, read at compile time (<<compile-time-policies>>); reading them by reflection stays as
+the fallback, unchanged.
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| `<Bean>$$HeisenbergPolicies`, a `FaultToleranceCompanion`: the bean's `@Retry`, `@Timeout`, `@CircuitBreaker`,
+  `@Bulkhead`, `@Asynchronous` and `@Fallback` as constant literals, defaults filled in
+| `heisenberg-processor` in javac, for each class whose methods carry Fault Tolerance annotations; on Vidocq the
+  `vidocq-runtime-heisenberg-fault-tolerance-extension-codegen` bundle puts it on the processor path
+| `AnnotationReader`, on the first call of a guarded method, through `Companions`: the `ServiceLoader` of the bean's
+  module layer, then its class loaders, then by name; cached per class
+| The annotations are read by reflection on the first call of each method, and announced once per class.
+
+| The `@FaultToleranceBinding` marker on each guarded class, and the interceptor's priority
+| `HeisenbergExtension`, a Build Compatible Extension (`@Enhancement`) that Vauban runs in javac when
+  `heisenberg-cdi-vauban` is on the processor path
+| Vauban applies the frozen enhancement at boot
+| The extension runs at boot, which it also does whenever a bean archive lacks Vauban's processed marker
+  (xref:vauban::internals.adoc#generated-code[Vauban]).
+
+| The lookup a private `fallbackMethod` is resolved with
+| Vauban's generated `_VaubanComponents` of the bean's package (<<fallback-lookup>>)
+| `FallbackResolver`, through `VaubanLookupSource`
+| The core adds the read edge itself, and the bean's package must be opened to `io.vidocq.heisenberg.core`.
+|===
+
+Not generated yet: the validation of the definitions (`@Asynchronous` return type, `@Bulkhead` bounds, the
+`@Fallback` method signature…). Wherever `HeisenbergExtension` runs, it loads each guarded class and walks its
+declared methods by reflection.
+
+=== When the fallback runs
+
+* A class compiled without `heisenberg-processor`, such as the TCK's classes or a library of another build.
+* A class the processor skips with a compiler note: a private, local or anonymous class, or an annotation value
+  naming a class the companion's package cannot reach.
+
+=== Which path ran
+
+* `HEISENBERG — Fault Tolerance annotations of <class> read by reflection` at `WARNING`, once per class, the first
+  time it is read without a companion.
+* A companion that cannot be used logs why, and the annotations are read by reflection.
+
 == `heisenberg-core` / `heisenberg-cdi-vauban` split
 
 `heisenberg-core` is plain Java — no CDI, no `@Inject`. It is usable outside a container, which is how the project's own JUnit 5 tests verify a `RetryEngine`'s logic without deploying an application. Its `io.vidocq.heisenberg.internal` package is exported only to the CDI module — it is not application API.
