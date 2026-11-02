@@ -85,8 +85,7 @@ public final class FallbackResolver {
         if (hasFallbackMethod) {
             resolveFallbackMethodHandle(beanClass, guardedMethod, fallback.fallbackMethod());
         } else {
-            instantiateHandler(fallback.value());
-            validateHandlerReturnType(guardedMethod, fallback.value());
+            validateHandler(guardedMethod, fallback.value());
         }
     }
 
@@ -102,8 +101,7 @@ public final class FallbackResolver {
         if (hasFallbackMethod) {
             resolveFallbackMethodHandle(beanClass, guardedMethod, fallbackMethod);
         } else {
-            instantiateHandler(Objects.requireNonNull(fallbackHandler, "fallbackHandler"));
-            validateHandlerReturnType(guardedMethod, fallbackHandler);
+            validateHandler(guardedMethod, Objects.requireNonNull(fallbackHandler, "fallbackHandler"));
         }
     }
 
@@ -135,6 +133,30 @@ public final class FallbackResolver {
     }
 
     private MethodHandle resolveFallbackMethodHandle(Class<?> beanClass, Method guardedMethod, String fallbackMethodName) {
+        return fallbackHandle(beanClass, guardedMethod, fallbackMethodName);
+    }
+
+    /**
+     * The handle of the fallback method of {@code guardedMethod} on {@code beanClass}, found by reflection once per
+     * class: every fallback used to scan the class's methods and take a private lookup, twice. {@link ClassValue}
+     * releases the entries with a reloaded class. A definition error is not kept: it is thrown again.
+     */
+    MethodHandle fallbackHandle(Class<?> beanClass, Method guardedMethod, String fallbackMethodName) {
+        return HANDLES.get(beanClass).computeIfAbsent(new FallbackMethodKey(guardedMethod, fallbackMethodName),
+                k -> lookUpFallbackMethodHandle(beanClass, k.guardedMethod(), k.name()));
+    }
+
+    private record FallbackMethodKey(Method guardedMethod, String name) {}
+
+    private static final ClassValue<java.util.concurrent.ConcurrentHashMap<FallbackMethodKey, MethodHandle>> HANDLES =
+            new ClassValue<>() {
+                @Override
+                protected java.util.concurrent.ConcurrentHashMap<FallbackMethodKey, MethodHandle> computeValue(Class<?> type) {
+                    return new java.util.concurrent.ConcurrentHashMap<>();
+                }
+            };
+
+    private MethodHandle lookUpFallbackMethodHandle(Class<?> beanClass, Method guardedMethod, String fallbackMethodName) {
         Method fallbackMethod = findCompatibleFallbackMethod(beanClass, guardedMethod, fallbackMethodName);
         if (fallbackMethod == null) {
             throw new FaultToleranceDefinitionException(
@@ -346,6 +368,27 @@ public final class FallbackResolver {
         }
         return false;
     }
+
+    /**
+     * Checks that a handler can be created and returns the guarded method's type, once per guarded method: each
+     * fallback used to create one more handler and read its generic type by reflection just to validate it.
+     */
+    private void validateHandler(Method guardedMethod, Class<? extends FallbackHandler<?>> handlerClass) {
+        var validated = VALIDATED_HANDLERS.get(handlerClass);
+        if (validated.contains(guardedMethod)) {
+            return;
+        }
+        instantiateHandler(handlerClass);
+        validateHandlerReturnType(guardedMethod, handlerClass);
+        validated.add(guardedMethod);
+    }
+
+    private static final ClassValue<java.util.Set<Method>> VALIDATED_HANDLERS = new ClassValue<>() {
+        @Override
+        protected java.util.Set<Method> computeValue(Class<?> type) {
+            return java.util.concurrent.ConcurrentHashMap.newKeySet();
+        }
+    };
 
     private void validateHandlerReturnType(Method guardedMethod, Class<? extends FallbackHandler<?>> handlerClass) {
         Type[] interfaces = handlerClass.getGenericInterfaces();
