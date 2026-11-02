@@ -4,6 +4,44 @@
 [.lead]
 Dirac rejects instrumentation by hot-path reflection: all wiring is done at CDI container startup, and the hot path — bumping a counter, measuring a duration — engages neither lock, nor stray allocation, nor `synchronized`. This page describes the exact sequence and the threading invariants.
 
+[#generated-code]
+== Generated code and reflective fallback [.tag-new]#NEW#
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. For Dirac that is the metric metadata of each bean
+class; the annotation scan of the <<_startup_pipeline,startup pipeline>> stays as the fallback, unchanged.
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| `<Bean>$$DiracMetrics`, a `MetricsCompanion`: the names, units, tags and scopes of the class's `@Counted`, `@Timed`
+  and `@Gauge` metrics, resolved at compile time, and a direct accessor per gauge method
+| `dirac-processor` in javac; on Vidocq the `vidocq-runtime-dirac-metrics-extension-codegen` bundle puts it on the
+  processor path
+| `DiscoveredMetrics`, when the container starts and resolves the classes the extension found: `CompanionRegistry`
+  tries the `ServiceLoader` of `MetricsCompanion` (module layer aware), then `Class.forName(<bean>$$DiracMetrics)`
+| The class's annotations are scanned by reflection, and each gauge method is resolved to a `MethodHandle` through
+  `MethodHandles.privateLookupIn`, which on the module path needs the package opened to Dirac.
+
+| The interceptor bindings and the list of classes carrying metrics
+| `DiracExtension`, a Build Compatible Extension that Vauban runs in javac when `dirac-cdi-vauban` is on the
+  processor path
+| Vauban, from the synthetic metadata the processor wrote
+| The extension runs at boot.
+|===
+
+=== When the fallback runs
+
+* A class compiled without `dirac-processor`: a library of another build, the TCK's classes.
+* A companion that targets another class than the bean's (a stale jar) or cannot be instantiated: logged at
+  `WARNING`, then the scan.
+
+=== Which path ran
+
+Dirac does not announce the scan in the log. A test reads which tier resolved each class through the
+`CompanionRegistry` counters (`serviceLoaderHits()`, `preGeneratedHits()`, `scanFallbacks()`).
+
 == Separation `dirac-core` / `dirac-cdi-vauban`
 
 `dirac-core` is pure Java. It knows nothing of CDI or JAX-RS — only the MP Metrics spec. `CounterImpl`, `GaugeImpl`, `HistogramImpl`, `TimerImpl`, `MetricRegistryImpl`, `BaseMetricsRegistrar`, `OpenMetricsFormatter` and `JsonMetricsFormatter` are unit-testable without a container, and usable outside CDI (a Maven plugin or a JMH benchmark can consume them directly).
