@@ -9,6 +9,43 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-039 — A one-attribute SELECT into a one-component record was read as a plain column
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `feat/no-reflection-under-vidocq`
+- **Severity**: medium (the query failed at every call)
+- **Symptom**: `@Query("SELECT title FROM Book WHERE id = :id") List<TitleOnly> titleOf(long id)` with
+  `record TitleOnly(String title)`: `MansartDataException: SQL error`, caused by `conversion to class …TitleOnly from
+  varchar not supported` (PostgreSQL).
+- **Minimal reproduction**: `JdqlMultiProjectionTest.oneComponentRecords`.
+- **Cause**: the JDQL parser classifies a one-attribute `SELECT` as a scalar projection before looking at the return
+  type, so the record was asked of the driver as the column's type.
+- **Fix**: a one-attribute projection whose element is a record goes the multi-column way, with that one attribute.
+
+## MANSART-038 — In a named module, entity packages needed `opens` for what Mansart reached by reflection
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `feat/no-reflection-under-vidocq`
+- **Severity**: medium (a request failed at run time; Vidocq's checks asked for `opens` on every entity package)
+- **Symptom**: a Vidocq application whose entity package is neither opened nor exported: CRUD, derived queries and
+  JDQL entity queries already worked (the generated repository uses `_Book.$MODEL`, Vauban creates it), but a JDQL
+  projection into a record failed — `IllegalAccessException: JdqlExecutor (in module io.vidocq.mansart.data.core)
+  cannot access class …IdTitle … does not export …book` — and `EntityModels.of` (JDQL run at run time, the dev console)
+  and `MansartData.repository` / `MansartRepoCreator` (a repository bound to a named data store) used reflection too.
+- **Minimal reproduction**: `RecordProjectionCodegenTest`; end to end, a packaged Vidocq application with
+  `cassini-rest`, `mansart-data`, `-pool`, `-transactions`, `flyway-migration`, no `opens` on the entity package.
+- **Cause**: `JdqlExecutor` built projection records through their canonical constructor by reflection;
+  `EntityModels.of` read `_Entity.$MODEL` reflectively; `MansartData` and `MansartRepoCreator` created the
+  `*Impl` with `Constructor.newInstance` — all from Mansart's module.
+- **Fix**: the processor generates the record factory next to the query (`_r -> new IdTitle((Long) _r[0], …)`, a new
+  `dispatchMultiProjection` overload), and a `_MansartComponents` per package, declared in
+  `META-INF/services/io.vidocq.mansart.data.core.GeneratedComponents`, which hands Mansart the entity models and
+  creates the repository implementations by plain calls; `EntityModels.of`, `MansartData.repository` and
+  `MansartRepoCreator` ask it first and keep reflection as the fallback (no processor, portable containers). The
+  run-time repository warning now names its cause (a repository not visible from its package, or no processor).
+  Verified: the packaged application with no `opens` on the entity package answers CRUD, a derived query, JDQL
+  record projections (two components, one component) and a JDQL entity query.
+
 ## MANSART-037 — A table made after the class name was only found missing at the first request
 
 - **Date**: 2026-11-02

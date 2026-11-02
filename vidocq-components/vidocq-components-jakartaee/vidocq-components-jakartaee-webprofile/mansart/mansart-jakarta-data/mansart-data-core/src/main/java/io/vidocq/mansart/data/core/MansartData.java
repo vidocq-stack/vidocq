@@ -79,6 +79,10 @@ public final class MansartData {
     }
 
     private <R> R instantiate(Class<R> itf) {
+        Object generated = Generated.repository(itf, runtime);
+        if (generated != null) {
+            return itf.cast(generated);
+        }
         String implName = itf.getName() + "Impl";
         try {
             Class<?> impl = Class.forName(implName, true, itf.getClassLoader());

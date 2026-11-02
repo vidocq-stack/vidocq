@@ -72,6 +72,17 @@ Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Gett
 
 All modules are strict Java Modules — minimal `exports`, no unjustified `opens`, no classpath.
 
+[#application-modules]
+=== Your entities and repositories need no `opens` [.tag-new]#NEW#
+
+Mansart reaches an application's entities and repositories without reflection, so a named application module needs neither `opens` nor `exports` for their packages:
+
+* the generated metamodel (`_Book`) builds the entity's accessors inside the application's own module, and the generated repository uses it directly;
+* the processor writes, in each package of entities or repositories, a `_MansartComponents` class declared in `META-INF/services/io.vidocq.mansart.data.core.GeneratedComponents`. Mansart asks it for an entity's model (`EntityModels.of`, JDQL run at run time, the Vidocq dev console) and for a repository implementation (`MansartData.repository`, a repository bound to a named data store), by plain calls. Under Vidocq the service file is enough; a module launched outside Vidocq's application layer also declares it with `provides io.vidocq.mansart.data.core.GeneratedComponents with ….`;
+* a JDQL projection into a record (`SELECT id, title FROM Book` into `List<IdTitle>`) is built by code the processor generates next to the repository, not through the record's constructor by reflection.
+
+Reflection remains the fallback where the generated code is absent: an entity or repository compiled without `mansart-data-processor`, or a container that does not load the service (Weld, Open Liberty — reflection is fine there). A repository served on the run-time path says so once, at start-up, with its cause.
+
 [#bean-archives]
 === Bean archives
 

@@ -45,6 +45,11 @@ public final class MansartRepoCreator implements SyntheticBeanCreator<Object> {
         // M9 — pick the RepositoryRuntime keyed by the @Repository(dataStore) value.
         // Falls back to the @Default RepositoryRuntime when dataStore is empty.
         RepositoryRuntime runtime = DataStoreResolver.resolve(lookup, itfClass);
+        // MANSART-038: the implementation the processor generated, created by a plain call in its own module.
+        Object generated = itfClass == null ? null : io.vidocq.mansart.data.core.Generated.repository(itfClass, runtime);
+        if (generated != null) {
+            return generated;
+        }
         try {
             var ctor = implClass.getDeclaredConstructor(RepositoryRuntime.class);
             return ctor.newInstance(runtime);

@@ -20,6 +20,7 @@
 package io.vidocq.mansart.data.processor;
 
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -106,7 +107,9 @@ final class JdqlParser {
             case SELECT, COUNT -> emitSelect(stmt, method, metamodel, nameToIdx, returnType,
                     trailingPageRequest, isCursoredPageReturn);
             case AGGREGATE     -> emitAggregate(stmt, method, metamodel, nameToIdx, returnType);
-            case PROJECT       -> emitProject(stmt, method, metamodel, nameToIdx, returnType);
+            case PROJECT       -> projectedRecord(returnType) != null
+                    ? emitProjectMulti(asMulti(stmt), method, metamodel, nameToIdx, returnType)
+                    : emitProject(stmt, method, metamodel, nameToIdx, returnType);
             case PROJECT_MULTI -> emitProjectMulti(stmt, method, metamodel, nameToIdx, returnType);
             case UPDATE        -> emitUpdate(stmt, method, metamodel, nameToIdx, returnType);
             case DELETE        -> emitDelete(stmt, method, metamodel, nameToIdx, returnType);
@@ -236,8 +239,70 @@ final class JdqlParser {
         String elem = projectionElementMulti(rt);
         sb.append("return (").append(rawType(rt)).append(") ")
           .append("io.vidocq.mansart.data.core.JdqlExecutor.dispatchMultiProjection(")
-          .append(rawType(rt)).append(".class, ").append(elem).append(".class, _rows, _attrs);");
+          .append(rawType(rt)).append(".class, ").append(elem).append(".class, _rows, _attrs");
+        TypeElement record = projectedRecord(returnType);
+        if (record != null) {
+            if (record.getRecordComponents().size() != stmt.projectAttrs.size()) {
+                throw new ParseException("Record " + record.getSimpleName() + " has "
+                        + record.getRecordComponents().size() + " components but the SELECT lists "
+                        + stmt.projectAttrs.size() + " attributes");
+            }
+            sb.append(", ").append(recordFactory(record));
+        }
+        sb.append(");");
         return sb.toString();
+    }
+
+    /** A one-attribute projection into a record goes the multi-column way, with that one attribute (MANSART-039). */
+    private static Stmt asMulti(Stmt stmt) {
+        stmt.projectAttrs = new ArrayList<>(List.of(stmt.scalarAttr));
+        stmt.kind = Stmt.Kind.PROJECT_MULTI;
+        return stmt;
+    }
+
+    /**
+     * The record a projection returns — as is, in a collection, a stream, an {@code Optional} or an array — or
+     * {@code null} when it returns something else.
+     */
+    private static TypeElement projectedRecord(TypeMirror returnType) {
+        TypeMirror element = returnType;
+        if (returnType instanceof javax.lang.model.type.ArrayType array) {
+            element = array.getComponentType();
+        } else if (returnType instanceof javax.lang.model.type.DeclaredType declared
+                && !declared.getTypeArguments().isEmpty()) {
+            element = declared.getTypeArguments().get(0);
+        }
+        if (element instanceof javax.lang.model.type.DeclaredType declared
+                && declared.asElement().getKind() == javax.lang.model.element.ElementKind.RECORD) {
+            return (TypeElement) declared.asElement();
+        }
+        return null;
+    }
+
+    /**
+     * MANSART-038 — the code that builds {@code record} from a projected row, compiled in the application's module:
+     * Mansart's module then needs no reflective access to the record (no {@code opens}, no {@code exports}).
+     */
+    private static String recordFactory(TypeElement record) {
+        StringBuilder sb = new StringBuilder("_r -> new ").append(record.getQualifiedName()).append('(');
+        List<? extends javax.lang.model.element.RecordComponentElement> components = record.getRecordComponents();
+        for (int i = 0; i < components.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append('(').append(castType(components.get(i).asType())).append(") _r[").append(i)
+              .append(']');
+        }
+        return sb.append(')').toString();
+    }
+
+    /**
+     * The type a row value is cast to before it reaches the record's constructor: boxed for a primitive (unboxed again
+     * by the call), raw for a parameterised type, so the generated code compiles without an unchecked warning.
+     */
+    private static String castType(TypeMirror type) {
+        if (type instanceof javax.lang.model.type.DeclaredType declared && !declared.getTypeArguments().isEmpty()) {
+            return ((TypeElement) declared.asElement()).getQualifiedName().toString();
+        }
+        return boxedReturnType(type);
     }
 
     /** M8-2 — extract the parameterised element type for multi-projection. Defaults to Object[]. */

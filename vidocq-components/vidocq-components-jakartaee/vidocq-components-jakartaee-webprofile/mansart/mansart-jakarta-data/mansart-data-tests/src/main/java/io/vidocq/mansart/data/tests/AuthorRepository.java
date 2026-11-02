@@ -183,6 +183,15 @@ public interface AuthorRepository extends BasicRepository<Author, Long> {
 
     record AuthorView(Long id, String name) {}
 
+    /** MANSART-039: a record of one component, filled from a one-attribute SELECT. */
+    @jakarta.data.repository.Query("SELECT name FROM Author ORDER BY name ASC")
+    java.util.List<NameOnly> jdqlNamesOnly();
+
+    @jakarta.data.repository.Query("SELECT name FROM Author WHERE id = :id")
+    NameOnly jdqlNameOnlyById(long id);
+
+    record NameOnly(String name) {}
+
     /* ---- mansart#41 ---- */
 
     /** {@code @Param} names the query parameter, whatever the Java parameter is called. */

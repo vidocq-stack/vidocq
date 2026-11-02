@@ -89,6 +89,10 @@ public final class EntityModels {
     private static EntityModel<?> resolve(Class<?> entityType) {
         // Try the generated _<EntitySimpleName> class first.
         String pkg = entityType.getPackageName();
+        EntityModel<?> fromProvider = Generated.model(entityType);
+        if (fromProvider != null) {
+            return fromProvider;
+        }
         String generatedName = pkg + (pkg.isEmpty() ? "" : ".") + "_" + entityType.getSimpleName();
         try {
             Class<?> meta = Class.forName(generatedName, true, entityType.getClassLoader());

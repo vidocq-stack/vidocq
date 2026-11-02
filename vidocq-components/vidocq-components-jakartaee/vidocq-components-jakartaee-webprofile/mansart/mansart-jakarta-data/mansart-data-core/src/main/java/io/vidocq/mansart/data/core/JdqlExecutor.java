@@ -943,43 +943,59 @@ public final class JdqlExecutor {
      */
     public static Object dispatchMultiProjection(Class<?> rt, Class<?> elem, List<Object[]> rows,
                                                   java.util.List<Attribute<?, ?>> attrs) {
+        return dispatchMultiProjection(rt, elem, rows, attrs, null);
+    }
+
+    /**
+     * MANSART-038 — the same, with {@code toRecord} building the record of a row: the code the annotation processor
+     * generates in the application's module, so that Mansart's module never reaches the record's constructor by
+     * reflection. {@code null} falls back to the canonical constructor, found by reflection (the run-time path).
+     */
+    public static Object dispatchMultiProjection(Class<?> rt, Class<?> elem, List<Object[]> rows,
+                                                  java.util.List<Attribute<?, ?>> attrs,
+                                                  java.util.function.Function<Object[], ?> toRecord) {
         boolean isRecordTarget = elem != null && elem != Object[].class && elem.isRecord();
+        Class<?> recordType = isRecordTarget ? elem : rt.isRecord() ? rt
+                : rt.isArray() && rt.getComponentType().isRecord() ? rt.getComponentType() : null;
+        java.util.function.Function<Object[], ?> rowToRecord = recordType == null ? null
+                : toRecord != null ? toRecord : row -> mapRowToRecord(row, recordType, attrs);
 
         // Object[]-shaped returns
         if (isListLike(rt)) {
-            return isRecordTarget ? mapRowsToRecords(rows, elem, attrs) : rows;
+            return isRecordTarget ? mapRows(rows, rowToRecord) : rows;
         }
         if (rt == java.util.stream.Stream.class) {
-            return isRecordTarget ? mapRowsToRecords(rows, elem, attrs).stream() : rows.stream();
+            return isRecordTarget ? mapRows(rows, rowToRecord).stream() : rows.stream();
         }
-        if (rt.isArray()) return multiProjectionArray(rt, rows, attrs);
-        if (rt == java.util.Optional.class) return firstRow(rows, isRecordTarget ? elem : null, attrs);
-        if (rt.isRecord()) return singleRecord(rt, rows, attrs);
+        if (rt.isArray()) return multiProjectionArray(rt, rows, rowToRecord);
+        if (rt == java.util.Optional.class) return firstRow(rows, isRecordTarget ? rowToRecord : null);
+        if (rt.isRecord()) return singleRecord(rt, rows, rowToRecord);
         throw new MansartDataException("Unsupported multi-projection return type: " + rt);
     }
 
-    /** The first row, mapped to {@code recordType} unless it is {@code null}; empty without rows. */
-    private static java.util.Optional<Object> firstRow(List<Object[]> rows, Class<?> recordType,
-                                                       java.util.List<Attribute<?, ?>> attrs) {
+    /** The first row, built by {@code rowToRecord} unless it is {@code null}; empty without rows. */
+    private static java.util.Optional<Object> firstRow(List<Object[]> rows,
+                                                       java.util.function.Function<Object[], ?> rowToRecord) {
         if (rows.isEmpty()) return java.util.Optional.empty();
-        return java.util.Optional.of(recordType == null ? rows.get(0) : mapRowToRecord(rows.get(0), recordType, attrs));
+        return java.util.Optional.of(rowToRecord == null ? rows.get(0) : rowToRecord.apply(rows.get(0)));
     }
 
     /** The first row as a {@code recordType}; an {@link jakarta.data.exceptions.EmptyResultException} without rows. */
-    private static Object singleRecord(Class<?> recordType, List<Object[]> rows, java.util.List<Attribute<?, ?>> attrs) {
+    private static Object singleRecord(Class<?> recordType, List<Object[]> rows,
+                                       java.util.function.Function<Object[], ?> rowToRecord) {
         if (rows.isEmpty()) {
             throw new jakarta.data.exceptions.EmptyResultException(
                     "Multi-projection returned no result for " + recordType.getSimpleName());
         }
-        return mapRowToRecord(rows.get(0), recordType, attrs);
+        return rowToRecord.apply(rows.get(0));
     }
 
     /** {@code Object[][]} holding the rows, or {@code R[]} holding one record per row. */
     private static Object multiProjectionArray(Class<?> rt, List<Object[]> rows,
-                                               java.util.List<Attribute<?, ?>> attrs) {
+                                               java.util.function.Function<Object[], ?> rowToRecord) {
         Class<?> comp = rt.getComponentType();
         if (comp == Object[].class) return rows.toArray(new Object[0][]);
-        if (comp.isRecord()) return toArray(comp, mapRowsToRecords(rows, comp, attrs));
+        if (comp.isRecord()) return toArray(comp, mapRows(rows, rowToRecord));
         throw new MansartDataException("Multi-projection array return must be Object[][] or RecordType[], got: " + rt);
     }
 
@@ -995,10 +1011,9 @@ public final class JdqlExecutor {
         return arr;
     }
 
-    private static java.util.List<Object> mapRowsToRecords(List<Object[]> rows, Class<?> recordType,
-                                                            java.util.List<Attribute<?, ?>> attrs) {
+    private static java.util.List<Object> mapRows(List<Object[]> rows, java.util.function.Function<Object[], ?> rowToRecord) {
         java.util.List<Object> out = new ArrayList<>(rows.size());
-        for (Object[] row : rows) out.add(mapRowToRecord(row, recordType, attrs));
+        for (Object[] row : rows) out.add(rowToRecord.apply(row));
         return out;
     }
 

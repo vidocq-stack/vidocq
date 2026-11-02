@@ -36,4 +36,5 @@ module io.vidocq.mansart.data.core {
     exports io.vidocq.mansart.data.core;
 
     uses io.vidocq.mansart.data.dialect.DialectFactory;
+    uses io.vidocq.mansart.data.core.GeneratedComponents;
 }

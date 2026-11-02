@@ -46,8 +46,26 @@ final class RuntimeGeneration {
     /** A repository implemented by a class generated at run time: warns unless a warning already named it. */
     static void generated(Class<?> repository) {
         if (ANNOUNCED.add(repository.getName())) {
-            LOG.log(System.Logger.Level.WARNING, generatedWarning(repository.getName()));
+            LOG.log(System.Logger.Level.WARNING, generatedWarning(repository.getName(), cause(repository)));
         }
+    }
+
+    /**
+     * Why the build did not implement {@code repository}: a type no generated top-level class of its package can see
+     * (nested in a private type, or local), or, otherwise, a module compiled without the processor.
+     */
+    static String cause(Class<?> repository) {
+        for (Class<?> type = repository; type != null; type = type.getEnclosingClass()) {
+            if (java.lang.reflect.Modifier.isPrivate(type.getModifiers()) || type.isLocalClass()
+                    || type.isAnonymousClass()) {
+                return "It is not visible from its package (" + type.getName() + " is private or local), so no"
+                        + " generated class can implement it. Make it, and the types it is nested in, at least"
+                        + " package-private.\n";
+            }
+        }
+        return """
+                It was compiled without the Mansart annotation processor.
+                """ + FIX;
     }
 
     /** A repository the generator failed on, served by a {@code Proxy}: warns unless a warning already named it. */
@@ -57,15 +75,15 @@ final class RuntimeGeneration {
         }
     }
 
-    static String generatedWarning(String repositoryName) {
+    static String generatedWarning(String repositoryName, String cause) {
         return "\n" + RULE + "\n"
                 + "MANSART — RUNTIME CODE GENERATION FALLBACK\n"
                 + "The repository " + repositoryName + " is implemented at run time instead of at build time.\n"
+                + cause
                 + """
-                It was compiled without the Mansart annotation processor. This fallback is exceptional: it slows the
-                startup and cannot run ahead of time (native image, CDS).
+                This fallback is exceptional: it slows the startup, cannot run ahead of time (native image, CDS) and,
+                in a named module, reaches the repository's package by reflection.
                 """
-                + FIX
                 + RULE;
     }
 

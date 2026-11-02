@@ -120,4 +120,13 @@ class JdqlMultiProjectionTest {
         a.setName(name);
         return a;
     }
+
+    /** MANSART-039: a one-attribute SELECT into a one-component record used to be read as a scalar column. */
+    @Test
+    void oneComponentRecords() {
+        assertThat(repo.jdqlNamesOnly()).extracting(AuthorRepository.NameOnly::name)
+                .containsExactly("Alpha", "Beta", "Gamma");
+        long id = repo.jdqlAuthorViews().get(1).id();
+        assertThat(repo.jdqlNameOnlyById(id).name()).isEqualTo("Beta");
+    }
 }

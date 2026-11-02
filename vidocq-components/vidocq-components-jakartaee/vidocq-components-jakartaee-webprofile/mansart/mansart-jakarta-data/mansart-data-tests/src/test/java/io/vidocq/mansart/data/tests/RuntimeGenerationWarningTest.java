@@ -55,6 +55,13 @@ class RuntimeGenerationWarningTest {
         List<Author> findByName(String name);
     }
 
+    /** A repository the processor cannot implement: no top-level class of the package can see it. */
+    private static final class Hidden {
+        @Repository
+        interface HiddenAuthorRepo extends BasicRepository<Author, Long> {
+        }
+    }
+
     private final Logger logger = Logger.getLogger("io.vidocq.mansart.data.core.RuntimeGeneration");
     private final List<String> warnings = new CopyOnWriteArrayList<>();
     private final Handler capture = new Handler() {
@@ -136,5 +143,20 @@ class RuntimeGenerationWarningTest {
                 throw new ClassNotFoundException(name, e);
             }
         }
+    }
+
+    /**
+     * MANSART-038: a repository served at run time although the processor ran says why — here, it is nested in a
+     * private class, so no generated class of its package can implement it — instead of blaming a missing processor.
+     */
+    @Test
+    void aRepositoryNotVisibleFromItsPackageIsAnnouncedWithThatCause() {
+        data.runtimeRepository(Hidden.HiddenAuthorRepo.class);
+
+        assertThat(warnings).hasSize(1);
+        assertThat(warnings.getFirst())
+                .contains(Hidden.HiddenAuthorRepo.class.getName())
+                .contains("not visible from its package")
+                .doesNotContain("compiled without the Mansart annotation processor");
     }
 }

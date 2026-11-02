@@ -63,6 +63,7 @@ public final class MansartProcessor extends AbstractProcessor {
     private MansartMetamodelWriter    mansartWriter;
     private JpaMetamodelWriter        jpaWriter;
     private RepositoryWriter          repositoryWriter;
+    private ComponentsWriter          componentsWriter;
     private EntityRegistry            entityRegistry;
     private final java.util.List<String> repoEntries = new java.util.ArrayList<>();
     /**
@@ -89,6 +90,7 @@ public final class MansartProcessor extends AbstractProcessor {
                 .getTypeElement("jakarta.persistence.metamodel.SingularAttribute") != null
                 ? new JpaMetamodelWriter(sink) : null;
         this.entityRegistry   = new EntityRegistry();
+        this.componentsWriter = new ComponentsWriter(sink);
         this.repositoryWriter = new RepositoryWriter(sink,
                 env.getElementUtils(), env.getTypeUtils(), entityRegistry, env.getMessager(),
                 "warn".equalsIgnoreCase(env.getOptions().get(UNRESOLVED_METHODS))
@@ -99,6 +101,14 @@ public final class MansartProcessor extends AbstractProcessor {
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment round) {
         if (round.processingOver()) {
             writeRepositoriesIndex();
+            try {
+                componentsWriter.writeServices(processingEnv.getFiler());
+            } catch (IOException ex) {
+                failed = true;
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                        "[mansart-data] Failed to write META-INF/services/" + ComponentsWriter.SERVICE + ": "
+                                + ex.getMessage());
+            }
             if (generated && !failed) writeMarker();
             return false;
         }
@@ -120,6 +130,13 @@ public final class MansartProcessor extends AbstractProcessor {
 
         for (TypeElement type : entities) writeMetamodels(type);
         for (TypeElement repo : repositories) writeRepository(repo);
+        try {
+            componentsWriter.endOfRound();
+        } catch (IOException ex) {
+            failed = true;
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "[mansart-data] Failed to write the _MansartComponents classes: " + ex.getMessage());
+        }
         return true;
     }
 
@@ -133,6 +150,11 @@ public final class MansartProcessor extends AbstractProcessor {
         try {
             mansartWriter.write(descriptor);
             if (jpaWriter != null) jpaWriter.write(descriptor);
+            String qualified = type.getQualifiedName().toString();
+            int dot = qualified.lastIndexOf('.');
+            String metamodelPkg = dot < 0 ? "" : qualified.substring(0, dot);
+            componentsWriter.entity(packageOf(type), qualified,
+                    (metamodelPkg.isEmpty() ? "" : metamodelPkg + ".") + "_" + type.getSimpleName());
             generated = true;
         } catch (IOException ex) {
             failed = true;
@@ -198,6 +220,7 @@ public final class MansartProcessor extends AbstractProcessor {
             if (implFqn != null) {
                 String itfFqn = repo.getQualifiedName().toString();
                 repoEntries.add(itfFqn + "=" + implFqn);
+                componentsWriter.repository(packageOf(repo), itfFqn, implFqn);
                 generated = true;
             }
         } catch (IOException | RuntimeException ex) {
@@ -221,6 +244,10 @@ public final class MansartProcessor extends AbstractProcessor {
         String pkg = processingEnv.getElementUtils().getPackageOf(entity).getQualifiedName().toString();
         String metamodel = (pkg.isEmpty() ? "" : pkg + ".") + "_" + entity.getSimpleName();
         if (processingEnv.getElementUtils().getTypeElement(metamodel) == null) writeMetamodels(entity);
+    }
+
+    private String packageOf(TypeElement type) {
+        return processingEnv.getElementUtils().getPackageOf(type).getQualifiedName().toString();
     }
 
     /** Whether a top-level class of the repository's package can implement it. */
