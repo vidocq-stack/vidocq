@@ -21,7 +21,9 @@ package io.vidocq.knock.internal;
 
 import jakarta.json.Json;
 import jakarta.json.JsonArrayBuilder;
+import jakarta.json.JsonBuilderFactory;
 import jakarta.json.JsonObjectBuilder;
+import jakarta.json.spi.JsonProvider;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 
 import java.util.Map;
@@ -50,8 +52,24 @@ import java.util.Optional;
  *
  * <p>Spec §3.1: {@code data} is omitted if absent ({@link Optional#empty()}) ;
  * do not serialize {@code "data":null}.</p>
+ *
+ * <p>The builders come from one {@link JsonBuilderFactory} resolved when the serializer is created:
+ * {@link Json}'s static methods look the provider up through {@code ServiceLoader} and create it by
+ * reflection at every call, that is at every {@code /health} request (BUG-20261102-01).</p>
  */
 public final class KnockJsonSerializer {
+
+    private final JsonBuilderFactory json;
+
+    /** Resolves the JSON-P provider once. */
+    public KnockJsonSerializer() {
+        this(JsonProvider.provider().createBuilderFactory(Map.of()));
+    }
+
+    /** Builds through {@code json}. */
+    KnockJsonSerializer(JsonBuilderFactory json) {
+        this.json = json;
+    }
 
     /**
      * Serializes the snapshot as a JSON string.
@@ -60,12 +78,12 @@ public final class KnockJsonSerializer {
      * @return JSON string compliant with spec §3.1
      */
     public String serialize(HealthSnapshot snapshot) {
-        JsonArrayBuilder checksArray = Json.createArrayBuilder();
+        JsonArrayBuilder checksArray = json.createArrayBuilder();
         for (HealthCheckResponse check : snapshot.checks()) {
             checksArray.add(buildCheckObject(check));
         }
 
-        return Json.createObjectBuilder()
+        return json.createObjectBuilder()
                 .add("status", snapshot.status().name())
                 .add("checks", checksArray)
                 .build()
@@ -88,7 +106,7 @@ public final class KnockJsonSerializer {
     }
 
     private JsonObjectBuilder buildCheckObject(HealthCheckResponse check) {
-        JsonObjectBuilder builder = Json.createObjectBuilder()
+        JsonObjectBuilder builder = json.createObjectBuilder()
                 .add("name", check.getName())
                 .add("status", check.getStatus().name());
 
@@ -101,7 +119,7 @@ public final class KnockJsonSerializer {
     }
 
     private JsonObjectBuilder buildDataObject(Map<String, Object> data) {
-        JsonObjectBuilder dataBuilder = Json.createObjectBuilder();
+        JsonObjectBuilder dataBuilder = json.createObjectBuilder();
         for (Map.Entry<String, Object> entry : data.entrySet()) {
             switch (entry.getValue()) {
                 case String s -> dataBuilder.add(entry.getKey(), s);

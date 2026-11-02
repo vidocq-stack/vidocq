@@ -225,3 +225,18 @@ back with compiler plugin 3.13 either). Workaround removed; the shared execution
   only the Knock jars and `vauban-api`.
 - **Scope**: every brick whose beans the Vauban build weaves has the same defect
   (Vidocq/vidocq-workspace#15).
+
+## BUG-20261102-01 — every `/health` request looks the JSON-P provider up through `ServiceLoader` and creates it by reflection
+
+- **Date** : 2026-11-02
+- **Statut** : FIXED (branch fix/reflection-per-request)
+- **Module touché** : knock-core (`KnockJsonSerializer`)
+- **Symptôme** : the Vidocq reflection audit (tracing agent on a multi-extension application) shows a
+  `ServiceLoader` lookup and a reflective `newInstance` of the JSON-P provider at every `/health` call.
+- **Reproduction minimale** : call `/health` repeatedly with the tracing agent; `JsonProvider.provider()`
+  appears once per builder created.
+- **Hypothèse de cause** : `KnockJsonSerializer` built its objects through the static `Json.createObjectBuilder()`
+  / `Json.createArrayBuilder()`, each of which calls `JsonProvider.provider()`.
+- **Investigations** :
+  - 2026-11-02 : the serializer resolves one `JsonBuilderFactory` when it is created (once per
+    `KnockHealthService`) and builds through it; `KnockJsonSerializerTest.serialize_builds_through_the_factory_resolved_once`.

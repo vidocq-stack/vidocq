@@ -59,6 +59,48 @@ class KnockJsonSerializerTest {
     }
 
     // -----------------------------------------------------------------------
+    // The JSON-P provider is resolved once, not at every /health call
+    // -----------------------------------------------------------------------
+
+    /**
+     * {@code Json.createObjectBuilder()} looks the provider up through {@code ServiceLoader} and creates it by
+     * reflection at every call: the serializer builds through one factory resolved when it is created
+     * (BUG-20261102-01).
+     */
+    @Test
+    void serialize_builds_through_the_factory_resolved_once() {
+        var delegate = jakarta.json.spi.JsonProvider.provider().createBuilderFactory(java.util.Map.of());
+        var objects = new java.util.concurrent.atomic.AtomicInteger();
+        var arrays = new java.util.concurrent.atomic.AtomicInteger();
+        jakarta.json.JsonBuilderFactory counting = new jakarta.json.JsonBuilderFactory() {
+            @Override
+            public jakarta.json.JsonObjectBuilder createObjectBuilder() {
+                objects.incrementAndGet();
+                return delegate.createObjectBuilder();
+            }
+
+            @Override
+            public jakarta.json.JsonArrayBuilder createArrayBuilder() {
+                arrays.incrementAndGet();
+                return delegate.createArrayBuilder();
+            }
+
+            @Override
+            public java.util.Map<String, ?> getConfigInUse() {
+                return delegate.getConfigInUse();
+            }
+        };
+        HealthSnapshot snapshot = new HealthSnapshot(ProbeType.ALL, HealthCheckResponse.Status.UP,
+                List.of(HealthCheckResponse.named("db").up().withData("pool", 4L).build()));
+
+        String json = new KnockJsonSerializer(counting).serialize(snapshot);
+
+        assertTrue(json.contains("\"pool\":4"), json);
+        assertEquals(3, objects.get(), "root, check and data objects");
+        assertEquals(1, arrays.get(), "checks array");
+    }
+
+    // -----------------------------------------------------------------------
     // §3.1 — UP snapshot, empty list
     // -----------------------------------------------------------------------
 
