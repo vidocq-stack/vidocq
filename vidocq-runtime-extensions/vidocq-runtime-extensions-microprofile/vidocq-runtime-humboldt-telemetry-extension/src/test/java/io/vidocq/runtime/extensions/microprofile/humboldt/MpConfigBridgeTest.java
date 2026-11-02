@@ -50,7 +50,7 @@ class MpConfigBridgeTest {
 
         private final Map<String, String> values = Map.of("otel.service.name", "orders", "app.name", "shop");
 
-        private static void record() {
+        private static void noteCaller() {
             // only the frames between this call and the test: JUnit calls the test method by reflection
             reachedThroughMethodInvoke |= Arrays.stream(Thread.currentThread().getStackTrace())
                     .takeWhile(f -> !f.getClassName().equals(MpConfigBridgeTest.class.getName()))
@@ -59,13 +59,13 @@ class MpConfigBridgeTest {
 
         @Override
         public Iterable<String> getPropertyNames() {
-            record();
+            noteCaller();
             return values.keySet();
         }
 
         @Override
         public <T> Optional<T> getOptionalValue(String propertyName, Class<T> propertyType) {
-            record();
+            noteCaller();
             return Optional.ofNullable(values.get(propertyName)).map(propertyType::cast);
         }
 
