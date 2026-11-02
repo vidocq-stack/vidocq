@@ -412,7 +412,7 @@ public final class RavelProcessor extends AbstractProcessor {
             String binary = processingEnv.getElementUtils().getBinaryName(type).toString();
             cases.append("            case \"").append(binary).append("\" -> ")
                     .append("ofEnum".equals(call)
-                            ? "io.vidocq.ravel.spi.ImplicitConversion.ofEnum(" + name + ".class)"
+                            ? "io.vidocq.ravel.spi.ImplicitConversion.ofEnum(" + name + DOT_CLASS
                             : "io.vidocq.ravel.spi.ImplicitConversion.of(" + name + ".class, " + call + ")")
                     .append(";\n");
         });

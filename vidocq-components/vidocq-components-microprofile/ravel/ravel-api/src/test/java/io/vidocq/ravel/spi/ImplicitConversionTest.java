@@ -46,18 +46,17 @@ class ImplicitConversionTest {
     @Test
     void anIllegalArgumentOrNullPointerOfTheFactoryPassesThrough() {
         var iae = new IllegalArgumentException("no");
-        var thrown = assertThrows(IllegalArgumentException.class,
-                () -> ImplicitConversion.of(String.class, v -> { throw iae; }).convert("x"));
+        var rejecting = ImplicitConversion.of(String.class, v -> { throw iae; });
+        var thrown = assertThrows(IllegalArgumentException.class, () -> rejecting.convert("x"));
         assertSame(iae, thrown);
-        assertThrows(NullPointerException.class,
-                () -> ImplicitConversion.of(String.class, v -> { throw new NullPointerException(); }).convert("x"));
+        var nulling = ImplicitConversion.of(String.class, v -> { throw new NullPointerException(); });
+        assertThrows(NullPointerException.class, () -> nulling.convert("x"));
     }
 
     @Test
     void anyOtherFailureBecomesAnIllegalArgument() {
-        var thrown = assertThrows(IllegalArgumentException.class,
-                () -> ImplicitConversion.of(String.class, v -> { throw new IllegalStateException("boom"); })
-                        .convert("x"));
+        var failing = ImplicitConversion.of(String.class, v -> { throw new IllegalStateException("boom"); });
+        var thrown = assertThrows(IllegalArgumentException.class, () -> failing.convert("x"));
         assertEquals(IllegalStateException.class, thrown.getCause().getClass());
     }
 
