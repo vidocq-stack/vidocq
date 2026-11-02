@@ -44,6 +44,7 @@ final class ComponentsWriter {
 
     static final String SERVICE = "io.vidocq.mansart.data.core.GeneratedComponents";
     private static final String NAME = "_MansartComponents";
+    private static final String END_METHOD = "    }";
 
     private final SourceSink sink;
     private final Map<String, List<String[]>> entities = new LinkedHashMap<>();
@@ -107,15 +108,17 @@ final class ComponentsWriter {
             w.println("public final class " + simple + " implements " + SERVICE + " {");
             w.println();
             w.println("    public " + simple + "() {");
-            w.println("    }");
+            w.println(END_METHOD);
             w.println();
             w.println("    @Override");
-            w.println("    public io.vidocq.mansart.data.dialect.EntityModel<?> model(Class<?> entity) {");
+            w.println("    @SuppressWarnings(\"unchecked\")");
+            w.println("    public <T> io.vidocq.mansart.data.dialect.EntityModel<T> model(Class<T> entity) {");
             for (String[] e : pkgEntities) {
-                w.println("        if (entity == " + e[0] + ".class) return " + e[1] + ".$MODEL;");
+                w.println("        if (entity == " + e[0] + ".class) return (io.vidocq.mansart.data.dialect.EntityModel<T>) "
+                        + "(io.vidocq.mansart.data.dialect.EntityModel<?>) " + e[1] + ".$MODEL;");
             }
             w.println("        return null;");
-            w.println("    }");
+            w.println(END_METHOD);
             w.println();
             w.println("    @Override");
             w.println("    public Object repository(Class<?> repository, io.vidocq.mansart.data.core.RepositoryRuntime runtime) {");
@@ -123,7 +126,7 @@ final class ComponentsWriter {
                 w.println("        if (repository == " + r[0] + ".class) return new " + r[1] + "(runtime);");
             }
             w.println("        return null;");
-            w.println("    }");
+            w.println(END_METHOD);
             w.println("}");
         }
         providers.add(fqn);

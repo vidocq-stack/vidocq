@@ -112,7 +112,7 @@ class RecordProjectionCodegenTest {
         assertThat(result.errors()).isEmpty();
         assertThat(result.generatedSource("demo._MansartComponents"))
                 .contains("implements io.vidocq.mansart.data.core.GeneratedComponents")
-                .contains("if (entity == demo.Book.class) return demo._Book.$MODEL;")
+                .contains("if (entity == demo.Book.class) return (io.vidocq.mansart.data.dialect.EntityModel<T>) (io.vidocq.mansart.data.dialect.EntityModel<?>) demo._Book.$MODEL;")
                 .contains("if (repository == demo.Books.class) return new demo.BooksImpl(runtime);");
         assertThat(java.nio.file.Files.readString(result.classes()
                 .resolve("META-INF/services/io.vidocq.mansart.data.core.GeneratedComponents")))

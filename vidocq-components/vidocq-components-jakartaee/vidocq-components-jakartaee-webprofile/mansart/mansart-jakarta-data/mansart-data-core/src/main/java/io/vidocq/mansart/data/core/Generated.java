@@ -54,9 +54,9 @@ public final class Generated {
     }
 
     /** The generated model of {@code entity}, or {@code null}. */
-    public static EntityModel<?> model(Class<?> entity) {
+    public static <T> EntityModel<T> model(Class<T> entity) {
         for (GeneratedComponents components : PROVIDERS.get(entity)) {
-            EntityModel<?> model = components.model(entity);
+            EntityModel<T> model = components.model(entity);
             if (model != null) {
                 return model;
             }

@@ -955,10 +955,8 @@ public final class JdqlExecutor {
                                                   java.util.List<Attribute<?, ?>> attrs,
                                                   java.util.function.Function<Object[], ?> toRecord) {
         boolean isRecordTarget = elem != null && elem != Object[].class && elem.isRecord();
-        Class<?> recordType = isRecordTarget ? elem : rt.isRecord() ? rt
-                : rt.isArray() && rt.getComponentType().isRecord() ? rt.getComponentType() : null;
-        java.util.function.Function<Object[], ?> rowToRecord = recordType == null ? null
-                : toRecord != null ? toRecord : row -> mapRowToRecord(row, recordType, attrs);
+        java.util.function.Function<Object[], ?> rowToRecord =
+                rowToRecord(isRecordTarget ? elem : recordReturned(rt), attrs, toRecord);
 
         // Object[]-shaped returns
         if (isListLike(rt)) {
@@ -971,6 +969,22 @@ public final class JdqlExecutor {
         if (rt == java.util.Optional.class) return firstRow(rows, isRecordTarget ? rowToRecord : null);
         if (rt.isRecord()) return singleRecord(rt, rows, rowToRecord);
         throw new MansartDataException("Unsupported multi-projection return type: " + rt);
+    }
+
+    /** The record {@code rt} returns, itself or as an array component; {@code null} when it returns none. */
+    private static Class<?> recordReturned(Class<?> rt) {
+        if (rt.isRecord()) return rt;
+        if (rt.isArray() && rt.getComponentType().isRecord()) return rt.getComponentType();
+        return null;
+    }
+
+    /** {@code toRecord}, or the reflective canonical constructor without it; {@code null} without a record. */
+    private static java.util.function.Function<Object[], ?> rowToRecord(Class<?> recordType,
+                                                                        java.util.List<Attribute<?, ?>> attrs,
+                                                                        java.util.function.Function<Object[], ?> toRecord) {
+        if (recordType == null) return null;
+        if (toRecord != null) return toRecord;
+        return row -> mapRowToRecord(row, recordType, attrs);
     }
 
     /** The first row, built by {@code rowToRecord} unless it is {@code null}; empty without rows. */

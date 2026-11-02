@@ -31,7 +31,7 @@ import io.vidocq.mansart.data.dialect.EntityModel;
 public interface GeneratedComponents {
 
     /** The model of {@code entity}, or {@code null} when it is not an entity of this package. */
-    EntityModel<?> model(Class<?> entity);
+    <T> EntityModel<T> model(Class<T> entity);
 
     /** A new implementation of {@code repository} on {@code runtime}, or {@code null} when it is not one of this package. */
     Object repository(Class<?> repository, RepositoryRuntime runtime);
