@@ -132,8 +132,8 @@ class VidocqTestMojoOnceTest {
         CompletableFuture<TestResults> verdict = new CompletableFuture<>();
         ContinuousTesting testing = new ContinuousTesting(tests -> new Ended(0),
                 since -> new SurefireReports.Reports(new Counts(1, 0, 0, 0), List.of(), 1, 0), () -> true,
-                new ContinuousTesting.Results(dir.resolve(TestResultsFile.FILE_NAME), "log"), result -> result.state(),
-                warning -> warning.length(), Clock.systemUTC());
+                new ContinuousTesting.Results(dir.resolve(TestResultsFile.FILE_NAME), "log"), TestResults::state,
+                CharSequence::length, Clock.systemUTC());
         Thread.currentThread().interrupt();
         try {
             assertThrows(org.apache.maven.plugin.MojoExecutionException.class,
@@ -149,8 +149,8 @@ class VidocqTestMojoOnceTest {
         verdict.completeExceptionally(new IllegalStateException("boom"));
         ContinuousTesting testing = new ContinuousTesting(tests -> new Ended(0),
                 since -> new SurefireReports.Reports(new Counts(1, 0, 0, 0), List.of(), 1, 0), () -> true,
-                new ContinuousTesting.Results(dir.resolve(TestResultsFile.FILE_NAME), "log"), result -> result.state(),
-                warning -> warning.length(), Clock.systemUTC());
+                new ContinuousTesting.Results(dir.resolve(TestResultsFile.FILE_NAME), "log"), TestResults::state,
+                CharSequence::length, Clock.systemUTC());
         assertThrows(org.apache.maven.plugin.MojoExecutionException.class,
                 () -> new VidocqTestMojo().runOnce(testing, null, new Thread(Thread::onSpinWait), verdict));
     }
