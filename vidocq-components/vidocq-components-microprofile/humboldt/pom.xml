@@ -55,7 +55,7 @@
 
     <scm>
         <connection>scm:git:https://codefloe.com/Vidocq/humboldt.git</connection>
-        <developerConnection>scm:git:ssh://git@forge.vidocq.dev:vidocq/humboldt.git</developerConnection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/humboldt.git</developerConnection>
         <url>https://codefloe.com/Vidocq/humboldt</url>
     </scm>
 

@@ -9,7 +9,7 @@ The Write tool isn't available in this session. I'll deliver the plan inline as 
 Workspace path: `/Users/yblazart/projects/perso/vidocq/humboldt/`
 Maven groupId: `io.vidocq.humboldt`
 Java Modules root namespace: `io.vidocq.humboldt.*`
-Forge: `https://forge.vidocq.dev/vidocq/humboldt`
+Forge: `https://codefloe.com/Vidocq/humboldt`
 
 ---
 
@@ -882,7 +882,7 @@ asciidoc:
     lang: en
     spec-mp-telemetry: 'https://microprofile.io/specifications/telemetry/2.1[MicroProfile Telemetry 2.1]'
     spec-otel-api: 'https://opentelemetry.io/docs/specs/otel/[OpenTelemetry specification]'
-    repo-humboldt: 'https://forge.vidocq.dev/vidocq/humboldt'
+    repo-humboldt: 'https://codefloe.com/Vidocq/humboldt'
 ```
 
 ### 10.2 `humboldt/docs/en/modules/ROOT/nav.adoc`
