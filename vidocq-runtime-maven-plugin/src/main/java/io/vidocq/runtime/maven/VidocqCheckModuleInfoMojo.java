@@ -58,7 +58,7 @@ import java.util.function.Consumer;
  * alone.</p>
  *
  * <p>It also reads the compiled classes for the packages a runtime module reaches by reflection — the
- * JPA entities, and the types a REST resource or provider takes or returns, with the types their fields
+ * entities (Jakarta Data) without a model Mansart generated at build time, and the types a REST resource or provider takes or returns, with the types their fields
  * and getters hold, and the CDI interceptors (see {@link ReflectedPackages}) — and asks for an
  * {@code opens} of each one the module does not open: JSON-B binds those types, and Vauban calls the
  * interceptors, by reflection, and the first request failed (BUG-20261030-24, BUG-20261031-04).</p>
@@ -163,7 +163,7 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
         }
         List<String> issues = new ArrayList<>();
         issues.add("module-info of '" + module + "' does not open " + unopened.size()
-                + " package(s) the runtime reaches by reflection (JSON-B, JPA, CDI interceptors) — `vidocq doctor"
+                + " package(s) the runtime reaches by reflection (JSON-B, Jakarta Data entities without a generated model, CDI interceptors) — `vidocq doctor"
                 + " --fix` or `./mvnw vidocq:complete-module-info` adds them, `vidocq dev` too; or add to"
                 + " src/main/java/module-info.java:");
         unopened.forEach(pkg -> issues.add("    opens " + pkg + ";   (" + reasons.get(pkg) + ")"));

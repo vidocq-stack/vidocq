@@ -90,7 +90,7 @@ class VidocqCompleteModuleInfoMojoTest {
         // BUG-20261031-04: the tutorial's interceptor and Book DTO packages, which check-module-info reports
         var reached = new ReflectedPackages.Reached(Map.of(
                 "com.example.lib.support", "com.example.lib.support.AuditedInterceptor, a CDI interceptor",
-                "com.example.lib.book", "com.example.lib.book.Book, a JPA entity",
+                "com.example.lib.book", "com.example.lib.book.Book, an entity (Jakarta Data) without a model generated at build time",
                 "com.example.lib", "com.example.lib.HelloResource"), Set.of("com.example.lib.support"));
         var descriptor = java.lang.module.ModuleDescriptor.newModule("com.example.lib").opens("com.example.lib")
                 .packages(Set.of("com.example.lib.support", "com.example.lib.book")).build();

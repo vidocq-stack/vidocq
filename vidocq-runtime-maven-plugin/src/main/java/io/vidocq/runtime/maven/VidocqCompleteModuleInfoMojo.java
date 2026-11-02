@@ -52,7 +52,7 @@ import java.util.Set;
  * duplicated), and marks the block it adds. Only {@code opens} is auto-added: it is never inherited,
  * whereas a {@code requires} may be satisfied transitively and must not be injected blindly.</p>
  *
- * <p>It also opens the packages of the module the runtime reaches by reflection — JSON-B types, JPA entities, CDI
+ * <p>It also opens the packages of the module the runtime reaches by reflection — JSON-B types, entities (Jakarta Data) without a generated model, CDI
  * interceptors (see {@link ReflectedPackages}) — that {@code check-module-info} reports (BUG-20261031-04).</p>
  */
 @Mojo(name = "complete-module-info",

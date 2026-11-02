@@ -13,6 +13,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Minimal reproduction**: start an application with the Telemetry extension under the audit agent: `Class.forName(ConfigProvider)`, `Class.forName(Config)`, three `getMethod` and one `Method.invoke` per `otel.*` property in `HumboldtExtension.bridgeFromMpConfig`.
 - **Cause hypothesis**: the bridge was written reflective so the extension starts without a Config implementation; a `requires static` module gives the same tolerance without reflection.
 
+## BUG-20261102-01 — The build check asked to open every package of entities, which Mansart no longer reaches by reflection
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `feat/mansart-entities-no-opens`, with mansart#74 (MANSART-038): Mansart's processor generates, per package, a `_MansartComponents` service that hands Mansart the entity models and the repository implementations by plain calls. `ReflectedPackages` (`vidocq:check-module-info`, `vidocq doctor`, `vidocq:complete-module-info`, `vidocq dev`) reads the classes the services file `META-INF/services/io.vidocq.mansart.data.core.GeneratedComponents` lists and no longer starts from an entity they name; an entity they do not name — Mansart's reflective fallback — is still reported, as "an entity (Jakarta Data) without a model generated at build time" instead of "a JPA entity", and an entity a REST resource returns is still reached for JSON-B. Tests: `ReflectedPackagesTest` (`anEntityWithAModelMansartGeneratedNeedsNoDirective`, `anEntityTheGeneratedComponentsDoNotNameNeedsItsPackageOpened`, `anEntityWithAGeneratedModelAResourceReturnsStillNeedsItsPackageForJsonb`, `anEntityMansartHasNoGeneratedModelForNeedsItsPackageOpened`; red before). Checked end to end with Mansart from mansart#74 on a `vidocq create` application (`cassini-rest`, `mansart-data`, `-pool`, `-transactions`, `flyway-migration`) whose entity package is not opened: `mvn package` passes (`opens the 0 package(s)`), the packaged application and `vidocq:dev` answer POST, a derived query and JDQL record projections with 200 on PostgreSQL, and `vidocq:dev` leaves `module-info.java` unchanged; with the services file removed from `target/classes`, `check-module-info` asks for `opens com.example.shelf.book` with the new reason.
+- **Reported by**: the maintainer (Mansart without reflection under Vidocq)
+- **Minimal reproduction**: an application with a Jakarta Data entity in a package the module does not open: the build failed asking for `opens`, although Mansart reaches the entity through generated code.
+- **Cause hypothesis**: the check treated every `@Entity` as reached by Jakarta Persistence's reflection.
+
 ## BUG-20261101-04 — Plain POJO DTOs (non-final, with a base class) still needed `opens`
 
 - **Date**: 2026-11-01

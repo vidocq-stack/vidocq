@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The packages of the application that a runtime module reaches by reflection: the JSON-B binding of a REST
- * resource's return and parameter types, a JPA entity. A package that is neither opened nor exported failed at the
+ * resource's return and parameter types, an entity (Jakarta Data). A package that is neither opened nor exported failed at the
  * first request (BUG-20261030-24); {@code vidocq:check-module-info} now names it at build time.
  */
 class ReflectedPackagesTest {
@@ -151,7 +151,7 @@ class ReflectedPackagesTest {
     }
 
     @Test
-    void aJpaEntityWithABindingStillNeedsItsPackageOpenedForJpa() throws IOException {
+    void anEntityWithABindingStillNeedsItsPackageOpenedForJakartaData() throws IOException {
         write(BOOK, annotated("jakarta.persistence.Entity", cb -> { }));
         generatedBinding(BOOK);
 
@@ -159,14 +159,77 @@ class ReflectedPackagesTest {
     }
 
     @Test
-    void aJpaEntityNeedsItsPackageOpened() throws IOException {
+    void anEntityMansartHasNoGeneratedModelForNeedsItsPackageOpened() throws IOException {
         write(ClassDesc.of("com.acme.shop.data.Loan"), annotated("jakarta.persistence.Entity",
                 cb -> cb.withField("id", ConstantDescs.CD_long, ClassFile.ACC_PRIVATE)));
 
-        assertEquals(Set.of("com.acme.shop.data"), ReflectedPackages.of(classes).reasons().keySet());
+        Map<String, String> reached = ReflectedPackages.of(classes).reasons();
+        assertEquals(Set.of("com.acme.shop.data"), reached.keySet());
+        assertEquals("com.acme.shop.data.Loan, an entity (Jakarta Data) without a model generated at build time",
+                reached.get("com.acme.shop.data"));
     }
 
-    /** JSON-B and JPA read the inherited fields too: the superclass, and what its fields hold, need their packages. */
+    /**
+     * The {@code _MansartComponents} Mansart's processor generates in a package of entities, listed in the services
+     * file: it hands Mansart the entity models by plain calls (MANSART-038).
+     */
+    private void mansartComponents(ClassDesc... entities) throws IOException {
+        String pkg = entities[0].packageName();
+        ClassDesc components = ClassDesc.of(pkg, "_MansartComponents");
+        write(components, cb -> {
+            cb.withInterfaceSymbols(ClassDesc.of("io.vidocq.mansart.data.core.GeneratedComponents"));
+            cb.withMethodBody("model", MethodTypeDesc.of(ConstantDescs.CD_Object, ConstantDescs.CD_Class),
+                    ClassFile.ACC_PUBLIC, code -> {
+                        for (ClassDesc entity : entities) {
+                            code.ldc(entity).pop();
+                        }
+                        code.aconst_null().areturn();
+                    });
+        });
+        Path services = classes.resolve("META-INF/services/io.vidocq.mansart.data.core.GeneratedComponents");
+        Files.createDirectories(services.getParent());
+        Files.writeString(services, pkg + "._MansartComponents\n");
+    }
+
+    @Test
+    void anEntityWithAModelMansartGeneratedNeedsNoDirective() throws IOException {
+        ClassDesc loan = ClassDesc.of("com.acme.shop.data.Loan");
+        write(loan, annotated("jakarta.persistence.Entity",
+                cb -> cb.withField("id", ConstantDescs.CD_long, ClassFile.ACC_PRIVATE)));
+        mansartComponents(loan);
+
+        assertEquals(Map.of(), ReflectedPackages.of(classes).reasons());
+    }
+
+    /** Covered for Jakarta Data, the entity is still bound by JSON-B by reflection when a REST resource returns it. */
+    @Test
+    void anEntityWithAGeneratedModelAResourceReturnsStillNeedsItsPackageForJsonb() throws IOException {
+        write(BOOK, annotated("jakarta.persistence.Entity",
+                cb -> cb.withField("title", ConstantDescs.CD_String, ClassFile.ACC_PRIVATE)));
+        mansartComponents(BOOK);
+        write(ClassDesc.of("com.acme.shop.rest.BookResource"), annotated("jakarta.ws.rs.Path", cb ->
+                cb.withMethodBody("one", MethodTypeDesc.of(BOOK), ClassFile.ACC_PUBLIC,
+                        code -> code.aconst_null().areturn())));
+
+        assertEquals(Map.of("com.acme.shop.book", "com.acme.shop.book.Book, reached through com.acme.shop.rest.BookResource"),
+                ReflectedPackages.of(classes).reasons());
+    }
+
+    /** An entity of the package that the generated components do not name is still reached. */
+    @Test
+    void anEntityTheGeneratedComponentsDoNotNameNeedsItsPackageOpened() throws IOException {
+        ClassDesc loan = ClassDesc.of("com.acme.shop.data.Loan");
+        ClassDesc fee = ClassDesc.of("com.acme.shop.data.Fee");
+        write(loan, annotated("jakarta.persistence.Entity", cb -> { }));
+        write(fee, annotated("jakarta.persistence.Entity", cb -> { }));
+        mansartComponents(loan);
+
+        assertEquals(Map.of("com.acme.shop.data",
+                        "com.acme.shop.data.Fee, an entity (Jakarta Data) without a model generated at build time"),
+                ReflectedPackages.of(classes).reasons());
+    }
+
+    /** JSON-B and Mansart's reflective fallback read the inherited fields too: the superclass, and what its fields hold, need their packages. */
     @Test
     void theSuperclassOfAReachedTypeAndWhatItHoldsAreReachedToo() throws IOException {
         ClassDesc audited = ClassDesc.of("com.acme.shop.base.Audited");

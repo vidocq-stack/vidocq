@@ -98,14 +98,14 @@ class VidocqCheckModuleInfoMojoTest {
     @Test
     void theUnopenedPackagesNameTheCommandsThatOpenThem() {
         List<String> issues = VidocqCheckModuleInfoMojo.unopenedIssues("com.example.lib",
-                List.of("com.example.lib.book"), Map.of("com.example.lib.book", "com.example.lib.book.Book, a JPA entity"));
+                List.of("com.example.lib.book"), Map.of("com.example.lib.book", "com.example.lib.book.Book, an entity (Jakarta Data) without a model generated at build time"));
 
         String text = String.join("\n", issues);
         assertTrue(text.contains("vidocq doctor --fix"), text);
         assertTrue(text.contains("./mvnw vidocq:complete-module-info"), text);
         assertFalse(text.contains("first request"), text);
         assertFalse(text.contains("`mvn "), text);
-        assertTrue(text.contains("opens com.example.lib.book;   (com.example.lib.book.Book, a JPA entity)"), text);
+        assertTrue(text.contains("opens com.example.lib.book;   (com.example.lib.book.Book, an entity (Jakarta Data) without a model generated at build time)"), text);
     }
 
     /** BUG-20261031-10: under dev the package is opened in the source and in the compiled descriptor, and printed. */
@@ -121,11 +121,11 @@ class VidocqCheckModuleInfoMojoTest {
 
         List<String> left = VidocqCheckModuleInfoMojo.openUnderDev(
                 VidocqCheckModuleInfoMojo.moduleInfoSource(List.of(sources.toString())), compiled.toFile(),
-                List.of("demo.book"), Map.of("demo.book", "demo.book.Book, a JPA entity"), printed::add);
+                List.of("demo.book"), Map.of("demo.book", "demo.book.Book, an entity (Jakarta Data) without a model generated at build time"), printed::add);
 
         assertTrue(left.isEmpty(), left.toString());
         assertTrue(Files.readString(source).contains("opens demo.book;"), Files.readString(source));
-        assertEquals(List.of("✔ module-info.java: opens demo.book;   (demo.book.Book, a JPA entity)"), printed);
+        assertEquals(List.of("✔ module-info.java: opens demo.book;   (demo.book.Book, an entity (Jakarta Data) without a model generated at build time)"), printed);
         try (var in = Files.newInputStream(compiled)) {
             assertTrue(java.lang.module.ModuleDescriptor.read(in).opens().stream()
                     .anyMatch(o -> o.source().equals("demo.book")));

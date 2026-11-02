@@ -47,11 +47,11 @@ The lines the tooling adds for reflection go in one block, last in the file, eac
 
 `vidocq:check-module-info` and `vidocq doctor` read the compiled classes of `target/classes` (nothing is loaded or run) and start from three kinds of classes:
 
-* a JPA entity, embeddable or mapped superclass (`@Entity`, `@Embeddable`, `@MappedSuperclass`): its package;
+* an entity (Jakarta Data), embeddable or mapped superclass (`@Entity`, `@Embeddable`, `@MappedSuperclass`) that Mansart has no model generated at build time for: its package (xref:#entities[below]);
 * a REST resource or provider (`@Path`, `@Provider`): the types its methods take and return, which JSON-B binds — not the resource itself, whose dispatch is generated;
 * a CDI interceptor with a `private` interceptor method (`@AroundInvoke`, `@AroundConstruct`, a lifecycle callback): its package. Other interceptor methods are called through code generated in their package and need nothing.
 
-From each type reached, the check follows the declared types of its fields and of its getters, generic arguments included, as long as they are classes of the application. [.tag-new]#NEW# It also follows the superclass of each type it reaches, whose fields and getters JSON-B and Jakarta Persistence read too, and, for a type that is an interface or an abstract class, the application classes that implement or extend it directly, one of which is what the field actually holds:
+From each type reached, the check follows the declared types of its fields and of its getters, generic arguments included, as long as they are classes of the application. [.tag-new]#NEW# It also follows the superclass of each type it reaches, whose fields and getters JSON-B, and Mansart when it falls back to reflection, read too, and, for a type that is an interface or an abstract class, the application classes that implement or extend it directly, one of which is what the field actually holds:
 
 ----
 BookResource ──returns──▶ List<Book> ──▶ Book ──field──▶ Author ──field──▶ Address
@@ -94,13 +94,20 @@ The usual reasons, and what to do:
 
 * an abstract class, an interface or `Object` as a property type — or a JSON-B customisation the generated code cannot honour (a `@JsonbCreator` parameter without a `@JsonbProperty` name in a dependency compiled without `-parameters`, `@JsonbTypeInfo` on an interface that is not sealed, `@JsonbVisibility`, `@JsonbPropertyOrder`…): keep it, and keep the `opens` the check asks for. [.tag-new]#NEW# Date and number formats, arrays, adapters, serializers and deserializers, creators, and `@JsonbTypeInfo` on a sealed interface over records are generated;
 * a property declared on several classes of a hierarchy (a getter overridden in a subclass), an interface with a default getter: same;
-* a JPA entity: Jakarta Persistence reaches it by reflection anyway, its package stays opened.
+* an entity (Jakarta Data): JSON-B keeps the reflective mapping for it, so an entity a resource returns as it is keeps its package opened, for JSON-B — return a record or a DTO to avoid it. Mansart itself needs no `opens` for it (xref:#entities[below]).
 
 [.tag-new]#NEW# An adapter, serializer or deserializer that is a CDI bean — injections included — is called by the generated binding too: the REST extension brings `champollion-jsonb-cdi`, whose registry hands the bindings the container's instances, one per application, destroyed when it stops, and whose build compatible extension, run by Vauban at build, fails the build when such a class is ambiguous or injects without being a bean (its injections would stay null) — xref:champollion::reference.adoc#jsonb-cdi[JSON-B and CDI].
 
 [.tag-new]#NEW# A type of a dependency — a DTO jar your resources return — cannot get its binding in your compilation. The processor lists it, with the types it holds, in `META-INF/champollion/dependency-types`, and `vidocq:generate` runs the processor over that jar: the bindings go into the jar's enriched copy (xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[brick processors]), so the library's packages need no `opens` either, not even a package it does not export.
 
 The output is the same as the reflective mapping, character for character (`@JsonbProperty`, `@JsonbTransient` and `@JsonbNillable` included). The details are in Champollion's reference, xref:champollion::reference.adoc#rest-bindings[Bindings for the types REST resources exchange].
+
+[#entities]
+== Entities and repositories (Jakarta Data)
+
+[.tag-new]#NEW# Mansart's processor, run by the `mansart-data` extension's codegen bundle, generates each entity's model (`_Book`), each repository's implementation (`BooksImpl`), the code that builds the records a JDQL query projects into, and, per package, a `_MansartComponents` service that hands them to Mansart by plain calls. Mansart reaches none of them by reflection, so a package of entities, repositories or projection records needs no `opens` for Jakarta Data, and `vidocq:check-module-info` and `vidocq doctor` do not ask for one when the generated `_MansartComponents` names the entity.
+
+They still ask for it when Mansart falls back to reflection: an entity no generated model covers (a module compiled without the processor), which Mansart then reads by reflection, as it does under another container (Weld, Open Liberty). The reason line says so: `opens com.acme.shop.data;   (com.acme.shop.data.Loan, an entity (Jakarta Data) without a model generated at build time)`. An entity a REST resource returns is still bound by JSON-B by reflection, above, and keeps that `opens`. The details are in Mansart's reference, xref:mansart::reference.adoc#application-modules[Your entities and repositories need no `opens`].
 
 [#limits]
 == What it cannot see

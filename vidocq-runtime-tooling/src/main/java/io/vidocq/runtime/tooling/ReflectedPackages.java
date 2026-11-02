@@ -25,6 +25,7 @@ import java.lang.classfile.ClassFile;
 import java.lang.classfile.ClassModel;
 import java.lang.classfile.FieldModel;
 import java.lang.classfile.MethodModel;
+import java.lang.classfile.constantpool.ClassEntry;
 import java.lang.module.ModuleDescriptor;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,10 +42,11 @@ import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 /**
  * The packages of the application that a runtime module reaches by reflection, read from the compiled classes
- * (BUG-20261030-24): the JPA entities, and the types a REST resource or provider takes or returns, with the types
+ * (BUG-20261030-24): the entities (Jakarta Data) Mansart has no model generated at build time for, and the types a REST resource or provider takes or returns, with the types
  * their fields and getters hold, transitively. JSON-B binds those types by reflection, so their package must be
  * opened, or at least exported, or the first request fails with an {@code IllegalAccessException}.
  *
@@ -55,7 +57,11 @@ import java.util.stream.Stream;
  * <p>The resources themselves are not listed: their dispatch is generated at build time. Nor are the types that have
  * a JSON-B binding generated at build time (champollion-codegen-apt, listed in the {@code JsonbBinding} services
  * file): JSON-B maps them without reflection, and the processor generates one only when every type they hold has one
- * too. A JPA entity still needs its package opened for JPA.</p>
+ * too.</p>
+ *
+ * <p>An entity's package is not listed when Mansart's processor generated its model (MANSART-038): the
+ * {@code _MansartComponents} its services file lists names the entity, and hands Mansart the model by plain calls. An
+ * entity it does not name is read by reflection, Mansart's fallback, and its package must be opened.</p>
  */
 public final class ReflectedPackages {
 
@@ -74,7 +80,9 @@ public final class ReflectedPackages {
 
     private static final String JSONB_BINDING = "io/vidocq/champollion/jsonb/spi/JsonbBinding";
     private static final String JSONB_BINDING_SERVICES = "META-INF/services/io.vidocq.champollion.jsonb.spi.JsonbBinding";
-    private static final String JPA_ENTITY = "a JPA entity";
+    private static final String ENTITY = "an entity (Jakarta Data) without a model generated at build time";
+    private static final String MANSART_COMPONENTS_SERVICES =
+            "META-INF/services/io.vidocq.mansart.data.core.GeneratedComponents";
     /** Where Champollion's processor lists the entities the code gives a JAX-RS {@code Response}. */
     static final String RESPONSE_ENTITIES = "META-INF/champollion/rest-entity-types";
     /** The type argument of {@code JsonbBinding<T>} in a binding's class signature. */
@@ -119,11 +127,14 @@ public final class ReflectedPackages {
         queue.addAll(responseEntities(classes));
         Map<String, List<String>> subtypes = subtypes(application);
         Set<String> bound = boundTypes(classes, application);
+        Set<String> modelled = mansartModelled(classes, application);
         Set<String> seen = new HashSet<>();
         while (!queue.isEmpty()) {
             String[] next = queue.poll();
             ClassModel model = application.get(next[0]);
-            if (model == null || bound.contains(next[0]) && !JPA_ENTITY.equals(next[1]) || !seen.add(next[0])) {
+            boolean entity = ENTITY.equals(next[1]);
+            if (model == null || entity && modelled.contains(next[0]) || bound.contains(next[0]) && !entity
+                    || !seen.add(next[0])) {
                 continue;
             }
             reasons.putIfAbsent(packageOf(next[0]), dotted(next[0]) + ", " + next[1]);
@@ -134,7 +145,7 @@ public final class ReflectedPackages {
 
     /**
      * What a reached type leads to, as {@code {class, how it is reached}}: the types its fields and getters hold, its
-     * superclass, whose inherited fields and getters JSON-B and JPA read too, and, for an interface or an abstract
+     * superclass, whose inherited fields and getters JSON-B and Mansart's reflective fallback read too, and, for an interface or an abstract
      * class, the application classes that implement or extend it directly — a field of that type holds one of them.
      */
     private static List<String[]> reachedFrom(ClassModel model, Map<String, List<String>> subtypes) {
@@ -237,7 +248,7 @@ public final class ReflectedPackages {
     }
 
     /**
-     * The starting points {@code model} gives, as {@code {class, how it is reached}}: itself when it is a JPA
+     * The starting points {@code model} gives, as {@code {class, how it is reached}}: itself when it is an
      * entity, and the types its public methods take or return when it is a REST resource or provider.
      */
     private static List<String[]> roots(ClassModel model) {
@@ -245,7 +256,7 @@ public final class ReflectedPackages {
         Set<String> annotations = annotations(model);
         List<String[]> roots = new ArrayList<>();
         if (annotations.stream().anyMatch(ENTITY_ANNOTATIONS::contains)) {
-            roots.add(new String[] {name, JPA_ENTITY});
+            roots.add(new String[] {name, ENTITY});
         }
         if (annotations.stream().anyMatch(RESOURCE_ANNOTATIONS::contains)) {
             model.methods().stream()
@@ -292,6 +303,28 @@ public final class ReflectedPackages {
                     .forEach(m -> bound.add(m.group(1)));
         }
         return bound;
+    }
+
+    /**
+     * The entities Mansart's processor generated a model for: the classes the {@code _MansartComponents} its services
+     * file lists refer to (MANSART-038).
+     */
+    private static Set<String> mansartModelled(Path classes, Map<String, ClassModel> application) throws IOException {
+        Path services = classes.resolve(MANSART_COMPONENTS_SERVICES);
+        Set<String> modelled = new HashSet<>();
+        if (!Files.isRegularFile(services)) {
+            return modelled;
+        }
+        try (Stream<String> lines = Files.lines(services)) {
+            lines.map(String::strip)
+                    .filter(provider -> !provider.isEmpty() && !provider.startsWith("#"))
+                    .map(provider -> application.get(provider.replace('.', '/')))
+                    .filter(java.util.Objects::nonNull)
+                    .flatMap(model -> StreamSupport.stream(model.constantPool().spliterator(), false))
+                    .filter(ClassEntry.class::isInstance)
+                    .forEach(entry -> modelled.add(((ClassEntry) entry).asInternalName()));
+        }
+        return modelled;
     }
 
     /** The types the non-static fields and the getters of {@code model} hold. */
