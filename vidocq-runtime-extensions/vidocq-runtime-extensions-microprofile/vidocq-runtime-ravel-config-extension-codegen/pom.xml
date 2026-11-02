@@ -25,12 +25,22 @@
         @Inject @ConfigProperty point fails the compilation as an unsatisfied
         dependency (ravel#21). Configuration values are still checked when the
         container starts, where the deployment's configuration is known.
+
+        Also runs Ravel's own processor (ravel-processor), which generates in the
+        application's packages the factories of its @ConfigProperties classes and the
+        implicit converters of its injected types: Ravel fills and converts them with
+        plain code instead of reflection, and those packages need no opens.
     </description>
 
     <dependencies>
         <dependency>
             <groupId>io.vidocq.ravel</groupId>
             <artifactId>ravel-cdi-vauban</artifactId>
+            <version>${ravel.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-processor</artifactId>
             <version>${ravel.version}</version>
         </dependency>
     </dependencies>
