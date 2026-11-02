@@ -4,7 +4,7 @@
 > sources into a coherent whole. This is exactly what a configuration system does.
 
 **Ravel** is a [MicroProfile Config 3.1](https://download.eclipse.org/microprofile/microprofile-config-3.1/microprofile-config-spec-3.1.html)
-implementation for the [Vidocq](https://forge.vidocq.dev/vidocq) ecosystem.
+implementation for the [Vidocq](https://codefloe.com/Vidocq) ecosystem.
 
 ## Principles
 

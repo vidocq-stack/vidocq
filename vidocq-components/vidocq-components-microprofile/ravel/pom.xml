@@ -47,9 +47,9 @@
     </licenses>
 
     <scm>
-        <url>https://forge.vidocq.dev/vidocq/ravel</url>
-        <connection>scm:git:https://forge.vidocq.dev/vidocq/ravel.git</connection>
-        <developerConnection>scm:git:git@forge.vidocq.dev:vidocq/ravel.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/ravel</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/ravel.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/ravel.git</developerConnection>
     </scm>
 
     <properties>
