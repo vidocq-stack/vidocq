@@ -41,11 +41,20 @@ module io.vidocq.cervantes.jaxrs {
     // classes cannot be loaded without this module. It also supplies the VaubanComponentProvider
     // service type.
     requires io.vidocq.vauban.api;
+    // Compile-only: the classes cassini-processor generates implement cassini-api types. Without Cassini in the
+    // runtime nothing loads them, and the module still resolves (a `provides` of a type whose module is absent is
+    // not checked when that module is only `requires static`).
+    requires static io.vidocq.cassini.api;
 
     // In-module instantiation of the no-arg @Provider beans (generated as _VaubanComponents),
     // so the container needs no reflection for them.
     provides io.vidocq.vauban.api.VaubanComponentProvider
             with io.vidocq.cervantes.jaxrs._VaubanComponents;
+
+    // The descriptors of the @Provider classes: Cassini reads them at startup instead of the annotations.
+    provides io.vidocq.cassini.spi.gen.ProviderDescriptor
+            with io.vidocq.cervantes.jaxrs.JwtAuthenticationFilter$$CassiniProvider,
+                 io.vidocq.cervantes.jaxrs.RolesAllowedDynamicFeature$$CassiniProvider;
 
     exports io.vidocq.cervantes.jaxrs;
     // No `opens … to io.vidocq.vauban.core`: the @Provider beans (auth filter, @RolesAllowed

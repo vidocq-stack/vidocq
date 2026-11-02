@@ -332,3 +332,9 @@ use the array references and print every component.
 `ParsedJwt` overrides `equals` and `hashCode` with `Arrays.equals` / `Arrays.hashCode`, and
 `toString()` prints the header, the claims and the array lengths, never the raw token. Regression
 test: `ParsedJwtTest`.
+
+## CERV-010 — Cassini reads the JAX-RS filters' annotations by reflection at startup
+- **Date**: 2026-11-02 — **Status**: FIXED (feat/provider-descriptors)
+- **Symptom**: the Vidocq reflection audit shows `FilterEntry` reading `@Priority`, `@PreMatching` and the name bindings of `JwtAuthenticationFilter` and `RolesAllowedDynamicFeature` by reflection at startup, because `cervantes-jaxrs` ships no Cassini provider descriptor.
+- **Fix**: `cervantes-jaxrs` runs `cassini-processor` (cassini-api in `provided` scope, `requires static io.vidocq.cassini.api`) and declares `provides io.vidocq.cassini.spi.gen.ProviderDescriptor` for both providers. A runtime without Cassini still resolves the module: a `provides` whose service module is only `requires static` and absent is not checked, and nothing loads the generated classes. `CassiniProviderDescriptorsTest` checks that `module-info` provides every descriptor the processor lists. Audit application: `FilterEntry` reflective calls 80 → 40 at startup; MP JWT TCK 208/208.
+

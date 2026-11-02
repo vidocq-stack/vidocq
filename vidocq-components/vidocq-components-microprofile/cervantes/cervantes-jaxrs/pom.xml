@@ -15,6 +15,13 @@
     <description>MicroProfile JWT 2.2 JAX-RS security: JwtAuthenticationFilter (bearer auth + SecurityContext), RolesAllowedDynamicFeature (@RolesAllowed/@PermitAll/@DenyAll). Standard JAX-RS API — validated against Cassini but implementation-agnostic.</description>
 
     <dependencies>
+        <!-- Compile-only: the classes cassini-processor generates implement cassini-api types. Only Cassini loads
+             them; on another JAX-RS runtime they stay unused. -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <!-- Validator + principal (cervantes-api) and CDI request context (cervantes-cdi-vauban) -->
         <dependency>
             <groupId>io.vidocq.cervantes</groupId>
@@ -112,6 +119,13 @@
                             <groupId>io.vidocq.vauban</groupId>
                             <artifactId>vauban-processor</artifactId>
                             <version>${vauban.version}</version>
+                        </path>
+                        <!-- The descriptors of the @Provider classes, which Cassini reads at startup instead of
+                             their annotations (cassini CASSINI-040); declared as `provides` in module-info.java. -->
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-processor</artifactId>
+                            <version>${cassini.version}</version>
                         </path>
                     </annotationProcessorPaths>
                     <compilerArgs>
