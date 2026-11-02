@@ -32,11 +32,11 @@ class FallbackHandleCacheTest {
 
     public static class Guarded {
         public String call(int n) {
-            return "call";
+            return "call " + n;
         }
 
         String recover(int n) {
-            return "fallback";
+            return "fallback " + n;
         }
     }
 
