@@ -4,4 +4,5 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
+* xref:internals.adoc#generated-code[Generated code and reflective fallback] — what is generated for Cervantes at build (by Vauban's and Cassini's processors and its `@Claim` extension, Cervantes having no generator of its own), what uses it at run time, and what is still read by reflection: the security annotations, once per resource method.
 * *The token stays out of logs* — `ParsedJwt`, a record with `byte[]` components, compares and hashes its arrays by content, and its `toString` no longer prints the raw token bytes (CERV-009).

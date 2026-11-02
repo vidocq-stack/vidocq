@@ -4,6 +4,50 @@
 [.lead]
 Cervantes strictly separates the validation engine (`cervantes-core`, pure Java, no HTTP, no CDI) from the integration layers (`cervantes-jaxrs` for JAX-RS, `cervantes-cdi-vauban` for CDI). This page details the validation sequence, the JAX-RS auth filter, the `@Claim` synthesis BCE, the thread-safe JWKS cache, and the threading invariants.
 
+[#generated-code]
+== Generated code and reflective fallback [.tag-new]#NEW#
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. Cervantes has no generator of its own: its jars
+are built with Vauban's and Cassini's processors, its `@Claim` beans are registered by an extension Vauban can run in
+javac, and the security annotations of a resource are read once, when Cassini builds its routes.
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| The `_VaubanComponents` and bean index of `cervantes-cdi-vauban` and `cervantes-jaxrs`
+| `vauban-processor`, at Cervantes's own build
+| Vauban (xref:vauban::internals.adoc#generated-code[Vauban])
+| Vauban's fallback.
+
+| The `$$CassiniProvider` descriptors of `JwtAuthenticationFilter` and `RolesAllowedDynamicFeature`
+| `cassini-processor`, at Cervantes's own build
+| Cassini, when it registers the providers (xref:cassini::internals.adoc#generated-code[Cassini])
+| Cassini reads their annotations by reflection.
+
+| The synthetic `@Claim` beans, one per injected claim type
+| `CervantesClaimExtension` (<<_vauban_bce_cervantesclaimextension>>), which Vauban runs in javac when
+  `cervantes-cdi-vauban` is on the processor path; on Vidocq the `vidocq-runtime-cervantes-jwt-extension-codegen`
+  bundle puts it there
+| Vauban, from the synthetic metadata the processor wrote
+| The extension runs at boot.
+|===
+
+Not generated: `RolesAllowedDynamicFeature` reads `@RolesAllowed`, `@PermitAll` and `@DenyAll` on each resource
+method and class by reflection, once per resource method when Cassini configures it, and registers the matching
+filter; nothing is read per request. The claim bean creator reads the `@Claim` of the injection point through the
+CDI `Annotated` view each time it creates a claim bean (`ClaimResolver`).
+
+=== When the fallback runs
+
+The reads above run in every deployment. The generated classes are part of Cervantes's jars; they are absent only on
+a container other than Vauban and Cassini, which ignores them.
+
+=== Which path ran
+
+Cervantes does not log which path it took.
+
 == Separation `cervantes-core` / integrations
 
 `cervantes-core` is pure Java. It depends only on `cervantes-mp-jwt-api` (spec), `cervantes-api` (public SPI), `jakarta.json` (parsing through xref:champollion::index.adoc[Champollion]), and on the MicroProfile Config SPI as a method signature — _not_ on any runtime implementation. It can be used outside any container: a unit test can generate an RSA pair, forge a token, and validate the whole thing without starting Cassini or Vauban.
