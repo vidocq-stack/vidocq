@@ -402,6 +402,8 @@ public final class ConfigResolver {
     public static void configurationChanged() {
         GENERATION.incrementAndGet();
         INTERCEPTOR_SETTINGS.set(null);
+        // A new deployment brings new classes: keys of the previous ones would only pin their class loader.
+        KEYS.clear();
     }
 
     static int generation() {
@@ -511,7 +513,30 @@ public final class ConfigResolver {
      *   <li>{@code <Annotation>/<param>}</li>
      * </ul>
      */
-    private static List<String> keys(
+    static List<String> keys(
+            Method method,
+            Class<?> beanClass,
+            Class<? extends Annotation> annotationType,
+            String annotationName,
+            String parameter,
+            boolean classLevelAppliesToAllMethods
+    ) {
+        // An interceptor resolves its policy on every invocation: the keys, which depend on annotations only, are
+        // computed once per method, class and parameter instead of reading those annotations each time.
+        return KEYS.computeIfAbsent(
+                new KeysOf(method, beanClass, annotationName, parameter, classLevelAppliesToAllMethods),
+                k -> computeKeys(method, beanClass, annotationType, annotationName, parameter,
+                        classLevelAppliesToAllMethods));
+    }
+
+    /** What the configuration keys of a policy parameter depend on. */
+    private record KeysOf(Method method, Class<?> beanClass, String annotationName, String parameter,
+                          boolean classLevelAppliesToAllMethods) {}
+
+    private static final java.util.concurrent.ConcurrentHashMap<KeysOf, List<String>> KEYS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static List<String> computeKeys(
             Method method,
             Class<?> beanClass,
             Class<? extends Annotation> annotationType,
@@ -532,7 +557,7 @@ public final class ConfigResolver {
         }
 
         keys.add(globalKey);
-        return keys;
+        return List.copyOf(keys);
     }
 
     @SuppressWarnings("unchecked")
