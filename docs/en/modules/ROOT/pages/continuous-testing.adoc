@@ -53,6 +53,19 @@ Both goals read `target/classes/vidocq.properties` when they open the dev servic
 on a clean project, `vidocq:test` alone found no configuration, and the Keycloak dev service fell back to the
 `master` realm. `vidocq test` and `vidocq dev` do it for you [.tag-new]#NEW#.
 
+[#once]
+== One run, for CI and scripts
+
+`vidocq:test` watches, so it never ends by itself. `vidocq test --once` [.tag-new]#NEW# runs every test once instead:
+the dev services start as usual, the tests run, the dev services stop, and the command exits with status 0 when
+they passed (or there was none to run), 1 when a test failed or the code does not compile.
+
+[source,bash]
+----
+vidocq test --once
+mvn process-classes vidocq:test -Dvidocq.test.once=true   # the same, without the CLI
+----
+
 [#when-tests-run]
 == When tests run
 

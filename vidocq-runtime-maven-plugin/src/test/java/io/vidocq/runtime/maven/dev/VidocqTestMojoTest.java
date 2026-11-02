@@ -137,4 +137,21 @@ class VidocqTestMojoTest {
         assertTrue(killed.get(), "the finally returned before the hook finished killing the test process");
         hook.join();
     }
+
+    private static TestResults result(TestResults.State state, TestResults.Counts counts) {
+        return new TestResults(state, TestResults.Trigger.RUN_ALL, java.time.Instant.EPOCH, 1, counts, List.of(), "",
+                null);
+    }
+
+    @Test
+    void theOneShotRunFailsOnlyWhenATestOrTheBuildFails() {
+        assertEquals(null, VidocqTestMojo.failure(result(TestResults.State.PASSED, new TestResults.Counts(3, 0, 0, 0))));
+        assertEquals(null, VidocqTestMojo.failure(result(TestResults.State.NO_TESTS, TestResults.Counts.NONE)));
+        assertEquals("2 of 5 test(s) failed",
+                VidocqTestMojo.failure(result(TestResults.State.FAILED, new TestResults.Counts(5, 1, 1, 0))));
+        assertEquals("the code does not compile",
+                VidocqTestMojo.failure(result(TestResults.State.COMPILE_ERROR, TestResults.Counts.NONE)));
+        assertTrue(VidocqTestMojo.failure(result(TestResults.State.ERROR, TestResults.Counts.NONE))
+                .contains("did not complete"));
+    }
 }

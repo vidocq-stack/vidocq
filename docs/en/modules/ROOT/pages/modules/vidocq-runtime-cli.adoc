@@ -228,8 +228,8 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | `vidocq start [--port] [--config] [--debug]`
 | Build and run the project's application, `mvn vidocq:run` (see <<start>>).
 
-| `vidocq test`
-| Run the tests on every change, without the application, `mvn vidocq:test` (see <<test>>).
+| `vidocq test [--once]`
+| Run the tests on every change, without the application, `mvn vidocq:test`; `--once` runs them once and exits (see <<test>>).
 
 | `vidocq idea [--check\|--strict] [--kind <kind>]`
 | Write, or check, the IntelliJ run configurations in `.run/`, `mvn vidocq:idea` (see <<idea>>).
@@ -365,6 +365,16 @@ project and starts the application with its dependencies and extensions on the m
 Runs `mvn vidocq:test` in the project, through `./mvnw` when there is one: every test, then again on each change
 of the main or test sources, without starting the application. `r` runs every test, `f` the failed ones, `q`
 quits. See xref:continuous-testing.adoc[Continuous testing].
+
+`vidocq test --once` [.tag-new]#NEW# is for CI and scripts, which a watch mode never gives back to: it runs every
+test once, stops the dev services, and exits with status 1 when a test fails or the code does not compile, 0
+otherwise (`mvn process-classes vidocq:test -Dvidocq.test.once=true`).
+
+[source,bash]
+----
+vidocq test            # watch: every test, then again on each change
+vidocq test --once     # CI: every test once, the exit status is the verdict
+----
 
 [#idea]
 === `vidocq idea`

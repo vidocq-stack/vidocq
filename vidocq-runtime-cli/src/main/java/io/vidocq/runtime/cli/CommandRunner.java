@@ -81,8 +81,9 @@ public final class CommandRunner {
             case Command.Start s               -> runStart(s);
             case Command.Dev d                 -> runDev(d);
             case Command.Doctor doc            -> runDoctor(doc);
-            case Command.ContinuousTest _      -> runMaven(RunGoals.test(), MavenInvocation.Options.none(), false,
-                    "Starting " + CliOutput.bold("continuous testing") + "…");
+            case Command.ContinuousTest t      -> runMaven(RunGoals.test(t.once()), MavenInvocation.Options.none(),
+                    false, t.once() ? "Running the tests once…"
+                            : "Starting " + CliOutput.bold("continuous testing") + "…");
             case Command.Idea(String check, String kind) -> runMaven(RunGoals.idea(check, kind),
                     MavenInvocation.Options.none(), false,
                     progress(check != null, "the IntelliJ run configurations"));

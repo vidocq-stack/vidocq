@@ -65,7 +65,12 @@ class RunGoalsTest {
      */
     @Test
     void testRunsTheContinuousTestingGoalAfterProcessClasses() {
-        assertEquals(List.of("process-classes", "vidocq:test"), RunGoals.test());
+        assertEquals(List.of("process-classes", "vidocq:test"), RunGoals.test(false));
+    }
+
+    @Test
+    void testOnceRunsEveryTestOnceAndEnds() {
+        assertEquals(List.of("process-classes", "vidocq:test", "-Dvidocq.test.once=true"), RunGoals.test(true));
     }
 
     /** Vidocq/vidocq#314: the commands of the goals the CLI had none for. */

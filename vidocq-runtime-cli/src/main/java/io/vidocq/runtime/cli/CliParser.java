@@ -43,6 +43,7 @@ public final class CliParser {
     private static final String DOCTOR = "doctor";
     private static final String DEBUG = "--debug";
     private static final String CHECK = "--check";
+    private static final String ONCE = "--once";
     private static final String VSCODE = "vscode";
     private static final String ECLIPSE = "eclipse";
     private static final String OPTIONS = "Options:";
@@ -150,10 +151,15 @@ public final class CliParser {
     }
 
     private static Command.ContinuousTest parseTest(String[] args, int from) {
-        if (args.length > from) {
-            unknownOpt(args[from], "test");
+        boolean once = false;
+        for (String arg : Arrays.asList(args).subList(from, args.length)) {
+            if (ONCE.equals(arg)) {
+                once = true;
+            } else {
+                unknownOpt(arg, "test");
+            }
         }
-        return new Command.ContinuousTest();
+        return new Command.ContinuousTest(once);
     }
 
     private static Command.Vscode parseVscode(String[] args, int from) {
@@ -448,10 +454,13 @@ public final class CliParser {
                         "--profile, -P <name>", "Config profile to activate (default: dev)",
                         DEBUG,              "Force the debug agent on (it is on by default in dev)");
             }
-            case "test" -> topic("test", "Continuous testing",
-                    "Runs 'mvn vidocq:test' in the project (./mvnw when present): every test, then",
-                    "again on each change of the main or test sources, without the application.",
-                    "Keys: r runs every test, f the failed ones, q quits.");
+            case "test" -> {
+                topic("test", "Continuous testing",
+                        "Runs 'mvn vidocq:test' in the project (./mvnw when present): every test, then",
+                        "again on each change of the main or test sources, without the application.",
+                        "Keys: r runs every test, f the failed ones, q quits.");
+                options(ONCE, "Run every test once and exit, with status 1 when one fails (for CI and scripts)");
+            }
             case "idea" -> {
                 topic("idea", "IntelliJ run configurations (experimental)",
                         "Runs 'mvn vidocq:idea' in the project (./mvnw when present): one dev, run and",

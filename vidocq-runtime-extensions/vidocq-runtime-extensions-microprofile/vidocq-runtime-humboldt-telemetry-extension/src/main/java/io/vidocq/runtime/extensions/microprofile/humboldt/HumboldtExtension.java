@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.microprofile.humboldt;
 
 import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.OpenTelemetry;
 import io.vidocq.humboldt.otel.interop.OtelSpiAutoConfiguration;
 import io.vidocq.humboldt.runtime.AutoConfiguredHumboldt;
 import io.vidocq.humboldt.runtime.EnvConfig;
@@ -68,6 +69,8 @@ public final class HumboldtExtension implements VidocqExtension {
     private VidocqConfiguration cfg;
     private AutoConfiguredHumboldt humboldt;
     private boolean disabled;
+    /** Whether this boot put {@link #humboldt} in {@code GlobalOpenTelemetry}: then its stop takes it out. */
+    private boolean installedGlobally;
 
     @Override
     public String name() {
@@ -126,27 +129,7 @@ public final class HumboldtExtension implements VidocqExtension {
         // Apps/tests can @Inject AutoConfiguredHumboldt through the holder bean.
         HumboldtHolder.publish(humboldt);
 
-        try {
-            GlobalOpenTelemetry.set(humboldt);
-            LOG.log(Level.INFO,
-                    "Humboldt installed as GlobalOpenTelemetry (service.name=" +
-                            env.getOrDefault("OTEL_SERVICE_NAME", "vidocq-app") + ")");
-        } catch (IllegalStateException _) {
-            // Sequential boots in the same JVM (e.g. TCK deployments) hit the
-            // set-once guard of GlobalOpenTelemetry: reset and retry ONCE. In
-            // production the set happens a single time and this path is never taken.
-            try {
-                GlobalOpenTelemetry.resetForTest();
-                GlobalOpenTelemetry.set(humboldt);
-                LOG.log(Level.WARNING,
-                        "GlobalOpenTelemetry was already set (previous boot in this JVM) - "
-                                + "replaced it with this Humboldt instance");
-            } catch (IllegalStateException _) {
-                LOG.log(Level.WARNING,
-                        "GlobalOpenTelemetry is already set by another component - "
-                                + "Humboldt remains active as a local SDK but will not be the global one");
-            }
-        }
+        installedGlobally = installGlobal(humboldt, env.getOrDefault("OTEL_SERVICE_NAME", "vidocq-app"));
         LOG.log(Level.INFO,
                 "Humboldt ready: traces/metrics/logs pipeline active (propagators={0})",
                 humboldt.getPropagators().getTextMapPropagator().fields());
@@ -159,6 +142,51 @@ public final class HumboldtExtension implements VidocqExtension {
         humboldt.flush().join(5, TimeUnit.SECONDS);
         humboldt.shutdown().join(5, TimeUnit.SECONDS);
         HumboldtHolder.publish(null);
+        if (installedGlobally) {
+            releaseGlobal();
+            installedGlobally = false;
+        }
+    }
+
+    /**
+     * Installs {@code otel} as {@code GlobalOpenTelemetry}, which can be set once per JVM. A boot after a stop of
+     * this extension finds it free (the stop releases it, see {@link #releaseGlobal}), as a hot reload of
+     * {@code vidocq dev} does; one that finds it taken, by a boot of an older runtime or by another component,
+     * replaces it and says so.
+     *
+     * @return whether {@code otel} is the global instance, so that this extension has to release it
+     */
+    // package-private for the unit test.
+    static boolean installGlobal(OpenTelemetry otel, String serviceName) {
+        try {
+            GlobalOpenTelemetry.set(otel);
+            LOG.log(Level.INFO, "Humboldt installed as GlobalOpenTelemetry (service.name=" + serviceName + ")");
+            return true;
+        } catch (IllegalStateException _) {
+            try {
+                GlobalOpenTelemetry.resetForTest();
+                GlobalOpenTelemetry.set(otel);
+                LOG.log(Level.WARNING,
+                        "GlobalOpenTelemetry was already set (previous boot in this JVM) - "
+                                + "replaced it with this Humboldt instance");
+                return true;
+            } catch (IllegalStateException _) {
+                LOG.log(Level.WARNING,
+                        "GlobalOpenTelemetry is already set by another component - "
+                                + "Humboldt remains active as a local SDK but will not be the global one");
+                return false;
+            }
+        }
+    }
+
+    /**
+     * Frees {@code GlobalOpenTelemetry} for the next boot of this JVM. OpenTelemetry names the only way to do it
+     * {@code resetForTest}; a runtime that boots again in the same JVM (a hot reload, a test deployment) is why it
+     * is used here.
+     */
+    // package-private for the unit test.
+    static void releaseGlobal() {
+        GlobalOpenTelemetry.resetForTest();
     }
 
     /**

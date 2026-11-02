@@ -53,7 +53,8 @@ public sealed interface Command {
     }
 
     /** {@code vidocq test}: the tests on every change, without the application ({@code mvn vidocq:test}). */
-    record ContinuousTest() implements Command {}
+    /** {@code vidocq test}; {@code once} runs every test once and exits, for CI and scripts. */
+    record ContinuousTest(boolean once) implements Command {}
 
     /**
      * {@code vidocq idea}: the IntelliJ run configurations ({@code mvn vidocq:idea}).

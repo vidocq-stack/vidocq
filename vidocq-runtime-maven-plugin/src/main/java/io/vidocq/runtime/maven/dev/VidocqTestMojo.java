@@ -28,6 +28,7 @@ import io.vidocq.runtime.maven.dev.TestResults.Trigger;
 import org.apache.maven.artifact.DependencyResolutionRequiredException;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
@@ -43,6 +44,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 
 /**
@@ -53,6 +56,9 @@ import java.util.function.Function;
  *
  * <p>Each run prints a summary; with a console, {@code r} runs every test, {@code f} the failed ones and {@code q}
  * quits. Ctrl+C always stops the goal, its run and its dev services.
+ *
+ * <p>With {@code -Dvidocq.test.once=true} ({@code vidocq test --once}) the goal does not watch: it runs every test
+ * once, stops the dev services, and ends with the verdict, so that a script or a CI job gets an exit status.
  *
  * <p>The goal resolves the test dependencies at start, dev services on or off: the PostgreSQL dev service looks for
  * its driver on that class path, and the tests it forks need the same resolution anyway, so an unresolvable
@@ -84,6 +90,13 @@ public class VidocqTestMojo extends AbstractMojo {
     @Parameter(property = "vidocq.dev.devServices")
     private Boolean devServices;
 
+    /**
+     * Run every test once and end with the verdict (the build fails when a test does) instead of watching the
+     * sources: for CI and scripts, which a watch mode never gives back to.
+     */
+    @Parameter(property = "vidocq.test.once", defaultValue = "false")
+    private boolean once;
+
     @Parameter(defaultValue = "${project.build.outputDirectory}", readonly = true)
     private File classesDir;
 
@@ -98,7 +111,7 @@ public class VidocqTestMojo extends AbstractMojo {
     private MavenProject project;
 
     @Override
-    public void execute() throws MojoExecutionException {
+    public void execute() throws MojoExecutionException, MojoFailureException {
         Path projectDir = baseDir.toPath();
         List<Path> mainDirs = VidocqDevMojo.parseDirs(projectDir, watchDirs);
         List<Path> testDirs = VidocqDevMojo.parseDirs(projectDir, testWatchDirs);
@@ -119,9 +132,15 @@ public class VidocqTestMojo extends AbstractMojo {
         if (session != null) {
             session.foldInto(testProps);
         }
-        boolean keys = TerminalControls.attached();
+        boolean keys = !once && TerminalControls.attached();
+        CompletableFuture<TestResults> verdict = new CompletableFuture<>();
         ContinuousTesting testing = ContinuousTesting.forProject(projectDir, buildDir.toPath(), testProps,
-                result -> TestSummaryPrinter.lines(result, true, keys).forEach(getLog()::info), getLog()::warn);
+                result -> {
+                    TestSummaryPrinter.lines(result, true, keys).forEach(getLog()::info);
+                    if (result.state().complete()) {
+                        verdict.complete(result);
+                    }
+                }, getLog()::warn);
 
         Thread mainThread = Thread.currentThread();
         Thread hook = new Thread(() -> {
@@ -130,6 +149,10 @@ public class VidocqTestMojo extends AbstractMojo {
         }, "vidocq-test-shutdown");
         Runtime.getRuntime().addShutdownHook(hook);
 
+        if (once) {
+            runOnce(testing, session, hook, verdict);
+            return;
+        }
         try (SourceWatcher watcher = SourceWatcher.on(mainDirs, testDirs, Duration.ofMillis(debounceMillis))) {
             getLog().info("Vidocq test — watching " + mainDirs + " and " + testDirs
                     + (keys ? "" : "; no console, so no keys: Ctrl+C to stop"));
@@ -158,6 +181,46 @@ public class VidocqTestMojo extends AbstractMojo {
                 // shutdown already in progress
             }
         }
+    }
+
+    /** The single run of {@code vidocq.test.once}: every test, then the verdict, the dev services stopped either way. */
+    // package-private for the unit test.
+    void runOnce(ContinuousTesting testing, DevServicesSession session, Thread hook,
+            CompletableFuture<TestResults> verdict) throws MojoExecutionException, MojoFailureException {
+        try {
+            getLog().info("Vidocq test — running every test once");
+            testing.start();
+            testing.changed(Trigger.RUN_ALL, TestControl.ReadyGate.NOW);
+            String failure = failure(verdict.get());
+            if (failure != null) {
+                throw new MojoFailureException(failure);
+            }
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
+            throw new MojoExecutionException("Vidocq test interrupted");
+        } catch (ExecutionException e) {
+            throw new MojoExecutionException("Vidocq test failed: " + e.getCause(), e);
+        } finally {
+            shutdown(testing, session);
+            try {
+                Runtime.getRuntime().removeShutdownHook(hook);
+            } catch (IllegalStateException _) {
+                // shutdown already in progress
+            }
+        }
+    }
+
+    /** Why {@code result} makes the one-shot run fail, or {@code null} when it passed (or had no test to run). */
+    // package-private for the unit test.
+    static String failure(TestResults result) {
+        return switch (result.state()) {
+            case PASSED, NO_TESTS -> null;
+            case FAILED -> result.counts().failures() + result.counts().errors() + " of "
+                    + result.counts().run() + " test(s) failed";
+            case COMPILE_ERROR -> "the code does not compile";
+            case ERROR, RUNNING, CANCELLED -> "the test run did not complete (" + result.state().wire()
+                    + "), see the log of the run";
+        };
     }
 
     /** Reads the keys on the daemon thread {@code vidocq-test-keys}; {@code q} closes the watcher. */
@@ -229,6 +292,10 @@ public class VidocqTestMojo extends AbstractMojo {
         } catch (DependencyResolutionRequiredException e) {
             throw new MojoExecutionException("vidocq:test needs the test class path: " + e.getMessage(), e);
         }
+    }
+
+    void setOnce(boolean once) {
+        this.once = once;
     }
 
     void setProject(MavenProject project) {

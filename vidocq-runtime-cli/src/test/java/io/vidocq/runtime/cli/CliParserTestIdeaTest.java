@@ -26,7 +26,6 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,8 +33,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CliParserTestIdeaTest {
 
     @Test
-    void testTakesNoOption() {
-        assertInstanceOf(Command.ContinuousTest.class, CliParser.parse(new String[]{"test"}));
+    void testWatchesByDefaultAndTakesOnlyOnce() {
+        assertEquals(new Command.ContinuousTest(false), CliParser.parse(new String[]{"test"}));
+        assertEquals(new Command.ContinuousTest(true), CliParser.parse(new String[]{"test", "--once"}));
         CliException ex = assertThrows(CliException.class, () -> CliParser.parse(new String[]{"test", "--bogus"}));
         assertTrue(ex.getMessage().contains("test"), ex.getMessage());
     }

@@ -63,10 +63,12 @@ public final class RunGoals {
     /**
      * {@code vidocq:test} after {@code process-classes}: the goal opens the dev services from
      * {@code target/classes/vidocq.properties} before its first run, which a clean project did not have yet
-     * (BUG-20261030-28). Each run then compiles through its own {@code process-test-classes}.
+     * (BUG-20261030-28). Each run then compiles through its own {@code process-test-classes}. With {@code once}, the
+     * goal runs every test once and ends with the verdict, for CI and scripts.
      */
-    public static List<String> test() {
-        return List.of("process-classes", "vidocq:test");
+    public static List<String> test(boolean once) {
+        return once ? List.of("process-classes", "vidocq:test", "-Dvidocq.test.once=true")
+                : List.of("process-classes", "vidocq:test");
     }
 
     /**
