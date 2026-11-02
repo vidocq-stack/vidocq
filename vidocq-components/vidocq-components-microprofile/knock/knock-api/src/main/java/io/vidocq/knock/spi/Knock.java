@@ -53,10 +53,20 @@ public final class Knock {
     }
 
     private static String loadVersion() {
-        try (InputStream in = Knock.class.getResourceAsStream("version.properties")) {
-            if (in == null) {
-                return UNKNOWN_VERSION;
-            }
+        return readVersion(Knock.class.getResourceAsStream("version.properties"));
+    }
+
+    /**
+     * The {@code version} entry of a filtered version resource, which this method closes.
+     *
+     * @param in the resource, or {@code null} when the build did not produce it
+     * @return the version, or {@code "unknown"} when the resource is missing, unreadable or has no such entry
+     */
+    static String readVersion(InputStream in) {
+        if (in == null) {
+            return UNKNOWN_VERSION;
+        }
+        try (in) {
             Properties props = new Properties();
             props.load(in);
             return props.getProperty("version", UNKNOWN_VERSION);

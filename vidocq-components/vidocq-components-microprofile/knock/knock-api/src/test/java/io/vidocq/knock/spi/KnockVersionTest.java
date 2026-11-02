@@ -21,8 +21,14 @@ package io.vidocq.knock.spi;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The published 0.2.0 artifact reported a hardcoded "0.1.0-SNAPSHOT" — the
@@ -49,5 +55,41 @@ class KnockVersionTest {
     @Test
     void specVersionIsStable() {
         assertEquals("4.0", Knock.SPEC_VERSION);
+    }
+
+    @Test
+    void aMissingVersionResourceReportsUnknown() {
+        assertEquals("unknown", Knock.readVersion(null));
+    }
+
+    @Test
+    void aVersionPropertyIsRead() {
+        InputStream in = new ByteArrayInputStream("version=1.2.3\n".getBytes(StandardCharsets.ISO_8859_1));
+        assertEquals("1.2.3", Knock.readVersion(in));
+    }
+
+    @Test
+    void aResourceWithoutTheVersionKeyReportsUnknown() {
+        InputStream in = new ByteArrayInputStream("other=1\n".getBytes(StandardCharsets.ISO_8859_1));
+        assertEquals("unknown", Knock.readVersion(in));
+    }
+
+    @Test
+    void anUnreadableVersionResourceReportsUnknownAndIsClosed() {
+        var closed = new boolean[1];
+        InputStream broken = new InputStream() {
+            @Override
+            public int read() throws IOException {
+                throw new IOException("unreadable");
+            }
+
+            @Override
+            public void close() {
+                closed[0] = true;
+            }
+        };
+
+        assertEquals("unknown", Knock.readVersion(broken));
+        assertTrue(closed[0], "the stream must be closed even when it cannot be read");
     }
 }
