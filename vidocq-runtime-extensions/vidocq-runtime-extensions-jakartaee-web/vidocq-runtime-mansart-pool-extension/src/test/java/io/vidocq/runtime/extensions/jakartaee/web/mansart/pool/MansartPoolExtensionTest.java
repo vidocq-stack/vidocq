@@ -93,6 +93,34 @@ class MansartPoolExtensionTest {
         }
     }
 
+    /**
+     * The holder is created by the factory the extension registers, a plain {@code new}: without one, Vauban creates a
+     * class added by {@code addBeanClass} through its constructor, by reflection.
+     */
+    @Test
+    void theHolderIsCreatedByItsFactoryNotByReflection() throws Exception {
+        ext.configure(MapConfig.of(Map.of(
+                "vidocq.pool.url", "jdbc:h2:mem:vid-pool-factory-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1")));
+        VaubanContainerBuilder builder = new VaubanContainerBuilder();
+        ext.beforeStart(builder);
+
+        Object factory = registeredFactory(builder, MansartPoolHolder.class);
+        assertNotNull(factory, "a factory is registered for MansartPoolHolder");
+        assertTrue(((io.vidocq.vauban.core.BeanFactory<?>) factory).create() instanceof MansartPoolHolder);
+    }
+
+    /** The factory the builder holds for {@code type}, read from its private map: the builder exposes none. */
+    static Object registeredFactory(VaubanContainerBuilder builder, Class<?> type) throws ReflectiveOperationException {
+        var field = VaubanContainerBuilder.class.getDeclaredField("factories");
+        field.setAccessible(true);
+        for (var entry : ((Map<?, ?>) field.get(builder)).entrySet()) {
+            if (entry.getKey().toString().equals(type.getName())) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
     @Test
     void allTypedPropertiesAreParsed() {
         ext.configure(MapConfig.of(Map.ofEntries(

@@ -62,4 +62,19 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Tests only: read the factories VaubanContainerBuilder holds, which it exposes no getter
+                         for, to check the holder bean is created by its factory and not by reflection. -->
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>@{argLine} --add-opens io.vidocq.vauban.core/io.vidocq.vauban.core.container=io.vidocq.runtime.extensions.jakartaee.web.mansart.pool</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

@@ -99,6 +99,8 @@ public final class HumboldtExtension implements VidocqExtension {
         // CDI.current() (the MP Telemetry TCK's InMemorySpanExporterProvider
         // does), which requires the container to be up.
         builder.addBeanClass(HumboldtHolder.class);
+        // Created by a plain constructor call, not through its constructor by reflection.
+        builder.addFactory(HumboldtHolder.class, HumboldtHolder::new);
     }
 
     @Override

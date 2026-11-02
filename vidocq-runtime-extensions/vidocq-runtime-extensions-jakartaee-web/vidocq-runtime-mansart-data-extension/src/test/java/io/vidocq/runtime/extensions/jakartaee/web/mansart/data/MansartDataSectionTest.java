@@ -171,10 +171,58 @@ class MansartDataSectionTest {
     }
 
     @Test
-    void startBuildsTheCatalogueFromTheBeanClasses() {
+    void startBuildsTheCatalogueFromTheBeanClassesWhenTheDevConsoleAsks() {
         ext.start(() -> List.of(OrderRepository.class), CatalogueFixtures::model);
 
         assertTrue(MansartDataLive.catalogue().isPresent());
+    }
+
+    /**
+     * Start reads no repository method and no entity model: the catalogue costs reflection over every repository and
+     * entity, so it is built when the dev console or a detailed report asks for it, never in production.
+     */
+    @Test
+    void inProductionTheCatalogueIsNeverBuilt() {
+        var models = new java.util.concurrent.atomic.AtomicInteger();
+        ext.start(() -> List.of(CatalogueFixtures.GadgetRepositoryImpl.class, OrderRepository.class), type -> {
+            models.incrementAndGet();
+            return CatalogueFixtures.model(type);
+        });
+
+        for (Verbosity verbosity : List.of(Verbosity.SUMMARY, Verbosity.OFF)) {
+            RecordedSection section = section(new ReportContext(LaunchMode.PROD, verbosity));
+            assertEquals("2 repositories", section.summary());
+            assertEquals(List.of(), section.anomalies());
+        }
+        assertEquals(0, models.get(), "no entity model was read");
+    }
+
+    @Test
+    void theDevConsoleBuildsTheCatalogueOnDemandOnce() {
+        var models = new java.util.concurrent.atomic.AtomicInteger();
+        ext.start(() -> List.of(OrderRepository.class), type -> {
+            models.incrementAndGet();
+            return CatalogueFixtures.model(type);
+        });
+        assertEquals(0, models.get());
+
+        var first = MansartDataLive.catalogue().orElseThrow();
+        int read = models.get();
+
+        assertTrue(read > 0);
+        assertSame(first, MansartDataLive.catalogue().orElseThrow());
+        assertEquals(read, models.get(), "built once");
+        assertEquals("1 entity, 1 repository, 1 method", section(new ReportContext(LaunchMode.PROD,
+                Verbosity.SUMMARY)).summary(), "once built, the summary says what it holds");
+    }
+
+    /** A production report asked to be detailed reads the catalogue. */
+    @Test
+    void aDetailedProductionReportBuildsTheCatalogue() {
+        ext.start(() -> List.of(OrderRepository.class), CatalogueFixtures::model);
+
+        assertEquals("1 entity, 1 repository, 1 method",
+                section(new ReportContext(LaunchMode.PROD, Verbosity.DETAILED)).summary());
     }
 
     @Test

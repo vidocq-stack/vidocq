@@ -359,6 +359,9 @@ record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans
             case REFLECTION -> "reflection";
             case UNKNOWN -> "unknown";
             case NOT_APPLICABLE -> "n/a";
+            // A verdict a newer Vauban adds (a bean its builder creates by a registered factory, for instance) reads
+            // as its name until the console names it: the console keeps compiling against either Vauban.
+            default -> verdict.name().toLowerCase(Locale.ROOT).replace('_', ' ');
         };
     }
 

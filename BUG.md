@@ -5,6 +5,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261102-04 — Production boots read the Mansart Data catalogue and created holder beans by reflection
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `perf/holder-factories-lazy-catalogue`. (1) `MansartPoolExtension` and `HumboldtExtension` add their holder bean with `addBeanClass`, which Vauban creates through its constructor by reflection (the dev console's coverage panel: "reflection"); each now also registers `addFactory(Holder.class, Holder::new)` (`MansartPoolExtensionTest.theHolderIsCreatedByItsFactoryNotByReflection`, `HumboldtHolderFactoryTest`, both red before; the tests read the builder's factories with a test-only `--add-opens`). (2) `MansartDataIntegrationExtension` built the catalogue — every repository method, generic signature and entity model, by reflection — at every boot, production included; it now keeps what `onStart` found and builds the catalogue the first time the dev console (`MansartDataLive.catalogue()`) or a startup report in dev or at `detailed` asks for it. A production report at `summary` or `off` reads `N repositories` and never builds it, so MANSART-DATA-001 is not raised there (`inProductionTheCatalogueIsNeverBuilt`, `theDevConsoleBuildsTheCatalogueOnDemandOnce`, `aDetailedProductionReportBuildsTheCatalogue`; red before). (3) The dev console's `CdiInventory.label` gets a `default` branch, so a codegen verdict a newer Vauban adds (a bean created by a registered factory) reads as its name instead of breaking the build (`CodegenLabelTest`).
+- **Reported by**: the reflection audit of the standard Vidocq path
+- **Minimal reproduction**: start a packaged application with `mansart-pool` and `mansart-data`: the coverage panel lists `MansartPoolHolder`'s constructor as reflection, and the boot reads every repository and entity for a report section that only prints a summary.
+- **Cause hypothesis**: the holders predate `addFactory`; the catalogue was written for the dev console and the report alike, built eagerly.
+
 ## BUG-20261102-03 — A normal-scoped @Named bean was read by reflection in EL, its accessor table never applied
 
 - **Date**: 2026-11-02

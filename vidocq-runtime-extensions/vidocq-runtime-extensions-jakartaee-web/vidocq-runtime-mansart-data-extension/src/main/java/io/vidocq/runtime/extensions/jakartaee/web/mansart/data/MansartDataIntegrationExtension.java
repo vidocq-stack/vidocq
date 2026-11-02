@@ -29,6 +29,7 @@ import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
+import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.Verbosity;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.spi.Bean;
@@ -64,7 +65,9 @@ import java.util.function.Supplier;
  *       {@code @Repository} interfaces that have been wired, so an operator can confirm at a
  *       glance that the APT generation + BCE discovery actually fired.</li>
  *   <li><b>Catalogue</b>: reads those repositories and, through {@link EntityModels#of}, the model Mansart uses for
- *       each primary entity, once, into a {@link MansartDataCatalogue} of names and texts. It is the
+ *       each primary entity, once, into a {@link MansartDataCatalogue} of names and texts, when it is first asked
+ *       for — by the dev console, or by a startup report in dev or at {@code detailed}; a production boot reports the
+ *       number of repositories and never reads it. It is the
  *       {@code mansart-data} section of the startup report, and the {@code vidocq-runtime-mansart-data-extension-dev}
  *       companion, which only {@code vidocq:dev} adds, shows it live from {@link MansartDataLive}. An entity whose
  *       model cannot be read raises {@value #ANOMALY}; nothing here fails the boot or opens a connection.</li>
@@ -98,6 +101,15 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
     /** Why there is no catalogue although {@code onStart} ran: the class of the exception; {@code null} otherwise. */
     private volatile String unavailable;
 
+    /**
+     * What {@code onStart} found, to build the catalogue from when it is asked for: {@code null} before
+     * {@code onStart}, after {@code onStop}, and once the catalogue is built.
+     */
+    private volatile Pending pending;
+
+    /** The repositories {@code onStart} found, and how to read an entity's model. */
+    private record Pending(List<Class<?>> repositories, Function<Class<?>, EntityModel<?>> models) {}
+
     @Override
     public String name() {
         return "mansart-data";
@@ -129,9 +141,11 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
     }
 
     /**
-     * Finds the repositories among {@code beanClasses}, logs them, builds the catalogue and publishes the repository
-     * interfaces for the {@code -dev} panel's actions; never throws, the boot never fails for it, not even when
-     * listing the beans or reading their interfaces does. Visible for tests.
+     * Finds the repositories among {@code beanClasses}, logs them and publishes the repository interfaces for the
+     * {@code -dev} panel's actions; never throws, the boot never fails for it, not even when listing the beans or
+     * reading their interfaces does. The catalogue, which reads every repository method and entity model by
+     * reflection, is built only when it is asked for: by the dev console, or by a startup report in dev or at
+     * {@code detailed} — never in a production boot. Visible for tests.
      */
     void start(Supplier<Iterable<Class<?>>> beanClasses, Function<Class<?>, EntityModel<?>> models) {
         List<Class<?>> repositories;
@@ -145,8 +159,21 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
             return;
         }
         logRepositoryInventory(repositories);
-        catalogue(repositories, models);
+        catalogue.set(null);
+        unavailable = null;
+        pending = new Pending(List.copyOf(repositories), models);
         MansartDataLive.publishRepositories(repositories);
+        MansartDataLive.publishSource(this::catalogueOnDemand);
+    }
+
+    /** The catalogue, built from what {@code onStart} found the first time it is asked for; {@code null} without. */
+    synchronized MansartDataCatalogue catalogueOnDemand() {
+        Pending found = pending;
+        if (catalogue.get() == null && found != null) {
+            pending = null;
+            catalogue(found.repositories(), found.models());
+        }
+        return catalogue.get();
     }
 
     /** Builds the catalogue with the limits of the spec, keeps it and publishes it. Visible for tests. */
@@ -175,6 +202,7 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
         MansartDataLive.clear();
         catalogue.set(null);
         unavailable = null;
+        pending = null;
     }
 
     /**
@@ -183,7 +211,13 @@ public final class MansartDataIntegrationExtension implements VidocqExtension, S
      */
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        MansartDataCatalogue read = catalogue.get();
+        Pending found = pending;
+        if (found != null && context.launchMode() != LaunchMode.DEV && context.verbosity() != Verbosity.DETAILED) {
+            // A production boot: the repositories only, without reading their methods and entities.
+            section.summary(count(found.repositories().size(), "repository", "repositories"));
+            return;
+        }
+        MansartDataCatalogue read = catalogueOnDemand();
         if (read == null) {
             String why = unavailable;
             section.summary(why == null ? "no catalogue: the extension did not start" : "no catalogue (" + why + ")");

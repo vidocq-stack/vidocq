@@ -826,7 +826,7 @@ When the container cannot say which beans it has, no pool is flagged: the report
 [#mansart-data-catalogue]
 == The Mansart Data catalogue in the startup report and the dev console
 
-`vidocq-runtime-mansart-data-extension` writes the section `mansart-data`, *Mansart Data*, of the xref:modules/vidocq-runtime-core.adoc#startup-report[startup report]: what Mansart Data knows about the application, read once per boot from the CDI container and by reflection. Under `mvn vidocq:dev`, its companion `vidocq-runtime-mansart-data-extension-dev` shows it in the xref:dev-console.adoc[dev console] as the *Mansart Data* tab, one card per entity with its repositories inside. Nothing here opens a connection or runs a query.
+`vidocq-runtime-mansart-data-extension` writes the section `mansart-data`, *Mansart Data*, of the xref:modules/vidocq-runtime-core.adoc#startup-report[startup report]: what Mansart Data knows about the application, read once per boot from the CDI container and by reflection. [.tag-new]#NEW# That reading is done only when something asks for it: the dev console, or a startup report in dev or at `detailed`. A production boot never reads the repositories' methods nor the entities' models; its summary is the number of repositories, `2 repositories`, and xref:#mansart-data-001[MANSART-DATA-001] is not raised there. Under `mvn vidocq:dev`, its companion `vidocq-runtime-mansart-data-extension-dev` shows it in the xref:dev-console.adoc[dev console] as the *Mansart Data* tab, one card per entity with its repositories inside. Nothing here opens a connection or runs a query.
 
 *Repositories.* Every `@Repository` interface a bean implements, once: the implementation `mansart-data-processor` generates and its interface count as one. The primary entity and the id type come from the type arguments of `BasicRepository`, `CrudRepository` or `DataRepository`, however deep in the super-interfaces; a repository without one is listed under *Other repositories*. Its declared methods, in name order:
 
@@ -895,7 +895,7 @@ Mansart could not build the model of a repository's primary entity: its generate
 [MANSART-DATA-001] The model of entity com.acme.Invoice could not be read (io.vidocq.mansart.data.core.MansartDataException) Check its mapping annotations; Mansart could not build its model, so its repositories may fail too.
 ----
 
-Check the entity's `jakarta.persistence` annotations, its id and its constructor, and that its package is open to `io.vidocq.mansart.data.core`.
+Check the entity's `jakarta.persistence` annotations, its id and its constructor. An entity Mansart has a generated model for needs no `opens` (xref:java-modules.adoc#entities[Entities and repositories]).
 
 [#mansart-data-run-method]
 == Running a repository method from the dev console
