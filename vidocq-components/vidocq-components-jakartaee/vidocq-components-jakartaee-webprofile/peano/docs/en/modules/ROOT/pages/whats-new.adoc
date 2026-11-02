@@ -4,4 +4,6 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
+* xref:reference.adoc#automatic-selection[Accessor tables without `@ELAccessible`] — the processor also generates tables for the `@Named` and `@Model` beans a page reaches by name and for the application types their properties hold; `-Apeano.autoAccessors=false` turns it off (EL-022).
+* xref:reference.adoc#container-proxies[A bean's table serves its client proxy] — a normal-scoped bean reaches EL as its container's proxy; its generated table now serves it when a `ProxyUnwrapper` service names the bean class (EL-022).
 * `MethodDescriptor` prints its parameter types and annotations by content instead of by array identity, and compares them by content: two descriptors of the same method print and compare equal (EL-021).

@@ -55,6 +55,17 @@ public abstract class AccessorTable extends ELResolver {
     public abstract Class<?> targetType();
 
     /**
+     * Whether a base of this runtime class is served by this table: the target type itself, or a container proxy
+     * of it a registered {@link ProxyUnwrapper} recognises. Generated tables call it for their exact-class check.
+     *
+     * @param runtime runtime class of the base
+     * @return true when this table serves the base
+     */
+    protected final boolean serves(Class<?> runtime) {
+        return runtime == targetType() || ProxyUnwrappers.proxiedClass(runtime) == targetType();
+    }
+
+    /**
      * Returns generated metadata without invoking the referenced method.
      *
      * @param context evaluation context

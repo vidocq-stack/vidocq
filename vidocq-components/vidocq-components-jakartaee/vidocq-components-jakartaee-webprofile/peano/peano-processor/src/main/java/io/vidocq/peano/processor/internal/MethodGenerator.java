@@ -98,7 +98,7 @@ final class MethodGenerator {
 
     private static void appendDispatchHeader(StringBuilder text) {
         text.append("    private boolean methodTarget(jakarta.el.ELContext context, java.lang.Object base) {\n")
-                .append("      java.util.Objects.requireNonNull(context); return base != null && (base.getClass()==targetType()")
+                .append("      java.util.Objects.requireNonNull(context); return base != null && (serves(base.getClass())")
                 .append(" || base instanceof jakarta.el.ELClass c && c.getKlass()==targetType());\n    }\n")
                 .append("    private boolean hasMethod(java.lang.String name, boolean staticOnly) {\n")
                 .append("      for(var descriptor:METHODS) if(descriptor.name().equals(name) && (!staticOnly || descriptor.staticMethod())) return true;\n")

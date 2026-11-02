@@ -65,6 +65,9 @@ public final class AccessorCatalog {
     public static AccessorCatalog load(ClassLoader loader) {
         var accessors = new ArrayList<AccessorTable>();
         try {
+            for (io.vidocq.peano.spi.ProxyUnwrapper unwrapper : ServiceLoader.load(io.vidocq.peano.spi.ProxyUnwrapper.class, loader)) {
+                io.vidocq.peano.spi.ProxyUnwrappers.register(unwrapper);
+            }
             for (AccessorProvider provider : ServiceLoader.load(AccessorProvider.class, loader)) {
                 Collection<? extends AccessorTable> contributed = provider.accessors();
                 if (contributed == null) throw new ELException("Accessor provider returned null tables");

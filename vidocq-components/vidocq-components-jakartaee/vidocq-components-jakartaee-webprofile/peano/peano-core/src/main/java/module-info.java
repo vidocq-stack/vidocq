@@ -32,6 +32,7 @@ module io.vidocq.peano.core {
     requires io.vidocq.peano.api;
     exports io.vidocq.peano.core.internal.syntax to io.vidocq.peano.compiler;
     uses io.vidocq.peano.spi.AccessorProvider;
+    uses io.vidocq.peano.spi.ProxyUnwrapper;
     uses io.vidocq.peano.spi.TypeConversionProvider;
     provides jakarta.el.ExpressionFactory with io.vidocq.peano.core.internal.PeanoExpressionFactory;
 }

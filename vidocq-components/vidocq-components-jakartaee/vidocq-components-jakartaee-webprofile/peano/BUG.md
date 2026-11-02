@@ -3,6 +3,23 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## EL-022 · 2026-11-02 · A page's @Named bean was read by reflection unless annotated @ELAccessible
+
+- Symptom: in a Vidocq application, `${cart.lines}` on a CDI `@Named` bean, and on the types its properties hold,
+  went through the reflective `BeanELResolver`: the processor only generated accessor tables for types selected
+  by `@ELAccessible` or `peano.accessorTypes`. A normal-scoped bean was not served by its table either, even when
+  selected: EL receives the container's client proxy, a subclass, and generated tables accepted their exact class only.
+  Found by the reflection audit of the standard Vidocq path (2026-11-02).
+- Minimal reproduction: `PropertyProcessorTest.selectsNamedBeansAndTheApplicationTypesTheirPropertiesHoldWithoutAnnotation`;
+  `ProxyUnwrapperTest.aRegisteredUnwrapperLetsTheBeanTableServeItsProxyAndNothingElse`.
+- Cause: selection was explicit only; the exact-class check had no notion of a container proxy.
+- Status: fixed on branch `feat/el-auto-accessors`: the processor also selects the classes and producer methods
+  annotated `@jakarta.inject.Named` or `@jakarta.enterprise.inject.Model` and, transitively, the application
+  classes and records their properties hold (through collections, maps, optionals and arrays); a type that cannot
+  get a table is left to the reflective fallback without an error; `-Apeano.autoAccessors=false` turns the
+  selection off. Generated tables check their target through `AccessorTable.serves`, which also accepts a
+  container proxy a registered `ProxyUnwrapper` (found with the accessor providers) names.
+
 ## EL-021 · 2026-10-29 · MethodDescriptor text hid its parameter types and annotations
 
 - Symptom: `io.vidocq.peano.spi.MethodDescriptor.toString()` printed array identities

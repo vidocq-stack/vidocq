@@ -373,6 +373,60 @@ class PropertyProcessorTest {
         assertEquals(0,result.status(),result.log());
     }
 
+    /**
+     * A {@code @Named} bean is what a page reaches by name: its type, and the application types its properties
+     * hold, get accessor tables without {@code @ELAccessible}, so the page needs no reflection. A type that cannot
+     * get a table (ambiguous setter) is left to the reflective fallback silently; an unreachable type gets none.
+     */
+    @Test
+    void selectsNamedBeansAndTheApplicationTypesTheirPropertiesHoldWithoutAnnotation() throws Exception {
+        Path source = temporary.resolve("sources");
+        Files.createDirectories(source);
+        Files.writeString(source.resolve("module-info.java"),
+                "module peano.autoselect { requires io.vidocq.peano.api; }");
+        Files.writeString(source.resolve("Named.java"),
+                "package jakarta.inject; public @interface Named { String value() default \"\"; }");
+        Files.writeString(source.resolve("Cart.java"), """
+                package demo;
+                @jakarta.inject.Named public class Cart {
+                    public java.util.List<Line> getLines() { return java.util.List.of(); }
+                    public Customer getCustomer() { return null; }
+                    public Odd getOdd() { return null; }
+                }""");
+        Files.writeString(source.resolve("Line.java"), "package demo; public class Line { public String getDish() { return \"\"; } }");
+        Files.writeString(source.resolve("Customer.java"), "package demo; public record Customer(String name) {}");
+        Files.writeString(source.resolve("Odd.java"), """
+                package demo; public class Odd {
+                    public void setValue(String v) {} public void setValue(Integer v) {}
+                }""");
+        Files.writeString(source.resolve("Unused.java"), "package demo; public class Unused { public int getX() { return 1; } }");
+        var compilation = compile(source);
+        String log = compilation.log();
+        assertEquals(0, compilation.status(), log);
+        Path generated = temporary.resolve("generated/demo");
+        assertTrue(Files.exists(generated.resolve("Cart__PeanoAccessors.java")), log);
+        assertTrue(Files.exists(generated.resolve("Line__PeanoAccessors.java")), log);
+        assertTrue(Files.exists(generated.resolve("Customer__PeanoAccessors.java")), log);
+        assertFalse(Files.exists(generated.resolve("Odd__PeanoAccessors.java")), log);
+        assertFalse(Files.exists(generated.resolve("Unused__PeanoAccessors.java")), log);
+        assertFalse(log.contains("error"), log);
+    }
+
+    /** The automatic selection can be switched off: only @ELAccessible and peano.accessorTypes select. */
+    @Test
+    void theAutomaticSelectionCanBeSwitchedOff() throws Exception {
+        Path source = temporary.resolve("sources");
+        Files.createDirectories(source);
+        Files.writeString(source.resolve("module-info.java"), "module peano.autooff { requires io.vidocq.peano.api; }");
+        Files.writeString(source.resolve("Named.java"),
+                "package jakarta.inject; public @interface Named { String value() default \"\"; }");
+        Files.writeString(source.resolve("Cart.java"),
+                "package demo; @jakarta.inject.Named public class Cart { public int getSize() { return 1; } }");
+        var compilation = compile(source, "-Apeano.autoAccessors=false");
+        assertEquals(0, compilation.status(), compilation.log());
+        assertFalse(Files.exists(compilation.generated().resolve("demo/Cart__PeanoAccessors.java")));
+    }
+
     private Path sources(String model) throws Exception {
         Path source = temporary.resolve("sources");
         Files.createDirectories(source);

@@ -318,7 +318,7 @@ Each operation (getValue, getType, setValue, isReadOnly, method invocation and m
 metadata) tries the matching tables in that order and stops at the first one that resolves it:
 the table sets the resolution flag, or returns a method reference. A table that leaves the
 operation unresolved passes it to the next matching table. Generated tables accept their exact
-class only, so a subclass without its own table falls through its generated superclass table
+class only — or a container proxy of it, see below — so a subclass without its own table falls through its generated superclass table
 to, for instance, a handwritten table on an interface it implements. When no matching table
 resolves the operation, it falls through to the rest of the resolver chain, which applies the
 reflection policy above. getCommonPropertyType comes from the first matching table that reports
@@ -395,11 +395,23 @@ interface signatures use erasure; generic functional methods receive diagnostics
 Annotated and explicit roots also select accessible source descendants in the current
 compilation, including nested and later-round declarations. Each type has its own
 provider and registration fragment. Register every required provider in module-info.java.
+[[container-proxies]][.tag-new]#NEW# A CDI container hands EL a client proxy of a normal-scoped bean: a subclass
+that delegates every call to the contextual instance. A generated table serves it as it serves its target when a
+`io.vidocq.peano.spi.ProxyUnwrapper` service, found next to the accessor providers, names the target as the class
+the proxy stands for (`AccessorTable.serves`). Vidocq provides the unwrapper for Vauban's proxies. Without one, the
+proxy falls through to the rest of the chain, as any subclass does.
+
 Binary descendants are not inferred; unselected private descendants are skipped.
 This family selection depends on compilation roots and is not build-tool isolating
 incremental processing.
 
 * `io.vidocq.peano.annotation.ELAccessible`: SOURCE-retained TYPE annotation on an owned class or record.
+* [[automatic-selection]][.tag-new]#NEW# Automatic selection, with no annotation: the classes and producer methods
+  annotated `@jakarta.inject.Named` or `@jakarta.enterprise.inject.Model` — the beans a page reaches by name — and,
+  transitively, the classes and records of the module their readable or writable properties hold, through
+  collections, maps, optionals and arrays. A reached type that cannot get a table (abstract, ambiguous setter,
+  type-variable property, private enclosing class) is left to the reflective fallback without an error.
+  `-Apeano.autoAccessors=false` turns it off.
 * `-Apeano.accessorTypes=pkg.Type,pkg.Other`: comma-separated owned type names, including models produced by another processor in a later round.
 * Generated provider: `pkg.Type__PeanoAccessors` (nested binary names retain their dollar separators).
 * Registration fragment: `META-INF/peano/accessor-providers/pkg.Type__PeanoAccessors.txt`.
