@@ -49,7 +49,9 @@ class ProxyUnwrapperTest {
             return ((Cart) base).getOwner();
         }
         @Override public Class<?> getType(ELContext c, Object b, Object p) { return null; }
-        @Override public void setValue(ELContext c, Object b, Object p, Object v) { }
+        @Override public void setValue(ELContext c, Object b, Object p, Object v) {
+            // Read-only table: the test only reads.
+        }
         @Override public boolean isReadOnly(ELContext c, Object b, Object p) { return true; }
         @Override public Class<?> getCommonPropertyType(ELContext c, Object b) { return null; }
     }

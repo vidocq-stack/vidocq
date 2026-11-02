@@ -21,6 +21,7 @@ package io.vidocq.peano.spi;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The registered {@link ProxyUnwrapper}s and their cached answers. The engine registers the unwrappers it finds
@@ -29,7 +30,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public final class ProxyUnwrappers {
     private static final List<ProxyUnwrapper> UNWRAPPERS = new CopyOnWriteArrayList<>();
-    private static volatile ClassValue<Class<?>> answers = newCache();
+    private static final AtomicReference<ClassValue<Class<?>>> ANSWERS = new AtomicReference<>(newCache());
 
     private ProxyUnwrappers() {}
 
@@ -44,7 +45,7 @@ public final class ProxyUnwrappers {
             if (registered.getClass() == unwrapper.getClass()) return;
         }
         UNWRAPPERS.add(unwrapper);
-        answers = newCache();
+        ANSWERS.set(newCache());
     }
 
     /**
@@ -54,7 +55,7 @@ public final class ProxyUnwrappers {
      * @return the proxied class, or null when no registered unwrapper knows {@code runtime} as a proxy
      */
     public static Class<?> proxiedClass(Class<?> runtime) {
-        return runtime == null || UNWRAPPERS.isEmpty() ? null : answers.get(runtime);
+        return runtime == null || UNWRAPPERS.isEmpty() ? null : ANSWERS.get().get(runtime);
     }
 
     private static ClassValue<Class<?>> newCache() {

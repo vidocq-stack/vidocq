@@ -166,15 +166,19 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
         for (Element root : round.getRootElements()) collectNamed(root, queue);
         while (!queue.isEmpty()) {
             TypeElement type = queue.poll();
-            if (!autoVisited.add(type.getQualifiedName().toString())) continue;
-            List<Property> properties = probe(type);
-            if (properties == null) continue;
+            if (autoVisited.add(type.getQualifiedName().toString())) visit(type, queue);
+        }
+    }
+
+    /** Generates the table of a type the selection reached, then queues the types its properties hold. */
+    private void visit(TypeElement type, java.util.Deque<TypeElement> queue) {
+        probe(type).ifPresent(properties -> {
             generate(type);
             for (Property property : properties) {
                 if (property.getter() != null) reachable(property.getter().getReturnType(), queue);
                 if (property.setter() != null) reachable(property.setter().getParameters().getFirst().asType(), queue);
             }
-        }
+        });
     }
 
     private void collectNamed(Element element, java.util.Deque<TypeElement> queue) {
@@ -205,18 +209,18 @@ public final class PeanoAccessorProcessor extends AbstractProcessor {
     }
 
     /**
-     * The properties of a type the automatic selection may give a table, or null: only a concrete class or a record
+     * The properties of a type the automatic selection may give a table, if any: only a concrete class or a record
      * of this module that a package table can reach, whose properties are unambiguous. Nothing is reported.
      */
-    private List<Property> probe(TypeElement type) {
+    private java.util.Optional<List<Property>> probe(TypeElement type) {
         if ((type.getKind() != ElementKind.CLASS && type.getKind() != ElementKind.RECORD)
                 || type.getModifiers().contains(Modifier.ABSTRACT) || !eligibleSubtype(type)
-                || unresolvedHierarchy(type.asType(), new HashSet<>())) return null;
+                || unresolvedHierarchy(type.asType(), new HashSet<>())) return java.util.Optional.empty();
         quiet = true;
         quietFailure = false;
         try {
             List<Property> properties = properties(type);
-            return quietFailure ? null : properties;
+            return quietFailure || properties == null ? java.util.Optional.empty() : java.util.Optional.of(properties);
         } finally {
             quiet = false;
         }
