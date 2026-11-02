@@ -49,7 +49,7 @@
     <scm>
         <url>https://codefloe.com/Vidocq/knock</url>
         <connection>scm:git:https://codefloe.com/Vidocq/knock.git</connection>
-        <developerConnection>scm:git:git@forge.vidocq.dev:vidocq/knock.git</developerConnection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/knock.git</developerConnection>
     </scm>
 
     <properties>
