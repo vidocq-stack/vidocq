@@ -64,4 +64,26 @@ class GlobalOpenTelemetryReleaseTest {
 
         assertTrue(HumboldtExtension.installGlobal(OpenTelemetry.noop(), "app"));
     }
+
+    @Test
+    void theStopOfABootThatTookTheSlotFreesIt() {
+        HumboldtExtension extension = new HumboldtExtension();
+        extension.installedGlobally(HumboldtExtension.installGlobal(OpenTelemetry.noop(), "app"));
+
+        extension.releaseIfInstalled();
+
+        OpenTelemetry next = OpenTelemetry.noop();
+        assertDoesNotThrow(() -> GlobalOpenTelemetry.set(next));
+    }
+
+    @Test
+    void theStopOfABootThatDidNotTakeTheSlotLeavesItAlone() {
+        GlobalOpenTelemetry.set(OpenTelemetry.noop());
+        HumboldtExtension extension = new HumboldtExtension();
+
+        extension.releaseIfInstalled();
+
+        OpenTelemetry other = OpenTelemetry.noop();
+        assertThrows(IllegalStateException.class, () -> GlobalOpenTelemetry.set(other));
+    }
 }

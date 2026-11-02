@@ -142,10 +142,21 @@ public final class HumboldtExtension implements VidocqExtension {
         humboldt.flush().join(5, TimeUnit.SECONDS);
         humboldt.shutdown().join(5, TimeUnit.SECONDS);
         HumboldtHolder.publish(null);
+        releaseIfInstalled();
+    }
+
+    /** Frees {@code GlobalOpenTelemetry} when this boot took it, once. */
+    // package-private for the unit test.
+    void releaseIfInstalled() {
         if (installedGlobally) {
             releaseGlobal();
             installedGlobally = false;
         }
+    }
+
+    // package-private for the unit test.
+    void installedGlobally(boolean installed) {
+        this.installedGlobally = installed;
     }
 
     /**

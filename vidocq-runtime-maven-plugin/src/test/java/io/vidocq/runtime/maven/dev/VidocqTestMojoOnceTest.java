@@ -22,6 +22,8 @@ package io.vidocq.runtime.maven.dev;
 import io.vidocq.runtime.maven.dev.TestResults.Counts;
 import io.vidocq.runtime.maven.dev.TestResults.Failure;
 import org.apache.maven.plugin.MojoFailureException;
+import java.util.Map;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
@@ -75,5 +77,38 @@ class VidocqTestMojoOnceTest {
         MojoFailureException failure = assertThrows(MojoFailureException.class,
                 () -> runOnce(dir, 1, new SurefireReports.Reports(new Counts(3, 1, 0, 0), failures, 1, 0)));
         assertEquals("1 of 3 test(s) failed", failure.getMessage());
+    }
+
+    /** The goal itself, with the child Maven process replaced by an ended one: dev services off, no watching. */
+    private static void execute(Path dir, int exit, SurefireReports.Reports reports) throws Exception {
+        VidocqTestMojo mojo = new VidocqTestMojo() {
+            @Override
+            ContinuousTesting continuousTesting(Path projectDir, Map<String, String> testProps,
+                    Consumer<TestResults> onResult) {
+                return new ContinuousTesting(tests -> new Ended(exit), since -> reports, () -> true,
+                        new ContinuousTesting.Results(dir.resolve(TestResultsFile.FILE_NAME), "log"), onResult,
+                        warning -> {
+                            // no warning expected in these runs
+                        }, Clock.systemUTC());
+            }
+        };
+        java.io.File base = dir.toFile();
+        mojo.setDirectories(base, base, base);
+        mojo.setWatchDirs("src/main/java", "src/test/java");
+        mojo.setDevServices(false);
+        mojo.setOnce(true);
+        mojo.execute();
+    }
+
+    @Test
+    void theGoalEndsWithThePassingVerdictWithoutWatching(@TempDir Path dir) {
+        assertDoesNotThrow(() -> execute(dir, 0, new SurefireReports.Reports(new Counts(2, 0, 0, 0), List.of(), 1, 0)));
+    }
+
+    @Test
+    void theGoalFailsWhenATestDoes(@TempDir Path dir) {
+        var failures = List.of(new Failure("BookTest#loads", "org.opentest4j.AssertionFailedError", "no"));
+        assertThrows(MojoFailureException.class,
+                () -> execute(dir, 1, new SurefireReports.Reports(new Counts(2, 1, 0, 0), failures, 1, 0)));
     }
 }

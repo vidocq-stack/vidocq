@@ -69,6 +69,9 @@ class CliParserTestIdeaTest {
         String all = help(null);
         assertTrue(all.contains("mvn vidocq:test") && all.contains("mvn vidocq:idea"), all);
         assertTrue(help("test").contains("Keys: r runs every test"), help("test"));
+        assertTrue(help("test").contains("--once"), help("test"));
+        assertTrue(CommandRunner.testBanner(true).contains("once"));
+        assertTrue(CommandRunner.testBanner(false).contains("continuous testing"));
         String idea = help("idea");
         assertTrue(idea.startsWith("vidocq idea — IntelliJ run configurations"), idea);
         assertTrue(idea.contains("Options:") && idea.contains("--strict") && idea.contains("--kind <kind>"), idea);

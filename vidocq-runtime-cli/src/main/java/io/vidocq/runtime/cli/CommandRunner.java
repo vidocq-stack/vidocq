@@ -82,8 +82,7 @@ public final class CommandRunner {
             case Command.Dev d                 -> runDev(d);
             case Command.Doctor doc            -> runDoctor(doc);
             case Command.ContinuousTest(boolean once) -> runMaven(RunGoals.test(once), MavenInvocation.Options.none(),
-                    false, once ? "Running the tests once…"
-                            : "Starting " + CliOutput.bold("continuous testing") + "…");
+                    false, testBanner(once));
             case Command.Idea(String check, String kind) -> runMaven(RunGoals.idea(check, kind),
                     MavenInvocation.Options.none(), false,
                     progress(check != null, "the IntelliJ run configurations"));
@@ -345,6 +344,12 @@ public final class CommandRunner {
         MavenInvocation.Options opts = new MavenInvocation.Options(
                 clean.offline(), false, clean.passthrough());
         return runMaven(List.of("clean"), opts, clean.dryRun(), "Cleaning build output…");
+    }
+
+    /** What {@code vidocq test} says before it hands over to Maven. */
+    // package-private for the unit test.
+    static String testBanner(boolean once) {
+        return once ? "Running the tests once…" : "Starting " + CliOutput.bold("continuous testing") + "…";
     }
 
     private static int runMaven(List<String> goals, MavenInvocation.Options opts,

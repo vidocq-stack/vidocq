@@ -124,8 +124,7 @@ public class VidocqTestMojo extends AbstractMojo {
         }
         boolean keys = !once && TerminalControls.attached();
         CompletableFuture<TestResults> verdict = new CompletableFuture<>();
-        ContinuousTesting testing = ContinuousTesting.forProject(projectDir, buildDir.toPath(), testProps,
-                reporter(keys, verdict), getLog()::warn);
+        ContinuousTesting testing = continuousTesting(projectDir, testProps, reporter(keys, verdict));
 
         Thread mainThread = Thread.currentThread();
         Thread hook = new Thread(() -> {
@@ -166,6 +165,13 @@ public class VidocqTestMojo extends AbstractMojo {
                 // shutdown already in progress
             }
         }
+    }
+
+    /** The runs of the tests: Maven in a child process. Overridden by the unit test, which has none to start. */
+    // package-private for the unit test.
+    ContinuousTesting continuousTesting(Path projectDir, Map<String, String> testProps,
+            Consumer<TestResults> onResult) {
+        return ContinuousTesting.forProject(projectDir, buildDir.toPath(), testProps, onResult, getLog()::warn);
     }
 
     /** The dev services session of the tests, or {@code null} when they are off. */
@@ -303,6 +309,17 @@ public class VidocqTestMojo extends AbstractMojo {
         } catch (DependencyResolutionRequiredException e) {
             throw new MojoExecutionException("vidocq:test needs the test class path: " + e.getMessage(), e);
         }
+    }
+
+    void setDirectories(File baseDir, File classesDir, File buildDir) {
+        this.baseDir = baseDir;
+        this.classesDir = classesDir;
+        this.buildDir = buildDir;
+    }
+
+    void setWatchDirs(String watchDirs, String testWatchDirs) {
+        this.watchDirs = watchDirs;
+        this.testWatchDirs = testWatchDirs;
     }
 
     void setOnce(boolean once) {
