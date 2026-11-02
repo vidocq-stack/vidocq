@@ -211,6 +211,39 @@ class GrimmModelProcessorOracleTest {
     }
 
     @Test
+    void contextParameters_matchScan() throws Exception {
+        var compilation = compile(writeSource("t/TaskResource.java", """
+                package t;
+                import jakarta.ws.rs.DELETE;
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.HeaderParam;
+                import jakarta.ws.rs.Path;
+                import jakarta.ws.rs.PathParam;
+                import jakarta.ws.rs.Produces;
+                import jakarta.ws.rs.core.Context;
+                import jakarta.ws.rs.core.HttpHeaders;
+                import jakarta.ws.rs.core.UriInfo;
+
+                @Path("/tasks")
+                @Produces("text/plain")
+                public class TaskResource {
+
+                    @GET
+                    public String list(@HeaderParam(HttpHeaders.AUTHORIZATION) String authz,
+                                       @Context UriInfo uriInfo) {
+                        return "";
+                    }
+
+                    @DELETE
+                    @Path("/{id}")
+                    public void remove(@PathParam("id") long id, @Context HttpHeaders headers) {
+                    }
+                }
+                """));
+        assertFragmentMatchesScan(compilation, "t.TaskResource");
+    }
+
+    @Test
     void multiVerbsParamsAndScalars_matchScan() throws Exception {
         var compilation = compile(writeSource("t/CrudResource.java", """
                 package t;

@@ -470,6 +470,14 @@ Track reproducible bugs with:
 - **Cause**: nothing kept the rendered text, although the document only changes when it is built again.
 - **Status**: FIXED (branch `fix/openapi-render-once`) — the text is kept per format with the document it was rendered from; a new document instance (a reload in dev mode, the model built after an early request) is rendered again. The serializer itself still uses reflection once per document; replacing it with a generated or hand-written writer is part of wave 4 (build-time model). MP OpenAPI TCK unchanged.
 
+## BUG-20261102-02 — a resource with an `@Context` parameter is left to the run-time scan
+
+- **Date**: 2026-11-02
+- **Symptom**: `GrimmModelProcessor` skipped every class with an `@Context` parameter ("not a scalar path/query/header parameter"), so the class was described by the reflective scan at start-up, although the scan leaves such a parameter out of the document.
+- **Repro**: `GrimmModelProcessorOracleTest.contextParameters_matchScan`: no `$$GrimmModel` companion for a resource taking `@Context UriInfo`.
+- **Cause**: the M1 subset accepted path, query and header parameters only.
+- **Status**: FIXED (branch `perf/model-at-build`) — `@Context` parameters are left out, as the scan does. Measured on 15 resource classes of the sample applications (vidocq-demo, vidocq-tools, experiments, rehearsals), the build-time model still covers none of them: 13 return `Response`, 8 take a request body, most use application classes. Those shapes stay on the scan for now: the scan describes `Response` by its getters as a component (`#/components/schemas/Response`, plus `URI`, `Locale`, `MediaType`…), and a fragment carrying such components would collide by simple name with application classes (fragments merge components first-wins); `java.time` and `UUID` schemas can be replaced by `mp.openapi.schema.*` at run time, which a build-time fragment cannot know. Application POJOs need a schema generator working on `TypeMirror`. The reflective scan is unchanged.
+
 ## BUG-20261029-01 — the configured model reader and filter are looked up in Grimm's loader only
 
 - **Date**: 2026-10-29

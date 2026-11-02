@@ -248,6 +248,9 @@ public final class GrimmModelProcessor extends AbstractProcessor {
         Operation operation = OASFactory.createObject(Operation.class);
 
         for (VariableElement param : method.getParameters()) {
+            if (param.getAnnotation(jakarta.ws.rs.core.Context.class) != null) {
+                continue; // as the run-time scan: an injected context never appears in the document
+            }
             rejectMpOpenApiAnnotations(param);
             rejectBeanValidationAnnotations(param, method);
             String name;
