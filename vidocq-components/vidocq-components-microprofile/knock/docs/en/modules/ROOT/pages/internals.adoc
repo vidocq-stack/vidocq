@@ -4,6 +4,42 @@
 [.lead]
 Knock rests on a simple principle: implement MicroProfile Health 4.0 with the JDK and Jakarta specs alone. No third-party library, no reflection-heavy machinery, no platform-thread pool. This page documents the implementation choices that uphold that discipline.
 
+[#generated-code]
+== Generated code and reflective fallback [.tag-new]#NEW#
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. Knock has no generator of its own and reads no
+annotation by reflection: its jars are built with Vauban's and Cassini's processors, and the application's health
+checks are ordinary CDI beans.
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| The `_VaubanComponents` and bean index of `knock-cdi-vauban` and `knock-jaxrs`
+| `vauban-processor`, at Knock's own build (<<_cdi_discovery>>)
+| Vauban (xref:vauban::internals.adoc#generated-code[Vauban])
+| Vauban's fallback.
+
+| `KnockHealthResource$$CassiniAdapter` and `$$CassiniRoutes`, the dispatch of the `/health` endpoints
+| `cassini-processor`, at Knock's own build
+| Cassini (xref:cassini::internals.adoc#generated-code[Cassini])
+| Cassini's fallback.
+
+| The `_VaubanComponents` that create the application's `HealthCheck` beans
+| `vauban-processor`, at the application's build
+| Vauban, when `HealthCheckRegistrar` gets the beans through `Instance<HealthCheck>`
+| Vauban's fallback.
+|===
+
+=== When the fallback runs
+
+Only on a container other than Vauban and Cassini, which ignores these classes; Knock itself has no reflective path.
+
+=== Which path ran
+
+See the bricks that generate the classes: Vauban's run-time generation warning and coverage, Cassini's warning.
+
 == Module architecture
 
 [cols="2,3"]
