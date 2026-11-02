@@ -74,8 +74,7 @@ public class ConfigPropertiesSyntheticCreator implements SyntheticBeanCreator<Ob
 
         var generated = GENERATED.get(beanClass);
         if (generated.isPresent()) {
-            var factory = generated.get();
-            return factory.create(effectivePrefix(fieldPrefix, factory.classPrefix()), config);
+            return createWith(generated.get(), fieldPrefix, config);
         }
 
         String resolvedPrefix = resolvePrefix(beanClass, fieldPrefix);
@@ -112,8 +111,14 @@ public class ConfigPropertiesSyntheticCreator implements SyntheticBeanCreator<Ob
         return ConfigProperties.UNCONFIGURED_PREFIX;
     }
 
+    /** The instance the generated {@code factory} creates, under the effective prefix. */
+    static Object createWith(io.vidocq.ravel.spi.GeneratedConfigProperties factory, String fieldPrefix,
+                             Config config) {
+        return factory.create(effectivePrefix(fieldPrefix, factory.classPrefix()), config);
+    }
+
     /** The injection point's prefix, else the class's, else none (MP Config 3.1 §6.4). */
-    private static String effectivePrefix(String fieldPrefix, String classPrefix) {
+    static String effectivePrefix(String fieldPrefix, String classPrefix) {
         if (!ConfigProperties.UNCONFIGURED_PREFIX.equals(fieldPrefix)) {
             return fieldPrefix;
         }

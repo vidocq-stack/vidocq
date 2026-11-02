@@ -82,7 +82,8 @@ public final class RavelConfig implements Config, java.io.Serializable {
     private final ConcurrentMap<Class<?>, Converter<?>> derivedConverters = new ConcurrentHashMap<>();
 
     /** The implicit converters generated at build for the application's types, loaded on first need. */
-    private transient volatile List<io.vidocq.ravel.spi.GeneratedConverters> generatedConverters;
+    private final transient java.util.concurrent.atomic.AtomicReference<List<io.vidocq.ravel.spi.GeneratedConverters>>
+            generatedConverters = new java.util.concurrent.atomic.AtomicReference<>();
 
     public RavelConfig(List<ConfigSource> sources,
                        Map<Class<?>, Converter<?>> converters,
@@ -391,20 +392,25 @@ public final class RavelConfig implements Config, java.io.Serializable {
 
     /** The implicit converter Ravel's processor generated for {@code type}, called directly (no reflection). */
     private <T> Converter<T> generatedConverter(Class<T> type) {
-        var known = generatedConverters;
+        var known = generatedConverters.get();
         if (known == null) {
             var loader = classLoader != null ? classLoader : Thread.currentThread().getContextClassLoader();
             var found = new ArrayList<io.vidocq.ravel.spi.GeneratedConverters>();
             java.util.ServiceLoader.load(io.vidocq.ravel.spi.GeneratedConverters.class, loader).forEach(found::add);
-            known = List.copyOf(found);
-            generatedConverters = known;
+            generatedConverters.compareAndSet(null, List.copyOf(found));
+            known = generatedConverters.get();
         }
-        for (var converters : known) {
-            Converter<T> converter = converters.converter(type);
+        for (var candidate : known) {
+            Converter<T> converter = candidate.converter(type);
             if (converter != null) {
                 return converter;
             }
         }
         return null;
+    }
+
+    /** Uses {@code generated} instead of looking the generated converters up (tests). */
+    void useGeneratedConverters(List<io.vidocq.ravel.spi.GeneratedConverters> generated) {
+        generatedConverters.set(List.copyOf(generated));
     }
 }

@@ -66,15 +66,19 @@ public final class RavelProcessor extends AbstractProcessor {
     private static final String FACTORIES_SERVICE = "META-INF/services/io.vidocq.ravel.spi.GeneratedConfigProperties";
     private static final String CONVERTERS_SERVICE = "META-INF/services/io.vidocq.ravel.spi.GeneratedConverters";
     private static final String CONVERTERS_CLASS = "_RavelConverters";
+    private static final String STRING = "java.lang.String";
+    private static final String OPTIONAL = "java.util.Optional";
+    private static final String DOT_CLASS = ".class)";
+    private static final String OPTIONAL_OF_LOOKUP = "java.util.Optional.of(config.getOptionalValue(";
 
     /** Types Ravel converts with its built-in converters: no implicit converter is generated for them. */
     private static final Set<String> BUILT_IN = Set.of(
-            "java.lang.String", "java.lang.Boolean", "java.lang.Integer", "java.lang.Long", "java.lang.Double",
+            STRING, "java.lang.Boolean", "java.lang.Integer", "java.lang.Long", "java.lang.Double",
             "java.lang.Float", "java.lang.Short", "java.lang.Byte", "java.lang.Character", "java.lang.Class",
             "java.lang.Object");
 
     private static final Set<String> WRAPPERS = Set.of(
-            "java.util.Optional", "java.util.List", "java.util.Set", "java.util.function.Supplier",
+            OPTIONAL, "java.util.List", "java.util.Set", "java.util.function.Supplier",
             "jakarta.inject.Provider");
 
     private final Set<String> factories = new LinkedHashSet<>();
@@ -93,27 +97,35 @@ public final class RavelProcessor extends AbstractProcessor {
             writeServices();
             return false;
         }
-        TypeElement configProperties = processingEnv.getElementUtils().getTypeElement(CONFIG_PROPERTIES);
-        TypeElement configProperty = processingEnv.getElementUtils().getTypeElement(CONFIG_PROPERTY);
-        if (configProperties != null) {
-            for (Element element : round.getElementsAnnotatedWith(configProperties)) {
-                if (element.getKind() == ElementKind.CLASS) {
-                    TypeElement type = (TypeElement) element;
-                    for (VariableElement field : ElementFilter.fieldsIn(type.getEnclosedElements())) {
-                        if (!field.getModifiers().contains(Modifier.STATIC)) {
-                            collectConverterType(field.asType(), type);
-                        }
-                    }
-                    generateFactory(type);
-                }
-            }
-        }
-        if (configProperty != null) {
-            for (Element element : round.getElementsAnnotatedWith(configProperty)) {
-                collectConverterType(element.asType(), element);
-            }
-        }
+        var elements = processingEnv.getElementUtils();
+        processConfigProperties(round, elements.getTypeElement(CONFIG_PROPERTIES));
+        processConfigProperty(round, elements.getTypeElement(CONFIG_PROPERTY));
         return false;
+    }
+
+    private void processConfigProperties(RoundEnvironment round, TypeElement annotation) {
+        if (annotation == null) {
+            return;
+        }
+        for (Element element : round.getElementsAnnotatedWith(annotation)) {
+            if (element.getKind() != ElementKind.CLASS) {
+                continue;
+            }
+            TypeElement type = (TypeElement) element;
+            ElementFilter.fieldsIn(type.getEnclosedElements()).stream()
+                    .filter(field -> !field.getModifiers().contains(Modifier.STATIC))
+                    .forEach(field -> collectConverterType(field.asType(), type));
+            generateFactory(type);
+        }
+    }
+
+    private void processConfigProperty(RoundEnvironment round, TypeElement annotation) {
+        if (annotation == null) {
+            return;
+        }
+        for (Element element : round.getElementsAnnotatedWith(annotation)) {
+            collectConverterType(element.asType(), element);
+        }
     }
 
     // ---- @ConfigProperties factories ----
@@ -228,15 +240,15 @@ public final class RavelProcessor extends AbstractProcessor {
         String key = "name(prefix, \"" + escape(property) + "\")";
         String lookup;
         switch (erasure) {
-            case "java.util.Optional" -> lookup = "config.getOptionalValue(" + key + ", " + optionalArgument(type) + ".class)";
-            case "java.util.OptionalInt" -> lookup = "java.util.Optional.of(config.getOptionalValue(" + key
+            case OPTIONAL -> lookup = "config.getOptionalValue(" + key + ", " + optionalArgument(type) + DOT_CLASS;
+            case "java.util.OptionalInt" -> lookup = OPTIONAL_OF_LOOKUP + key
                     + ", Integer.class).map(java.util.OptionalInt::of).orElse(java.util.OptionalInt.empty()))";
-            case "java.util.OptionalLong" -> lookup = "java.util.Optional.of(config.getOptionalValue(" + key
+            case "java.util.OptionalLong" -> lookup = OPTIONAL_OF_LOOKUP + key
                     + ", Long.class).map(java.util.OptionalLong::of).orElse(java.util.OptionalLong.empty()))";
-            case "java.util.OptionalDouble" -> lookup = "java.util.Optional.of(config.getOptionalValue(" + key
+            case "java.util.OptionalDouble" -> lookup = OPTIONAL_OF_LOOKUP + key
                     + ", Double.class).map(java.util.OptionalDouble::of).orElse(java.util.OptionalDouble.empty()))";
             default -> {
-                lookup = "config.getOptionalValue(" + key + ", " + erasure + ".class)";
+                lookup = "config.getOptionalValue(" + key + ", " + erasure + DOT_CLASS;
                 if (defaultValue != null) {
                     lookup = lookup + ".or(() -> config.getConverter(" + erasure + ".class).map(c -> c.convert(\""
                             + escape(defaultValue) + "\")))";
@@ -248,7 +260,7 @@ public final class RavelProcessor extends AbstractProcessor {
                 : "instance." + fieldName + " = (" + castType(type) + ") value";
         return "        {\n"
                 + "            java.util.Optional<?> found = " + lookup + ";\n"
-                + (erasure.equals("java.util.Optional")
+                + (erasure.equals(OPTIONAL)
                     ? "            Object value = found;\n            " + assign + ";\n"
                     : "            if (found.isPresent()) {\n                Object value = found.get();\n                "
                         + assign + ";\n            }\n")
@@ -298,21 +310,24 @@ public final class RavelProcessor extends AbstractProcessor {
 
     private TypeMirror unwrap(TypeMirror type) {
         TypeMirror current = type;
-        while (true) {
-            if (current.getKind() == TypeKind.ARRAY) {
-                current = ((javax.lang.model.type.ArrayType) current).getComponentType();
-                continue;
-            }
-            if (current.getKind() == TypeKind.DECLARED) {
-                var declared = (DeclaredType) current;
-                String name = ((TypeElement) declared.asElement()).getQualifiedName().toString();
-                if (WRAPPERS.contains(name) && declared.getTypeArguments().size() == 1) {
-                    current = declared.getTypeArguments().getFirst();
-                    continue;
-                }
-            }
-            return current.getKind() == TypeKind.DECLARED ? current : null;
+        TypeMirror inner = unwrapOnce(current);
+        while (inner != null) {
+            current = inner;
+            inner = unwrapOnce(current);
         }
+        return current.getKind() == TypeKind.DECLARED ? current : null;
+    }
+
+    /** The element type of an array or a supported wrapper ({@code Optional}, {@code List}…), else {@code null}. */
+    private static TypeMirror unwrapOnce(TypeMirror type) {
+        if (type.getKind() == TypeKind.ARRAY) {
+            return ((javax.lang.model.type.ArrayType) type).getComponentType();
+        }
+        if (type instanceof DeclaredType declared && declared.getTypeArguments().size() == 1
+                && WRAPPERS.contains(((TypeElement) declared.asElement()).getQualifiedName().toString())) {
+            return declared.getTypeArguments().getFirst();
+        }
+        return null;
     }
 
     /** The §5.2 conversion of {@code type} as a {@code Function<String, T>} expression, or {@code null}. */
@@ -321,7 +336,7 @@ public final class RavelProcessor extends AbstractProcessor {
         if (type.getKind() == ElementKind.ENUM) {
             return "ofEnum";
         }
-        for (String[] candidate : new String[][] {{"of", "java.lang.String"}, {"valueOf", "java.lang.String"},
+        for (String[] candidate : new String[][] {{"of", STRING}, {"valueOf", STRING},
                 {"parse", "java.lang.CharSequence"}}) {
             var method = staticFactory(type, candidate[0], candidate[1]);
             if (method != null) {
@@ -333,7 +348,7 @@ public final class RavelProcessor extends AbstractProcessor {
         }
         for (ExecutableElement constructor : ElementFilter.constructorsIn(type.getEnclosedElements())) {
             if (constructor.getModifiers().contains(Modifier.PUBLIC) && constructor.getParameters().size() == 1
-                    && erasure(constructor.getParameters().getFirst().asType()).equals("java.lang.String")) {
+                    && erasure(constructor.getParameters().getFirst().asType()).equals(STRING)) {
                 return call("new " + name + "(value)", constructor, name);
             }
         }
