@@ -4,5 +4,8 @@
 <html lang="en"><head><meta charset="utf-8"><title>Specials · Vidocq Bistro</title></head>
 <body>
 <h1>Tonight's special</h1>
-<p>${specials.dish}, ${bistro:euros(specials.priceCents)}.</p>
+<p>
+<bistro:out value="${specials.dish}" escapeXml="true"/>,
+<bistro:out value="${bistro:euros(specials.priceCents)}" escapeXml="true"/>.
+</p>
 </body></html>

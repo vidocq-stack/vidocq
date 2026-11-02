@@ -91,7 +91,8 @@ class BistroPagesTest {
         Response specials = new Browser().get("/specials.jsp");
 
         assertEquals(200, specials.status(), specials.body() + "\n" + application.log());
-        assertTrue(specials.body().contains("beef bourguignon, €18.50."), specials.body());
+        assertTrue(specials.body().contains("beef bourguignon,"), specials.body());
+        assertTrue(specials.body().contains("€18.50."), specials.body());
     }
 
     /**
@@ -108,7 +109,8 @@ class BistroPagesTest {
 
     private static long destroyed(Response tally) {
         assertEquals(200, tally.status(), tally.body());
-        return Long.parseLong(tally.body().strip().substring("destroyed=".length()));
+        String body = tally.body().strip();
+        return Long.parseLong(body.substring(body.indexOf("destroyed=") + "destroyed=".length()));
     }
 
     @Test

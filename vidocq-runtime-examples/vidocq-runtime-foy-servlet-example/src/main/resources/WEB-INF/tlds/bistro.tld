@@ -21,6 +21,23 @@
             <required>true</required>
         </attribute>
     </tag>
+    <tag>
+        <name>out</name>
+        <tag-class>io.vidocq.runtime.examples.servlet.OutTag</tag-class>
+        <body-content>empty</body-content>
+        <attribute>
+            <name>value</name>
+            <required>true</required>
+            <rtexprvalue>true</rtexprvalue>
+            <type>java.lang.Object</type>
+        </attribute>
+        <attribute>
+            <name>escapeXml</name>
+            <required>false</required>
+            <rtexprvalue>true</rtexprvalue>
+            <type>boolean</type>
+        </attribute>
+    </tag>
     <function>
         <name>euros</name>
         <function-class>io.vidocq.runtime.examples.servlet.BistroFunctions</function-class>
