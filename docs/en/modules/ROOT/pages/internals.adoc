@@ -4,6 +4,91 @@
 [.lead]
 This page describes what happens between `mvn package` and the first `200 OK`. It follows the code through `vidocq-runtime-maven-plugin`, `vidocq-runtime-core` and the SPI, and details the extension grammar.
 
+[#generated-code]
+== Generated code and reflective fallback [.tag-new]#NEW#
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. Vidocq's own part is to make the bricks'
+generators run on every build without a line of configuration: it puts their processors on the compiler's path, runs
+them over the dependency jars too, and reports what was left to reflection.
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| What the bricks' annotation processors generate for the application
+| The processors the `-codegen` bundle of each extension brings (xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[codegen bundles]),
+  put on the compiler's processor path by `vidocq-runtime-maven-plugin` itself
+  (xref:modules/vidocq-runtime-maven-plugin.adoc#codegen-wiring[codegen wiring]); see the table below
+| Each brick
+| Each brick's fallback; `vidocq:checkpom` and `vidocq doctor` report a missing bundle.
+
+| The same code for the dependency jars: Vauban's components, client proxies and intercepted subclasses, and what
+  each brick's processor generates for the classes it selects (servlets, repositories, JSON-B bindings…), in an
+  enriched copy of each jar under `target/vidocq-enriched/`
+| `vidocq:generate`, bound to `process-classes` by `vidocq-runtime-parent`
+  (xref:modules/vidocq-runtime-maven-plugin.adoc#generate[`vidocq:generate`])
+| Each brick, from the enriched copy, which `provides` the generated providers
+| The dependency's classes run on each brick's fallback.
+
+| `META-INF/vidocq/generate.stamp`: the bean index `vidocq:generate` left
+| `vidocq:generate`
+| The boot, which compares it with the application's bean index
+| The boot indexes the unprocessed bean archives itself and says so
+  (xref:modules/vidocq-runtime-core.adoc#vidocq-gen-001[`VIDOCQ-GEN-001`]).
+
+| One `@Named` `DataSource` holder per declared datasource
+| `VidocqDataSourcesProcessor`, from the `vidocq-runtime-mansart-pool-datasources-codegen` bundle
+| CDI, for `@Inject @Named("x") DataSource` and `@Repository(dataStore = "x")`
+| —
+|===
+
+The bundles and the bricks they serve:
+
+[cols="2,2,2"]
+|===
+| Bundle | Processors it brings | Brick section
+
+| `vidocq-runtime-core-codegen` | `vauban-processor` | xref:vauban::internals.adoc#generated-code[Vauban]
+| `vidocq-runtime-cassini-rest-extension-codegen` | `cassini-processor`, `champollion-codegen-apt`, and the
+  extensions of `cassini-cdi` and `champollion-jsonb-cdi`
+| xref:cassini::internals.adoc#generated-code[Cassini], xref:champollion::internals.adoc#generated-code[Champollion]
+| `vidocq-runtime-ravel-config-extension-codegen` | `ravel-processor`, the extension of `ravel-cdi-vauban` | xref:ravel::internals.adoc#generated-code[Ravel]
+| `vidocq-runtime-cyrano-rest-client-extension-codegen` | `cyrano-processor`, the extension of `cyrano-cdi-vauban` | xref:cyrano::internals.adoc#generated-code[Cyrano]
+| `vidocq-runtime-heisenberg-fault-tolerance-extension-codegen` | `heisenberg-processor`, the extension of `heisenberg-cdi-vauban` | xref:heisenberg::internals.adoc#generated-code[Heisenberg]
+| `vidocq-runtime-dirac-metrics-extension-codegen` | `dirac-processor`, the extension of `dirac-cdi-vauban` | xref:dirac::internals.adoc#generated-code[Dirac]
+| `vidocq-runtime-grimm-openapi-extension-codegen` | `grimm-processor`, the extension of `grimm-cdi-vauban` | xref:grimm::internals.adoc#generated-code[Grimm]
+| `vidocq-runtime-cervantes-jwt-extension-codegen` | the extension of `cervantes-cdi-vauban`, and Ravel's bundle | xref:cervantes::internals.adoc#generated-code[Cervantes]
+| `vidocq-runtime-foy-servlet-extension-codegen` | `foy-processor`, the extension of `foy-cdi-vauban` | xref:foy::internals.adoc#generated-code[Foy]
+| `vidocq-runtime-mansart-data-extension-codegen` | `mansart-data-processor`, the extension of `mansart-data-cdi` | xref:mansart::internals.adoc#generated-code[Mansart]
+| `vidocq-runtime-mansart-transactions-extension-codegen` | the extension of `mansart-transactions-cdi` | xref:mansart::internals.adoc#generated-code[Mansart]
+| `vidocq-runtime-mansart-pool-datasources-codegen` | `VidocqDataSourcesProcessor` | —
+| `vidocq-runtime-peano-el-extension-codegen` | `peano-processor` | xref:peano::internals.adoc#generated-code[Peano]
+|===
+
+JSP pages are not compiled by a processor: `vidocq:generate` compiles them with Ibarra's page compiler
+(xref:ibarra::internals.adoc#generated-code[Ibarra]). On the application layer, the processors' `META-INF/services`
+files become `provides` directives (<<_class_loading_the_vauban_application_layer>>), so an application never writes
+one for a generated class. `vidocq-runtime-peano-el-extension` provides the `ProxyUnwrapper` that lets a bean's
+Peano table serve its Vauban client proxy.
+
+=== When the fallback runs
+
+* A build without `vidocq:generate`, such as an IDE build: `VIDOCQ-GEN-001` at boot, and the dependency jars run
+  on their bricks' fallbacks.
+* A dependency jar `vidocq:generate` leaves out: signed and not named in `<scanDependencies>`, named in
+  `<scanExcludes>`, or one for which no module descriptor can be synthesized.
+* A class or a type a brick's processor cannot handle: each brick's section says which.
+
+=== Which path ran
+
+* The CDI panel of the dev console shows, per bean, which generator covers it (`APT`, `Class-File`, `partial`,
+  `reflection`, `factory`), from Vauban's coverage (xref:dev-console.adoc#cdi-panel[CDI panel]).
+* Each brick that generates at run time says so in a framed `WARNING` at boot (_… — RUNTIME CODE GENERATION
+  FALLBACK_): Vauban, Cassini, Cyrano, Mansart.
+* `vidocq doctor` and the build's module check list the packages that stay reflective and need an `opens`
+  (xref:java-modules.adoc[Java modules in a Vidocq application]).
+
 == Overview — from source to runtime
 
 [mermaid]
@@ -136,7 +221,7 @@ Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 
 === Compile-time indexing (APT)
 
-The `vidocq-runtime-core-codegen` POM bundle wires the Vauban indexer (`vauban-processor`) into every application build. At compile time it scans CDI-annotated classes and produces:
+The `vidocq-runtime-core-codegen` bundle wires the Vauban indexer (`vauban-processor`) into every application build; `vidocq-runtime-maven-plugin` puts it, and the bundle of each extension, on the processor path (<<generated-code>>). At compile time it scans CDI-annotated classes and produces:
 
 * the `META-INF/vauban-beans.list` index consumed by xref:vauban::index.adoc[Vauban] to boot without classpath scanning or reflection;
 * for each `vidocq-runtime-<x>-extension` the application depends on, a matching `vidocq-runtime-<x>-extension-codegen` bundle adds the extension's own APT output (e.g. Cassini's statically generated dispatch).
