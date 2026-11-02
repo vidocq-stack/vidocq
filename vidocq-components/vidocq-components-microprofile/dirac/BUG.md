@@ -6,6 +6,14 @@ minimal repro, cause hypothesis, status.
 
 ---
 
+## DRC-010 — Every bean class loaded and scanned by reflection at start-up for metric annotations
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `perf/boot-prefilter`. `DiracExtension.collectMetricAnnotations` first reads the class declaration the container gives the enhancement (`ClassInfo`: Vauban builds it from build-time metadata). It looks for a metric annotation on the class, its superclasses, its methods and constructors, directly or on an application annotation (a stereotype). Only a class that may declare a metric is loaded and scanned; the companion and reflective scan of those classes is unchanged. When the declaration cannot settle it (an undescribed superclass, an unreadable annotation), the class is scanned as before (`BootScanPrefilterTest`). Audit application boot: dirac reflection from 5,435 to 458 traced calls. MP Metrics TCK 127/127.
+- **Reported by**: the boot reflection trace of 2026-11-02
+- **Minimal reproduction**: start any application with the metrics extension: `DiracExtension.findTimedOnElement`/`findCountedOnElement` and `DiscoveredMetrics.scan`/`scanGaugeMethods` read the annotations of every method of every bean class (`getDeclaredMethods`, `getAnnotation`, `getAnnotations`).
+- **Cause**: `@Enhancement(types = Object.class, withSubtypes = true)` visits every type, and each one was loaded with `Class.forName` and scanned by reflection, although very few declare a metric.
+
 ## DRC-009 — Metrics re-resolved by reflection on every call and every bean construction; companions loaded once per class at boot
 
 - **Date**: 2026-11-02

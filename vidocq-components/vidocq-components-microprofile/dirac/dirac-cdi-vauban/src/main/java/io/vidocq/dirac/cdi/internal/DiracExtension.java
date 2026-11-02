@@ -74,6 +74,10 @@ public class DiracExtension implements BuildCompatibleExtension {
     @Enhancement(types = Object.class, withSubtypes = true)
     public void collectMetricAnnotations(ClassInfo classInfo, Messages messages) {
         var beanClassName = classInfo.name();
+        if (!namesAMetric(classInfo)) {
+            // Read from the class declaration, without loading the class: nothing to scan (BUG DRC-010).
+            return;
+        }
         try {
             var beanClass = Class.forName(beanClassName, false, Thread.currentThread().getContextClassLoader());
             // CG-05: compile-time $$DiracMetrics companion first; the reflective
@@ -96,6 +100,83 @@ public class DiracExtension implements BuildCompatibleExtension {
         } catch (DiracException exception) {
             if (messages != null) messages.error(exception.getMessage());
             throw exception;
+        }
+    }
+
+    private static final java.util.List<Class<? extends java.lang.annotation.Annotation>> METRIC_ANNOTATIONS =
+            java.util.List.of(Timed.class, Counted.class, org.eclipse.microprofile.metrics.annotation.Gauge.class);
+
+    /**
+     * Whether the declaration of a class, its superclasses (the class annotations are inherited), its methods or its
+     * constructors names a metric annotation, directly or on one of their annotations as the reflective scan reads
+     * them. A class for which this is false has no metric: it is neither loaded nor scanned. Package-private for the
+     * test.
+     */
+    static boolean namesAMetric(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
+        for (var type = classInfo; type != null; type = type.superClassDeclaration()) {
+            if (carriesAMetric(type.annotations())) {
+                return true;
+            }
+            if (type.superClassDeclaration() == null && hasUnreadableSuperclass(type)) {
+                return true; // an inherited class annotation cannot be ruled out: the reflective scan decides
+            }
+        }
+        for (var method : classInfo.methods()) {
+            if (carriesAMetric(method.annotations())) {
+                return true;
+            }
+        }
+        for (var constructor : classInfo.constructors()) {
+            if (carriesAMetric(constructor.annotations())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** A superclass other than {@code Object} whose declaration the container does not describe. */
+    private static boolean hasUnreadableSuperclass(jakarta.enterprise.lang.model.declarations.ClassInfo type) {
+        var superClass = type.superClass();
+        return superClass != null && !"java.lang.Object".equals(String.valueOf(superClass));
+    }
+
+    private static boolean carriesAMetric(
+            java.util.Collection<jakarta.enterprise.lang.model.AnnotationInfo> annotations) {
+        for (var annotation : annotations) {
+            String name = annotation.name();
+            for (var metric : METRIC_ANNOTATIONS) {
+                if (name.equals(metric.getName())) {
+                    return true;
+                }
+            }
+            if (!isPlatformAnnotation(name) && mayCarryAMetric(annotation)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The JDK, Jakarta and MicroProfile Metrics annotations carry no metric annotation: their declaration is not read.
+     * Any other annotation (an application stereotype, say) may, and is checked.
+     */
+    private static boolean isPlatformAnnotation(String name) {
+        return name.startsWith("java.") || name.startsWith("javax.") || name.startsWith("jakarta.")
+                || name.startsWith("org.eclipse.microprofile.metrics.annotation.");
+    }
+
+    /** Whether an application annotation carries a metric annotation; when its declaration cannot be read, maybe. */
+    private static boolean mayCarryAMetric(jakarta.enterprise.lang.model.AnnotationInfo annotation) {
+        try {
+            var declaration = annotation.declaration();
+            for (var metric : METRIC_ANNOTATIONS) {
+                if (declaration.hasAnnotation(metric)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (RuntimeException unreadable) {
+            return true; // the reflective scan decides
         }
     }
 
