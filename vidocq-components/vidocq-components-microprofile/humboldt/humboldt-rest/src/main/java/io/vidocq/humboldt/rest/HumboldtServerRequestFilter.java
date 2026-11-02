@@ -41,6 +41,8 @@ import jakarta.ws.rs.ext.Provider;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * {@link ContainerRequestFilter} that starts a SERVER span for each incoming HTTP
@@ -194,6 +196,38 @@ public class HumboldtServerRequestFilter implements ContainerRequestFilter {
         if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
 
         StringBuilder sb = new StringBuilder(base);
+        appendPathSegment(sb, resourceTemplate(resourceClass, resourceMethod));
+        return sb.toString();
+    }
+
+    /** A matched resource method ({@code null} without one), and whether its resource class was known. */
+    private record TemplateKey(Method method, boolean withClass) {
+    }
+
+    /**
+     * The templates of the resource methods of a class. A {@link ClassValue} so that a class an application
+     * reload drops is not held by this cache.
+     */
+    private static final ClassValue<Map<TemplateKey, String>> TEMPLATES = new ClassValue<>() {
+        @Override
+        protected Map<TemplateKey, String> computeValue(Class<?> type) {
+            return new ConcurrentHashMap<>();
+        }
+    };
+
+    /**
+     * The {@code @Path} part of the route of a resource class and method, read once per resource method and cached
+     * (BUG-20261102-01): the annotations of a class do not change, and reading them at every request is reflection
+     * on the request path.
+     */
+    static String resourceTemplate(Class<?> resourceClass, Method resourceMethod) {
+        Class<?> owner = resourceClass != null ? resourceClass : resourceMethod.getDeclaringClass();
+        TemplateKey key = new TemplateKey(resourceMethod, resourceClass != null);
+        return TEMPLATES.get(owner).computeIfAbsent(key, ignored -> readTemplate(resourceClass, resourceMethod));
+    }
+
+    private static String readTemplate(Class<?> resourceClass, Method resourceMethod) {
+        StringBuilder sb = new StringBuilder();
         if (resourceClass != null) {
             Path classPath = resourceClass.getAnnotation(Path.class);
             if (classPath != null) appendPathSegment(sb, classPath.value());

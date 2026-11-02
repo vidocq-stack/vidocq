@@ -710,3 +710,16 @@
 - **Fix**: `OtelSpanData`, Humboldt's own record implementing `SpanData`; `opentelemetry-sdk-testing` is test-scoped
   and the module no longer requires it.
 - **Regression test**: `SpanDataMapperTest`; humboldt-otel-interop 77 tests; MP Telemetry TCK 85/85.
+
+## BUG-20261102-01 — every traced request reads the `@Path` annotations of its resource by reflection
+
+- **Date**: 2026-11-02
+- **Status**: FIXED (branch fix/reflection-per-request)
+- **Symptom**: the Vidocq reflection audit (tracing agent on a multi-extension application) shows two
+  `getAnnotation(Path.class)` calls per request in `HumboldtServerRequestFilter.buildRoute`, to rebuild `http.route`.
+- **Minimal repro**: `HumboldtServerRequestFilterTest.reads_the_path_annotations_of_a_resource_method_once`.
+- **Root cause**: the route template was rebuilt from the annotations of the matched resource class and method at
+  every request, although they never change.
+- **Fix**: `resourceTemplate` reads them once per resource class and method and caches the template in a
+  `ClassValue` (a class an application reload drops is not held); the request only prefixes the base path.
+- **Regression test**: `HumboldtServerRequestFilterTest` (36 tests in humboldt-rest).

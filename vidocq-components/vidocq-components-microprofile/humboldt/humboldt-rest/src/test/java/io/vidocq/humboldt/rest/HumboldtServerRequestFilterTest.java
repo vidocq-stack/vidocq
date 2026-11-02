@@ -176,6 +176,23 @@ class HumboldtServerRequestFilterTest {
         assertEquals("GET /ctx/plain", routeOf(NoPathResource.class, "plain", CONTEXT_BASE));
     }
 
+    /**
+     * The {@code @Path} annotations of a resource method are read once, not at every request
+     * (BUG-20261102-01): the template part of the route is cached per resource class and method.
+     */
+    @Test
+    void reads_the_path_annotations_of_a_resource_method_once() throws NoSuchMethodException {
+        Method byId = UsersResource.class.getMethod("byId");
+
+        String first = HumboldtServerRequestFilter.resourceTemplate(UsersResource.class, byId);
+        String second = HumboldtServerRequestFilter.resourceTemplate(UsersResource.class, byId);
+
+        assertEquals("/users/{id}", first);
+        assertSame(first, second, "the template is computed once per resource method");
+        assertEquals("/all", HumboldtServerRequestFilter.resourceTemplate(null, ItemsResource.class.getMethod("all")));
+        assertEquals("/items", HumboldtServerRequestFilter.resourceTemplate(ItemsResource.class, null));
+    }
+
     @Test
     void uses_the_method_path_when_the_resource_class_is_unknown() throws NoSuchMethodException {
         HumboldtServerRequestFilter filter = new HumboldtServerRequestFilter();
