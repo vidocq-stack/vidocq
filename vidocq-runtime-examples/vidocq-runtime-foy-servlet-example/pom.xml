@@ -21,6 +21,10 @@
 
     <dependencies>
         <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-core</artifactId>
         </dependency>

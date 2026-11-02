@@ -51,6 +51,14 @@
             <artifactId>vidocq-runtime-spi</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>

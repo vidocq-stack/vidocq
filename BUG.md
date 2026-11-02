@@ -5,6 +5,25 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261102-05 — A JSP could not read a @Named CDI bean by name
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `fix/jsp-cdi-named-beans`: the Pages extension registers `CdiBeanNameELResolver` in the
+  pages' EL context once the application is deployed, before its first request (`CdiPageNames`, through the Foy
+  extension's new `ServletDeploymentListener`); `BistroPagesTest.aPageReadsANamedCdiBeanByName` (red, then green,
+  with `-Dpeano.reflection=deny`), `CdiBeanNameELResolverTest`.
+- **Reported by**: the wave-4 reflection work on Peano/Ibarra (BUG-20261102-03 follow-up)
+- **Minimal reproduction**: `specials.jsp` with `${specials.dish}` on a `@Named("specials") @RequestScoped` bean
+  rendered an empty string: no resolver of the page `ELContext` knew CDI bean names.
+- **Cause**: Jakarta EE has the CDI container add its EL resolver to the JSP application
+  (`BeanManager.getELResolver()`); nothing did in Vidocq, and Vauban, a CDI Lite container, has no
+  `getELResolver()` (it throws). The resolver is now built on `BeanManager.getBeans(String)`.
+- **`@Dependent` beans**: an instance a page creates by name is destroyed when the request ends (`RequestDependents`,
+  a `CdiContextListeners` provider Foy registers ahead of the application's listeners;
+  `BistroPagesTest.aDependentBeanReadByNameIsDestroyedAtTheEndOfItsRequest`, `RequestDependentsTest`). CDI Full
+  destroys it when the EL evaluation completes; JSP has no hook there, the request is the nearest end.
+- **Known limit**: names with dots (`@Named("a.b")`) are not split into a bean name and properties.
+- **Weld/Liberty**: unaffected — the registration lives in the Vidocq Pages extension only.
 ## BUG-20261102-04 — Production boots read the Mansart Data catalogue and created holder beans by reflection
 
 - **Date**: 2026-11-02

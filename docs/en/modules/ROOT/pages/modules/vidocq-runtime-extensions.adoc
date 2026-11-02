@@ -327,6 +327,16 @@ Where the pages go, as Foy serves the web resources of a runtime application:
 
 At process-classes, `vidocq:generate` stages them as a web root under `target/ibarra-web` and compiles every page into the application module, whose descriptor gains `provides io.vidocq.ibarra.spi.PageIndex`. A page that does not translate or compile fails the build, with the page named. Pages in a module that does not require `io.vidocq.ibarra.api` are not compiled: the build warns and names the first one. The precompilation runs before the Peano accessor registration, which keeps the page index when it rewrites the descriptor. Bind the generate goal in the build, as Vidocq's generated projects do: `vidocq:run` and `vidocq:dev` then reach it through `process-classes`. Without it, no page is compiled, and the startup report says so.
 
+[[pages-cdi-beans]][.tag-new]#NEW# A page reads a CDI bean by its name, as Jakarta EE requires: `${cart.total}` is the
+`total` of the `@Named` bean `cart`, in its scope (a `@RequestScoped` bean is the one of the current request). Once
+the application is deployed, before its first request, the extension adds a resolver of CDI bean names to the
+pages' EL context (`JspApplicationContext.addELResolver`); a name no bean has goes on to the request, session and
+application attributes as before. A `@Dependent` bean read by name is created for the page and destroyed when the
+request ends. A name with dots (`@Named("a.b")`) is not split into a bean name and properties. Vauban implements CDI Lite, which has no `BeanManager.getELResolver()`: the
+resolver is built on `BeanManager.getBeans(String)`. Peano reads the bean through the accessor table it generates
+for a `@Named` bean, served for its client proxy (xref:#peano-auto-accessors[no `@ELAccessible` needed]), so the
+page needs no reflection.
+
 At run time, Foy finds Ibarra's JSP engine and the compiled pages in the application layer. An application made of pages only, with no servlet, filter or listener of its own, is deployed.
 
 The `pages` section of the startup report counts the compiled pages and lists their paths; when none was compiled, it reports an anomaly with the steps above.

@@ -24,6 +24,7 @@ import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMount;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMounts;
 import io.vidocq.runtime.spi.ApplicationLayer;
 import io.vidocq.runtime.spi.config.VidocqConfig;
+import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletDeploymentListener;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.servlet.ServletException;
 
@@ -99,9 +100,18 @@ final class FoyDeployments {
         if (contextPath != null) builder.contextPath(contextPath);
         ServletSecurity.from(config).applyTo(builder, ServletSecurity.identityStoreBean(beanManager));
         try {
-            return builder.build();
+            Optional<FoyChappeBoot.Mounted> mounted = builder.build();
+            mounted.ifPresent(m -> deployed(m.servletContext(), beanManager));
+            return mounted;
         } catch (ServletException e) {
             throw new IllegalStateException(e.getMessage(), e);
+        }
+    }
+
+    /** Tells the {@link ServletDeploymentListener}s of the runtime extensions that an application is deployed. */
+    static void deployed(jakarta.servlet.ServletContext context, BeanManager beanManager) {
+        for (ServletDeploymentListener listener : java.util.ServiceLoader.load(ServletDeploymentListener.class)) {
+            listener.deployed(context, beanManager);
         }
     }
 

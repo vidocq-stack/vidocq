@@ -18,6 +18,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
  */
 module io.vidocq.runtime.examples.servlet {
+    requires jakarta.annotation;
     requires jakarta.cdi;
     requires jakarta.inject;
     requires jakarta.servlet;

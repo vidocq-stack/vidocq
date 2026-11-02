@@ -25,11 +25,22 @@ module io.vidocq.runtime.extensions.jakartaee.web.ibarra {
     requires transitive io.vidocq.ibarra.api;
     requires io.vidocq.ibarra.foy;
     requires io.vidocq.runtime.spi;
+    requires jakarta.cdi;
+    requires io.vidocq.foy.api;
+    requires jakarta.el;
     // The Servlet extension serves the pages; Peano evaluates their expressions.
     requires io.vidocq.runtime.extensions.jakartaee.web.foy;
     requires io.vidocq.runtime.extensions.jakartaee.core.peano;
 
     uses io.vidocq.ibarra.spi.PageIndex;
+
+    // CDI's bean names in the pages' EL context, registered once the application is deployed.
+    provides io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletDeploymentListener
+            with io.vidocq.runtime.extensions.jakartaee.web.ibarra.CdiPageNames;
+
+    // The @Dependent beans a page reads by name are destroyed when its request ends.
+    provides io.vidocq.foy.spi.cdi.CdiContextListeners
+            with io.vidocq.runtime.extensions.jakartaee.web.ibarra.RequestDependents;
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.jakartaee.web.ibarra.IbarraPagesExtension;

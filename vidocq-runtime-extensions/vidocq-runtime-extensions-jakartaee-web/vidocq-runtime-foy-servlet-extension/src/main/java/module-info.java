@@ -32,6 +32,11 @@ module io.vidocq.runtime.extensions.jakartaee.web.foy {
     exports io.vidocq.runtime.extensions.jakartaee.web.foy.live
             to io.vidocq.runtime.extensions.jakartaee.web.foy.dev;
 
+    // The extensions that complete a deployed application before its first request (the Pages extension).
+    exports io.vidocq.runtime.extensions.jakartaee.web.foy.spi
+            to io.vidocq.runtime.extensions.jakartaee.web.ibarra;
+    uses io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletDeploymentListener;
+
     provides io.vidocq.runtime.spi.VidocqExtension
             with FoyExtension;
 

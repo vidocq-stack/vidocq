@@ -82,6 +82,35 @@ class BistroPagesTest {
         assertTrue(receipt.body().contains("Total €23.00"), receipt.body());
     }
 
+    /**
+     * {@code ${specials.dish}} names a {@code @Named @RequestScoped} bean: the page resolves it through CDI, as Jakarta
+     * EE requires, and Peano reads its client proxy through the generated table (reflection is denied).
+     */
+    @Test
+    void aPageReadsANamedCdiBeanByName() throws IOException {
+        Response specials = new Browser().get("/specials.jsp");
+
+        assertEquals(200, specials.status(), specials.body() + "\n" + application.log());
+        assertTrue(specials.body().contains("beef bourguignon, €18.50."), specials.body());
+    }
+
+    /**
+     * {@code ${tally}} names a {@code @Dependent} bean: the instance a request creates is destroyed when the request
+     * ends, so after N requests the next one sees N destroyed.
+     */
+    @Test
+    void aDependentBeanReadByNameIsDestroyedAtTheEndOfItsRequest() throws IOException {
+        long before = destroyed(new Browser().get("/tally.jsp"));
+        for (int i = 0; i < 5; i++) new Browser().get("/tally.jsp");
+
+        assertEquals(before + 6, destroyed(new Browser().get("/tally.jsp")), application.log());
+    }
+
+    private static long destroyed(Response tally) {
+        assertEquals(200, tally.status(), tally.body());
+        return Long.parseLong(tally.body().strip().substring("destroyed=".length()));
+    }
+
     @Test
     void theReceiptViewIsOutOfTheClientsReach() throws IOException {
         assertEquals(404, new Browser().get("/WEB-INF/views/receipt.jsp").status());
