@@ -238,5 +238,8 @@ back with compiler plugin 3.13 either). Workaround removed; the shared execution
 - **Hypothèse de cause** : `KnockJsonSerializer` built its objects through the static `Json.createObjectBuilder()`
   / `Json.createArrayBuilder()`, each of which calls `JsonProvider.provider()`.
 - **Investigations** :
-  - 2026-11-02 : the serializer resolves one `JsonBuilderFactory` when it is created (once per
-    `KnockHealthService`) and builds through it; `KnockJsonSerializerTest.serialize_builds_through_the_factory_resolved_once`.
+  - 2026-11-02 : the serializers build through one `JsonBuilderFactory`, resolved on first use and shared (the
+    `/health` resource creates a `KnockHealthService`, hence a serializer, per request);
+    `KnockJsonSerializerTest.serialize_builds_through_the_factory_resolved_once`,
+    `serializers_share_the_factory_resolved_once`. Traced on a multi-extension app: 9 provider lookups per
+    3 `/health` calls before, 1 for the JVM after.

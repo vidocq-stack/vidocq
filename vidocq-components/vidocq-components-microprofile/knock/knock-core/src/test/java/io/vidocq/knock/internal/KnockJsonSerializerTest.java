@@ -67,6 +67,12 @@ class KnockJsonSerializerTest {
      * reflection at every call: the serializer builds through one factory resolved when it is created
      * (BUG-20261102-01).
      */
+    /** The /health resource creates a serializer per request: they share one factory. */
+    @Test
+    void serializers_share_the_factory_resolved_once() {
+        assertSame(new KnockJsonSerializer().factory(), new KnockJsonSerializer().factory());
+    }
+
     @Test
     void serialize_builds_through_the_factory_resolved_once() {
         var delegate = jakarta.json.spi.JsonProvider.provider().createBuilderFactory(java.util.Map.of());

@@ -55,20 +55,30 @@ import java.util.Optional;
  *
  * <p>The builders come from one {@link JsonBuilderFactory} resolved when the serializer is created:
  * {@link Json}'s static methods look the provider up through {@code ServiceLoader} and create it by
- * reflection at every call, that is at every {@code /health} request (BUG-20261102-01).</p>
+ * reflection at every call, that is at every {@code /health} request (BUG-20261102-01); the factory is shared
+ * by all serializers, the {@code /health} resource creating one per request.</p>
  */
 public final class KnockJsonSerializer {
 
     private final JsonBuilderFactory json;
 
-    /** Resolves the JSON-P provider once. */
+    /** The factory of the JSON-P provider, resolved on first use and shared: a serializer is created per request. */
+    private static final class DefaultFactory {
+        static final JsonBuilderFactory INSTANCE = JsonProvider.provider().createBuilderFactory(Map.of());
+    }
+
+    /** Builds through the shared factory of the JSON-P provider. */
     public KnockJsonSerializer() {
-        this(JsonProvider.provider().createBuilderFactory(Map.of()));
+        this(DefaultFactory.INSTANCE);
     }
 
     /** Builds through {@code json}. */
     KnockJsonSerializer(JsonBuilderFactory json) {
         this.json = json;
+    }
+
+    JsonBuilderFactory factory() {
+        return json;
     }
 
     /**
