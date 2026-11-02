@@ -4,6 +4,48 @@
 [.lead]
 Humboldt runs on a simple principle: no runtime reflection on the hot path, no external bytecode library, anything computable at compile time is computed there. This page describes the internal pipeline (`TracerProvider` → `Processor` → `Exporter`), the `ScopedValue` vs `ThreadLocal` choice, the build-time wiring policy (and its one deliberate dynamic-proxy exception), and the deliberate absence of a gRPC stack.
 
+[#generated-code]
+== Generated code and reflective fallback [.tag-new]#NEW#
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. Humboldt has no generator of its own: its jars
+are built with Vauban's and Cassini's processors, and the rest is read once by reflection and cached
+(<<_build_time_wiring_and_one_deliberate_proxy_exception>>).
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| The `_VaubanComponents` and bean index of `humboldt-cdi` and `humboldt-rest`
+| `vauban-processor`, at Humboldt's own build
+| Vauban (xref:vauban::internals.adoc#generated-code[Vauban])
+| Vauban's fallback.
+
+| The `$$CassiniProvider` descriptors of the JAX-RS filters of `humboldt-rest`
+  (`HumboldtServerRequestFilter`, `HumboldtServerResponseFilter`, `HumboldtSpanFinalizer`)
+| `cassini-processor`, at Humboldt's own build
+| Cassini, when it registers the providers (xref:cassini::internals.adoc#generated-code[Cassini])
+| Cassini reads the filters' annotations by reflection.
+
+| The `$$Intercepted` subclass of an application bean carrying `@WithSpan`
+| `vauban-processor`, at the application's build
+| Vauban, which routes the call through `WithSpanInterceptor`
+| Vauban's fallback.
+|===
+
+Not generated: the span plan of a `@WithSpan` method (its name, kind, `@SpanAttribute` parameters) is read by
+reflection on its first call and cached per method; the `http.route` template of a resource method is read from its
+`@Path` annotations once and cached per resource class. Neither reads anything again per request.
+
+=== When the fallback runs
+
+The cached reads above run in every deployment, on Vidocq too. The generated classes are part of Humboldt's jars;
+they are absent only on a container other than Vauban and Cassini, which ignores them.
+
+=== Which path ran
+
+Humboldt does not log which path it took.
+
 == Signal pipeline
 
 [mermaid]
