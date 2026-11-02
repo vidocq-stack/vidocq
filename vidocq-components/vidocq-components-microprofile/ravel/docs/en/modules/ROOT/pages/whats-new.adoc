@@ -4,4 +4,5 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
+* xref:internals.adoc#generated-code[Generated code and reflective fallback] — one table lists what Ravel generates at build (the `@ConfigProperties` factories, the implicit converters, what its extension records), what uses it at run time and what runs when it is missing, followed by when the reflective path still runs.
 * xref:cdi-integration.adoc#generated-code[`@ConfigProperties` and implicit converters without reflection] — `ravel-processor` generates, in the application's packages, the factories of its `@ConfigProperties` classes and the implicit converters of its injected types; Ravel uses them before its reflective path, which stays unchanged for every class or container without them.

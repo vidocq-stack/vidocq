@@ -4,6 +4,53 @@
 [.lead]
 Ravel resolves the MicroProfile Config abstraction against the JDK and the spec alone — zero third-party libraries, strict Java Modules, jlink-ready. This page documents the module structure and the design choices behind the runtime.
 
+[#generated-code]
+== Generated code and reflective fallback [.tag-new]#NEW#
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. For Ravel that is the code that fills
+`@ConfigProperties` classes and the implicit converters; reflection stays as the fallback, unchanged. The user-facing
+side is in xref:cdi-integration.adoc#generated-code[CDI integration — Generated code instead of reflection].
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| `<Class>$$RavelConfigProperties`, a `GeneratedConfigProperties`: creates a `@ConfigProperties` instance and sets its
+  fields with plain assignments (a `private` field through a `VarHandle` the application's module grants itself)
+| `ravel-processor` in javac, in the class's package; on Vidocq the `vidocq-runtime-ravel-config-extension-codegen`
+  bundle puts it on the processor path
+| `ConfigPropertiesSyntheticCreator`, when the bean is created: the `ServiceLoader` of `GeneratedConfigProperties`
+  on the class's loader, matched by type name, cached per class
+| The class's fields are read and set by reflection, which on the module path needs the package opened to Ravel.
+
+| `_RavelConverters`, a `GeneratedConverters`: the implicit converter the specification picks for each type injected
+  with `@ConfigProperty` or held by a `@ConfigProperties` field (`of`, `valueOf`, `parse`, a `String` constructor,
+  or an enum constant by name), called directly
+| `ravel-processor`, one per compilation, in one of the application's packages
+| `RavelConfig`, which loads them through `ServiceLoader` before looking for an implicit converter
+| The implicit converter is found and called by reflection on the type's public members.
+
+| The beans that satisfy each `@ConfigProperty` and `@ConfigProperties` point
+| Ravel's Build Compatible Extension, which Vauban runs in javac when `ravel-cdi-vauban` is on the processor path
+  (xref:cdi-integration.adoc#extension-in-the-compiler[When the extension runs in the compiler])
+| Vauban, from the synthetic metadata the processor wrote
+| The extension runs at boot.
+|===
+
+=== When the fallback runs
+
+* A class or a type compiled without `ravel-processor`: a library of another build, another container (Weld, Open
+  Liberty, a CDI 3 container).
+* A `@ConfigProperties` class the generated code cannot fill: abstract, with a `final` or type-variable field, or
+  without a non-private no-argument constructor.
+* A type without a generated converter.
+
+=== Which path ran
+
+Ravel does not log which path it took. A `@ConfigProperties` class in a package that is not opened fails on the
+module path only when the reflective path runs, which is the visible sign of a missing processor.
+
 == Overview
 
 Ravel implements MicroProfile Config 3.1 with these principles:
