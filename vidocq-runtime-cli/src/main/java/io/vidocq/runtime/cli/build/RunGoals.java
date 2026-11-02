@@ -40,6 +40,9 @@ public final class RunGoals {
      */
     private static final String PORT_KEY = "vidocq.chappe.listener.default.port";
 
+    /** The phase every run goal starts after: the goals read {@code target/classes}. */
+    private static final String PROCESS_CLASSES = "process-classes";
+
     private RunGoals() {}
 
     /**
@@ -48,7 +51,7 @@ public final class RunGoals {
      * ({@code maven.compiler.failOnError=false}): the goal reports it and waits for a fix (BUG-20261030-12).
      */
     public static List<String> dev(String profile, boolean portExplicit, int port, boolean debug) {
-        List<String> args = new ArrayList<>(List.of("process-classes", "vidocq:dev",
+        List<String> args = new ArrayList<>(List.of(PROCESS_CLASSES, "vidocq:dev",
                 "-Dmaven.compiler.failOnError=false"));
         args.add("-Dvidocq.profile=" + profile);
         if (portExplicit) {
@@ -67,8 +70,8 @@ public final class RunGoals {
      * goal runs every test once and ends with the verdict, for CI and scripts.
      */
     public static List<String> test(boolean once) {
-        return once ? List.of("process-classes", "vidocq:test", "-Dvidocq.test.once=true")
-                : List.of("process-classes", "vidocq:test");
+        return once ? List.of(PROCESS_CLASSES, "vidocq:test", "-Dvidocq.test.once=true")
+                : List.of(PROCESS_CLASSES, "vidocq:test");
     }
 
     /**

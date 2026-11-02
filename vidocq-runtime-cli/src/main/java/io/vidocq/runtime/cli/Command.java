@@ -52,8 +52,10 @@ public sealed interface Command {
         static Dev defaults() { return new Dev(8080, false, "dev", false); }
     }
 
-    /** {@code vidocq test}: the tests on every change, without the application ({@code mvn vidocq:test}). */
-    /** {@code vidocq test}; {@code once} runs every test once and exits, for CI and scripts. */
+    /**
+     * {@code vidocq test}: the tests on every change, without the application ({@code mvn vidocq:test}); {@code once}
+     * runs every test once and exits, for CI and scripts.
+     */
     record ContinuousTest(boolean once) implements Command {}
 
     /**

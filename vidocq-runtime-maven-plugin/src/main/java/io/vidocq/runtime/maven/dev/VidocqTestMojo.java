@@ -46,6 +46,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -116,18 +117,7 @@ public class VidocqTestMojo extends AbstractMojo {
         List<Path> mainDirs = VidocqDevMojo.parseDirs(projectDir, watchDirs);
         List<Path> testDirs = VidocqDevMojo.parseDirs(projectDir, testWatchDirs);
         Function<String, Optional<String>> files = ApplicationFiles.of(classesDir.toPath());
-        DevServicesSession devs = null;
-        if (devServicesEnabled(files)) {
-            ApplicationClasspath classpath = new ApplicationClasspath(testClasspath());
-            try {
-                devs = DevServicesSession.open(HOST, projectDir, new LinkedHashMap<>(), files,
-                        ApplicationFiles.allOf(classesDir.toPath()), classpath::contains,
-                        new MavenSystemLogger(getLog()));
-            } catch (DevServicesException e) {
-                throw new MojoExecutionException(e.getMessage(), e);
-            }
-        }
-        final DevServicesSession session = devs;
+        final DevServicesSession session = openDevServices(projectDir, files);
         Map<String, String> testProps = new LinkedHashMap<>();
         if (session != null) {
             session.foldInto(testProps);
@@ -135,12 +125,7 @@ public class VidocqTestMojo extends AbstractMojo {
         boolean keys = !once && TerminalControls.attached();
         CompletableFuture<TestResults> verdict = new CompletableFuture<>();
         ContinuousTesting testing = ContinuousTesting.forProject(projectDir, buildDir.toPath(), testProps,
-                result -> {
-                    TestSummaryPrinter.lines(result, true, keys).forEach(getLog()::info);
-                    if (result.state().complete()) {
-                        verdict.complete(result);
-                    }
-                }, getLog()::warn);
+                reporter(keys, verdict), getLog()::warn);
 
         Thread mainThread = Thread.currentThread();
         Thread hook = new Thread(() -> {
@@ -181,6 +166,32 @@ public class VidocqTestMojo extends AbstractMojo {
                 // shutdown already in progress
             }
         }
+    }
+
+    /** The dev services session of the tests, or {@code null} when they are off. */
+    private DevServicesSession openDevServices(Path projectDir, Function<String, Optional<String>> files)
+            throws MojoExecutionException {
+        if (!devServicesEnabled(files)) {
+            return null;
+        }
+        ApplicationClasspath classpath = new ApplicationClasspath(testClasspath());
+        try {
+            return DevServicesSession.open(HOST, projectDir, new LinkedHashMap<>(), files,
+                    ApplicationFiles.allOf(classesDir.toPath()), classpath::contains,
+                    new MavenSystemLogger(getLog()));
+        } catch (DevServicesException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
+    }
+
+    /** Prints each result, and hands the first complete one to {@code verdict} for the one-shot run. */
+    private Consumer<TestResults> reporter(boolean keys, CompletableFuture<TestResults> verdict) {
+        return result -> {
+            TestSummaryPrinter.lines(result, true, keys).forEach(getLog()::info);
+            if (result.state().complete()) {
+                verdict.complete(result);
+            }
+        };
     }
 
     /** The single run of {@code vidocq.test.once}: every test, then the verdict, the dev services stopped either way. */

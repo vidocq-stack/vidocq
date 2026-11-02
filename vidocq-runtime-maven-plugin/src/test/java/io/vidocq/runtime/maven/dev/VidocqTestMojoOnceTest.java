@@ -42,7 +42,9 @@ class VidocqTestMojoOnceTest {
     /** A test process that has already ended with {@code code}. */
     private record Ended(int code) implements ContinuousTesting.Launched {
         @Override public int waitFor() { return code; }
-        @Override public void cancel() { }
+        @Override public void cancel() {
+            // the process has already ended
+        }
         @Override public boolean cancelled() { return false; }
     }
 
@@ -54,8 +56,12 @@ class VidocqTestMojoOnceTest {
                     if (result.state().complete()) {
                         verdict.complete(result);
                     }
-                }, warning -> { }, Clock.systemUTC());
-        new VidocqTestMojo().runOnce(testing, null, new Thread(() -> { }), verdict);
+                }, warning -> {
+                    // no warning expected in these runs
+                }, Clock.systemUTC());
+        new VidocqTestMojo().runOnce(testing, null, new Thread(() -> {
+            // a hook that is never registered
+        }), verdict);
     }
 
     @Test

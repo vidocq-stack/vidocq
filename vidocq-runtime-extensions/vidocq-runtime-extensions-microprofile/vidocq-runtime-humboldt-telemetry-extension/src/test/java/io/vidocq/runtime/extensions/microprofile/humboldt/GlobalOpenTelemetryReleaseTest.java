@@ -44,7 +44,8 @@ class GlobalOpenTelemetryReleaseTest {
     @Test
     void installingTakesTheGlobalSlot() {
         assertTrue(HumboldtExtension.installGlobal(OpenTelemetry.noop(), "app"));
-        assertThrows(IllegalStateException.class, () -> GlobalOpenTelemetry.set(OpenTelemetry.noop()));
+        OpenTelemetry other = OpenTelemetry.noop();
+        assertThrows(IllegalStateException.class, () -> GlobalOpenTelemetry.set(other));
     }
 
     @Test
@@ -53,7 +54,8 @@ class GlobalOpenTelemetryReleaseTest {
 
         HumboldtExtension.releaseGlobal();
 
-        assertDoesNotThrow(() -> GlobalOpenTelemetry.set(OpenTelemetry.noop()));
+        OpenTelemetry next = OpenTelemetry.noop();
+        assertDoesNotThrow(() -> GlobalOpenTelemetry.set(next));
     }
 
     @Test
