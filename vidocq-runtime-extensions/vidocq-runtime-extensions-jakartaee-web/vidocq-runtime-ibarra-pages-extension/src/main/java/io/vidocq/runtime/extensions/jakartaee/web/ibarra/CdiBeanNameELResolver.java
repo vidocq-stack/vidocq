@@ -51,6 +51,8 @@ public final class CdiBeanNameELResolver extends ELResolver {
         Optional<Supplier<Object>> find(String name, ELContext context);
     }
 
+    private static final String CONTEXT = "context";
+
     private final BeanNames names;
 
     /**
@@ -88,7 +90,7 @@ public final class CdiBeanNameELResolver extends ELResolver {
 
     @Override
     public Object getValue(ELContext context, Object base, Object property) {
-        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(context, CONTEXT);
         Optional<Supplier<Object>> bean = named(context, base, property);
         if (bean.isEmpty()) return null;
         context.setPropertyResolved(base, property);
@@ -97,7 +99,7 @@ public final class CdiBeanNameELResolver extends ELResolver {
 
     @Override
     public Class<?> getType(ELContext context, Object base, Object property) {
-        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(context, CONTEXT);
         if (named(context, base, property).isPresent()) context.setPropertyResolved(base, property);
         // Read-only: the type of a resolved name is null (ELResolver.getType contract).
         return null;
@@ -105,7 +107,7 @@ public final class CdiBeanNameELResolver extends ELResolver {
 
     @Override
     public void setValue(ELContext context, Object base, Object property, Object value) {
-        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(context, CONTEXT);
         if (named(context, base, property).isPresent()) {
             throw new PropertyNotWritableException("The CDI bean " + property + " cannot be replaced from EL");
         }
@@ -113,7 +115,7 @@ public final class CdiBeanNameELResolver extends ELResolver {
 
     @Override
     public boolean isReadOnly(ELContext context, Object base, Object property) {
-        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(context, CONTEXT);
         if (named(context, base, property).isEmpty()) return false;
         context.setPropertyResolved(base, property);
         return true;
