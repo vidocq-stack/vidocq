@@ -39,7 +39,7 @@ public final class PeanoExpressionFactory extends ExpressionFactory {
     /**
      * A catalog fixed at construction (tests); otherwise null, and the catalog is the calling thread's application's.
      * The factory holds nothing of any application: the Jakarta EL API keeps the first one for the life of the JVM,
-     * across the application layers {@code vidocq dev} discards on a hot reload (BUG-20261102-02).
+     * across the application layers {@code vidocq dev} discards on a hot reload (EL-023).
      */
     private final AccessorCatalog fixed;
 

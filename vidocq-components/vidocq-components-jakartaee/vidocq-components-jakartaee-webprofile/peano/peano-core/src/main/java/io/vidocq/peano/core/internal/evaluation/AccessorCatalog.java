@@ -46,7 +46,7 @@ public final class AccessorCatalog {
     /**
      * Matching tables per runtime class, in lookup order; an empty list means none. Held by the runtime classes
      * themselves rather than in a map of this catalog: a catalog an expression factory keeps for the JVM must not
-     * pin the classes of an application layer that was discarded (BUG-20261102-02).
+     * pin the classes of an application layer that was discarded (EL-023).
      */
     private final ClassValue<AtomicReference<List<AccessorTable>>> matching = new ClassValue<>() {
         @Override

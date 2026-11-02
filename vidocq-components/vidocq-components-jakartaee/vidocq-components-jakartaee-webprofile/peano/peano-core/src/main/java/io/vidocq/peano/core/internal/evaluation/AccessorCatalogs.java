@@ -31,7 +31,7 @@ import java.util.WeakHashMap;
  * while {@code vidocq dev} boots a fresh application layer (a new class loader, new table classes) on every hot
  * reload. A catalog holds the tables of its layer, and so its classes and its loader: a map keyed by the loader would
  * keep the loader alive through its own value (a weak key does not help when the value reaches the key), and the
- * factory would pin every layer it was ever asked about (BUG-20261102-02).
+ * factory would pin every layer it was ever asked about (EL-023).
  *
  * <p>A catalog that holds a class its loader defines is therefore kept by that class, in a {@link ClassValue}: it is
  * reachable from the layer alone, and goes with it. Only a weak, class-only link from the loader to that class is

@@ -48,7 +48,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * {@code vidocq dev} boots a fresh application layer on every hot reload, while the Jakarta EL API keeps the first
- * expression factory in a static field of its own (BUG-20261102-02): the factory must hold nothing of a layer, or
+ * expression factory in a static field of its own (EL-023): the factory must hold nothing of a layer, or
  * every discarded layer stays reachable from that static.
  */
 class CatalogLayerLeakTest {
