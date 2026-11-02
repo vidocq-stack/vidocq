@@ -27,6 +27,9 @@ import java.security.PublicKey;
 import java.security.Signature;
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Checks the signature of a JWT via the JCA ({@code java.security.Signature}) — zero third-party cryptography dependency.
@@ -37,17 +40,47 @@ import java.security.interfaces.RSAPublicKey;
  */
 final class JwtSignatureVerifier {
 
+    /** How many idle {@link Signature} objects are kept per algorithm: more than that is only the peak of a burst. */
+    private static final int IDLE_PER_ALGORITHM = 32;
+
+    /** Asks the JCA for a new {@link Signature}. */
+    @FunctionalInterface
+    interface SignatureFactory {
+        Signature create(String jcaName) throws GeneralSecurityException;
+    }
+
+    private final SignatureFactory factory;
+    /**
+     * Idle signatures by JCA name. {@code Signature.getInstance} looks the provider up and builds the engine
+     * reflectively on every call; {@code initVerify} resets a signature completely, so one is reused by the next token.
+     */
+    private final ConcurrentHashMap<String, BlockingQueue<Signature>> idle = new ConcurrentHashMap<>();
+
+    JwtSignatureVerifier() {
+        this(Signature::getInstance);
+    }
+
+    JwtSignatureVerifier(SignatureFactory factory) {
+        this.factory = factory;
+    }
+
     boolean verify(ParsedJwt jwt, PublicKey key, SignatureAlgorithm alg) throws JwtValidationException {
         requireKeyFamily(key, alg);
         try {
-            Signature signature = Signature.getInstance(alg.jcaName());
+            BlockingQueue<Signature> pool = idle.computeIfAbsent(alg.jcaName(), _ -> new ArrayBlockingQueue<>(IDLE_PER_ALGORITHM));
+            Signature signature = pool.poll();
+            if (signature == null) {
+                signature = factory.create(alg.jcaName());
+            }
             signature.initVerify(key);
             signature.update(jwt.signingInput());
             byte[] sigBytes = jwt.signature();
             if (alg.family() == SignatureAlgorithm.Family.EC) {
                 sigBytes = EcdsaSignatures.joseToDer(sigBytes, alg.ecCoordinateOctets());
             }
-            return signature.verify(sigBytes);
+            boolean valid = signature.verify(sigBytes);
+            pool.offer(signature); // only after a clean run: a signature that threw is dropped
+            return valid;
         } catch (IllegalArgumentException _) {
             //poorly sized EC signature (transcoding impossible) → invalid signature, not server error
             return false;

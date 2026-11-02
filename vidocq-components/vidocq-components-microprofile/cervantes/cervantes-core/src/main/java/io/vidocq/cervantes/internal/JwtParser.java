@@ -20,13 +20,14 @@
 package io.vidocq.cervantes.internal;
 
 import io.vidocq.cervantes.api.JwtValidationException;
-import jakarta.json.Json;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonReader;
+import jakarta.json.spi.JsonProvider;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.function.Supplier;
 
 /**
  * Decode a compact {@code header.payload.signature} JWT in {@link ParsedJwt}.
@@ -38,6 +39,27 @@ import java.util.Base64;
 final class JwtParser {
 
     private static final Base64.Decoder B64URL = Base64.getUrlDecoder();
+
+    private final Supplier<JsonProvider> providerLookup;
+    /** The JSON-P provider, looked up on the first token: {@code JsonProvider.provider()} runs a ServiceLoader each time. */
+    private volatile JsonProvider provider;
+
+    JwtParser() {
+        this(JsonProvider::provider);
+    }
+
+    JwtParser(Supplier<JsonProvider> providerLookup) {
+        this.providerLookup = providerLookup;
+    }
+
+    private JsonProvider provider() {
+        JsonProvider found = provider;
+        if (found == null) {
+            found = providerLookup.get();
+            provider = found;
+        }
+        return found;
+    }
 
     ParsedJwt parse(String token) throws JwtValidationException {
         if (token == null || token.isBlank()) {
@@ -59,7 +81,7 @@ final class JwtParser {
 
     private JsonObject readJson(String segment, String what) throws JwtValidationException {
         byte[] json = decode(segment, what);
-        try (JsonReader reader = Json.createReader(new ByteArrayInputStream(json))) {
+        try (JsonReader reader = provider().createReader(new ByteArrayInputStream(json))) {
             return reader.readObject();
         } catch (RuntimeException e) {
             throw new JwtValidationException("invalid JSON in JWT " + what, e);
