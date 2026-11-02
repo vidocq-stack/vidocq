@@ -65,6 +65,6 @@ from the auto-configuration.
 
 ## See also
 
-- [humboldt/](https://forge.vidocq.dev/vidocq/humboldt) — Humboldt implementation
-- [humboldt/PLAN.md](https://forge.vidocq.dev/vidocq/humboldt/src/branch/main/PLAN.md) — detailed architecture
-- [humboldt/TCK.md](https://forge.vidocq.dev/vidocq/humboldt/src/branch/main/TCK.md) — MP Telemetry 2.2 TCK status
+- [humboldt/](https://codefloe.com/Vidocq/humboldt) — Humboldt implementation
+- [humboldt/PLAN.md](https://codefloe.com/Vidocq/humboldt/src/branch/main/PLAN.md) — detailed architecture
+- [humboldt/TCK.md](https://codefloe.com/Vidocq/humboldt/src/branch/main/TCK.md) — MP Telemetry 2.2 TCK status
