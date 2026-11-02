@@ -207,6 +207,42 @@ class TransactionalInterceptorTest {
         try { return tm.getStatus(); } catch (Exception e) { throw new RuntimeException(e); }
     }
 
+    // ============ Binding resolution ============
+
+    @Transactional(Transactional.TxType.MANDATORY)
+    static class ClassLevel {
+        public void inherited() { }
+
+        @Transactional(Transactional.TxType.NEVER)
+        public void own() { }
+    }
+
+    static class SubclassOfClassLevel extends ClassLevel { }
+
+    @Test
+    void theMethodBindingWinsOverTheClassBinding() throws Exception {
+        assertThat(TransactionalInterceptor.binding(ClassLevel.class, ClassLevel.class.getMethod("own")).value())
+                .isEqualTo(Transactional.TxType.NEVER);
+        assertThat(TransactionalInterceptor.binding(ClassLevel.class, ClassLevel.class.getMethod("inherited")).value())
+                .isEqualTo(Transactional.TxType.MANDATORY);
+    }
+
+    /** A container's subclass (a proxy) finds the binding of the class it extends. */
+    @Test
+    void aSubclassFindsTheBindingOfItsSuperclass() throws Exception {
+        assertThat(TransactionalInterceptor.binding(SubclassOfClassLevel.class,
+                ClassLevel.class.getMethod("inherited")).value()).isEqualTo(Transactional.TxType.MANDATORY);
+    }
+
+    /** Resolved once per target class and method, then served from the cache: the same instance every call. */
+    @Test
+    void theBindingIsResolvedOncePerTargetClassAndMethod() throws Exception {
+        var method = ClassLevel.class.getMethod("own");
+        assertThat(TransactionalInterceptor.binding(ClassLevel.class, method))
+                .isSameAs(TransactionalInterceptor.binding(ClassLevel.class, method));
+        assertThat(TransactionalInterceptor.cachedBindings(ClassLevel.class)).containsKey(method);
+    }
+
     // ============ Test bean ============
 
     @ApplicationScoped

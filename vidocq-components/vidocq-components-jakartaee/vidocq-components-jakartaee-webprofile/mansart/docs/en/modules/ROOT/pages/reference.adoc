@@ -83,6 +83,12 @@ Mansart reaches an application's entities and repositories without reflection, s
 
 Reflection remains the fallback where the generated code is absent: an entity or repository compiled without `mansart-data-processor`, or a container that does not load the service (Weld, Open Liberty — reflection is fine there). A repository served on the run-time path says so once, at start-up, with its cause.
 
+[.tag-new]#NEW# The calls that stay reflective are made once, not on every call or for every class:
+
+* a JDQL statement the processor leaves to the run time (an arithmetic `UPDATE`, for instance) finds its repository method once, in a holder class of the generated method;
+* `@Transactional` resolves the annotation of a method once per bean class and method, then reads it from a cache;
+* at startup, the CDI extension loads only the classes that can be a repository implementation it vetoes — a generated implementation the repository index lists, or a `<repository>_` class of another provider — instead of loading and inspecting every class of the archive.
+
 [#bean-archives]
 === Bean archives
 

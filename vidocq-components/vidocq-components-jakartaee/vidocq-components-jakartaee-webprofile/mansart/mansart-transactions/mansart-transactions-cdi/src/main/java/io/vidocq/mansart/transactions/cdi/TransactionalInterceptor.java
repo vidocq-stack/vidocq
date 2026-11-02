@@ -34,6 +34,8 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.TransactionalException;
 
 import java.lang.reflect.Method;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Interceptor implementing {@link Transactional} for the six TxType values defined by
@@ -189,22 +191,44 @@ public class TransactionalInterceptor {
         return e instanceof RuntimeException || e instanceof Error;
     }
 
+    /** The bindings already resolved, per target class and method: annotations do not change once loaded. */
+    private static final ClassValue<Map<Method, Transactional>> BINDINGS = new ClassValue<>() {
+        @Override
+        protected Map<Method, Transactional> computeValue(Class<?> type) {
+            return new ConcurrentHashMap<>();
+        }
+    };
+
+    private static Transactional resolveAnnotation(InvocationContext ic) {
+        Object target = ic.getTarget();
+        return binding(target == null ? null : target.getClass(), ic.getMethod());
+    }
+
+    /** The binding of {@code method} called on a {@code targetClass}, resolved once and then cached. */
+    static Transactional binding(Class<?> targetClass, Method method) {
+        if (targetClass == null || method == null) {
+            return resolve(targetClass, method);
+        }
+        return BINDINGS.get(targetClass).computeIfAbsent(method, m -> resolve(targetClass, m));
+    }
+
+    /** The bindings cached for {@code targetClass}. Visible for tests. */
+    static Map<Method, Transactional> cachedBindings(Class<?> targetClass) {
+        return BINDINGS.get(targetClass);
+    }
+
     /** Resolve @Transactional from the method, then the target class hierarchy. Falls back to
      *  the {@link #DEFAULT} (REQUIRED, no override) if none is found — defensive : the interceptor
      *  is only triggered when @Transactional is present somewhere, so this branch is essentially
      *  unreachable in CDI. */
-    private static Transactional resolveAnnotation(InvocationContext ic) {
-        Method m = ic.getMethod();
+    private static Transactional resolve(Class<?> targetClass, Method m) {
         if (m != null) {
             Transactional ann = m.getAnnotation(Transactional.class);
             if (ann != null) return ann;
         }
-        Object target = ic.getTarget();
-        if (target != null) {
-            for (Class<?> c = target.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
-                Transactional ann = c.getAnnotation(Transactional.class);
-                if (ann != null) return ann;
-            }
+        for (Class<?> c = targetClass; c != null && c != Object.class; c = c.getSuperclass()) {
+            Transactional ann = c.getAnnotation(Transactional.class);
+            if (ann != null) return ann;
         }
         return DEFAULT;
     }

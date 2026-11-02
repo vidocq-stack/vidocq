@@ -9,6 +9,14 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-040 — Reflection repeated on every call, and every class loaded at startup
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `perf/mansart-reflection-wave`. (1) The method body the processor emits for a JDQL statement left to the run time (an arithmetic `UPDATE`) called `this.getClass().getInterfaces()[0].getMethod(…)` on every call; it now reads the method from a local holder class (`final class _CallSite { static final Method M = JdqlExecutor.callSite(Repo.class, "name", …); }`), resolved once, on the interface that declares the method (`RuntimeFallbackCallSiteTest`, red before; it also runs the statement twice on H2). (2) `TransactionalInterceptor` resolved `@Transactional` with `getAnnotation` on the method and the target class hierarchy on every call; the same resolution is now cached per target class (`ClassValue`) and method (`theBindingIsResolvedOncePerTargetClassAndMethod`, `theMethodBindingWinsOverTheClassBinding`, `aSubclassFindsTheBindingOfItsSuperclass`). `InvocationContext.getInterceptorBinding` was not used: Vauban derives the bindings of a business method by reflection on every call too. (3) `MansartDataExtension.vetoRoutedRepositoryImpls`, an `@Enhancement` over every class, loaded each class and read its interfaces (≈ 5 700 introspections at a boot measured by the reflection audit); it now loads only the classes the repository indices list as implementations and the `<repository>_` classes of another provider (`VetoCandidateTest`). A class the application writes itself that implements a repository bound to a named `dataStore` is no longer vetoed: the veto was meant for the generated implementation, whose constructor injects the default runtime. The reflective paths themselves are unchanged. Full reactor 665 tests, Jakarta Data TCK 74/74, Weld and Open Liberty modules green; a `vidocq create` application (REST, data, pool, transactions, Flyway) answers its `@Transactional` POST, derived query and JDQL projections on PostgreSQL.
+- **Reported by**: the reflection audit of the standard Vidocq path
+- **Minimal reproduction**: profile a request on a repository method with an arithmetic `UPDATE`, or on a `@Transactional` bean method: `Class.getMethod` / `getAnnotation` on each call; boot an application: every class of the archive is loaded by the extension.
+- **Cause hypothesis**: the generated fallback body and the interceptor had no place to keep what they resolved; the `@Enhancement` filter was by type `Object` because the index-backed interfaces are empty for pre-indexed module-path classes.
+
 ## MANSART-039 — A one-attribute SELECT into a one-component record was read as a plain column
 
 - **Date**: 2026-11-02

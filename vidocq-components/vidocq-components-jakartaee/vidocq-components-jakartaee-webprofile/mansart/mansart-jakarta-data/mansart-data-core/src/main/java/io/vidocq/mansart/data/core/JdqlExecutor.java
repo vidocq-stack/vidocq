@@ -71,6 +71,18 @@ public final class JdqlExecutor {
     }
 
     /**
+     * The public method {@code name} of {@code repository}, for the code the processor generates around
+     * {@link #executeJdql}: it resolves it once, when the class holding it initializes.
+     */
+    public static Method callSite(Class<?> repository, String name, Class<?>... parameterTypes) {
+        try {
+            return repository.getMethod(name, parameterTypes);
+        } catch (NoSuchMethodException e) {
+            throw new MansartDataException("missing method handle", e);
+        }
+    }
+
+    /**
      * M8-1f — public entry point used by compile-time generated repository impls when the JDQL
      * grammar requires features not yet emitted as static Java by {@link io.vidocq.mansart.data.processor.JdqlParser}
      * (currently: UPDATE with arithmetic/scalar-function SET RHS). Re-parses the JDQL string at

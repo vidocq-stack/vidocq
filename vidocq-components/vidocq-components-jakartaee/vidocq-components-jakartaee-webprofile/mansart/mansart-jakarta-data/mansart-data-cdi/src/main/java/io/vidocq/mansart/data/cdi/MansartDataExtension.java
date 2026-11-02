@@ -41,6 +41,7 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -85,11 +86,17 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         // factory at boot, so no on-disk artefact lives in the user module.
         scanned.add(MansartRuntimeProducer.class.getName());
 
-        ClassLoader cl = currentClassLoader();
-        // Two compile-time indices, identical format (itf=impl): the APT-produced list (repositories
-        // in the application's own sources) and the mansart-data-maven-plugin list (repositories from
-        // pre-compiled dependency jars, generated ahead of time into an app-owned package). Both map
-        // to a @Singleton *Impl with an (RepositoryRuntime) constructor → MansartRepoCreator path.
+        entries.addAll(readIndices(currentClassLoader()));
+    }
+
+    /**
+     * The entries of the two compile-time indices, identical format (itf=impl): the APT-produced list (repositories
+     * in the application's own sources) and the mansart-data-maven-plugin list (repositories from pre-compiled
+     * dependency jars, generated ahead of time into an app-owned package). Both map to a @Singleton *Impl with an
+     * (RepositoryRuntime) constructor → MansartRepoCreator path.
+     */
+    static List<RepoEntry> readIndices(ClassLoader cl) {
+        List<RepoEntry> read = new ArrayList<>();
         for (String resource : new String[]{
                 "META-INF/mansart-repositories.list",
                 "META-INF/mansart-repositories-external.list"}) {
@@ -100,23 +107,40 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
                 throw new UncheckedIOException(e);
             }
             while (resources.hasMoreElements()) {
-                readIndex(resources.nextElement());
+                readIndex(resources.nextElement(), read);
             }
         }
+        return read;
     }
 
     /** Adds the {@code itf=impl} entries of one index file; blank lines and {@code #} comments are skipped. */
-    private void readIndex(URL url) {
+    private static void readIndex(URL url, List<RepoEntry> read) {
         try (BufferedReader r = new BufferedReader(
                 new InputStreamReader(url.openStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = r.readLine()) != null) {
                 RepoEntry entry = parseEntry(line.trim());
-                if (entry != null) entries.add(entry);
+                if (entry != null) read.add(entry);
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /** The implementations the indices of a class loader list, read once per loader. */
+    private static final Map<ClassLoader, Set<String>> INDEXED_IMPLEMENTATIONS =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    /**
+     * Whether {@code className} can be a repository implementation {@link #vetoRoutedRepositoryImpls} vetoes: one the
+     * Mansart indices list (a routed repository's generated implementation), or one named by another provider's
+     * convention, {@code <repository>_} (mansart#40). Any other class is left alone without being loaded.
+     */
+    static boolean vetoCandidate(String className, ClassLoader cl) {
+        if (className.endsWith("_")) return true;
+        return INDEXED_IMPLEMENTATIONS.computeIfAbsent(cl, loader -> readIndices(loader).stream()
+                .map(RepoEntry::implFqn).collect(java.util.stream.Collectors.toUnmodifiableSet()))
+                .contains(className);
     }
 
     private static RepoEntry parseEntry(String line) {
@@ -165,13 +189,19 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
      * application classes on the module path. Class-loading tolerance matches
      * {@code @Synthesis}: when the class is not loadable (APT-time replay), no veto happens
      * and no synthetic bean is registered either, keeping both sides consistent.
+     *
+     * <p>Only the classes {@link #vetoCandidate} names are loaded: the generated implementations the indices list,
+     * and the {@code <repository>_} classes of another provider. Every other class of the archive is skipped by its
+     * name, instead of being loaded and introspected at startup.
      */
     @Enhancement(types = Object.class, withSubtypes = true)
     public void vetoRoutedRepositoryImpls(jakarta.enterprise.inject.build.compatible.spi.ClassConfig clazz) {
         if (clazz.info().isInterface()) return;
+        ClassLoader cl = currentClassLoader();
+        if (!vetoCandidate(clazz.info().name(), cl)) return;
         Class<?> impl;
         try {
-            impl = currentClassLoader().loadClass(clazz.info().name());
+            impl = cl.loadClass(clazz.info().name());
         } catch (ClassNotFoundException | LinkageError _) {
             return;
         }

@@ -630,26 +630,24 @@ final class JdqlParser {
             sb.append("arg").append(i);
         }
         sb.append("}; ");
-        sb.append("java.lang.reflect.Method _m;");
-        sb.append("try { _m = ").append(repoCallSiteAccessor(method)).append("; }");
-        sb.append("catch (NoSuchMethodException _e) { throw new io.vidocq.mansart.data.core.MansartDataException(\"missing method handle\", _e); }");
+        // Resolved once, when the holder class initializes, not on every call.
+        sb.append("final class _CallSite { static final java.lang.reflect.Method M = ")
+          .append(repoCallSite(method)).append("; } ");
+        sb.append("java.lang.reflect.Method _m = _CallSite.M; ");
         sb.append("Object _r = io.vidocq.mansart.data.core.JdqlExecutor.executeJdql(")
           .append(quote(jdql)).append(", _m, ").append(metamodel).append(".$MODEL, runtime, _xs); ");
         return sb.append(returnFromRuntimeFallback(returnType)).toString();
     }
 
-    private static String repoCallSiteAccessor(ExecutableElement method) {
-        // The generated impl is in the same package as the interface; we don't have the interface
-        // FQN here at call time, so we resolve via the impl's own enclosing class lookup. The
-        // interface is the impl's first declared interface — getInterfaces()[0] of `this.getClass()`.
-        StringBuilder sb = new StringBuilder();
-        sb.append("this.getClass().getInterfaces()[0].getMethod(\"")
-          .append(method.getSimpleName()).append("\"");
+    /** The repository method, found on the interface that declares it, as {@code JdqlExecutor.callSite} finds it. */
+    private static String repoCallSite(ExecutableElement method) {
+        StringBuilder sb = new StringBuilder("io.vidocq.mansart.data.core.JdqlExecutor.callSite(")
+                .append(((javax.lang.model.element.TypeElement) method.getEnclosingElement()).getQualifiedName())
+                .append(".class, \"").append(method.getSimpleName()).append("\"");
         for (var p : method.getParameters()) {
             sb.append(", ").append(p.asType().toString()).append(".class");
         }
-        sb.append(")");
-        return sb.toString();
+        return sb.append(")").toString();
     }
 
     private static String returnFromRuntimeFallback(TypeMirror returnType) {
