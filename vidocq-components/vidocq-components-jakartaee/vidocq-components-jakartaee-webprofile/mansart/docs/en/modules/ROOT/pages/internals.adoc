@@ -4,6 +4,62 @@
 [.lead]
 This page describes what happens when the application calls `authors.findByName("Sylvie Germain")`: from the CDI proxy down to the pool, through JDQL → SQL translation and ResultSet → entity materialization. It is also the right place to understand **why** Mansart favors static codegen.
 
+[#generated-code]
+== Generated code and reflective fallback [.tag-new]#NEW#
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. For Mansart (Jakarta Data) that is the
+implementation of each repository and the model of each entity; implementing a repository at run time and reading an
+entity by reflection stay as the fallback, unchanged (<<_the_run_time_fallback>>).
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| `BookRepositoryImpl`, the implementation of a `@Repository` interface, its queries translated at build
+| `mansart-data-processor` in javac; on Vidocq the `vidocq-runtime-mansart-data-extension-codegen` bundle puts it on
+  the processor path, and `vidocq:generate` runs it over the dependency jars that hold repositories
+| `MansartRepoCreator` when the repository bean is created, through the package's `_MansartComponents` below
+| `RuntimeRepositoryProxy` and `RuntimeRepositoryClassGenerator` implement it at run time with the Class-File API, or
+  a `java.lang.reflect.Proxy` when that fails; both announced.
+
+| `_Book` (Mansart's entity model, `$MODEL`) and `Book_` (the Jakarta Data static metamodel)
+| `mansart-data-processor`, for each `@Entity`
+| `EntityModels`, the first time an entity is used: the package's `_MansartComponents`, then the `$MODEL` field of
+  `_Book`
+| `RuntimeEntityModelBuilder` reads the entity class by reflection.
+
+| `_MansartComponents`, a `GeneratedComponents`, one per package with entities or repositories
+| `mansart-data-processor`, with its `META-INF/services` entry
+| `Generated`, through `ServiceLoader` on the type's class loader: it hands out the entity models and creates the
+  repository implementations by plain calls in the application's module, so the package needs no `opens`
+| The implementation class is created through its constructor by reflection, and `$MODEL` is read by reflection.
+
+| `META-INF/mansart-repositories.list`, and `META-INF/mansart-repositories-external.list` for the repositories of
+  dependency jars
+| `mansart-data-processor`; the `mansart-data-maven-plugin` goal `generate-external-repositories`
+| `MansartDataExtension`, the Build Compatible Extension that registers a bean per repository
+| A repository is found only when the extension sees its interface.
+|===
+
+A `@Query` the processor cannot compile entirely is still implemented at build, but its JDQL is parsed when the
+method is first called (`JdqlExecutor.executeJdql`), with the repository method resolved once.
+
+=== When the fallback runs
+
+* A repository or an entity compiled without `mansart-data-processor`, such as the Jakarta Data TCK jar.
+* A repository a top-level class of its package cannot implement: a private or local interface, or one nested in a
+  private type. A compiler `NOTE` says so.
+* An entity whose `_Entity` class was written by hand or by another processor: the model is built at run time.
+
+=== Which path ran
+
+* A framed `WARNING` from `io.vidocq.mansart.data.core.RuntimeGeneration`, once per repository:
+  _MANSART — RUNTIME CODE GENERATION FALLBACK_, or _MANSART — DYNAMIC PROXY FALLBACK_ when the run-time generator
+  failed too.
+* xref:vidocq::modules/vidocq-runtime-extensions.adoc#mansart-data-001[`MANSART-DATA-001`] in the Vidocq startup report
+  (in `dev` and `detailed` mode) when the model of an entity cannot be read.
+
 == Overview — repository method call
 
 [mermaid]
