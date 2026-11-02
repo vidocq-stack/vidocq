@@ -9,6 +9,15 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-041 — The runtime of a routed data store outlived its CDI container
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `fix/layer-leak-mansart`. `DataStoreResolver` cached the `RepositoryRuntime` of each `@Repository(dataStore = "...")` in a static map, for the life of the JVM. Each cached runtime wraps the `DataSource` bean of the container that built it, so in `vidocq dev` every hot reload (a new container, new data source beans) left the previous layer reachable from that static (the static audit of vidocq-workspace#40 item 25), and the next layer's repositories were served the previous layer's runtime, on a data source its container had already closed. The runtimes are now held by `DataStoreRuntimes`, a singleton synthetic bean of the container registered by `MansartDataExtension`, so they die with it; several repositories of one container still share one runtime per data store.
+- **Reproduction**: `DataStoreResolverScopeTest.aNewContainerDoesNotGetTheRuntimeOfThePreviousOne` (red before the change: the second container got the first one's runtime).
+- **Reported by**: the static audit of the layers `vidocq dev` discards (2026-11-02). The other statics of the Mansart modules are `ClassValue`s keyed by the application's own classes, string sets, or weak maps keyed by the class loader, and need no change.
+
+---
+
 ## MANSART-040 — Reflection repeated on every call, and every class loaded at startup
 
 - **Date**: 2026-11-02

@@ -267,6 +267,12 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
     public void registerRepositories(SyntheticComponents components) {
         ClassLoader cl = currentClassLoader();
 
+        // The runtimes of the routed data stores are the container's own (MANSART-041): see DataStoreRuntimes.
+        components.addBean(DataStoreRuntimes.class)
+                .type(DataStoreRuntimes.class)
+                .scope(jakarta.inject.Singleton.class)
+                .createWith(DataStoreRuntimesCreator.class);
+
         // Compile-time path — APT-generated *RepositoryImpl from mansart-data-processor
         for (RepoEntry e : entries) registerCompileTimeEntry(components, cl, e);
 

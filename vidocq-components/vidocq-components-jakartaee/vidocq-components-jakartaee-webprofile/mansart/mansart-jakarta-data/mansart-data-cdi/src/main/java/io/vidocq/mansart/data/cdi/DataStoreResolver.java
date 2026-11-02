@@ -30,8 +30,6 @@ import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import javax.sql.DataSource;
 import javax.sql.XADataSource;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 /**
  * Resolves the {@link RepositoryRuntime} bound to a given {@code @Repository}'s {@code dataStore}.
@@ -56,11 +54,10 @@ import java.util.concurrent.ConcurrentMap;
  * {@link DataSource}.
  *
  * <p>Each resolved {@link DataSource} is wrapped in a fresh {@link RepositoryRuntime}, then cached by
- * dataStore key — multiple repositories targeting the same store share one runtime.
+ * dataStore key in the container's {@link DataStoreRuntimes} — multiple repositories targeting the same store of one
+ * container share one runtime, and a container never sees the runtimes of another.
  */
 final class DataStoreResolver {
-
-    private static final ConcurrentMap<String, RepositoryRuntime> CACHE = new ConcurrentHashMap<>();
 
     private DataStoreResolver() {}
 
@@ -74,7 +71,17 @@ final class DataStoreResolver {
         if (key == null || key.isEmpty() || Repository.DEFAULT_DATA_STORE.equals(key)) {
             return lookup.select(RepositoryRuntime.class).get();
         }
-        return CACHE.computeIfAbsent(key, k -> buildRuntime(lookup, k));
+        return runtimes(lookup).of(key, k -> buildRuntime(lookup, k));
+    }
+
+    /** The runtimes of this container, held by the container itself: they die with it (MANSART-041). */
+    private static DataStoreRuntimes runtimes(Instance<Object> lookup) {
+        Instance<DataStoreRuntimes> held = lookup.select(DataStoreRuntimes.class);
+        if (!held.isResolvable()) {
+            throw new MansartDataException("The data store runtimes of this container are not registered: "
+                    + MansartDataExtension.class.getName() + " did not run its synthesis phase");
+        }
+        return held.get();
     }
 
     private static RepositoryRuntime buildRuntime(Instance<Object> lookup, String key) {
