@@ -20,7 +20,6 @@
 package io.vidocq.peano.core.internal;
 
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicReference;
 import jakarta.el.ELContext;
 import jakarta.el.ELResolver;
 import jakarta.el.CompositeELResolver;
@@ -28,6 +27,7 @@ import jakarta.el.ExpressionFactory;
 import jakarta.el.MethodExpression;
 import jakarta.el.ValueExpression;
 import io.vidocq.peano.core.internal.evaluation.AccessorCatalog;
+import io.vidocq.peano.core.internal.evaluation.AccessorCatalogs;
 import io.vidocq.peano.core.internal.evaluation.Coercions;
 import io.vidocq.peano.core.internal.evaluation.StreamELResolver;
 import io.vidocq.peano.core.internal.evaluation.GeneratedAccessorELResolver;
@@ -36,35 +36,30 @@ import io.vidocq.peano.core.internal.evaluation.ReflectionGuard;
 /** Jakarta EL provider, discovered through the core module's service declaration. */
 public final class PeanoExpressionFactory extends ExpressionFactory {
     private final ParsedExpressionCache expressions = new ParsedExpressionCache();
-    /** The application this factory was created for, as ExpressionFactory.newInstance resolves it. */
-    private final ClassLoader owner = Thread.currentThread().getContextClassLoader();
-    /** The owner's accessor tables and lookup cache, loaded on first use and shared by every context (EL-019). */
-    private final AtomicReference<AccessorCatalog> accessors = new AtomicReference<>();
+    /**
+     * A catalog fixed at construction (tests); otherwise null, and the catalog is the calling thread's application's.
+     * The factory holds nothing of any application: the Jakarta EL API keeps the first one for the life of the JVM,
+     * across the application layers {@code vidocq dev} discards on a hot reload (BUG-20261102-02).
+     */
+    private final AccessorCatalog fixed;
 
     public PeanoExpressionFactory() {
+        this.fixed = null;
         ReflectionGuard.denied();
     }
 
-    /** A factory whose owner's catalog is already loaded (tests). */
+    /** A factory whose catalog is already loaded (tests). */
     PeanoExpressionFactory(AccessorCatalog accessors) {
-        this();
-        this.accessors.set(accessors);
+        this.fixed = accessors;
+        ReflectionGuard.denied();
     }
 
     /**
-     * The accessor catalog for the calling thread's application. A context class loader other than
-     * the owner's may see other providers, so it gets its own catalog, never the shared one.
+     * The accessor catalog for the calling thread's application, loaded once per context class loader and shared by
+     * every context (EL-019). A context class loader may see other providers than another's, so each gets its own.
      */
     private AccessorCatalog accessors() {
-        ClassLoader current = Thread.currentThread().getContextClassLoader();
-        if (current != owner) return AccessorCatalog.load(current);
-        AccessorCatalog catalog = accessors.get();
-        if (catalog == null) {
-            // A race loads twice; both catalogs are equivalent and the first one published wins.
-            catalog = AccessorCatalog.load(owner);
-            if (!accessors.compareAndSet(null, catalog)) catalog = accessors.get();
-        }
-        return catalog;
+        return fixed != null ? fixed : AccessorCatalogs.of(Thread.currentThread().getContextClassLoader());
     }
 
     @Override

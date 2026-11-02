@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import jakarta.el.ELClass;
 import jakarta.el.ELException;
 import io.vidocq.peano.spi.AccessorProvider;
@@ -43,8 +43,17 @@ import io.vidocq.peano.spi.AccessorTable;
  */
 public final class AccessorCatalog {
     private final Map<Class<?>, AccessorTable> tables;
-    /** Matching tables per runtime class, in lookup order; an empty list means none. */
-    private final ConcurrentHashMap<Class<?>, List<AccessorTable>> matching = new ConcurrentHashMap<>();
+    /**
+     * Matching tables per runtime class, in lookup order; an empty list means none. Held by the runtime classes
+     * themselves rather than in a map of this catalog: a catalog an expression factory keeps for the JVM must not
+     * pin the classes of an application layer that was discarded (BUG-20261102-02).
+     */
+    private final ClassValue<AtomicReference<List<AccessorTable>>> matching = new ClassValue<>() {
+        @Override
+        protected AtomicReference<List<AccessorTable>> computeValue(Class<?> runtime) {
+            return new AtomicReference<>();
+        }
+    };
 
     public AccessorCatalog(Collection<? extends AccessorTable> accessors) {
         if (accessors == null) throw new ELException("Accessor table collection must not be null");
@@ -93,18 +102,27 @@ public final class AccessorCatalog {
             return exact == null ? List.of() : List.of(exact);
         }
         Class<?> runtime = base.getClass();
-        List<AccessorTable> found = matching.get(runtime);
+        AtomicReference<List<AccessorTable>> box = matching.get(runtime);
+        List<AccessorTable> found = box.get();
         if (found == null) {
             found = lookup(runtime);
-            List<AccessorTable> raced = matching.putIfAbsent(runtime, found);
-            if (raced != null) found = raced;
+            // A race looks twice; both answers are equivalent and the first one published wins.
+            if (!box.compareAndSet(null, found)) found = box.get();
         }
         return found;
     }
 
     /** The cached matching tables of a runtime class, or null before its first lookup (tests). */
     List<AccessorTable> cached(Class<?> runtime) {
-        return matching.get(runtime);
+        return matching.get(runtime).get();
+    }
+
+    /** A table class this catalog holds that {@code loader} itself defines, or null: the class that anchors the catalog. */
+    Class<?> definedBy(ClassLoader loader) {
+        for (AccessorTable table : tables.values()) {
+            if (table.getClass().getClassLoader() == loader && loader != null) return table.getClass();
+        }
+        return null;
     }
 
     private List<AccessorTable> lookup(Class<?> runtime) {

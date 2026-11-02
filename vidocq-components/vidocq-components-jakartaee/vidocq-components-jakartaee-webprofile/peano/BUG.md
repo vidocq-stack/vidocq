@@ -3,6 +3,23 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## EL-023 · 2026-11-02 · The first expression factory kept every discarded application layer of `vidocq dev` reachable
+
+- Symptom: after N hot reloads of `vidocq dev`, N+1 application class loaders stayed alive (about 0.8 MB heap per
+  reload). Heap dump of the static audit (vidocq-workspace#40 item 25): `jakarta.el.ELManager.exprFactory` ->
+  `PeanoExpressionFactory` -> its `owner` class loader and its accessor catalog, both of the first layer. After a
+  reload the factory also found `owner` different from the context class loader and loaded the catalog again on
+  every evaluation.
+- Minimal reproduction: `CatalogLayerLeakTest` (a factory created under a first layer's loader, the layer dropped,
+  `WeakReference<ClassLoader>` still set after a collection loop; a later layer's catalog loaded again at each call).
+- Cause: the factory stored the loader and the catalog of the application it was created under; the Jakarta EL API
+  keeps that factory in a static field for the life of the JVM. The per-class lookup cache of the catalog also held
+  the runtime classes it had seen in a plain map.
+- Status: fixed on branch `fix/layer-leak-peano`: the factory holds nothing of an application. `AccessorCatalogs.of(loader)`
+  loads each loader's catalog once and keeps it in a `ClassValue` of one of the layer's own table classes (reachable
+  from the layer alone, collected with it); a catalog whose tables all come from ancestors is kept against the
+  loader. The lookup cache of a catalog is held by the runtime classes themselves. The reflective fallback is unchanged.
+
 ## EL-022 · 2026-11-02 · A page's @Named bean was read by reflection unless annotated @ELAccessible
 
 - Symptom: in a Vidocq application, `${cart.lines}` on a CDI `@Named` bean, and on the types its properties hold,
