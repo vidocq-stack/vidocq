@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
@@ -81,6 +82,11 @@ class VidocqTestMojoOnceTest {
 
     /** The goal itself, with the child Maven process replaced by an ended one: dev services off, no watching. */
     private static void execute(Path dir, int exit, SurefireReports.Reports reports) throws Exception {
+        execute(dir, exit, reports, false);
+    }
+
+    private static void execute(Path dir, int exit, SurefireReports.Reports reports, boolean devServices)
+            throws Exception {
         VidocqTestMojo mojo = new VidocqTestMojo() {
             @Override
             ContinuousTesting continuousTesting(Path projectDir, Map<String, String> testProps,
@@ -95,7 +101,7 @@ class VidocqTestMojoOnceTest {
         java.io.File base = dir.toFile();
         mojo.setDirectories(base, base, base);
         mojo.setWatchDirs("src/main/java", "src/test/java");
-        mojo.setDevServices(false);
+        mojo.setDevServices(devServices);
         mojo.setOnce(true);
         mojo.execute();
     }
@@ -110,5 +116,42 @@ class VidocqTestMojoOnceTest {
         var failures = List.of(new Failure("BookTest#loads", "org.opentest4j.AssertionFailedError", "no"));
         assertThrows(MojoFailureException.class,
                 () -> execute(dir, 1, new SurefireReports.Reports(new Counts(2, 1, 0, 0), failures, 1, 0)));
+    }
+
+    /** With the dev services on and none to provide, the session opens empty and the goal goes on as usual. */
+    @Test
+    void theGoalOpensTheDevServicesSessionWhenTheyAreOn(@TempDir Path dir) {
+        assertDoesNotThrow(() -> execute(dir, 0, new SurefireReports.Reports(new Counts(1, 0, 0, 0), List.of(), 1, 0),
+                true));
+    }
+
+    @Test
+    void anInterruptedWaitEndsTheGoalWithoutAVerdict() throws Exception {
+        // Not a @TempDir: the run's worker may still write its results file when a temporary folder is removed.
+        Path dir = Files.createDirectories(Path.of("target", "mojo-once-interrupted"));
+        CompletableFuture<TestResults> verdict = new CompletableFuture<>();
+        ContinuousTesting testing = new ContinuousTesting(tests -> new Ended(0),
+                since -> new SurefireReports.Reports(new Counts(1, 0, 0, 0), List.of(), 1, 0), () -> true,
+                new ContinuousTesting.Results(dir.resolve(TestResultsFile.FILE_NAME), "log"), result -> result.state(),
+                warning -> warning.length(), Clock.systemUTC());
+        Thread.currentThread().interrupt();
+        try {
+            assertThrows(org.apache.maven.plugin.MojoExecutionException.class,
+                    () -> new VidocqTestMojo().runOnce(testing, null, new Thread(Thread::onSpinWait), verdict));
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    @Test
+    void aVerdictThatFailedToComeEndsTheGoalInError(@TempDir Path dir) {
+        CompletableFuture<TestResults> verdict = new CompletableFuture<>();
+        verdict.completeExceptionally(new IllegalStateException("boom"));
+        ContinuousTesting testing = new ContinuousTesting(tests -> new Ended(0),
+                since -> new SurefireReports.Reports(new Counts(1, 0, 0, 0), List.of(), 1, 0), () -> true,
+                new ContinuousTesting.Results(dir.resolve(TestResultsFile.FILE_NAME), "log"), result -> result.state(),
+                warning -> warning.length(), Clock.systemUTC());
+        assertThrows(org.apache.maven.plugin.MojoExecutionException.class,
+                () -> new VidocqTestMojo().runOnce(testing, null, new Thread(Thread::onSpinWait), verdict));
     }
 }
