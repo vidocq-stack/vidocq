@@ -40,6 +40,9 @@ module io.vidocq.runtime.extensions.microprofile.humboldt {
     requires io.opentelemetry.context;
     requires jakarta.cdi;
     requires java.logging;
+    // MicroProfile Config is read directly when the runtime assembles it; without it, the otel.* system
+    // properties and environment variables remain the sources.
+    requires static org.eclipse.microprofile.config;
 
     // The interop module only `requires static` the OTel SDK automatic modules
     // (the consumer supplies them). This extension IS that consumer: require them

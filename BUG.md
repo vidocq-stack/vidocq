@@ -5,6 +5,14 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261102-02 — The Telemetry extension reads MicroProfile Config by reflection at startup
+
+- **Date**: 2026-11-02
+- **Status**: FIXED (fix/humboldt-config-direct): the extension `requires static org.eclipse.microprofile.config` and reads the `otel.*` properties through `ConfigProvider.getConfig()` in `MpConfigBridge`; when the Config module is not in the runtime, or answers no Config, the reflective reading runs as before, unchanged. Tests: `MpConfigBridgeTest` (red first: Config was reached through `Method.invoke`; the fallback test drives the reflective path and sees the property).
+- **Reported by**: the Vidocq reflection audit (tracing agent on a multi-extension application)
+- **Minimal reproduction**: start an application with the Telemetry extension under the audit agent: `Class.forName(ConfigProvider)`, `Class.forName(Config)`, three `getMethod` and one `Method.invoke` per `otel.*` property in `HumboldtExtension.bridgeFromMpConfig`.
+- **Cause hypothesis**: the bridge was written reflective so the extension starts without a Config implementation; a `requires static` module gives the same tolerance without reflection.
+
 ## BUG-20261101-04 — Plain POJO DTOs (non-final, with a base class) still needed `opens`
 
 - **Date**: 2026-11-01

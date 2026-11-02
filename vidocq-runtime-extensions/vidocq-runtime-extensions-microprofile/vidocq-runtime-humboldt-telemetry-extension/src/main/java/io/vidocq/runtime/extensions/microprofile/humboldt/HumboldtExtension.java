@@ -199,12 +199,28 @@ public final class HumboldtExtension implements VidocqExtension {
     }
 
     /**
+     * Bridges every {@code otel.*} property visible to MicroProfile Config into
+     * the env-form map: through the Config API when the runtime assembles it
+     * ({@code requires static}), else through {@link #bridgeFromMpConfigByReflection}
+     * as before (BUG-20261102-02).
+     */
+    static void bridgeFromMpConfig(Map<String, String> env) {
+        try {
+            MpConfigBridge.bridge(env);
+            return;
+        } catch (RuntimeException | LinkageError _) {
+            // The Config module is not in the runtime, or answers no Config: the reflective reading decides.
+        }
+        bridgeFromMpConfigByReflection(env);
+    }
+
+    /**
      * Bridges every {@code otel.*} property visible to MicroProfile Config
      * (context class loader) into the env-form map. Reflective so the
      * extension keeps working on runtimes assembled without a Config
      * implementation — system properties and env vars remain the sources then.
      */
-    private static void bridgeFromMpConfig(Map<String, String> env) {
+    private static void bridgeFromMpConfigByReflection(Map<String, String> env) {
         try {
             ClassLoader tccl = Thread.currentThread().getContextClassLoader();
             ClassLoader loader = tccl != null ? tccl : HumboldtExtension.class.getClassLoader();
