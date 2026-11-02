@@ -55,4 +55,19 @@ class ModuleDescriptorTest {
     void namesNoAutomaticModuleOfTheUpstreamApi() {
         assertFalse(descriptor().requires().stream().anyMatch(r -> r.name().equals("microprofile.rest.client.api")));
     }
+
+    @Test
+    void providesTheCassiniDescriptorOfEachFilter() throws java.io.IOException {
+        // cassini-processor lists them in META-INF/services; on the module path Cassini finds them through provides.
+        String service = "io.vidocq.cassini.spi.gen.ProviderDescriptor";
+        Set<String> listed = Set.copyOf(java.nio.file.Files.readAllLines(
+                Path.of("target/classes/META-INF/services/" + service)));
+        Set<String> provided = descriptor().provides().stream()
+                .filter(p -> p.service().equals(service))
+                .flatMap(p -> p.providers().stream())
+                .collect(Collectors.toSet());
+
+        assertEquals(3, listed.size(), listed.toString());
+        assertEquals(listed, provided);
+    }
 }

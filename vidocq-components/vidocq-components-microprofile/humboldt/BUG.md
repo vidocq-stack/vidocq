@@ -723,3 +723,9 @@
 - **Fix**: `resourceTemplate` reads them once per resource class and method and caches the template in a
   `ClassValue` (a class an application reload drops is not held); the request only prefixes the base path.
 - **Regression test**: `HumboldtServerRequestFilterTest` (36 tests in humboldt-rest).
+
+## BUG-20261102-02 — Cassini reads the tracing filters' annotations by reflection at startup
+- **Date**: 2026-11-02 — **Status**: FIXED (feat/provider-descriptors)
+- **Symptom**: `humboldt-rest` runs `cassini-processor`, which writes a `$$CassiniProvider` descriptor for each filter, but the module did not declare them as `provides`. On the module path Cassini could not find them and read `@Priority`, `@PreMatching` and the name bindings of the three filters by reflection.
+- **Fix**: `module-info.java` provides `io.vidocq.cassini.spi.gen.ProviderDescriptor` for `HumboldtServerRequestFilter`, `HumboldtServerResponseFilter` and `HumboldtSpanFinalizer`. A runtime without Cassini still resolves the module: the cassini-api module is only `requires static`, so the JDK does not check a `provides` of its type when it is absent. Checked by booting a module that requires `io.vidocq.humboldt.rest` on the audit application's module path without any Cassini jar: it resolves with the new jar as with the old one. `ModuleDescriptorTest.providesTheCassiniDescriptorOfEachFilter` checks that every listed descriptor is provided. MP Telemetry TCK 85/85.
+
