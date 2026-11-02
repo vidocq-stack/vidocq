@@ -21,8 +21,11 @@
 module io.vidocq.runtime.extensions.jakartaee.core.peano {
     requires transitive jakarta.el;
     requires io.vidocq.peano.core;
+    requires io.vidocq.peano.api;
     requires io.vidocq.runtime.spi;
 
+    provides io.vidocq.peano.spi.ProxyUnwrapper
+            with io.vidocq.runtime.extensions.jakartaee.core.peano.VaubanProxyUnwrapper;
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.jakartaee.core.peano.PeanoElExtension;
 }

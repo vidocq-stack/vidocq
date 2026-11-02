@@ -150,7 +150,11 @@ bundle to the inherited compiler configuration:
 `vidocq extension add peano-el` adds these coordinates. The application module requires
 `io.vidocq.runtime.extensions.jakartaee.core.peano`; generated accessor classes and
 `@ELAccessible` annotations also require `io.vidocq.peano.api`. No package opens are
-needed for generated tables. At process-classes, vidocq:generate reads the APT's
+needed for generated tables. [[peano-auto-accessors]][.tag-new]#NEW# No annotation is needed for the
+beans an expression reaches by name either: the processor also generates the tables of the classes and producer
+methods annotated `@Named` or `@Model`, and of the application types their properties hold (and those of the
+`@ELAccessible` types). A normal-scoped bean reaches EL as its Vauban client proxy (`<Bean>_ClientProxy`); the
+extension provides the `ProxyUnwrapper` that lets the bean's table serve it, so it is not read by reflection. At process-classes, vidocq:generate reads the APT's
 META-INF/peano/accessor-providers fragments and merges their provides directives into
 the compiled application module descriptor. It preserves existing access and service
 directives and does not rewrite module-info.java. Ensure the generate goal is bound

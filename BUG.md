@@ -5,6 +5,20 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261102-03 — A normal-scoped @Named bean was read by reflection in EL, its accessor table never applied
+
+- **Date**: 2026-11-02
+- **Status**: FIXED on `feat/peano-vauban-proxies`, with Vidocq/peano#78 (EL-022): the Peano EL extension provides
+  `VaubanProxyUnwrapper` (a `ProxyUnwrapper` that names the bean class of a `<Bean>_ClientProxy`), so the table Peano
+  generates for the bean serves the proxy EL receives (`VaubanProxyUnwrapperTest`); Peano also selects `@Named`/`@Model`
+  beans and the types their properties hold without `@ELAccessible`.
+- **Reported by**: the reflection audit of the standard Vidocq path (2026-11-02)
+- **Minimal reproduction**: a `@RequestScoped @Named("cart")` bean read as `${cart.total}`: the base is the client proxy,
+  a subclass; generated tables accepted their exact class only, so the reflective `BeanELResolver` answered.
+- **Cause hypothesis**: Peano had no notion of a container proxy; selection needed an annotation on every type.
+- **Not covered here**: Vidocq does not register the CDI `BeanManager.getELResolver()` in the page `ELContext` yet, so a
+  JSP cannot resolve `${cart}` by bean name at all today; the tables serve `ELProcessor`/programmatic EL with a CDI
+  resolver, and pages once that resolver is wired.
 ## BUG-20261102-02 — The Telemetry extension reads MicroProfile Config by reflection at startup
 
 - **Date**: 2026-11-02

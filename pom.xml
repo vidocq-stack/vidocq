@@ -570,6 +570,9 @@
                 <groupId>io.vidocq.peano</groupId><artifactId>peano-core</artifactId><version>${peano.version}</version>
             </dependency>
             <dependency>
+                <groupId>io.vidocq.peano</groupId><artifactId>peano-api</artifactId><version>${peano.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
                 <artifactId>vidocq-runtime-peano-el-extension</artifactId><version>0.4.0-SNAPSHOT</version>
             </dependency>
