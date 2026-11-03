@@ -106,7 +106,7 @@ interface JwksSource {
         }
         try {
             return java.net.InetAddress.getByName(host).isLoopbackAddress();
-        } catch (java.net.UnknownHostException e) {
+        } catch (java.net.UnknownHostException _) {
             return false;
         }
     }
