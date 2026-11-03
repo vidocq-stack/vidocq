@@ -87,7 +87,7 @@ class JwksSourceTest {
     }
 
     @Test
-    void missingFile_isRejected() {
+    void missingFile_isRejected() throws Exception {
         JwksSource source = JwksSource.fromLocation(dir.resolve("absent.json").toUri().toString());
         JwtValidationException ex = assertThrows(JwtValidationException.class, source::fetch);
         assertTrue(ex.getMessage().contains("unreadable"), ex.getMessage());
@@ -117,5 +117,40 @@ class JwksSourceTest {
     void classPathResource_isRead() throws Exception {
         byte[] bytes = JwksSource.fromLocation("/cervantes-test-jwks.json").fetch();
         assertEquals(DOC, new String(bytes, StandardCharsets.UTF_8).trim());
+    }
+
+    @Test
+    void cleartextHttpToANonLoopbackHost_isRefused() {
+        // Security audit F-05: cleartext http:// to a remote host lets a MITM serve attacker keys.
+        JwtValidationException ex = assertThrows(JwtValidationException.class,
+                () -> JwksSource.fromLocation("http://192.0.2.1/jwks"));
+        assertTrue(ex.getMessage().contains("https"), ex.getMessage());
+    }
+
+    @Test
+    void cleartextHttpToANonLoopbackHost_isAllowedWhenExplicitlyOptedIn() throws Exception {
+        System.setProperty("io.vidocq.cervantes.jwks.allowHttp", "true");
+        try {
+            assertInstanceOf(JwksSource.Http.class, JwksSource.fromLocation("http://192.0.2.1/jwks"));
+        } finally {
+            System.clearProperty("io.vidocq.cervantes.jwks.allowHttp");
+        }
+    }
+
+    @Test
+    void cleartextHttpToLoopback_isAllowedForLocalDevelopment() throws Exception {
+        try (TestHttpServer server = new TestHttpServer(200, DOC)) {
+            assertArrayEquals(DOC_BYTES, JwksSource.fromLocation(server.url(JWKS_PATH)).fetch());
+        }
+    }
+
+    @Test
+    void anOverSizedJwksBody_isRejected() throws Exception {
+        String big = "x".repeat(2 * 1024 * 1024); // 2 MiB > the 1 MiB cap
+        try (TestHttpServer server = new TestHttpServer(200, big)) {
+            JwksSource source = JwksSource.fromLocation(server.url(JWKS_PATH));
+            JwtValidationException ex = assertThrows(JwtValidationException.class, source::fetch);
+            assertTrue(ex.getMessage().contains("1 MiB"), ex.getMessage());
+        }
     }
 }

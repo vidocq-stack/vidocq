@@ -49,9 +49,18 @@ interface JwksSource {
      * <li>Sinon → classpath resource (relative path) then system file</li>
      * </ul>
      */
-    static JwksSource fromLocation(String location, HttpClient httpClient, Duration timeout) {
+    static JwksSource fromLocation(String location, HttpClient httpClient, Duration timeout) throws JwtValidationException {
         if (location.startsWith("http://") || location.startsWith("https://")) {
-            return new Http(URI.create(location), httpClient, timeout);
+            URI uri = URI.create(location);
+            // Security audit F-05: cleartext http:// to a non-loopback host lets a MITM serve attacker
+            // keys (token forgery). Refused unless explicitly opted in; loopback stays allowed for dev.
+            if ("http".equalsIgnoreCase(uri.getScheme()) && !isLoopbackHost(uri.getHost())
+                    && !Boolean.getBoolean("io.vidocq.cervantes.jwks.allowHttp")) {
+                throw new JwtValidationException("JWKS location over cleartext http:// to a non-loopback host is refused"
+                        + " (a MITM could serve attacker keys); use https:// or set"
+                        + " -Dio.vidocq.cervantes.jwks.allowHttp=true: " + location);
+            }
+            return new Http(uri, httpClient, timeout);
         }
         if (location.startsWith("file:")) {
             return new File(Path.of(URI.create(location)));
@@ -79,15 +88,34 @@ interface JwksSource {
     }
 
     /** Variant with a default {@link HttpClient} (5 s connect timeout). */
-    static JwksSource fromLocation(String location) {
+    static JwksSource fromLocation(String location) throws JwtValidationException {
         return fromLocation(
                 location,
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(),
                 Duration.ofSeconds(5));
     }
 
+    /** Whether the host of a URI is loopback (literal IP or {@code localhost}), without a DNS lookup for literals. */
+    private static boolean isLoopbackHost(String host) {
+        if (host == null) {
+            return false;
+        }
+        String h = host.toLowerCase(java.util.Locale.ROOT);
+        if (h.equals("localhost") || h.equals("::1") || h.equals("[::1]") || h.startsWith("127.")) {
+            return true;
+        }
+        try {
+            return java.net.InetAddress.getByName(host).isLoopbackAddress();
+        } catch (java.net.UnknownHostException e) {
+            return false;
+        }
+    }
+
     /** HTTP source: a blocking GET on a virtual thread (no pinning). */
     final class Http implements JwksSource {
+        /** Security audit F-05: a hostile or compromised JWKS endpoint must not exhaust memory. */
+        private static final int MAX_JWKS_BYTES = 1024 * 1024; // 1 MiB
+
         private final URI uri;
         private final HttpClient client;
         private final Duration timeout;
@@ -106,11 +134,19 @@ interface JwksSource {
                         .header("Accept", "application/json, text/plain, */*")
                         .GET()
                         .build();
-                HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
-                if (response.statusCode() / 100 != 2) {
-                    throw new JwtValidationException("JWKS fetch returned HTTP " + response.statusCode() + " from " + uri);
+                HttpResponse<java.io.InputStream> response =
+                        client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+                try (java.io.InputStream body = response.body()) {
+                    if (response.statusCode() / 100 != 2) {
+                        throw new JwtValidationException(
+                                "JWKS fetch returned HTTP " + response.statusCode() + " from " + uri);
+                    }
+                    byte[] bytes = body.readNBytes(MAX_JWKS_BYTES + 1);
+                    if (bytes.length > MAX_JWKS_BYTES) {
+                        throw new JwtValidationException("JWKS document from " + uri + " exceeds the 1 MiB limit");
+                    }
+                    return bytes;
                 }
-                return response.body();
             } catch (IOException e) {
                 throw new JwtValidationException("JWKS fetch failed from " + uri, e);
             } catch (InterruptedException e) {
