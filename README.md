@@ -11,7 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/JDK-25-orange" alt="JDK">
-  <img src="https://img.shields.io/badge/Maven-3.9.16-purple" alt="Maven">
+  <img src="https://img.shields.io/badge/Maven-3.10.0-purple" alt="Maven">
   <img src="https://img.shields.io/badge/CDI-4.1_Lite-blue" alt="CDI">
   <img src="https://img.shields.io/badge/JAX--RS-4.0-green" alt="JAX-RS">
   <img src="https://img.shields.io/badge/license-EPL--2.0%20OR%20EUPL--1.2%20OR%20GPL--2.0--or--later-blue.svg" alt="License">
@@ -44,7 +44,7 @@ Vidocq is a modular Java SE application runtime built on [Vauban](https://codefl
 ### Prerequisites
 
 - JDK 25 (Temurin)
-- Maven 3.9.16
+- Maven 3.10.0
 
 ```bash
 # With SDKMAN!

@@ -489,7 +489,7 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 == Compatibility
 
 * **Java 25** minimum (LTS)
-* **Maven 3.9.16** minimum
+* **Maven 3.10.0** minimum
 * **Strict Java Modules** — one `module-info.java` per submodule
 * **No hidden classpath** — every dependency exposes a named module
 

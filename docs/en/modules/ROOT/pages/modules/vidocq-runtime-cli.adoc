@@ -22,7 +22,7 @@ user guide; jump straight to <<getting-started>> for a Hello-World walkthrough.
 
 * **Java 25** (Temurin recommended) — the CLI refuses to run a project on an older JVM and
   `vidocq doctor` flags it.
-* **Maven 3.9.16** — pinned per project via `.sdkmanrc` (`sdk env`). The build/clean commands
+* **Maven 3.10.0** — pinned per project via `.sdkmanrc` (`sdk env`). The build/clean commands
   reuse the project's `mvnw` wrapper, falling back to `mvn` on the `PATH`.
 
 == Installing the `vidocq` command

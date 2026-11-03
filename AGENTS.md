@@ -16,7 +16,7 @@ Lite). Each MicroProfile/Jakarta spec ships as an independent **extension** disc
 
 ## Build, test & run
 
-- Toolchain is pinned in `.sdkmanrc`: **Java 25-tem + Maven 3.9.16**. Run `sdk env install` then `sdk env`.
+- Toolchain is pinned in `.sdkmanrc`: **Java 25-tem + Maven 3.10.0**. Run `sdk env install` then `sdk env`.
 - Build everything: `mvn clean install` (uses Maven Model 4.0.0; internal module versions are pinned explicitly in root `dependencyManagement`).
 - Dev mode (live run of an example/app): `./mvnw vidocq:dev` — reads `vidocq.mainModule` / `vidocq.mainClass` properties (see `vidocq-runtime-examples/vidocq-runtime-mansart-h2-example/pom.xml`).
 - Commits must be **DCO signed-off**: `git commit -s` (see `CONTRIBUTING.md`).

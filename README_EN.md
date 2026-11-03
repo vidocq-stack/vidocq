@@ -56,7 +56,7 @@ Properties are resolved in order:
 ## Prerequisites
 
 - Java 25 (`sdk use java 25-tem`)
-- Maven 3.9.16 (`sdk use maven 3.9.16`)
+- Maven 3.10.0 (`sdk use maven 3.10.0`)
 
 ## Build
 

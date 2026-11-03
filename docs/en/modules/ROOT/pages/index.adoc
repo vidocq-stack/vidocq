@@ -28,7 +28,7 @@ The metaphor faithfully reflects the role of the module. Vidocq fused heterogene
 | 25 (LTS)
 
 | Build
-| Maven 3.9.16
+| Maven 3.10.0
 
 | Java modules
 | `io.vidocq.runtime.spi`, `io.vidocq.runtime.core`, plus one `io.vidocq.runtime.extensions.*` module per extension (the Maven plugin is intentionally non-modular)
