@@ -66,6 +66,18 @@ public interface RecoveryLog extends Closeable {
     /** Read every record in chronological order. Used at startup for recovery. */
     List<Record> scan() throws IOException;
 
+    /**
+     * Lets go of the file descriptor held by the journal, before a process snapshot (CRaC) that
+     * refuses open files. The journal stays usable: the next {@link #append} or {@link #reopen()}
+     * takes the file again. Default: nothing to release.
+     */
+    default void release() throws IOException {
+    }
+
+    /** Takes the file again after {@link #release()}. Default: nothing to reopen. */
+    default void reopen() throws IOException {
+    }
+
     @Override
     void close() throws IOException;
 }

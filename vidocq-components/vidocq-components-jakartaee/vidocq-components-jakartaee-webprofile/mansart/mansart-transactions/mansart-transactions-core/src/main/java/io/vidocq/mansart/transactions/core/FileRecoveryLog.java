@@ -58,7 +58,8 @@ public final class FileRecoveryLog implements RecoveryLog {
             StandardOpenOption.DSYNC };
 
     private final Path file;
-    private final java.nio.channels.FileChannel channel;
+    private java.nio.channels.FileChannel channel;
+    private boolean closed;
 
     public FileRecoveryLog(Path file) throws IOException {
         this.file = file;
@@ -68,6 +69,7 @@ public final class FileRecoveryLog implements RecoveryLog {
 
     @Override
     public synchronized void append(Record entry) throws IOException {
+        reopen();
         String line = entry.type().name() + SEP
                 + Integer.toHexString(entry.xid().getFormatId()).toUpperCase() + SEP
                 + HEX.formatHex(entry.xid().getGlobalTransactionId()) + SEP
@@ -105,8 +107,29 @@ public final class FileRecoveryLog implements RecoveryLog {
     }
 
     @Override
+    public synchronized void release() throws IOException {
+        if (channel != null) {
+            channel.close();
+            channel = null;
+        }
+    }
+
+    /** Opens the file at its path again; a closed journal stays closed. */
+    @Override
+    public synchronized void reopen() throws IOException {
+        if (closed) {
+            throw new IOException("The recovery log is closed: " + file);
+        }
+        if (channel == null) {
+            Files.createDirectories(file.toAbsolutePath().getParent());
+            channel = java.nio.channels.FileChannel.open(file, APPEND_OPTS);
+        }
+    }
+
+    @Override
     public synchronized void close() throws IOException {
-        channel.close();
+        closed = true;
+        release();
     }
 
     /** Lightweight {@link Xid} constructed by {@link #scan()} — only the bytes matter for

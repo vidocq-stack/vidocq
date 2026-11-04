@@ -74,6 +74,16 @@ public class MansartTransactionManager implements TransactionManager {
         return recoveryLog != NoOpRecoveryLog.INSTANCE;
     }
 
+    /** Lets go of the journal's file before a process snapshot (CRaC); see {@link RecoveryLog#release()}. */
+    public void release() throws java.io.IOException {
+        recoveryLog.release();
+    }
+
+    /** Takes the journal's file again after {@link #release()}. */
+    public void reopen() throws java.io.IOException {
+        recoveryLog.reopen();
+    }
+
     @Override
     public void begin() throws NotSupportedException {
         if (active.get() != null) {
