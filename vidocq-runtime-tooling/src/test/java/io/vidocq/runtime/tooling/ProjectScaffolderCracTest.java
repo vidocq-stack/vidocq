@@ -56,6 +56,12 @@ class ProjectScaffolderCracTest {
         assertTrue(dockerfile.contains("-XX:CRaCCheckpointTo=/crac"), dockerfile);
         assertTrue(dockerfile.contains("-XX:CRaCRestoreFrom=/crac"), dockerfile);
         assertTrue(dockerfile.contains("/app/bin/demo.sh"), dockerfile);
+        // A JVM that is process 1 does not attach: --init, the attach listener, and jcmd by main class (not by pid).
+        assertTrue(dockerfile.contains("docker run -d --init"), dockerfile);
+        assertTrue(dockerfile.contains("-XX:+StartAttachListener"), dockerfile);
+        assertTrue(dockerfile.contains("jcmd " + ProjectScaffolder.appClassName("demo") + " JDK.checkpoint"), dockerfile);
+        assertFalse(dockerfile.contains("jcmd 1 "), dockerfile);
+        assertTrue(dockerfile.contains("docker run --rm --init"), dockerfile);
     }
 
     @Test

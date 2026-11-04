@@ -547,12 +547,15 @@ public final class ProjectScaffolder {
                 #
                 # Take a checkpoint: start, then ask the JVM for it (the volume keeps the image).
                 #
-                #   docker run -d --name ckpt -v crac-img:/crac -e JAVA_OPTS="-XX:CRaCCheckpointTo=/crac -XX:+StartAttachListener" %1$s-crac
-                #   docker exec ckpt jcmd 1 JDK.checkpoint     # the launcher execs java, so the JVM is process 1
+                #   docker run -d --init --name ckpt -v crac-img:/crac -e JAVA_OPTS="-XX:CRaCCheckpointTo=/crac -XX:+StartAttachListener" %1$s-crac
+                #   docker exec ckpt jcmd %3$s JDK.checkpoint
+                #
+                # --init matters: a JVM that is process 1 does not accept the attach, and behind --init its command name
+                # is "exe", so jcmd is given the main class, not a pid or a name to pgrep.
                 #
                 # Restore it, in a fresh container, from the same volume:
                 #
-                #   docker run --rm -p 8080:8080 -v crac-img:/crac -e JAVA_OPTS="-XX:CRaCRestoreFrom=/crac" %1$s-crac
+                #   docker run --rm --init -p 8080:8080 -v crac-img:/crac -e JAVA_OPTS="-XX:CRaCRestoreFrom=/crac" %1$s-crac
                 ARG ZULU=%2$s
                 FROM ubuntu:24.04 AS jdk
                 ARG ZULU
@@ -571,7 +574,7 @@ public final class ProjectScaffolder {
                 ENV JAVA_OPTS=""
                 EXPOSE 8080
                 ENTRYPOINT ["/app/bin/%1$s.sh"]
-                """.formatted(c.name(), ZULU_CRAC);
+                """.formatted(c.name(), ZULU_CRAC, c.main() ? appClassName(c.name()) : "io.vidocq.runtime.spi.VidocqMain");
     }
 
     private static final String BUILD_PROPERTIES = """
