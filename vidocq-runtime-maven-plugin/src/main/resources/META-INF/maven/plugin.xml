@@ -608,6 +608,13 @@
                     <description>jlink compress level (zip-0 to zip-9)</description>
                 </parameter>
                 <parameter>
+                    <name>addModules</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Comma-separated JDK modules to add to the image beyond those the application requires; jdk.crac is added on its own as soon as a module of the application requires it</description>
+                </parameter>
+                <parameter>
                     <name>includeResources</name>
                     <type>java.util.List</type>
                     <required>false</required>
@@ -669,6 +676,7 @@
                             default-value="true">${vidocq.stripDebug}</stripDebug>
                 <compress implementation="java.lang.String"
                           default-value="zip-6">${vidocq.compress}</compress>
+                <addModules implementation="java.lang.String">${vidocq.jlink.addModules}</addModules>
                 <includeResources implementation="java.util.List">${vidocq.includeResources}</includeResources>
                 <skip implementation="boolean"
                       default-value="false">${vidocq.jlink.skip}</skip>

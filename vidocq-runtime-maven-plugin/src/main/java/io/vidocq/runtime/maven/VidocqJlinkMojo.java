@@ -188,10 +188,10 @@ public class VidocqJlinkMojo extends AbstractMojo {
                 + (launch.vmOptions().isEmpty() ? "" : " " + String.join(" ", launch.vmOptions())));
         try {
             stageModules();
-            String addModules = resolveAddModules();
-            runJlink(addModules, launch);
+            String rootModules = resolveAddModules();
+            runJlink(rootModules, launch);
             List<Path> conf = copyResources();
-            PortableImage.write(buildDir.toPath(), portableJlinkArgs(addModules, launch), launch.entryPoint(), conf);
+            PortableImage.write(buildDir.toPath(), portableJlinkArgs(rootModules, launch), launch.entryPoint(), conf);
             getLog().info("jlink image ready: " + distDir.toPath().toAbsolutePath());
             getLog().info("Run with: " + distDir.toPath().toAbsolutePath() + "/bin/" + launcher);
         } catch (IOException e) {
@@ -494,12 +494,12 @@ public class VidocqJlinkMojo extends AbstractMojo {
     }
 
     /** The arguments of the {@code jlink} run: the staged modules, the launcher of {@code launch}, the options. */
-    List<String> jlinkArgs(String addModules, ImageLaunch launch) {
+    List<String> jlinkArgs(String rootModules, ImageLaunch launch) {
         String modulePath = modsDir.toPath() + File.pathSeparator + System.getProperty("java.home") + "/jmods";
         List<String> args = new ArrayList<>();
         args.add("--module-path"); args.add(modulePath);
         args.add("--output"); args.add(distDir.toPath().toString());
-        args.addAll(portableJlinkArgs(addModules, launch));
+        args.addAll(portableJlinkArgs(rootModules, launch));
         return args;
     }
 
@@ -507,9 +507,9 @@ public class VidocqJlinkMojo extends AbstractMojo {
      * The arguments of the {@code jlink} run that name no path of the build host: those of the recipe
      * {@code vidocq:docker} links again inside a Linux JDK ({@link PortableImage}).
      */
-    List<String> portableJlinkArgs(String addModules, ImageLaunch launch) {
+    List<String> portableJlinkArgs(String rootModules, ImageLaunch launch) {
         List<String> args = new ArrayList<>();
-        args.add("--add-modules"); args.add(addModules);
+        args.add("--add-modules"); args.add(rootModules);
         args.addAll(launcherArgs(launcher, launch));
         args.add("--no-header-files");
         args.add("--no-man-pages");
@@ -520,13 +520,13 @@ public class VidocqJlinkMojo extends AbstractMojo {
         return args;
     }
 
-    private void runJlink(String addModules, ImageLaunch launch) throws IOException {
+    private void runJlink(String rootModules, ImageLaunch launch) throws IOException {
         deleteRecursive(distDir.toPath());
-        List<String> args = jlinkArgs(addModules, launch);
+        List<String> args = jlinkArgs(rootModules, launch);
 
         ToolProvider jlink = ToolProvider.findFirst("jlink")
                 .orElseThrow(() -> new IOException("jlink tool is not available in this JDK"));
-        getLog().info("Modules: " + addModules);
+        getLog().info("Modules: " + rootModules);
         int rc = jlink.run(System.out, System.err, args.toArray(new String[0]));
         if (rc != 0) {
             throw new IOException("jlink failed (rc=" + rc + ")");
