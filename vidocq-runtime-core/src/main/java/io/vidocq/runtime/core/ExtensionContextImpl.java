@@ -21,11 +21,13 @@ package io.vidocq.runtime.core;
 
 import io.vidocq.vauban.core.container.VaubanContainer;
 import io.vidocq.runtime.spi.ExtensionContext;
+import io.vidocq.runtime.spi.Suspendable;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.StartupReportView;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -44,11 +46,18 @@ record ExtensionContextImpl(
         VidocqConfiguration configuration,
         VidocqConfig config,
         LaunchMode launchMode,
-        Supplier<Optional<StartupReportView>> startupReport
+        Supplier<Optional<StartupReportView>> startupReport,
+        List<Suspendable> suspendables
 ) implements ExtensionContext {
 
     ExtensionContextImpl {
         // The type witness matters: without it an Eclipse (JDT) build types Optional::empty as Optional<Object>.
+        suspendables = suspendables == null ? List.of() : List.copyOf(suspendables);
         startupReport = startupReport == null ? Optional::<StartupReportView>empty : startupReport;
+    }
+
+    ExtensionContextImpl(VaubanContainer container, VidocqConfiguration configuration, VidocqConfig config,
+            LaunchMode launchMode, Supplier<Optional<StartupReportView>> startupReport) {
+        this(container, configuration, config, launchMode, startupReport, List.of());
     }
 }

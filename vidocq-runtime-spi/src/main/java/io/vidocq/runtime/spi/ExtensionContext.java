@@ -25,6 +25,7 @@ import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.StartupReportView;
 import jakarta.enterprise.inject.spi.BeanManager;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -93,5 +94,17 @@ public interface ExtensionContext {
     default Supplier<Optional<StartupReportView>> startupReport() {
         // The type witness matters: without it an Eclipse (JDT) build typed Optional::empty as Optional<Object>.
         return Optional::<StartupReportView>empty;
+    }
+
+    /**
+     * The extensions of this boot that are {@link Suspendable}, in start order.
+     *
+     * <p>The context Vidocq passes to {@link VidocqExtension#onStart} answers them all; this default
+     * answers none, for contexts that do not know, such as a test double.
+     *
+     * @return the suspendable extensions, in start order; never {@code null}
+     */
+    default List<Suspendable> suspendables() {
+        return List.of();
     }
 }

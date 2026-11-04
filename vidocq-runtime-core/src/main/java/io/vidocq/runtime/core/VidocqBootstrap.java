@@ -39,6 +39,7 @@ import io.vidocq.runtime.core.report.StartupReport;
 import io.vidocq.runtime.core.report.VerbosityResolver;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
+import io.vidocq.runtime.spi.Suspendable;
 import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 import io.vidocq.runtime.spi.report.LaunchMode;
@@ -656,7 +657,8 @@ public final class VidocqBootstrap {
 
     /** The context every extension's {@code onStart} receives. */
     ExtensionContext extensionContext() {
-        return new ExtensionContextImpl(container, configuration, config, launchMode(), this::publishedView);
+        return new ExtensionContextImpl(container, configuration, config, launchMode(), this::publishedView,
+                extensions.stream().filter(Suspendable.class::isInstance).map(Suspendable.class::cast).toList());
     }
 
     /**
