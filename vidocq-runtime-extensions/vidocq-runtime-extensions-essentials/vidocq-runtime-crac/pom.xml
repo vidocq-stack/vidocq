@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+ ~ Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ ~
+ ~ This program and the accompanying materials are made available under the
+ ~ terms of the Eclipse Public License 2.0 which is available at
+ ~ https://www.eclipse.org/legal/epl-2.0/
+ ~
+ ~ This Source Code may also be made available under the following Secondary
+ ~ Licenses when the conditions for such availability set forth in the Eclipse
+ ~ Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ ~ or any later version, which is available at
+ ~ https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ ~
+ ~ It is also made available under the European Union Public Licence v. 1.2,
+ ~ which is available at
+ ~ https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ ~
+ ~ SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+        <artifactId>vidocq-runtime-extensions-essentials</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>vidocq-runtime-crac</artifactId>
+    <name>Vidocq :: Core Extensions :: CRaC</name>
+    <description>Suspends the Suspendable bricks before a CRaC checkpoint and resumes them after a restore. The only
+        module that requires jdk.crac: built with a CRaC JDK, in the crac profile of the essentials aggregator.</description>
+    <properties>
+        <!-- jdk.crac is not in the release 25 API signature: compile against the JDK itself. -->
+        <maven.compiler.release/>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

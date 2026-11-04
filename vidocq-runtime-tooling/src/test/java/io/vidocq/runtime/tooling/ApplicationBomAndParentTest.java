@@ -52,6 +52,10 @@ class ApplicationBomAndParentTest {
     private static final Set<String> NOT_A_DEPENDENCY = Set.of(
             "vidocq-runtime-bom", "vidocq-runtime-parent", "vidocq-runtime-maven-plugin");
 
+    /** Published, but built in a profile only: they need a JDK the default build does not use (crac: jdk.crac). */
+    private static final Set<String> PROFILE_ONLY = Set.of(
+            "io.vidocq.runtime.extensions.essentials:vidocq-runtime-crac");
+
     @Test
     void theReactorRootIsTheBuildOfThisRepositoryNotTheApplicationParent() throws Exception {
         Element root = pom(ROOT).getDocumentElement();
@@ -186,6 +190,7 @@ class ApplicationBomAndParentTest {
     private static Set<String> publishedArtifacts() throws Exception {
         Set<String> published = new TreeSet<>();
         collect(ROOT, published);
+        published.addAll(PROFILE_ONLY);
         return published;
     }
 

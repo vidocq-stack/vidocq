@@ -27,6 +27,17 @@
         <module>vidocq-runtime-langchain4j-cdi-mcp-extension-dev</module>
     </modules>
 
+    <profiles>
+        <!-- The only module that requires jdk.crac, so the only one a JDK without it cannot build: it stays out of
+             the default reactor and out of a Temurin build. Activate with -Pcrac on a CRaC JDK (Azul Zulu CRaC). -->
+        <profile>
+            <id>crac</id>
+            <modules>
+                <module>vidocq-runtime-crac</module>
+            </modules>
+        </profile>
+    </profiles>
+
     <build>
         <plugins>
             <!-- Inherits the execution from vidocq-runtime-build/pluginManagement.
