@@ -25,6 +25,7 @@ import io.vidocq.mansart.pool.ValidationMode;
 import io.vidocq.mansart.pool.core.MansartDataSource;
 import io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.live.MansartPoolsLive;
 import io.vidocq.runtime.spi.ExtensionContext;
+import io.vidocq.runtime.spi.Suspendable;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.report.LaunchMode;
@@ -132,7 +133,7 @@ import java.util.stream.Collectors;
  * stopping this extension: {@link MansartPoolsLive} holds one {@code volatile} immutable list of the open
  * pools, published once they are all open and emptied before any is closed.
  */
-public final class MansartPoolExtension implements VidocqExtension, StartupReportContributor {
+public final class MansartPoolExtension implements VidocqExtension, StartupReportContributor, Suspendable {
 
     private static final System.Logger LOG = System.getLogger(MansartPoolExtension.class.getName());
 
@@ -156,6 +157,7 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
     private final Map<String, MansartDataSource> namedPools = new LinkedHashMap<>();
     /** The dev service that provided a pool's URL, keyed by the pool's key prefix, {@code vidocq.pool[.<name>].}. */
     private Map<String, String> devServices = Map.of();
+    private boolean suspended;
 
     /**
      * The open pools, as the report shows them: an immutable list published at the end of {@code beforeStart}, once
@@ -296,13 +298,58 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
         }
     }
 
+    /**
+     * Closes every pool, so that a process snapshot holds no JDBC connection: the holders and the registry serve
+     * nothing meanwhile. The configuration is kept. Idempotent.
+     */
+    @Override
+    public synchronized void suspend() {
+        if (suspended || (pool == null && namedPools.isEmpty())) {
+            return;
+        }
+        suspended = true;
+        MansartPoolsLive.clear();
+        closePools();
+        LOG.log(System.Logger.Level.INFO, "Mansart pools suspended");
+    }
+
+    /** Opens every pool again from the configuration read at start, and serves them again. Idempotent. */
+    @Override
+    public synchronized void resume() {
+        if (!suspended) {
+            return;
+        }
+        List<PoolView> opened = new ArrayList<>();
+        if (poolConfig != null) {
+            this.pool = MansartDataSource.of(poolConfig);
+            MansartPoolHolder.INSTANCE.set(this.pool);
+            opened.add(view(DEFAULT_LABEL, true, PREFIX, pool));
+        }
+        for (Map.Entry<String, PoolConfig> e : namedConfigs.entrySet()) {
+            MansartDataSource ds = MansartDataSource.of(e.getValue());
+            namedPools.put(e.getKey(), ds);
+            NamedDataSourceRegistry.register(e.getKey(), ds);
+            opened.add(view(e.getKey(), false, PREFIX + e.getKey() + ".", ds));
+        }
+        views.set(List.copyOf(opened));
+        MansartPoolsLive.publish(
+                opened.stream().map(v -> new MansartPoolsLive.Pool(v.label(), v.pool())).toList());
+        suspended = false;
+        LOG.log(System.Logger.Level.INFO, "Mansart pools resumed");
+    }
+
     @Override
     public void onStop() {
         // First, before any pool is closed: a dev console poll from now on reads no pool.
         MansartPoolsLive.clear();
+        suspended = false;
         views.set(List.of());
         namedWithoutBean.set(Set.of());
         prefillFailed.set(Set.of());
+        closePools();
+    }
+
+    private void closePools() {
         for (Map.Entry<String, MansartDataSource> e : namedPools.entrySet()) {
             try {
                 e.getValue().close();
