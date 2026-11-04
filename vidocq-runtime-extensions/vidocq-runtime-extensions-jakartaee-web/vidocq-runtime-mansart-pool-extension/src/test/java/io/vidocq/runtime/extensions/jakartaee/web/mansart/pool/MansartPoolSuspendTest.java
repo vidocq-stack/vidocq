@@ -29,7 +29,9 @@ import java.sql.SQLException;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -96,6 +98,34 @@ class MansartPoolSuspendTest {
         ext.resume();
         try (Connection c = ext.pool().getConnection()) {
             assertTrue(c.isValid(1));
+        }
+    }
+
+    /**
+     * The environment of a restored process can differ from the one that was checkpointed (a database URL or a password
+     * of the new deployment): the pools open again from the configuration read at the restore.
+     */
+    @Test
+    void resumeReadsTheConfigurationAgain() throws Exception {
+        var settings = new java.util.HashMap<String, String>(Map.of(
+                "vidocq.pool.url", h2("before"), "vidocq.pool.username", "sa",
+                "vidocq.pool.audit.url", h2("audit-before"), "vidocq.pool.audit.username", "sa"));
+        ext.configure(new TestContexts.MapConfig(settings));
+        ext.beforeStart(new VaubanContainerBuilder());
+        var urlBefore = ext.poolConfig().jdbcUrl();
+
+        ext.suspend();
+        settings.put("vidocq.pool.url", h2("after"));
+        settings.put("vidocq.pool.audit.url", h2("audit-after"));
+        ext.resume();
+
+        assertNotEquals(urlBefore, ext.poolConfig().jdbcUrl());
+        assertEquals(settings.get("vidocq.pool.url"), ext.poolConfig().jdbcUrl());
+        try (Connection c = ext.pool().getConnection()) {
+            assertEquals(settings.get("vidocq.pool.url").split(";")[0], c.getMetaData().getURL());
+        }
+        try (Connection c = NamedDataSourceRegistry.require("audit").getConnection()) {
+            assertEquals(settings.get("vidocq.pool.audit.url").split(";")[0], c.getMetaData().getURL());
         }
     }
 }

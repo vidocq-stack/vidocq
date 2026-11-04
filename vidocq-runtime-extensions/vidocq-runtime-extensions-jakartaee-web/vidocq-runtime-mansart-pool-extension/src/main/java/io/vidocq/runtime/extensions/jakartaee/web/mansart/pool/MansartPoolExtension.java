@@ -158,6 +158,8 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
     /** The dev service that provided a pool's URL, keyed by the pool's key prefix, {@code vidocq.pool[.<name>].}. */
     private Map<String, String> devServices = Map.of();
     private boolean suspended;
+    /** Kept to read the settings again at a restore: the environment of the restored process can differ. */
+    private VidocqConfiguration configuration;
 
     /**
      * The open pools, as the report shows them: an immutable list published at the end of {@code beforeStart}, once
@@ -209,6 +211,7 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
 
     @Override
     public void configure(VidocqConfiguration vidocqConfig) {
+        this.configuration = vidocqConfig;
         this.poolConfig   = buildPoolConfig(vidocqConfig, PREFIX);   // @Default (null if no url)
         this.namedConfigs = discoverNamedConfigs(vidocqConfig);      // vidocq.pool.<name>.*
         this.devServices  = devServices(vidocqConfig);               // vidocq.dev.provided.vidocq.pool[.<name>].url
@@ -320,11 +323,20 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
             return;
         }
         List<PoolView> opened = new ArrayList<>();
+        // The environment of a restored process can differ (another database, other credentials): read it again.
+        // Which pools exist stays what the start decided: a pool is neither added nor dropped by a restore.
         if (poolConfig != null) {
+            this.poolConfig = reread(buildPoolConfig(configuration, PREFIX), poolConfig);
             this.pool = MansartDataSource.of(poolConfig);
             MansartPoolHolder.INSTANCE.set(this.pool);
             opened.add(view(DEFAULT_LABEL, true, PREFIX, pool));
         }
+        Map<String, PoolConfig> fresh = discoverNamedConfigs(configuration);
+        Map<String, PoolConfig> reread = new LinkedHashMap<>();
+        for (Map.Entry<String, PoolConfig> e : namedConfigs.entrySet()) {
+            reread.put(e.getKey(), reread(fresh.get(e.getKey()), e.getValue()));
+        }
+        this.namedConfigs = reread;
         for (Map.Entry<String, PoolConfig> e : namedConfigs.entrySet()) {
             MansartDataSource ds = MansartDataSource.of(e.getValue());
             namedPools.put(e.getKey(), ds);
@@ -379,6 +391,11 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
      * {@code <prefix>url} is absent. The validation rules of {@link PoolConfig.Builder#build()}
      * surface eagerly, so a misconfiguration fails during {@code configure}.
      */
+    /** The settings read at a restore, or the ones of the start when the restored environment no longer sets them. */
+    private static PoolConfig reread(PoolConfig fresh, PoolConfig atStart) {
+        return fresh != null ? fresh : atStart;
+    }
+
     private static PoolConfig buildPoolConfig(VidocqConfiguration cfg, String prefix) {
         Optional<String> url = cfg.property(prefix + "url");
         if (url.isEmpty()) return null;
