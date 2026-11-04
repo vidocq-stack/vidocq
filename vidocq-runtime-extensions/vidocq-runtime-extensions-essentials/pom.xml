@@ -33,7 +33,7 @@
         <profile>
             <id>crac</id>
             <modules>
-                <module>vidocq-runtime-crac</module>
+                <module>vidocq-runtime-crac-extension</module>
             </modules>
         </profile>
     </profiles>

@@ -27,7 +27,7 @@
         <artifactId>vidocq-runtime-extensions-essentials</artifactId>
         <version>0.4.0-SNAPSHOT</version>
     </parent>
-    <artifactId>vidocq-runtime-crac</artifactId>
+    <artifactId>vidocq-runtime-crac-extension</artifactId>
     <name>Vidocq :: Core Extensions :: CRaC</name>
     <description>Suspends the Suspendable bricks before a CRaC checkpoint and resumes them after a restore. The only
         module that requires jdk.crac: built with a CRaC JDK, in the crac profile of the essentials aggregator.</description>

@@ -54,7 +54,7 @@ class ApplicationBomAndParentTest {
 
     /** Published, but built in a profile only: they need a JDK the default build does not use (crac: jdk.crac). */
     private static final Set<String> PROFILE_ONLY = Set.of(
-            "io.vidocq.runtime.extensions.essentials:vidocq-runtime-crac");
+            "io.vidocq.runtime.extensions.essentials:vidocq-runtime-crac-extension");
 
     @Test
     void theReactorRootIsTheBuildOfThisRepositoryNotTheApplicationParent() throws Exception {
