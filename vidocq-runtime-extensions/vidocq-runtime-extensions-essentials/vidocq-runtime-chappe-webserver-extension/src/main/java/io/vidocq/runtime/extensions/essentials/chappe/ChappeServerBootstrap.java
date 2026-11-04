@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.essentials.chappe;
 import io.vidocq.chappe.api.Router;
 import io.vidocq.chappe.api.Server;
 import io.vidocq.runtime.spi.ExtensionContext;
+import io.vidocq.runtime.spi.Suspendable;
 import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 
@@ -57,7 +58,7 @@ import java.util.Optional;
  *   <li>{@code vidocq.chappe.listener.<name>.port} — port (default: 8080 for {@code default}, required otherwise)</li>
  * </ul>
  */
-public final class ChappeServerBootstrap implements VidocqExtension {
+public final class ChappeServerBootstrap implements VidocqExtension, Suspendable {
 
     private static final System.Logger LOG = System.getLogger(ChappeServerBootstrap.class.getName());
     private static final String LISTENER = "Chappe listener '";
@@ -76,6 +77,46 @@ public final class ChappeServerBootstrap implements VidocqExtension {
     /** The address each listener bound, by name, read once after its start: a stopped server forgets it. */
     private final Map<String, InetSocketAddress> boundAddresses = new LinkedHashMap<>();
     private ChappeMountPoint mountPoint;
+
+    /** The names of {@link #servers}, same order: a restart records the address under the listener's name. */
+    private final List<String> serverNames = new ArrayList<>();
+    private boolean suspended;
+
+    /**
+     * Stops every listener, in reverse start order, so that a process snapshot finds no listening socket:
+     * the accept loop of a live listener would keep its descriptor. Idempotent.
+     */
+    @Override
+    public synchronized void suspend() {
+        if (suspended) {
+            return;
+        }
+        suspended = true;
+        for (Server s : servers.reversed()) {
+            s.stop();
+        }
+        LOG.log(System.Logger.Level.INFO, "Suspended " + servers.size() + " Chappe listener(s)");
+    }
+
+    /**
+     * Starts every listener again, in start order, and records the address it bound: a listener configured
+     * on port {@code 0} gets another port. Idempotent.
+     */
+    @Override
+    public synchronized void resume() {
+        if (!suspended) {
+            return;
+        }
+        for (int i = 0; i < servers.size(); i++) {
+            Server s = servers.get(i);
+            s.start();
+            InetSocketAddress bound = s.localAddress();
+            boundAddresses.put(serverNames.get(i), bound);
+            mountPoint.recordBound(serverNames.get(i), bound);
+        }
+        suspended = false;
+        LOG.log(System.Logger.Level.INFO, "Resumed " + servers.size() + " Chappe listener(s)");
+    }
 
     @Override
     public String name() {
@@ -137,6 +178,7 @@ public final class ChappeServerBootstrap implements VidocqExtension {
             fellBack = true;
         }
         servers.add(server);
+        serverNames.add(l.name());
         InetSocketAddress bound = server.localAddress();
         boundAddresses.put(l.name(), bound);
         mountPoint.recordBound(l.name(), bound);
@@ -192,6 +234,8 @@ public final class ChappeServerBootstrap implements VidocqExtension {
             }
         }
         servers.clear();
+        serverNames.clear();
+        suspended = false;
         boundAddresses.clear();
         if (mountPoint != null) {
             mountPoint.clearBound();
