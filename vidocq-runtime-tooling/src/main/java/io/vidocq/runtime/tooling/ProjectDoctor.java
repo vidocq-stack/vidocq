@@ -65,6 +65,8 @@ public final class ProjectDoctor {
     private static final String JWT_CHECK = "JWT verification";
     private static final String REQUIRED_CHECK = "Required extensions";
     private static final String JWT = "cervantes-jwt";
+    private static final String CRAC = "crac";
+    private static final String CRAC_CHECK = "CRaC";
     /** The keys MicroProfile JWT verifies a token's signature with: without one, it accepts none. */
     private static final List<String> JWT_KEYS = List.of("mp.jwt.verify.publickey", "mp.jwt.verify.publickey.location");
 
@@ -144,6 +146,8 @@ public final class ProjectDoctor {
         if (extensions.containsKey(JWT)) {
             diagnostics.add(checkJwtVerification(facts.config()));
         }
+        checkCrac(extensions.keySet(), ModuleLayer.boot().findModule("jdk.crac").isPresent(),
+                System.getProperty("os.name", "")).ifPresent(diagnostics::add);
         checkRequiredExtensions(extensions.keySet()).ifPresent(diagnostics::add);
         return diagnostics;
     }
@@ -318,6 +322,26 @@ public final class ProjectDoctor {
                         + " vidocq.properties",
                 "The Keycloak dev service sets it under vidocq dev and the tests; in production every token would be"
                         + " rejected. Set it, or set it in the environment, to your identity provider.");
+    }
+
+    /**
+     * The CRaC check of a project that declares the {@code crac} extension: the JDK that runs this tool must ship
+     * {@code jdk.crac} (the extension requires it, so the build and the run need it), and only Linux takes a checkpoint.
+     */
+    static Optional<Diagnostic> checkCrac(Set<String> extensionIds, boolean jdkHasCrac, String osName) {
+        if (!extensionIds.contains(CRAC)) {
+            return Optional.empty();
+        }
+        if (!jdkHasCrac) {
+            return Optional.of(Diagnostic.fail(CRAC_CHECK, "this JDK has no jdk.crac module",
+                    "The crac extension requires jdk.crac: build and run with a CRaC JDK such as Azul Zulu CRaC 25,"
+                            + " in the image too."));
+        }
+        if (!osName.toLowerCase(java.util.Locale.ROOT).contains("linux")) {
+            return Optional.of(Diagnostic.warn(CRAC_CHECK, "jdk.crac is present, but " + osName + " is not Linux",
+                    "A checkpoint is taken on Linux only: build and run it in a Linux container."));
+        }
+        return Optional.of(Diagnostic.ok(CRAC_CHECK, "jdk.crac is present on Linux"));
     }
 
     private static Diagnostic checkPort(Facts facts) {
