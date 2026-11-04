@@ -38,6 +38,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Glue between Vidocq lifecycle and the Mansart Transactions stack.
@@ -74,7 +75,7 @@ public final class MansartTransactionsIntegrationExtension implements VidocqExte
     static final String RECOVERY_LOG_KEY = "vidocq.tx.recovery.log";
 
     /** The durable transaction manager, kept to let go of its journal file at a checkpoint. */
-    private volatile MansartTransactionManager journalOwner;
+    private final AtomicReference<MansartTransactionManager> journalOwner = new AtomicReference<>();
 
     @Override
     public String name() {
@@ -110,7 +111,7 @@ public final class MansartTransactionsIntegrationExtension implements VidocqExte
 
         TransactionManager tm = resolve(bm, TransactionManager.class, tmBeans.iterator().next());
         if (tm instanceof MansartTransactionManager mansartTm && mansartTm.durable()) {
-            journalOwner = mansartTm;
+            journalOwner.set(mansartTm);
             recoverInDoubtBranches(bm, mansartTm);
         }
     }
@@ -118,17 +119,17 @@ public final class MansartTransactionsIntegrationExtension implements VidocqExte
     /** Lets go of the recovery journal's file before a CRaC checkpoint. */
     @Override
     public void suspend() {
-        release(journalOwner);
+        release(journalOwner.get());
     }
 
     /** Takes the recovery journal's file again after a restore. */
     @Override
     public void resume() {
-        reopen(journalOwner);
+        reopen(journalOwner.get());
     }
 
     void adopt(MansartTransactionManager manager) {
-        journalOwner = manager;
+        journalOwner.set(manager);
     }
 
     private static void release(MansartTransactionManager manager) {

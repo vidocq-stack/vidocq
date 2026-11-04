@@ -655,7 +655,6 @@ public final class VidocqBootstrap {
         return launch == null || launch.launchMode() == null ? LaunchMode.PROD : launch.launchMode().mode();
     }
 
-    /** The context every extension's {@code onStart} receives. */
     /**
      * What a process snapshot must let go of, in start order: the application layer first, which every extension's
      * classes come through, then the extensions that are {@link Suspendable}.
@@ -667,6 +666,7 @@ public final class VidocqBootstrap {
         return all;
     }
 
+    /** The context every extension's {@code onStart} receives. */
     ExtensionContext extensionContext() {
         return new ExtensionContextImpl(container, configuration, config, launchMode(), this::publishedView,
                 suspendables());

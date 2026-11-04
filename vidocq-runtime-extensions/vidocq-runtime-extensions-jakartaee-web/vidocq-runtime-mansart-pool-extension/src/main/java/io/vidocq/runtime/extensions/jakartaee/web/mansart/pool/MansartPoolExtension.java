@@ -386,16 +386,16 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
         }
     }
 
-    /**
-     * Builds a {@link PoolConfig} from the {@code <prefix>*} keys, or {@code null} when
-     * {@code <prefix>url} is absent. The validation rules of {@link PoolConfig.Builder#build()}
-     * surface eagerly, so a misconfiguration fails during {@code configure}.
-     */
     /** The settings read at a restore, or the ones of the start when the restored environment no longer sets them. */
     private static PoolConfig reread(PoolConfig fresh, PoolConfig atStart) {
         return fresh != null ? fresh : atStart;
     }
 
+    /**
+     * Builds a {@link PoolConfig} from the {@code <prefix>*} keys, or {@code null} when
+     * {@code <prefix>url} is absent. The validation rules of {@link PoolConfig.Builder#build()}
+     * surface eagerly, so a misconfiguration fails during {@code configure}.
+     */
     private static PoolConfig buildPoolConfig(VidocqConfiguration cfg, String prefix) {
         Optional<String> url = cfg.property(prefix + "url");
         if (url.isEmpty()) return null;
