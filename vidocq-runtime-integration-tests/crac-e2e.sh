@@ -43,26 +43,12 @@ wait_http() { # wait_http <seconds>
 
 java -XX:+PrintFlagsFinal -version 2>/dev/null | grep -q CRaCCheckpointTo || fail "this JDK has no CRaC support"
 cp "$CRAC_JAR" "$DIST/lib/"
-# Not bin/*.sh: its -Dvidocq.app.path puts the application in its own layer, whose class loader (Vauban) keeps the
-# application jar open, and a checkpoint refuses an open file. Without the property the jar is on the module path,
-# where the JDK itself closes and reopens it.
-# The example reads its classes by reflection, which a layer would have opened for it (the Cassini example needs
-# nothing else: its module is not open).
-M=io.vidocq.runtime.examples.rest
-OPENS=""
-for target in io.vidocq.cassini.core io.vidocq.champollion.jsonb io.vidocq.vauban.core io.vidocq.cassini.cdi.vauban \
-              io.vidocq.cassini.cdi; do
-    OPENS="$OPENS --add-opens $M/$M=$target --add-opens $M/$M.model=$target"
-done
-run_java() { # run_java <jvm options>...
-    # shellcheck disable=SC2086
-    exec java $OPENS "$@" --module-path "$DIST/lib:$DIST/app" --add-modules ALL-MODULE-PATH \
-        --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq
-}
+# The launcher puts the application in its own layer: its class loader (Vauban) keeps the application jar open,
+# which the application layer lets go of before a checkpoint (AppLayerSuspendable).
+LAUNCHER=$(ls "$DIST"/bin/*.sh | head -1)
 
 echo "== start"
-run_java -XX:CRaCCheckpointTo="$IMG" -XX:+StartAttachListener ${EXTRA_OPTS:-} \
-    >"$WORK/first.log" 2>&1 &
+JAVA_OPTS="-XX:CRaCCheckpointTo=$IMG -XX:+StartAttachListener ${EXTRA_OPTS:-}" "$LAUNCHER" >"$WORK/first.log" 2>&1 &
 PID=$!
 wait_http 60 || fail "the application did not answer on $URL"
 # The listener answers before the crac extension, which starts last, has registered: wait for it.

@@ -573,9 +573,7 @@ public final class ProjectScaffolder {
                 COPY --from=build /app /app
                 ENV JAVA_OPTS=""
                 EXPOSE 8080
-                # Not the bin/ launcher: its application layer has a class loader of its own that keeps the application jar
-                # open, and a checkpoint refuses an open file. On the module path the JDK closes and reopens it.
-                ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS --module-path /app/lib:/app/app --add-modules ALL-MODULE-PATH --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq"]
+                ENTRYPOINT ["/app/bin/%1$s.sh"]
                 """.formatted(c.name(), ZULU_CRAC);
     }
 

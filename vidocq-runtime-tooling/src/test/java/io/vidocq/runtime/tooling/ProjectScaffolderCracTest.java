@@ -55,11 +55,7 @@ class ProjectScaffolderCracTest {
         assertTrue(dockerfile.contains("crac-jdk"), dockerfile);
         assertTrue(dockerfile.contains("-XX:CRaCCheckpointTo=/crac"), dockerfile);
         assertTrue(dockerfile.contains("-XX:CRaCRestoreFrom=/crac"), dockerfile);
-        // Not bin/*.sh: its application layer keeps the application jar open, which a checkpoint refuses.
-        assertFalse(dockerfile.contains("bin/demo.sh"), dockerfile);
-        assertFalse(dockerfile.contains("vidocq.app.path"), dockerfile);
-        assertTrue(dockerfile.contains("--module-path /app/lib:/app/app"), dockerfile);
-        assertTrue(dockerfile.contains("--module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq"), dockerfile);
+        assertTrue(dockerfile.contains("/app/bin/demo.sh"), dockerfile);
         // A JVM that is process 1 does not attach: --init, the attach listener, and jcmd by main class (not by pid).
         assertTrue(dockerfile.contains("docker run -d --init"), dockerfile);
         assertTrue(dockerfile.contains("-XX:+StartAttachListener"), dockerfile);

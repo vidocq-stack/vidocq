@@ -28,7 +28,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /** {@link ExtensionContext#suspendables()}: the extensions that are {@link Suspendable}, in start order. */
 class ExtensionContextSuspendablesTest {
@@ -51,7 +51,7 @@ class ExtensionContextSuspendablesTest {
     }
 
     @Test
-    void onlyTheSuspendableExtensionsAreHandedOver_inStartOrder() {
+    void theApplicationLayerThenTheSuspendableExtensionsAreHandedOver_inStartOrder() {
         Frozen first = new Frozen();
         Frozen second = new Frozen();
         List<VidocqExtension> booted = List.of(first, new Plain(), second);
@@ -59,13 +59,16 @@ class ExtensionContextSuspendablesTest {
 
         List<Suspendable> suspendables = bootstrap.extensionContext().suspendables();
 
-        assertEquals(2, suspendables.size());
-        assertSame(first, suspendables.get(0));
-        assertSame(second, suspendables.get(1));
+        assertEquals(3, suspendables.size());
+        assertInstanceOf(AppLayerSuspendable.class, suspendables.get(0));
+        assertSame(first, suspendables.get(1));
+        assertSame(second, suspendables.get(2));
     }
 
     @Test
-    void aBootstrapNotYetConfiguredHandsOverNone() {
-        assertTrue(VidocqBootstrap.create().extensionContext().suspendables().isEmpty());
+    void aBootstrapNotYetConfiguredHandsOverTheApplicationLayerOnly() {
+        List<Suspendable> suspendables = VidocqBootstrap.create().extensionContext().suspendables();
+        assertEquals(1, suspendables.size());
+        assertInstanceOf(AppLayerSuspendable.class, suspendables.get(0));
     }
 }

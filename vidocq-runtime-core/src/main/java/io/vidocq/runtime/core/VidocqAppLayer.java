@@ -350,6 +350,12 @@ public final class VidocqAppLayer {
     }
 
     /** The application layer installed by this JVM, or {@code null}. */
+    /** The class loader of the installed application layer; {@code null} without one. */
+    static io.vidocq.vauban.classloader.VaubanClassLoader installedLoader() {
+        var layer = INSTALLED.get();
+        return layer == null ? null : layer.loader();
+    }
+
     static ModuleLayer installedLayer() {
         var layer = INSTALLED.get();
         return layer == null ? null : layer.layer();

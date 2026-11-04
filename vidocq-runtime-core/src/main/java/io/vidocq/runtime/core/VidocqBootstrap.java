@@ -656,9 +656,20 @@ public final class VidocqBootstrap {
     }
 
     /** The context every extension's {@code onStart} receives. */
+    /**
+     * What a process snapshot must let go of, in start order: the application layer first, which every extension's
+     * classes come through, then the extensions that are {@link Suspendable}.
+     */
+    private List<Suspendable> suspendables() {
+        List<Suspendable> all = new java.util.ArrayList<>();
+        all.add(new AppLayerSuspendable(VidocqAppLayer::installedLoader));
+        extensions.stream().filter(Suspendable.class::isInstance).map(Suspendable.class::cast).forEach(all::add);
+        return all;
+    }
+
     ExtensionContext extensionContext() {
         return new ExtensionContextImpl(container, configuration, config, launchMode(), this::publishedView,
-                extensions.stream().filter(Suspendable.class::isInstance).map(Suspendable.class::cast).toList());
+                suspendables());
     }
 
     /**
