@@ -120,6 +120,9 @@ public final class ProjectScaffolder {
                         + " (vidocq-runtime-junit) comes with 0.4.0.");
             }
         }
+        if (create.extensions().contains(CRAC_EXTENSION)) {
+            write(root.resolve("Dockerfile.crac"), buildCracDockerfile(create));
+        }
         // The settings of the extensions, as `vidocq extension add` appends them (BUG-20261031-09).
         write(res.resolve("vidocq.properties"),
                 ExtensionConfig.append(BUILD_PROPERTIES, create.extensions(), create.name()));
@@ -528,6 +531,47 @@ public final class ProjectScaffolder {
                 curl http://localhost:8080/hello
                 ```
                 """ : "");
+    }
+
+    private static final String CRAC_EXTENSION = "crac";
+
+    /** The Zulu CRaC JDK build, linux x64: the Dockerfile builds and runs on it; checkpoints are Linux only. */
+    private static final String ZULU_CRAC = "zulu25.36.205-ca-crac-jdk25.0.4.1-linux_x64";
+
+    private static String buildCracDockerfile(ProjectSpec c) {
+        return """
+                # syntax=docker/dockerfile:1
+                # Builds and runs %1$s on Azul Zulu CRaC, the JDK the crac extension requires (it requires jdk.crac).
+                #
+                #   docker build -f Dockerfile.crac -t %1$s-crac .
+                #
+                # Take a checkpoint: start, then ask the JVM for it (the volume keeps the image).
+                #
+                #   docker run -d --name ckpt -v crac-img:/crac -e JAVA_OPTS="-XX:CRaCCheckpointTo=/crac -XX:+StartAttachListener" %1$s-crac
+                #   docker exec ckpt jcmd 1 JDK.checkpoint     # the launcher execs java, so the JVM is process 1
+                #
+                # Restore it, in a fresh container, from the same volume:
+                #
+                #   docker run --rm -p 8080:8080 -v crac-img:/crac -e JAVA_OPTS="-XX:CRaCRestoreFrom=/crac" %1$s-crac
+                ARG ZULU=%2$s
+                FROM ubuntu:24.04 AS jdk
+                ARG ZULU
+                ADD https://cdn.azul.com/zulu/bin/${ZULU}.tar.gz /tmp/zulu.tar.gz
+                RUN mkdir -p /opt/jdk && tar -xzf /tmp/zulu.tar.gz -C /opt/jdk --strip-components=1 && rm /tmp/zulu.tar.gz
+                ENV JAVA_HOME=/opt/jdk PATH=/opt/jdk/bin:$PATH
+
+                FROM jdk AS build
+                WORKDIR /src
+                COPY . .
+                RUN ./mvnw -ntp -B package -DskipTests && mv target/%1$s-*/ /app
+
+                FROM jdk
+                RUN mkdir -m 777 /crac
+                COPY --from=build /app /app
+                ENV JAVA_OPTS=""
+                EXPOSE 8080
+                ENTRYPOINT ["/app/bin/%1$s.sh"]
+                """.formatted(c.name(), ZULU_CRAC);
     }
 
     private static final String BUILD_PROPERTIES = """
