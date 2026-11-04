@@ -27,7 +27,7 @@ package io.vidocq.runtime.spi;
  * <p>A {@link VidocqExtension} that needs it also implements this interface; the runtime hands
  * those extensions to {@link ExtensionContext#suspendables()}, in start order, with no reflection
  * and no dependency on any checkpoint technology. The module that drives the snapshot (for CRaC,
- * {@code vidocq-runtime-crac}) calls {@link #suspend()} in the reverse of the start order, then
+ * {@code vidocq-runtime-crac-extension}) calls {@link #suspend()} in the reverse of the start order, then
  * {@link #resume()} in the start order.
  *
  * <p>Both methods must be idempotent and quick, and must leave the state a plain

@@ -46,6 +46,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -143,6 +144,14 @@ public class VidocqJlinkMojo extends AbstractMojo {
     private boolean modularize;
 
     /** jlink compression level ({@code zip-0} to {@code zip-9}, default: {@code zip-6}). */
+    /**
+     * JDK modules to add to the image besides those jdeps finds, comma separated: for a CRaC image whose checkpoint
+     * is taken with {@code jcmd}, {@code jdk.jcmd,jdk.attach}. {@code jdk.crac} needs no mention: the image carries it
+     * as soon as a module of the application requires it.
+     */
+    @Parameter(property = "vidocq.jlink.addModules")
+    private String addModules;
+
     @Parameter(defaultValue = "zip-6", property = "vidocq.compress")
     private String compress;
 
@@ -441,7 +450,32 @@ public class VidocqJlinkMojo extends AbstractMojo {
                 if (!t.isEmpty()) all.add(t);
             }
         }
+        List<ModuleDescriptor> staged = new ArrayList<>();
+        for (var ref : ModuleFinder.of(stage).findAll()) {
+            staged.add(ref.descriptor());
+        }
+        all.addAll(extraModules(staged, addModules));
         return String.join(",", all);
+    }
+
+    /** {@code jdk.crac} when a staged module requires it, then the configured modules; in that order, once each. */
+    static Set<String> extraModules(Collection<ModuleDescriptor> staged, String configured) {
+        Set<String> extra = new LinkedHashSet<>();
+        for (ModuleDescriptor d : staged) {
+            for (ModuleDescriptor.Requires r : d.requires()) {
+                if (r.name().equals("jdk.crac")) {
+                    extra.add("jdk.crac");
+                }
+            }
+        }
+        if (configured != null) {
+            for (String m : configured.split(",")) {
+                if (!m.isBlank()) {
+                    extra.add(m.strip());
+                }
+            }
+        }
+        return extra;
     }
 
     /**
