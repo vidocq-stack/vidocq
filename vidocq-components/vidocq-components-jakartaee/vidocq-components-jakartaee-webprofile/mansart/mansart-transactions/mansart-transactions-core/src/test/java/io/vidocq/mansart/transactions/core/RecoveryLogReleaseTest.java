@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -93,9 +94,11 @@ class RecoveryLogReleaseTest {
     }
 
     @Test
-    void theNoOpJournalHasNothingToRelease() throws Exception {
-        NoOpRecoveryLog.INSTANCE.release();
-        NoOpRecoveryLog.INSTANCE.reopen();
+    void theNoOpJournalHasNothingToRelease() {
+        assertThatCode(() -> {
+            NoOpRecoveryLog.INSTANCE.release();
+            NoOpRecoveryLog.INSTANCE.reopen();
+        }).doesNotThrowAnyException();
     }
 
     @Test
