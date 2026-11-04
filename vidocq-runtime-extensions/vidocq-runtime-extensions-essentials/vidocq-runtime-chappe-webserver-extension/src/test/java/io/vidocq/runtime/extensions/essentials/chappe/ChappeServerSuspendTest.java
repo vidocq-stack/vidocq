@@ -76,7 +76,7 @@ class ChappeServerSuspendTest {
         try (ServerSocket probe = new ServerSocket(port)) {
             assertEquals(port, probe.getLocalPort(), "the port is free while suspended");
         }
-        assertThrows(IOException.class, () -> get());
+        assertThrows(IOException.class, this::get);
 
         suspendable.resume();
         assertEquals("hi", get().body());

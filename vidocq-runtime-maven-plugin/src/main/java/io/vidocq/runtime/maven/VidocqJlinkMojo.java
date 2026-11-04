@@ -143,7 +143,6 @@ public class VidocqJlinkMojo extends AbstractMojo {
     @Parameter(defaultValue = "true", property = "vidocq.jlink.modularize")
     private boolean modularize;
 
-    /** jlink compression level ({@code zip-0} to {@code zip-9}, default: {@code zip-6}). */
     /**
      * JDK modules to add to the image besides those jdeps finds, comma separated: for a CRaC image whose checkpoint
      * is taken with {@code jcmd}, {@code jdk.jcmd,jdk.attach}. {@code jdk.crac} needs no mention: the image carries it
@@ -152,6 +151,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
     @Parameter(property = "vidocq.jlink.addModules")
     private String addModules;
 
+    /** jlink compression level ({@code zip-0} to {@code zip-9}, default: {@code zip-6}). */
     @Parameter(defaultValue = "zip-6", property = "vidocq.compress")
     private String compress;
 

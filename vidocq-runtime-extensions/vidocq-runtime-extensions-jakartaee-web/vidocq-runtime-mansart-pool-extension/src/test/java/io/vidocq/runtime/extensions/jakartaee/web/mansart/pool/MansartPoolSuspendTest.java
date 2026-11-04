@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The pools hold JDBC connections a process snapshot cannot carry: closed on suspend, opened again on resume. */
@@ -74,12 +75,13 @@ class MansartPoolSuspendTest {
         s.suspend();
         assertThrows(SQLException.class, before::getConnection);
         assertNull(MansartPoolHolder.INSTANCE.get(), "the holder keeps no closed pool");
-        assertThrows(RuntimeException.class, () -> NamedDataSourceRegistry.require("audit").getConnection());
+        assertThrows(RuntimeException.class, () -> NamedDataSourceRegistry.require("audit"),
+                "the registry keeps no closed named pool");
 
         s.resume();
         assertNotNull(ext.pool());
         assertNotSame(before, ext.pool());
-        assertTrue(ext.pool() == MansartPoolHolder.INSTANCE.get(), "the holder serves the new pool");
+        assertSame(ext.pool(), MansartPoolHolder.INSTANCE.get(), "the holder serves the new pool");
         try (Connection c = ext.pool().getConnection()) {
             assertTrue(c.isValid(1));
         }

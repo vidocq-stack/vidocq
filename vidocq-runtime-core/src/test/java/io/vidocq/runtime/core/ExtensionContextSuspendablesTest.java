@@ -43,10 +43,12 @@ class ExtensionContextSuspendablesTest {
     static final class Frozen extends Plain implements Suspendable {
         @Override
         public void suspend() {
+            // A test double: only its place in the list matters, it holds nothing to release.
         }
 
         @Override
         public void resume() {
+            // A test double: nothing was released, nothing to take back.
         }
     }
 
