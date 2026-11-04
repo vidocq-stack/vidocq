@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions;
 import io.vidocq.mansart.transactions.core.MansartTransactionManager;
 import io.vidocq.mansart.transactions.core.RecoveryReport;
 import io.vidocq.runtime.spi.ExtensionContext;
+import io.vidocq.runtime.spi.Suspendable;
 import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import jakarta.enterprise.inject.Any;
@@ -64,13 +65,16 @@ import java.util.Set;
  * {@code DataSource}, but before mansart-data (300) so the {@code @Transactional} interceptors
  * are guaranteed to be visible by the time repositories start accepting calls.
  */
-public final class MansartTransactionsIntegrationExtension implements VidocqExtension {
+public final class MansartTransactionsIntegrationExtension implements VidocqExtension, Suspendable {
 
     private static final System.Logger LOG =
             System.getLogger(MansartTransactionsIntegrationExtension.class.getName());
 
     /** Vidocq-side key; forwarded to mansart's {@code mansart.tx.recovery.log}. */
     static final String RECOVERY_LOG_KEY = "vidocq.tx.recovery.log";
+
+    /** The durable transaction manager, kept to let go of its journal file at a checkpoint. */
+    private volatile MansartTransactionManager journalOwner;
 
     @Override
     public String name() {
@@ -106,7 +110,42 @@ public final class MansartTransactionsIntegrationExtension implements VidocqExte
 
         TransactionManager tm = resolve(bm, TransactionManager.class, tmBeans.iterator().next());
         if (tm instanceof MansartTransactionManager mansartTm && mansartTm.durable()) {
+            journalOwner = mansartTm;
             recoverInDoubtBranches(bm, mansartTm);
+        }
+    }
+
+    /** Lets go of the recovery journal's file before a CRaC checkpoint. */
+    @Override
+    public void suspend() {
+        release(journalOwner);
+    }
+
+    /** Takes the recovery journal's file again after a restore. */
+    @Override
+    public void resume() {
+        reopen(journalOwner);
+    }
+
+    void adopt(MansartTransactionManager manager) {
+        journalOwner = manager;
+    }
+
+    private static void release(MansartTransactionManager manager) {
+        if (manager == null) return;
+        try {
+            manager.release();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    private static void reopen(MansartTransactionManager manager) {
+        if (manager == null) return;
+        try {
+            manager.reopen();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
         }
     }
 
