@@ -1,0 +1,75 @@
+# CRaC end to end: checkpoint -> restore -> HTTP on the Cassini example, with the vidocq-runtime-crac-extension.
+#
+# The extension requires jdk.crac, so it builds in the `crac` profile on a CRaC JDK (Azul Zulu CRaC) only; the rest
+# of the runtime builds on the usual JDK. A checkpoint is taken on Linux only. The script and the findings behind it
+# are in vidocq-runtime-integration-tests/crac-e2e.sh.
+name: CRaC end to end
+
+on:
+  schedule:
+    # 03:30 UTC, after the TCK nightly.
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+env:
+  ZULU_CRAC: zulu25.36.205-ca-crac-jdk25.0.4.1-linux_x64
+
+jobs:
+  crac:
+    runs-on: vidocq-runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch Vidocq/ci action (Forgejo mirror, basic-auth)
+        shell: bash
+        env:
+          MIRROR_URL:  ${{ secrets.MIRROR_ASD_URL }}
+          MIRROR_USER: ${{ secrets.MIRROR_ASD_USER }}
+          MIRROR_PASS: ${{ secrets.MIRROR_ASD_PASSWORD }}
+        run: |
+          set -euo pipefail
+          enc_pass=$(python3 -c "import os,urllib.parse;print(urllib.parse.quote(os.environ['MIRROR_PASS'], safe=''))")
+          host="${MIRROR_URL#https://}"; host="${host#http://}"; host="${host%/}"
+          git clone --depth=1 --branch main \
+            "https://${MIRROR_USER}:${enc_pass}@${host}/Vidocq/ci.git" \
+            .ci-action
+
+      - uses: ./.ci-action/setup-maven
+
+      - name: Install Azul Zulu CRaC
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/zulu"
+          curl -fsSL "https://cdn.azul.com/zulu/bin/${ZULU_CRAC}.tar.gz" | tar -xz -C "$RUNNER_TEMP/zulu" --strip-components=1
+          echo "CRAC_JAVA_HOME=$RUNNER_TEMP/zulu" >> "$GITHUB_ENV"
+
+      # The runtime and the example on the usual JDK, then the CRaC extension on the CRaC one.
+      - name: Build & install the runtime
+        run: mvn -B -ntp -U install -DskipTests
+
+      - name: Build the CRaC extension and package the example
+        env:
+          JAVA_HOME: ${{ env.CRAC_JAVA_HOME }}
+        run: >
+          mvn -B -ntp -Pcrac -P!dist
+          -pl vidocq-runtime-extensions/vidocq-runtime-extensions-essentials/vidocq-runtime-crac-extension,vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
+          install io.vidocq.runtime:vidocq-runtime-maven-plugin:package -DskipTests
+
+      - name: Checkpoint, restore, request
+        env:
+          JAVA_HOME: ${{ env.CRAC_JAVA_HOME }}
+        run: >
+          vidocq-runtime-integration-tests/crac-e2e.sh
+          vidocq-runtime-examples/vidocq-runtime-cassini-rest-example/target/vidocq-runtime-cassini-rest-example-*
+          vidocq-runtime-extensions/vidocq-runtime-extensions-essentials/vidocq-runtime-crac-extension/target/vidocq-runtime-crac-extension-*-SNAPSHOT.jar
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.ci-action/notify-slack
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: failure
+          repo: ${{ github.repository }}
+          ref: ${{ github.ref_name }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
