@@ -74,7 +74,7 @@ class HumboldtSuspendTest {
     private AutoConfiguredHumboldt humboldt;
 
     @BeforeEach
-    void record() {
+    void recordWarnings() {
         SENDER_LOG.addHandler(recorder);
     }
 
