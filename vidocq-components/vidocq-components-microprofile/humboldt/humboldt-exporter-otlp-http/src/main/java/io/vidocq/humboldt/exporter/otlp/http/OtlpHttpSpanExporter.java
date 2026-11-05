@@ -22,6 +22,7 @@ package io.vidocq.humboldt.exporter.otlp.http;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpJsonSender;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonEncoder;
 import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+import io.vidocq.humboldt.sdk.common.Releasable;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
 import io.vidocq.humboldt.sdk.trace.export.SpanExporter;
 
@@ -34,7 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>Default endpoint: {@code http://localhost:4318/v1/traces}.</p>
  */
-public final class OtlpHttpSpanExporter implements SpanExporter {
+public final class OtlpHttpSpanExporter implements SpanExporter, Releasable {
 
     private final OtlpHttpJsonSender sender;
     private final AtomicBoolean stopped = new AtomicBoolean(false);
@@ -63,6 +64,17 @@ public final class OtlpHttpSpanExporter implements SpanExporter {
     public CompletableResultCode shutdown() {
         stopped.set(true);
         return sender.flush();
+    }
+
+    /** Lets the connections to the collector go, for a checkpoint: see {@link Releasable}. */
+    @Override
+    public void release() {
+        sender.release();
+    }
+
+    @Override
+    public void reopen() {
+        sender.reopen();
     }
 
     /**

@@ -268,6 +268,17 @@ Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent syst
 | **Not read** — the exporter always sends OTLP/HTTP with JSON encoding; there is no protobuf variant to switch to.
 |===
 
+[[checkpoint-restore]]
+=== Checkpoint and restore (CRaC) [.tag-new]#NEW#
+
+Each OTLP exporter keeps its connections to the collector in the pool of a JDK `HttpClient`, and a CRaC checkpoint
+refuses a process with an open socket. `AutoConfiguredHumboldt.release()` exports what the processors and the metric
+readers hold, waits for the requests in flight, then closes the client of each OTLP exporter; `reopen()` builds new
+ones after the restore. The providers, processors and exporters stay the same objects, so an application or an
+instrumentation that holds them keeps working. Between `release()` and `reopen()` an export fails at once and its data
+is dropped, with a warning. The exporters implement `io.vidocq.humboldt.sdk.common.Releasable`, for an application that
+assembles them itself. Under Vidocq, the Telemetry extension calls both around the checkpoint.
+
 === Sampling
 
 [cols="2,1,2"]

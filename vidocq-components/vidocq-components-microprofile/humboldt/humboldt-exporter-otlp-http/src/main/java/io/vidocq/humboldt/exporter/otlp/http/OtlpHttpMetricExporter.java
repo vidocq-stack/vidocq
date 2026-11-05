@@ -22,6 +22,7 @@ package io.vidocq.humboldt.exporter.otlp.http;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpJsonSender;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonMetricEncoder;
 import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+import io.vidocq.humboldt.sdk.common.Releasable;
 import io.vidocq.humboldt.sdk.metric.data.MetricData;
 import io.vidocq.humboldt.sdk.metric.export.MetricExporter;
 
@@ -34,7 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>Default endpoint: {@code http://localhost:4318/v1/metrics}.</p>
  */
-public final class OtlpHttpMetricExporter implements MetricExporter {
+public final class OtlpHttpMetricExporter implements MetricExporter, Releasable {
 
     private static final System.Logger LOG = System.getLogger(OtlpHttpMetricExporter.class.getName());
 
@@ -83,6 +84,17 @@ public final class OtlpHttpMetricExporter implements MetricExporter {
     public CompletableResultCode shutdown() {
         stopped.set(true);
         return sender.flush();
+    }
+
+    /** Lets the connections to the collector go, for a checkpoint: see {@link Releasable}. */
+    @Override
+    public void release() {
+        sender.release();
+    }
+
+    @Override
+    public void reopen() {
+        sender.reopen();
     }
 
     /** Builder of {@link OtlpHttpMetricExporter}; default endpoint {@code http://localhost:4318/v1/metrics}. */

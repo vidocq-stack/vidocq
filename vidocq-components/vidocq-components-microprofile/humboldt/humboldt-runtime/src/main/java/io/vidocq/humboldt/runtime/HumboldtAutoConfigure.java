@@ -26,6 +26,7 @@ import io.vidocq.humboldt.exporter.otlp.http.OtlpHttpLogExporter;
 import io.vidocq.humboldt.exporter.otlp.http.OtlpHttpMetricExporter;
 import io.vidocq.humboldt.exporter.otlp.http.OtlpHttpSpanExporter;
 import io.vidocq.humboldt.propagator.w3c.W3CPropagators;
+import io.vidocq.humboldt.sdk.common.Releasable;
 import io.vidocq.humboldt.sdk.common.Resource;
 import io.vidocq.humboldt.sdk.log.BatchLogRecordProcessor;
 import io.vidocq.humboldt.sdk.log.SdkLoggerProvider;
@@ -51,6 +52,7 @@ import io.vidocq.humboldt.sdk.trace.samplers.Sampler;
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -169,28 +171,32 @@ public final class HumboldtAutoConfigure {
                     SdkMeterProvider.builder().setResource(resource).build(),
                     SdkLoggerProvider.builder().setResource(resource).build(),
                     overridePropagators != null ? overridePropagators : W3CPropagators.get(),
-                    null, null, null);
+                    null, null, null, List.of());
         }
+        // The exporters that hold connections (the OTLP ones), released for a CRaC checkpoint.
+        List<Releasable> releasables = new ArrayList<>();
 
         // --- Tracer ---
         String tracesExporter = env.getOrDefault("OTEL_TRACES_EXPORTER", "otlp");
         Sampler sampler = overrideSampler != null ? overrideSampler : parseSampler(env);
         InMemorySpanExporter inMemSpan = IN_MEMORY.equals(tracesExporter)
                 ? InMemorySpanExporter.create() : null;
-        SdkTracerProvider tracerProvider =
-                buildTracerProvider(env, resource, sampler, tracesExporter, inMemSpan, extraSpanExporters);
+        SdkTracerProvider tracerProvider = buildTracerProvider(
+                env, resource, sampler, tracesExporter, inMemSpan, extraSpanExporters, releasables);
 
         // --- Meter ---
         String metricsExporter = env.getOrDefault("OTEL_METRICS_EXPORTER", "otlp");
         InMemoryMetricExporter inMemMetric = IN_MEMORY.equals(metricsExporter)
                 ? InMemoryMetricExporter.create() : null;
-        SdkMeterProvider meterProvider = buildMeterProvider(env, resource, metricsExporter, inMemMetric);
+        SdkMeterProvider meterProvider =
+                buildMeterProvider(env, resource, metricsExporter, inMemMetric, releasables);
 
         // --- Logger ---
         String logsExporter = env.getOrDefault("OTEL_LOGS_EXPORTER", "otlp");
         InMemoryLogRecordExporter inMemLog = IN_MEMORY.equals(logsExporter)
                 ? InMemoryLogRecordExporter.create() : null;
-        SdkLoggerProvider loggerProvider = buildLoggerProvider(env, resource, logsExporter, inMemLog);
+        SdkLoggerProvider loggerProvider =
+                buildLoggerProvider(env, resource, logsExporter, inMemLog, releasables);
 
         ContextPropagators propagators = overridePropagators != null
                 ? overridePropagators
@@ -203,11 +209,19 @@ public final class HumboldtAutoConfigure {
 
         return new AutoConfiguredHumboldt(
                 tracerProvider, meterProvider, loggerProvider, propagators,
-                inMemSpan, inMemMetric, inMemLog);
+                inMemSpan, inMemMetric, inMemLog, releasables);
+    }
+
+    /** Keeps {@code exporter} in {@code releasables} when it holds connections that a checkpoint must let go. */
+    private static void keepIfReleasable(Object exporter, List<Releasable> releasables) {
+        if (exporter instanceof Releasable releasable) {
+            releasables.add(releasable);
+        }
     }
 
     private static SdkTracerProvider buildTracerProvider(EnvConfig env, Resource resource, Sampler sampler,
-            String tracesExporter, InMemorySpanExporter inMemSpan, List<SpanExporter> extraSpanExporters) {
+            String tracesExporter, InMemorySpanExporter inMemSpan, List<SpanExporter> extraSpanExporters,
+            List<Releasable> releasables) {
         SdkTracerProvider.Builder tpBuilder = SdkTracerProvider.builder()
                 .setResource(resource)
                 .setSampler(sampler);
@@ -217,6 +231,7 @@ public final class HumboldtAutoConfigure {
             case LOGGING -> LoggingSpanExporter.create();
             default -> buildOtlpSpanExporter(env);
         };
+        keepIfReleasable(spanExporter, releasables);
         if (spanExporter != null) {
             SpanProcessor sp = IN_MEMORY.equals(tracesExporter)
                     ? SimpleSpanProcessor.create(spanExporter)
@@ -230,7 +245,7 @@ public final class HumboldtAutoConfigure {
     }
 
     private static SdkMeterProvider buildMeterProvider(EnvConfig env, Resource resource,
-            String metricsExporter, InMemoryMetricExporter inMemMetric) {
+            String metricsExporter, InMemoryMetricExporter inMemMetric, List<Releasable> releasables) {
         SdkMeterProvider.Builder mpBuilder = SdkMeterProvider.builder().setResource(resource);
         MetricExporter metricExporter = switch (metricsExporter) {
             case NONE -> null;
@@ -238,6 +253,7 @@ public final class HumboldtAutoConfigure {
             case LOGGING -> io.vidocq.humboldt.sdk.metric.export.LoggingMetricExporter.create();
             default -> buildOtlpMetricExporter(env);
         };
+        keepIfReleasable(metricExporter, releasables);
         if (metricExporter != null) {
             mpBuilder.registerMetricReader(PeriodicMetricReader.builder(metricExporter)
                     .setInterval(metricExportInterval(env, metricsExporter))
@@ -280,7 +296,7 @@ public final class HumboldtAutoConfigure {
     }
 
     private static SdkLoggerProvider buildLoggerProvider(EnvConfig env, Resource resource,
-            String logsExporter, InMemoryLogRecordExporter inMemLog) {
+            String logsExporter, InMemoryLogRecordExporter inMemLog, List<Releasable> releasables) {
         SdkLoggerProvider.Builder lpBuilder = SdkLoggerProvider.builder().setResource(resource);
         LogRecordExporter logExporter = switch (logsExporter) {
             case NONE -> null;
@@ -288,6 +304,7 @@ public final class HumboldtAutoConfigure {
             case LOGGING -> LoggingLogRecordExporter.create();
             default -> buildOtlpLogExporter(env);
         };
+        keepIfReleasable(logExporter, releasables);
         if (logExporter != null) {
             // Simple processor for in-memory AND logging: output must be synchronous
             // so that tests (especially TCK JulTest) can read the file without

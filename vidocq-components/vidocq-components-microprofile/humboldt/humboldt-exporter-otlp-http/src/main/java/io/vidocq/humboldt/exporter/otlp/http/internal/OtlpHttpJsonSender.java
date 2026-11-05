@@ -20,6 +20,7 @@
 package io.vidocq.humboldt.exporter.otlp.http.internal;
 
 import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+import io.vidocq.humboldt.sdk.common.Releasable;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
@@ -35,6 +36,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Shared HTTP/JSON sender for the 3 OTLP exporters (traces / metrics / logs).
@@ -46,16 +48,21 @@ import java.util.concurrent.Executors;
  * <p>Async: each {@link #send(String)} launches a virtual thread that executes
  * the HTTP request + retry. Returns a {@link CompletableResultCode} that completes
  * at the end (success / definitive failure after {@code maxRetries}).</p>
+ *
+ * <p>{@link Releasable}: the client keeps its connections to the collector in a pool, which a CRaC checkpoint
+ * refuses; {@link #release()} closes the client once what was sent is answered, {@link #reopen()} builds another.</p>
  */
-public final class OtlpHttpJsonSender {
+public final class OtlpHttpJsonSender implements Releasable {
 
     private static final Logger LOG = System.getLogger(OtlpHttpJsonSender.class.getName());
 
     private final URI endpoint;
     private final Map<String, String> headers;
     private final Duration requestTimeout;
+    private final Duration connectTimeout;
     private final int maxRetries;
-    private final HttpClient client;
+    /** {@code null} while released: an export then fails at once. */
+    private volatile HttpClient client;
     private final String signalLabel;
     /** The results of the requests sent and not answered yet. */
     private final Set<CompletableResultCode> inFlight = ConcurrentHashMap.newKeySet();
@@ -64,13 +71,49 @@ public final class OtlpHttpJsonSender {
         this.endpoint = b.endpoint;
         this.headers = Map.copyOf(b.headers);
         this.requestTimeout = b.requestTimeout;
+        this.connectTimeout = b.connectTimeout;
         this.maxRetries = b.maxRetries;
         this.signalLabel = b.signalLabel;
-        this.client = HttpClient.newBuilder()
-                .connectTimeout(b.connectTimeout)
+        this.client = newClient();
+    }
+
+    private HttpClient newClient() {
+        return HttpClient.newBuilder()
+                .connectTimeout(connectTimeout)
                 .executor(Executors.newVirtualThreadPerTaskExecutor())
                 .version(HttpClient.Version.HTTP_1_1)
                 .build();
+    }
+
+    /**
+     * Waits for the requests in flight (each within its request timeout and retries), then closes the client: its
+     * pooled connections and its selector go with it. A request still running after that wait is cut.
+     */
+    @Override
+    public synchronized void release() {
+        HttpClient current = client;
+        if (current == null) {
+            return;
+        }
+        long waitMillis = requestTimeout.toMillis() * (maxRetries + 1L) + 5_000L;
+        flush().join(waitMillis, TimeUnit.MILLISECONDS);
+        client = null;
+        current.shutdown();
+        try {
+            if (!current.awaitTermination(Duration.ofSeconds(5))) {
+                current.shutdownNow();
+            }
+        } catch (InterruptedException _) {
+            current.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @Override
+    public synchronized void reopen() {
+        if (client == null) {
+            client = newClient();
+        }
     }
 
     public static Builder builder() {
@@ -105,8 +148,14 @@ public final class OtlpHttpJsonSender {
     }
 
     private void sendWithRetry(HttpRequest req, CompletableResultCode result, int attempt) {
+        HttpClient current = client;
+        if (current == null) {
+            LOG.log(Level.WARNING, "OTLP {0} exporter released for a checkpoint: the batch is dropped", signalLabel);
+            result.fail();
+            return;
+        }
         try {
-            HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> resp = current.send(req, HttpResponse.BodyHandlers.ofString());
             int sc = resp.statusCode();
             if (sc >= 200 && sc < 300) { result.succeed(); return; }
             if (sc >= 500 && attempt < maxRetries) {

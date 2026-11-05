@@ -25,6 +25,7 @@ import io.opentelemetry.api.metrics.MeterProvider;
 import io.opentelemetry.api.trace.TracerProvider;
 import io.opentelemetry.context.propagation.ContextPropagators;
 import io.vidocq.humboldt.sdk.common.CompletableResultCode;
+import io.vidocq.humboldt.sdk.common.Releasable;
 import io.vidocq.humboldt.sdk.log.SdkLoggerProvider;
 import io.vidocq.humboldt.sdk.metric.SdkMeterProvider;
 import io.vidocq.humboldt.sdk.trace.SdkTracerProvider;
@@ -54,6 +55,8 @@ public final class AutoConfiguredHumboldt implements OpenTelemetry, AutoCloseabl
     private final InMemorySpanExporter inMemorySpanExporter;
     private final InMemoryMetricExporter inMemoryMetricExporter;
     private final InMemoryLogRecordExporter inMemoryLogRecordExporter;
+    /** The configured exporters that hold connections (the OTLP ones), for {@link #release()}. */
+    private final List<Releasable> releasables;
 
     AutoConfiguredHumboldt(
             SdkTracerProvider tracerProvider,
@@ -62,7 +65,8 @@ public final class AutoConfiguredHumboldt implements OpenTelemetry, AutoCloseabl
             ContextPropagators propagators,
             InMemorySpanExporter inMemorySpanExporter,
             InMemoryMetricExporter inMemoryMetricExporter,
-            InMemoryLogRecordExporter inMemoryLogRecordExporter) {
+            InMemoryLogRecordExporter inMemoryLogRecordExporter,
+            List<Releasable> releasables) {
         this.tracerProvider = tracerProvider;
         this.meterProvider = meterProvider;
         this.loggerProvider = loggerProvider;
@@ -70,6 +74,7 @@ public final class AutoConfiguredHumboldt implements OpenTelemetry, AutoCloseabl
         this.inMemorySpanExporter = inMemorySpanExporter;
         this.inMemoryMetricExporter = inMemoryMetricExporter;
         this.inMemoryLogRecordExporter = inMemoryLogRecordExporter;
+        this.releasables = List.copyOf(releasables);
     }
 
     @Override
@@ -123,6 +128,27 @@ public final class AutoConfiguredHumboldt implements OpenTelemetry, AutoCloseabl
                 tracerProvider.flush(),
                 meterProvider.flush(),
                 loggerProvider.flush()));
+    }
+
+    /**
+     * Lets the exporters' connections to the collector go, for a checkpoint of the process (CRaC): exports what the
+     * processors and readers hold, then releases each exporter once what it sent is answered. The providers,
+     * processors and exporters stay the same objects: until {@link #reopen()}, an export fails at once and its data is
+     * dropped.
+     */
+    public void release() {
+        flush().join(10, TimeUnit.SECONDS);
+        releasables.forEach(Releasable::release);
+    }
+
+    /** Takes the exporters' connections back after {@link #release()}, once the process is restored. */
+    public void reopen() {
+        releasables.forEach(Releasable::reopen);
+    }
+
+    /** The configured exporters {@link #release()} lets go: the OTLP ones. */
+    List<Releasable> releasables() {
+        return releasables;
     }
 
     public CompletableResultCode shutdown() {
