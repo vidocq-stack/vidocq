@@ -88,7 +88,7 @@ class AutoConfiguredHumboldtReleaseTest {
                 SdkMeterProvider.builder().build(),
                 SdkLoggerProvider.builder().build(),
                 W3CPropagators.get(),
-                null, null, null,
+                InMemoryExporters.NONE,
                 releasables);
     }
 

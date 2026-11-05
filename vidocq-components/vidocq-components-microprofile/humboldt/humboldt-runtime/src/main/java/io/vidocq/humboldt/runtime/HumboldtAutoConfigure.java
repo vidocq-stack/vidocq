@@ -171,7 +171,7 @@ public final class HumboldtAutoConfigure {
                     SdkMeterProvider.builder().setResource(resource).build(),
                     SdkLoggerProvider.builder().setResource(resource).build(),
                     overridePropagators != null ? overridePropagators : W3CPropagators.get(),
-                    null, null, null, List.of());
+                    InMemoryExporters.NONE, List.of());
         }
         // The exporters that hold connections (the OTLP ones), released for a CRaC checkpoint.
         List<Releasable> releasables = new ArrayList<>();
@@ -209,7 +209,7 @@ public final class HumboldtAutoConfigure {
 
         return new AutoConfiguredHumboldt(
                 tracerProvider, meterProvider, loggerProvider, propagators,
-                inMemSpan, inMemMetric, inMemLog, releasables);
+                new InMemoryExporters(inMemSpan, inMemMetric, inMemLog), releasables);
     }
 
     /** Keeps {@code exporter} in {@code releasables} when it holds connections that a checkpoint must let go. */

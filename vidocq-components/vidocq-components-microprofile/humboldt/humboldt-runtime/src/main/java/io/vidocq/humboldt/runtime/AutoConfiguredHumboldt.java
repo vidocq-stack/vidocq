@@ -52,9 +52,7 @@ public final class AutoConfiguredHumboldt implements OpenTelemetry, AutoCloseabl
     private final SdkMeterProvider meterProvider;
     private final SdkLoggerProvider loggerProvider;
     private final ContextPropagators propagators;
-    private final InMemorySpanExporter inMemorySpanExporter;
-    private final InMemoryMetricExporter inMemoryMetricExporter;
-    private final InMemoryLogRecordExporter inMemoryLogRecordExporter;
+    private final InMemoryExporters inMemory;
     /** The configured exporters that hold connections (the OTLP ones), for {@link #release()}. */
     private final List<Releasable> releasables;
 
@@ -63,17 +61,13 @@ public final class AutoConfiguredHumboldt implements OpenTelemetry, AutoCloseabl
             SdkMeterProvider meterProvider,
             SdkLoggerProvider loggerProvider,
             ContextPropagators propagators,
-            InMemorySpanExporter inMemorySpanExporter,
-            InMemoryMetricExporter inMemoryMetricExporter,
-            InMemoryLogRecordExporter inMemoryLogRecordExporter,
+            InMemoryExporters inMemory,
             List<Releasable> releasables) {
         this.tracerProvider = tracerProvider;
         this.meterProvider = meterProvider;
         this.loggerProvider = loggerProvider;
         this.propagators = propagators;
-        this.inMemorySpanExporter = inMemorySpanExporter;
-        this.inMemoryMetricExporter = inMemoryMetricExporter;
-        this.inMemoryLogRecordExporter = inMemoryLogRecordExporter;
+        this.inMemory = inMemory;
         this.releasables = List.copyOf(releasables);
     }
 
@@ -111,15 +105,15 @@ public final class AutoConfiguredHumboldt implements OpenTelemetry, AutoCloseabl
 
     /** @return the in-memory span exporter if autoconfig installed one, otherwise {@code null}. */
     public InMemorySpanExporter inMemorySpanExporter() {
-        return inMemorySpanExporter;
+        return inMemory.span();
     }
 
     public InMemoryMetricExporter inMemoryMetricExporter() {
-        return inMemoryMetricExporter;
+        return inMemory.metric();
     }
 
     public InMemoryLogRecordExporter inMemoryLogRecordExporter() {
-        return inMemoryLogRecordExporter;
+        return inMemory.log();
     }
 
     /** Forces a flush of the 3 SDK providers (useful to drain before export). */
