@@ -22,12 +22,10 @@ package io.vidocq.humboldt.exporter.otlp.http;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpJsonSender;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonEncoder;
 import io.vidocq.humboldt.sdk.common.CompletableResultCode;
-import io.vidocq.humboldt.sdk.common.Releasable;
 import io.vidocq.humboldt.sdk.trace.data.SpanData;
 import io.vidocq.humboldt.sdk.trace.export.SpanExporter;
 
 import java.util.Collection;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * OTLP/HTTP-JSON exporter for spans — delegates transport to
@@ -35,13 +33,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>Default endpoint: {@code http://localhost:4318/v1/traces}.</p>
  */
-public final class OtlpHttpSpanExporter implements SpanExporter, Releasable {
-
-    private final OtlpHttpJsonSender sender;
-    private final AtomicBoolean stopped = new AtomicBoolean(false);
+public final class OtlpHttpSpanExporter extends OtlpHttpExporter implements SpanExporter {
 
     private OtlpHttpSpanExporter(OtlpHttpJsonSender sender) {
-        this.sender = sender;
+        super(sender);
     }
 
     public static Builder builder() {
@@ -50,31 +45,9 @@ public final class OtlpHttpSpanExporter implements SpanExporter, Releasable {
 
     @Override
     public CompletableResultCode export(Collection<SpanData> spans) {
-        if (stopped.get()) return CompletableResultCode.ofFailure();
+        if (stopped()) return CompletableResultCode.ofFailure();
         if (spans.isEmpty()) return CompletableResultCode.ofSuccess();
         return sender.send(OtlpJsonEncoder.encode(spans));
-    }
-
-    @Override
-    public CompletableResultCode flush() {
-        return sender.flush();
-    }
-
-    @Override
-    public CompletableResultCode shutdown() {
-        stopped.set(true);
-        return sender.flush();
-    }
-
-    /** Lets the connections to the collector go, for a checkpoint: see {@link Releasable}. */
-    @Override
-    public void release() {
-        sender.release();
-    }
-
-    @Override
-    public void reopen() {
-        sender.reopen();
     }
 
     /**

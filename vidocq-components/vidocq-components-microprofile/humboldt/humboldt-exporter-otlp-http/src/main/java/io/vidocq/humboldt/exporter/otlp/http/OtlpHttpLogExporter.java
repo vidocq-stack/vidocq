@@ -22,12 +22,10 @@ package io.vidocq.humboldt.exporter.otlp.http;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpHttpJsonSender;
 import io.vidocq.humboldt.exporter.otlp.http.internal.OtlpJsonLogEncoder;
 import io.vidocq.humboldt.sdk.common.CompletableResultCode;
-import io.vidocq.humboldt.sdk.common.Releasable;
 import io.vidocq.humboldt.sdk.log.data.LogRecordData;
 import io.vidocq.humboldt.sdk.log.export.LogRecordExporter;
 
 import java.util.Collection;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * OTLP/HTTP-JSON exporter for LogRecord — delegates transport to
@@ -35,13 +33,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>Default endpoint: {@code http://localhost:4318/v1/logs}.</p>
  */
-public final class OtlpHttpLogExporter implements LogRecordExporter, Releasable {
-
-    private final OtlpHttpJsonSender sender;
-    private final AtomicBoolean stopped = new AtomicBoolean(false);
+public final class OtlpHttpLogExporter extends OtlpHttpExporter implements LogRecordExporter {
 
     private OtlpHttpLogExporter(OtlpHttpJsonSender sender) {
-        this.sender = sender;
+        super(sender);
     }
 
     public static Builder builder() {
@@ -50,31 +45,9 @@ public final class OtlpHttpLogExporter implements LogRecordExporter, Releasable 
 
     @Override
     public CompletableResultCode export(Collection<LogRecordData> records) {
-        if (stopped.get()) return CompletableResultCode.ofFailure();
+        if (stopped()) return CompletableResultCode.ofFailure();
         if (records.isEmpty()) return CompletableResultCode.ofSuccess();
         return sender.send(OtlpJsonLogEncoder.encode(records));
-    }
-
-    @Override
-    public CompletableResultCode flush() {
-        return sender.flush();
-    }
-
-    @Override
-    public CompletableResultCode shutdown() {
-        stopped.set(true);
-        return sender.flush();
-    }
-
-    /** Lets the connections to the collector go, for a checkpoint: see {@link Releasable}. */
-    @Override
-    public void release() {
-        sender.release();
-    }
-
-    @Override
-    public void reopen() {
-        sender.reopen();
     }
 
     /** Builder of {@link OtlpHttpLogExporter}; default endpoint {@code http://localhost:4318/v1/logs}. */

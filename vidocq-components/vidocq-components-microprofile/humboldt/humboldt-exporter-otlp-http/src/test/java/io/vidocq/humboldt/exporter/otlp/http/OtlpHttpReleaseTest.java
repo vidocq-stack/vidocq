@@ -37,6 +37,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -55,7 +56,10 @@ class OtlpHttpReleaseTest {
 
     private HttpServer server;
     private final AtomicInteger received = new AtomicInteger();
-    private volatile long answerDelayMillis;
+    /** Counted down when a request reaches the collector. */
+    private final CountDownLatch arrived = new CountDownLatch(1);
+    /** The collector answers once it is counted down: open by default. */
+    private volatile CountDownLatch answer = new CountDownLatch(0);
 
     @BeforeEach
     void startServer() throws IOException {
@@ -63,8 +67,9 @@ class OtlpHttpReleaseTest {
         server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         server.createContext("/v1/traces", ex -> {
             ex.getRequestBody().readAllBytes();
+            arrived.countDown();
             try {
-                Thread.sleep(answerDelayMillis);
+                answer.await(5, TimeUnit.SECONDS);
             } catch (InterruptedException _) {
                 Thread.currentThread().interrupt();
             }
@@ -128,12 +133,16 @@ class OtlpHttpReleaseTest {
     }
 
     @Test
-    void releaseWaitsForTheRequestsInFlight() {
+    void releaseWaitsForTheRequestsInFlight() throws InterruptedException {
         OtlpHttpSpanExporter exporter = exporter();
-        answerDelayMillis = 300;
+        answer = new CountDownLatch(1);
         CompletableResultCode pending = exporter.export(oneSpan());
+        assertTrue(arrived.await(5, TimeUnit.SECONDS), "the request reaches the collector");
 
-        exporter.release();
+        Thread releasing = Thread.ofVirtual().start(exporter::release);
+        assertFalse(releasing.join(Duration.ofMillis(200)), "release waits while the collector has not answered");
+        answer.countDown();
+        assertTrue(releasing.join(Duration.ofSeconds(10)), "release returns once the collector answers");
 
         assertTrue(pending.isDone(), "release returns once what was sent is answered");
         assertTrue(pending.isSuccess());

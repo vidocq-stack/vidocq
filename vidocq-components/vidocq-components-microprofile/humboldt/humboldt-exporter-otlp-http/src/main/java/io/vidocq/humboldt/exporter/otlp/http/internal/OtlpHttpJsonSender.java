@@ -37,6 +37,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Shared HTTP/JSON sender for the 3 OTLP exporters (traces / metrics / logs).
@@ -61,8 +62,8 @@ public final class OtlpHttpJsonSender implements Releasable {
     private final Duration requestTimeout;
     private final Duration connectTimeout;
     private final int maxRetries;
-    /** {@code null} while released: an export then fails at once. */
-    private volatile HttpClient client;
+    /** Empty while released: an export then fails at once. */
+    private final AtomicReference<HttpClient> client = new AtomicReference<>();
     private final String signalLabel;
     /** The results of the requests sent and not answered yet. */
     private final Set<CompletableResultCode> inFlight = ConcurrentHashMap.newKeySet();
@@ -74,7 +75,7 @@ public final class OtlpHttpJsonSender implements Releasable {
         this.connectTimeout = b.connectTimeout;
         this.maxRetries = b.maxRetries;
         this.signalLabel = b.signalLabel;
-        this.client = newClient();
+        this.client.set(newClient());
     }
 
     private HttpClient newClient() {
@@ -91,13 +92,13 @@ public final class OtlpHttpJsonSender implements Releasable {
      */
     @Override
     public synchronized void release() {
-        HttpClient current = client;
+        HttpClient current = client.get();
         if (current == null) {
             return;
         }
         long waitMillis = requestTimeout.toMillis() * (maxRetries + 1L) + 5_000L;
         flush().join(waitMillis, TimeUnit.MILLISECONDS);
-        client = null;
+        client.set(null);
         current.shutdown();
         try {
             if (!current.awaitTermination(Duration.ofSeconds(5))) {
@@ -111,8 +112,8 @@ public final class OtlpHttpJsonSender implements Releasable {
 
     @Override
     public synchronized void reopen() {
-        if (client == null) {
-            client = newClient();
+        if (client.get() == null) {
+            client.set(newClient());
         }
     }
 
@@ -148,7 +149,7 @@ public final class OtlpHttpJsonSender implements Releasable {
     }
 
     private void sendWithRetry(HttpRequest req, CompletableResultCode result, int attempt) {
-        HttpClient current = client;
+        HttpClient current = client.get();
         if (current == null) {
             LOG.log(Level.WARNING, "OTLP {0} exporter released for a checkpoint: the batch is dropped", signalLabel);
             result.fail();
