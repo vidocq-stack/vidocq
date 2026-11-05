@@ -32,8 +32,24 @@ package io.vidocq.runtime.spi;
  *
  * <p>Both methods must be idempotent and quick, and must leave the state a plain
  * {@code onStart} would have produced once {@code resume()} returned.
+ *
+ * <p>The application takes part too, through the CDI events {@link io.vidocq.runtime.spi.event.Checkpoint} and
+ * {@link io.vidocq.runtime.spi.event.Restore}, which the runtime fires from a suspendable of its own at
+ * {@link #APPLICATION_PRIORITY}.
  */
 public interface Suspendable {
+
+    /**
+     * The place of the application's own hooks among the extensions, as an extension {@link VidocqExtension#priority()
+     * priority}: 5,000.
+     *
+     * <p>An extension below it (telemetry 100, pool 200, transactions 250) is suspended after the application's
+     * {@link io.vidocq.runtime.spi.event.Checkpoint} observers and resumed before its
+     * {@link io.vidocq.runtime.spi.event.Restore} observers, so they can still use it. An extension at or above it
+     * (the HTTP server, 10,000) is suspended before them and resumed after them, so no request reaches the application
+     * while it lets go.
+     */
+    int APPLICATION_PRIORITY = 5_000;
 
     /** Releases what a snapshot cannot carry. Called before the snapshot, in reverse start order. */
     void suspend();

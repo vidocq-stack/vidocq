@@ -97,12 +97,15 @@ public interface ExtensionContext {
     }
 
     /**
-     * The extensions of this boot that are {@link Suspendable}, in start order.
+     * What a process snapshot must let go of in this boot, in start order: the extensions that are
+     * {@link Suspendable}, with the runtime's own (the application layer, and the application's
+     * {@link io.vidocq.runtime.spi.event.Checkpoint} and {@link io.vidocq.runtime.spi.event.Restore} events at
+     * {@link Suspendable#APPLICATION_PRIORITY}).
      *
      * <p>The context Vidocq passes to {@link VidocqExtension#onStart} answers them all; this default
      * answers none, for contexts that do not know, such as a test double.
      *
-     * @return the suspendable extensions, in start order; never {@code null}
+     * @return the suspendables, in start order; never {@code null}
      */
     default List<Suspendable> suspendables() {
         return List.of();

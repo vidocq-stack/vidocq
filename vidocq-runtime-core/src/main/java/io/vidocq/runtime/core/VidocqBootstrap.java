@@ -657,12 +657,27 @@ public final class VidocqBootstrap {
 
     /**
      * What a process snapshot must let go of, in start order: the application layer first, which every extension's
-     * classes come through, then the extensions that are {@link Suspendable}.
+     * classes come through, then the extensions that are {@link Suspendable}, with the application's own
+     * {@code Checkpoint} and {@code Restore} events before the first one at {@link Suspendable#APPLICATION_PRIORITY} or
+     * above (Vidocq/vidocq#496).
      */
     private List<Suspendable> suspendables() {
         List<Suspendable> all = new java.util.ArrayList<>();
         all.add(new AppLayerSuspendable(VidocqAppLayer::installedLoader));
-        extensions.stream().filter(Suspendable.class::isInstance).map(Suspendable.class::cast).forEach(all::add);
+        Suspendable application = new ApplicationSuspendable(() -> container);
+        boolean placed = false;
+        for (VidocqExtension extension : extensions) {
+            if (extension instanceof Suspendable suspendable) {
+                if (!placed && extension.priority() >= Suspendable.APPLICATION_PRIORITY) {
+                    all.add(application);
+                    placed = true;
+                }
+                all.add(suspendable);
+            }
+        }
+        if (!placed) {
+            all.add(application);
+        }
         return all;
     }
 

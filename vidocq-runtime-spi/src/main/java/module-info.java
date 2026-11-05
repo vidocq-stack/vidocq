@@ -22,6 +22,8 @@ module io.vidocq.runtime.spi {
 
     exports io.vidocq.runtime.spi;
     exports io.vidocq.runtime.spi.config;
+    // Checkpoint and Restore, the CDI events an application observes around a process snapshot (vidocq#496).
+    exports io.vidocq.runtime.spi.event;
     // Startup report: contributors, and the launch mode the extensions read too.
     exports io.vidocq.runtime.spi.report;
 
