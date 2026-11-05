@@ -111,7 +111,9 @@ on:
 
 jobs:
   release:
-    runs-on: vidocq-runner
+    # The crac runner (Kikanux) has Azul Zulu CRaC 25 as the image's JAVA_HOME: the CRaC extension requires
+    # jdk.crac, so the release builds on it (-Pcrac) and publishes the extension with the rest.
+    runs-on: crac
     steps:
       - uses: actions/checkout@v4
         with:
@@ -123,6 +125,8 @@ jobs:
 
       - uses: https://codefloe.com/Vidocq/ci/release-maven@main
         with:
+          java-setup: 'false'
+          release-profile: release,crac
           release-version:  ${{ inputs.release_version }}
           next-dev-version: ${{ inputs.next_dev_version }}
           dry-run:          ${{ inputs.dry_run }}
