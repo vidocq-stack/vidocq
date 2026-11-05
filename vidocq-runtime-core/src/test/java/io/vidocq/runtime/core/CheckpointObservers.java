@@ -27,7 +27,8 @@ import jakarta.enterprise.event.Observes;
 
 /**
  * An application bean of {@link ApplicationCheckpointEventsTest}: its observers, ordered by {@code @Priority}. A
- * top-level class, as a nested one with package-private observers does not compile in the generated provider yet.
+ * top-level class: a nested one with package-private observers does not compile in the generated provider until
+ * Vidocq/vauban#278 (VAU-APT-009).
  */
 @ApplicationScoped
 public class CheckpointObservers {
