@@ -58,9 +58,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # The runners are x86_64 and aarch64: the archive must match the runner.
+          case "$(uname -m)" in
+            x86_64) arch=x64 ;;
+            aarch64|arm64) arch=aarch64 ;;
+            *) echo "No Azul Zulu CRaC build for $(uname -m)" >&2; exit 1 ;;
+          esac
           mkdir -p "$RUNNER_TEMP/zulu"
-          curl -fsSL "https://cdn.azul.com/zulu/bin/zulu25.36.205-ca-crac-jdk25.0.4.1-linux_x64.tar.gz" \
+          curl -fsSL "https://cdn.azul.com/zulu/bin/zulu25.36.205-ca-crac-jdk25.0.4.1-linux_${arch}.tar.gz" \
             | tar -xz -C "$RUNNER_TEMP/zulu" --strip-components=1
+          "$RUNNER_TEMP/zulu/bin/java" -version
           echo "CRAC_JAVA_HOME=$RUNNER_TEMP/zulu" >> "$GITHUB_ENV"
 
       - name: Deploy the CRaC extension (built on a CRaC JDK)

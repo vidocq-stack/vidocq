@@ -535,8 +535,11 @@ public final class ProjectScaffolder {
 
     private static final String CRAC_EXTENSION = "crac";
 
-    /** The Zulu CRaC JDK build, linux x64: the Dockerfile builds and runs on it; checkpoints are Linux only. */
-    private static final String ZULU_CRAC = "zulu25.36.205-ca-crac-jdk25.0.4.1-linux_x64";
+    /**
+     * The Zulu CRaC JDK build, without its {@code -linux_<arch>} suffix: the Dockerfile takes the x64 or the aarch64
+     * archive after the image's target architecture. Checkpoints are Linux only.
+     */
+    private static final String ZULU_CRAC = "zulu25.36.205-ca-crac-jdk25.0.4.1";
 
     private static String buildCracDockerfile(ProjectSpec c) {
         return """
@@ -557,9 +560,15 @@ public final class ProjectScaffolder {
                 #
                 #   docker run --rm --init -p 8080:8080 -v crac-img:/crac -e JAVA_OPTS="-XX:CRaCRestoreFrom=/crac" %1$s-crac
                 ARG ZULU=%2$s
-                FROM ubuntu:24.04 AS jdk
+                # Azul names its archives x64 and aarch64, Docker names the platforms amd64 and arm64.
+                FROM ubuntu:24.04 AS jdk-amd64
+                ENV ZULU_ARCH=x64
+                FROM ubuntu:24.04 AS jdk-arm64
+                ENV ZULU_ARCH=aarch64
+
+                FROM jdk-${TARGETARCH} AS jdk
                 ARG ZULU
-                ADD https://cdn.azul.com/zulu/bin/${ZULU}.tar.gz /tmp/zulu.tar.gz
+                ADD https://cdn.azul.com/zulu/bin/${ZULU}-linux_${ZULU_ARCH}.tar.gz /tmp/zulu.tar.gz
                 RUN mkdir -p /opt/jdk && tar -xzf /tmp/zulu.tar.gz -C /opt/jdk --strip-components=1 && rm /tmp/zulu.tar.gz
                 ENV JAVA_HOME=/opt/jdk PATH=/opt/jdk/bin:$PATH
 

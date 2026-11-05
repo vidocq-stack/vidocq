@@ -65,6 +65,20 @@ class ProjectScaffolderCracTest {
     }
 
     @Test
+    void theDockerfileTakesTheZuluBuildOfTheTargetArchitecture(@TempDir Path dir) throws IOException {
+        String dockerfile = Files.readString(scaffold(dir, Set.of("crac")).resolve("Dockerfile.crac"));
+
+        // Built on Apple silicon, the image is arm64: an x64 JDK in it fails with "Exec format error".
+        assertTrue(dockerfile.contains("FROM ubuntu:24.04 AS jdk-amd64"), dockerfile);
+        assertTrue(dockerfile.contains("ENV ZULU_ARCH=x64"), dockerfile);
+        assertTrue(dockerfile.contains("FROM ubuntu:24.04 AS jdk-arm64"), dockerfile);
+        assertTrue(dockerfile.contains("ENV ZULU_ARCH=aarch64"), dockerfile);
+        assertTrue(dockerfile.contains("FROM jdk-${TARGETARCH} AS jdk"), dockerfile);
+        assertTrue(dockerfile.contains("${ZULU}-linux_${ZULU_ARCH}.tar.gz"), dockerfile);
+        assertFalse(dockerfile.contains("linux_x64.tar.gz"), dockerfile);
+    }
+
+    @Test
     void withoutTheCracExtensionNoDockerfileIsWritten(@TempDir Path dir) throws IOException {
         assertFalse(Files.exists(scaffold(dir, Set.of()).resolve("Dockerfile.crac")));
     }
