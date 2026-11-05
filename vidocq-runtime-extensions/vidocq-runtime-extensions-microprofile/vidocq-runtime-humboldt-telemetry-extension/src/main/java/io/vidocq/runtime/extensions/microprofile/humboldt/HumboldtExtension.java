@@ -26,6 +26,7 @@ import io.vidocq.humboldt.runtime.AutoConfiguredHumboldt;
 import io.vidocq.humboldt.runtime.EnvConfig;
 import io.vidocq.humboldt.runtime.HumboldtAutoConfigure;
 import io.vidocq.runtime.spi.ExtensionContext;
+import io.vidocq.runtime.spi.Suspendable;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
@@ -61,8 +62,13 @@ import java.util.concurrent.TimeUnit;
  * <p>{@code MP_TELEMETRY_SDK_DISABLED=true} → the extension log a message and
  * does not install anything (useful for tests that want to force an OpenTelemetry
  * custom via {@code GlobalOpenTelemetry.set} manual).</p>
+ *
+ * <h3>Checkpoint and restore</h3>
+ * <p>{@link Suspendable}: the OTLP exporters keep their connections to the collector, which a CRaC checkpoint refuses.
+ * {@link #suspend()} exports what is queued and lets them go, {@link #resume()} takes them back; the SDK, its
+ * providers and the {@code GlobalOpenTelemetry} instance stay the same objects (BUG-20261105-03).</p>
  */
-public final class HumboldtExtension implements VidocqExtension {
+public final class HumboldtExtension implements VidocqExtension, Suspendable {
 
     private static final Logger LOG = System.getLogger(HumboldtExtension.class.getName());
 
@@ -143,6 +149,30 @@ public final class HumboldtExtension implements VidocqExtension {
         humboldt.shutdown().join(5, TimeUnit.SECONDS);
         HumboldtHolder.publish(null);
         releaseIfInstalled();
+    }
+
+    /**
+     * Exports what the processors and readers hold, then lets the OTLP exporters' connections go, for a checkpoint.
+     * Until {@link #resume()}, an export fails at once and its data is dropped, with a warning.
+     */
+    @Override
+    public void suspend() {
+        if (humboldt != null) {
+            humboldt.release();
+        }
+    }
+
+    /** Takes the OTLP exporters' connections back after the restore. */
+    @Override
+    public void resume() {
+        if (humboldt != null) {
+            humboldt.reopen();
+        }
+    }
+
+    // package-private for the unit test.
+    void humboldt(AutoConfiguredHumboldt humboldt) {
+        this.humboldt = humboldt;
     }
 
     /** Frees {@code GlobalOpenTelemetry} when this boot took it, once. */
