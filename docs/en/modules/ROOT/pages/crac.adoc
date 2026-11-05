@@ -102,8 +102,8 @@ An extension takes part through the `Suspendable` interface of `vidocq-runtime-s
 
 Vidocq knows only its own sockets, connections and files. A client your application opened itself (a JDK `HttpClient`, a gRPC channel, a JDBC connection outside the Mansart pool), a file it keeps open, a thread it started: each of them is yours to let go of. Observe two CDI events of `vidocq-runtime-spi`, in the package `io.vidocq.runtime.spi.event`:
 
-* `Checkpoint`, before the snapshot. The HTTP server already stopped taking requests. The pool, the transactions and the telemetry are still open: your observers can still query the database.
-* `Restore`, after the restore, or after a checkpoint that failed. The pool, the transactions and the telemetry are open again. The HTTP server does not take requests yet.
+* `Checkpoint`, before the snapshot. The HTTP server already stopped taking requests. The pool, the transactions and the telemetry are still open: your observers can still query the database. `at()` is the instant of the checkpoint.
+* `Restore`, after the restore, or after a checkpoint that failed. The pool, the transactions and the telemetry are open again. The HTTP server does not take requests yet. `checkpointAt()` is the instant of the checkpoint the process comes from: with `Instant.now()`, it tells how old the image is.
 
 A worked example: the application needs a 50 MB reference file, which it downloads from another service.
 

@@ -19,6 +19,9 @@
  */
 package io.vidocq.runtime.spi.event;
 
+import java.time.Instant;
+import java.util.Objects;
+
 /**
  * Fired to the application's observers before a process snapshot (CRaC checkpoint) is taken, like CDI's
  * {@code Shutdown}, but the application keeps running once the snapshot is written or restored.
@@ -40,8 +43,19 @@ package io.vidocq.runtime.spi.event;
  * the telemetry exporters are still open. An observer that throws makes the checkpoint fail; the runtime then takes
  * back what it let go of, as after a restore.
  *
+ * @param at when the runtime started letting go, by the wall clock of the process; the {@link Restore} that follows
+ *           carries the same instant
  * @see Restore
  * @see io.vidocq.runtime.spi.Suspendable#APPLICATION_PRIORITY
  */
-public record Checkpoint() {
+public record Checkpoint(Instant at) {
+
+    /**
+     * Checks the instant.
+     *
+     * @throws NullPointerException when {@code at} is {@code null}
+     */
+    public Checkpoint {
+        Objects.requireNonNull(at, "at");
+    }
 }

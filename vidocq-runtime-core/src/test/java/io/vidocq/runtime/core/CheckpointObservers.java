@@ -35,6 +35,7 @@ public class CheckpointObservers {
 
     void first(@Observes @Priority(10) Checkpoint checkpoint) {
         ApplicationCheckpointEventsTest.EVENTS.add("application checkpoint 10");
+        ApplicationCheckpointEventsTest.RECEIVED.add(checkpoint);
     }
 
     void second(@Observes @Priority(20) Checkpoint checkpoint) {
@@ -43,5 +44,6 @@ public class CheckpointObservers {
 
     void restored(@Observes Restore restore) {
         ApplicationCheckpointEventsTest.EVENTS.add("application restore");
+        ApplicationCheckpointEventsTest.RECEIVED.add(restore);
     }
 }

@@ -19,6 +19,9 @@
  */
 package io.vidocq.runtime.spi.event;
 
+import java.time.Instant;
+import java.util.Objects;
+
 /**
  * Fired to the application's observers after a process was restored from a snapshot (CRaC restore), or after a
  * checkpoint failed. Observers take back what they let go of on {@link Checkpoint}.
@@ -26,7 +29,9 @@ package io.vidocq.runtime.spi.event;
  * <pre>{@code
  * void afterRestore(@Observes Restore restore) {
  *     client = HttpClient.newHttpClient();
- *     catalogue.refreshIfOlderThan(Duration.ofHours(1));
+ *     if (Duration.between(restore.checkpointAt(), Instant.now()).toHours() >= 1) {
+ *         catalogue.reload();
+ *     }
  * }
  * }</pre>
  *
@@ -34,8 +39,20 @@ package io.vidocq.runtime.spi.event;
  * clock or the network before the checkpoint may no longer hold. When it is fired, the pool, the transactions and
  * the telemetry exporters are open again, and the HTTP server does not take requests yet.
  *
+ * @param checkpointAt the {@link Checkpoint#at() instant of the checkpoint} this process comes from: with
+ *                     {@code Instant.now()}, how old the image is (by the clocks of the two machines, when it was
+ *                     restored on another one)
  * @see Checkpoint
  * @see io.vidocq.runtime.spi.Suspendable#APPLICATION_PRIORITY
  */
-public record Restore() {
+public record Restore(Instant checkpointAt) {
+
+    /**
+     * Checks the instant.
+     *
+     * @throws NullPointerException when {@code checkpointAt} is {@code null}
+     */
+    public Restore {
+        Objects.requireNonNull(checkpointAt, "checkpointAt");
+    }
 }
