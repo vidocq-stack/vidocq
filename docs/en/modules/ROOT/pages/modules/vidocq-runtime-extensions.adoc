@@ -22,6 +22,10 @@
 | `essentials`
 | Wires xref:chappe::index.adoc[Chappe] as HTTP/1.1, H2, H3 transport. Configures bind via `vidocq.http.host` / `vidocq.http.port`.
 
+| `vidocq-runtime-crac-extension`
+| `essentials`
+| [.tag-new]#NEW# Lets go of the runtime's sockets, connections and open files before a CRaC checkpoint, and takes them back after the restore. Needs a CRaC JDK. See xref:crac.adoc[Checkpoint and restore (CRaC)].
+
 | `vidocq-runtime-devconsole-extension`
 | `essentials`
 | The xref:dev-console.adoc[dev console]: a read-only page, on a loopback listener of its own, with the startup report of the running boot and the live values of the extensions. On in a dev launch only. Its own panels show the configuration(xref:dev-console.adoc#config-panel[the `config` panel]), the beans of the Vauban container(xref:dev-console.adoc#cdi-panel[the `cdi` panel]), the last log records and the log levels, in a dev launch(xref:dev-console.adoc#logs-panel[the `logs` panel]), the last test run under `vidocq:dev` with continuous testing(xref:dev-console.adoc#tests-panel[the `tests` panel]), and the JVM.

@@ -1,0 +1,198 @@
+= Checkpoint and restore (CRaC)
+:description: Start a Vidocq application from a snapshot of a warmed-up process: the CRaC JDK and extension, how to take a checkpoint and restore it, what Vidocq lets go of, the Checkpoint and Restore events of the application, and what an image does not keep.
+
+[.lead]
+[.tag-new]#NEW# With CRaC (Coordinated Restore at Checkpoint), you start a Vidocq application once and warm it up. Then you write a snapshot of the process to disk, and start every next instance from that snapshot instead of from `main`. The restored process answers in a few hundred milliseconds, with its classes loaded, its code compiled and its data in memory. Vidocq lets go of what a snapshot cannot hold (listening sockets, connections, open files) and takes it back after the restore. Your application does the same for its own resources by observing two CDI events.
+
+[#requirements]
+== What you need
+
+* **A JDK with CRaC**, for example Azul Zulu CRaC 25. A checkpoint is taken and restored on **Linux only**.
+* **The CRaC extension**, `vidocq-runtime-crac-extension`:
++
+[source,bash]
+----
+vidocq extension add crac
+----
++
+or, in the `pom.xml`:
++
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.essentials</groupId>
+    <artifactId>vidocq-runtime-crac-extension</artifactId>
+</dependency>
+----
+
+The extension is the only module of the runtime that requires `jdk.crac`, and a JDK without CRaC does not have that module. Keep the extension out of a build that runs on another JDK, for example behind a Maven profile. Your own code needs no `jdk.crac`: it observes the events of <<application-events>>.
+
+[#checkpoint]
+== Taking a checkpoint, restoring it
+
+Start the packaged application (the output of `vidocq:package`) with a directory for the image:
+
+[source,bash]
+----
+JAVA_OPTS="-XX:CRaCCheckpointTo=/var/lib/app/crac -XX:+StartAttachListener" bin/app.sh
+----
+
+The startup log says that the extension is active:
+
+----
+CRaC: <n> suspendable(s) registered
+----
+
+Warm the application up: send it the requests it will serve, so that the image holds compiled code and loaded data. Then take the checkpoint:
+
+[source,bash]
+----
+jcmd <pid> JDK.checkpoint
+----
+
+The process writes the image into the directory and exits. Start any number of processes from it, on this machine or, with the same JDK and a compatible processor, on another one:
+
+[source,bash]
+----
+java -XX:CRaCRestoreFrom=/var/lib/app/crac
+----
+
+`-XX:+StartAttachListener` starts at boot the listener `jcmd` talks to. Azul Zulu CRaC writes the image with an engine you choose with `-XX:CRaCEngine`; the Vidocq benchmark uses `warp`. See your JDK's documentation for the engines and the rights each one needs. The `crac-e2e.sh` script of `vidocq-runtime-integration-tests` runs these steps on the REST example and checks that the state of the application survives the restore.
+
+[#order]
+== What Vidocq lets go of, and in which order
+
+Before the checkpoint, each part of the runtime lets go of what the snapshot cannot hold, the last started first. After the restore, each one takes it back in the opposite order, the first started first:
+
+[cols="1,2,2"]
+|===
+| Before the checkpoint | Lets go of | After the restore
+
+| 1. HTTP server (Chappe)
+| Stops every listener: no request reaches the application from now on. The log says `Suspended <n> Chappe listener(s)`.
+| 6. Starts every listener again. A listener configured on port `0` gets a new port.
+
+| 2. The application
+| Its `Checkpoint` observers run (<<application-events>>).
+| 5. Its `Restore` observers run.
+
+| 3. Transactions (Mansart)
+| Closes the file of the recovery journal.
+| 4. Opens it again.
+
+| 4. Connection pool (Mansart)
+| Closes every pool and its JDBC connections.
+| 3. Opens every pool again. It reads its connection settings again first, so a restored process can use another database or other credentials.
+
+| 5. Telemetry (Humboldt)
+| Waits for the export in progress, then closes the HTTP clients of the OTLP exporters.
+| 2. Opens them again.
+
+| 6. Application jar
+| Closes the jar files the application's class loader keeps open.
+| 1. Opens them again, before anything else needs a class.
+|===
+
+Each step runs even when an earlier one failed, and the first failure makes the checkpoint fail. The JDK then runs the restore side all the same: the application serves again, as if the checkpoint had not been asked for.
+
+An extension takes part through the `Suspendable` interface of `vidocq-runtime-spi`: xref:modules/vidocq-runtime-spi.adoc#suspendable[Suspendable].
+
+[#application-events]
+== Your own resources: the `Checkpoint` and `Restore` events
+
+Vidocq knows only its own sockets, connections and files. A client your application opened itself (a JDK `HttpClient`, a gRPC channel, a JDBC connection outside the Mansart pool), a file it keeps open, a thread it started: each of them is yours to let go of. Observe two CDI events of `vidocq-runtime-spi`, in the package `io.vidocq.runtime.spi.event`:
+
+* `Checkpoint`, before the snapshot. The HTTP server already stopped taking requests. The pool, the transactions and the telemetry are still open: your observers can still query the database.
+* `Restore`, after the restore, or after a checkpoint that failed. The pool, the transactions and the telemetry are open again. The HTTP server does not take requests yet.
+
+A worked example: the application needs a 50 MB reference file, which it downloads from another service.
+
+[source,java]
+----
+@ApplicationScoped
+public class Catalogue {
+
+    private static final URI SOURCE = URI.create("https://reference.example.com/catalogue.csv");
+
+    private volatile HttpClient client = HttpClient.newHttpClient();
+    private volatile Map<String, Part> parts;
+    private volatile Instant loadedAt;
+
+    void beforeCheckpoint(@Observes @Priority(100) Checkpoint checkpoint) throws IOException, InterruptedException {
+        if (parts == null) {
+            load(); // <1>
+        }
+        client.close(); // <2>
+    }
+
+    void afterRestore(@Observes Restore restore) throws IOException, InterruptedException {
+        client = HttpClient.newHttpClient(); // <3>
+        if (loadedAt.isBefore(Instant.now().minus(Duration.ofHours(1)))) {
+            load(); // <4>
+        }
+    }
+
+    private void load() throws IOException, InterruptedException {
+        var response = client.send(HttpRequest.newBuilder(SOURCE).build(), BodyHandlers.ofInputStream());
+        try (InputStream body = response.body()) {
+            parts = Parts.read(body);
+        }
+        loadedAt = Instant.now();
+    }
+}
+----
+<1> Loaded into memory before the snapshot: the 50 MB land in the image, and a restored process does not download them again.
+<2> An open connection makes the checkpoint fail. Close what the snapshot cannot hold.
+<3> Opened again after the restore.
+<4> The image can be days old: check that the data is still fresh enough.
+
+The module of the application reads the two modules these types come from:
+
+[source,java]
+----
+requires io.vidocq.runtime.spi;   // Checkpoint, Restore
+requires jakarta.annotation;      // @Priority
+----
+
+What to know about these observers:
+
+* **Order.** Observers run in the order of their `@Priority`, the lowest first. An observer without one has the priority 2,500, CDI's default.
+* **Thread.** They run one after the other, on the thread that takes the checkpoint. No request runs at the same time.
+* **Failures.** An observer that throws makes the checkpoint fail, and the observers after it are not called. The `Restore` observers are called all the same: write them so that they work when their `Checkpoint` observer did not run, or did not finish.
+* **Without CRaC.** On a JDK without CRaC, or without the extension, the events are never fired. The same code runs unchanged.
+* **No `jdk.crac` in your code.** You may still register a `jdk.crac.Resource` yourself. Your code then needs a CRaC JDK, and its place against the steps of <<order>> depends on when it registered.
+
+[#image]
+== What an image keeps, and what it does not
+
+An image is the **memory of the process**: the heap, the loaded classes, the compiled code, and the data your beans hold. It is not more than that:
+
+* **No files.** A file the application wrote to disk before the checkpoint is not in the image. If a restored process needs it, keep the data in memory, or make sure that the file exists where the process is restored.
+* **No open descriptors.** Sockets and files must be closed before the checkpoint, or it fails (<<troubleshooting>>).
+* **The values read at start.** Environment variables, system properties and configuration values that a bean read at start keep the values of the checkpoint in its fields. The Mansart pool reads its own settings again; read again, in a `Restore` observer, what else may differ where the process is restored.
+* **The clock moved on.** Time passed between the checkpoint and the restore: caches with an expiry, tokens and leases may have expired.
+* **One image, many processes.** Every process restored from one image starts from the same memory. A value generated once at start, such as an instance identifier or a seed of your own, is the same in all of them. Generate it in a `Restore` observer.
+
+[#limits]
+== Limits
+
+* A checkpoint is taken and restored on Linux only.
+* The integration test and the benchmark take checkpoints of a packaged application. A `vidocq dev` session is not covered.
+* Only the parts of <<order>> let go of their resources. The other extensions have not been checked against a checkpoint yet: one that keeps a connection open, a REST client or a messaging client for example, can make a checkpoint fail. Close it in a `Checkpoint` observer if you can reach it, and tell us in https://codefloe.com/Vidocq/vidocq/issues/496[vidocq#496].
+
+[#troubleshooting]
+== When a checkpoint is refused
+
+`jcmd` prints why the checkpoint failed, and the process goes on serving.
+
+`C/R is not configured`::
+The JVM was started without `-XX:CRaCCheckpointTo`.
+
+No `CRaC: … suspendable(s) registered` line at startup::
+The extension is not on the module path: nothing is let go of, and the checkpoint fails on the socket of the HTTP listener.
+
+`CheckpointOpenSocketException`, `CheckpointOpenFileException`, `CheckpointOpenResourceException`::
+Something still holds a socket, a file or another descriptor, and the JDK names it: the local and remote addresses of a socket, the path of a file. The address usually tells you whose it is: a connection to the database port, opened outside the Mansart pool, comes from a JDBC client of your own. Close it in a `Checkpoint` observer and open it again in a `Restore` observer.
+
+An exception of your own::
+A `Checkpoint` observer threw it. It is the cause of the failure `jcmd` prints.
