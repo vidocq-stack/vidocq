@@ -134,6 +134,10 @@ jobs:
         # snapshot") went unnoticed before. See check-doc-versions.sh.
         run: ./check-doc-versions.sh
 
+      # The JDK install of ci.yml and crac.yml, offline: a file:// archive and a curl that cuts downloads short.
+      - name: Test install-zulu-crac.sh
+        run: ./install-zulu-crac-test.sh
+
       - uses: https://codefloe.com/Vidocq/ci/setup-maven@main
         if: steps.changes.outputs.docs-only != 'true' && steps.reuse.outputs.reused != 'true'
 

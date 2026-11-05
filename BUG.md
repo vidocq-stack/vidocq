@@ -5,6 +5,29 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261105-01 — The CRaC nightly died on a Zulu download cut short, piped straight into tar
+
+- **Date**: 2026-11-05
+- **Status**: FIXED on `fix/crac-zulu-download`: `install-zulu-crac.sh <dest-dir>`, used by `ci.yml` (the CRaC
+  extension's deploy pass) and `crac.yml`, downloads the archive of the runner's architecture into a file, extracts it
+  only once it matches the SHA-256 pinned in the script, and tries four times with a growing pause;
+  `install-zulu-crac-test.sh` (red, then green; offline, a `file://` archive and a curl that cuts downloads short),
+  run by `pr.yml`.
+- **Reported by**: the scheduled `crac.yml`, run 3034 (2026-11-05 03:30 UTC), on `main` at `6772de82`, which had
+  passed at 02:14 (run 3032).
+- **Minimal reproduction**: any run of `crac.yml`, or of `ci.yml` on `main`, while the download of the Zulu CRaC
+  archive from `cdn.azul.com` is cut: the step "Install Azul Zulu CRaC" fails after 3 min 24 s with
+  `curl: (56) OpenSSL SSL_read: … unexpected eof while reading`, `gzip: stdin: unexpected end of file`,
+  `tar: Error is not recoverable`; nothing is built.
+- **Cause**: both workflows ran `curl -fsSL <archive> | tar -xz`: one attempt for a 238 MB download, and no check
+  of what tar was given. Azul publishes no checksum for this build (no `.sha256` on the CDN; its metadata API does
+  not list `zulu25.36.205-ca-crac-jdk25.0.4.1`): the pins are the hashes of the archives downloaded on 2026-11-05, at
+  the sizes the CDN announces and gzip-tested; the x64 one was also downloaded independently in the runners' image
+  (`node:24.22.1-trixie`), same hash, and `java -version` answers there.
+- **Not fixed here**: the archive is still downloaded on every run; caching it would remove most of the exposure.
+
+---
+
 ## BUG-20261102-06 — A hot reload kept the stopped layer reachable through Ravel's configuration registry
 
 - **Date**: 2026-11-02

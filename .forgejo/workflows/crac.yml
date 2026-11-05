@@ -11,10 +11,6 @@ on:
     - cron: '30 3 * * *'
   workflow_dispatch:
 
-env:
-  # Without its -linux_<arch> suffix: the install step takes the archive of the runner's architecture.
-  ZULU_CRAC: zulu25.36.205-ca-crac-jdk25.0.4.1
-
 jobs:
   crac:
     runs-on: vidocq-runner
@@ -37,19 +33,13 @@ jobs:
 
       - uses: ./.ci-action/setup-maven
 
+      # The build of the runner's architecture, checked against its pinned SHA-256, a cut download tried again:
+      # install-zulu-crac.sh says why.
       - name: Install Azul Zulu CRaC
         shell: bash
         run: |
           set -euo pipefail
-          case "$(uname -m)" in
-            x86_64) arch=x64 ;;
-            aarch64|arm64) arch=aarch64 ;;
-            *) echo "No Azul Zulu CRaC build for $(uname -m)" >&2; exit 1 ;;
-          esac
-          mkdir -p "$RUNNER_TEMP/zulu"
-          curl -fsSL "https://cdn.azul.com/zulu/bin/${ZULU_CRAC}-linux_${arch}.tar.gz" \
-            | tar -xz -C "$RUNNER_TEMP/zulu" --strip-components=1
-          "$RUNNER_TEMP/zulu/bin/java" -version
+          ./install-zulu-crac.sh "$RUNNER_TEMP/zulu"
           echo "CRAC_JAVA_HOME=$RUNNER_TEMP/zulu" >> "$GITHUB_ENV"
 
       # The runtime and the example on the usual JDK, then the CRaC extension on the CRaC one.
