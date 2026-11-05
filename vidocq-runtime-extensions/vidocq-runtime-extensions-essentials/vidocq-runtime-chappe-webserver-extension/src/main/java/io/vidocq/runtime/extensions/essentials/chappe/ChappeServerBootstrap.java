@@ -286,20 +286,23 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
      * the key first (BUG-20261105-02).
      */
     private static <T> Optional<T> valueOrAlias(VidocqConfig config, String key, String alias, Class<T> type) {
-        String first = key;
-        String second = alias;
+        boolean aliasFirst = aliasSetHigher(config, key, alias);
+        String first = aliasFirst ? alias : key;
+        String second = aliasFirst ? key : alias;
+        return config.getValue(first, type).or(() -> config.getValue(second, type));
+    }
+
+    /** Whether the source of highest ordinal that sets {@code key} or {@code alias} sets the alias and not the key. */
+    private static boolean aliasSetHigher(VidocqConfig config, String key, String alias) {
         for (ConfigSource source : config.getConfigSources()) {
             if (source.getValue(key) != null) {
-                break;
+                return false;
             }
             if (source.getValue(alias) != null) {
-                first = alias;
-                second = key;
-                break;
+                return true;
             }
         }
-        String fallback = second;
-        return config.getValue(first, type).or(() -> config.getValue(fallback, type));
+        return false;
     }
 
     /** The servers started, in start order (tests). */
