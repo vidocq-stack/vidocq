@@ -169,7 +169,7 @@ An image is the **memory of the process**: the heap, the loaded classes, the com
 
 * **No files.** A file the application wrote to disk before the checkpoint is not in the image. If a restored process needs it, keep the data in memory, or make sure that the file exists where the process is restored.
 * **No open descriptors.** Sockets and files must be closed before the checkpoint, or it fails (<<troubleshooting>>).
-* **The values read at start.** Environment variables, system properties and configuration values that a bean read at start keep the values of the checkpoint in its fields. The Mansart pool reads its own settings again; read again, in a `Restore` observer, what else may differ where the process is restored.
+* **The values read at start.** After the restore, `System.getenv()` and the system properties answer the values of the restore command. But a value a bean read at start, from them or from a configuration file, stays in its field as it was at the checkpoint, and so does the HTTP port. The Mansart pool reads its own settings again; read again, in a `Restore` observer, what else may differ where the process is restored.
 * **The clock moved on.** Time passed between the checkpoint and the restore: caches with an expiry, tokens and leases may have expired.
 * **One image, many processes.** Every process restored from one image starts from the same memory. A value generated once at start, such as an instance identifier or a seed of your own, is the same in all of them. Generate it in a `Restore` observer.
 
