@@ -10,8 +10,13 @@
 # module path in full. Linux only: a checkpoint is not taken elsewhere.
 set -euo pipefail
 
-DIST=${1:?usage: crac-e2e.sh <dist-dir> <vidocq-runtime-crac-extension.jar>}
-CRAC_JAR=${2:?usage: crac-e2e.sh <dist-dir> <vidocq-runtime-crac-extension.jar>}
+USAGE="usage: crac-e2e.sh <dist-dir> <vidocq-runtime-crac-extension.jar>"
+# Exactly two: a glob that also matches the dist zip or the jar next to the dist directory shifts every argument.
+[ $# -eq 2 ] || { echo "$USAGE (got $# arguments: $*)" >&2; exit 2; }
+DIST=$1
+CRAC_JAR=$2
+[ -d "$DIST/bin" ] && [ -d "$DIST/lib" ] || { echo "$DIST is not a vidocq:package distribution (bin/, lib/)" >&2; exit 2; }
+[[ $CRAC_JAR == *.jar && -f $CRAC_JAR ]] || { echo "$CRAC_JAR is not a jar file" >&2; exit 2; }
 : "${JAVA_HOME:?JAVA_HOME must point to a CRaC JDK}"
 PATH="$JAVA_HOME/bin:$PATH"
 PORT=${PORT:-8080}

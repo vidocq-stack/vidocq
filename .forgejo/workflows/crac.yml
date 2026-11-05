@@ -56,12 +56,14 @@ jobs:
       - name: Build & install the runtime
         run: mvn -B -ntp -U install -DskipTests
 
+      # The examples are never installed (maven.install.skip): the library the cassini example depends on is built in
+      # the same reactor.
       - name: Build the CRaC extension and package the example
         env:
           JAVA_HOME: ${{ env.CRAC_JAVA_HOME }}
         run: >
           mvn -B -ntp -Pcrac -P!dist
-          -pl vidocq-runtime-extensions/vidocq-runtime-extensions-essentials/vidocq-runtime-crac-extension,vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
+          -pl vidocq-runtime-extensions/vidocq-runtime-extensions-essentials/vidocq-runtime-crac-extension,vidocq-runtime-examples/vidocq-runtime-external-rest-lib,vidocq-runtime-examples/vidocq-runtime-cassini-rest-example
           install io.vidocq.runtime:vidocq-runtime-maven-plugin:package -DskipTests
 
       - name: Checkpoint, restore, request
@@ -69,7 +71,7 @@ jobs:
           JAVA_HOME: ${{ env.CRAC_JAVA_HOME }}
         run: >
           vidocq-runtime-integration-tests/crac-e2e.sh
-          vidocq-runtime-examples/vidocq-runtime-cassini-rest-example/target/vidocq-runtime-cassini-rest-example-*
+          vidocq-runtime-examples/vidocq-runtime-cassini-rest-example/target/vidocq-runtime-cassini-rest-example-*-SNAPSHOT/
           vidocq-runtime-extensions/vidocq-runtime-extensions-essentials/vidocq-runtime-crac-extension/target/vidocq-runtime-crac-extension-*-SNAPSHOT.jar
 
       - name: Notify Slack on failure
