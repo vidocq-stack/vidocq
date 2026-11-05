@@ -24,6 +24,7 @@ import io.vidocq.chappe.api.Server;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.Suspendable;
 import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.runtime.spi.config.ConfigSource;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 
 import java.net.BindException;
@@ -67,8 +68,9 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
      * Published aliases for the listener named {@code default}. They are the discoverable names —
      * the CLI ({@code vidocq start --port}), every scaffolded {@code vidocq.properties} and the
      * reference documentation all use them — so the runtime honours them rather than ignoring
-     * them silently. The explicit {@code vidocq.chappe.listener.default.*} key always wins, and the
-     * aliases back no other listener.
+     * them silently. Between an alias and the explicit {@code vidocq.chappe.listener.default.*} key,
+     * the source of higher ordinal wins, and within one source the explicit key; the aliases back no
+     * other listener.
      */
     static final String HTTP_HOST_ALIAS = "vidocq.http.host";
     static final String HTTP_PORT_ALIAS = "vidocq.http.port";
@@ -262,11 +264,11 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
             String hostKey = "vidocq.chappe.listener." + name + ".host";
             String portKey = "vidocq.chappe.listener." + name + ".port";
 
-            String host = config.getValue(hostKey, String.class)
-                    .or(() -> isDefault ? config.getValue(HTTP_HOST_ALIAS, String.class) : Optional.empty())
+            String host = (isDefault ? valueOrAlias(config, hostKey, HTTP_HOST_ALIAS, String.class)
+                    : config.getValue(hostKey, String.class))
                     .orElse("0.0.0.0");
-            int port = config.getValue(portKey, Integer.class)
-                    .or(() -> isDefault ? config.getValue(HTTP_PORT_ALIAS, Integer.class) : Optional.empty())
+            int port = (isDefault ? valueOrAlias(config, portKey, HTTP_PORT_ALIAS, Integer.class)
+                    : config.getValue(portKey, Integer.class))
                     .orElse(isDefault ? 8080 : -1);
             if (port < 0) {
                 throw new IllegalStateException(
@@ -275,6 +277,29 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
             out.add(ChappeListener.http(name, host, port));
         }
         return out;
+    }
+
+    /**
+     * The value of {@code key}, or of its {@code alias}, whichever the source of highest ordinal sets: the alias
+     * of the system properties outranks the key of the application's {@code vidocq.properties}, as any other key
+     * would. Within one source the key wins, being the more specific. A configuration that lists no source keeps
+     * the key first (BUG-20261105-02).
+     */
+    private static <T> Optional<T> valueOrAlias(VidocqConfig config, String key, String alias, Class<T> type) {
+        String first = key;
+        String second = alias;
+        for (ConfigSource source : config.getConfigSources()) {
+            if (source.getValue(key) != null) {
+                break;
+            }
+            if (source.getValue(alias) != null) {
+                first = alias;
+                second = key;
+                break;
+            }
+        }
+        String fallback = second;
+        return config.getValue(first, type).or(() -> config.getValue(fallback, type));
     }
 
     /** The servers started, in start order (tests). */

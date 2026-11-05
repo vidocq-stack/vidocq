@@ -35,8 +35,8 @@ public final class RunGoals {
 
     /**
      * The canonical key of the {@code default} Chappe listener, not the {@code vidocq.http.port}
-     * alias: the alias is read only when this key is absent, so an explicit {@code --port}
-     * outranks whatever the project configured.
+     * alias: a system property outranks the project's files, and within one source this key
+     * outranks the alias, so an explicit {@code --port} wins whatever the project configured.
      */
     private static final String PORT_KEY = "vidocq.chappe.listener.default.port";
 

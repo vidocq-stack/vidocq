@@ -23,9 +23,13 @@ import io.vidocq.runtime.spi.config.ConfigSource;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Implementation of {@link VidocqConfig} test-only — avoid crossing a Java Modules dependency
@@ -34,13 +38,53 @@ import java.util.Optional;
 final class TestConfig implements VidocqConfig {
 
     private final Map<String, String> data;
+    private final List<ConfigSource> sources;
 
-    private TestConfig(Map<String, String> data) {
+    private TestConfig(Map<String, String> data, List<ConfigSource> sources) {
         this.data = data;
+        this.sources = sources;
     }
 
+    /** One flat set of values, with no source behind them. */
     static TestConfig of(Map<String, String> data) {
-        return new TestConfig(data);
+        return new TestConfig(data, List.of());
+    }
+
+    /** Sources as the runtime layers them: each key takes its value from the source of highest ordinal that has it. */
+    static TestConfig ofSources(ConfigSource... sources) {
+        List<ConfigSource> sorted = Arrays.stream(sources)
+                .sorted(Comparator.comparingInt(ConfigSource::getOrdinal).reversed())
+                .toList();
+        Map<String, String> merged = new HashMap<>();
+        for (ConfigSource source : sorted) {
+            source.getProperties().forEach(merged::putIfAbsent);
+        }
+        return new TestConfig(merged, sorted);
+    }
+
+    /** A source named {@code name}, of ordinal {@code ordinal}, holding {@code properties}. */
+    static ConfigSource source(String name, int ordinal, Map<String, String> properties) {
+        return new ConfigSource() {
+            @Override
+            public String getName() {
+                return name;
+            }
+
+            @Override
+            public int getOrdinal() {
+                return ordinal;
+            }
+
+            @Override
+            public String getValue(String key) {
+                return properties.get(key);
+            }
+
+            @Override
+            public Set<String> getPropertyNames() {
+                return properties.keySet();
+            }
+        };
     }
 
     @Override
@@ -71,7 +115,7 @@ final class TestConfig implements VidocqConfig {
 
     @Override
     public Iterable<ConfigSource> getConfigSources() {
-        return List.of();
+        return sources;
     }
 
     @SuppressWarnings("unchecked")

@@ -103,7 +103,7 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 `vidocq.chappe.listener.<name>.port`
 | `0.0.0.0` +
 `8080` (for `default`)
-| Bind of a named listener. Takes precedence over the `vidocq.http.*` alias; any listener other than `default` must declare its port.
+| Bind of a named listener. Between this key and the `vidocq.http.*` alias, the source of higher ordinal wins (`-Dvidocq.http.port` outranks this key in `vidocq.properties`), and within one source this key wins; any listener other than `default` must declare its port.
 
 | `vidocq.http.mount.<name>.*`
 | —

@@ -5,6 +5,23 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261105-02 — `-Dvidocq.http.port` was ignored when the application's file set the listener key
+
+- **Date**: 2026-11-05
+- **Status**: FIXED on `fix/http-port-alias-precedence`: `ChappeServerBootstrap.resolveListeners` reads the key of
+  the `default` listener and its `vidocq.http.*` alias from whichever the source of highest ordinal sets; within one
+  source the listener key still wins. `ChappeServerBootstrapTest` (red, then green: four cases across sources).
+- **Reported by**: the CRaC end-to-end runs (Vidocq/vidocq#488): `EXTRA_OPTS=-Dvidocq.http.port=…` left the cassini
+  example on 8080.
+- **Minimal reproduction**: an application whose `vidocq.properties` sets `vidocq.chappe.listener.default.port=8080`
+  (the cassini example does), started with `-Dvidocq.http.port=9099` or `VIDOCQ_HTTP_PORT=9099`: it listens on 8080,
+  with no message.
+- **Cause**: the listener key won over the alias whatever their sources, so the documented alias, from the system
+  properties (ordinal 400) or the environment (300), could not override the key of a file (100). The same held for
+  `vidocq.http.host`. `vidocq start --port` was not affected: it passes the listener key itself.
+
+---
+
 ## BUG-20261105-01 — The CRaC nightly died on a Zulu download cut short, piped straight into tar
 
 - **Date**: 2026-11-05

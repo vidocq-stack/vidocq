@@ -117,6 +117,45 @@ class ChappeServerBootstrapTest {
         assertEquals("10.0.0.1", listeners.get(0).host());
     }
 
+    // --- Across sources, the ordinal decides (BUG-20261105-02) ---------------------------------
+    // The cassini example's vidocq.properties sets vidocq.chappe.listener.default.port=8080, and
+    // -Dvidocq.http.port=9099 left the application on 8080, silently: the explicit key won from any
+    // source, so the documented alias could not override a file.
+
+    @Test
+    void httpPortAliasOfAHigherSourceWinsOverTheListenerKeyOfAFile() {
+        var listeners = new ChappeServerBootstrap().resolveListeners(TestConfig.ofSources(
+                TestConfig.source("system properties", 400, Map.of("vidocq.http.port", "9099")),
+                TestConfig.source("vidocq.properties", 100, Map.of("vidocq.chappe.listener.default.port", "8080"))));
+        assertEquals(9099, listeners.get(0).port(), "-Dvidocq.http.port outranks the application's file");
+    }
+
+    @Test
+    void httpHostAliasOfAHigherSourceWinsOverTheListenerKeyOfAFile() {
+        var listeners = new ChappeServerBootstrap().resolveListeners(TestConfig.ofSources(
+                TestConfig.source("environment", 300, Map.of("vidocq.http.host", "127.0.0.1")),
+                TestConfig.source("vidocq.properties", 100, Map.of("vidocq.chappe.listener.default.host", "0.0.0.0"))));
+        assertEquals("127.0.0.1", listeners.get(0).host());
+    }
+
+    @Test
+    void listenerKeyOfAHigherSourceWinsOverTheAliasOfAFile() {
+        var listeners = new ChappeServerBootstrap().resolveListeners(TestConfig.ofSources(
+                TestConfig.source("system properties", 400, Map.of("vidocq.chappe.listener.default.port", "9100")),
+                TestConfig.source("vidocq.properties", 100, Map.of("vidocq.http.port", "9099"))));
+        assertEquals(9100, listeners.get(0).port());
+    }
+
+    @Test
+    void inOneSourceTheListenerKeyStillWinsOverTheAlias() {
+        var listeners = new ChappeServerBootstrap().resolveListeners(TestConfig.ofSources(
+                TestConfig.source("system properties", 400, Map.of(
+                        "vidocq.http.port", "9099",
+                        "vidocq.chappe.listener.default.port", "9100")),
+                TestConfig.source("vidocq.properties", 100, Map.of("vidocq.http.port", "8080"))));
+        assertEquals(9100, listeners.get(0).port(), "the explicit listener key is the more specific one");
+    }
+
     @Test
     void httpAliasAppliesOnlyToTheDefaultListener() {
         // A named listener has no implicit port, and the alias must not silently satisfy it:
