@@ -5,6 +5,25 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261105-03 — A checkpoint fails once the Telemetry extension has exported over OTLP
+
+- **Date**: 2026-11-05
+- **Status**: FIXED on `feat/telemetry-crac-suspend` (with Vidocq/humboldt#55,
+  humboldt BUG-20261105-01): `HumboldtExtension` is `Suspendable`; `suspend()` calls
+  `AutoConfiguredHumboldt.release()`, which exports what is queued and closes the OTLP exporters' HTTP clients, and
+  `resume()` calls `reopen()`. `HumboldtSuspendTest` (red with `suspend()` doing nothing, then green).
+- **Reported by**: the review of the extensions before the CRaC benchmark: an application with the Telemetry
+  extension and `OTEL_SDK_DISABLED=false` holds, in each OTLP exporter, a JDK `HttpClient` with its connection to
+  the collector and its selector.
+- **Minimal reproduction**: a probe in the CI runners' image, Zulu CRaC 25.0.4.1 with `-XX:CRaCEngine=warp`: one
+  request to a stub collector, then `jdk.crac.Core.checkpointRestore()` fails with a `BusySelectorException` and
+  `CheckpointOpenSocketException`s for the epoll descriptors and the `SocketChannel` to the collector. After
+  `HttpClient.close()` the checkpoint is taken, and after the restore a new client gets HTTP 200.
+- **Cause**: the Telemetry extension was not `Suspendable`, and Humboldt had no way to let its exporters'
+  connections go while the SDK stays the same object.
+
+---
+
 ## BUG-20261105-02 — `-Dvidocq.http.port` was ignored when the application's file set the listener key
 
 - **Date**: 2026-11-05
