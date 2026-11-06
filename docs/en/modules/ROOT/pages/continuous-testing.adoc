@@ -162,7 +162,7 @@ Each run writes its output to `target/vidocq-dev-tests.log`, overwritten on the 
 | `passed` | Every test passed, or was skipped.
 | `failed` | A test failed or ended in error — or Maven exited with an error although none did, such as a test JVM that crashed; the log says why.
 | `compile-error` | The main or test sources do not compile: the log shows the compiler's errors. The application keeps running.
-| `error`| Maven failed before any test ran, but not in the compiler: for example Surefire's JUnit provider missing from the local repository of an offline run, or a test JVM that crashed before writing any report. The log says why.
+| `error`| Maven failed before any test ran, but not in the compiler: for example a dependency of the tests that Maven could not download, even online, or a test JVM that crashed before writing any report. The log says why.
 | `no-tests` | There was no test to run.
 | `cancelled` | A newer change stopped the run; the previous complete result is under `previous`.
 |===
@@ -236,8 +236,10 @@ themselves, or turn continuous testing off for that project.
   with `-Dvidocq.dev.continuousTesting=false` when that is too slow.
 * Every test runs, every time: a change is not mapped to the tests it affects.
 * Surefire's tests only: Failsafe's integration tests are not run.
-* A run is offline (`mvn -o`): the dependencies the tests need must already be in the local repository, as they are
-  after one `mvn test`.
+* A run is offline (`mvn -o`). When it misses a dependency the tests need, a test-scope jar or Surefire's JUnit
+  provider that was never downloaded, it runs again once online with the same tests, and the log is the online run's
+  [.tag-new]#NEW#. That is the first run of a new project under `vidocq dev`, which resolves the application's
+  dependencies only, or the first run after a test dependency was added to the pom.
 * The keys need a real console: an IDE's run window may not deliver them.
 * The dev session's keys, a password included, are on the command line of the test run: other users of the machine
   can see it in the process list, as they can the application's.

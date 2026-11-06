@@ -104,6 +104,33 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261106-01 — The first continuous-test run of a new project fails offline under `vidocq dev`
+
+- **Date**: 2026-11-06
+- **Status**: FIXED on `fix/dev-tests-offline-first-run`: a run that misses an artifact offline runs again once
+  online, with the same tests (`TestRunner.Running`, `TestRunner.missedOffline`). `TestRunnerTest`: an offline miss
+  runs again online, another failure does not, and a cancel between the offline miss and the online run stops the
+  run (red, then green).
+- **Affected modules**: vidocq-runtime-maven-plugin (`vidocq:dev`, `vidocq:test`)
+- **Reported by**: the replay of the 0.4.0-RC2 CLI for the release post, on a machine whose local repository had no
+  0.4.0-RC2 test artifacts yet.
+- **Symptom**: on the first change after `vidocq dev` starts a new project, the console says
+  `Tests: the run failed (change), see target/vidocq-dev-tests.log`, and the log holds only Maven's
+  `Cannot access central (…) in offline mode and the artifact io.vidocq.runtime:vidocq-runtime-junit:jar:0.4.0-RC2 has
+  not been downloaded from it before`, the same for `vidocq-runtime-devservices-junit`. No test ran.
+- **Minimal reproduction**: `vidocq create --name todo -x cassini-rest -x mansart-data -x flyway-migration` with a
+  local repository that never resolved the project's test scope, `vidocq dev`, then save any source. By hand, on a
+  fresh `-Dmaven.repo.local`: `./mvnw process-classes` passes, then
+  `./mvnw -o process-test-classes surefire:test -DfailIfNoTests=false` fails on the Surefire plugin and the
+  test-scope jars, with the wording above; the same command online resolves them and runs the tests.
+- **Cause**: continuous testing runs every run offline (`mvn -o`, spec §2.3), while `vidocq dev` runs
+  `process-classes vidocq:dev`, which resolves the runtime scope only: the test-scope jars, Surefire and its JUnit
+  provider are downloaded by nothing before the first run. The limit was documented ("as they are after one
+  `mvn test`"), but a new project meets it on its first change. `vidocq:test` resolves the test scope at start (#166),
+  so it met it only for Surefire's provider (#138).
+
+---
+
 ## BUG-20261105-03 — A checkpoint fails once the Telemetry extension has exported over OTLP
 
 - **Date**: 2026-11-05

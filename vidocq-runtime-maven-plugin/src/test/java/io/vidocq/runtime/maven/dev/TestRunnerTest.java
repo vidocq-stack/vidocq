@@ -48,7 +48,16 @@ class TestRunnerTest {
         assertEquals(List.of("mvn", "-ntp", "-o", "-q", "process-test-classes", "surefire:test",
                         "-DfailIfNoTests=false", "-Dsurefire.failIfNoSpecifiedTests=false",
                         "-Dvidocq.dev.devServices=false"),
-                TestRunner.command("mvn", List.of(), Map.of()));
+                TestRunner.command("mvn", List.of(), Map.of(), true));
+    }
+
+    /** BUG-20261106-01: the run again after an offline miss goes online, its command otherwise the same. */
+    @Test
+    void anOnlineRunHasNoOfflineSwitch() {
+        assertEquals(List.of("mvn", "-ntp", "-q", "process-test-classes", "surefire:test",
+                        "-DfailIfNoTests=false", "-Dsurefire.failIfNoSpecifiedTests=false",
+                        "-Dvidocq.dev.devServices=false"),
+                TestRunner.command("mvn", List.of(), Map.of(), false));
     }
 
     @Test
@@ -64,7 +73,7 @@ class TestRunnerTest {
                         "-Dvidocq.pool.url=jdbc:postgresql://localhost:5432/dev",
                         "-Dvidocq.dev.provided.vidocq.pool.url=postgres",
                         "-Dvidocq.dev.devServices=false"),
-                TestRunner.command("/w/mvnw", List.of("com.acme.ATest#x", "com.acme.BTest#y"), keys),
+                TestRunner.command("/w/mvnw", List.of("com.acme.ATest#x", "com.acme.BTest#y"), keys, true),
                 "the dev session's own switch never reaches the tests: they use its containers");
     }
 
@@ -92,6 +101,83 @@ class TestRunnerTest {
         assertTrue(Files.exists(reports.resolve("notes.txt")), "only the reports are deleted");
         assertTrue(Files.readString(log).contains("args: -ntp -o -q process-test-classes surefire:test"),
                 Files.readString(log));
+    }
+
+    /** What Maven 3.9 logs, offline, for a test dependency that was never downloaded (BUG-20261106-01). */
+    private static final String OFFLINE_MISS = "[ERROR] Failed to execute goal on project todo: Could not resolve"
+            + " dependencies for project com.acme:todo:jar:1.0.0-SNAPSHOT\n[ERROR] dependency:"
+            + " io.vidocq.runtime:vidocq-runtime-junit:jar:0.4.0-RC2 (test)\n[ERROR] \tCannot access central"
+            + " (https://repo.maven.apache.org/maven2) in offline mode and the artifact"
+            + " io.vidocq.runtime:vidocq-runtime-junit:jar:0.4.0-RC2 has not been downloaded from it before.\n";
+
+    /** A fake Maven that misses an artifact offline and, online, logs its arguments in {@code online.txt}. */
+    private static Path missingOffline(Path dir) throws Exception {
+        Files.writeString(dir.resolve("offline-miss.txt"), OFFLINE_MISS);
+        return script(dir, """
+                case " $* " in
+                  *" -o "*) cat offline-miss.txt; echo $$ > offline.pid; exit 1 ;;
+                  *) echo "args: $*"; echo "args: $*" >> online.txt; exit 0 ;;
+                esac
+                """);
+    }
+
+    /**
+     * BUG-20261106-01: the first run of a new project under {@code vidocq:dev} failed, offline, on the test
+     * dependencies that {@code process-classes vidocq:dev} never resolves. A run that misses an artifact offline runs
+     * again online, once, and the log is the online run's.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    @Timeout(30)
+    void aRunThatMissesAnArtifactOfflineRunsAgainOnline(@TempDir Path dir) throws Exception {
+        Path log = dir.resolve("target/vidocq-dev-tests.log");
+        TestRunner runner = new TestRunner(dir, missingOffline(dir).toString(), Map.of(), log,
+                dir.resolve("target/surefire-reports"));
+
+        ContinuousTesting.Launched launched = runner.launch(List.of("com.acme.ATest#x"));
+
+        assertEquals(0, launched.waitFor());
+        assertFalse(launched.cancelled());
+        assertEquals(List.of("args: -ntp -q process-test-classes surefire:test -DfailIfNoTests=false"
+                        + " -Dsurefire.failIfNoSpecifiedTests=false -Dtest=com.acme.ATest#x"
+                        + " -Dvidocq.dev.devServices=false"),
+                Files.readAllLines(dir.resolve("online.txt")), "one online run, the same tests");
+        assertFalse(Files.readString(log).contains("offline mode"), Files.readString(log));
+    }
+
+    /** BUG-20261106-01: any other failure is the run's verdict, never a reason to run again. */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    @Timeout(30)
+    void aFailureThatIsNotAnOfflineMissDoesNotRunAgain(@TempDir Path dir) throws Exception {
+        Path maven = script(dir, "echo \"args: $*\" >> calls.txt\necho '[ERROR] COMPILATION ERROR : '\nexit 1\n");
+        TestRunner runner = new TestRunner(dir, maven.toString(), Map.of(), dir.resolve("target/t.log"),
+                dir.resolve("target/surefire-reports"));
+
+        assertEquals(1, runner.launch(List.of()).waitFor());
+
+        assertEquals(1, Files.readAllLines(dir.resolve("calls.txt")).size(), "a single run");
+    }
+
+    /**
+     * BUG-20261106-01: a cancel that comes after the offline run missed an artifact, before the online run starts,
+     * stops the run: no online run starts, and the run is cancelled, since it had not ended yet.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    @Timeout(30)
+    void aCancelBetweenTheOfflineMissAndTheOnlineRunStopsTheRun(@TempDir Path dir) throws Exception {
+        TestRunner runner = new TestRunner(dir, missingOffline(dir).toString(), Map.of(),
+                dir.resolve("target/t.log"), dir.resolve("target/surefire-reports"));
+        ContinuousTesting.Launched launched = runner.launch(List.of());
+        long offline = writtenPid(dir.resolve("offline.pid"));
+        assertTrue(goneWithin(offline, Duration.ofSeconds(5)), "the offline run");
+
+        launched.cancel();
+
+        assertTrue(launched.cancelled());
+        assertEquals(1, launched.waitFor());
+        assertFalse(Files.exists(dir.resolve("online.txt")), "no online run after the cancel");
     }
 
     @Test
@@ -189,5 +275,24 @@ class TestRunnerTest {
                 + " Cannot access central in offline mode and the artifact surefire-junit-platform has not been"
                 + " downloaded from it before.\n");
         assertFalse(TestRunner.compilationFailed(log));
+    }
+
+    /** BUG-20261106-01: both ways Maven says an artifact is missing offline, and nothing else, are a miss. */
+    @Test
+    void theLogTellsAnArtifactMissingOfflineFromAnyOtherFailure(@TempDir Path dir) throws Exception {
+        Path log = dir.resolve("vidocq-dev-tests.log");
+
+        assertFalse(TestRunner.missedOffline(log), "no log at all");
+        Files.writeString(log, OFFLINE_MISS);
+        assertTrue(TestRunner.missedOffline(log));
+        Files.writeString(log, "[ERROR] Plugin org.apache.maven.plugins:maven-surefire-plugin:3.5.5 or one of its"
+                + " dependencies could not be resolved: The repository system is offline but the artifact"
+                + " org.apache.maven.surefire:surefire-junit-platform:jar:3.5.5 is not available in the local"
+                + " repository.\n");
+        assertTrue(TestRunner.missedOffline(log));
+        Files.writeString(log, "[ERROR] COMPILATION ERROR : \n[ERROR] /a/B.java:[3,1] ';' expected\n");
+        assertFalse(TestRunner.missedOffline(log));
+        Files.writeString(log, "[ERROR] Tests run: 3, Failures: 1, Errors: 0, Skipped: 0\n");
+        assertFalse(TestRunner.missedOffline(log));
     }
 }
