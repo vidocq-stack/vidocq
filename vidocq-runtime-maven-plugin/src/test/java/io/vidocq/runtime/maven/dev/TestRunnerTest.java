@@ -104,11 +104,13 @@ class TestRunnerTest {
     }
 
     /** What Maven 3.9 logs, offline, for a test dependency that was never downloaded (BUG-20261106-01). */
-    private static final String OFFLINE_MISS = "[ERROR] Failed to execute goal on project todo: Could not resolve"
-            + " dependencies for project com.acme:todo:jar:1.0.0-SNAPSHOT\n[ERROR] dependency:"
-            + " io.vidocq.runtime:vidocq-runtime-junit:jar:0.4.0-RC2 (test)\n[ERROR] \tCannot access central"
-            + " (https://repo.maven.apache.org/maven2) in offline mode and the artifact"
-            + " io.vidocq.runtime:vidocq-runtime-junit:jar:0.4.0-RC2 has not been downloaded from it before.\n";
+    private static final String OFFLINE_MISS = """
+            [ERROR] Failed to execute goal on project todo: Could not resolve dependencies for project \
+            com.acme:todo:jar:1.0.0-SNAPSHOT
+            [ERROR] dependency: io.vidocq.runtime:vidocq-runtime-junit:jar:0.4.0-RC2 (test)
+            [ERROR] \tCannot access central (https://repo.maven.apache.org/maven2) in offline mode and the artifact \
+            io.vidocq.runtime:vidocq-runtime-junit:jar:0.4.0-RC2 has not been downloaded from it before.
+            """;
 
     /** A fake Maven that misses an artifact offline and, online, logs its arguments in {@code online.txt}. */
     private static Path missingOffline(Path dir) throws Exception {
