@@ -72,7 +72,7 @@ With the Maven plugin:
 <plugin>
     <groupId>io.vidocq.runtime</groupId>
     <artifactId>vidocq-runtime-maven-plugin</artifactId>
-    <version>0.4.0-RC1</version>
+    <version>0.4.0-RC2</version>
     <executions>
         <execution>
             <goals>
