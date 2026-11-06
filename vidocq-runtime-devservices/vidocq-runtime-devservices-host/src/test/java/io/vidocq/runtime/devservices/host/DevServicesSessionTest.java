@@ -163,6 +163,60 @@ class DevServicesSessionTest {
         assertTrue(stopped.contains(skipped), stopped);
     }
 
+    @Test
+    void aTestRunLeavesTheFilesOfTheApplicationsSessionAlone(@TempDir Path basedir) throws Exception {
+        // BUG-20261106-03: `vidocq test --once` beside `vidocq dev` wrote its own container into the dev session's
+        // files, then marked them stopped, and the next reload of the application reported that.
+        Path properties = basedir.resolve("target").resolve("vidocq-dev-services.properties");
+        try (DevServicesSession dev = DevServicesSession.open("vidocq:dev", basedir, List.of(postgres(32783)),
+                ctx(basedir), LOG, CLOCK)) {
+            String devState = Files.readString(dev.stateFile());
+            String devProperties = Files.readString(properties);
+
+            for (String host : List.of("vidocq:test", "test")) {
+                DevServicesSession tests = DevServicesSession.open(host, basedir, List.of(postgres(32785)),
+                        ctx(basedir), LOG, CLOCK);
+                String testState = Files.readString(tests.stateFile());
+                String testProperties = Files.readString(
+                        basedir.resolve("target").resolve("vidocq-dev-services-test.properties"));
+                tests.close();
+
+                assertEquals(basedir.resolve("target").resolve("vidocq-dev-services-test.json"), tests.stateFile(),
+                        host);
+                assertTrue(testState.contains("\"host\":\"" + host + "\"") && testState.contains("32785"),
+                        testState);
+                assertTrue(testProperties.contains("32785"), testProperties);
+                assertEquals(devState, Files.readString(dev.stateFile()), host + " rewrote the dev session's state");
+                assertEquals(devProperties, Files.readString(properties), host + " rewrote the dev session's keys");
+            }
+        }
+    }
+
+    @Test
+    void theApplicationsHostsKeepTheProjectsFiles(@TempDir Path basedir) throws Exception {
+        for (String host : List.of("vidocq:dev", "vidocq:run")) {
+            try (DevServicesSession s = DevServicesSession.open(host, basedir, List.of(postgres(32783)),
+                    ctx(basedir), LOG, CLOCK)) {
+                assertEquals(basedir.resolve("target").resolve(StateFile.FILE_NAME), s.stateFile(), host);
+                assertTrue(Files.isRegularFile(basedir.resolve("target").resolve("vidocq-dev-services.properties")),
+                        host);
+            }
+        }
+    }
+
+    /** A PostgreSQL-like provider on {@code port}: enough keys for the connection block and its properties file. */
+    private static DevService postgres(int port) {
+        return new DevService() {
+            @Override public String id() { return "postgres"; }
+            @Override public boolean appliesWhen(DevServiceContext ctx) { return true; }
+            @Override public Map<String, String> start(DevServiceContext ctx) {
+                return Map.of("vidocq.pool.url", "jdbc:postgresql://localhost:" + port + "/vidocq",
+                        "vidocq.pool.username", "vidocq", "vidocq.pool.password", "pw");
+            }
+            @Override public void stop() { /* nothing started */ }
+        };
+    }
+
     /** A minimal {@link DevService} scripted to succeed or fail, recording how many times it was stopped. */
     private static final class Fake implements DevService {
         final String id;

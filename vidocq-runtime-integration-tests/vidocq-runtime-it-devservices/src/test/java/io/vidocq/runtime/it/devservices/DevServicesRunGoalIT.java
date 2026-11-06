@@ -54,9 +54,9 @@ import static org.junit.jupiter.api.Assertions.fail;
  * §4.2/§4.4 actually add: the {@code devservices} startup report section's own {@code vidocq.pool.password}
  * row is masked ({@code section.secret(key, true)}), so it never prints the raw value next to the key.
  *
- * <p>{@code @Order(2)} ({@code junit-platform.properties} makes it effective): this test's subprocess
- * overwrites the shared {@code target/vidocq-dev-services.json} with its own {@code vidocq:run} host's
- * run, so it must run after {@link DevServicesTestHostIT} has already read that file.
+ * <p>{@code @Order(2)} ({@code junit-platform.properties} makes it effective): this test's subprocess writes
+ * {@code target/vidocq-dev-services.json}, the file of the application's hosts, which {@link DevServicesDevGoalIT}
+ * writes again after it. {@link DevServicesTestHostIT}'s JUnit host has a file of its own (BUG-20261106-03).
  */
 @Order(2)
 class DevServicesRunGoalIT {

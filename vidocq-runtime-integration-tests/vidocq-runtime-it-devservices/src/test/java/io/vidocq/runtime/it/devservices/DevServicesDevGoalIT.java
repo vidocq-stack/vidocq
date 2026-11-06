@@ -52,9 +52,8 @@ import static org.junit.jupiter.api.Assertions.fail;
  * injected PostgreSQL password appears nowhere in that snapshot. Stopping {@code mvn} (as Ctrl+C does) stops the
  * child and the containers, and rewrites the state file as {@code "stopped"}.
  *
- * <p>{@code @Order(3)} ({@code junit-platform.properties} makes it effective): its subprocess overwrites the shared
- * {@code target/vidocq-dev-services.json}, after {@link DevServicesTestHostIT} and {@link DevServicesRunGoalIT}
- * are done with it.
+ * <p>{@code @Order(3)} ({@code junit-platform.properties} makes it effective): its subprocess writes
+ * {@code target/vidocq-dev-services.json} again, after {@link DevServicesRunGoalIT} is done with it.
  */
 @Order(3)
 class DevServicesDevGoalIT {

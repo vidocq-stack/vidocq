@@ -286,7 +286,8 @@ Connection information:
 ```
 
 The same coordinates land in **`target/vidocq-dev-services.properties`** (rewritten on each
-`vidocq:dev` start):
+`vidocq:dev` start; a test run writes its own, `target/vidocq-dev-services-test.properties`, see
+[The state file](#the-state-file)):
 
 ```properties
 datasource.default.url=jdbc:postgresql://localhost:54213/vidocq
@@ -476,10 +477,11 @@ of timing out on the first query.
 
 ## The state file
 
-Whichever host started them — `vidocq:dev`, `vidocq:run`, or the JUnit listener above — writes
-`<basedir>/target/vidocq-dev-services.json` once the providers are up, and rewrites it with
-`"state": "stopped"` once they stop. **A custom `<project.build.directory>` does not move it**:
-the path is always `<basedir>/target/vidocq-dev-services.json`, `<basedir>` meaning the project's
+The host that started them writes a state file once the providers are up, and rewrites it with
+`"state": "stopped"` once they stop: `<basedir>/target/vidocq-dev-services.json` for the
+application's hosts, `vidocq:dev` and `vidocq:run`, and `<basedir>/target/vidocq-dev-services-test.json`
+for a test run's, `vidocq:test` and the JUnit listener above. **A custom `<project.build.directory>`
+does not move it**: the path is always under `<basedir>/target`, `<basedir>` meaning the project's
 own `pom.xml` directory, never `${project.build.directory}`.
 
 This file is how `vidocq-runtime-devservices-extension` (on the child's module path under the
@@ -492,13 +494,13 @@ stripped the same way. Without the file (or without the `vidocq.devservices.stat
 that points to it), the section simply reads "no dev service" — the extension never scans for a
 stray file on its own.
 
-**One project, one state file.** The path is fixed by the project, not by the host, so every host
-of the same project shares it — and `target/vidocq-dev-services.properties` too. Running `mvn test`
-while `vidocq:dev` runs in another terminal starts the test run's own containers and overwrites
-both files with the test host's; when the test run ends, it marks the state file `stopped` with
-host `test`, although `vidocq:dev`'s containers still run. The running `vidocq:dev` application
-keeps what it read at boot, but a reload reads the file again and then shows the test run's. Restart `vidocq:dev`, or
-avoid running both at once, when the files must describe it.
+**A test run has files of its own.** `vidocq test` or `mvn test` beside a running `vidocq:dev`
+starts the test run's own containers and writes `vidocq-dev-services-test.json` and
+`vidocq-dev-services-test.properties`: the dev session's two files keep describing `vidocq:dev`,
+whose application reads its state file again on every reload. Before BUG-20261106-03, every host
+of a project shared one pair of files, and the reload after a test run reported the test run's
+container, `stopped`. `vidocq:dev` and `vidocq:run` still share the application's pair: both run
+the application, and one at a time.
 
 **`target/vidocq-dev-services.properties` is a different file, on purpose.** It is the one
 described in [Connection information](#connection-information) above: local to the machine,

@@ -39,8 +39,15 @@ import java.util.Map;
  */
 public final class StateFile {
 
-    /** The state file's name, under {@code <basedir>/target}. */
+    /** The state file's name, under {@code <basedir>/target}, for the application's hosts, {@code vidocq:dev} and {@code vidocq:run}. */
     public static final String FILE_NAME = "vidocq-dev-services.json";
+
+    /**
+     * The state file's name, under {@code <basedir>/target}, for a test run's hosts, {@code vidocq:test} and the JUnit
+     * listener's {@code test}: a file of their own, so a test run beside {@code vidocq:dev} never overwrites the dev
+     * session's file (BUG-20261106-03).
+     */
+    public static final String TEST_FILE_NAME = "vidocq-dev-services-test.json";
 
     /** The system property the host sets so the application can find the state file. */
     public static final String PROPERTY = "vidocq.devservices.state";

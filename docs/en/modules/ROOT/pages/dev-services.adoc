@@ -270,8 +270,9 @@ in a consuming project's `pom.xml`.
 [#the-report-section]
 == The startup report section and dev console panel
 
-Whichever host started them, the application reads one state file,
-`<basedir>/target/vidocq-dev-services.json` — `<basedir>` is always the project's own `pom.xml`
+The application reads the state file of the host that started them,
+`<basedir>/target/vidocq-dev-services.json` under `vidocq:dev` and `vidocq:run`, `vidocq-dev-services-test.json`
+under a test run's host (<<test-run-files>>) — `<basedir>` is always the project's own `pom.xml`
 directory, unaffected by a custom `project.build.directory` — through
 `vidocq-runtime-devservices-extension`, which the host adds to the child's module path (the
 Maven-plugin hosts) or which arrives on the class path (the JUnit host, transitively with
@@ -317,15 +318,16 @@ often from a very old, incompatible Vidocq version. The boot goes on; the sectio
 `state file unreadable`, and the anomaly's message names the file's path. Rerun the goal that starts dev services: the Maven plugin, or the JUnit
 listener, rewrites the file cleanly.
 
-[#one-state-file-per-project]
-=== One state file per project
+[#test-run-files]
+=== A test run has files of its own [.tag-new]#NEW#
 
-The state file's path is the project's, not the host's: every host of the same project shares
-it, and `target/vidocq-dev-services.properties` too. Running `mvn test` while `vidocq:dev` runs in
-another terminal starts the test run's own containers and overwrites both files; when the test run
-ends, it marks the state file `stopped`, host `test`, although `vidocq:dev`'s containers still run.
-The running application keeps what it read at boot, but a reload reads the file again. Restart
-`vidocq:dev`, or avoid running both at once, when the files must describe it.
+`vidocq:dev` and `vidocq:run` write `target/vidocq-dev-services.json` and
+`target/vidocq-dev-services.properties`. A test run's hosts, `vidocq:test` and the JUnit listener, write
+`target/vidocq-dev-services-test.json` and `target/vidocq-dev-services-test.properties`. So `vidocq test` or
+`mvn test` beside a running `vidocq:dev` starts its own containers and leaves the dev session's files alone: a
+reload of the application, which reads its state file again, still reports the dev containers. Until
+BUG-20261106-03, every host of a project shared one pair of files, and the reload after a test run reported the
+test run's container, `stopped`.
 
 The dev console panel of the same name shows the same boot facts, live: which service, its image
 and endpoints, and the keys it injected, a secret always as `configured`. The application cannot
@@ -337,7 +339,8 @@ xref:dev-console.adoc#panels[The dev console's panels].
 == Continuous testing
 
 xref:continuous-testing.adoc[Continuous testing] reuses the dev containers: under `vidocq:dev` every test run
-gets the session's connection keys, and `vidocq:test` opens a session of its own, host `vidocq:test`. Each run
+gets the session's connection keys, and `vidocq:test` opens a session of its own, host `vidocq:test`, with files of
+its own (<<test-run-files>>). Each run
 gets `-Dvidocq.dev.devServices=false`, so the tests never start a second set of containers.
 
 WARNING: The tests then share the dev database: a test that deletes rows deletes your dev data.
@@ -349,7 +352,7 @@ A key whose last dot-separated segment names a secret — `password`, `passwd`, 
 `token`, `key`, `credential(s)`, `apikey`, `api-key`, `private-key`, in any case — is written to
 the state file as `"configured": true`, never with its value; a URL loses its `user:password@`
 part and any secret query parameter is masked as `***` before anything is written. Only
-`target/vidocq-dev-services.properties`, documented in `DEV_SERVICES.md`'s "Connection
-information", keeps a password in clear text, on purpose: it is the local, machine-only file an
+`target/vidocq-dev-services.properties` (`-test.properties` for a test run), documented in `DEV_SERVICES.md`'s
+"Connection information", keeps a password in clear text, on purpose: it is the local, machine-only file an
 external tool — `psql`, DataGrip, a migration runner — reads to connect to the dev database
 without a JDBC URL copied by hand.

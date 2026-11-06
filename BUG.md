@@ -5,6 +5,28 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261106-03 — `vidocq test` overwrote the dev session's dev services files
+
+- **Date**: 2026-11-06
+- **Status**: FIXED on `fix/dev-services-file-per-session`: a test run's hosts, `vidocq:test` and the JUnit
+  listener's `test`, write `target/vidocq-dev-services-test.json` and `-test.properties`; `vidocq:dev` and
+  `vidocq:run` keep `target/vidocq-dev-services.json` and `.properties`. The application finds its file through
+  `vidocq.devservices.state`, which every host sets to its own session's file, so no reader changed.
+  `DevServicesSessionTest.aTestRunLeavesTheFilesOfTheApplicationsSessionAlone` (red: the test session wrote the
+  project's files) and `theApplicationsHostsKeepTheProjectsFiles`.
+- **Reported by**: the replay of the 0.4.0-RC2 CLI for the release post.
+- **Minimal reproduction**: `vidocq dev` on an application with PostgreSQL, its container on port 32783; in another
+  terminal, `vidocq test --once`, which starts its own container on 32785 and stops it at the end; then save a main
+  source. The reload's report reads `postgres (... localhost:32785) — vidocq:test, stopped`, although the dev
+  container still runs and the application still uses it.
+- **Cause**: `DevServicesSession.open` wrote `<basedir>/target/vidocq-dev-services.json` and `.properties` whatever
+  the host, so every session of a project shared one pair of files. The test session overwrote the dev session's
+  state, then rewrote it `stopped` on close; the dev application, pointed at the same path by
+  `vidocq.devservices.state`, read it again on its next reload. The Dev services page listed it as a limitation
+  ("One state file per project").
+
+---
+
 ## BUG-20261105-03 — A checkpoint fails once the Telemetry extension has exported over OTLP
 
 - **Date**: 2026-11-05

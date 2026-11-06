@@ -69,9 +69,9 @@ import static org.junit.jupiter.api.Assertions.fail;
  * ExtensionContext.startupReport()} is only reachable from inside {@code vidocq-runtime-core}'s own
  * package, not from a test in a different module.
  *
- * <p>{@code @Order(1)} ({@code junit-platform.properties} makes it effective): this class must finish
- * reading the shared {@code target/vidocq-dev-services.json} before {@link DevServicesRunGoalIT}'s own
- * {@code mvn vidocq:run} subprocess overwrites it with its own host's run.
+ * <p>{@code @Order(1)} ({@code junit-platform.properties} makes it effective). The JUnit host writes its own
+ * {@code target/vidocq-dev-services-test.json} (BUG-20261106-03), which the {@code vidocq:run} and {@code vidocq:dev}
+ * subprocesses of the next classes never touch: the order only keeps the module's run the same every time.
  */
 @Order(1)
 class DevServicesTestHostIT {

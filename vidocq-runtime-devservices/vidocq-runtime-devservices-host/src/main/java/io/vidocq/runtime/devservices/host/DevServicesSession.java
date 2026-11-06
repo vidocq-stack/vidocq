@@ -30,6 +30,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -47,6 +48,13 @@ public final class DevServicesSession implements AutoCloseable {
      * {@code vidocq.dev.provided.<key>=<provider id>}.
      */
     public static final String PROVIDED_PREFIX = "vidocq.dev.provided.";
+
+    /**
+     * The hosts of a test run — {@code vidocq:test}'s {@code HOST} and the JUnit listener's — which write {@link
+     * StateFile#TEST_FILE_NAME} and its {@code .properties} rather than the files of the application's session
+     * (BUG-20261106-03).
+     */
+    private static final Set<String> TEST_HOSTS = Set.of("vidocq:test", "test");
 
     private final DevServiceManager mgr;
     private final Path stateFile;
@@ -109,13 +117,13 @@ public final class DevServicesSession implements AutoCloseable {
 
     private static DevServicesSession open(String host, Path basedir, DevServiceManager mgr, System.Logger log,
             Clock clock) throws DevServicesException {
-        Path stateFile = stateFileOf(basedir);
+        Path stateFile = stateFileOf(host, basedir);
         try {
             Instant startedAt = clock.instant();
             List<DevServiceState> states = mgr.states();
             StateFile.write(stateFile,
                     StateFile.json(host, "running", startedAt, states, mgr.collectedProperties(), mgr.skipped()));
-            reportConnectionInformation(basedir, mgr.collectedProperties(), log);
+            reportConnectionInformation(propertiesFileOf(stateFile), mgr.collectedProperties(), log);
             return new DevServicesSession(mgr, stateFile, host, startedAt, log);
         } catch (IOException e) {
             mgr.close();
@@ -161,7 +169,10 @@ public final class DevServicesSession implements AutoCloseable {
         return mgr.providers();
     }
 
-    /** {@code <basedir>/target/vidocq-dev-services.json}. */
+    /**
+     * {@code <basedir>/target/vidocq-dev-services.json}, or {@code vidocq-dev-services-test.json} for a test run's
+     * host.
+     */
     public Path stateFile() {
         return stateFile;
     }
@@ -193,24 +204,36 @@ public final class DevServicesSession implements AutoCloseable {
         }
     }
 
-    private static Path stateFileOf(Path basedir) {
-        return basedir.resolve("target").resolve(StateFile.FILE_NAME);
+    /**
+     * The host's state file: a test run's host has its own, so that it never overwrites the file of the {@code
+     * vidocq:dev} or {@code vidocq:run} session running beside it, which the application reads again on every reload
+     * (BUG-20261106-03).
+     */
+    private static Path stateFileOf(String host, Path basedir) {
+        String name = TEST_HOSTS.contains(host) ? StateFile.TEST_FILE_NAME : StateFile.FILE_NAME;
+        return basedir.resolve("target").resolve(name);
+    }
+
+    /** The connection properties beside {@code stateFile}: its name, with {@code .properties} for {@code .json}. */
+    private static Path propertiesFileOf(Path stateFile) {
+        String name = stateFile.getFileName().toString();
+        return stateFile.resolveSibling(name.substring(0, name.length() - ".json".length()) + ".properties");
     }
 
     /**
      * Logs the {@code Connection information} block for every dev-provisioned datasource and writes the
-     * coordinates to {@code target/vidocq-dev-services.properties}, so an external SQL client can reach the dev
+     * coordinates to {@code file} — {@code target/vidocq-dev-services.properties}, or {@code
+     * vidocq-dev-services-test.properties} for a test run — so an external SQL client can reach the dev
      * databases (moved here from {@code VidocqDevMojo} — spec §6, "same code"). No-op when no datasource was
      * provisioned (e.g. only Keycloak ran). A failure to write the properties file is logged, not fatal: the
      * state file already carries what the application needs.
      */
-    private static void reportConnectionInformation(Path basedir, Map<String, String> collected, System.Logger log) {
+    private static void reportConnectionInformation(Path file, Map<String, String> collected, System.Logger log) {
         List<String> lines = DevServicesReport.consoleLines(collected);
         if (lines.isEmpty()) {
             return;
         }
         lines.forEach(line -> log.log(System.Logger.Level.INFO, line));
-        Path file = basedir.resolve("target").resolve("vidocq-dev-services.properties");
         try {
             Files.createDirectories(file.getParent());
             Files.writeString(file, DevServicesReport.fileContent(collected));
