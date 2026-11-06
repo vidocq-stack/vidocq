@@ -43,6 +43,10 @@ import java.util.stream.Stream;
  * application {@code @VidocqTest} starts (BUG-20261030-06). Its output goes to the log file, overwritten per run; the stale {@code TEST-*.xml} are deleted first,
  * so that the reports found afterwards are this run's. The command line is never logged: it may hold a dev
  * service's password.
+ *
+ * <p>A run that misses an artifact offline runs again online, once, with the same tests: {@code vidocq:dev} resolves
+ * only the runtime dependencies, so on a new project, or after a test dependency was added, the test-scope jars and
+ * Surefire's JUnit provider may never have been downloaded (BUG-20261106-01). The log is then the online run's.
  */
 final class TestRunner implements ContinuousTesting.Launcher {
 
@@ -68,11 +72,16 @@ final class TestRunner implements ContinuousTesting.Launcher {
     }
 
     /**
-     * The command (spec §2.3). {@code vidocq.dev.devServices=false} comes last and a key of that name in
-     * {@code properties} is dropped: the tests use the dev session's containers, and never start their own.
+     * The command (spec §2.3), offline ({@code -o}) unless it runs again after an offline miss. {@code
+     * vidocq.dev.devServices=false} comes last and a key of that name in {@code properties} is dropped: the tests use
+     * the dev session's containers, and never start their own.
      */
-    static List<String> command(String maven, List<String> tests, Map<String, String> properties) {
-        List<String> cmd = new ArrayList<>(List.of(maven, "-ntp", "-o", "-q", "process-test-classes", "surefire:test",
+    static List<String> command(String maven, List<String> tests, Map<String, String> properties, boolean offline) {
+        List<String> cmd = new ArrayList<>(List.of(maven, "-ntp"));
+        if (offline) {
+            cmd.add("-o");
+        }
+        cmd.addAll(List.of("-q", "process-test-classes", "surefire:test",
                 "-DfailIfNoTests=false", "-Dsurefire.failIfNoSpecifiedTests=false"));
         if (!tests.isEmpty()) {
             cmd.add("-Dtest=" + String.join(",", tests));
@@ -90,12 +99,30 @@ final class TestRunner implements ContinuousTesting.Launcher {
     public ContinuousTesting.Launched launch(List<String> tests) throws IOException {
         deleteReports(reportsDir);
         Files.createDirectories(logFile.toAbsolutePath().getParent());
-        Process process = new ProcessBuilder(command(maven, tests, properties))
+        Process offline = start(command(maven, tests, properties, true));
+        return new Running(offline, logFile, () -> start(command(maven, tests, properties, false)));
+    }
+
+    /** Starts {@code command} in the project, its output overwriting the log. */
+    private Process start(List<String> command) throws IOException {
+        return new ProcessBuilder(command)
                 .directory(projectDir.toFile())
                 .redirectErrorStream(true)
                 .redirectOutput(logFile.toFile())
                 .start();
-        return new Running(process);
+    }
+
+    /**
+     * Whether the log of a run shows Maven missing an artifact it may not download offline, in either of the ways
+     * Maven says it, as opposed to any other failure (BUG-20261106-01). {@code false} when the log cannot be read.
+     */
+    static boolean missedOffline(Path logFile) {
+        try {
+            String log = Files.readString(logFile, StandardCharsets.UTF_8);
+            return log.contains(" in offline mode and the artifact ") || log.contains("repository system is offline");
+        } catch (IOException | UncheckedIOException _) {
+            return false;
+        }
     }
 
     /**
@@ -148,31 +175,81 @@ final class TestRunner implements ContinuousTesting.Launcher {
         descendants.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
     }
 
+    /** Starts the online run of a run that missed an artifact offline. */
+    @FunctionalInterface
+    private interface OnlineRun {
+        Process start() throws IOException;
+    }
+
+    /**
+     * The offline run, then the online one when the offline run missed an artifact. Until {@link #waitFor} has taken
+     * that decision, the run has not ended: a cancel that comes after the offline process exited, but before the
+     * online one starts, stops the run, and no online run starts.
+     */
     private static final class Running implements ContinuousTesting.Launched {
 
-        private final Process process;
-        private volatile boolean cancelled;
+        private final Object lock = new Object();
+        private final Path logFile;
+        /** Guarded by lock. */
+        private Process process;
+        /** Guarded by lock: the online run still to start after an offline miss, {@code null} once decided. */
+        private OnlineRun online;
+        /** Guarded by lock. */
+        private boolean cancelled;
 
-        Running(Process process) {
-            this.process = process;
+        Running(Process offline, Path logFile, OnlineRun online) {
+            this.process = offline;
+            this.logFile = logFile;
+            this.online = online;
         }
 
         @Override
         public int waitFor() throws InterruptedException {
-            return process.waitFor();
+            Process first;
+            synchronized (lock) {
+                first = process;
+            }
+            int exit = first.waitFor();
+            Process again;
+            synchronized (lock) {
+                OnlineRun start = !cancelled && runsAgain(first) ? online : null;
+                online = null;
+                if (start == null) {
+                    return exit;
+                }
+                try {
+                    process = start.start();
+                } catch (IOException _) {
+                    return exit;
+                }
+                again = process;
+            }
+            return again.waitFor();
+        }
+
+        /** Guarded by lock: whether {@code ended}, the offline process, missed an artifact and runs again online. */
+        private boolean runsAgain(Process ended) {
+            return online != null && ended.exitValue() != 0 && missedOffline(logFile);
         }
 
         @Override
         public void cancel() {
-            if (process.isAlive()) {
+            Process stopping;
+            synchronized (lock) {
+                stopping = process;
+                if (!stopping.isAlive() && !runsAgain(stopping)) {
+                    return;
+                }
                 cancelled = true;
-                destroyTree(process.toHandle(), GRACE);
             }
+            destroyTree(stopping.toHandle(), GRACE);
         }
 
         @Override
         public boolean cancelled() {
-            return cancelled;
+            synchronized (lock) {
+                return cancelled;
+            }
         }
     }
 }
