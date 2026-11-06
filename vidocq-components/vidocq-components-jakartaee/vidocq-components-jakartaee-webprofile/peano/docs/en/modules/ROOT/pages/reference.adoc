@@ -395,7 +395,7 @@ interface signatures use erasure; generic functional methods receive diagnostics
 Annotated and explicit roots also select accessible source descendants in the current
 compilation, including nested and later-round declarations. Each type has its own
 provider and registration fragment. Register every required provider in module-info.java.
-[[container-proxies]][.tag-new]#NEW# A CDI container hands EL a client proxy of a normal-scoped bean: a subclass
+[[container-proxies]]A CDI container hands EL a client proxy of a normal-scoped bean: a subclass
 that delegates every call to the contextual instance. A generated table serves it as it serves its target when a
 `io.vidocq.peano.spi.ProxyUnwrapper` service, found next to the accessor providers, names the target as the class
 the proxy stands for (`AccessorTable.serves`). Vidocq provides the unwrapper for Vauban's proxies. Without one, the
@@ -406,7 +406,7 @@ This family selection depends on compilation roots and is not build-tool isolati
 incremental processing.
 
 * `io.vidocq.peano.annotation.ELAccessible`: SOURCE-retained TYPE annotation on an owned class or record.
-* [[automatic-selection]][.tag-new]#NEW# Automatic selection, with no annotation: the classes and producer methods
+* [[automatic-selection]]Automatic selection, with no annotation: the classes and producer methods
   annotated `@jakarta.inject.Named` or `@jakarta.enterprise.inject.Model` — the beans a page reaches by name — and,
   transitively from them and from the types selected above, the classes and records of the module their readable or writable properties hold, through
   collections, maps, optionals and arrays. A reached type that cannot get a table (abstract, ambiguous setter,

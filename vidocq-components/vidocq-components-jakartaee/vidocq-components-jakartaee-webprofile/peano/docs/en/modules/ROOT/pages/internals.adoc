@@ -7,7 +7,7 @@ provider with build-time accessor and expression generation. The full design is
 `PLAN.md` in {repo-peano}[the repository].
 
 [#generated-code]
-== Generated code and reflective fallback [.tag-new]#NEW#
+== Generated code and reflective fallback
 
 Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
 looks it up at run time, and what runs instead when it is missing. For Peano that is the accessor table of each model
