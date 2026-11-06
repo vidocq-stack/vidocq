@@ -183,7 +183,7 @@ fails the container start, as above. The extension asks Vauban which of the two 
 (`io.vidocq.vauban.api.ExtensionPhase`).
 
 [#generated-code]
-=== Generated code instead of reflection [.tag-new]#NEW#
+=== Generated code instead of reflection
 
 `ravel-processor`, on the same processor path (the Vidocq codegen bundle brings it too), writes into the
 application's own packages the code Ravel otherwise runs by reflection:

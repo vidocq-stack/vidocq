@@ -65,7 +65,7 @@ Config config = builder.build();
 ----
 
 [[layered-release]]
-=== Releasing the configurations of a layer [.tag-new]#NEW#
+=== Releasing the configurations of a layer
 
 Ravel keeps one `Config` per class loader for the life of the JVM, and a `Config` reaches the classes of its application (custom sources and converters, the converters generated at build). A runtime that boots the application in a layer of its own, with a class loader of its own, must therefore release the configuration of that layer when it stops, or the stopped layer stays reachable: a `vidocq dev` hot reload used to keep every previous layer in memory. `releaseConfig(Config)` needs the `Config` itself, while a container reads its configuration under several loaders (the layer's, and those it builds on top of it). The resolver of Ravel therefore also implements `io.vidocq.ravel.spi.LayeredConfigProviderResolver`:
 
