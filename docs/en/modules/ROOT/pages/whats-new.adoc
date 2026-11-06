@@ -11,3 +11,7 @@ New in the `{project-version}` development line — everything listed here lande
 == Dev services
 
 * xref:dev-services.adoc#test-run-files[A test run has files of its own] [.tag-new]#NEW# — `vidocq test` and the JUnit listener write `target/vidocq-dev-services-test.json` and `-test.properties`, so a test run beside `vidocq dev` no longer overwrites the dev session's files, and the next reload no longer reports the test run's container as the application's, `stopped` (BUG-20261106-03).
+
+== Dev mode
+
+* xref:continuous-testing.adoc#terminal[The line of a failed test, at last] [.tag-new]#NEW# — `vidocq dev` and `vidocq:test` print where a test failed, `(OrderServiceTest.java:31)`, for the tests of a Vidocq application too: they run in a named module, whose frames the JDK prints as `com.acme@1.0.0/com.acme.OrderServiceTest…`, and the line was never found (BUG-20261106-02).

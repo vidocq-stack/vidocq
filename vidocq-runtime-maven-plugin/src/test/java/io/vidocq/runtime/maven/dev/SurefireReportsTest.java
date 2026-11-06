@@ -110,6 +110,35 @@ class SurefireReportsTest {
         assertEquals("", SurefireReports.location("com.acme.CartTest", null));
     }
 
+    /**
+     * BUG-20261106-02: a Vidocq application's tests run in a named module, so the JDK prefixes each frame with the
+     * module and its version, and sometimes the class loader ({@link StackTraceElement#toString}); the line was never
+     * found. Every shape the JDK prints names the test's line, and the frames of other modules still do not.
+     */
+    @Test
+    void theLocationIsFoundInFramesQualifiedByAModuleOrAClassLoader() {
+        assertEquals("TodoResourceTest.java:18", SurefireReports.location("com.acme.todo.todos.TodoResourceTest", """
+                org.opentest4j.AssertionFailedError: expected: <201> but was: <200>
+                	at org.junit.jupiter.api@5.12.2/org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+                	at org.junit.jupiter.api@5.12.2/org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:150)
+                	at com.acme.todo@1.0.0-SNAPSHOT/com.acme.todo.todos.TodoResourceTest.createsATodo(TodoResourceTest.java:18)
+                	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+                """), "a module with its version, as Surefire runs a Vidocq application's tests");
+        assertEquals("CartTest.java:8", SurefireReports.location("com.acme.CartTest",
+                "x\n\tat app//com.acme.CartTest.adds(CartTest.java:8)"), "the application class loader, no module");
+        assertEquals("CartTest.java:9", SurefireReports.location("com.acme.CartTest",
+                "x\n\tat com.acme.loader/com.acme@2.1+7/com.acme.CartTest.adds(CartTest.java:9)"),
+                "a named class loader and a module");
+        assertEquals("CartTest.java:10", SurefireReports.location("com.acme.CartTest",
+                "x\n\tat com.acme.loader//com.acme.CartTest$Nested.adds(CartTest.java:10)"),
+                "a named class loader without a module, in a nested class");
+        assertEquals("CartTest.java:11", SurefireReports.location("com.acme.CartTest",
+                "x\n\tat com.acme/com.acme.CartTest.lambda$adds$0(CartTest.java:11)"), "a module without a version");
+        assertEquals("", SurefireReports.location("com.acme.CartTest",
+                "x\n\tat com.acme@1/com.acme.Cart.add(Cart.java:3)\n\tat java.base/java.lang.Thread.run(Thread.java:1583)"),
+                "only other classes' frames");
+    }
+
     @Test
     void aMessageKeepsItsFirstLineWithoutCredentials(@TempDir Path dir) throws Exception {
         report(dir, "TEST-com.acme.OrderServiceTest.xml", FAILING, SINCE.plusSeconds(3));

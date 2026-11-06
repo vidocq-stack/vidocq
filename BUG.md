@@ -27,6 +27,28 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261106-02 — The line of a failed test is never printed for a Vidocq application
+
+- **Date**: 2026-11-06
+- **Status**: FIXED on `fix/failed-test-line-module-frames`: `SurefireReports.FRAME` accepts the up to two segments
+  the JDK puts before the class, the class loader and the module with its version. `SurefireReportsTest`: the
+  frame shapes the JDK prints (red on the real frame, then green).
+- **Affected modules**: vidocq-runtime-maven-plugin (`vidocq:dev`, `vidocq:test`)
+- **Reported by**: the replay of the 0.4.0-RC2 CLI for the release post.
+- **Symptom**: a red run prints
+  `FAILED com.acme.todo.todos.TodoResourceTest#createsATodo(VidocqApplication) — AssertionFailedError: a new todo
+  answers 201 Created ==> expected: <201> but was: <200>` with no `(TodoResourceTest.java:18)`, although 0.4.0-RC2's
+  What's new and the Continuous testing page promise the line of the test where it failed (BUG-20261030-08).
+- **Minimal reproduction**: a created application with a `@VidocqTest` whose assertion fails, under `vidocq dev` or
+  `vidocq test --once`. The stack trace in `target/vidocq-dev-tests.log` reads
+  `at com.acme.todo@1.0.0-SNAPSHOT/com.acme.todo.todos.TodoResourceTest.createsATodo(TodoResourceTest.java:18)`.
+- **Cause**: the frame pattern, `at ([\w.$]+)\.[\w$<>]+\(([\w$]+\.java:\d+)\)`, expected the class right after `at`.
+  `StackTraceElement.toString` puts the module and its version before it (`com.acme@1.0/`), and sometimes the class
+  loader (`app//`, `loader/module@1.0/`). A Vidocq application's tests always run in a named module, so no frame of
+  the test class ever matched; the tests of BUG-20261030-08 only used class-path frames.
+
+---
+
 ## BUG-20261105-03 — A checkpoint fails once the Telemetry extension has exported over OTLP
 
 - **Date**: 2026-11-05

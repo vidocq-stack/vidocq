@@ -47,8 +47,14 @@ import java.util.stream.Stream;
  */
 final class SurefireReports {
 
-    /** A stack frame: {@code at <class>.<method>(<File>:<line>)}. */
-    private static final Pattern FRAME = Pattern.compile("at ([\\w.$]+)\\.[\\w$<>]+\\(([\\w$]+\\.java:\\d+)\\)");
+    /**
+     * A stack frame: {@code at <class>.<method>(<File>:<line>)}, the class prefixed, as {@link
+     * StackTraceElement#toString} prints it, by up to two segments ending in {@code /}: the class loader and the module
+     * with its version ({@code com.acme@1.0/}, {@code app//}, {@code java.base/}). A Vidocq application's tests run in
+     * a named module, so its frames always carry one (BUG-20261106-02).
+     */
+    private static final Pattern FRAME =
+            Pattern.compile("at (?:[^\\s/()]*/){0,2}([\\w.$]+)\\.[\\w$<>]+\\(([\\w$]+\\.java:\\d+)\\)");
 
     /** The longest message kept, in characters. */
     static final int MAX_MESSAGE = 200;

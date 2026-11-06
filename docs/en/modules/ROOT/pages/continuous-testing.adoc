@@ -192,7 +192,9 @@ Log: target/vidocq-dev-tests.log   [r] run all  [f] rerun failed  [q] quit
 ----
 
 The location in parentheses is the first frame of the test's own class in the stack trace, so it points at the
-failing assertion rather than at JUnit. A compilation failure, another failure before the tests, a run with no test and a cancelled run each print one line, such as
+failing assertion rather than at JUnit. It is found in frames the JDK prefixes with the module and its version, as it
+does for the tests of a Vidocq application, which run in a named module (`at com.acme@1.0.0/com.acme.OrderServiceTest…`)
+[.tag-new]#NEW#. A compilation failure, another failure before the tests, a run with no test and a cancelled run each print one line, such as
 `Tests: compilation failed (change), see target/vidocq-dev-tests.log` or `Tests: the run failed (change), see target/vidocq-dev-tests.log`.
 
 With a console attached, `vidocq:test` reads a key per line — type the key, then Enter:
