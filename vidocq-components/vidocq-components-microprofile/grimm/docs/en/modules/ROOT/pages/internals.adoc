@@ -5,7 +5,7 @@
 Grimm refuses per-request classpath scanning: all the work happens once, at CDI container startup, and the result is cached. This page describes the exact pipeline sequence, the role of the Vauban BCE, and the threading invariants.
 
 [#generated-code]
-== Generated code and reflective fallback [.tag-new]#NEW#
+== Generated code and reflective fallback
 
 Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
 looks it up at run time, and what runs instead when it is missing. For Grimm that is the OpenAPI fragment of each
@@ -161,7 +161,7 @@ Symmetrically, `JsonDeserializer` and `YamlDeserializer` consume the static file
 
 No lock is taken; serialisation itself can parallelise safely.
 
-On Cassini, `OpenApiResource` is served by an adapter built with `grimm-cdi-vauban` [.tag-new]#NEW#: the module runs `cassini-processor`, with a compile-only `requires static io.vidocq.cassini.api`. Cassini finds the adapter by name in the resource's package, so building the stack no longer generates it at run time. On another JAX-RS runtime the class is present but never loaded, and the module does not need Cassini.
+On Cassini, `OpenApiResource` is served by an adapter built with `grimm-cdi-vauban`: the module runs `cassini-processor`, with a compile-only `requires static io.vidocq.cassini.api`. Cassini finds the adapter by name in the resource's package, so building the stack no longer generates it at run time. On another JAX-RS runtime the class is present but never loaded, and the module does not need Cassini.
 
 == Further reading
 
