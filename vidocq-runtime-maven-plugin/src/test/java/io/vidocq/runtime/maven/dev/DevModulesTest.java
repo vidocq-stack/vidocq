@@ -23,6 +23,9 @@ import io.vidocq.runtime.maven.DevOnlyJars;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
+import org.eclipse.aether.graph.DefaultDependencyNode;
+import org.eclipse.aether.graph.Dependency;
+import org.eclipse.aether.graph.DependencyNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -41,6 +44,7 @@ import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -162,6 +166,32 @@ class DevModulesTest {
         }, w -> {}, i -> {});
 
         assertEquals(List.of("g:ext-dev:0.4.0-SNAPSHOT"), asked);
+    }
+
+    /**
+     * BUG-20261106-04: {@code vidocq-runtime-mansart-data-extension-dev} declares the JTA API optional and requires it
+     * {@code static} (without it, a write commits). Resolved as the root of a request, the companion kept that direct
+     * optional dependency, which the application lacked, so the Mansart Data panel was dropped. Only what the companion
+     * needs is resolved: an optional dependency is left out, and so is everything under it.
+     */
+    @Test
+    void aCompanionsOptionalDependenciesAreNotResolved() {
+        DependencyNode companion = node("io.vidocq.runtime.extensions.jakartaee.web:"
+                + "vidocq-runtime-mansart-data-extension-dev:0.4.0-RC2", false);
+        DependencyNode spi = node(DevConsoleJars.SPI_KEY + ":0.4.0-RC2", false);
+        DependencyNode jta = node("jakarta.transaction:jakarta.transaction-api:2.0.1", true);
+        DependencyNode underJta = node("g:needed-by-jta:1.0", false);
+
+        assertTrue(DevModules.WITHOUT_OPTIONAL.accept(companion, List.of()), "the companion itself");
+        assertTrue(DevModules.WITHOUT_OPTIONAL.accept(spi, List.of(companion)), "a dependency it needs");
+        assertFalse(DevModules.WITHOUT_OPTIONAL.accept(jta, List.of(companion)), "an optional dependency");
+        assertFalse(DevModules.WITHOUT_OPTIONAL.accept(underJta, List.of(jta, companion)),
+                "a dependency of an optional one");
+    }
+
+    private static DependencyNode node(String coordinates, boolean optional) {
+        return new DefaultDependencyNode(new Dependency(
+                new org.eclipse.aether.artifact.DefaultArtifact(coordinates), "runtime", optional));
     }
 
     /** A jar carrying the {@code META-INF/vidocq/dev-module} descriptor, no manifest attribute of its own. */

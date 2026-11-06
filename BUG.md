@@ -5,6 +5,34 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261106-04 — The Mansart Data dev panel was dropped from an application without JTA
+
+- **Date**: 2026-11-06
+- **Status**: FIXED on `fix/mansart-data-dev-panel-jta`: `VidocqDevMojo.resolveRuntime` resolves a companion through
+  `DevModules.WITHOUT_OPTIONAL`, which leaves out an optional dependency and everything under it.
+  `DevModulesTest.aCompanionsOptionalDependenciesAreNotResolved` (red with a filter that keeps every node, then
+  green). End to end: `vidocq:dev` of this branch's plugin on the RC2 todo application without
+  `mansart-transactions` adds `vidocq-runtime-mansart-data-extension-dev`, with no warning, and the dev console's
+  `mansart-data` panel is live; the 0.4.0-RC2 plugin on the same copy prints the warning.
+- **Reported by**: the replay of the 0.4.0-RC2 CLI for the release post.
+- **Minimal reproduction**: `vidocq create todo -x mansart-data` (no `mansart-transactions`), then `vidocq dev`:
+  `[WARNING] Dev tools: io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-mansart-data-extension-dev:0.4.0-RC2
+  needs jakarta.transaction:jakarta.transaction-api, which the application does not have; its panel shows its boot
+  facts only`. `vidocq extension add mansart-transactions` makes it go away.
+- **Cause**: the `-dev` module is built to do without JTA: `jakarta.transaction-api` is `<optional>` in its pom, its
+  `module-info` `requires static jakarta.transaction`, and only `JtaDemarcation` names a JTA type; without it, a
+  write commits. But `vidocq:dev` resolved the companion as the root of a `CollectRequest`, and Maven Resolver drops
+  optional dependencies only below the root's direct ones: the JTA API came back, and `DevModules` took it for
+  runtime code the application lacks. Not chosen: making `extension add mansart-data` bring `mansart-transactions`
+  (Mansart Data does not need JTA), or making the `-dev` module bring the API (it would put an API on the module path
+  that the application does not have).
+- **Not fixed here**: on a project with no `@Repository` yet, the boot still warns `Mansart Data: no @Repository
+  interface discovered. Did the APT processor (mansart-data-processor) run on the application module?`. Telling
+  that case apart from a processor that did not run needs either a marker from `mansart-data-processor`, in the
+  Mansart repository, or a scan of the application's classes. Neither is a small change.
+
+---
+
 ## BUG-20261106-03 — `vidocq test` overwrote the dev session's dev services files
 
 - **Date**: 2026-11-06

@@ -21,6 +21,8 @@ package io.vidocq.runtime.maven.dev;
 
 import io.vidocq.runtime.maven.DevOnlyJars;
 import org.apache.maven.artifact.Artifact;
+import org.eclipse.aether.graph.DependencyFilter;
+import org.eclipse.aether.graph.DependencyNode;
 import org.eclipse.aether.resolution.DependencyResolutionException;
 
 import java.io.BufferedReader;
@@ -54,6 +56,20 @@ final class DevModules {
     static final Pattern ARTIFACT_ID = Pattern.compile("\\w[\\w.-]*");
     /** The prefix of every line this class logs. */
     private static final String DEV_TOOLS = "Dev tools: ";
+
+    /**
+     * Keeps out of a companion's resolution its optional dependencies, and what they bring. Resolved as the root of a
+     * request, a companion keeps its direct optional dependencies, which Maven drops only further down. A companion
+     * that declares one optional runs without it — {@code vidocq-runtime-mansart-data-extension-dev} requires the JTA
+     * API {@code static} and commits a write when it is missing — so it must not count as runtime code the application
+     * lacks (BUG-20261106-04). When the application has it, it is on the module path already.
+     */
+    static final DependencyFilter WITHOUT_OPTIONAL =
+            (node, parents) -> required(node) && parents.stream().allMatch(DevModules::required);
+
+    private static boolean required(DependencyNode node) {
+        return node.getDependency() == null || !node.getDependency().isOptional();
+    }
 
     /** One resolved jar: {@code groupId:artifactId} and its file. */
     record Resolved(String key, Path file) {}

@@ -164,6 +164,12 @@ One line, the companion's `artifactId` — its `groupId` and version are the run
 holding more than one artifactId, or one that is not a valid Maven identifier, is unreadable: `vidocq:dev` logs
 a warning naming the jar, and that extension gets no companion — it never fails the goal.
 
+`vidocq:dev` resolves the companion with what it needs, never its `<optional>` dependencies [.tag-new]#NEW#. A
+`-dev` module may use an API the application may lack: it declares it optional, `requires static` it, and keeps the
+code that names its types in a class it loads only when the API is there. `vidocq-runtime-mansart-data-extension-dev`
+does so with the JTA API. A dependency that is not optional must already be in the application, or be marked
+`Vidocq-Dev-Only`; otherwise that extension keeps its boot facts only, with a warning.
+
 === What the panel reads
 
 The `-dev` module never reaches the runtime extension's implementation packages — those stay closed. The

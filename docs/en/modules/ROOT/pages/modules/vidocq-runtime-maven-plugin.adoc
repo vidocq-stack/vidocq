@@ -917,7 +917,9 @@ ships in a binary whenever an extension that keeps the all-in-one `DevConsolePan
   is nothing to serve the page, and nothing is added;
 . for every runtime extension the project resolves, reads its `META-INF/vidocq/dev-module` descriptor, if it has
   one, and resolves that companion `-dev` module and its own dev-only runtime dependencies, plus the console SPI,
-  at the extension's own `groupId` and version;
+  at the extension's own `groupId` and version. A companion's optional dependencies are not resolved, nor what they
+  bring [.tag-new]#NEW#: it runs without them, so an application that lacks one keeps the live panel. The Mansart
+  Data panel declares the JTA API optional, and without it a write commits, with no rollback to offer;
 . never adds a module twice: a jar the console step already put on the path is not added again by a
   companion's own transitive dependencies, and a jar the project already resolves at runtime scope — the legacy
   declaration, kept working — is left where it is, not duplicated;
@@ -945,7 +947,9 @@ goal, and `vidocq:dev` continues without it:
 
 A companion that cannot be resolved the same way costs only that one extension's live panel — its section keeps
 its boot facts, unaffected — and a descriptor that cannot be read, or that names more than one artifact or an
-invalid one, costs the same, naming the jar. Both are warnings, never failures.
+invalid one, costs the same, naming the jar. So does a companion that needs, not optionally, runtime code the
+application does not have (`… needs <groupId:artifactId>, which the application does not have; its panel shows its
+boot facts only`). All three are warnings, never failures.
 
 **`vidocq:run`, the packaging goals, and never twice.** `vidocq:run`, `vidocq:package`, `vidocq:jlink`,
 `vidocq:jpackage` and `vidocq:docker` add none of this. They also drop every jar marked `Vidocq-Dev-Only: true`

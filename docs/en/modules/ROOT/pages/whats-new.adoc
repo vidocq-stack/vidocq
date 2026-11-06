@@ -15,3 +15,7 @@ New in the `{project-version}` development line — everything listed here lande
 == Dev mode
 
 * xref:continuous-testing.adoc#terminal[The line of a failed test, at last] [.tag-new]#NEW# — `vidocq dev` and `vidocq:test` print where a test failed, `(OrderServiceTest.java:31)`, for the tests of a Vidocq application too: they run in a named module, whose frames the JDK prints as `com.acme@1.0.0/com.acme.OrderServiceTest…`, and the line was never found (BUG-20261106-02).
+
+== Dev console
+
+* xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools[The Mansart Data panel without JTA] [.tag-new]#NEW# — `vidocq dev` no longer resolves a `-dev` module's optional dependencies, so an application with Mansart Data and no `mansart-transactions` keeps its live Mansart Data panel, instead of `… needs jakarta.transaction:jakarta.transaction-api, which the application does not have; its panel shows its boot facts only` (BUG-20261106-04).

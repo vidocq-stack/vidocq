@@ -861,11 +861,15 @@ public class VidocqDevMojo extends AbstractMojo {
         }
     }
 
-    /** {@code coordinates} and its runtime dependencies, through Maven's own resolution and repositories. */
+    /**
+     * {@code coordinates} and the runtime dependencies it needs, through Maven's own resolution and repositories: not
+     * its optional ones ({@link DevModules#WITHOUT_OPTIONAL}).
+     */
     private List<DevModules.Resolved> resolveRuntime(String coordinates) throws DependencyResolutionException {
         Dependency root = new Dependency(new DefaultArtifact(coordinates), RUNTIME_SCOPE);
         CollectRequest collect = new CollectRequest(root, remoteRepos);
-        DependencyRequest request = new DependencyRequest(collect, DependencyFilterUtils.classpathFilter(RUNTIME_SCOPE));
+        DependencyRequest request = new DependencyRequest(collect, DependencyFilterUtils.andFilter(
+                DependencyFilterUtils.classpathFilter(RUNTIME_SCOPE), DevModules.WITHOUT_OPTIONAL));
         List<DevModules.Resolved> jars = new ArrayList<>();
         DependencyResult result = repoSystem.resolveDependencies(repoSession, request);
         for (ArtifactResult artifactResult : result.getArtifactResults()) {
