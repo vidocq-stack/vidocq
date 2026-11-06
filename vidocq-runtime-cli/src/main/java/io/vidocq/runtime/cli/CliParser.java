@@ -344,9 +344,7 @@ public final class CliParser {
         if (release && snapshot) {
             throw new CliException("'update' takes --release or --snapshot, not both.");
         }
-        UpdatePlan.Channel channel = release ? UpdatePlan.Channel.RELEASE
-                : snapshot ? UpdatePlan.Channel.SNAPSHOT : UpdatePlan.Channel.INSTALLED;
-        return new Command.Update(check, channel);
+        return new Command.Update(check, UpdatePlan.Channel.of(release, snapshot));
     }
 
     private static Command parseCompletion(String[] args, int from) {

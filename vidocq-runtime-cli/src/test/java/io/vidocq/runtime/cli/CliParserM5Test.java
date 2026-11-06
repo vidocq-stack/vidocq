@@ -102,6 +102,20 @@ class CliParserM5Test {
     }
 
     @Test
+    void updateHelpDescribesTheChannelOptions() {
+        var out = new java.io.ByteArrayOutputStream();
+        var original = System.out;
+        System.setOut(new java.io.PrintStream(out, true, java.nio.charset.StandardCharsets.UTF_8));
+        try {
+            CliParser.printHelp("update");
+        } finally {
+            System.setOut(original);
+        }
+        String help = out.toString(java.nio.charset.StandardCharsets.UTF_8).replaceAll("\u001B\\[[0-9;]*m", "");
+        assertTrue(help.contains("--release") && help.contains("--snapshot") && help.contains("--check"));
+    }
+
+    @Test
     void completionBash() {
         Command.Completion c = assertInstanceOf(Command.Completion.class,
                 CliParser.parse(new String[]{"completion", "bash"}));

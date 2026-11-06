@@ -59,11 +59,30 @@ public final class UpdatePlan {
     /** Which channel to follow. */
     public enum Channel {
         /** The channel of the installed CLI: releases for a release, SNAPSHOTs for a SNAPSHOT. */
-        INSTALLED,
+        INSTALLED(""),
         /** The latest release of Maven Central, whatever is installed. */
-        RELEASE,
+        RELEASE(" --release"),
         /** The latest SNAPSHOT build, whatever is installed. */
-        SNAPSHOT
+        SNAPSHOT(" --snapshot");
+
+        private final String flag;
+
+        Channel(String flag) {
+            this.flag = flag;
+        }
+
+        /** The option that selects this channel, preceded by a space; empty for {@link #INSTALLED}. */
+        public String flag() {
+            return flag;
+        }
+
+        /** The channel the options select. */
+        public static Channel of(boolean release, boolean snapshot) {
+            if (release) {
+                return RELEASE;
+            }
+            return snapshot ? SNAPSHOT : INSTALLED;
+        }
     }
 
     /** What to do. */

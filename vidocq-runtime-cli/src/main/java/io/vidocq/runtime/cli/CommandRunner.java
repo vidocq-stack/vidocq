@@ -483,12 +483,7 @@ public final class CommandRunner {
                 case UpdatePlan.Update(var version, var zipUrl, var build) -> {
                     String label = version + build.map(b -> " (build " + b + ")").orElse("");
                     if (update.checkOnly()) {
-                        CliOutput.info("Update available: " + label + " — run 'vidocq update"
-                                + switch (update.channel()) {
-                                    case RELEASE -> " --release";
-                                    case SNAPSHOT -> " --snapshot";
-                                    case INSTALLED -> "";
-                                } + "'.");
+                        CliOutput.info("Update available: " + label + " — run 'vidocq update" + update.channel().flag() + "'.");
                         return 0;
                     }
                     CliOutput.info("Downloading " + zipUrl);

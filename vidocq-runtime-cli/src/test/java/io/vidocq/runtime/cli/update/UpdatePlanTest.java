@@ -207,4 +207,23 @@ class UpdatePlanTest {
 
         assertEquals(plan("0.3.0", null), plan("0.3.0", null, UpdatePlan.Channel.INSTALLED));
     }
+
+    @Test
+    void channelFlagsAndSelection() {
+        assertEquals("", UpdatePlan.Channel.INSTALLED.flag());
+        assertEquals(" --release", UpdatePlan.Channel.RELEASE.flag());
+        assertEquals(" --snapshot", UpdatePlan.Channel.SNAPSHOT.flag());
+        assertEquals(UpdatePlan.Channel.INSTALLED, UpdatePlan.Channel.of(false, false));
+        assertEquals(UpdatePlan.Channel.RELEASE, UpdatePlan.Channel.of(true, false));
+        assertEquals(UpdatePlan.Channel.SNAPSHOT, UpdatePlan.Channel.of(false, true));
+    }
+
+    @Test
+    void releaseChannelFromASnapshotOnTheSameVersionStillSwitches() {
+        release("0.4.0");
+
+        var update = assertInstanceOf(UpdatePlan.Update.class,
+                plan("0.4.0-SNAPSHOT", null, UpdatePlan.Channel.RELEASE));
+        assertEquals("0.4.0", update.version());
+    }
 }
