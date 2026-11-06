@@ -5,7 +5,7 @@
 Knock rests on a simple principle: implement MicroProfile Health 4.0 with the JDK and Jakarta specs alone. No third-party library, no reflection-heavy machinery, no platform-thread pool. This page documents the implementation choices that uphold that discipline.
 
 [#generated-code]
-== Generated code and reflective fallback [.tag-new]#NEW#
+== Generated code and reflective fallback
 
 Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
 looks it up at run time, and what runs instead when it is missing. Knock has no generator of its own and reads no
