@@ -5,7 +5,7 @@
 Humboldt runs on a simple principle: no runtime reflection on the hot path, no external bytecode library, anything computable at compile time is computed there. This page describes the internal pipeline (`TracerProvider` → `Processor` → `Exporter`), the `ScopedValue` vs `ThreadLocal` choice, the build-time wiring policy (and its one deliberate dynamic-proxy exception), and the deliberate absence of a gRPC stack.
 
 [#generated-code]
-== Generated code and reflective fallback [.tag-new]#NEW#
+== Generated code and reflective fallback
 
 Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
 looks it up at run time, and what runs instead when it is missing. Humboldt has no generator of its own: its jars

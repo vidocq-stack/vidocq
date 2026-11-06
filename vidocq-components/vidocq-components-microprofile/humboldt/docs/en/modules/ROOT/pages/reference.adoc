@@ -231,7 +231,7 @@ Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent syst
 | `otlp`, `none`, `in-memory`, `logging`
 |===
 
-[[exporter-defaults]]An exporter key left unset is `otlp` [.tag-new]#NEW#, through the OpenTelemetry SPI discovery too: setting `OTEL_EXPORTER_OTLP_ENDPOINT` (and enabling the SDK) is enough to export the three signals. Until now the discovery set the unset keys to `none`, and nothing was exported unless the three keys were named. A bridged OpenTelemetry exporter (`OTEL_TRACES_EXPORTER=in-memory` from an SPI provider, as the TCK does) still replaces Humboldt's own.
+[[exporter-defaults]]An exporter key left unset is `otlp`, through the OpenTelemetry SPI discovery too: setting `OTEL_EXPORTER_OTLP_ENDPOINT` (and enabling the SDK) is enough to export the three signals. Until now the discovery set the unset keys to `none`, and nothing was exported unless the three keys were named. A bridged OpenTelemetry exporter (`OTEL_TRACES_EXPORTER=in-memory` from an SPI provider, as the TCK does) still replaces Humboldt's own.
 
 === OTLP HTTP endpoint
 
@@ -269,7 +269,7 @@ Humboldt reads standard OpenTelemetry env vars, with fallback to equivalent syst
 |===
 
 [[checkpoint-restore]]
-=== Checkpoint and restore (CRaC) [.tag-new]#NEW#
+=== Checkpoint and restore (CRaC)
 
 Each OTLP exporter keeps its connections to the collector in the pool of a JDK `HttpClient`, and a CRaC checkpoint
 refuses a process with an open socket. `AutoConfiguredHumboldt.release()` exports what the processors and the metric
@@ -314,7 +314,7 @@ assembles them itself. Under Vidocq, the Telemetry extension calls both around t
 The runtime reads **no** `mp.telemetry.*` key: enabling/disabling goes through `OTEL_SDK_DISABLED` (see the SDK gate above), and propagators default to W3C TraceContext + Baggage. The single exception lives in the optional `humboldt-otel-interop` bridge, whose SPI autoconfiguration accepts `mp.telemetry.propagators` as an alias of `otel.propagators` (MP Telemetry §3.3).
 
 [[context-debug]]
-=== Context diagnostics [.tag-new]#NEW#
+=== Context diagnostics
 
 [cols="2,1,3",options="header"]
 |===
@@ -420,7 +420,7 @@ The `otlp` exporter follows the OTLP JSON encoding, as the OpenTelemetry Java 1.
 == Compatibility
 
 * Java 25 LTS minimum (compile and runtime).
-* [.tag-new]#NEW# OpenTelemetry API and context 1.67.0, `opentelemetry-instrumentation-annotations` 2.31.1, repackaged in the `humboldt-otel-*` artifacts. OpenTelemetry SDK, autoconfigure SPI and exporter jars you supply next to `humboldt-otel-interop` belong to the same 1.66 line; the semantic conventions used by the TCK harness are 1.44.0.
+*OpenTelemetry API and context 1.67.0, `opentelemetry-instrumentation-annotations` 2.31.1, repackaged in the `humboldt-otel-*` artifacts. OpenTelemetry SDK, autoconfigure SPI and exporter jars you supply next to `humboldt-otel-interop` belong to the same 1.66 line; the semantic conventions used by the TCK harness are 1.44.0.
 * Maven 3.9.16 or later (Model 4.0.0 everywhere; the TCK runner is in-reactor behind the `tck` profile).
 * Compatible with CDI 4.1 Lite (Vauban) and JAX-RS 4.0 (Cassini). Also proven on Weld SE 6.0 and on Open Liberty (CDI 4.0, Jakarta REST 3.1): see <<other-containers>>.
 
