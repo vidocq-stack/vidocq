@@ -5,7 +5,7 @@
 Dirac rejects instrumentation by hot-path reflection: all wiring is done at CDI container startup, and the hot path — bumping a counter, measuring a duration — engages neither lock, nor stray allocation, nor `synchronized`. This page describes the exact sequence and the threading invariants.
 
 [#generated-code]
-== Generated code and reflective fallback [.tag-new]#NEW#
+== Generated code and reflective fallback
 
 Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
 looks it up at run time, and what runs instead when it is missing. For Dirac that is the metric metadata of each bean
