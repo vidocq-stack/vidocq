@@ -5,7 +5,7 @@
 Heisenberg strictly separates pure automata (`heisenberg-core`) from the CDI integration (`heisenberg-cdi-vauban`). This page describes the invocation sequence, the role of each engine, the shared state management for `@CircuitBreaker` and `@Bulkhead`, and the threading invariants required by virtual threads.
 
 [#generated-code]
-== Generated code and reflective fallback [.tag-new]#NEW#
+== Generated code and reflective fallback
 
 Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
 looks it up at run time, and what runs instead when it is missing. For Heisenberg that is the Fault Tolerance
@@ -90,7 +90,7 @@ flowchart LR
 . `FaultToleranceInterceptor.around()` intercepts the `InvocationContext`. For `@Asynchronous`, it immediately switches onto a virtual thread.
 . `PolicyComposer` reads the resolved annotations (direct annotations + MP Config overrides) and builds the chain in canonical §2.5 order.
 +
-What the annotations and MicroProfile Config say about a method is resolved on its first invocation and kept [.tag-new]#NEW#: `MethodPolicies` holds the enabled policies and their configurations per bean class and method, for the `Config` instance they were read from, and resolves them again under another instance (another deployment). The interceptor keeps, the same way, the method it resolved on the bean class, and the interceptor priority read from the configuration or, when it does not set it, from the class path. Until 0.4.0-RC1 all of it was read on every invocation: a `@Retry` method that succeeded at once cost about 4 µs and 16 KB (BENCH.md, BENCH-20261030-01).
+What the annotations and MicroProfile Config say about a method is resolved on its first invocation and kept: `MethodPolicies` holds the enabled policies and their configurations per bean class and method, for the `Config` instance they were read from, and resolves them again under another instance (another deployment). The interceptor keeps, the same way, the method it resolved on the bean class, and the interceptor priority read from the configuration or, when it does not set it, from the class path. Until 0.4.0-RC1 all of it was read on every invocation: a `@Retry` method that succeeded at once cost about 4 µs and 16 KB (BENCH.md, BENCH-20261030-01).
 . Each engine applies its logic:
 .. `RetryEngine` loops up to `maxRetries` with `delay + jitter` randomness.
 .. `TimeoutEngine` runs the attempt on a virtual thread and calls `Thread.join(Duration)`; on expiry, it raises `TimeoutException` and interrupts the worker.
@@ -199,7 +199,7 @@ public void addFaultToleranceBinding(ClassConfig classConfig) {
 Startup validation is crucial: any malformed annotation (`@Asynchronous void m()`, `@Bulkhead(value=0)`, a `@Fallback` whose fallback method does not match the guarded signature) raises `FaultToleranceDefinitionException` and immediately aborts application startup — no late runtime surprise.
 
 [#compile-time-policies]
-== Annotations read at compile time [.tag-new]#NEW#
+== Annotations read at compile time
 
 `heisenberg-processor` is an annotation processor. For each class whose methods carry Fault Tolerance annotations, directly or through a class of their hierarchy, it generates a `<Bean>$$HeisenbergPolicies` companion: an implementation of `io.vidocq.heisenberg.spi.gen.FaultToleranceCompanion` that holds the annotations as constant `Literals`, defaults filled in. The resolution rule is the runtime's: each annotation comes from the method's nearest declaration in the class hierarchy, else from the nearest class that carries it. The processor is checked against `AnnotationReader` as an oracle (`FaultTolerancePoliciesProcessorOracleTest`).
 
