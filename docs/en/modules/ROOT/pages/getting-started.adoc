@@ -124,7 +124,7 @@ INFOS: Vidocq - Started in 90.940 ms (process running for 135 ms)
 ----
 
 [#last-round-warnings]
-NOTE: With a Vauban older than Vidocq/vauban#251, the compilation prints one `[WARNING] File for type '…' created in the last round will not be subject to annotation processing.` per class Vauban generates (`HelloResource_ClientProxy`, `_VaubanComponents`). They are harmless: javac compiles these classes like any other. Vauban now writes them before javac's last round [.tag-new]#NEW#, once the other processors' classes are in, and the warnings are gone. It keeps the last round, and its warnings, when a bean carries an inherited annotation another processor reads, such as a class-level `@Retry` or `@Counted` (`-Avauban.generationRound`, Vidocq/vauban#216).
+NOTE: With a Vauban older than Vidocq/vauban#251, the compilation prints one `[WARNING] File for type '…' created in the last round will not be subject to annotation processing.` per class Vauban generates (`HelloResource_ClientProxy`, `_VaubanComponents`). They are harmless: javac compiles these classes like any other. Vauban now writes them before javac's last round, once the other processors' classes are in, and the warnings are gone. It keeps the last round, and its warnings, when a bean carries an inherited annotation another processor reads, such as a class-level `@Retry` or `@Counted` (`-Avauban.generationRound`, Vidocq/vauban#216).
 
 == Step 5 — Dev mode
 

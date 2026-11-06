@@ -5,7 +5,7 @@
 This page describes what happens between `mvn package` and the first `200 OK`. It follows the code through `vidocq-runtime-maven-plugin`, `vidocq-runtime-core` and the SPI, and details the extension grammar.
 
 [#generated-code]
-== Generated code and reflective fallback [.tag-new]#NEW#
+== Generated code and reflective fallback
 
 Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
 looks it up at run time, and what runs instead when it is missing. Vidocq's own part is to make the bricks'

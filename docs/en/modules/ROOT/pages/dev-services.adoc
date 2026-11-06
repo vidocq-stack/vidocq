@@ -2,7 +2,7 @@
 :description: Zero-config external dependencies — a PostgreSQL database, a Keycloak identity provider, an OpenTelemetry collector with Grafana — for `vidocq:dev`, `vidocq:run` and your tests, visible in the startup report and the dev console.
 
 [.lead]
-A **dev service** provisions a Testcontainers container — PostgreSQL, Keycloak, an OpenTelemetry collector with Grafana (`vidocq-runtime-devservice-otel`) [.tag-new]#NEW# — and wires its coordinates into your application as plain configuration, with no `docker run` and no hand-copied JDBC URL. Providers run outside the application, in the host that starts them: `vidocq:dev`, `vidocq:run` (opt-in), or a JUnit test run. Whichever host it is, the application sees the same thing — a `devservices` section of the startup report, and, in a `dev` launch, a dev console panel of the same name — without depending on Testcontainers or Docker itself.
+A **dev service** provisions a Testcontainers container — PostgreSQL, Keycloak, an OpenTelemetry collector with Grafana (`vidocq-runtime-devservice-otel`)— and wires its coordinates into your application as plain configuration, with no `docker run` and no hand-copied JDBC URL. Providers run outside the application, in the host that starts them: `vidocq:dev`, `vidocq:run` (opt-in), or a JUnit test run. Whichever host it is, the application sees the same thing — a `devservices` section of the startup report, and, in a `dev` launch, a dev console panel of the same name — without depending on Testcontainers or Docker itself.
 
 TIP: This page covers where dev services run, how the application sees them, and how a test gets one. `DEV_SERVICES.md` at the repository root covers the providers themselves — PostgreSQL, Keycloak, OpenTelemetry, multi-datasource, stable ports — in full.
 
@@ -29,7 +29,7 @@ Three hosts can start dev services, all through the same `vidocq-runtime-devserv
 |===
 
 [#declared-for-you]
-=== Declared for you [.tag-new]#NEW#
+=== Declared for you
 
 An extension with a dev service brings what that service needs: `vidocq extension add`, `vidocq create`
 and `vidocq doctor --fix` write it into the `pom.xml`, so `vidocq dev`, `vidocq test` and a plain `mvn test`
@@ -73,7 +73,7 @@ has no Testcontainers, no Maven API and no JSON library of its own.
 
 [#host-log]
 Under a Maven goal (`vidocq:dev`, `vidocq:run`, `vidocq:test`), the dev services and their providers log
-through the build's log [.tag-new]#NEW#: one `[INFO]` line like the rest of the build, in English whatever the
+through the build's log: one `[INFO]` line like the rest of the build, in English whatever the
 machine's locale. Under a JUnit test run (`vidocq-runtime-devservices-junit`, a plain `mvn test`) they write
 the same `[INFO]`, `[WARNING]` and `[ERROR]` lines to the standard output of the tests; debug messages are dropped.
 
@@ -137,7 +137,7 @@ service decides, for the `@Default` datasource (`vidocq.pool.url`) and then for 
 
 | No URL at all, or a value that is not a readable `jdbc:` URL, such as a `${db.url}` expression, `jdbc:${db.kind}://…` or `jdbc:` alone
 | Only when `org.postgresql.Driver` is on the application's class path
-| Without the driver: `not started: no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path`, as a `[WARNING]` [.tag-new]#NEW#: the pool gets no database at all
+| Without the driver: `not started: no vidocq.pool.url and no PostgreSQL driver (org.postgresql.Driver) on the class path`, as a `[WARNING]`: the pool gets no database at all
 |===
 
 The class path is the one the application will run with: its runtime dependencies under
@@ -298,7 +298,7 @@ mode. Without a state file or the `vidocq.devservices.state` system property, th
 `no dev service: not started by vidocq:dev, vidocq:run or the test launcher` — not an anomaly, the
 ordinary state of an application nobody has started with a dev service yet. Under `vidocq dev`, which did
 start the application, it reads `no dev service configured (no vidocq-runtime-devservice-* dependency, or
-vidocq.dev.devServices=false)` [.tag-new]#NEW#. The extension never
+vidocq.dev.devServices=false)`. The extension never
 scans `target/` for a stray file on its own: a killed session's leftover file is read again only
 when a later host overwrites `vidocq.devservices.state`, never merely because the file exists.
 

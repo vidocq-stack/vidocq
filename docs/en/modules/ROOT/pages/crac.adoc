@@ -2,7 +2,7 @@
 :description: Start a Vidocq application from a snapshot of a warmed-up process: the CRaC JDK and extension, how to take a checkpoint and restore it, what Vidocq lets go of, the Checkpoint and Restore events of the application, and what an image does not keep.
 
 [.lead]
-[.tag-new]#NEW# With CRaC (Coordinated Restore at Checkpoint), you start a Vidocq application once and warm it up. Then you write a snapshot of the process to disk, and start every next instance from that snapshot instead of from `main`. The restored process answers in a few hundred milliseconds, with its classes loaded, its code compiled and its data in memory. Vidocq lets go of what a snapshot cannot hold (listening sockets, connections, open files) and takes it back after the restore. Your application does the same for its own resources by observing two CDI events.
+With CRaC (Coordinated Restore at Checkpoint), you start a Vidocq application once and warm it up. Then you write a snapshot of the process to disk, and start every next instance from that snapshot instead of from `main`. The restored process answers in a few hundred milliseconds, with its classes loaded, its code compiled and its data in memory. Vidocq lets go of what a snapshot cannot hold (listening sockets, connections, open files) and takes it back after the restore. Your application does the same for its own resources by observing two CDI events.
 
 [#requirements]
 == What you need

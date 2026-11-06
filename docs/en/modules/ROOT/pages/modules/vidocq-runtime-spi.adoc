@@ -28,10 +28,10 @@ List indexed from the existing sources:
 | Handed to `onStart` — `container()` (Vauban), `beanManager()`, `configuration()` (legacy string API), `config()` (typed API), `launchMode()`(<<launch-mode-api>>), `startupReport()`(<<startup-report-view>>), `suspendables()`(<<suspendable>>).
 
 | `Suspendable`
-| [.tag-new]#NEW# Implemented by an extension that holds what a process snapshot cannot: `suspend()` before a CRaC checkpoint, `resume()` after the restore (<<suspendable>>).
+|Implemented by an extension that holds what a process snapshot cannot: `suspend()` before a CRaC checkpoint, `resume()` after the restore (<<suspendable>>).
 
 | `event.Checkpoint` / `event.Restore`
-| [.tag-new]#NEW# The CDI events an application observes around a checkpoint (xref:crac.adoc#application-events[Checkpoint and restore]).
+|The CDI events an application observes around a checkpoint (xref:crac.adoc#application-events[Checkpoint and restore]).
 
 | `VidocqConfiguration`
 | String-property view passed to `configure` — `property(key)` returns `Optional<String>`, plus `property(key, default)` and `portFor(extensionName, defaultPort)`.
@@ -134,7 +134,7 @@ Priorities express real ordering constraints between extensions. The built-in HT
 [#suspendable]
 == Taking part in a checkpoint: `Suspendable`
 
-[.tag-new]#NEW# An extension that holds a listening socket, a pool of connections or an open file also implements `Suspendable`. Before a process snapshot (a CRaC checkpoint), the runtime calls `suspend()` on every suspendable in the reverse of the start order. After the restore, it calls `resume()` in the start order. Both methods are idempotent, and `resume()` leaves the state a plain `onStart` would have produced. `ExtensionContext.suspendables()` lists them; `vidocq-runtime-crac-extension` drives them, and is the only module that depends on `jdk.crac`.
+An extension that holds a listening socket, a pool of connections or an open file also implements `Suspendable`. Before a process snapshot (a CRaC checkpoint), the runtime calls `suspend()` on every suspendable in the reverse of the start order. After the restore, it calls `resume()` in the start order. Both methods are idempotent, and `resume()` leaves the state a plain `onStart` would have produced. `ExtensionContext.suspendables()` lists them; `vidocq-runtime-crac-extension` drives them, and is the only module that depends on `jdk.crac`.
 
 The application's own `Checkpoint` and `Restore` observers run from a suspendable of the runtime, placed at `Suspendable.APPLICATION_PRIORITY` (5,000) among the extensions:
 

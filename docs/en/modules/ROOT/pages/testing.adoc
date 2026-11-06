@@ -61,7 +61,7 @@ class HelloResourceTest {
   that path holds `target/classes` and the main dependencies; JUnit and the other test dependencies stay on the
   class path, so the application never sees them. A `@Nested` class shares the application of the class that
   carries `@VidocqTest`.
-* [[runtime-dependencies]]**Every runtime dependency** [.tag-new]#NEW# is on the application's module path, and
+* [[runtime-dependencies]]**Every runtime dependency**is on the application's module path, and
   every module of that path is resolved, as under `vidocq:dev` and in the packaged application: a JDBC driver in
   `runtime` scope, which no module requires, is found without `requires org.postgresql.jdbc`. Surefire leaves such a
   jar on the class path of the tests; `vidocq:test-path`, which `vidocq-runtime-parent` binds to
@@ -80,7 +80,7 @@ class HelloResourceTest {
     </configuration>
 </plugin>
 ----
-* [[dev-services]]**The dev services of the run** [.tag-new]#NEW# reach the application. `vidocq test`, `vidocq dev`
+* [[dev-services]]**The dev services of the run**reach the application. `vidocq test`, `vidocq dev`
   and, under a plain `mvn test`, the `vidocq-runtime-devservices-junit` listener (see
   xref:dev-services.adoc[Dev services]) put the keys their containers publish, `vidocq.pool.url` or
   `mp.jwt.verify.issuer` for instance, in the system properties of the tests. The application gets each of them, as
@@ -106,7 +106,7 @@ A test method declares any of these parameters:
 | `get(path)`, `post(path, contentType, body)` and `request(method, path, contentType, body)` send a request and
   return a `VidocqResponse` (`status()`, `body()` read as UTF-8, `header(name)`, `headers()`); `url()` and
   `url(path)` give the URL; `log()` gives what the application wrote so far.
-  [[request-headers]]`get(path, headers)` and `request(method, path, headers, contentType, body)` [.tag-new]#NEW# add request
+  [[request-headers]]`get(path, headers)` and `request(method, path, headers, contentType, body)`add request
   headers, an `Authorization: Bearer …` for a `@RolesAllowed` endpoint for one. The test cannot send the request
   itself: patched into the application module, it does not read `java.net.http`.
 

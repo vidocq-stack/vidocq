@@ -204,7 +204,7 @@ including the resource class, the JPMS module declarations, and `curl` calls.
 
 == Command reference
 
-Run `vidocq help` for the command list, or `vidocq help <command>` for per-command options; `vidocq <command> --help` (or `-h`) [.tag-new]#NEW# shows the same. After `--`, a `--help` goes to Maven.
+Run `vidocq help` for the command list, or `vidocq help <command>` for per-command options; `vidocq <command> --help` (or `-h`)shows the same. After `--`, a `--help` goes to Maven.
 
 [cols="1,3"]
 |===
@@ -300,7 +300,7 @@ From 0.4.0 the project is finished(Vidocq/vidocq#339):
 | `--extension, -x <id>` | Extension to enable; repeatable.
 | `--parent-version <version>` | Version of `vidocq-runtime-parent` the project inherits (default: the runtime version of the CLI). From 0.4.0 the parent's BOM versions the Vidocq dependencies, which carry no `<version>`; under an older parent each one names this version.
 | `--main`| Also write an `@VidocqMain` trampoline and set `vidocq.mainClass` to it (default: no main class, the runtime's own main boots the application). For a right-click Run in the IDE or a `VidocqApp`.
-| [[create-open-module]]`--open-module` [.tag-new]#NEW# | Declare an `open module`: every package of the application is open to reflection, so no `opens` line is ever written or asked for — not by `extension add`, `vidocq dev`, `doctor --fix` nor the build check. The simplest choice for an application; a library keeps its packages closed. See xref:java-modules.adoc#open-module[Java modules in a Vidocq application]. `vidocq:create` takes `-DopenModule=true`.
+| [[create-open-module]]`--open-module`| Declare an `open module`: every package of the application is open to reflection, so no `opens` line is ever written or asked for — not by `extension add`, `vidocq dev`, `doctor --fix` nor the build check. The simplest choice for an application; a library keeps its packages closed. See xref:java-modules.adoc#open-module[Java modules in a Vidocq application]. `vidocq:create` takes `-DopenModule=true`.
 |===
 
 [source,bash]
@@ -311,7 +311,7 @@ vidocq create --name my-api -g com.acme -x cassini-rest -x knock-health
 [#create-snapshot]
 ==== Trying a SNAPSHOT
 
-Every build of `main` publishes the Vidocq SNAPSHOTs to the project's own repository [.tag-new]#NEW#, `https://maven.vidocq.dev/snapshots/`, readable without an account, then copies them to Central's snapshot repository, `https://central.sonatype.com/repository/maven-snapshots/`, as before. `https://maven.bak.vidocq.dev/snapshots/` is a full copy of it on another site, synchronised every 10 minutes: declared right after it, as `vidocq-snapshots-bak`, it takes over when the first one is down, since Maven moves on to the next repository after a transfer error. The repository keeps the five latest builds of each SNAPSHOT version, and drops a SNAPSHOT version no build has touched for 30 days. When the parent version is a SNAPSHOT, the generated `pom.xml` declares both repositories, `vidocq-snapshots` then `vidocq-snapshots-bak`, for dependencies and for plugins, with releases disabled: the SNAPSHOT artifacts come from there, everything else from Maven Central. Releases are still published to Maven Central.
+Every build of `main` publishes the Vidocq SNAPSHOTs to the project's own repository, `https://maven.vidocq.dev/snapshots/`, readable without an account, then copies them to Central's snapshot repository, `https://central.sonatype.com/repository/maven-snapshots/`, as before. `https://maven.bak.vidocq.dev/snapshots/` is a full copy of it on another site, synchronised every 10 minutes: declared right after it, as `vidocq-snapshots-bak`, it takes over when the first one is down, since Maven moves on to the next repository after a transfer error. The repository keeps the five latest builds of each SNAPSHOT version, and drops a SNAPSHOT version no build has touched for 30 days. When the parent version is a SNAPSHOT, the generated `pom.xml` declares both repositories, `vidocq-snapshots` then `vidocq-snapshots-bak`, for dependencies and for plugins, with releases disabled: the SNAPSHOT artifacts come from there, everything else from Maven Central. Releases are still published to Maven Central.
 
 A project created before this change declares `central-snapshots` instead: it keeps working, and may add the two repositories above as backups. `vidocq update` looks for a SNAPSHOT CLI on `maven.vidocq.dev`; `VIDOCQ_SNAPSHOTS=https://maven.bak.vidocq.dev/snapshots` points it to the mirror.
 
@@ -366,7 +366,7 @@ Runs `mvn vidocq:test` in the project, through `./mvnw` when there is one: every
 of the main or test sources, without starting the application. `r` runs every test, `f` the failed ones, `q`
 quits. See xref:continuous-testing.adoc[Continuous testing].
 
-`vidocq test --once` [.tag-new]#NEW# is for CI and scripts, which a watch mode never gives back to: it runs every
+`vidocq test --once`is for CI and scripts, which a watch mode never gives back to: it runs every
 test once, stops the dev services, and exits with status 1 when a test fails or the code does not compile, 0
 otherwise (`mvn process-classes vidocq:test -Dvidocq.test.once=true`).
 
@@ -439,7 +439,7 @@ Maven's output streams straight to the terminal.
 | `package` _(default)_ | `mvn package` | Standalone distribution ZIP.
 | `jlink` | `mvn package vidocq:jlink` | Self-contained jlink runtime image (no `java` on target).
 | `jpackage` | `mvn package vidocq:jpackage` | Native installer (`.dmg`/`.deb`/`.msi`) or app-image.
-| `docker` | `mvn package vidocq:jlink vidocq:docker` | Dockerfile around the jlink image, which it builds first [.tag-new]#NEW#; when Docker answers, the image itself (`-Dvidocq.docker.build=true`), linked for Linux even on macOS or Windows. Without Docker, the CLI says the image is not built and how to build it [.tag-new]#NEW#.
+| `docker` | `mvn package vidocq:jlink vidocq:docker` | Dockerfile around the jlink image, which it builds first; when Docker answers, the image itself (`-Dvidocq.docker.build=true`), linked for Linux even on macOS or Windows. Without Docker, the CLI says the image is not built and how to build it.
 |===
 
 Shared options:
@@ -476,11 +476,11 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#extension-goals[`mvn vidocq:add-ex
 | `list [--installed\|--available\|--all] [--refresh]` | List extensions. `--installed` (default) lists the extensions of the project in the current directory; `--available` lists the catalog built into the CLI, by family (Jakarta EE, MicroProfile, Data, Web); `--all` shows both. xref:modules/vidocq-runtime-maven-plugin.adoc#report-goals[`mvn vidocq:list-extensions`] gives the same list.
 | `add <id…>` | Inject the matching `<dependency>` into `pom.xml`, the extension's APT codegen bundle into the compiler's `annotationProcessorPaths` when it ships one, and its directives into `src/main/java/module-info.java`. The dependency and the codegen path carry the parent's version, written out.
 | `remove <id…>` | Remove the matching project-level `<dependency>`, its codegen path and its `module-info.java` directives — undoing `add`. The settings `add` wrote into `vidocq.properties` stay: they are the application's.
-| [[extension-required]] [.tag-new]#NEW# required extensions | An extension may need another to work: `mansart-data` reads the DataSource of `mansart-pool`. `add mansart-data` (and `create -x mansart-data`) adds the pool too, with its dev service, driver and test block, and says so. `remove mansart-data` keeps the pool, which works alone, and names `vidocq extension remove mansart-pool`; removing the pool while `mansart-data` stays warns, as Mansart Data then has no DataSource unless the application produces one. `vidocq doctor` shows **Required extensions** when one is missing.
+| [[extension-required]]required extensions | An extension may need another to work: `mansart-data` reads the DataSource of `mansart-pool`. `add mansart-data` (and `create -x mansart-data`) adds the pool too, with its dev service, driver and test block, and says so. `remove mansart-data` keeps the pool, which works alone, and names `vidocq extension remove mansart-pool`; removing the pool while `mansart-data` stays warns, as Mansart Data then has no DataSource unless the application produces one. `vidocq doctor` shows **Required extensions** when one is missing.
 |===
 
 [#extension-settings]
-`add` also appends the settings an extension needs to `vidocq.properties` [.tag-new]#NEW#, as one block opened by
+`add` also appends the settings an extension needs to `vidocq.properties`, as one block opened by
 `# <id>: settings written by the Vidocq CLI, yours to edit`, written once: a second `add` finds the block, and a key the
 application already sets, active or commented, is left out, so nothing is overwritten. `vidocq create -x` writes the
 same blocks. `{app}` below is the project's artifactId.
@@ -501,7 +501,7 @@ same blocks. `{app}` below is the project's artifactId.
   import naming a file not there yet would stop the dev service. `vidocq doctor` warns until a verification key is
   set (<<doctor-project>>).
 
-| `mansart-pool` [.tag-new]#NEW#
+| `mansart-pool`
 | Comments only: `vidocq.pool.url=jdbc:postgresql://localhost:5432/{app}`, `vidocq.pool.username={app}` and
   `vidocq.pool.password={app}`. The PostgreSQL dev service sets the three keys under `vidocq dev`, `vidocq test`
   and `mvn test`; uncommented, they are the database of `vidocq run` and of the packaged application. A
@@ -566,7 +566,7 @@ module-info.requires = jakarta.cdi, jakarta.inject, jakarta.ws.rs, jakarta.json.
 module-info.opens-application-package = true
 ----
 
-An extension with a dev service names it [.tag-new]#NEW#, and `add` declares it (xref:dev-services.adoc#declared-for-you[Declared for you]):
+An extension with a dev service names it, and `add` declares it (xref:dev-services.adoc#declared-for-you[Declared for you]):
 
 [source,properties]
 ----
@@ -578,7 +578,7 @@ devservice.driver = org.postgresql:postgresql:42.7.10
 devservice.in-tests = true
 ----
 
-Its settings are lines, in key order, which `add` appends as a block to `vidocq.properties` [.tag-new]#NEW#
+Its settings are lines, in key order, which `add` appends as a block to `vidocq.properties`
 (<<extension-settings>>); `{app}` is the project's artifactId:
 
 [source,properties]
@@ -637,7 +637,7 @@ recognize (Vidocq/vidocq#314).
 | Sub-command | Description
 
 | `get <key>` | Print the value bound to `<key>`.
-| `set <key> <value>` | Set `<key>` to `<value>`: its assignment is rewritten in place; else a commented one, `#key=value` as an extension's block writes it, is uncommented in place [.tag-new]#NEW#, under the comment that explains it; else the key is appended.
+| `set <key> <value>` | Set `<key>` to `<value>`: its assignment is rewritten in place; else a commented one, `#key=value` as an extension's block writes it, is uncommented in place, under the comment that explains it; else the key is appended.
 | `list` | Print every `key=value` pair.
 |===
 
@@ -691,11 +691,11 @@ read what the pom and `module-info.java` declare.
 
 | **Codegen bundles** | ✔ every catalog extension the pom declares has its `-codegen` bundle on `annotationProcessorPaths`, or the plugin puts it there (a `vidocq-runtime-parent` from 0.4.0, or the plugin declared with `<extensions>true</extensions>`); ✘ a bundle is missing; ⚠ a bundle whose extension is gone.
 | **Vauban indexer** | ✔ the indexer, `vidocq-runtime-core-codegen`, is on the processor path; ✘ `annotationProcessorPaths` replace the parent's, which hold it, instead of appending (`combine.children="append"`), or, without the Vidocq parent, the pom does not declare it.
-| **Dependency codegen** | [.tag-new]#NEW# ✔ `vidocq:generate` runs on the build: `vidocq-runtime-parent` from 0.4.0 binds it (0.4.0-RC1 aside), or the pom names `<goal>generate</goal>`; ⚠ it does not run, or `vidocq.generate.skip` turns it off — the dependency jars then get no generated code (see xref:modules/vidocq-runtime-maven-plugin.adoc#generate[the `vidocq:generate` goal]).
-| **Module directives** | ✔ `module-info.java` declares the `requires` (and `opens`) of each extension, the `opens` of the resource packages it reads included, such as Flyway's `opens db.migration` [.tag-new]#NEW#, and, once the application is compiled, the `opens` of the packages the runtime reaches by reflection, read from `target/classes` as `vidocq:check-module-info` reads them (entities (Jakarta Data) without a model generated at build time, the types a REST resource returns, interceptors with a private method) [.tag-new]#NEW#; before a compile it says to compile for those; ✘ one is missing, which `vidocq:check-module-info` would fail the build on; ⚠ no `module-info.java`.
-| **Required extensions** [.tag-new]#NEW# | Shown only when a declared extension lacks one it requires: ⚠ `mansart-data needs mansart-pool`. Not fixable: the application may provide it itself, its own `@Produces DataSource` for Mansart Data.
-| **JWT verification** [.tag-new]#NEW# | Shown with `cervantes-jwt`. ✔ `vidocq.properties` sets `mp.jwt.verify.publickey.location` or `mp.jwt.verify.publickey`, in any profile; ⚠ none: the Keycloak dev service sets it under `vidocq dev` and the tests, and production would reject every token. Not fixable: only the application knows its identity provider.
-| **Dev services** [.tag-new]#NEW# | ✔ each extension with a dev service (`mansart-pool`, `cervantes-jwt`, `humboldt-telemetry`) has its provider on `vidocq-runtime-maven-plugin`, the provider and `vidocq-runtime-devservices-junit` in test scope (not for the collector), and, for the pool, a JDBC driver; ⚠ one is missing (xref:dev-services.adoc#declared-for-you[Declared for you]).
+| **Dependency codegen** |✔ `vidocq:generate` runs on the build: `vidocq-runtime-parent` from 0.4.0 binds it (0.4.0-RC1 aside), or the pom names `<goal>generate</goal>`; ⚠ it does not run, or `vidocq.generate.skip` turns it off — the dependency jars then get no generated code (see xref:modules/vidocq-runtime-maven-plugin.adoc#generate[the `vidocq:generate` goal]).
+| **Module directives** | ✔ `module-info.java` declares the `requires` (and `opens`) of each extension, the `opens` of the resource packages it reads included, such as Flyway's `opens db.migration`, and, once the application is compiled, the `opens` of the packages the runtime reaches by reflection, read from `target/classes` as `vidocq:check-module-info` reads them (entities (Jakarta Data) without a model generated at build time, the types a REST resource returns, interceptors with a private method); before a compile it says to compile for those; ✘ one is missing, which `vidocq:check-module-info` would fail the build on; ⚠ no `module-info.java`.
+| **Required extensions**| Shown only when a declared extension lacks one it requires: ⚠ `mansart-data needs mansart-pool`. Not fixable: the application may provide it itself, its own `@Produces DataSource` for Mansart Data.
+| **JWT verification**| Shown with `cervantes-jwt`. ✔ `vidocq.properties` sets `mp.jwt.verify.publickey.location` or `mp.jwt.verify.publickey`, in any profile; ⚠ none: the Keycloak dev service sets it under `vidocq dev` and the tests, and production would reject every token. Not fixable: only the application knows its identity provider.
+| **Dev services**| ✔ each extension with a dev service (`mansart-pool`, `cervantes-jwt`, `humboldt-telemetry`) has its provider on `vidocq-runtime-maven-plugin`, the provider and `vidocq-runtime-devservices-junit` in test scope (not for the collector), and, for the pool, a JDBC driver; ⚠ one is missing (xref:dev-services.adoc#declared-for-you[Declared for you]).
 | **Maven version** | ✔ the wrapper runs the Maven Vidocq is built with, or a newer one; ⚠ an older one. Shown when the project has a wrapper.
 | **HTTP port** | ✔ the port of `vidocq.chappe.listener.default.port`, else `vidocq.http.port`, else 8080, is free; ⚠ something listens there.
 |===
@@ -705,14 +705,14 @@ A fixable ✘ or ⚠ is followed by `↳ Fix: vidocq doctor --fix`. `--fix` firs
 * it wires the missing codegen bundles and removes those whose extension is gone, without a `<version>` when the BOM
   versions them; under a parent that wires them, it adds none;
 * it makes `annotationProcessorPaths` append to the parent's, or declares the indexer without the Vidocq parent;
-* it declares what the dev services of the extensions need, as `vidocq extension add` does [.tag-new]#NEW#;
+* it declares what the dev services of the extensions need, as `vidocq extension add` does;
 * it adds the missing `module-info.java` directives, each marked `// vidocq:<id>`, as `vidocq extension add` does,
-  and creates the folder of a resource package it opens, such as `src/main/resources/db/migration` [.tag-new]#NEW#;
-* it opens the packages the runtime reaches by reflection, in the block `vidocq:complete-module-info` writes [.tag-new]#NEW#;
+  and creates the folder of a resource package it opens, such as `src/main/resources/db/migration`;
+* it opens the packages the runtime reaches by reflection, in the block `vidocq:complete-module-info` writes;
 * it writes a missing Maven wrapper, and moves an older wrapper to the Maven Vidocq is built with.
 
 [#module-info-layout]
-[.tag-new]#NEW# The tooling keeps `module-info.java` in one layout, whatever wrote it last: the lines of each extension,
+The tooling keeps `module-info.java` in one layout, whatever wrote it last: the lines of each extension,
 marked `// vidocq:<id>`, together after the lines you wrote; then one block, last, of the packages opened for
 reflection, under `// added by vidocq: the runtime reaches these packages by reflection`, each marked
 `// vidocq:reflection`. `vidocq extension add` puts its lines with the other extensions', and `doctor --fix`,
@@ -722,7 +722,7 @@ merged into that layout on the next write.
 
 A created project reports no warning. `doctor` asks for the `opens` the catalog extensions need, Flyway's
 `opens db.migration` included, and for those of the packages reached by reflection, with the same code as
-`vidocq:check-module-info` at `process-classes` [.tag-new]#NEW#; an extension
+`vidocq:check-module-info` at `process-classes`; an extension
 outside the catalog is known to the build only, through the descriptors of the resolved dependencies, and
 `vidocq:complete-module-info` adds what they ask for. `doctor` does not summarise `vidocq:analyze-deps` either: that
 report needs the compiled classes.

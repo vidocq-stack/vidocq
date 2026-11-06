@@ -51,12 +51,12 @@ mvn process-classes vidocq:test                                       # the test
 
 Both goals read `target/classes/vidocq.properties` when they open the dev services, so run `process-classes` first:
 on a clean project, `vidocq:test` alone found no configuration, and the Keycloak dev service fell back to the
-`master` realm. `vidocq test` and `vidocq dev` do it for you [.tag-new]#NEW#.
+`master` realm. `vidocq test` and `vidocq dev` do it for you.
 
 [#once]
 == One run, for CI and scripts
 
-`vidocq:test` watches, so it never ends by itself. `vidocq test --once` [.tag-new]#NEW# runs every test once instead:
+`vidocq:test` watches, so it never ends by itself. `vidocq test --once`runs every test once instead:
 the dev services start as usual, the tests run, the dev services stop, and the command exits with status 0 when
 they passed (or there was none to run), 1 when a test failed or the code does not compile.
 
@@ -175,7 +175,7 @@ a key) or `rerun-failed`. A message is the first line of the exception's message
 == The terminal
 
 `vidocq:dev` prints one line for a green run, among the application's own output. When tests fail, it adds a line
-per failure, with where the test failed, and the log [.tag-new]#NEW#:
+per failure, with where the test failed, and the log:
 
 ----
 [INFO] Tests: 41 passed, 1 failed, 0 skipped in 3.2 s (change)
@@ -192,7 +192,7 @@ Log: target/vidocq-dev-tests.log   [r] run all  [f] rerun failed  [q] quit
 ----
 
 The location in parentheses is the first frame of the test's own class in the stack trace, so it points at the
-failing assertion rather than at JUnit [.tag-new]#NEW#. A compilation failure, another failure before the tests, a run with no test and a cancelled run each print one line, such as
+failing assertion rather than at JUnit. A compilation failure, another failure before the tests, a run with no test and a cancelled run each print one line, such as
 `Tests: compilation failed (change), see target/vidocq-dev-tests.log` or `Tests: the run failed (change), see target/vidocq-dev-tests.log`.
 
 With a console attached, `vidocq:test` reads a key per line — type the key, then Enter:

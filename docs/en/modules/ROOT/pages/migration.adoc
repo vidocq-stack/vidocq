@@ -295,13 +295,13 @@ application that declares the extension without it:
 * `vidocq-runtime-dirac-metrics-extension` → `vidocq-runtime-dirac-metrics-extension-codegen`;
 * `vidocq-runtime-grimm-openapi-extension` → `vidocq-runtime-grimm-openapi-extension-codegen`.
 * `vidocq-runtime-heisenberg-fault-tolerance-extension` → `vidocq-runtime-heisenberg-fault-tolerance-extension-codegen`
-  [.tag-new]#NEW#: Heisenberg's processor writes the Fault Tolerance annotations of each bean into a companion.
-* `vidocq-runtime-cervantes-jwt-extension` → `vidocq-runtime-cervantes-jwt-extension-codegen` [.tag-new]#NEW#: Vauban
+ : Heisenberg's processor writes the Fault Tolerance annotations of each bean into a companion.
+* `vidocq-runtime-cervantes-jwt-extension` → `vidocq-runtime-cervantes-jwt-extension-codegen`: Vauban
   runs Cervantes' Build Compatible Extension when the application compiles.
 
-The Metrics bundle now also brings its extension's Build Compatible Extension, `DiracExtension` [.tag-new]#NEW#:
+The Metrics bundle now also brings its extension's Build Compatible Extension, `DiracExtension`:
 without it, Vauban warned at each build that the extension was on the module path only and would not run. The
-OpenAPI bundle brings `GrimmExtension` the same way [.tag-new]#NEW#.
+OpenAPI bundle brings `GrimmExtension` the same way.
 
 Add each one to the compiler's `annotationProcessorPaths`, as in xref:#config-rest-client-codegen[the previous
 section]; `checkpom` prints the `<path>` to paste, and `vidocq extension add` writes it. See
