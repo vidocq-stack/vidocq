@@ -5,7 +5,7 @@
     <parent>
         <groupId>io.vidocq.heisenberg</groupId>
         <artifactId>heisenberg-parent</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.4.0-RC2</version>
     </parent>
 
     <artifactId>heisenberg-processor</artifactId>
