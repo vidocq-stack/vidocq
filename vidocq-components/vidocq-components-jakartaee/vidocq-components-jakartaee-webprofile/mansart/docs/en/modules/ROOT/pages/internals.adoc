@@ -5,7 +5,7 @@
 This page describes what happens when the application calls `authors.findByName("Sylvie Germain")`: from the CDI proxy down to the pool, through JDQL → SQL translation and ResultSet → entity materialization. It is also the right place to understand **why** Mansart favors static codegen.
 
 [#generated-code]
-== Generated code and reflective fallback [.tag-new]#NEW#
+== Generated code and reflective fallback
 
 Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
 looks it up at run time, and what runs instead when it is missing. For Mansart (Jakarta Data) that is the

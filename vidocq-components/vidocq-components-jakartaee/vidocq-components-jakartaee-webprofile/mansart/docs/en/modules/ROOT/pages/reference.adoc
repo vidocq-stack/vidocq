@@ -73,7 +73,7 @@ Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Gett
 All modules are strict Java Modules — minimal `exports`, no unjustified `opens`, no classpath.
 
 [#application-modules]
-=== Your entities and repositories need no `opens` [.tag-new]#NEW#
+=== Your entities and repositories need no `opens`
 
 Mansart reaches an application's entities and repositories without reflection, so a named application module needs neither `opens` nor `exports` for their packages:
 
@@ -83,7 +83,7 @@ Mansart reaches an application's entities and repositories without reflection, s
 
 Reflection remains the fallback where the generated code is absent: an entity or repository compiled without `mansart-data-processor`, or a container that does not load the service (Weld, Open Liberty — reflection is fine there). A repository served on the run-time path says so once, at start-up, with its cause.
 
-[.tag-new]#NEW# The calls that stay reflective are made once, not on every call or for every class:
+The calls that stay reflective are made once, not on every call or for every class:
 
 * a JDQL statement the processor leaves to the run time (an arithmetic `UPDATE`, for instance) finds its repository method once, in a holder class of the generated method;
 * `@Transactional` resolves the annotation of a method once per bean class and method, then reads it from a cache;
@@ -92,10 +92,10 @@ Reflection remains the fallback where the generated code is absent: an entity or
 [#bean-archives]
 === Bean archives
 
-`mansart-data-cdi` and `mansart-transactions-cdi` are explicit bean archives. Each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A CDI container that does not scan implicit archives, such as Weld SE by default, therefore treats them as bean archives too. The default `RepositoryRuntime` producer (`MansartRuntimeProducer`) does not depend on discovery mode: the `mansart-data-cdi` extension adds it at `@Discovery`. [.tag-new]#NEW# So does `mansart-transactions-cdi` for its `TransactionManager` producer and its six `@Transactional` interceptors; its `beans.xml` excludes its own package from the scan, so a container that also scans the archive does not declare them twice.
+`mansart-data-cdi` and `mansart-transactions-cdi` are explicit bean archives. Each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A CDI container that does not scan implicit archives, such as Weld SE by default, therefore treats them as bean archives too. The default `RepositoryRuntime` producer (`MansartRuntimeProducer`) does not depend on discovery mode: the `mansart-data-cdi` extension adds it at `@Discovery`.So does `mansart-transactions-cdi` for its `TransactionManager` producer and its six `@Transactional` interceptors; its `beans.xml` excludes its own package from the scan, so a container that also scans the archive does not declare them twice.
 
 [#other-cdi-containers]
-=== Other CDI containers [.tag-new]#NEW#
+=== Other CDI containers
 
 The Mansart jars run unchanged on CDI containers other than Vauban. Under Vidocq, the repository implementations, the `RepositoryRuntime` producer and the `@Transactional` interceptors are generated at build time, and neither `mansart-data-cdi` nor `mansart-transactions-cdi` opens a package. On another container the same jars take the standard route — the build compatible extensions run there, and the container reaches the beans by reflection, which is its own business.
 
@@ -123,7 +123,7 @@ What the jars rely on:
 Entities use the **standard `jakarta.persistence` annotations**: `@Entity`, `@Table`, `@Id`, `@GeneratedValue`, `@Column`, `@Version`, `@Enumerated`, `@Embedded`/`@Embeddable`, `@ManyToOne`, `@OneToOne`, `@JoinColumn`, `@Transient`. The processor reads them at compile time; no other annotation set is recognized (the early zero-dep Mansart annotations were retired in M7-29).
 
 [#table-names]
-=== Table and column names [.tag-new]#NEW#
+=== Table and column names
 
 Mansart chooses table and column names itself; the annotations change them.
 
@@ -151,7 +151,7 @@ or give the existing one with @Table(name = "…") on Book.
 ----
 
 [#migration-check]
-==== Checked at build time [.tag-new]#NEW#
+==== Checked at build time
 
 When the application ships Flyway SQL migrations, the annotation processor reads them and warns, while compiling, about an entity whose table none of them creates — the usual case being a table made after the class name:
 

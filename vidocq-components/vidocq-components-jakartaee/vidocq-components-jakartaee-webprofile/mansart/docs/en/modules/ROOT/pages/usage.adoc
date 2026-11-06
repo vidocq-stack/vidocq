@@ -21,9 +21,9 @@ public interface AuthorRepository extends CrudRepository<Author, Long> {
 
 === Derived queries (by method name)
 
-Mansart parses the name into a neutral AST, then produces SQL via the target dialect. Supported keywords: `findBy`, `existsBy`, `countBy`, `deleteBy`, operators `And`, `Or`, `Not`, `Like`, `StartsWith`, `EndsWith`, `Contains`, `Between`, `In`, `LessThan`, `GreaterThan`, `LessThanEqual`, `GreaterThanEqual`, `True`, `False`, `Empty`, `Null` [.tag-new]#NEW# (also written `IsNull`), `NotNull`, `IgnoreCase`, `OrderBy<Asc|Desc>`.
+Mansart parses the name into a neutral AST, then produces SQL via the target dialect. Supported keywords: `findBy`, `existsBy`, `countBy`, `deleteBy`, operators `And`, `Or`, `Not`, `Like`, `StartsWith`, `EndsWith`, `Contains`, `Between`, `In`, `LessThan`, `GreaterThan`, `LessThanEqual`, `GreaterThanEqual`, `True`, `False`, `Empty`, `Null`(also written `IsNull`), `NotNull`, `IgnoreCase`, `OrderBy<Asc|Desc>`.
 
-[[unresolved-methods]]A repository method the annotation processor derives no query from fails the build [.tag-new]#NEW#: _Mansart could not derive a query for '…'_. Fix the name, or write a `@Query`. The processor option `-Amansart.unresolvedMethods=warn` turns the error back into a warning, and the generated method then throws `UnsupportedOperationException` when called.
+[[unresolved-methods]]A repository method the annotation processor derives no query from fails the build: _Mansart could not derive a query for '…'_. Fix the name, or write a `@Query`. The processor option `-Amansart.unresolvedMethods=warn` turns the error back into a warning, and the generated method then throws `UnsupportedOperationException` when called.
 
 [source,java]
 ----
@@ -44,7 +44,7 @@ long deleteByName(String name);
 List<Book> find(String title, Author author);
 ----
 
-Each parameter is an equality match on the attribute that `@By` names, or else on the attribute of the parameter's own name (compile with `-parameters`). [.tag-new]#NEW# A repository compiled without `-parameters` has no names to match: each parameter then binds to the entity's only attribute of its type, and when there are several, or none, the build — or, on the run-time path, the creation of the repository — fails naming the method, instead of running a query without that condition. The annotation processor compiles `@Find` methods: `@OrderBy` gives the order, a trailing `PageRequest` pages the result, and a method without parameters returns every entity. A `Sort`, `Order` or `Limit` parameter is not supported yet: the build warns, naming the method. Range conditions (`Between`, `LessThan`, …) belong to derived method names such as `findByPublishedOnBetween(from, to)`, which the APT compiles too.
+Each parameter is an equality match on the attribute that `@By` names, or else on the attribute of the parameter's own name (compile with `-parameters`).A repository compiled without `-parameters` has no names to match: each parameter then binds to the entity's only attribute of its type, and when there are several, or none, the build — or, on the run-time path, the creation of the repository — fails naming the method, instead of running a query without that condition. The annotation processor compiles `@Find` methods: `@OrderBy` gives the order, a trailing `PageRequest` pages the result, and a method without parameters returns every entity. A `Sort`, `Order` or `Limit` parameter is not supported yet: the build warns, naming the method. Range conditions (`Between`, `LessThan`, …) belong to derived method names such as `findByPublishedOnBetween(from, to)`, which the APT compiles too.
 
 [source,java]
 ----
@@ -200,7 +200,7 @@ NOTE: Repositories routed via `dataStore` are built by the repository factory wi
 In dev mode, the runtime's PostgreSQL Dev Service can provision one disposable container per declared datasource name — nothing to install or configure. See `DEV_SERVICES.md` in the {repo-vidocq}[Vidocq runtime repo].
 
 [#dependency-repositories]
-== Repositories shipped in a library [.tag-new]#NEW#
+== Repositories shipped in a library
 
 A library compiled against the Jakarta Data API — by a third party, without Mansart's processor — can ship `@Repository` interfaces with no implementation. Mansart implements them as it does the application's own:
 
