@@ -20,6 +20,7 @@
 package io.vidocq.runtime.cli;
 
 import io.vidocq.runtime.cli.completion.Shell;
+import io.vidocq.runtime.cli.update.UpdatePlan;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -27,6 +28,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CliParserM5Test {
 
@@ -78,6 +80,25 @@ class CliParserM5Test {
                 CliParser.parse(new String[]{"update"})).checkOnly());
         assertEquals(true, assertInstanceOf(Command.Update.class,
                 CliParser.parse(new String[]{"update", "--check"})).checkOnly());
+    }
+
+    @Test
+    void updateChannelOptions() {
+        assertEquals(UpdatePlan.Channel.INSTALLED, assertInstanceOf(Command.Update.class,
+                CliParser.parse(new String[]{"update"})).channel());
+        assertEquals(UpdatePlan.Channel.RELEASE, assertInstanceOf(Command.Update.class,
+                CliParser.parse(new String[]{"update", "--release"})).channel());
+        var snapshotCheck = assertInstanceOf(Command.Update.class,
+                CliParser.parse(new String[]{"update", "--check", "--snapshot"}));
+        assertEquals(UpdatePlan.Channel.SNAPSHOT, snapshotCheck.channel());
+        assertEquals(true, snapshotCheck.checkOnly());
+    }
+
+    @Test
+    void updateReleaseAndSnapshotAreMutuallyExclusive() {
+        var e = assertThrows(CliException.class,
+                () -> CliParser.parse(new String[]{"update", "--release", "--snapshot"}));
+        assertTrue(e.getMessage().contains("--release") && e.getMessage().contains("--snapshot"));
     }
 
     @Test

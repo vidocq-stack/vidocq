@@ -23,6 +23,7 @@ import io.vidocq.runtime.cli.build.BuildType;
 import io.vidocq.runtime.cli.completion.Shell;
 import io.vidocq.runtime.cli.spi.CliPlugins;
 import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
+import io.vidocq.runtime.cli.update.UpdatePlan;
 import io.vidocq.runtime.tooling.ProjectSpec;
 
 import java.nio.file.Path;
@@ -330,14 +331,22 @@ public final class CliParser {
 
     private static Command.Update parseUpdate(String[] args, int from) {
         boolean check = false;
+        boolean release = false;
+        boolean snapshot = false;
         for (String arg : Arrays.asList(args).subList(from, args.length)) {
-            if (CHECK.equals(arg)) {
-                check = true;
-            } else {
-                unknownOpt(arg, UPDATE);
+            switch (arg) {
+                case CHECK -> check = true;
+                case "--release" -> release = true;
+                case "--snapshot" -> snapshot = true;
+                default -> unknownOpt(arg, UPDATE);
             }
         }
-        return new Command.Update(check);
+        if (release && snapshot) {
+            throw new CliException("'update' takes --release or --snapshot, not both.");
+        }
+        UpdatePlan.Channel channel = release ? UpdatePlan.Channel.RELEASE
+                : snapshot ? UpdatePlan.Channel.SNAPSHOT : UpdatePlan.Channel.INSTALLED;
+        return new Command.Update(check, channel);
     }
 
     private static Command parseCompletion(String[] args, int from) {
@@ -426,7 +435,7 @@ public final class CliParser {
         cmd("extension add",    "Add extensions to the current project's pom.xml.");
         cmd("extension remove", "Remove extensions from the current project's pom.xml.");
         cmd("config get|set|list", "Read or write keys in vidocq.properties.");
-        cmd("update [--check]",    "Update the CLI: latest release, or latest SNAPSHOT build.");
+        cmd("update [--check] [--release|--snapshot]", "Update the CLI: latest release, or latest SNAPSHOT build.");
         cmd("completion bash|zsh", "Print a shell completion script.");
         cmd("completion install",  "Enable completion in your shell's rc file (uninstall to undo).");
         cmd("help [command]",   "Show detailed help for a specific command.");
@@ -584,8 +593,13 @@ public final class CliParser {
                 CliOutput.println("in ~/.vidocq/cli, the 'vidocq' launcher is pointed at it, and an installed");
                 CliOutput.println("completion script is regenerated.");
                 CliOutput.println();
+                CliOutput.println("--release and --snapshot switch channel whatever the installed one is: a");
+                CliOutput.println("SNAPSHOT CLI moves to the latest release, a release CLI to the latest SNAPSHOT.");
+                CliOutput.println();
                 CliOutput.println(OPTIONS);
-                CliOutput.println("  --check    Only report whether an update is available");
+                CliOutput.println("  --check      Only report what would be installed");
+                CliOutput.println("  --release    Switch to (or stay on) the latest release");
+                CliOutput.println("  --snapshot   Switch to (or stay on) the latest SNAPSHOT build");
                 CliOutput.println();
                 CliOutput.println("Environment: VIDOCQ_CENTRAL, VIDOCQ_SNAPSHOTS (repository mirrors),");
                 CliOutput.println("             VIDOCQ_BIN (launcher directory, default ~/.local/bin)");

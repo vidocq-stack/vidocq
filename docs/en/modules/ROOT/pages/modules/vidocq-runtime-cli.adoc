@@ -258,8 +258,8 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | `vidocq completion install\|uninstall [bash\|zsh]`
 | Set up (or remove) completion in your shell's rc file (see <<completion>>).
 
-| `vidocq update [--check]`
-| Update the CLI itself to the latest release, or the latest SNAPSHOT build (see <<update>>).
+| `vidocq update [--check] [--release\|--snapshot]`
+| Update the CLI itself to the latest release, or the latest SNAPSHOT build; `--release` / `--snapshot` switch channel (see <<update>>).
 
 | `vidocq help [command]`
 | Show the command list or detailed help for one command.
@@ -781,6 +781,27 @@ an installed completion script is regenerated. Earlier versions stay where they 
 vidocq update --check   # only report
 vidocq update
 ----
+
+[#update-channel]
+==== Switching channel [.tag-new]#NEW#
+
+Without an option, `vidocq update` stays on the channel of the installed CLI. `--release` and `--snapshot` switch
+explicitly, whatever is installed:
+
+[source,bash]
+----
+vidocq update --release            # the latest release of Maven Central, from a SNAPSHOT CLI too
+vidocq update --snapshot           # the latest SNAPSHOT build, from a release CLI too
+vidocq update --check --release    # report what would be installed, install nothing
+----
+
+* `--release` installs the latest release even when it is older than the SNAPSHOT line installed
+  (`0.4.0-SNAPSHOT` → `0.3.0`); on the latest release it reports that it is up to date.
+* `--snapshot` installs the latest build of the highest SNAPSHOT line, and records the build as usual.
+* The two options exclude each other: giving both is a usage error. `--check` reports the version and, for a
+  SNAPSHOT, the build the command would install.
+
+The once-a-day xref:#update-notice[update notice] is not affected: it only looks at the installed channel.
 
 `VIDOCQ_CENTRAL` and `VIDOCQ_SNAPSHOTS` point it at repository mirrors, as for `install.sh`.
 

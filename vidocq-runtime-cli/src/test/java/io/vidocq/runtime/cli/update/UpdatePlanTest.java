@@ -142,4 +142,69 @@ class UpdatePlanTest {
 
         assertInstanceOf(UpdatePlan.Unavailable.class, plan("0.4.0-SNAPSHOT", null));
     }
+
+    private UpdatePlan.Decision plan(String current, String marker, UpdatePlan.Channel channel) {
+        return UpdatePlan.plan(current, Optional.ofNullable(marker), "",
+                url -> Optional.ofNullable(remote.get(url)), CENTRAL, SNAPSHOTS, channel);
+    }
+
+    @Test
+    void releaseChannelMovesASnapshotToTheLatestRelease() {
+        release("0.3.0");
+
+        var update = assertInstanceOf(UpdatePlan.Update.class,
+                plan("0.4.0-SNAPSHOT", "20261006.103352-3", UpdatePlan.Channel.RELEASE));
+        assertEquals("0.3.0", update.version());
+        assertEquals(CENTRAL + "/0.3.0/vidocq-runtime-cli-0.3.0-cli.zip", update.zipUrl());
+        assertTrue(update.build().isEmpty());
+    }
+
+    @Test
+    void releaseChannelOnTheLatestReleaseIsUpToDate() {
+        release("0.3.0");
+
+        assertInstanceOf(UpdatePlan.UpToDate.class, plan("0.3.0", null, UpdatePlan.Channel.RELEASE));
+    }
+
+    @Test
+    void releaseChannelOnAReleaseBehavesAsDefault() {
+        release("0.4.0");
+
+        assertEquals(plan("0.3.0", null), plan("0.3.0", null, UpdatePlan.Channel.RELEASE));
+    }
+
+    @Test
+    void releaseChannelReportsAnUnreachableRepository() {
+        assertInstanceOf(UpdatePlan.Unavailable.class,
+                plan("0.4.0-SNAPSHOT", null, UpdatePlan.Channel.RELEASE));
+    }
+
+    @Test
+    void snapshotChannelMovesAReleaseToTheLatestSnapshot() {
+        snapshots(List.of("0.4.0-SNAPSHOT"), "0.4.0-SNAPSHOT", "0.4.0-20261006.103352-3");
+
+        var update = assertInstanceOf(UpdatePlan.Update.class,
+                plan("0.4.0", null, UpdatePlan.Channel.SNAPSHOT));
+        assertEquals("0.4.0-SNAPSHOT", update.version());
+        assertEquals(Optional.of("0.4.0-20261006.103352-3"), update.build());
+    }
+
+    @Test
+    void snapshotChannelOnASnapshotBehavesAsDefault() {
+        snapshots(List.of("0.4.0-SNAPSHOT"), "0.4.0-SNAPSHOT", "0.4.0-20261006.103352-3");
+
+        assertEquals(plan("0.4.0-SNAPSHOT", null), plan("0.4.0-SNAPSHOT", null, UpdatePlan.Channel.SNAPSHOT));
+    }
+
+    @Test
+    void snapshotChannelReportsAnUnreachableRepository() {
+        assertInstanceOf(UpdatePlan.Unavailable.class, plan("0.3.0", null, UpdatePlan.Channel.SNAPSHOT));
+    }
+
+    @Test
+    void defaultChannelKeepsTheInstalledOne() {
+        release("0.4.0");
+
+        assertEquals(plan("0.3.0", null), plan("0.3.0", null, UpdatePlan.Channel.INSTALLED));
+    }
 }

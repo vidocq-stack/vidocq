@@ -39,6 +39,10 @@ import java.util.regex.Pattern;
  *       a CLI built locally from newer sources is never downgraded.</li>
  * </ul>
  *
+ * <p>A {@link Channel} other than {@link Channel#INSTALLED} switches channel regardless of the installed one: a
+ * SNAPSHOT moves to the latest release (even an older one than the SNAPSHOT line), a release to the latest
+ * SNAPSHOT build.</p>
+ *
  * <p>Pure: metadata is read through the injected {@code fetch}.</p>
  */
 public final class UpdatePlan {
@@ -51,6 +55,16 @@ public final class UpdatePlan {
     private static final Pattern CLI_ZIP = Pattern.compile(
             "<snapshotVersion>\\s*<classifier>cli</classifier>\\s*<extension>zip</extension>"
                     + "\\s*<value>\\s*([^<\\s]+)\\s*</value>(?:\\s*<updated>\\s*(\\d{14})\\s*</updated>)?");
+
+    /** Which channel to follow. */
+    public enum Channel {
+        /** The channel of the installed CLI: releases for a release, SNAPSHOTs for a SNAPSHOT. */
+        INSTALLED,
+        /** The latest release of Maven Central, whatever is installed. */
+        RELEASE,
+        /** The latest SNAPSHOT build, whatever is installed. */
+        SNAPSHOT
+    }
 
     /** What to do. */
     public sealed interface Decision {}
@@ -81,20 +95,34 @@ public final class UpdatePlan {
     public static Decision plan(String current, Optional<String> installedBuild, String builtAt,
                                 Function<String, Optional<String>> fetch,
                                 String central, String snapshots) {
-        return current.endsWith(SNAPSHOT)
-                ? planSnapshot(current, installedBuild, builtAt, fetch, snapshots)
-                : planRelease(current, fetch, central);
+        return plan(current, installedBuild, builtAt, fetch, central, snapshots, Channel.INSTALLED);
+    }
+
+    /**
+     * As {@link #plan(String, Optional, String, Function, String, String)}, on the given {@code channel}.
+     */
+    public static Decision plan(String current, Optional<String> installedBuild, String builtAt,
+                                Function<String, Optional<String>> fetch,
+                                String central, String snapshots, Channel channel) {
+        boolean snapshot = current.endsWith(SNAPSHOT);
+        return switch (channel) {
+            case RELEASE -> planRelease(current, fetch, central, snapshot);
+            case SNAPSHOT -> planSnapshot(current, installedBuild, builtAt, fetch, snapshots, !snapshot);
+            case INSTALLED -> snapshot
+                    ? planSnapshot(current, installedBuild, builtAt, fetch, snapshots, false)
+                    : planRelease(current, fetch, central, false);
+        };
     }
 
     private static Decision planRelease(String current, Function<String, Optional<String>> fetch,
-                                        String central) {
+                                        String central, boolean switching) {
         String url = central + MAVEN_METADATA;
         Optional<String> latest = fetch.apply(url).flatMap(xml -> first(RELEASE, xml));
         if (latest.isEmpty()) {
             return new Unavailable("no release found at " + url);
         }
         String version = latest.get();
-        if (compare(version, current) <= 0) {
+        if (switching ? version.equals(current) : compare(version, current) <= 0) {
             return new UpToDate(current);
         }
         return new Update(version, central + "/" + version + "/" + ARTIFACT + "-" + version + "-cli.zip",
@@ -102,7 +130,8 @@ public final class UpdatePlan {
     }
 
     private static Decision planSnapshot(String current, Optional<String> installedBuild, String builtAt,
-                                         Function<String, Optional<String>> fetch, String snapshots) {
+                                         Function<String, Optional<String>> fetch, String snapshots,
+                                         boolean switching) {
         String url = snapshots + MAVEN_METADATA;
         Optional<String> highest = fetch.apply(url).flatMap(xml -> VERSION.matcher(xml).results()
                 .map(m -> m.group(1))
@@ -111,7 +140,7 @@ public final class UpdatePlan {
         if (highest.isEmpty()) {
             return new Unavailable("no SNAPSHOT found at " + url);
         }
-        String line = compare(highest.get(), current) > 0 ? highest.get() : current;
+        String line = switching || compare(highest.get(), current) > 0 ? highest.get() : current;
         String lineUrl = snapshots + "/" + line + MAVEN_METADATA;
         Optional<Matcher> zip = fetch.apply(lineUrl).map(CLI_ZIP::matcher).filter(Matcher::find);
         if (zip.isEmpty()) {

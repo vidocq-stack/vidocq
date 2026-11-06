@@ -470,7 +470,7 @@ public final class CommandRunner {
         CliOutput.info("Current: " + Version.cliDisplay()
                 + CliInstaller.installedBuild(installed).map(b -> " — build " + b).orElse(""));
         try (HttpDownloads http = new HttpDownloads()) {
-            var decision = updatePlan(installed, http);
+            var decision = updatePlan(installed, http, update.channel());
             switch (decision) {
                 case UpdatePlan.UpToDate(var current) -> {
                     CliOutput.success("Already up to date: " + current);
@@ -483,7 +483,12 @@ public final class CommandRunner {
                 case UpdatePlan.Update(var version, var zipUrl, var build) -> {
                     String label = version + build.map(b -> " (build " + b + ")").orElse("");
                     if (update.checkOnly()) {
-                        CliOutput.info("Update available: " + label + " — run 'vidocq update'.");
+                        CliOutput.info("Update available: " + label + " — run 'vidocq update"
+                                + switch (update.channel()) {
+                                    case RELEASE -> " --release";
+                                    case SNAPSHOT -> " --snapshot";
+                                    case INSTALLED -> "";
+                                } + "'.");
                         return 0;
                     }
                     CliOutput.info("Downloading " + zipUrl);
@@ -510,12 +515,13 @@ public final class CommandRunner {
     }
 
     /** What {@code vidocq update} would install in place of the CLI installed in {@code installed}. */
-    private static UpdatePlan.Decision updatePlan(Path installed, HttpDownloads http) {
+    private static UpdatePlan.Decision updatePlan(Path installed, HttpDownloads http,
+                                                 UpdatePlan.Channel channel) {
         String central = env("VIDOCQ_CENTRAL", "https://repo1.maven.org/maven2") + CLI_PATH;
         String snapshots = env("VIDOCQ_SNAPSHOTS",
                 "https://maven.vidocq.dev/snapshots") + CLI_PATH;
         return UpdatePlan.plan(Version.cli(), CliInstaller.installedBuild(installed), Version.buildTimestamp(),
-                http::fetch, central, snapshots);
+                http::fetch, central, snapshots, channel);
     }
 
     /**
@@ -537,7 +543,7 @@ public final class CommandRunner {
         }
         return UpdateNotice.start(() -> {
             try (HttpDownloads http = new HttpDownloads()) {
-                return updatePlan(installed, http);
+                return updatePlan(installed, http, UpdatePlan.Channel.INSTALLED);
             }
         });
     }

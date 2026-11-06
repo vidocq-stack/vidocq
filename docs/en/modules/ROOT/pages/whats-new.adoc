@@ -4,4 +4,6 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
-_Nothing documented yet for this cycle. Add entries here (and place [.tag-new]#NEW# badges on the relevant pages) as features land on main._
+== CLI
+
+* xref:modules/vidocq-runtime-cli.adoc#update-channel[`vidocq update --release` and `vidocq update --snapshot`] [.tag-new]#NEW# — switch the CLI to the latest release or the latest SNAPSHOT build whatever channel is installed (a `0.4.0-SNAPSHOT` CLI can move to the latest release, a release to the latest SNAPSHOT). They are mutually exclusive, combine with `--check`, and complete after `vidocq update`.

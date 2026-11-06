@@ -112,6 +112,11 @@ class CompletionSpecTest {
     }
 
     @Test
+    void updateOffersItsChannelOptions() {
+        assertEquals(List.of("--check", "--release", "--snapshot"), after("update"));
+    }
+
+    @Test
     void unknownCommandOffersNothing() {
         assertTrue(after("frobnicate").isEmpty());
     }

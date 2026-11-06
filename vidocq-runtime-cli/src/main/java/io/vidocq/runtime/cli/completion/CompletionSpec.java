@@ -88,7 +88,7 @@ public final class CompletionSpec {
                     "--open-module"),
             "build", List.of("--offline", "--skip-tests", "--dry-run"),
             "clean", List.of("--offline", "--dry-run"),
-            "update", List.of(CHECK),
+            "update", List.of(CHECK, "--release", "--snapshot"),
             "extension list", List.of("--installed", "--available", "--all", "--refresh"),
             "extension add", List.of(ADDABLE_EXTENSIONS),
             "extension remove", List.of(POM_EXTENSIONS));

@@ -136,7 +136,7 @@ public sealed interface Command {
     record Completion(Shell shell) implements Command {}
 
     /** {@code update [--check]}: install the latest CLI of the running one's channel. */
-    record Update(boolean checkOnly) implements Command {}
+    record Update(boolean checkOnly, io.vidocq.runtime.cli.update.UpdatePlan.Channel channel) implements Command {}
 
     /** {@code completion install|uninstall [shell]}; a {@code null} shell is read from {@code $SHELL}. */
     record CompletionSetup(Shell shell, boolean install) implements Command {}
