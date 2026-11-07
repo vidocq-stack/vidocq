@@ -54,8 +54,12 @@ public final class CodegenPathsParticipant extends AbstractMavenLifecyclePartici
             CodegenPaths.wire(project.getModel());
             List<String> completed = ApplicationBuild.complete(project.getModel());
             if (!completed.isEmpty()) {
-                LOG.info("[vidocq] {}: no Vidocq parent in the pom, the plugin adds {}", project.getArtifactId(),
-                        String.join(", ", completed));
+                if (LOG.isInfoEnabled()) {
+                    LOG.info("[vidocq] {}: no Vidocq parent in the pom, the plugin adds {}", project.getArtifactId(),
+                            String.join(", ", completed));
+                }
+                // For vidocq:checkpom, which asks the pom for what an IDE reads there and the plugin cannot give it.
+                project.setContextValue(ApplicationBuild.CONTEXT_KEY, completed);
             }
             skipBuildIdentityWithoutCommit(project);
         }

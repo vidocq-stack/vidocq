@@ -195,6 +195,23 @@ public class VidocqCheckPomMojo extends AbstractMojo {
     }
 
     /**
+     * Vidocq/vidocq#380: without the parent, the plugin gives the build Java {@value ApplicationBuild#JAVA_RELEASE}
+     * when the pom sets no release, and Maven, m2e (Eclipse, VS Code) and {@code vidocq:*} all see it. IntelliJ IDEA
+     * reads the language level from the pom alone and shows Java 8: the warning names the line to add. Nothing when
+     * the pom, or a parent, sets the release.
+     */
+    static Optional<String> findReleaseIntelliJReadsFromThePom(MavenProject project) {
+        if (!ApplicationBuild.addedTheRelease(project.getContextValue(ApplicationBuild.CONTEXT_KEY))) {
+            return Optional.empty();
+        }
+        return Optional.of(LOG_PREFIX + "the pom has no Vidocq parent and sets no Java release: the plugin gives the"
+                + " build Java " + ApplicationBuild.JAVA_RELEASE + ", which IntelliJ IDEA does not read (it takes the"
+                + " language level from the pom alone and shows Java 8). Add <" + ApplicationBuild.RELEASE + ">"
+                + ApplicationBuild.JAVA_RELEASE + "</" + ApplicationBuild.RELEASE + "> to <properties>"
+                + " (Vidocq/vidocq#380).");
+    }
+
+    /**
      * Whether {@code project} builds a dev-only jar itself (a {@code -dev} companion, the console): its
      * maven-jar-plugin writes {@code Vidocq-Dev-Only: true} into the manifest. Such a module depends on dev tools by
      * design.
@@ -247,6 +264,9 @@ public class VidocqCheckPomMojo extends AbstractMojo {
             getLog().debug("Vidocq checkpom: skipping POM-only module " + project.getArtifactId());
             return;
         }
+
+        // What the IDE reads from the pom and the plugin cannot give it: a warning, never a failure (#380).
+        findReleaseIntelliJReadsFromThePom(project).ifPresent(getLog()::warn);
 
         // Warned about first, whatever the checks below find: a warning, never a failure. A dev-only module
         // depends on dev tools by design.

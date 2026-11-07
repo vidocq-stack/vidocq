@@ -559,6 +559,46 @@ class VidocqCheckPomMojoTest {
         assertEquals(List.of(), VidocqCheckPomMojo.findDevServiceGaps(List.of(dep("org.acme", "lib", "1")), null));
     }
 
+    /**
+     * Vidocq/vidocq#380: IntelliJ IDEA reads the language level from the pom, not from what the plugin adds to the
+     * model, so an application without the parent that leaves {@code maven.compiler.release} to the plugin builds on
+     * Maven and shows Java 8 in IntelliJ. checkpom says so, a warning, with the line to add.
+     */
+    @Test
+    void aReleaseThePluginAddedIsAskedForInThePomForIntelliJ(@TempDir Path dir) throws Exception {
+        Path plain = DevOnlyJarsTest.jar(dir, "core.jar", null);
+        Model model = new Model();
+        model.setPackaging("jar");
+        MavenProject project = new MavenProject(model);
+        project.setContextValue(ApplicationBuild.CONTEXT_KEY,
+                List.of("execution checkpom", "property maven.compiler.release=25"));
+        List<String> warnings = new ArrayList<>();
+
+        checkpom(project, plain, warnings).execute();
+
+        assertEquals(1, warnings.size(), warnings.toString());
+        assertTrue(warnings.getFirst().contains("<maven.compiler.release>25</maven.compiler.release>"),
+                warnings.getFirst());
+        assertTrue(warnings.getFirst().contains("IntelliJ"), warnings.getFirst());
+    }
+
+    /** With the parent, or with a release the pom sets, the plugin adds no release: nothing to say. */
+    @Test
+    void aReleaseThePomOrTheParentGivesIsNoWarning(@TempDir Path dir) throws Exception {
+        Path plain = DevOnlyJarsTest.jar(dir, "core.jar", null);
+        Model model = new Model();
+        model.setPackaging("jar");
+        MavenProject withTheParent = new MavenProject(model);
+        MavenProject withItsOwnRelease = new MavenProject(model);
+        withItsOwnRelease.setContextValue(ApplicationBuild.CONTEXT_KEY, List.of("execution checkpom"));
+        List<String> warnings = new ArrayList<>();
+
+        checkpom(withTheParent, plain, warnings).execute();
+        checkpom(withItsOwnRelease, plain, warnings).execute();
+
+        assertEquals(List.of(), warnings);
+    }
+
     private static void setProject(VidocqCheckPomMojo mojo, MavenProject project) throws Exception {
         Field f = VidocqCheckPomMojo.class.getDeclaredField("project");
         f.setAccessible(true);

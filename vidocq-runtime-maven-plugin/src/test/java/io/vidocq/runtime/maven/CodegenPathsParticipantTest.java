@@ -80,7 +80,8 @@ class CodegenPathsParticipantTest {
             classes = files.filter(f -> f.getFileName().toString().startsWith("CodegenPaths")
                     || f.getFileName().toString().startsWith("ApplicationBuild")).toList();
         }
-        assertEquals(3, classes.size(), classes.toString());
+        // CodegenPaths, CodegenPathsParticipant, ApplicationBuild and its nested Execution record.
+        assertEquals(4, classes.size(), classes.toString());
         for (Path file : classes) {
             ClassModel model = ClassFile.of().parse(Files.readAllBytes(file));
             assertTrue(model.majorVersion() <= ClassFile.JAVA_17_VERSION,
@@ -127,12 +128,17 @@ class CodegenPathsParticipantTest {
         vidocq.setArtifactId("vidocq-runtime-maven-plugin");
         vidocq.setExtensions(true);
         model.getBuild().addPlugin(vidocq);
-        MavenSession session = session(List.of(new MavenProject(model)));
+        MavenProject project = new MavenProject(model);
+        MavenSession session = session(List.of(project));
 
         new CodegenPathsParticipant().afterProjectsRead(session);
 
         assertEquals(5, vidocq.getExecutions().size(), vidocq.getExecutions().toString());
         assertEquals("25", model.getProperties().getProperty("maven.compiler.release"));
+        // What was added is left for checkpom, which asks the pom for what an IDE reads there (the release).
+        assertTrue(project.getContextValue(ApplicationBuild.CONTEXT_KEY) instanceof List<?> added
+                && added.contains("property maven.compiler.release=25"),
+                String.valueOf(project.getContextValue(ApplicationBuild.CONTEXT_KEY)));
     }
 
     /** A session of {@code projects}, which is all the participant reads. */
