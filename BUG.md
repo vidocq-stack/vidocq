@@ -1580,7 +1580,7 @@ where this whole bug class is invisible.
   - 2026-10-22: found while writing `vidocq-runtime-it-naming` (vidocq#297); the IT annotates a type instead.
     A fix has to pick a package for a module anchor (for instance the module's first package, or refuse
     `MODULE` in `@Target`).
-  - 2026-11-07: fixed (Vidocq/vidocq#505). A module anchor takes the first package of the module in name
+  - 2026-11-07: fixed in b9bb3ba6 (Vidocq/vidocq#505). A module anchor takes the first package of the module in name
     order, a type or package anchor wins when there is one, and a module with no package gets a compile
     error naming `@VidocqDataSources` instead of the `NullPointerException`. Tests
     `VidocqDataSourcesProcessorTest.generatesHolderWhenTheAnnotationIsOnTheModuleDeclaration` and
