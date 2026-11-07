@@ -21,6 +21,8 @@ package io.vidocq.runtime.maven;
 
 import io.vidocq.runtime.codegen.commons.ModuleRequirementsDescriptor;
 import io.vidocq.runtime.codegen.commons.Requirement;
+import io.vidocq.runtime.tooling.ExtensionCoordinate;
+import io.vidocq.runtime.tooling.KnownExtensions;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.logging.Log;
 
@@ -35,10 +37,11 @@ import java.util.jar.JarFile;
 import java.util.zip.ZipEntry;
 
 /**
- * Unions the {@link ModuleRequirementsDescriptor#RESOURCE} descriptors shipped by a set of resolved
- * dependency artifacts. Shared by {@code check-module-info} and {@code complete-module-info} so both
- * goals agree on the required JPMS directives. Reads a descriptor from a JAR or from a reactor
- * {@code target/classes} directory alike.
+ * Unions the module requirements of a set of resolved dependency artifacts, from two sources:
+ * the {@link ModuleRequirementsDescriptor#RESOURCE} descriptor an extension may ship, and the
+ * {@code module-info.requires} of the extension catalog. Shared by {@code check-module-info} and
+ * {@code complete-module-info} so both goals agree on the required Java Modules directives. Reads a
+ * descriptor from a JAR or from a reactor {@code target/classes} directory alike.
  */
 final class ModuleRequirementsCollector {
 
@@ -49,8 +52,33 @@ final class ModuleRequirementsCollector {
         Set<Requirement> all = new LinkedHashSet<>();
         for (Artifact artifact : artifacts) {
             all.addAll(ModuleRequirementsDescriptor.parse(readDescriptor(artifact.getFile(), log)));
+            all.addAll(fromCatalog(artifact));
         }
         return all;
+    }
+
+    /**
+     * The {@code requires} the extension catalog states an application needs besides the extension's own
+     * module. Only two of the first-party extensions ship a
+     * {@link ModuleRequirementsDescriptor#RESOURCE} descriptor, while the catalog carries the same
+     * information for the rest under {@code module-info.requires} -- so without this the check could not
+     * see, for instance, that an application using {@code cassini-rest} has to require
+     * {@code jakarta.ws.rs} itself.
+     *
+     * <p>A {@code requires static} is not reported: it is a separate catalog key and
+     * {@link Requirement} cannot express it.</p>
+     */
+    private static Set<Requirement> fromCatalog(Artifact artifact) {
+        if (artifact.getGroupId() == null || artifact.getGroupId().isBlank()
+                || artifact.getArtifactId() == null || artifact.getArtifactId().isBlank()) {
+            return Set.of();
+        }
+        String id = KnownExtensions.idOf(new ExtensionCoordinate(artifact.getGroupId(), artifact.getArtifactId()));
+        Set<Requirement> out = new LinkedHashSet<>();
+        for (String module : KnownExtensions.moduleRequires(id)) {
+            out.add(Requirement.requires(module, id + " does not re-export it"));
+        }
+        return out;
     }
 
     /**

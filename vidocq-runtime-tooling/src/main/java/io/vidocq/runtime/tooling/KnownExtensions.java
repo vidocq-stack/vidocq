@@ -316,6 +316,18 @@ public final class KnownExtensions {
     }
 
     /**
+     * The modules an application must {@code requires} <em>besides</em> the extension's own module, because
+     * {@code id} does not re-export them -- Cassini does not re-export Jakarta REST. Empty for an id outside
+     * the catalog.
+     *
+     * <p>The {@code module-info.requires.static} entries are deliberately not part of this list: they are a
+     * separate key, and the module-info check has no way to express a static requirement.</p>
+     */
+    public static List<String> moduleRequires(String id) {
+        return byId(id).map(e -> csv(property(e.id(), "module-info.requires"))).orElse(List.of());
+    }
+
+    /**
      * The {@code module-info.java} directives (without the trailing {@code ;}) an application
      * needs to use {@code id}: its module, which re-exports most extension APIs transitively,
      * plus what the extension's descriptor says it leaves to the application — Cassini does not
