@@ -145,6 +145,13 @@
                                 <exclude>io/vidocq/runtime/maven/CodegenPaths*.java</exclude>
                                 <exclude>io/vidocq/runtime/maven/ApplicationBuild*.java</exclude>
                             </excludes>
+                            <!-- vidocq:checkpom reads ApplicationBuild: javac compiles an excluded source a compiled one
+                                 refers to all the same, and would write it as a Java 25 class file, which the
+                                 participant-java17 execution below then takes for up to date. No class file for an
+                                 implicitly compiled source: that execution writes them all, for Java 17. -->
+                            <compilerArgs combine.children="append">
+                                <arg>-implicit:none</arg>
+                            </compilerArgs>
                         </configuration>
                     </execution>
                     <execution>
