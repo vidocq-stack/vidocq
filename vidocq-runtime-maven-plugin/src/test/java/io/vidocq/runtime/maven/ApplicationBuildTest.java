@@ -216,6 +216,26 @@ class ApplicationBuildTest {
     }
 
     @Test
+    void theSourceEncodingIsUtf8WhenTheProjectSetsNone() {
+        Model model = application();
+
+        ApplicationBuild.complete(model);
+
+        assertEquals("UTF-8", model.getProperties().getProperty("project.build.sourceEncoding"));
+    }
+
+    @Test
+    void anEncodingTheProjectSetsIsKept() {
+        Model model = application();
+        model.getProperties().setProperty("project.build.sourceEncoding", "ISO-8859-1");
+
+        List<String> added = ApplicationBuild.complete(model);
+
+        assertEquals("ISO-8859-1", model.getProperties().getProperty("project.build.sourceEncoding"));
+        assertEquals(List.of(), added.stream().filter(note -> note.contains("sourceEncoding")).toList());
+    }
+
+    @Test
     void m2eRunsTheAnnotationProcessors() {
         Model model = application();
 
@@ -229,8 +249,9 @@ class ApplicationBuildTest {
     void aProjectWithTheParentSeesNoChange() {
         Model model = application();
         List<String> firstPass = ApplicationBuild.complete(model);
-        // Six executions, the release, the compiler argument, the Surefire property, the m2e switch, two versions.
-        assertEquals(12, firstPass.size(), firstPass.toString());
+        // Six executions, the release, the encoding, the compiler argument, the Surefire property, the m2e switch,
+        // two versions.
+        assertEquals(13, firstPass.size(), firstPass.toString());
 
         List<String> secondPass = ApplicationBuild.complete(model);
 

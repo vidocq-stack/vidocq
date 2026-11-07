@@ -284,8 +284,8 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#create-goal[`vidocq:create`] write
 **No parent by default** (Vidocq/vidocq#380). The pom imports `vidocq-runtime-bom` and `junit-bom`, declares
 `vidocq-runtime-maven-plugin` with `<extensions>true</extensions>` and `maven.compiler.release`, and nothing else of
 the build: the plugin, a build extension, gives the build what `vidocq-runtime-parent` carried (the executions, the
-compiler argument, the lifecycle plugin versions, the Surefire property, the build identity), and the application
-keeps a parent of its own if it has one. The Vidocq version is the `vidocq.version` property, which the BOM import
+compiler argument, the source encoding, the lifecycle plugin versions, the Surefire property, the build identity), and
+the application keeps a parent of its own if it has one. The Vidocq version is the `vidocq.version` property, which the BOM import
 and the plugin read: an upgrade changes one line. `--with-parent` writes the previous style, under
 `vidocq-runtime-parent`; <<pom-convert,`vidocq pom convert`>> turns an existing pom from one style into the other.
 A version before 0.4.0, or a 0.4.0 release candidate, inherits the parent whatever the option: the plugin of those

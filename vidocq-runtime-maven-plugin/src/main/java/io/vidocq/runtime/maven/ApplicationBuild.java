@@ -40,12 +40,12 @@ import java.util.function.Predicate;
 /**
  * Gives the effective model of an application that declares the plugin with {@code <extensions>true</extensions>}
  * the build {@code vidocq-runtime-parent} carries, where the model lacks it (Vidocq/vidocq#380): the Java release,
- * the compiler argument that turns the Vauban provides hint off, the five executions of the plugin and the build
- * identity ({@code build-info}, where {@code git-commit-id-maven-plugin} does not write it), the versions of the
- * lifecycle plugins, the runtime path Surefire hands to the tests, and the m2e switch that runs the annotation
- * processors in Eclipse. What the model has, from the parent or from the application's own pom, is kept as it is:
- * an execution is told by its goal, whatever its id and phase, and a release by the properties or the compiler
- * configuration.
+ * the source encoding, the compiler argument that turns the Vauban provides hint off, the five executions of the
+ * plugin and the build identity ({@code build-info}, where {@code git-commit-id-maven-plugin} does not write it),
+ * the versions of the lifecycle plugins, the runtime path Surefire hands to the tests, and the m2e switch that runs
+ * the annotation processors in Eclipse. What the model has, from the parent or from the application's own pom, is
+ * kept as it is: an execution is told by its goal, whatever its id and phase, and a release by the properties or the
+ * compiler configuration.
  *
  * <p>Runs after Maven has read the projects, so the pom has been interpolated and the plugins of the lifecycle
  * (compiler, surefire) are in the model with Maven's default versions when the pom manages none. A property set here
@@ -60,6 +60,8 @@ final class ApplicationBuild {
 
     static final String RELEASE = "maven.compiler.release";
     static final String JAVA_RELEASE = "25";
+    static final String SOURCE_ENCODING = "project.build.sourceEncoding";
+    static final String UTF_8 = "UTF-8";
     static final String PROVIDES_HINT_ARGUMENT = "-Avauban.providesHint";
     static final String PROVIDES_HINT = PROVIDES_HINT_ARGUMENT + "=false";
     static final String TEST_RUNTIME_PATH = "vidocq.test.runtimePath";
@@ -134,6 +136,10 @@ final class ApplicationBuild {
         versions(model, added);
         Plugin compiler = model.getBuild().getPluginsAsMap().get(COMPILER);
         release(model.getProperties(), compiler, added);
+        if (!model.getProperties().containsKey(SOURCE_ENCODING)) {
+            model.getProperties().setProperty(SOURCE_ENCODING, UTF_8);
+            added.add(propertyNote(SOURCE_ENCODING, UTF_8));
+        }
         if (compiler != null
                 && configure(compiler, ApplicationBuild::lacksProvidesHint, ApplicationBuild::addProvidesHint)) {
             added.add("compiler argument " + PROVIDES_HINT);

@@ -89,11 +89,12 @@ class ApplicationBuildParentAlignmentTest {
     }
 
     @Test
-    void theReleaseAndTheM2eSwitchAreTheParents() throws Exception {
+    void theReleaseTheEncodingAndTheM2eSwitchAreTheParents() throws Exception {
         Model parent = parent();
 
         // The parent is the reference; the constants are what the plugin writes.
         assertEquals(ApplicationBuild.JAVA_RELEASE, parent.getProperties().getProperty(ApplicationBuild.RELEASE));
+        assertEquals(ApplicationBuild.UTF_8, parent.getProperties().getProperty(ApplicationBuild.SOURCE_ENCODING));
         assertEquals(ApplicationBuild.M2E_APT_MODE, parent.getProperties().getProperty(ApplicationBuild.M2E_APT));
     }
 
