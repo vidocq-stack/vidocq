@@ -66,6 +66,15 @@ public final class PomConverter {
     static final String BOM_ARTIFACT = "vidocq-runtime-bom";
     static final String VERSION_PROPERTY = "vidocq.version";
     private static final String VERSION_REFERENCE = "${" + VERSION_PROPERTY + "}";
+    private static final String JUNIT_GROUP = "org.junit";
+    private static final String JUNIT_BOM = "junit-bom";
+    private static final String PARENT = "parent";
+    private static final String PROPERTIES = "properties";
+    private static final String DEPENDENCY_MANAGEMENT = "dependencyManagement";
+    private static final String DEPENDENCIES = "dependencies";
+    private static final String GROUP_ID = "groupId";
+    private static final String ARTIFACT_ID = "artifactId";
+    private static final String VERSION = "version";
     private static final String RELEASE_PROPERTY = "maven.compiler.release";
     private static final String M2E_APT_PROPERTY = "m2e.apt.activation";
     private static final String DEFAULT_INDENT = "    ";
@@ -85,7 +94,7 @@ public final class PomConverter {
         String version = vidocqVersion(pom);
         String unit = indentUnit(pom);
         String edited = pom;
-        Optional<Element> parent = topLevel(edited, "parent");
+        Optional<Element> parent = topLevel(edited, PARENT);
         if (parent.isPresent() && isVidocqParent(edited, parent.get())) {
             edited = removeLines(edited, parent.get());
         }
@@ -98,10 +107,10 @@ public final class PomConverter {
 
     /** The project's own version, {@value ProjectScaffolder#APPLICATION_VERSION} when the parent gave it one. */
     private static String withProjectVersion(String pom, String unit) {
-        if (topLevel(pom, "version").isPresent()) {
+        if (topLevel(pom, VERSION).isPresent()) {
             return pom;
         }
-        Element artifactId = topLevel(pom, "artifactId").orElseThrow(() -> refused("no <artifactId>"));
+        Element artifactId = topLevel(pom, ARTIFACT_ID).orElseThrow(() -> refused("no <artifactId>"));
         return insert(pom, lineEnd(pom, artifactId.end()),
                 unit + "<version>" + ProjectScaffolder.APPLICATION_VERSION + "</version>\n");
     }
@@ -109,7 +118,7 @@ public final class PomConverter {
     /** {@code vidocq.version} and the Java release first among the properties, where the pom lacks them. */
     private static String withProperties(String pom, String unit, String version) {
         StringBuilder lines = new StringBuilder();
-        Optional<Element> properties = topLevel(pom, "properties");
+        Optional<Element> properties = topLevel(pom, PROPERTIES);
         if (properties.isEmpty() || child(pom, properties.get(), VERSION_PROPERTY).isEmpty()) {
             lines.append(unit).append(unit).append(element(VERSION_PROPERTY, version)).append('\n');
         }
@@ -126,8 +135,8 @@ public final class PomConverter {
             int at = existing.map(e -> lineEnd(pom, e.end())).orElse(lineEnd(pom, properties.get().start()));
             return insert(pom, at, lines.toString());
         }
-        Element before = topLevel(pom, "name").or(() -> topLevel(pom, "version"))
-                .or(() -> topLevel(pom, "artifactId")).orElseThrow(() -> refused("no <artifactId>"));
+        Element before = topLevel(pom, "name").or(() -> topLevel(pom, VERSION))
+                .or(() -> topLevel(pom, ARTIFACT_ID)).orElseThrow(() -> refused("no <artifactId>"));
         return insert(pom, lineEnd(pom, before.end()),
                 "\n" + unit + "<properties>\n" + lines + unit + "</properties>\n");
     }
@@ -143,29 +152,29 @@ public final class PomConverter {
 
     /** The BOM and the JUnit BOM imported, in a {@code <dependencyManagement>} created before the dependencies. */
     private static String withManagedBoms(String pom, String unit) {
-        Optional<Element> management = topLevel(pom, "dependencyManagement");
+        Optional<Element> management = topLevel(pom, DEPENDENCY_MANAGEMENT);
         String bom = unit.repeat(3) + "<dependency>\n"
-                + unit.repeat(4) + element("groupId", RUNTIME_GROUP) + "\n"
-                + unit.repeat(4) + element("artifactId", BOM_ARTIFACT) + "\n"
-                + unit.repeat(4) + element("version", VERSION_REFERENCE) + "\n"
+                + unit.repeat(4) + element(GROUP_ID, RUNTIME_GROUP) + "\n"
+                + unit.repeat(4) + element(ARTIFACT_ID, BOM_ARTIFACT) + "\n"
+                + unit.repeat(4) + element(VERSION, VERSION_REFERENCE) + "\n"
                 + unit.repeat(4) + "<type>pom</type>\n"
                 + unit.repeat(4) + "<scope>import</scope>\n"
                 + unit.repeat(3) + "</dependency>\n";
         String junit = unit.repeat(3) + "<dependency>\n"
-                + unit.repeat(4) + element("groupId", "org.junit") + "\n"
-                + unit.repeat(4) + element("artifactId", "junit-bom") + "\n"
-                + unit.repeat(4) + element("version", ProjectScaffolder.JUNIT_BOM_VERSION) + "\n"
+                + unit.repeat(4) + element(GROUP_ID, JUNIT_GROUP) + "\n"
+                + unit.repeat(4) + element(ARTIFACT_ID, JUNIT_BOM) + "\n"
+                + unit.repeat(4) + element(VERSION, ProjectScaffolder.JUNIT_BOM_VERSION) + "\n"
                 + unit.repeat(4) + "<type>pom</type>\n"
                 + unit.repeat(4) + "<scope>import</scope>\n"
                 + unit.repeat(3) + "</dependency>\n";
         if (management.isEmpty()) {
-            Element before = topLevel(pom, "dependencies").or(() -> topLevel(pom, "build"))
+            Element before = topLevel(pom, DEPENDENCIES).or(() -> topLevel(pom, "build"))
                     .orElseThrow(() -> refused("no <dependencies> and no <build>"));
             return insert(pom, lineStart(pom, before.start()), unit + "<dependencyManagement>\n"
                     + unit + unit + "<dependencies>\n" + bom + junit + unit + unit + "</dependencies>\n"
                     + unit + "</dependencyManagement>\n\n");
         }
-        Element dependencies = child(pom, management.get(), "dependencies").orElse(null);
+        Element dependencies = child(pom, management.get(), DEPENDENCIES).orElse(null);
         if (dependencies == null) {
             return insert(pom, lineEnd(pom, management.get().start()),
                     unit + unit + "<dependencies>\n" + bom + junit + unit + unit + "</dependencies>\n");
@@ -174,7 +183,7 @@ public final class PomConverter {
         if (dependency(pom, dependencies, RUNTIME_GROUP, BOM_ARTIFACT).isEmpty()) {
             missing.append(bom);
         }
-        if (dependency(pom, dependencies, "org.junit", "junit-bom").isEmpty()) {
+        if (dependency(pom, dependencies, JUNIT_GROUP, JUNIT_BOM).isEmpty()) {
             missing.append(junit);
         }
         return missing.isEmpty() ? pom : insert(pom, lineEnd(pom, dependencies.start()), missing.toString());
@@ -184,21 +193,21 @@ public final class PomConverter {
     private static String withPluginAsExtension(String pom, String unit) {
         Element plugin = plugin(pom);
         String edited = pom;
-        Optional<Element> version = child(edited, plugin, "version");
+        Optional<Element> version = child(edited, plugin, VERSION);
         if (version.isPresent() && !VERSION_REFERENCE.equals(text(edited, version.get()))) {
-            edited = replace(edited, version.get(), element("version", VERSION_REFERENCE));
+            edited = replace(edited, version.get(), element(VERSION, VERSION_REFERENCE));
             plugin = plugin(edited);
-            version = child(edited, plugin, "version");
+            version = child(edited, plugin, VERSION);
         }
         StringBuilder lines = new StringBuilder();
         if (version.isEmpty()) {
-            lines.append(unit.repeat(4)).append(element("version", VERSION_REFERENCE)).append('\n');
+            lines.append(unit.repeat(4)).append(element(VERSION, VERSION_REFERENCE)).append('\n');
         }
         if (child(edited, plugin, "extensions").isEmpty()) {
             lines.append(unit.repeat(4)).append("<extensions>true</extensions>\n");
         }
         if (!lines.isEmpty()) {
-            Element after = version.isPresent() ? version.get() : child(edited, plugin, "artifactId").orElseThrow();
+            Element after = version.isPresent() ? version.get() : child(edited, plugin, ARTIFACT_ID).orElseThrow();
             edited = insert(edited, lineEnd(edited, after.end()), lines.toString());
         }
         return edited;
@@ -210,7 +219,7 @@ public final class PomConverter {
         String version = vidocqVersion(pom);
         String unit = indentUnit(pom);
         String edited = pom;
-        Optional<Element> parent = topLevel(edited, "parent");
+        Optional<Element> parent = topLevel(edited, PARENT);
         if (parent.isPresent() && !isVidocqParent(edited, parent.get())) {
             throw new IllegalArgumentException("the pom inherits " + coordinate(edited, parent.get())
                     + ": it cannot also inherit " + PARENT_ARTIFACT + "; keep that parent and convert to the"
@@ -219,9 +228,9 @@ public final class PomConverter {
         if (parent.isEmpty()) {
             Element modelVersion = topLevel(edited, "modelVersion").orElseThrow(() -> refused("no <modelVersion>"));
             edited = insert(edited, lineEnd(edited, modelVersion.end()), "\n" + unit + "<parent>\n"
-                    + unit + unit + element("groupId", RUNTIME_GROUP) + "\n"
-                    + unit + unit + element("artifactId", PARENT_ARTIFACT) + "\n"
-                    + unit + unit + element("version", version) + "\n"
+                    + unit + unit + element(GROUP_ID, RUNTIME_GROUP) + "\n"
+                    + unit + unit + element(ARTIFACT_ID, PARENT_ARTIFACT) + "\n"
+                    + unit + unit + element(VERSION, version) + "\n"
                     + unit + unit + "<relativePath/>\n"
                     + unit + "</parent>\n");
         }
@@ -233,25 +242,25 @@ public final class PomConverter {
 
     /** The BOM and the parent's JUnit BOM out of {@code <dependencyManagement>}, which goes when nothing is left. */
     private static String withoutManagedBoms(String pom) {
-        Optional<Element> management = topLevel(pom, "dependencyManagement");
+        Optional<Element> management = topLevel(pom, DEPENDENCY_MANAGEMENT);
         if (management.isEmpty()) {
             return pom;
         }
         String edited = pom;
-        for (String[] bom : new String[][] {{RUNTIME_GROUP, BOM_ARTIFACT}, {"org.junit", "junit-bom"}}) {
-            Element dependencies = child(edited, topLevel(edited, "dependencyManagement").orElseThrow(), "dependencies")
+        for (String[] bom : new String[][] {{RUNTIME_GROUP, BOM_ARTIFACT}, {JUNIT_GROUP, JUNIT_BOM}}) {
+            Element dependencies = child(edited, topLevel(edited, DEPENDENCY_MANAGEMENT).orElseThrow(), DEPENDENCIES)
                     .orElse(null);
             if (dependencies == null) {
                 break;
             }
             Optional<Element> dependency = dependency(edited, dependencies, bom[0], bom[1]);
-            if (dependency.isPresent() && (!"junit-bom".equals(bom[1])
-                    || ProjectScaffolder.JUNIT_BOM_VERSION.equals(childText(edited, dependency.get(), "version")))) {
+            if (dependency.isPresent() && (!JUNIT_BOM.equals(bom[1])
+                    || ProjectScaffolder.JUNIT_BOM_VERSION.equals(childText(edited, dependency.get(), VERSION)))) {
                 edited = removeLines(edited, dependency.get());
             }
         }
-        Element remaining = topLevel(edited, "dependencyManagement").orElseThrow();
-        Optional<Element> dependencies = child(edited, remaining, "dependencies");
+        Element remaining = topLevel(edited, DEPENDENCY_MANAGEMENT).orElseThrow();
+        Optional<Element> dependencies = child(edited, remaining, DEPENDENCIES);
         if (dependencies.isEmpty() || children(edited, dependencies.get()).isEmpty()) {
             edited = removeLines(edited, remaining);
         }
@@ -261,7 +270,7 @@ public final class PomConverter {
     /** The plugin's version and extension switch, which the parent manages. */
     private static String withoutPluginExtension(String pom) {
         String edited = pom;
-        for (String name : new String[] {"version", "extensions"}) {
+        for (String name : new String[] {VERSION, "extensions"}) {
             Optional<Element> element = child(edited, plugin(edited), name);
             if (element.isPresent()) {
                 edited = removeLines(edited, element.get());
@@ -288,7 +297,7 @@ public final class PomConverter {
     }
 
     private static Optional<Element> property(String pom, String name) {
-        return topLevel(pom, "properties").flatMap(p -> child(pom, p, name));
+        return topLevel(pom, PROPERTIES).flatMap(p -> child(pom, p, name));
     }
 
     // ---- what the pom says ----
@@ -299,29 +308,29 @@ public final class PomConverter {
      */
     private static String vidocqVersion(String pom) {
         Element plugin = plugin(pom);
-        Optional<String> property = topLevel(pom, "properties").flatMap(p -> child(pom, p, VERSION_PROPERTY))
+        Optional<String> property = topLevel(pom, PROPERTIES).flatMap(p -> child(pom, p, VERSION_PROPERTY))
                 .map(e -> text(pom, e)).filter(PomConverter::literal);
         if (property.isPresent()) {
             return property.get();
         }
-        Optional<Element> parent = topLevel(pom, "parent").filter(p -> isVidocqParent(pom, p));
+        Optional<Element> parent = topLevel(pom, PARENT).filter(p -> isVidocqParent(pom, p));
         if (parent.isPresent()) {
-            return childText(pom, parent.get(), "version");
+            return childText(pom, parent.get(), VERSION);
         }
-        String pluginVersion = childText(pom, plugin, "version");
+        String pluginVersion = childText(pom, plugin, VERSION);
         if (literal(pluginVersion)) {
             return pluginVersion;
         }
-        Optional<Element> bom = topLevel(pom, "dependencyManagement")
-                .flatMap(m -> child(pom, m, "dependencies"))
+        Optional<Element> bom = topLevel(pom, DEPENDENCY_MANAGEMENT)
+                .flatMap(m -> child(pom, m, DEPENDENCIES))
                 .flatMap(d -> dependency(pom, d, RUNTIME_GROUP, BOM_ARTIFACT));
-        if (bom.isPresent() && literal(childText(pom, bom.get(), "version"))) {
-            return childText(pom, bom.get(), "version");
+        if (bom.isPresent() && literal(childText(pom, bom.get(), VERSION))) {
+            return childText(pom, bom.get(), VERSION);
         }
-        Optional<Element> core = topLevel(pom, "dependencies")
+        Optional<Element> core = topLevel(pom, DEPENDENCIES)
                 .flatMap(d -> dependency(pom, d, RUNTIME_GROUP, "vidocq-runtime-core"));
-        if (core.isPresent() && literal(childText(pom, core.get(), "version"))) {
-            return childText(pom, core.get(), "version");
+        if (core.isPresent() && literal(childText(pom, core.get(), VERSION))) {
+            return childText(pom, core.get(), VERSION);
         }
         throw refused("no Vidocq version to be found: no " + VERSION_PROPERTY + " property, no " + PARENT_ARTIFACT
                 + ", no version on " + PLUGIN_ARTIFACT + ", " + BOM_ARTIFACT + " or vidocq-runtime-core");
@@ -332,12 +341,12 @@ public final class PomConverter {
     }
 
     private static boolean isVidocqParent(String pom, Element parent) {
-        return PARENT_ARTIFACT.equals(childText(pom, parent, "artifactId"))
-                && RUNTIME_GROUP.equals(childText(pom, parent, "groupId"));
+        return PARENT_ARTIFACT.equals(childText(pom, parent, ARTIFACT_ID))
+                && RUNTIME_GROUP.equals(childText(pom, parent, GROUP_ID));
     }
 
     private static String coordinate(String pom, Element element) {
-        return childText(pom, element, "groupId") + ":" + childText(pom, element, "artifactId");
+        return childText(pom, element, GROUP_ID) + ":" + childText(pom, element, ARTIFACT_ID);
     }
 
     /** The Vidocq plugin under {@code <build><plugins>}, without which the pom is not an application's. */
@@ -345,7 +354,7 @@ public final class PomConverter {
         return topLevel(pom, "build").flatMap(b -> child(pom, b, "plugins"))
                 .flatMap(plugins -> children(pom, plugins).stream()
                         .filter(p -> "plugin".equals(p.name()))
-                        .filter(p -> PLUGIN_ARTIFACT.equals(childText(pom, p, "artifactId")))
+                        .filter(p -> PLUGIN_ARTIFACT.equals(childText(pom, p, ARTIFACT_ID)))
                         .findFirst())
                 .orElseThrow(() -> refused("it does not declare " + RUNTIME_GROUP + ":" + PLUGIN_ARTIFACT
                         + " under <build><plugins>"));
@@ -354,8 +363,8 @@ public final class PomConverter {
     private static Optional<Element> dependency(String pom, Element dependencies, String groupId, String artifactId) {
         return children(pom, dependencies).stream()
                 .filter(d -> "dependency".equals(d.name()))
-                .filter(d -> artifactId.equals(childText(pom, d, "artifactId"))
-                        && groupId.equals(childText(pom, d, "groupId")))
+                .filter(d -> artifactId.equals(childText(pom, d, ARTIFACT_ID))
+                        && groupId.equals(childText(pom, d, GROUP_ID)))
                 .findFirst();
     }
 
@@ -437,64 +446,86 @@ public final class PomConverter {
 
     /** The elements directly inside {@code [from, to)}, comments and processing instructions skipped. */
     static List<Element> children(String xml, int from, int to) {
-        List<Element> elements = new ArrayList<>();
-        int depth = 0;
-        String openName = null;
-        int openStart = -1;
-        int openContentStart = -1;
+        Scan scan = new Scan(xml, to);
         int i = from;
         while (i < to) {
             int lt = xml.indexOf('<', i);
             if (lt < 0 || lt >= to) {
                 break;
             }
-            if (xml.startsWith("<!--", lt)) {
-                i = skip(xml, lt, "-->");
-            } else if (xml.startsWith("<?", lt)) {
-                i = skip(xml, lt, "?>");
-            } else if (xml.startsWith("<![CDATA[", lt)) {
-                i = skip(xml, lt, "]]>");
-            } else if (xml.startsWith("</", lt)) {
-                int gt = xml.indexOf('>', lt);
-                if (gt < 0) {
-                    break;
-                }
-                depth--;
-                if (depth == 0 && openName != null) {
-                    elements.add(new Element(openName, openStart, gt + 1, openContentStart, lt));
-                    openName = null;
-                }
-                i = gt + 1;
-            } else {
-                int gt = xml.indexOf('>', lt);
-                if (gt < 0) {
-                    break;
-                }
-                boolean selfClosing = xml.charAt(gt - 1) == '/';
-                int nameEnd = lt + 1;
-                while (nameEnd < gt && !Character.isWhitespace(xml.charAt(nameEnd)) && xml.charAt(nameEnd) != '/') {
-                    nameEnd++;
-                }
-                if (depth == 0) {
-                    if (selfClosing) {
-                        elements.add(new Element(xml.substring(lt + 1, nameEnd), lt, gt + 1, -1, -1));
-                    } else {
-                        openName = xml.substring(lt + 1, nameEnd);
-                        openStart = lt;
-                        openContentStart = gt + 1;
-                    }
-                }
-                if (!selfClosing) {
-                    depth++;
-                }
-                i = gt + 1;
-            }
+            i = scan.tag(lt);
         }
-        return elements;
+        return scan.elements;
     }
 
-    private static int skip(String xml, int from, String closing) {
-        int end = xml.indexOf(closing, from);
-        return end < 0 ? xml.length() : end + closing.length();
+    /** The state of one pass over a range of the text: the depth, and the child open at depth 0. */
+    private static final class Scan {
+
+        private final String xml;
+        private final int to;
+        private final List<Element> elements = new ArrayList<>();
+        private int depth;
+        private String openName;
+        private int openStart;
+        private int openContentStart;
+
+        Scan(String xml, int to) {
+            this.xml = xml;
+            this.to = to;
+        }
+
+        /** Reads the markup at {@code lt}, a {@code <}, and returns where to go on, {@code to} to stop. */
+        int tag(int lt) {
+            if (xml.startsWith("<!--", lt)) {
+                return skip(lt, "-->");
+            }
+            if (xml.startsWith("<?", lt)) {
+                return skip(lt, "?>");
+            }
+            if (xml.startsWith("<![CDATA[", lt)) {
+                return skip(lt, "]]>");
+            }
+            int gt = xml.indexOf('>', lt);
+            if (gt < 0) {
+                return to;
+            }
+            if (xml.startsWith("</", lt)) {
+                close(gt, lt);
+            } else {
+                open(lt, gt);
+            }
+            return gt + 1;
+        }
+
+        private void close(int gt, int lt) {
+            depth--;
+            if (depth == 0 && openName != null) {
+                elements.add(new Element(openName, openStart, gt + 1, openContentStart, lt));
+                openName = null;
+            }
+        }
+
+        private void open(int lt, int gt) {
+            boolean selfClosing = xml.charAt(gt - 1) == '/';
+            int nameEnd = lt + 1;
+            while (nameEnd < gt && !Character.isWhitespace(xml.charAt(nameEnd)) && xml.charAt(nameEnd) != '/') {
+                nameEnd++;
+            }
+            if (depth == 0 && selfClosing) {
+                elements.add(new Element(xml.substring(lt + 1, nameEnd), lt, gt + 1, -1, -1));
+            } else if (depth == 0) {
+                openName = xml.substring(lt + 1, nameEnd);
+                openStart = lt;
+                openContentStart = gt + 1;
+            }
+            if (!selfClosing) {
+                depth++;
+            }
+        }
+
+        private int skip(int from, String closing) {
+            int end = xml.indexOf(closing, from);
+            return end < 0 ? xml.length() : end + closing.length();
+        }
     }
 }

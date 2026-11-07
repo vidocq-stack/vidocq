@@ -178,7 +178,7 @@ class ApplicationBomAndParentTest {
     void theScaffolderImportsTheJunitBomTheParentImports() throws Exception {
         Map<String, String> managed = managedVersions(pom(ROOT.resolve("vidocq-runtime-parent")));
 
-        assertEquals(managed.get("org.junit:junit-bom"), ProjectScaffolder.JUNIT_BOM_VERSION,
+        assertEquals(ProjectScaffolder.JUNIT_BOM_VERSION, managed.get("org.junit:junit-bom"),
                 "the parent and the scaffolder name different JUnit BOMs");
     }
 
