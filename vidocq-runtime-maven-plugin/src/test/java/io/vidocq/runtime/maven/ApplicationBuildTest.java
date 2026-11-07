@@ -20,6 +20,8 @@
 package io.vidocq.runtime.maven;
 
 import org.apache.maven.model.Build;
+import org.apache.maven.model.InputLocation;
+import org.apache.maven.model.InputSource;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.model.PluginExecution;
@@ -159,6 +161,39 @@ class ApplicationBuildTest {
         assertEquals(1, configuration.getChild("systemPropertyVariables").getChildCount());
     }
 
+    /**
+     * Maven binds the lifecycle plugins with its own default versions when no pom manages them (3.13.0 for the compiler
+     * under Maven 3.9.9 and 4.0.0-rc-5, which cannot read Java 25 class files on the module path): those get the
+     * versions the parent manages. Maven records where a version comes from: one without a location is a default.
+     */
+    @Test
+    void theLifecyclePluginsNoPomVersionsGetTheParentVersions() {
+        Model model = application();
+        plugin(model, COMPILER).setVersion("3.13.0");
+        plugin(model, SUREFIRE).setVersion("3.2.5");
+        // Maven 3.9 and 4 record the default bindings as the source of such a version.
+        InputSource bindings = new InputSource();
+        bindings.setModelId("org.apache.maven:maven-core:3.9.9:default-lifecycle-bindings");
+        plugin(model, SUREFIRE).setLocation("version", new InputLocation(-1, -1, bindings));
+
+        ApplicationBuild.complete(model);
+
+        assertEquals("3.15.0", plugin(model, COMPILER).getVersion());
+        assertEquals("3.5.5", plugin(model, SUREFIRE).getVersion());
+    }
+
+    @Test
+    void aPluginVersionAPomSetsIsKept() {
+        Model model = application();
+        Plugin compiler = plugin(model, COMPILER);
+        compiler.setVersion("3.13.0");
+        compiler.setLocation("version", new InputLocation(12, 5, new InputSource()));
+
+        ApplicationBuild.complete(model);
+
+        assertEquals("3.13.0", compiler.getVersion());
+    }
+
     @Test
     void m2eRunsTheAnnotationProcessors() {
         Model model = application();
@@ -173,8 +208,8 @@ class ApplicationBuildTest {
     void aProjectWithTheParentSeesNoChange() {
         Model model = application();
         List<String> firstPass = ApplicationBuild.complete(model);
-        // Five executions, the release, the compiler argument, the Surefire property and the m2e switch.
-        assertEquals(9, firstPass.size(), firstPass.toString());
+        // Five executions, the release, the compiler argument, the Surefire property, the m2e switch, two versions.
+        assertEquals(11, firstPass.size(), firstPass.toString());
 
         List<String> secondPass = ApplicationBuild.complete(model);
 

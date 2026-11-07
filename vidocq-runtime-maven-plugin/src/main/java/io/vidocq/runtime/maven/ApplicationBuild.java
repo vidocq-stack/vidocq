@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.maven;
 
+import org.apache.maven.model.InputLocation;
+import org.apache.maven.model.InputSource;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.model.PluginExecution;
@@ -34,8 +36,9 @@ import java.util.function.Predicate;
 /**
  * Gives the effective model of an application that declares the plugin with {@code <extensions>true</extensions>}
  * the build {@code vidocq-runtime-parent} carries, where the model lacks it (Vidocq/vidocq#380): the Java release,
- * the compiler argument that turns the Vauban provides hint off, the five executions of the plugin, the runtime path
- * Surefire hands to the tests, and the m2e switch that runs the annotation processors in Eclipse. What the model has,
+ * the compiler argument that turns the Vauban provides hint off, the five executions of the plugin, the versions of
+ * the lifecycle plugins, the runtime path Surefire hands to the tests, and the m2e switch that runs the annotation
+ * processors in Eclipse. What the model has,
  * from the parent or from the application's own pom, is kept as it is: an execution is told by its goal, whatever its
  * id and phase, and a release by the properties or the compiler configuration.
  *
@@ -66,6 +69,22 @@ final class ApplicationBuild {
             {"vidocq-check-module-info", "check-module-info", "process-classes"},
             {"default", "package", null},
     };
+    /**
+     * {artifactId, version} of the lifecycle plugins vidocq-runtime-parent manages. Maven binds them with its own
+     * defaults when no pom manages them: 3.13.0 for the compiler under Maven 3.9.9 and 4.0.0-rc-5, which fails on
+     * Java 25 class files on the module path ("Unsupported class file major version 69").
+     */
+    private static final String[][] LIFECYCLE_VERSIONS = {
+            {"maven-compiler-plugin", "3.15.0"},
+            {"maven-surefire-plugin", "3.5.5"},
+            {"maven-jar-plugin", "3.4.2"},
+            {"maven-resources-plugin", "3.3.1"},
+            {"maven-clean-plugin", "3.4.0"},
+            {"maven-install-plugin", "3.1.3"},
+            {"maven-deploy-plugin", "3.1.4"},
+    };
+    /** The end of the model id Maven gives the source of what its default lifecycle bindings put in a model. */
+    private static final String DEFAULT_BINDINGS = ":default-lifecycle-bindings";
 
     private ApplicationBuild() {}
 
@@ -81,6 +100,7 @@ final class ApplicationBuild {
         }
         List<String> added = new ArrayList<>();
         executions(vidocq, added);
+        versions(model, added);
         Plugin compiler = model.getBuild().getPluginsAsMap().get(COMPILER);
         release(model.getProperties(), compiler, added);
         if (compiler != null
@@ -125,6 +145,29 @@ final class ApplicationBuild {
             added.add("execution " + spec[1]);
         }
         vidocq.flushExecutionMap();
+    }
+
+    /**
+     * The parent's version for each lifecycle plugin whose version no pom set: Maven records the default bindings as
+     * the source of the version it binds itself, and a pom as the source of one it read there.
+     */
+    private static void versions(Model model, List<String> added) {
+        for (String[] spec : LIFECYCLE_VERSIONS) {
+            Plugin plugin = model.getBuild().getPluginsAsMap().get("org.apache.maven.plugins:" + spec[0]);
+            if (plugin == null || spec[1].equals(plugin.getVersion()) || !fromDefaultBindings(plugin.getLocation("version"))) {
+                continue;
+            }
+            plugin.setVersion(spec[1]);
+            added.add("version " + spec[0] + " " + spec[1]);
+        }
+    }
+
+    private static boolean fromDefaultBindings(InputLocation location) {
+        if (location == null) {
+            return true;
+        }
+        InputSource source = location.getSource();
+        return source != null && source.getModelId() != null && source.getModelId().endsWith(DEFAULT_BINDINGS);
     }
 
     /**
