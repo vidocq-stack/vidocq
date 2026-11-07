@@ -11,10 +11,10 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | Artefact | Role
 
 | `io.vidocq.runtime:vidocq-runtime-parent:{project-version}`
-| Parent POM of an application (Model 4.0.0). [[parent-pom-versions]]It imports `vidocq-runtime-bom`, sets Java 25 and UTF-8, puts the Vauban indexer (`vidocq-runtime-core-codegen`) on the compiler's processor path, pins the Maven plugins and `vidocq-runtime-maven-plugin` at the runtime version written out literally, and binds `checkpom`, `generate`, `check-module-info`, `test-path` and `package` to the application that declares the plugin. An application that declares a `<version>` of its own resolves the runtime at the runtime's version, not its own. Until 0.4.0 it was the reactor root, `vidocq-runtime-build` now: see xref:migration.adoc#application-parent[the migration note].
+| Parent POM of an application (Model 4.0.0). [[parent-pom-versions]]It imports `vidocq-runtime-bom`, sets Java 25 and UTF-8, puts the Vauban indexer (`vidocq-runtime-core-codegen`) on the compiler's processor path, pins the Maven plugins and `vidocq-runtime-maven-plugin` at the runtime version written out literally, and binds `checkpom`, `generate`, `check-module-info`, `test-path` and `package` to the application that declares the plugin. An application that declares a `<version>` of its own resolves the runtime at the runtime's version, not its own. Until 0.4.0 it was the reactor root, `vidocq-runtime-build` now: see xref:migration.adoc#application-parent[the migration note]. Since 0.4.0 an application needs no parent: the plugin, declared with `<extensions>true</extensions>`, gives its build the same (xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[Vidocq/vidocq#380]); `vidocq create` writes that pom, `--with-parent` this one.
 
 | `io.vidocq.runtime:vidocq-runtime-bom:{project-version}`
-| The versions of every Vidocq artifact an application declares: runtime, extensions, `-codegen` bundles, `-dev` modules, Dev Services, test support. `vidocq-runtime-parent` imports it; an application with a parent of its own imports it (`<type>pom</type>`, `<scope>import</scope>`).
+| The versions of every Vidocq artifact an application declares: runtime, extensions, `-codegen` bundles, `-dev` modules, Dev Services, test support. The pom `vidocq create` writes imports it (`<type>pom</type>`, `<scope>import</scope>`), and so does `vidocq-runtime-parent`.
 
 | `io.vidocq.runtime:vidocq-runtime-build:{project-version}`
 | The root of the runtime's own reactor, with the settings of this repository (CI, SonarQube, TCK). The parent of the runtime's modules; an application never inherits it.
@@ -286,7 +286,10 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
 | Opt-in companion of `check-module-info` — rewrites `src/main/java/module-info.java` to add the missing directives.
 
 | `vidocq:test-path`
-| Names the compile and runtime jars in `vidocq.test.runtimePath` for the application `@VidocqTest` starts, so that a driver no module requires is on its module path. Bound to `process-test-classes` by `vidocq-runtime-parent`. xref:testing.adoc#runtime-dependencies[Details].
+| Names the compile and runtime jars in `vidocq.test.runtimePath` for the application `@VidocqTest` starts, so that a driver no module requires is on its module path. Bound to `process-test-classes` by the plugin as a build extension, or by `vidocq-runtime-parent`. xref:testing.adoc#runtime-dependencies[Details].
+
+| `vidocq:build-info`
+| Writes the build identity the startup banner reads, `META-INF/vidocq/build-info/<artifactId>.properties`, from `.git` without running `git`; outside a repository the commit reads `unversionned` and the build goes on. Bound to `initialize` by the plugin as a build extension where `git-commit-id-maven-plugin` does not run (`vidocq-runtime-parent` keeps that plugin). xref:modules/vidocq-runtime-maven-plugin.adoc#build-info[Details].
 
 | `vidocq:idea`
 | Experimental — IntelliJ IDEA shared run configurations (`.run/*.run.xml`) for the reactor's applications, or a CI check of them. xref:modules/vidocq-runtime-maven-plugin.adoc#idea[Details].

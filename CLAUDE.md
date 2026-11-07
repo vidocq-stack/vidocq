@@ -83,12 +83,17 @@ Each extension is named after a **codename** mapping to its spec — keep this m
 
 ### Codegen (APT) wiring — required pattern for apps/examples
 
-**Applications under `vidocq-runtime-parent` ≥ 0.4.0**: nothing to write. The parent declares
-`vidocq-runtime-maven-plugin` with `<extensions>true</extensions>`, and its lifecycle participant
+**Applications on 0.4.0 or later**: nothing to write. `vidocq create` writes a pom without a parent that declares
+`vidocq-runtime-maven-plugin` with `<extensions>true</extensions>` (Vidocq/vidocq#380; `--with-parent` writes
+`vidocq-runtime-parent`, which declares the plugin the same way), and its lifecycle participant
 (`CodegenPathsParticipant`, declared in `META-INF/plexus/components.xml` — a Sisu index is skipped by Maven 3.9.9 for
 Java 25 classes) adds `vidocq-runtime-core-codegen` and each extension's `-codegen` bundle to the compiler's
-processor path in the model (Vidocq/vidocq#339). `vidocq create` and `vidocq extension add` write no codegen path
-there; `PomDependencies.codegenWiredByPlugin` is the test.
+processor path in the model (Vidocq/vidocq#339), and, without the parent, the rest of the build the parent carried
+(`ApplicationBuild`: the executions, `build-info`, the release, the source encoding, the compiler argument, the
+lifecycle plugin versions, the Surefire property, the m2e switch; `ApplicationBuildParentAlignmentTest` keeps it equal
+to the parent).
+`vidocq create` and `vidocq extension add` write no codegen path there; `PomDependencies.codegenWiredByPlugin` is the
+test. `vidocq pom convert --to parentless|parent` moves a pom between the two styles.
 
 **Examples of this reactor** inherit `vidocq-runtime-build`, which does not load the plugin as an extension: the
 Vauban indexer comes from the root `pluginManagement`, and for **every** `vidocq-runtime-<X>-extension` an example

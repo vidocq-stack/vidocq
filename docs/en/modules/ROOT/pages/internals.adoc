@@ -1,3 +1,4 @@
+| `vidocq:generate`, bound to `process-classes` by the plugin as a build extension, or by `vidocq-runtime-parent`
 = Internals
 :description: Boot sequence, extension mechanism, threading model.
 

@@ -44,7 +44,9 @@ distribution and the image (BENCH.md, 2026-10-15). The JVM itself adds about 150
 [#setup]
 == Setup
 
-The project is an ordinary Vidocq application, with `vidocq-runtime-parent` as its parent, the Servlet extension, the
+The project is an ordinary Vidocq application, under `vidocq-runtime-parent` here (the guide predates 0.4.0's
+xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[parentless style], which works the same: the spike of
+Vidocq/vidocq#380 ran this very application without its parent), with the Servlet extension, the
 Vaadin extension, the Vaadin BOM and two build plugins: `vaadin-maven-plugin` builds the frontend, and
 `vidocq-runtime-maven-plugin` generates the application's and the Vaadin jars' glue. The parent manages the versions
 of the Vidocq artefacts and plugins, and the Vidocq plugin puts Foy's annotation processors on the compiler's path
@@ -182,7 +184,8 @@ xref:modules/vidocq-runtime-cli.adoc#create-snapshot[Trying a SNAPSHOT].
     <plugin>
       <groupId>io.vidocq.runtime</groupId>
       <artifactId>vidocq-runtime-maven-plugin</artifactId>
-      <!-- vidocq-runtime-parent runs vidocq:generate on every build: no execution to declare. -->
+      <!-- vidocq-runtime-parent, or the plugin as a build extension, runs vidocq:generate on every build: no
+           execution to declare. -->
     </plugin>
   </plugins>
 </build>

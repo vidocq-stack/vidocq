@@ -209,8 +209,8 @@ Hexagonal and multi-module applications typically keep their business and adapte
 *spec-only* — Jakarta EE / MicroProfile APIs only, no Vidocq dependency, no Vidocq APT — and
 concentrate everything runtime-specific in a small main module. That main module asks
 `vidocq:generate` to scan the app modules and produce the CDI/REST glue for them. The id `generate` is the one of the
-execution `vidocq-runtime-parent` binds: the configuration below merges into it, and the goal still runs
-once.
+execution the plugin binds as a build extension, or `vidocq-runtime-parent`: the configuration below merges into it,
+and the goal still runs once.
 
 [source,xml]
 ----

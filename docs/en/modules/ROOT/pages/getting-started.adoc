@@ -57,7 +57,7 @@ todo/
   src/main/resources/
     vidocq.properties                <4>
 ----
-<1> Inherits `io.vidocq.runtime:vidocq-runtime-parent:{release-version}`, sets `vidocq.mainModule` and wires the `vidocq-runtime-maven-plugin` so `mvn package` produces a runnable distribution.
+<1> Imports `vidocq-runtime-bom` at `{release-version}`, sets `vidocq.mainModule` and declares `vidocq-runtime-maven-plugin` as a build extension, which gives the build everything else (no parent, Vidocq/vidocq#380), so `mvn package` produces a runnable distribution.
 <2> Module descriptor, pre-filled with the `requires`/`opens` a REST app needs.
 <3> A first resource, written for `cassini-rest` (Step 3).
 <4> MicroProfile-style configuration (`vidocq.http.port=8080`, â€¦).
@@ -193,31 +193,54 @@ The CLI is a convenience, not a requirement. The project above is plain Maven â€
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>io.vidocq.runtime</groupId>
-        <artifactId>vidocq-runtime-parent</artifactId>
-        <version>{release-version}</version>
-        <relativePath/>
-    </parent>
-
     <groupId>com.acme</groupId>
     <artifactId>todo</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
     <name>todo</name>
 
     <properties>
+        <vidocq.version>{release-version}</vidocq.version>
+        <maven.compiler.release>25</maven.compiler.release>
         <vidocq.mainModule>com.acme.todo</vidocq.mainModule>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-bom</artifactId>
+                <version>${vidocq.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>6.0.3</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-core</artifactId>
-            <version>{release-version}</version>
         </dependency>
         <dependency>
             <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
             <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
-            <version>{release-version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -226,45 +249,27 @@ The CLI is a convenience, not a requirement. The project above is plain Maven â€
             <plugin>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-maven-plugin</artifactId>
-                <configuration>
-                    <jvmArgs>-Dfile.encoding=UTF-8</jvmArgs>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>package</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <configuration>
-                    <annotationProcessorPaths combine.children="append">
-                        <path>
-                            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
-                            <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
-                            <version>{release-version}</version>
-                            <type>pom</type>
-                        </path>
-                    </annotationProcessorPaths>
-                </configuration>
+                <version>${vidocq.version}</version>
+                <extensions>true</extensions>
             </plugin>
         </plugins>
     </build>
 </project>
 ----
 
-NOTE: From 0.4.0, the codegen bundle is a jar: leave out the `<type>pom</type>` line, which IntelliJ's build cannot read (xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[Codegen bundles are jars]). It stays for {release-version}, where the bundle is a pom.
+No parent (Vidocq/vidocq#380): the plugin, loaded as a build extension, gives the build what a parent would,
+the Java release, the executions of its goals, the versions of the lifecycle plugins, the processor path of the
+extensions, the build identity. The application keeps a parent of its own if it has one, above the `groupId`.
+`vidocq create --with-parent` writes the previous style, under `vidocq-runtime-parent`, and
+xref:modules/vidocq-runtime-cli.adoc#pom-convert[`vidocq pom convert`] turns an existing pom from one style into
+the other. `maven.compiler.release` is the one line Maven does not need: IntelliJ IDEA reads the language level from
+the pom alone. See xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[the plugin without the parent].
 
-NOTE: Dependency versions are pinned on purpose: the released parent's `dependencyManagement` uses `${project.version}`, so an app relying on it must inherit the parent's version. The `jvmArgs` configuration of `vidocq-runtime-maven-plugin` works around a known 0.2.0 issue (fixed in 0.3.0).
-
-NOTE: From 0.4.0, whose parent names the runtime version literally, `vidocq create` gives the application a version of its own, `1.0.0-SNAPSHOT`, instead of the runtime's; it no longer writes the `jvmArgs` configuration; and it writes the Maven wrapper of the Vidocq repositories (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/`), so the project builds with the ecosystem's Maven version and `vidocq doctor` finds it.
-
-NOTE: From 0.4.0, the `maven-compiler-plugin` block goes away: the parent loads `vidocq-runtime-maven-plugin` as a build extension, which puts the codegen bundle of each extension on the processor path, so an extension is its dependency alone. See xref:modules/vidocq-runtime-maven-plugin.adoc#codegen-wiring[The plugin wires the codegen bundles].
-
-NOTE: From 0.4.0, `vidocq-runtime-parent` is an application parent that imports `vidocq-runtime-bom`: the Vidocq dependencies and the codegen path lose their `<version>`, and declaring `vidocq-runtime-maven-plugin` alone runs `checkpom`, `check-module-info` and `package`. See xref:migration.adoc#application-parent[the application parent].
+NOTE: This is the pom of 0.4.0. Until then, the project inherited `vidocq-runtime-parent`, pinned every Vidocq
+version, bound the `package` execution and listed each extension's codegen bundle in a `maven-compiler-plugin`
+block: xref:migration.adoc#no-parent[the migration page] says what became of each line. The project has a version
+of its own, `1.0.0-SNAPSHOT`, and the Maven wrapper of the Vidocq repositories (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/`),
+so it builds with the ecosystem's Maven version and `vidocq doctor` finds it.
 
 `src/main/java/module-info.java`:
 

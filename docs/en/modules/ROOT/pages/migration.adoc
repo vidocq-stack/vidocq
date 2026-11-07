@@ -310,6 +310,31 @@ xref:modules/vidocq-runtime-extensions.adoc#grimm-openapi-codegen[the OpenAPI ex
 xref:modules/vidocq-runtime-extensions.adoc#heisenberg-fault-tolerance-codegen[the Fault Tolerance extension] and
 xref:modules/vidocq-runtime-extensions.adoc#cervantes-jwt-codegen[the JWT extension].
 
+[#no-parent]
+== An application no longer needs `vidocq-runtime-parent`
+
+From 0.4.0 (Vidocq/vidocq#380), `vidocq create` writes a pom without a parent: the import of `vidocq-runtime-bom` and
+`junit-bom`, `vidocq-runtime-maven-plugin` at `${vidocq.version}` with `<extensions>true</extensions>`, the
+`maven.compiler.release` IntelliJ IDEA reads, and the dependencies. The plugin, a build extension, gives the build
+what the parent carried: the executions of its goals, the Java release, the source encoding, the compiler argument,
+the lifecycle plugin versions, the Surefire property, the m2e switch, and the build identity through
+xref:modules/vidocq-runtime-maven-plugin.adoc#build-info[`vidocq:build-info`], which needs no
+`git-commit-id-maven-plugin`. See xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[the plugin without the
+parent].
+
+* **An existing application changes nothing.** `vidocq-runtime-parent` stays published and keeps binding the same
+  executions; a project under it sees the same effective pom as before. `vidocq create --with-parent` still writes
+  that style.
+* **An application that wants a parent of its own** keeps it, and runs
+  xref:modules/vidocq-runtime-cli.adoc#pom-convert[`vidocq pom convert --to parentless`], which removes the Vidocq
+  parent and writes what replaces it, leaving everything else of the pom where it is; `--to parent` is the way back,
+  and `--check` reports without writing.
+* **The sixty lines an application used to copy** from the parent (the compiler configuration, the executions, the
+  plugin versions) can go: the plugin adds them to the effective model, and never twice. `vidocq:checkpom` warns
+  about the one line to keep, `maven.compiler.release`.
+* **Without a git repository** (a source archive, a build server without the history), the build no longer fails
+  on the build identity: `vidocq:build-info` writes `unversionned` as the commit, and the banner shows it.
+
 [#application-parent]
 == `vidocq-runtime-parent` is an application parent, with a BOM
 

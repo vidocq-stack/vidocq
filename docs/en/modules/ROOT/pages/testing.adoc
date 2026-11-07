@@ -8,8 +8,8 @@ parameter. `vidocq create` writes such a test for a REST application (Vidocq/vid
 
 == Setting it up
 
-Two test dependencies, versioned by `vidocq-runtime-bom` and the JUnit BOM that
-xref:migration.adoc#application-parent[`vidocq-runtime-parent`] imports:
+Two test dependencies, versioned by `vidocq-runtime-bom` and `junit-bom`, which the pom `vidocq create` writes
+imports, as xref:migration.adoc#application-parent[`vidocq-runtime-parent`] does:
 
 [source,xml]
 ----
@@ -66,8 +66,9 @@ class HelloResourceTest {
   `runtime` scope, which no module requires, is found without `requires org.postgresql.jdbc`. Surefire leaves such a
   jar on the class path of the tests; `vidocq:test-path`, which `vidocq-runtime-parent` binds to
   `process-test-classes`, names the runtime dependencies in `vidocq.test.runtimePath`, and the parent hands that
-  property to Surefire. An application without `vidocq-runtime-parent` binds the goal and passes the property
-  itself:
+  property to Surefire. An application without the parent gets both from the plugin, a build extension
+  (xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[Vidocq/vidocq#380]); one that declares the plugin
+  without `<extensions>true</extensions>` binds the goal and passes the property itself:
 +
 [source,xml]
 ----
