@@ -125,6 +125,10 @@ class BuildIdentityTest {
         assertEquals(Instant.parse("2026-11-07T10:00:00Z"), BuildIdentity.buildTime(null, clock), "now, to the second");
         assertEquals(Instant.parse("2026-11-07T10:00:00Z"), BuildIdentity.buildTime("  ", clock));
         assertEquals(Instant.parse("2026-11-07T10:00:00Z"), BuildIdentity.buildTime("not a date", clock));
+        // Maven 3.10 gives project.build.outputTimestamp the oldest zip date by default: not a build time.
+        assertEquals(Instant.parse("2026-11-07T10:00:00Z"), BuildIdentity.buildTime("1980-02-01T00:00:00Z", clock));
+        assertEquals(Instant.parse("2026-11-07T10:00:00Z"), BuildIdentity.buildTime("1980-01-01T00:00:00Z", clock));
+        assertEquals(Instant.parse("2026-11-07T10:00:00Z"), BuildIdentity.buildTime("0", clock));
     }
 
     /** The file is the one the startup banner reads, in the archive of the application. */

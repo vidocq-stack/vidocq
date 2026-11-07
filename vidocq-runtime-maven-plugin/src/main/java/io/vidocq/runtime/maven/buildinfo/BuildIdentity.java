@@ -65,21 +65,34 @@ public record BuildIdentity(String version, String commit, String branch, Boolea
     }
 
     /**
-     * The build time: {@code project.build.outputTimestamp} when the pom sets one, as an ISO-8601 date-time or epoch
-     * seconds, so that a reproducible build stays reproducible; otherwise now, to the second.
+     * Maven 3.10's default {@code project.build.outputTimestamp}, the oldest date a zip entry can carry: a pom that
+     * sets none gets it, so it is no build time (BUG-20261107-01).
+     */
+    static final Instant MAVEN_PLACEHOLDER = Instant.parse("1980-02-01T00:00:00Z");
+
+    /**
+     * The build time: {@code project.build.outputTimestamp} when the pom sets one after {@link #MAVEN_PLACEHOLDER}, as
+     * an ISO-8601 date-time or epoch seconds, so that a reproducible build stays reproducible; otherwise now, to the
+     * second.
      */
     public static Instant buildTime(String outputTimestamp, Clock clock) {
-        if (outputTimestamp != null && !outputTimestamp.isBlank()) {
-            String value = outputTimestamp.strip();
-            try {
-                return OffsetDateTime.parse(value).toInstant().truncatedTo(ChronoUnit.SECONDS);
-            } catch (DateTimeParseException _) {
-                if (value.matches("\\d{1,18}")) {
-                    return Instant.ofEpochSecond(Long.parseLong(value));
-                }
-            }
+        Instant chosen = parse(outputTimestamp);
+        if (chosen != null && chosen.isAfter(MAVEN_PLACEHOLDER)) {
+            return chosen;
         }
         return clock.instant().truncatedTo(ChronoUnit.SECONDS);
+    }
+
+    private static Instant parse(String outputTimestamp) {
+        if (outputTimestamp == null || outputTimestamp.isBlank()) {
+            return null;
+        }
+        String value = outputTimestamp.strip();
+        try {
+            return OffsetDateTime.parse(value).toInstant().truncatedTo(ChronoUnit.SECONDS);
+        } catch (DateTimeParseException _) {
+            return value.matches("\\d{1,18}") ? Instant.ofEpochSecond(Long.parseLong(value)) : null;
+        }
     }
 
     /** Whether no repository names this build. */

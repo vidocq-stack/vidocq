@@ -511,7 +511,9 @@ git.dirty=false
   banner shows `1.0.0-SNAPSHOT (unversionned, built 2026-11-07T17:36:03Z)`.
 * A detached `HEAD` gives `git.branch=HEAD`, as `git rev-parse --abbrev-ref HEAD` does.
 * `git.build.time` is `project.build.outputTimestamp` when the pom sets one (an ISO-8601 date-time or epoch seconds),
-  so a reproducible build stays reproducible; otherwise the time of the build, to the second. The file has no comment
+  so a reproducible build stays reproducible; otherwise the time of the build, to the second. Maven 3.10 gives that
+  property a default when the pom sets none, the oldest zip date `1980-02-01T00:00:00Z`: the goal takes it for no
+  build time and writes the time of the build (BUG-20261107-01). The file has no comment
   line and its keys are sorted: two builds of the same commit at the same time write the same bytes.
 * `-Dvidocq.buildInfo.skip=true` writes nothing; the banner then falls back to the jar date.
 

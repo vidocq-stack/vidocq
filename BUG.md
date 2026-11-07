@@ -5,6 +5,33 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261107-01 — `vidocq:build-info` writes Maven's placeholder `1980-02-01T00:00:00Z` as the build time
+
+- **Date**: 2026-11-07
+- **Status**: FIXED on `fix/380-build-time-placeholder` (Vidocq/vidocq#513, a #380 follow-up): `BuildIdentity.buildTime`
+  treats a timestamp that is not after `MAVEN_PLACEHOLDER` (1980-02-01T00:00:00Z) as no build time and writes the
+  time of the build; `BuildIdentityTest.theBuildTimeIsTheOutputTimestampWhenTheProjectSetsOne` covers the placeholder,
+  `1980-01-01` and epoch `0` (red first).
+- **Module**: `vidocq-runtime-maven-plugin`, `io.vidocq.runtime.maven.buildinfo.BuildIdentity.buildTime`,
+  `VidocqBuildInfoMojo`.
+- **Reported by**: the retest of the #380 stack on the published 0.4.0-SNAPSHOT (2026-11-07, Maven 3.10.0).
+- **Symptom**: an application built without `vidocq-runtime-parent` gets
+  `META-INF/vidocq/build-info/<artifactId>.properties` with `git.build.time=1980-02-01T00:00:00Z`, so the banner, the
+  dev console and `vidocq info` say `built 1980-02-01T00:00:00Z`. The parent's `git-commit-id-maven-plugin` writes
+  the current time.
+- **Minimal reproduction**: `vidocq create --name andy-demo -x cassini-rest` (CLI 0.4.0-SNAPSHOT of 2026-11-07), then
+  `./mvnw verify` with the wrapper's Maven 3.10.0, then
+  `cat target/classes/META-INF/vidocq/build-info/andy-demo.properties`.
+  `./mvnw help:evaluate -Dexpression=project.build.outputTimestamp -q -DforceStdout` prints `1980-02-01T00:00:00Z`
+  although the pom sets nothing.
+- **Cause**: Maven 3.10 gives `project.build.outputTimestamp` a default (reproducible builds by default): the oldest
+  zip date, 1980-02-01. The mojo takes the parameter as the pom's choice, and `BuildIdentity.buildTime` writes it as
+  it is.
+- **Fix**: a timestamp that is not after 1980-02-01 is Maven's placeholder, not a build time: `buildTime` treats it
+  as absent (the current time, to the second) and keeps a real timestamp the pom sets.
+
+---
+
 ## BUG-20261106-04 — The Mansart Data dev panel was dropped from an application without JTA
 
 - **Date**: 2026-11-06
