@@ -27,6 +27,8 @@ import org.apache.maven.model.Plugin;
 import org.apache.maven.model.PluginExecution;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -126,13 +128,15 @@ class ApplicationBuildTest {
         }
     }
 
-    @Test
-    void theJavaReleaseIs25WhenTheProjectSetsNone() {
+    /** The release IntelliJ reads from the pom, the encoding, and the switch that runs the processors in Eclipse. */
+    @ParameterizedTest
+    @CsvSource({"maven.compiler.release, 25", "project.build.sourceEncoding, UTF-8", "m2e.apt.activation, jdt_apt"})
+    void aPropertyTheProjectDoesNotSetGetsTheParentsValue(String property, String value) {
         Model model = application();
 
         ApplicationBuild.complete(model);
 
-        assertEquals("25", model.getProperties().getProperty("maven.compiler.release"));
+        assertEquals(value, model.getProperties().getProperty(property));
     }
 
     @Test
@@ -216,15 +220,6 @@ class ApplicationBuildTest {
     }
 
     @Test
-    void theSourceEncodingIsUtf8WhenTheProjectSetsNone() {
-        Model model = application();
-
-        ApplicationBuild.complete(model);
-
-        assertEquals("UTF-8", model.getProperties().getProperty("project.build.sourceEncoding"));
-    }
-
-    @Test
     void anEncodingTheProjectSetsIsKept() {
         Model model = application();
         model.getProperties().setProperty("project.build.sourceEncoding", "ISO-8859-1");
@@ -233,15 +228,6 @@ class ApplicationBuildTest {
 
         assertEquals("ISO-8859-1", model.getProperties().getProperty("project.build.sourceEncoding"));
         assertEquals(List.of(), added.stream().filter(note -> note.contains("sourceEncoding")).toList());
-    }
-
-    @Test
-    void m2eRunsTheAnnotationProcessors() {
-        Model model = application();
-
-        ApplicationBuild.complete(model);
-
-        assertEquals("jdt_apt", model.getProperties().getProperty("m2e.apt.activation"));
     }
 
     /** The model of an application under vidocq-runtime-parent already has all of it: nothing changes. */
