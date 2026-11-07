@@ -416,8 +416,8 @@ for the version, the commit and the build time of the application. Under `vidocq
 
 The goal reads `.git` and runs no `git` command for the commit: `HEAD`, the loose refs and `packed-refs`, through the
 `.git` file of a linked worktree (`gitdir:` and `commondir`) or of a submodule, in a shallow clone as well. The dirty
-flag alone comes from `git status --porcelain --untracked-files=no`, when the `git` command answers within ten
-seconds (`-Dvidocq.buildInfo.git=/path/to/git` names another one); otherwise the flag is left out.
+flag alone comes from `git status --porcelain --untracked-files=no`, when the `git` command on the PATH answers within
+ten seconds; otherwise the flag is left out.
 
 [source,properties]
 ----

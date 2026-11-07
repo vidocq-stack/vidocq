@@ -71,9 +71,8 @@ public class VidocqBuildInfoMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.outputTimestamp}", readonly = true)
     String outputTimestamp;
 
-    /** The {@code git} command that tells whether the working tree is dirty: a name on the PATH or a path. */
-    @Parameter(property = "vidocq.buildInfo.git", defaultValue = "git")
-    String git;
+    /** Tells whether the working tree is dirty: the {@code git} command on the PATH; a test puts {@link GitStatus#NONE}. */
+    GitStatus status = GitStatus.command();
 
     @Override
     public void execute() throws MojoExecutionException {
@@ -87,7 +86,7 @@ public class VidocqBuildInfoMojo extends AbstractMojo {
         }
         Path basedir = project.getBasedir() == null ? Path.of("").toAbsolutePath() : project.getBasedir().toPath();
         BuildIdentity identity = BuildIdentity.collect(basedir, project.getVersion(),
-                BuildIdentity.buildTime(outputTimestamp, Clock.systemUTC()), GitStatus.command(git));
+                BuildIdentity.buildTime(outputTimestamp, Clock.systemUTC()), status);
         Path file = outputDirectory.toPath().resolve(BuildInfo.resource(project.getArtifactId()));
         try {
             Files.createDirectories(file.getParent());

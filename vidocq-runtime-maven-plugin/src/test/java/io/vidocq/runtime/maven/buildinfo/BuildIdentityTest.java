@@ -168,10 +168,10 @@ class BuildIdentityTest {
         Path clean = script(dir.resolve("git-clean"), "#!/bin/sh\nexit 0\n");
         Path failing = script(dir.resolve("git-failing"), "#!/bin/sh\necho 'fatal: not a git repository' >&2\nexit 128\n");
 
-        assertEquals(Optional.of(true), GitStatus.command(dirty.toString()).dirty(repo));
-        assertEquals(Optional.of(false), GitStatus.command(clean.toString()).dirty(repo));
-        assertEquals(Optional.empty(), GitStatus.command(failing.toString()).dirty(repo));
-        assertEquals(Optional.empty(), GitStatus.command(dir.resolve("no-such-git").toString()).dirty(repo));
+        assertEquals(Optional.of(true), GitStatus.running(tree -> new ProcessBuilder(dirty.toString())).dirty(repo));
+        assertEquals(Optional.of(false), GitStatus.running(tree -> new ProcessBuilder(clean.toString())).dirty(repo));
+        assertEquals(Optional.empty(), GitStatus.running(tree -> new ProcessBuilder(failing.toString())).dirty(repo));
+        assertEquals(Optional.empty(), GitStatus.running(tree -> new ProcessBuilder(dir.resolve("no-such-git").toString())).dirty(repo));
     }
 
     private static Path repository(Path root, String head, String commitOfMain) throws IOException {

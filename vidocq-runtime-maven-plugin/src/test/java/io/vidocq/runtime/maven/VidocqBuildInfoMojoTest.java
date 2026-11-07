@@ -20,6 +20,7 @@
 package io.vidocq.runtime.maven;
 
 import io.vidocq.runtime.core.banner.BuildInfo;
+import io.vidocq.runtime.maven.buildinfo.GitStatus;
 import org.apache.maven.model.Model;
 import org.apache.maven.project.MavenProject;
 import org.junit.jupiter.api.Test;
@@ -114,7 +115,7 @@ class VidocqBuildInfoMojoTest {
         set(mojo, "project", project);
         set(mojo, "outputDirectory", dir.resolve("target/classes").toFile());
         set(mojo, "outputTimestamp", outputTimestamp);
-        set(mojo, "git", dir.resolve("no-such-git").toString());
+        set(mojo, "status", GitStatus.NONE);
         return mojo;
     }
 

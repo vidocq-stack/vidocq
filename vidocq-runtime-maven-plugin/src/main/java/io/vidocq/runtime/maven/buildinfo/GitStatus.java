@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 /**
  * Whether a working tree has uncommitted changes to tracked files. Only the {@code git} command can tell cheaply:
@@ -43,12 +44,20 @@ public interface GitStatus {
     /** {@code true} when tracked files are modified, {@code false} when clean, empty when it cannot be told. */
     Optional<Boolean> dirty(Path dir);
 
-    /** The {@code git} command at {@code git} (a name on the PATH or a path). */
-    static GitStatus command(String git) {
+    /** The {@code git} command on the PATH, as the build runs it. */
+    static GitStatus command() {
+        return running(dir -> new ProcessBuilder("git", "-C", dir.toAbsolutePath().toString(), "status",
+                "--porcelain", "--untracked-files=no"));
+    }
+
+    /**
+     * Runs the process {@code command} builds for a directory and reads its answer: dirty when it writes something,
+     * clean when it writes nothing and exits with 0, nothing when it is missing, fails or does not return in time.
+     */
+    static GitStatus running(Function<Path, ProcessBuilder> command) {
         return dir -> {
             try {
-                Process process = new ProcessBuilder(git, "-C", dir.toAbsolutePath().toString(), "status",
-                        "--porcelain", "--untracked-files=no")
+                Process process = command.apply(dir)
                         .redirectError(ProcessBuilder.Redirect.DISCARD)
                         .start();
                 byte[] output;
