@@ -77,9 +77,10 @@ class CodegenPathsParticipantTest {
     void theParticipantLoadsOnTheJava17RuntimeOfAnIde() throws Exception {
         List<Path> classes;
         try (var files = Files.list(Path.of("target/classes/io/vidocq/runtime/maven"))) {
-            classes = files.filter(f -> f.getFileName().toString().startsWith("CodegenPaths")).toList();
+            classes = files.filter(f -> f.getFileName().toString().startsWith("CodegenPaths")
+                    || f.getFileName().toString().startsWith("ApplicationBuild")).toList();
         }
-        assertEquals(2, classes.size(), classes.toString());
+        assertEquals(3, classes.size(), classes.toString());
         for (Path file : classes) {
             ClassModel model = ClassFile.of().parse(Files.readAllBytes(file));
             assertTrue(model.majorVersion() <= ClassFile.JAVA_17_VERSION,
@@ -114,6 +115,24 @@ class CodegenPathsParticipantTest {
         new CodegenPathsParticipant().afterProjectsRead(session);
 
         assertNotNull(compiler.getConfiguration(), "the indexer was not wired");
+    }
+
+    /** Vidocq/vidocq#380: a project without the parent gets the parent's build from the plugin it declares. */
+    @Test
+    void afterProjectsReadCompletesTheBuildOfAProjectWithoutTheParent() {
+        Model model = new Model();
+        model.setBuild(new org.apache.maven.model.Build());
+        org.apache.maven.model.Plugin vidocq = new org.apache.maven.model.Plugin();
+        vidocq.setGroupId("io.vidocq.runtime");
+        vidocq.setArtifactId("vidocq-runtime-maven-plugin");
+        vidocq.setExtensions(true);
+        model.getBuild().addPlugin(vidocq);
+        MavenSession session = session(List.of(new MavenProject(model)));
+
+        new CodegenPathsParticipant().afterProjectsRead(session);
+
+        assertEquals(5, vidocq.getExecutions().size(), vidocq.getExecutions().toString());
+        assertEquals("25", model.getProperties().getProperty("maven.compiler.release"));
     }
 
     /** A session of {@code projects}, which is all the participant reads. */

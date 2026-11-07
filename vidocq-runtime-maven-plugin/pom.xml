@@ -143,6 +143,7 @@
                         <configuration>
                             <excludes>
                                 <exclude>io/vidocq/runtime/maven/CodegenPaths*.java</exclude>
+                                <exclude>io/vidocq/runtime/maven/ApplicationBuild*.java</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -157,6 +158,7 @@
                             <proc>none</proc>
                             <includes>
                                 <include>io/vidocq/runtime/maven/CodegenPaths*.java</include>
+                                <include>io/vidocq/runtime/maven/ApplicationBuild*.java</include>
                             </includes>
                         </configuration>
                     </execution>

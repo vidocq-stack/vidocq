@@ -22,15 +22,19 @@ package io.vidocq.runtime.maven;
 import org.apache.maven.AbstractMavenLifecycleParticipant;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.project.MavenProject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Wires the codegen bundles of a project's extensions once Maven has read the projects, before any goal runs
- * (Vidocq/vidocq#339, evolution 2). Maven loads it only when the plugin is declared with
+ * (Vidocq/vidocq#339, evolution 2), and gives a project without {@code vidocq-runtime-parent} the build the parent
+ * carries (Vidocq/vidocq#380, {@link ApplicationBuild}). Maven loads it only when the plugin is declared with
  * {@code <extensions>true</extensions>}, which {@code vidocq-runtime-parent} does from 0.4.0; IntelliJ IDEA's Maven
  * import runs it too, so the IDE's processor path is the build's.
  *
@@ -39,6 +43,8 @@ import java.nio.file.Path;
  */
 public final class CodegenPathsParticipant extends AbstractMavenLifecycleParticipant {
 
+    private static final Logger LOG = LoggerFactory.getLogger(CodegenPathsParticipant.class);
+
     /** The property that skips {@code git-commit-id-maven-plugin}, which writes the build identity. */
     static final String GIT_COMMIT_ID_SKIP = "maven.gitcommitid.skip";
 
@@ -46,6 +52,11 @@ public final class CodegenPathsParticipant extends AbstractMavenLifecyclePartici
     public void afterProjectsRead(MavenSession session) {
         for (MavenProject project : session.getProjects()) {
             CodegenPaths.wire(project.getModel());
+            List<String> completed = ApplicationBuild.complete(project.getModel());
+            if (!completed.isEmpty()) {
+                LOG.info("[vidocq] {}: no Vidocq parent in the pom, the plugin adds {}", project.getArtifactId(),
+                        String.join(", ", completed));
+            }
             skipBuildIdentityWithoutCommit(project);
         }
     }
