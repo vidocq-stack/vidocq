@@ -5,6 +5,29 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261107-02 — `Requirement` cannot express `requires static`, so two catalog entries stay unchecked
+
+- **Date**: 2026-11-07
+- **Status**: OPEN. Deliberately out of scope of `fix/module-info-catalog-requires`, which pins the behaviour with
+  `ModuleRequirementsCollectorTest.catalogRequiresStaticIsNotReportedAsAPlainRequires`: a `mansart-data` artifact
+  must not contribute `java.compiler` as a plain `requires`.
+- **Reported by**: the same `social-metricbot` port, while fixing BUG-20261107-01.
+- **Minimal reproduction**: `cassini-rest.module-info.requires.static = java.compiler` and
+  `mansart-data.module-info.requires.static = java.compiler` in `extension-catalog.properties`. There is no way to
+  pass either to `vidocq:check-module-info`: `Requirement.Kind` in `vidocq-runtime-codegen-commons` is
+  `{REQUIRES, OPENS}`, so a static requirement can only be reported as a plain one, which would demand a stronger
+  directive than the extension needs and would fail an application that correctly wrote `requires static`.
+- **Cause**: `requires static` was never modelled. `Requirement` has two kinds, and
+  `ModuleInfoRequirements.missing(...)` compares names without looking at
+  `ModuleDescriptor.Requires.modifiers()`, so `STATIC` is invisible on both sides -- in what the catalog asks for
+  and in what the application's `module-info` already declares.
+- **Suggested fix**: add a third kind (`REQUIRES_STATIC`) or a boolean on `Requirement`, read
+  `module-info.requires.static` in `KnownExtensions.moduleRequires`'s sibling accessor, and make
+  `ModuleInfoRequirements.missing(...)` treat a declared `requires static X` as satisfying a static requirement
+  for `X` -- and a declared plain `requires X` as satisfying it too, since it is stronger.
+
+---
+
 ## BUG-20261107-01 — `check-module-info` never checks the `requires` the extension catalog states
 
 - **Date**: 2026-11-07
