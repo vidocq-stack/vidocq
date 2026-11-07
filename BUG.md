@@ -107,6 +107,37 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   it is.
 - **Fix**: a timestamp that is not after 1980-02-01 is Maven's placeholder, not a build time: `buildTime` treats it
   as absent (the current time, to the second) and keeps a real timestamp the pom sets.
+## BUG-20261107-02 — `check-module-info` never checks the `requires` the extension catalog states
+
+- **Date**: 2026-11-07
+- **Status**: FIXED on `fix/module-info-catalog-requires`: `ModuleRequirementsCollector.collect` now unions the
+  extension catalog with the `module-requirements.properties` descriptor, through a new
+  `KnownExtensions.moduleRequires(id)` that mirrors `resourcePackagesToOpen`.
+  `ModuleRequirementsCollectorTest.catalogRequiresAreCollectedForAnExtensionWithoutADescriptor` (red: `expected:
+  <[io.vidocq.cassini.api, jakarta.cdi, jakarta.inject, jakarta.json.bind, jakarta.ws.rs]> but was: <[]>`; green
+  with the collector change), plus `anArtifactOutsideTheCatalogContributesNothing` and
+  `catalogRequiresStaticIsNotReportedAsAPlainRequires`. Module tests: 1925, 0 failures; `verify` green including
+  the license headers.
+- **Reported by**: the port of `social-metricbot` from Open Liberty to Vidocq 0.4.0-RC2, where the module-info
+  goals had nothing to say about an application using `cassini-rest`, `mansart-data` and `foy-servlet`.
+- **Minimal reproduction**: pass a `cassini-rest` artifact to `ModuleRequirementsCollector.collect` -- any
+  `org.apache.maven.artifact.Artifact` with groupId `io.vidocq.runtime.extensions.jakartaee.core` and artifactId
+  `vidocq-runtime-cassini-rest-extension`. The result is empty, although
+  `cassini-rest.module-info.requires` in `extension-catalog.properties` names five modules. Since
+  `vidocq:check-module-info` reports what the collector returns, it cannot report any of them missing.
+- **Cause**: an extension's module requirements live in two unrelated descriptors.
+  `META-INF/vidocq/extension.properties`, aggregated into the generated `extension-catalog.properties`, carries
+  `module-info.requires`, `module-info.requires.static`, `module-info.opens-application-package` and
+  `module-info.opens-resource-package`; three ids use `module-info.requires` (`cassini-rest`, `ibarra-pages`,
+  `peano-el`). `META-INF/vidocq/module-requirements.properties` carries `requires`, `opens`, `opens.to.<module>`
+  and `reason.<name>`, and exactly one extension of 24 ships it (`migration`). `KnownExtensions` reads the first,
+  `ModuleRequirementsCollector` and `ModuleRequirementsDescriptor` read only the second, so the catalog's
+  `requires` never reach the check. Not chosen: generating `module-requirements.properties` into every extension
+  jar at build time, which would keep two formats alive and make the catalog a build input to itself.
+- **Not affected**: the `opens` half. `ReflectedPackages` derives it from the compiled classes (`@Path`,
+  `@Provider`, entity annotations, private interceptor methods), which is stronger than a descriptor flag, and
+  `complete-module-info` writing only `opens` is deliberate.
+- **Not fixed here**: `requires static` -- see BUG-20261107-03.
 
 ---
 
