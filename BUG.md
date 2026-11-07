@@ -1562,7 +1562,7 @@ where this whole bug class is invisible.
 ## BUG-20261022-01 — `@VidocqDataSources` on a module declaration crashes javac
 
 - **Date**: 2026-10-22
-- **Status**: OPEN
+- **Status**: FIXED on `fix/datasources-module-anchor` (Vidocq/vidocq#505)
 - **Affected module**: vidocq-runtime-mansart-pool-datasources-codegen (`VidocqDataSourcesProcessor`)
 - **Symptom**: the annotation's `@Target` allows `MODULE`, but a module annotated with it does not compile:
   `Fatal error compiling: java.lang.NullPointerException: Cannot invoke
@@ -1580,6 +1580,11 @@ where this whole bug class is invisible.
   - 2026-10-22: found while writing `vidocq-runtime-it-naming` (vidocq#297); the IT annotates a type instead.
     A fix has to pick a package for a module anchor (for instance the module's first package, or refuse
     `MODULE` in `@Target`).
+  - 2026-11-07: fixed (Vidocq/vidocq#505). A module anchor takes the first package of the module in name
+    order, a type or package anchor wins when there is one, and a module with no package gets a compile
+    error naming `@VidocqDataSources` instead of the `NullPointerException`. Tests
+    `VidocqDataSourcesProcessorTest.generatesHolderWhenTheAnnotationIsOnTheModuleDeclaration` and
+    `refusesAModuleWithoutAnyPackageInsteadOfCrashing`.
 
 ## BUG-20261023-01 — `extension add` declares a second `maven-compiler-plugin`
 

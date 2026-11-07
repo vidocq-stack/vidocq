@@ -30,7 +30,10 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.ModuleElement;
+import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
@@ -108,9 +111,24 @@ public final class VidocqDataSourcesProcessor extends AbstractProcessor {
             return false;
         }
 
-        // Holders are emitted in the package of the first annotated element.
+        // Holders are emitted in the package of the first annotated type or package; a module
+        // declaration has no package of its own, so it only anchors when nothing else does.
         Element anchor = anchors.iterator().next();
-        String targetPackage = elements.getPackageOf(anchor).getQualifiedName().toString();
+        for (Element candidate : anchors) {
+            if (candidate.getKind() != ElementKind.MODULE) {
+                anchor = candidate;
+                break;
+            }
+        }
+        String targetPackage = packageFor(anchor);
+        if (targetPackage == null) {
+            messager.printMessage(Diagnostic.Kind.ERROR,
+                    "@VidocqDataSources on module " + anchor + " needs a package to hold the generated "
+                            + "datasource beans, and the module declares none: annotate a class or a package instead",
+                    anchor);
+            generated = true;
+            return false;
+        }
 
         Set<String> names = new TreeSet<>();
         for (Element e : anchors) {
@@ -123,6 +141,24 @@ public final class VidocqDataSourcesProcessor extends AbstractProcessor {
         }
         generated = true;
         return false;
+    }
+
+    /**
+     * The package that receives the holders: the one enclosing a type or package anchor, and for a
+     * module declaration (which has no package) the first package of the module, in name order.
+     * Returns {@code null} when the module has no package.
+     */
+    private String packageFor(Element anchor) {
+        if (anchor instanceof ModuleElement module) {
+            return module.getEnclosedElements().stream()
+                    .filter(PackageElement.class::isInstance)
+                    .map(e -> ((PackageElement) e).getQualifiedName().toString())
+                    .filter(name -> !name.isEmpty())
+                    .sorted()
+                    .findFirst()
+                    .orElse(null);
+        }
+        return elements.getPackageOf(anchor).getQualifiedName().toString();
     }
 
     /** Reads the {@code value()} array of {@code @VidocqDataSources} via the annotation mirror. */

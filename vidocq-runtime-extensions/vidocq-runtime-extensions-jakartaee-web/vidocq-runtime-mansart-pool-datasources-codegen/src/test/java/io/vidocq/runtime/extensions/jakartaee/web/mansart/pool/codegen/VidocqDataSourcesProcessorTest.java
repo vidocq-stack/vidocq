@@ -87,6 +87,79 @@ class VidocqDataSourcesProcessorTest {
         assertTrue(body.contains("super(\"analytics\")"), body);
     }
 
+    /** BUG-20261022-01: the annotation on a module declaration used to crash javac with a NullPointerException. */
+    @Test
+    void generatesHolderWhenTheAnnotationIsOnTheModuleDeclaration() throws Exception {
+        Path classes = Files.createDirectories(tempDir.resolve("mclasses"));
+        Path gen = Files.createDirectories(tempDir.resolve("mgen"));
+        Path moduleInfo = tempDir.resolve("module-info.java");
+        Files.writeString(moduleInfo, """
+                @io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.VidocqDataSources("audit")
+                module com.example.app {
+                    requires io.vidocq.runtime.extensions.jakartaee.web.mansart.pool;
+                    requires java.sql;
+                    requires jakarta.cdi;
+                    requires jakarta.inject;
+                }
+                """);
+        Path app = Files.createDirectories(tempDir.resolve("app")).resolve("App.java");
+        Files.writeString(app, """
+                package com.example.app;
+                public class App {}
+                """);
+
+        List<String> messages = new ArrayList<>();
+        boolean ok = compileModule(List.of(moduleInfo.toFile(), app.toFile()), classes.toFile(), gen.toFile(), messages);
+        assertTrue(ok, "compilation of an annotated module failed: " + messages);
+
+        Path audit = gen.resolve("com/example/app/_audit$DataSource.java");
+        assertTrue(Files.exists(audit), "missing generated holder: " + audit);
+    }
+
+    @Test
+    void refusesAModuleWithoutAnyPackageInsteadOfCrashing() throws Exception {
+        Path classes = Files.createDirectories(tempDir.resolve("eclasses"));
+        Path gen = Files.createDirectories(tempDir.resolve("egen"));
+        Path moduleInfo = tempDir.resolve("module-info.java");
+        Files.writeString(moduleInfo, """
+                @io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.VidocqDataSources("audit")
+                module com.example.empty {
+                    requires io.vidocq.runtime.extensions.jakartaee.web.mansart.pool;
+                }
+                """);
+
+        List<String> messages = new ArrayList<>();
+        boolean ok = compileModule(List.of(moduleInfo.toFile()), classes.toFile(), gen.toFile(), messages);
+        assertFalse(ok, "an annotated module with no package has nowhere to put a holder");
+        assertTrue(messages.stream().anyMatch(m -> m.contains("@VidocqDataSources") && m.contains("package")),
+                "expected a diagnostic naming the annotation and the package: " + messages);
+        assertFalse(messages.stream().anyMatch(m -> m.contains("NullPointerException")), messages.toString());
+    }
+
+    private boolean compileModule(List<File> sources, File classesOut, File genOut, List<String> messages)
+            throws Exception {
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        assertNotNull(compiler, "javax.tools.JavaCompiler not available");
+        String cp = effectiveClasspath();
+        List<String> options = List.of(
+                "--module-path", cp,
+                "-processorpath", cp,
+                "-processor", VidocqDataSourcesProcessor.class.getName(),
+                "-d", classesOut.getAbsolutePath(),
+                "-s", genOut.getAbsolutePath());
+        javax.tools.DiagnosticListener<JavaFileObject> listener =
+                d -> messages.add(d.getKind() + ": " + d.getMessage(null));
+        try (StandardJavaFileManager fm = compiler.getStandardFileManager(null, null, null)) {
+            Iterable<? extends JavaFileObject> units = fm.getJavaFileObjectsFromFiles(sources);
+            try {
+                return compiler.getTask(null, fm, listener, options, null, units).call();
+            } catch (RuntimeException e) {
+                messages.add("EXCEPTION: " + e);
+                return false;
+            }
+        }
+    }
+
     private boolean compileWithProcessor(File source, File classesOut, File genOut) throws Exception {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         assertNotNull(compiler, "javax.tools.JavaCompiler not available");
