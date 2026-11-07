@@ -77,7 +77,7 @@ class BuildInfoTest {
                 identityLine(jar("0.4.0-SNAPSHOT", "9beafc47", false, null, "2026-08-30T20:07:01Z", "2026-09-15T15:53:21Z")));
         assertEquals("Vidocq 0.4.0-SNAPSHOT (jar dated 2026-09-15T15:53:21Z)",
                 identityLine(jar("0.4.0-SNAPSHOT", null, null, null, null, "2026-09-15T15:53:21Z")));
-        assertEquals("Vidocq version unknown (classes in vidocq-runtime-core/target/classes)",
+        assertEquals("Vidocq version unversionned (classes in vidocq-runtime-core/target/classes)",
                 identityLine(directory(null, "/home/dev/vidocq/vidocq-runtime-core/target/classes")));
         assertEquals("Vidocq 0.4.0-SNAPSHOT? (last Maven build, classes in vauban-api/target/classes)",
                 identityLine(directory("0.4.0-SNAPSHOT", "/home/dev/vauban/vauban-api/target/classes")));
@@ -143,7 +143,30 @@ class BuildInfoTest {
         assertNull(info.builtAt());
         assertNull(info.committedAt());
         assertNotNull(info.fileDatedAt(), "the jar date stands in");
-        assertTrue(info.describe().startsWith("version unknown (jar dated "), info.describe());
+        assertTrue(info.describe().startsWith("version unversionned (jar dated "), info.describe());
+    }
+
+    /**
+     * Vidocq/vidocq#380: {@code vidocq:build-info} writes {@value BuildInfo#UNVERSIONED} as the commit of a build made
+     * outside any git repository (a source archive, a build server without the history). It is a real value, shown as
+     * is: the application knows it was built, and when, and that no commit names that build.
+     */
+    @Test
+    void aBuildMadeOutsideARepositorySaysItIsUnversioned() throws Exception {
+        Path archive = writeJar(dir.resolve("app.jar"), Map.of(
+                "META-INF/vidocq/build-info/app.properties", utf8("""
+                        git.branch=unversionned
+                        git.build.time=2026-11-07T10:00:00Z
+                        git.build.version=1.0.0-SNAPSHOT
+                        git.commit.id.abbrev=unversionned
+                        git.commit.id.full=unversionned
+                        """)));
+
+        BuildInfo info = BuildInfo.read(null, null, archive.toUri());
+
+        assertEquals("unversionned", BuildInfo.UNVERSIONED);
+        assertEquals(BuildInfo.UNVERSIONED, info.commit());
+        assertEquals("1.0.0-SNAPSHOT (unversionned, built 2026-11-07T10:00:00Z)", info.describe());
     }
 
     @Test
@@ -229,7 +252,7 @@ class BuildInfoTest {
 
         assertEquals("0.4.0-SNAPSHOT? (last Maven build, classes in vauban-api/target/classes)",
                 BuildInfo.of(module(versioned, "brick.versioned")).describe());
-        assertEquals("version unknown (classes in vidocq-runtime-core/target/classes)",
+        assertEquals("version unversionned (classes in vidocq-runtime-core/target/classes)",
                 BuildInfo.of(module(unversioned, "brick.unversioned")).describe());
     }
 

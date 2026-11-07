@@ -76,6 +76,12 @@ public record BuildInfo(String module, String version, String commit, Boolean di
     /** Directory of the per-artifact build identity files. */
     public static final String BUILD_INFO_DIR = "META-INF/vidocq/build-info/";
 
+    /**
+     * The commit {@code vidocq:build-info} writes for a build made outside any git repository (Vidocq/vidocq#380), and
+     * what the banner says of a version it cannot find: the build happened, no commit names it.
+     */
+    public static final String UNVERSIONED = "unversionned";
+
     private static final String MAVEN_DIR = "META-INF/maven/";
     private static final String POM_PROPERTIES = "/pom.properties";
     private static final String PROPERTIES_SUFFIX = ".properties";
@@ -129,8 +135,12 @@ public record BuildInfo(String module, String version, String commit, Boolean di
         }
     }
 
-    /** What is known about the archive at {@code location} ({@code file:} jar or directory). */
-    static BuildInfo read(String module, String rawVersion, URI location) {
+    /**
+     * What is known about the archive at {@code location} ({@code file:} jar or directory), for the module named
+     * {@code module} (or {@code null}) whose descriptor gives {@code rawVersion} (or {@code null}). Public for the
+     * build tools that write the identity file: {@code vidocq:build-info} checks what it wrote reads back.
+     */
+    public static BuildInfo read(String module, String rawVersion, URI location) {
         try {
             Path path = Path.of(location);
             if (Files.isDirectory(path)) {
@@ -199,7 +209,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
     /**
      * The version, then the details between parentheses when there are any:
      * {@code 0.3.0}, {@code 0.4.0-SNAPSHOT (9beafc47+dirty, built 2026-09-17T14:02:11Z)},
-     * {@code version unknown (classes in vidocq-runtime-core/target/classes)}.
+     * {@code version unversionned (classes in vidocq-runtime-core/target/classes)}.
      */
     public String describe() {
         return describe(true);
@@ -212,7 +222,7 @@ public record BuildInfo(String module, String version, String commit, Boolean di
     public String describe(boolean lastMavenBuildLabel) {
         String text;
         if (version == null) {
-            text = "version unknown";
+            text = "version " + UNVERSIONED;
         } else {
             text = exploded ? version + "?" : version;
         }

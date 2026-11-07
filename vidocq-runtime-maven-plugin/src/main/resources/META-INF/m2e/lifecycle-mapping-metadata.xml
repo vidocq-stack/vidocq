@@ -2,9 +2,10 @@
 <!--
     How Eclipse's Maven integration (m2e: Eclipse, VS Code's Java extension) treats the goals vidocq-runtime-parent binds
     before package, and the plugin binds itself in a project without the parent (Vidocq/vidocq#380). checkpom and
-    check-module-info are command-line checks of the build, test-path sets a property for Surefire, and generate enriches
-    the dependency jars for a Maven run: the IDE ignores them instead of flagging each one on the pom ("Plugin execution
-    not covered by lifecycle configuration"). LifecycleMappingMetadataTest.
+    check-module-info are command-line checks of the build, test-path sets a property for Surefire, generate enriches
+    the dependency jars for a Maven run, and build-info writes the identity of a Maven build: the IDE ignores them
+    instead of flagging each one on the pom ("Plugin execution not covered by lifecycle configuration").
+    LifecycleMappingMetadataTest.
 -->
 <lifecycleMappingMetadata>
     <pluginExecutions>
@@ -15,6 +16,7 @@
                     <goal>check-module-info</goal>
                     <goal>test-path</goal>
                     <goal>generate</goal>
+                    <goal>build-info</goal>
                 </goals>
             </pluginExecutionFilter>
             <action>

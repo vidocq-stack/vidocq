@@ -60,6 +60,9 @@
 | `vidocq:test-path`
 | Names the compile and runtime jars in `vidocq.test.runtimePath` for the application `@VidocqTest` starts, so that a driver no module requires is on its module path. Bound to `process-test-classes` by `vidocq-runtime-parent`. xref:testing.adoc#runtime-dependencies[Details].
 
+| `vidocq:build-info`
+| Writes the build identity the startup banner reads, `META-INF/vidocq/build-info/<artifactId>.properties`, from `.git` without running `git`; without a repository the commit reads `unversionned` and the build goes on. Bound to `initialize` by the plugin in an application without `vidocq-runtime-parent`, which writes the same file with `git-commit-id-maven-plugin`. See <<build-info,the `vidocq:build-info` goal>>.
+
 | `vidocq:idea`
 | Experimental — writes one IntelliJ IDEA shared run configuration per application of the reactor into `.run/`, or checks them in CI. See <<idea,the `vidocq:idea` goal>>.
 
@@ -401,6 +404,39 @@ Foy's `merge` file is also among its `markers`: a jar that already has it was bu
 == `vidocq:analyze-deps` goal
 
 `mvn vidocq:analyze-deps` prints, for each bean archive and each named dependency, what it is — its discovery mode, an explicit or automatic module, signed or not — what selects or excludes it, and what `vidocq:generate` does with it: an enriched copy, an open module synthesized first, or nothing and why. It ends with the `<scanDependencies>` block that makes the detected bean archives explicit, to paste in the pom. It reads the same `scanDependencies`, `scanExcludes` and `autoScan` as `vidocq:generate`: configure them at plugin level so both goals see them. A jar that a brick selects reads `selected by a brick (Foy)` as its source, and the bricks that would process it are listed (<<brick-processors>>). It changes nothing.
+
+[#build-info]
+== `vidocq:build-info` goal
+
+`vidocq:build-info` writes `META-INF/vidocq/build-info/<artifactId>.properties` into `target/classes` at the
+`initialize` phase: the file the xref:vidocq-runtime-core.adoc#build-identity[startup banner] and the dev console read
+for the version, the commit and the build time of the application. Under `vidocq-runtime-parent`,
+`git-commit-id-maven-plugin` writes that file; in an application without the parent, the plugin binds this goal itself
+(Vidocq/vidocq#380), and a pom that runs `git-commit-id-maven-plugin` or binds the goal on its own is left alone.
+
+The goal reads `.git` and runs no `git` command for the commit: `HEAD`, the loose refs and `packed-refs`, through the
+`.git` file of a linked worktree (`gitdir:` and `commondir`) or of a submodule, in a shallow clone as well. The dirty
+flag alone comes from `git status --porcelain --untracked-files=no`, when the `git` command answers within ten
+seconds (`-Dvidocq.buildInfo.git=/path/to/git` names another one); otherwise the flag is left out.
+
+[source,properties]
+----
+git.branch=main
+git.build.time=2026-11-07T17:36:03Z
+git.build.version=1.0.0-SNAPSHOT
+git.commit.id.abbrev=9beafc47
+git.commit.id.full=9beafc47e1c8685e0123456789abcdef01234567
+git.dirty=false
+----
+
+* Without a repository (a source archive, a build server without the history, a `HEAD` that names no commit yet), the
+  build does not fail: `git.commit.id.abbrev`, `git.commit.id.full` and `git.branch` read `unversionned`, and the
+  banner shows `1.0.0-SNAPSHOT (unversionned, built 2026-11-07T17:36:03Z)`.
+* A detached `HEAD` gives `git.branch=HEAD`, as `git rev-parse --abbrev-ref HEAD` does.
+* `git.build.time` is `project.build.outputTimestamp` when the pom sets one (an ISO-8601 date-time or epoch seconds),
+  so a reproducible build stays reproducible; otherwise the time of the build, to the second. The file has no comment
+  line and its keys are sorted: two builds of the same commit at the same time write the same bytes.
+* `-Dvidocq.buildInfo.skip=true` writes nothing; the banner then falls back to the jar date.
 
 [#package-layout]
 == `vidocq:package` layouts

@@ -43,15 +43,17 @@ class ApplicationBuildTest {
 
     private static final String COMPILER = "org.apache.maven.plugins:maven-compiler-plugin";
     private static final String SUREFIRE = "org.apache.maven.plugins:maven-surefire-plugin";
+    /** The parent's five executions, then the build identity the parent writes with git-commit-id-maven-plugin. */
     private static final List<String> PARENT_EXECUTIONS = List.of(
             "vidocq-checkpom:checkpom@validate",
             "vidocq-test-path:test-path@process-test-classes",
             "generate:generate@process-classes",
             "vidocq-check-module-info:check-module-info@process-classes",
-            "default:package@");
+            "default:package@",
+            "vidocq-build-info:build-info@initialize");
 
     @Test
-    void aProjectWithoutTheParentGetsTheFiveExecutionsOfThePlugin() {
+    void aProjectWithoutTheParentGetsTheExecutionsOfThePlugin() {
         Model model = application();
 
         ApplicationBuild.complete(model);
@@ -71,7 +73,26 @@ class ApplicationBuildTest {
                 "vidocq-checkpom:checkpom@validate",
                 "vidocq-test-path:test-path@process-test-classes",
                 "generate:generate@process-classes",
-                "vidocq-check-module-info:check-module-info@process-classes"), executions(vidocq(model)));
+                "vidocq-check-module-info:check-module-info@process-classes",
+                "vidocq-build-info:build-info@initialize"), executions(vidocq(model)));
+    }
+
+    /**
+     * Vidocq/vidocq#380: the build identity comes from {@code vidocq:build-info} without the parent, and from
+     * {@code git-commit-id-maven-plugin} with it, or with a pom that runs that plugin itself: never both.
+     */
+    @Test
+    void aProjectThatRunsGitCommitIdWritesItsBuildIdentityOnceOnly() {
+        Model model = application();
+        Plugin gitCommitId = new Plugin();
+        gitCommitId.setGroupId("io.github.git-commit-id");
+        gitCommitId.setArtifactId("git-commit-id-maven-plugin");
+        gitCommitId.addExecution(execution("vidocq-build-info", "revision", "initialize"));
+        model.getBuild().addPlugin(gitCommitId);
+
+        ApplicationBuild.complete(model);
+
+        assertEquals(PARENT_EXECUTIONS.subList(0, 5), executions(vidocq(model)));
     }
 
     @Test
@@ -208,8 +229,8 @@ class ApplicationBuildTest {
     void aProjectWithTheParentSeesNoChange() {
         Model model = application();
         List<String> firstPass = ApplicationBuild.complete(model);
-        // Five executions, the release, the compiler argument, the Surefire property, the m2e switch, two versions.
-        assertEquals(11, firstPass.size(), firstPass.toString());
+        // Six executions, the release, the compiler argument, the Surefire property, the m2e switch, two versions.
+        assertEquals(12, firstPass.size(), firstPass.toString());
 
         List<String> secondPass = ApplicationBuild.complete(model);
 

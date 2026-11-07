@@ -240,7 +240,7 @@ class CoreSectionsTest {
     @Test
     void theRuntimeIsTheVersionAndTheJvm() {
         assertEquals("0.4.0-SNAPSHOT on Java 25+36-LTS", CoreSections.runtime("0.4.0-SNAPSHOT", "25+36-LTS"));
-        assertEquals("version unknown on Java 25", CoreSections.runtime(null, "25"));
+        assertEquals("version unversionned on Java 25", CoreSections.runtime(null, "25"));
     }
 
     private static Path absolute(String unixPath) {

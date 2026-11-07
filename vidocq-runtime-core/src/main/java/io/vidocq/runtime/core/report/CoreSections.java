@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.core.report;
 
+import io.vidocq.runtime.core.banner.BuildInfo;
 import io.vidocq.runtime.core.report.Section.Cells;
 import io.vidocq.runtime.core.report.Section.Items;
 import io.vidocq.runtime.core.report.Section.Line;
@@ -258,9 +259,9 @@ public final class CoreSections {
                 + String.join(", ", StartupReportRenderer.capped(names));
     }
 
-    /** {@code 0.4.0-SNAPSHOT on Java 25+36-LTS}. */
+    /** {@code 0.4.0-SNAPSHOT on Java 25+36-LTS}; {@code version unversionned} when the version is not known. */
     public static String runtime(String version, String java) {
-        return (version == null ? "version unknown" : version) + " on Java " + java;
+        return (version == null ? "version " + BuildInfo.UNVERSIONED : version) + " on Java " + java;
     }
 
     /**

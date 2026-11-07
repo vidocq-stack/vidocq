@@ -58,6 +58,6 @@ class LifecycleMappingMetadataTest {
                 ignored.add(goals.item(g).getTextContent().strip());
             }
         }
-        assertEquals(List.of("checkpom", "check-module-info", "test-path", "generate"), ignored);
+        assertEquals(List.of("checkpom", "check-module-info", "test-path", "generate", "build-info"), ignored);
     }
 }

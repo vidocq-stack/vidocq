@@ -348,7 +348,7 @@ ${ansi.cyan}  T O D O   S E R V I C E${ansi.reset}
 [#build-identity]
 === Build identity
 
-Every jar built with `io.vidocq:vidocq-parent` (Vidocq, Vauban, Cassini, Chappe), and every application built with `vidocq-runtime-parent`, which configures the plugin the same way, carries a build identity file, `META-INF/vidocq/build-info/<artifactId>.properties`, written by `git-commit-id-maven-plugin` at the `initialize` phase:
+Every jar built with `io.vidocq:vidocq-parent` (Vidocq, Vauban, Cassini, Chappe), and every application built with `vidocq-runtime-parent`, which configures the plugin the same way, carries a build identity file, `META-INF/vidocq/build-info/<artifactId>.properties`, written by `git-commit-id-maven-plugin` at the `initialize` phase. An application without the parent gets the same file from xref:vidocq-runtime-maven-plugin.adoc#build-info[`vidocq:build-info`], a goal of the Vidocq plugin that reads `.git` itself (Vidocq/vidocq#380); it adds `git.commit.id.full` and `git.branch`, and writes `unversionned` as the commit of a build made outside any repository, which the banner shows as is: `1.0.0-SNAPSHOT (unversionned, built 2026-11-07T17:36:03Z)`. A version the banner cannot find at all reads `version unversionned`.
 
 [source,properties]
 ----
