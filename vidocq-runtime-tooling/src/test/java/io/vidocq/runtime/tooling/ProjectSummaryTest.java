@@ -117,6 +117,18 @@ class ProjectSummaryTest {
         assertEquals("VIDOCQ_PROFILE", summary.profileSource());
     }
 
+    /** Vidocq/vidocq#380: a project without the parent imports the BOM at {@code ${vidocq.version}}, a property. */
+    @Test
+    void aParentlessPomNamesItsVersionThroughTheVidocqVersionProperty(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("pom.xml"), BOM_ONLY
+                .replace("<version>0.4.1</version>", "<version>${vidocq.version}</version>")
+                .replace("<properties>", "<properties>\n        <vidocq.version>0.4.2</vidocq.version>"));
+
+        ProjectSummary summary = ProjectSummary.read(dir, NO_ENV::get);
+
+        assertEquals("0.4.2", summary.runtimeVersion());
+    }
+
     /** An application that keeps its own parent imports the BOM, and may name its module in the pom. */
     @Test
     void theBomGivesTheVersionAndThePomTheModuleWhenThereIsNoModuleInfo(@TempDir Path dir) throws IOException {

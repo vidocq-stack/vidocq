@@ -52,6 +52,35 @@ class CliParserCreateTest {
         assertEquals("1.2.3", c.spec().parentVersion());
     }
 
+    /** Vidocq/vidocq#380: the project builds on the BOM and the plugin by default; the parent is asked for. */
+    @Test
+    void noParentByDefaultAndWithParentAsksForIt() {
+        Command.Create plain = assertInstanceOf(Command.Create.class,
+                CliParser.parse(new String[]{"create", "--name", "demo"}));
+        Command.Create withParent = assertInstanceOf(Command.Create.class,
+                CliParser.parse(new String[]{"create", "--name", "demo", "--with-parent"}));
+        Command.CreateInteractively asked = assertInstanceOf(Command.CreateInteractively.class,
+                CliParser.parse(new String[]{"create", "--with-parent"}));
+
+        assertFalse(plain.spec().withParent());
+        assertTrue(withParent.spec().withParent());
+        assertTrue(asked.withParent());
+    }
+
+    /** The version names the Vidocq runtime, the parent's with {@code --with-parent}: both spellings work. */
+    @Test
+    void vidocqVersionNamesTheRuntimeVersionAsParentVersionDoes() {
+        Command.Create c = assertInstanceOf(Command.Create.class,
+                CliParser.parse(new String[]{"create", "--name", "demo", "--vidocq-version", "0.4.0"}));
+        assertEquals("0.4.0", c.spec().parentVersion());
+    }
+
+    @Test
+    void theHelpListsTheWithParentAndVidocqVersionOptions() {
+        assertTrue(help("create").contains("--with-parent"), help("create"));
+        assertTrue(help("create").contains("--vidocq-version"), help("create"));
+    }
+
     @Test
     void noApplicationMainClassByDefault() {
         Command.Create c = assertInstanceOf(Command.Create.class,

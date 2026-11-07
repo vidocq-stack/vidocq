@@ -92,6 +92,7 @@ public final class CommandRunner {
                     false, progress(check, "the Eclipse configurations in .eclipse/"));
             case Command.Create c              -> runCreate(c);
             case Command.CreateInteractively c -> runCreateInteractively(c);
+            case Command.PomConvert p          -> runPomConvert(p, Path.of(""));
             case Command.Build b               -> runBuild(b);
             case Command.Clean cl              -> runClean(cl);
             case Command.Config cfg            -> switch (cfg) {
@@ -324,6 +325,49 @@ public final class CommandRunner {
             CliOutput.println("  " + CliOutput.dim("No main class: the runtime boots the app. Add " + CliOutput.cyan("--main")
                     + CliOutput.dim(" for an @VidocqMain trampoline (IDE Run, VidocqApp).")));
         }
+        return 0;
+    }
+
+    /**
+     * {@code vidocq pom convert} on the pom in {@code dir}: prints the diff, then writes the pom, unless
+     * {@code --check}, which exits with 1 when a conversion is needed. A pom the converter does not recognise is
+     * refused with its reason and left alone (Vidocq/vidocq#380).
+     */
+    static int runPomConvert(Command.PomConvert convert, Path dir) {
+        Path pom = dir.resolve(POM_XML);
+        if (!Files.isRegularFile(pom)) {
+            CliOutput.error("No " + POM_XML + " in " + dir.toAbsolutePath() + ".");
+            return 1;
+        }
+        String before;
+        io.vidocq.runtime.tooling.PomConverter.Result result;
+        try {
+            before = Files.readString(pom);
+            result = io.vidocq.runtime.tooling.PomConverter.convert(before, convert.target());
+        } catch (IOException e) {
+            CliOutput.error("Cannot read " + pom + ": " + e.getMessage());
+            return 1;
+        } catch (IllegalArgumentException e) {
+            CliOutput.error(e.getMessage());
+            return 1;
+        }
+        String style = convert.target().name().toLowerCase(java.util.Locale.ROOT);
+        if (!result.changed()) {
+            CliOutput.success(POM_XML + " already has the " + style + " style.");
+            return 0;
+        }
+        CliOutput.println(io.vidocq.runtime.tooling.TextDiff.unified(before, result.pom()));
+        if (convert.check()) {
+            CliOutput.warning(POM_XML + " needs a conversion to the " + style + " style (run without --check).");
+            return 1;
+        }
+        try {
+            Files.writeString(pom, result.pom());
+        } catch (IOException e) {
+            CliOutput.error("Cannot write " + pom + ": " + e.getMessage());
+            return 1;
+        }
+        CliOutput.success(POM_XML + " converted to the " + style + " style.");
         return 0;
     }
 

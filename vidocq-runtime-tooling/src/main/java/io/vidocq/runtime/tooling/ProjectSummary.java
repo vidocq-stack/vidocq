@@ -83,8 +83,22 @@ public record ProjectSummary(String mainModule, String runtimeVersion, List<Stri
             profileSource = profile == null ? null : PROPERTIES;
         }
         return new ProjectSummary(mainModule(projectDir, pom),
-                PomDependencies.runtimeVersion(pom).orElseGet(() -> first(BOM, pom)),
+                PomDependencies.runtimeVersion(pom).orElseGet(() -> resolved(first(BOM, pom), pom)),
                 extensions, profile, profileSource);
+    }
+
+    /**
+     * {@code value}, or the pom property it names when it is a {@code ${property}} reference: a project without the
+     * parent imports the BOM at {@code ${vidocq.version}} (Vidocq/vidocq#380).
+     */
+    private static String resolved(String value, String pom) {
+        if (value == null || !value.startsWith("${") || !value.endsWith("}")) {
+            return value;
+        }
+        String property = value.substring(2, value.length() - 1);
+        String defined = first(Pattern.compile("<" + Pattern.quote(property) + ">\\s*([^<\\s]+)\\s*</"
+                + Pattern.quote(property) + ">"), pom);
+        return defined == null ? value : defined;
     }
 
     private static String mainModule(Path projectDir, String pom) throws IOException {

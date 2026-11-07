@@ -261,6 +261,9 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | `vidocq update [--check] [--release\|--snapshot]`
 | Update the CLI itself to the latest release, or the latest SNAPSHOT build; `--release` / `--snapshot` switch channel (see <<update>>).
 
+| `vidocq pom convert --to <parentless\|parent> [--check]`
+| Convert the pom to the style without `vidocq-runtime-parent`, or back; `--check` reports only (see <<pom-convert>>).
+
 | `vidocq help [command]`
 | Show the command list or detailed help for one command.
 |===
@@ -277,12 +280,23 @@ version, the project inherits the parent's version instead, and `create` says so
 xref:modules/vidocq-runtime-maven-plugin.adoc#create-goal[`vidocq:create`] writes the same project
 . The extensions are written in the order given.
 
+[#create-parentless]
+**No parent by default** (Vidocq/vidocq#380). The pom imports `vidocq-runtime-bom` and `junit-bom`, declares
+`vidocq-runtime-maven-plugin` with `<extensions>true</extensions>` and `maven.compiler.release`, and nothing else of
+the build: the plugin, a build extension, gives the build what `vidocq-runtime-parent` carried (the executions, the
+compiler argument, the lifecycle plugin versions, the Surefire property, the build identity), and the application
+keeps a parent of its own if it has one. The Vidocq version is the `vidocq.version` property, which the BOM import
+and the plugin read: an upgrade changes one line. `--with-parent` writes the previous style, under
+`vidocq-runtime-parent`; <<pom-convert,`vidocq pom convert`>> turns an existing pom from one style into the other.
+A version before 0.4.0, or a 0.4.0 release candidate, inherits the parent whatever the option: the plugin of those
+versions gives the build nothing.
+
 From 0.4.0 the project is finished(Vidocq/vidocq#339):
 
 * **A first test.** With `-x cassini-rest`, `src/test/java/<package>/HelloResourceTest.java` starts the application
   with xref:testing.adoc[`@VidocqTest`] and checks `GET /hello`; the pom declares `vidocq-runtime-junit` and
-  `junit-jupiter` in test scope, versioned by the parent. Without it, the pom declares `junit-jupiter` alone. Under a
-  parent before 0.4.0 no test is written, and `create` says why.
+  `junit-jupiter` in test scope, versioned by the BOMs the pom imports (by the parent, with `--with-parent`). Without
+  it, the pom declares `junit-jupiter` alone. Under a parent before 0.4.0 no test is written, and `create` says why.
 * **`.gitignore`**: `target/` and the files of IntelliJ IDEA, Eclipse, VS Code and macOS.
 * **`README.md`**: the commands that work on the project, with the CLI and with Maven alone.
 * **Questions on a console.** Without `--name`, on a terminal, `create` asks for the name, then for the group id and
@@ -298,7 +312,9 @@ From 0.4.0 the project is finished(Vidocq/vidocq#339):
 | `--group-id, -g <groupId>` | Maven groupId (default `io.example`).
 | `--package <pkg>` | Root Java package, also the module name (default `<groupId>.<name>`, dashes turned into dots); must be a valid Java package name.
 | `--extension, -x <id>` | Extension to enable; repeatable.
-| `--parent-version <version>` | Version of `vidocq-runtime-parent` the project inherits (default: the runtime version of the CLI). From 0.4.0 the parent's BOM versions the Vidocq dependencies, which carry no `<version>`; under an older parent each one names this version.
+| `--vidocq-version <version>` | The Vidocq version the project builds on (default: the runtime version of the CLI): the `vidocq.version` property the BOM import and the plugin read, or the version of `vidocq-runtime-parent` with `--with-parent`. From 0.4.0 the BOM versions the Vidocq dependencies, which carry no `<version>`; under an older parent each one names this version.
+| `--parent-version <version>` | The same option, under the name it had until 0.4.0.
+| `--with-parent` | Inherit `vidocq-runtime-parent` instead of importing the BOM and loading the plugin as a build extension, the default from 0.4.0 (Vidocq/vidocq#380). A version before 0.4.0, or a 0.4.0 release candidate, inherits the parent whatever the option, and `create` says so.
 | `--main`| Also write an `@VidocqMain` trampoline and set `vidocq.mainClass` to it (default: no main class, the runtime's own main boots the application). For a right-click Run in the IDE or a `VidocqApp`.
 | [[create-open-module]]`--open-module`| Declare an `open module`: every package of the application is open to reflection, so no `opens` line is ever written or asked for — not by `extension add`, `vidocq dev`, `doctor --fix` nor the build check. The simplest choice for an application; a library keeps its packages closed. See xref:java-modules.adoc#open-module[Java modules in a Vidocq application]. `vidocq:create` takes `-DopenModule=true`.
 |===
@@ -321,6 +337,36 @@ vidocq create --name my-api -x cassini-rest --parent-version 0.4.0-SNAPSHOT
 ----
 
 A CLI installed from a SNAPSHOT (`VIDOCQ_VERSION=snapshot`, see xref:getting-started.adoc[Getting started]) scaffolds with its own SNAPSHOT runtime, so `--parent-version` is not needed there. A SNAPSHOT changes with every push to `main`: run `mvn -U package` to pick up the newest one.
+
+[#pom-convert]
+=== `vidocq pom convert`
+
+Turns the pom of a Vidocq application from one style into the other (Vidocq/vidocq#380): `--to parentless` removes
+`vidocq-runtime-parent` and writes what replaces it, the `vidocq.version` property, `maven.compiler.release`, the
+imports of `vidocq-runtime-bom` and `junit-bom`, the plugin at `${vidocq.version}` with `<extensions>true</extensions>`;
+`--to parent` does the reverse, and takes away what the parent now carries. Everything else of the pom stays where it
+is: dependencies, properties, plugins, profiles, comments, indentation. A pom that already has the style is left as it
+is, so the command can run on every build.
+
+[source,bash]
+----
+vidocq pom convert --to parentless          # the diff, then the pom is written
+vidocq pom convert --to parent --check      # the diff only; exit 1 when a conversion is needed, 0 otherwise
+----
+
+The diff is printed before anything is written. The command writes nothing and says why when it does not recognise the
+pom: no `vidocq-runtime-maven-plugin` under `<build><plugins>`, a parent of its own when asked for the Vidocq one
+(keep that parent and convert to the parentless style instead), or no Vidocq version to be found (the
+`vidocq.version` property, the Vidocq parent, the plugin's, the BOM's or `vidocq-runtime-core`'s version). A pom whose
+Vidocq version is a SNAPSHOT keeps the snapshot repositories it has; the command adds none.
+
+[cols="1,2"]
+|===
+| Option | Description
+
+| `--to <parentless\|parent>` | The style to convert to (required).
+| `--check` | Report only: print the diff, exit with 1 when a conversion is needed and 0 when the pom already has the style. For CI.
+|===
 
 [#dev]
 === `vidocq dev`

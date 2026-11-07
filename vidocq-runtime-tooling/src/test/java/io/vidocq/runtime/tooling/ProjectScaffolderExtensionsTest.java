@@ -64,7 +64,9 @@ class ProjectScaffolderExtensionsTest {
                 "vidocq:dev/run/package boot the application from its main module, pom was:\n" + pom);
         assertTrue(pom.contains("<artifactId>vidocq-runtime-maven-plugin</artifactId>"),
                 "the vidocq plugin must be active so mvn package produces a runnable dist");
-        assertTrue(pom.contains("<goal>package</goal>"));
+        // The plugin, a build extension, binds its own goals (#380): the pom names none.
+        assertTrue(pom.contains("<extensions>true</extensions>"), pom);
+        assertFalse(pom.contains("<goal>package</goal>"), pom);
         // BUG-20261024-07: no workaround for the 0.2.0 plugin (BUG-20260710-01, fixed by #40).
         assertFalse(pom.contains("<jvmArgs>"), pom);
         assertFalse(pom.contains("BUG-2026"), pom);
@@ -77,7 +79,7 @@ class ProjectScaffolderExtensionsTest {
 
         assertEquals(List.of(), DevServiceWiring.missing(List.of("mansart-pool", "cervantes-jwt"),
                 DevServiceWiring.Declared.of(pom)), pom);
-        assertTrue(pom.contains("<goal>package</goal>"), "the plugin keeps its execution: " + pom);
+        assertTrue(pom.contains("<extensions>true</extensions>"), "the plugin keeps its extension switch: " + pom);
     }
 
     /** BUG-20261031-09: `create -x` writes the configuration of its extensions, as `extension add` does. */

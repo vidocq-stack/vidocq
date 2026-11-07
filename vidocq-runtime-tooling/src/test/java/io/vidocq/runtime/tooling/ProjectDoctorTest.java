@@ -73,6 +73,13 @@ class ProjectDoctorTest {
         return dir.resolve("demo");
     }
 
+    /** A project under {@code vidocq-runtime-parent}, as {@code vidocq create --with-parent} writes it (#380). */
+    private static Path createWithParent(Path dir, Set<String> extensions) throws IOException {
+        ProjectScaffolder.scaffold(new ProjectSpec("demo", "com.acme", "com.acme.demo", extensions, null, false,
+                false, true), dir, RUNTIME, new RecordingReporter());
+        return dir.resolve("demo");
+    }
+
     private static Map<String, Diagnostic> check(Path project) {
         return byName(ProjectDoctor.check(ProjectDoctor.read(project, port -> true)));
     }
@@ -121,10 +128,19 @@ class ProjectDoctorTest {
     /** From 0.4.0 the parent runs vidocq:generate on every build: a created project needs nothing of its own. */
     @Test
     void theParentRunsTheDependencyCodegen(@TempDir Path dir) throws IOException {
-        Diagnostic d = check(create(dir, Set.of("cassini-rest"), false)).get("Dependency codegen");
+        Diagnostic d = check(createWithParent(dir, Set.of("cassini-rest"))).get("Dependency codegen");
 
         assertEquals(Diagnostic.Status.OK, d.status());
         assertTrue(d.detail().contains("vidocq-runtime-parent"), d.detail());
+    }
+
+    /** Vidocq/vidocq#380: without the parent, the plugin declared as a build extension binds vidocq:generate itself. */
+    @Test
+    void thePluginRunsTheDependencyCodegenWithoutTheParent(@TempDir Path dir) throws IOException {
+        Diagnostic d = check(create(dir, Set.of("cassini-rest"), false)).get("Dependency codegen");
+
+        assertEquals(Diagnostic.Status.OK, d.status());
+        assertTrue(d.detail().contains("build extension"), d.detail());
     }
 
     @Test
@@ -343,10 +359,13 @@ class ProjectDoctorTest {
         assertEquals(Diagnostic.Status.OK, check(project).get("Vauban indexer").status());
     }
 
-    /** An application that keeps its own parent declares the indexer itself (#47). */
+    /**
+     * An application that keeps its own parent, and does not load the plugin as a build extension, declares the
+     * indexer itself (#47).
+     */
     @Test
     void withoutTheVidocqParentTheIndexerMustBeDeclared(@TempDir Path dir) throws IOException {
-        Path project = create(dir, Set.of("cassini-rest"), false);
+        Path project = createWithParent(dir, Set.of("cassini-rest"));
         Path pom = project.resolve("pom.xml");
         String text = Files.readString(pom);
         int start = text.indexOf("<parent>");

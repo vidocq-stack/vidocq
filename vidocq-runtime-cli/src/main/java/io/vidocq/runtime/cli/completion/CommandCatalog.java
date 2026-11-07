@@ -43,6 +43,7 @@ public final class CommandCatalog {
             "build",
             "clean",
             "extension",
+            "pom",
             "config",
             "completion",
             "update",

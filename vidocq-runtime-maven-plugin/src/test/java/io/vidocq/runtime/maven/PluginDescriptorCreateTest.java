@@ -71,14 +71,15 @@ class PluginDescriptorCreateTest {
         }
 
         assertEquals(List.of("basedir", "name", "groupId", "pkg", "extensions", "parentVersion", "main",
-                "openModule", "runtimeVersion"), new ArrayList<>(parameters.keySet()));
+                "withParent", "openModule", "runtimeVersion"), new ArrayList<>(parameters.keySet()));
         assertEquals(parameters.keySet(), configuration.keySet());
         for (Map.Entry<String, String> parameter : parameters.entrySet()) {
             Class<?> type = parameter.getValue().equals("boolean") ? boolean.class : Class.forName(parameter.getValue());
             assertEquals(type, VidocqCreateMojo.class.getDeclaredField(parameter.getKey()).getType(), parameter.getKey());
         }
         assertEquals("${basedir}", configuration.get("basedir").getAttribute("default-value"));
-        for (String property : List.of("name", "groupId", "extensions", "parentVersion", "main", "openModule")) {
+        for (String property : List.of("name", "groupId", "extensions", "parentVersion", "main", "withParent",
+                "openModule")) {
             assertEquals("${" + property + "}", configuration.get(property).getTextContent().strip(), property);
         }
         assertEquals("${package}", configuration.get("pkg").getTextContent().strip());

@@ -61,6 +61,7 @@ public final class CompletionSpec {
     /** Commands whose first argument is a sub-command, with the sub-commands offered. */
     static final Map<String, List<String>> SUBCOMMANDS = ordered(
             "extension", List.of("list", "add", "remove"),
+            "pom", List.of("convert"),
             "config", List.of("get", "set", "list"),
             "completion", List.of("bash", "zsh", "install", "uninstall"));
 
@@ -84,8 +85,9 @@ public final class CompletionSpec {
             "idea", List.of(CHECK, "--strict", "--kind"),
             "vscode", List.of(CHECK),
             "eclipse", List.of(CHECK),
-            "create", List.of("--name", "--group-id", "--package", "--extension", "--parent-version", "--main",
-                    "--open-module"),
+            "create", List.of("--name", "--group-id", "--package", "--extension", "--vidocq-version", "--with-parent",
+                    "--main", "--open-module"),
+            "pom convert", List.of("--to", CHECK),
             "build", List.of("--offline", "--skip-tests", "--dry-run"),
             "clean", List.of("--offline", "--dry-run"),
             "update", List.of(CHECK, "--release", "--snapshot"),
@@ -97,6 +99,7 @@ public final class CompletionSpec {
     static final Map<String, List<String>> OPTION_VALUES = ordered(
             "create --extension", extensionIds(),
             "create -x", extensionIds(),
+            "pom convert --to", List.of("parentless", "parent"),
             "idea --kind", List.of("maven", "application"),
             "start --config", List.of(FILES),
             "start -c", List.of(FILES));
@@ -104,7 +107,8 @@ public final class CompletionSpec {
     /** Options followed by a value — nothing is offered for a free-form one. */
     static final Set<String> VALUE_OPTIONS = Set.of(
             PORT, "-p", "--config", "-c", "--profile", "-P", "--name", "-n",
-            "--group-id", "-g", "--package", "--extension", "-x", "--parent-version", "--kind");
+            "--group-id", "-g", "--package", "--extension", "-x", "--vidocq-version", "--parent-version", "--kind",
+            "--to");
 
     private CompletionSpec() {}
 

@@ -72,6 +72,13 @@ public class VidocqCreateMojo extends AbstractMojo {
     @Parameter(property = "main", defaultValue = "false")
     private boolean main;
 
+    /**
+     * Inherit {@code vidocq-runtime-parent} instead of importing the BOM and loading this plugin as a build extension,
+     * the default from 0.4.0 (Vidocq/vidocq#380); {@code vidocq create --with-parent}.
+     */
+    @Parameter(property = "withParent", defaultValue = "false")
+    private boolean withParent;
+
     /** Declare an {@code open module}: every package open to reflection, so no {@code opens} line is ever needed. */
     @Parameter(property = "openModule", defaultValue = "false")
     private boolean openModule;
@@ -89,7 +96,7 @@ public class VidocqCreateMojo extends AbstractMojo {
                 .map(String::strip).filter(id -> !id.isEmpty()).toList();
         ProjectSpec spec;
         try {
-            spec = ProjectSpec.of(name.strip(), groupId, pkg, ids, parentVersion, main, openModule,
+            spec = ProjectSpec.of(name.strip(), groupId, pkg, ids, parentVersion, main, openModule, withParent,
                     "-Dpackage=<pkg>");
         } catch (IllegalArgumentException e) {
             throw new MojoFailureException(e.getMessage());

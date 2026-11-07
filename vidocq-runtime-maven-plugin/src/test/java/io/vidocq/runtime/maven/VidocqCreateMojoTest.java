@@ -63,8 +63,20 @@ class VidocqCreateMojoTest {
             assertEquals(Files.readString(byScaffolder.resolve("todo").resolve(file)),
                     Files.readString(byGoal.resolve("todo").resolve(file)), file.toString());
         }
-        assertTrue(Files.readString(byGoal.resolve("todo/pom.xml")).contains("<version>1.2.3</version>"));
+        assertTrue(Files.readString(byGoal.resolve("todo/pom.xml")).contains("<vidocq.version>1.2.3</vidocq.version>"));
         assertTrue(infos.contains("Project 'todo' created: cd todo && ./mvnw vidocq:dev"), infos.toString());
+    }
+
+    /** Vidocq/vidocq#380: {@code -DwithParent=true} writes the project under vidocq-runtime-parent, as {@code --with-parent} does. */
+    @Test
+    void withParentWritesTheProjectUnderTheParent() throws Exception {
+        VidocqCreateMojo mojo = create(dir, "demo", "com.acme", null, "cassini-rest", false);
+        set(mojo, "withParent", true);
+        mojo.execute();
+
+        String pom = Files.readString(dir.resolve("demo/pom.xml"));
+        assertTrue(pom.contains("<artifactId>vidocq-runtime-parent</artifactId>"), pom);
+        assertFalse(pom.contains("<extensions>true</extensions>"), pom);
     }
 
     @Test

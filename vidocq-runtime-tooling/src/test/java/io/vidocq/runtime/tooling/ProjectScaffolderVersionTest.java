@@ -46,8 +46,9 @@ class ProjectScaffolderVersionTest {
         ProjectScaffolder.scaffold(create(null), dir, RUNTIME, SILENT);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
-        assertTrue(pom.contains("<version>" + RUNTIME + "</version>"),
-                "scaffolded parent version must be the runtime parent version, pom was:\n" + pom);
+        // Without a parent (#380) the runtime version is the vidocq.version property the BOM and the plugin read.
+        assertTrue(pom.contains("<vidocq.version>" + RUNTIME + "</vidocq.version>"),
+                "the scaffolded Vidocq version must be the runtime version, pom was:\n" + pom);
         assertFalse(pom.contains("${project."),
                 "pom must not rely on ${project.*} for versions — the parent's "
                         + "dependencyManagement re-evaluates them to the app's own version");
@@ -85,8 +86,8 @@ class ProjectScaffolderVersionTest {
         ProjectScaffolder.scaffold(create("9.9.9"), dir, RUNTIME, SILENT);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
-        assertTrue(pom.contains("<version>9.9.9</version>"),
-                "explicit --parent-version must win, pom was:\n" + pom);
+        assertTrue(pom.contains("<vidocq.version>9.9.9</vidocq.version>"),
+                "an explicit version must win, pom was:\n" + pom);
     }
 
     @Test
@@ -117,7 +118,7 @@ class ProjectScaffolderVersionTest {
     void underTheApplicationParentTheBomVersionsEveryVidocqArtifact(@TempDir Path dir) throws IOException {
         ProjectScaffolder.scaffold(
                 new ProjectSpec("demo", "com.acme", "com.acme.demo",
-                        Set.of("cassini-rest"), "0.4.0", false), dir, RUNTIME, SILENT);
+                        Set.of("cassini-rest"), "0.4.0", false, false, true), dir, RUNTIME, SILENT);
 
         String pom = Files.readString(dir.resolve("demo/pom.xml"));
         assertEquals(List.of("0.4.0", "1.0.0-SNAPSHOT"), pom.lines()

@@ -73,6 +73,15 @@ public final class ProjectScaffolder {
     /** The version of a new application, which is its own and not the runtime's (BUG-20261024-06). */
     static final String APPLICATION_VERSION = "1.0.0-SNAPSHOT";
 
+    /**
+     * The JUnit BOM a project without the parent imports itself: the one {@code vidocq-runtime-parent} imports
+     * (ApplicationBomAndParentTest keeps the two equal).
+     */
+    public static final String JUNIT_BOM_VERSION = "6.0.3";
+
+    /** The Java release a project without the parent writes: IntelliJ IDEA reads it from the pom alone (#380). */
+    static final String JAVA_RELEASE = "25";
+
     /** Where the tooling jar holds the Maven wrapper of the Vidocq repository (BUG-20261024-08). */
     private static final String WRAPPER_RESOURCES = "/META-INF/vidocq/maven-wrapper/";
 
@@ -147,29 +156,114 @@ public final class ProjectScaffolder {
     // -------------------------------------------------------------------------
 
     /**
-     * Builds the pom with an explicit runtime parent version — the
-     * {@code vidocq-runtime-parent} the generated project inherits from. An explicit
-     * {@code --parent-version} always wins. A SNAPSHOT parent (explicit, or the
-     * runtime of a CLI installed from a SNAPSHOT) is not on Maven Central: the pom
-     * then declares the Central snapshot repository for dependencies and plugins.
+     * Builds the pom on the Vidocq version {@code create} names, else the tool's runtime version. By default the pom
+     * imports {@code vidocq-runtime-bom} and declares the plugin as a build extension, which gives the build what
+     * {@code vidocq-runtime-parent} carried (Vidocq/vidocq#380); {@code withParent}, or a version before that build
+     * (0.4.0), makes it inherit the parent. A SNAPSHOT version (explicit, or the runtime of a CLI installed from a
+     * SNAPSHOT) is not on Maven Central: the pom then declares the Vidocq snapshot repositories for dependencies and
+     * plugins.
      */
     static String buildPom(ProjectSpec c, String runtimeVersion, Reporter reporter) {
-        String parentVersion = c.parentVersion() != null ? c.parentVersion() : runtimeVersion;
-        boolean snapshot = parentVersion.endsWith("-SNAPSHOT");
-        if (snapshot) {
-            reporter.note(PARENT_VERSION + parentVersion + " is a SNAPSHOT: the project resolves"
-                    + " Vidocq artifacts from " + SNAPSHOT_REPOSITORY_URL);
+        String version = c.parentVersion() != null ? c.parentVersion() : runtimeVersion;
+        boolean snapshot = version.endsWith("-SNAPSHOT");
+        boolean withParent = c.withParent() || !pluginGivesTheBuild(version);
+        if (withParent && !c.withParent()) {
+            reporter.note("Version " + version + " predates the build the plugin gives a project without a parent"
+                    + " (0.4.0): the project inherits vidocq-runtime-parent.");
         }
-        boolean ownVersion = parentPinsItsVersion(parentVersion);
+        if (snapshot) {
+            reporter.note((withParent ? PARENT_VERSION : "Vidocq version ") + version
+                    + " is a SNAPSHOT: the project resolves Vidocq artifacts from " + SNAPSHOT_REPOSITORY_URL);
+        }
+        if (!withParent) {
+            // The dev services of the extensions, as `vidocq extension add` wires them (BUG-20261031-05); the BOM
+            // versions them, and the plugin's dependencies take ${vidocq.version} from the BOM import.
+            return DevServiceWiring.wire(parentlessPom(c, version, snapshot), c.extensions(), null, reporter).pom();
+        }
+        boolean ownVersion = parentPinsItsVersion(version);
         if (!ownVersion) {
-            reporter.note(PARENT_VERSION + parentVersion + " predates 0.4.0: the project inherits its version,"
+            reporter.note(PARENT_VERSION + version + " predates 0.4.0: the project inherits its version,"
                     + " as the parent's dependencyManagement resolves at the project's version.");
         }
         // From 0.4.0 the parent imports vidocq-runtime-bom, which versions every Vidocq artifact (#339).
-        String vidocqVersion = ownVersion ? null : parentVersion;
-        // The dev services of the extensions, as `vidocq extension add` wires them (BUG-20261031-05).
-        return DevServiceWiring.wire(basePom(c, parentVersion, snapshot, ownVersion, vidocqVersion), c.extensions(),
+        String vidocqVersion = ownVersion ? null : version;
+        return DevServiceWiring.wire(basePom(c, version, snapshot, ownVersion, vidocqVersion), c.extensions(),
                 vidocqVersion, reporter).pom();
+    }
+
+    /**
+     * Whether the plugin at {@code version} gives a project without the parent the build the parent carries
+     * (Vidocq/vidocq#380): from 0.4.0, the release candidates aside, which came before.
+     */
+    static boolean pluginGivesTheBuild(String version) {
+        return parentPinsItsVersion(version) && !version.equals("0.4.0-RC1") && !version.equals("0.4.0-RC2");
+    }
+
+    /**
+     * The pom of a project without the parent: its own version, the Vidocq version as a property the BOM import and
+     * the plugin read, the Java release IntelliJ IDEA reads from the pom, the JUnit BOM, and the plugin as a build
+     * extension with no execution of its own. {@link PomConverter} writes and removes these very lines.
+     */
+    private static String parentlessPom(ProjectSpec c, String version, boolean snapshot) {
+        return """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <project xmlns="http://maven.apache.org/POM/4.0.0"
+                         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+                    <modelVersion>4.0.0</modelVersion>
+
+                    <groupId>%s</groupId>
+                    <artifactId>%s</artifactId>
+                    <version>%s</version>
+                    <name>%s</name>
+
+                    <properties>
+                        <vidocq.version>%s</vidocq.version>
+                        <maven.compiler.release>%s</maven.compiler.release>
+                        <vidocq.mainModule>%s</vidocq.mainModule>
+                %s    </properties>
+                %s
+                    <dependencyManagement>
+                        <dependencies>
+                            <dependency>
+                                <groupId>io.vidocq.runtime</groupId>
+                                <artifactId>vidocq-runtime-bom</artifactId>
+                                <version>${vidocq.version}</version>
+                                <type>pom</type>
+                                <scope>import</scope>
+                            </dependency>
+                            <dependency>
+                                <groupId>org.junit</groupId>
+                                <artifactId>junit-bom</artifactId>
+                                <version>%s</version>
+                                <type>pom</type>
+                                <scope>import</scope>
+                            </dependency>
+                        </dependencies>
+                    </dependencyManagement>
+
+                    <dependencies>
+                        <dependency>
+                            <groupId>io.vidocq.runtime</groupId>
+                            <artifactId>vidocq-runtime-core</artifactId>
+                        </dependency>
+                %s    </dependencies>
+
+                    <build>
+                        <plugins>
+                            <plugin>
+                                <groupId>io.vidocq.runtime</groupId>
+                                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                                <version>${vidocq.version}</version>
+                                <extensions>true</extensions>
+                            </plugin>
+                        </plugins>
+                    </build>
+                </project>
+                """.formatted(c.groupId(), c.name(), APPLICATION_VERSION, c.name(), version, JAVA_RELEASE,
+                moduleName(c), c.main() ? mainClassProperty(c) : "",
+                snapshot ? snapshotRepositories() : "", JUNIT_BOM_VERSION,
+                extensionDeps(c.extensions(), null) + testDeps(c));
     }
 
     private static String basePom(ProjectSpec c, String parentVersion, boolean snapshot, boolean ownVersion,
@@ -208,14 +302,7 @@ public final class ProjectScaffolder {
                             <plugin>
                                 <groupId>io.vidocq.runtime</groupId>
                                 <artifactId>vidocq-runtime-maven-plugin</artifactId>
-                                <executions>
-                                    <execution>
-                                        <goals>
-                                            <goal>package</goal>
-                                        </goals>
-                                    </execution>
-                                </executions>
-                            </plugin>
+                %s            </plugin>
                 %s        </plugins>
                     </build>
                 </project>
@@ -224,8 +311,23 @@ public final class ProjectScaffolder {
                 moduleName(c), c.main() ? mainClassProperty(c) : "",
                 snapshot ? snapshotRepositories() : "", versionLine("            ", vidocqVersion),
                 extensionDeps(c.extensions(), vidocqVersion) + (ownVersion ? testDeps(c) : ""),
+                ownVersion ? "" : PACKAGE_EXECUTION,
                 ownVersion ? "" : aptCodegenPlugin(c.extensions(), vidocqVersion));
     }
+
+    /**
+     * The execution of {@code vidocq:package} a pom under a parent before 0.4.0 binds itself: from 0.4.0 the parent
+     * binds it, and the plugin does without the parent (#380).
+     */
+    private static final String PACKAGE_EXECUTION = """
+                            <executions>
+                                <execution>
+                                    <goals>
+                                        <goal>package</goal>
+                                    </goals>
+                                </execution>
+                            </executions>
+            """;
 
     /**
      * Whether {@code vidocq-runtime-parent} at {@code parentVersion} runs {@code vidocq:generate} on every build: from

@@ -170,6 +170,18 @@ class ApplicationBomAndParentTest {
         assertEquals("jdt_apt", child(elements(project, "properties").getFirst(), "m2e.apt.activation"));
     }
 
+    /**
+     * Vidocq/vidocq#380: a project without the parent imports {@code junit-bom} itself, at the version the scaffolder
+     * writes; the parent is the reference of that version.
+     */
+    @Test
+    void theScaffolderImportsTheJunitBomTheParentImports() throws Exception {
+        Map<String, String> managed = managedVersions(pom(ROOT.resolve("vidocq-runtime-parent")));
+
+        assertEquals(managed.get("org.junit:junit-bom"), ProjectScaffolder.JUNIT_BOM_VERSION,
+                "the parent and the scaffolder name different JUnit BOMs");
+    }
+
     @Test
     void theApplicationParentCarriesNoSettingOfThisRepository() throws Exception {
         String text = Files.readString(ROOT.resolve("vidocq-runtime-parent").resolve("pom.xml"));

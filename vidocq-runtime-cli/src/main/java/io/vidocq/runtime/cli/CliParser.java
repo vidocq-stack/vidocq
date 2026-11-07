@@ -24,6 +24,7 @@ import io.vidocq.runtime.cli.completion.Shell;
 import io.vidocq.runtime.cli.spi.CliPlugins;
 import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 import io.vidocq.runtime.cli.update.UpdatePlan;
+import io.vidocq.runtime.tooling.PomConverter;
 import io.vidocq.runtime.tooling.ProjectSpec;
 
 import java.nio.file.Path;
@@ -55,9 +56,10 @@ public final class CliParser {
     private static final String EXTENSION = "extension";
     private static final String CONFIG = "config";
     private static final String COMPLETION = "completion";
+    private static final String POM = "pom";
     /** The built-in commands that show their own help on {@code --help}. */
     private static final Set<String> HELP_TOPICS = Set.of(START, "dev", DOCTOR, "test", "idea", VSCODE, ECLIPSE, CREATE,
-            BUILD, CLEAN, CONFIG, COMPLETION, UPDATE, EXTENSION);
+            BUILD, CLEAN, CONFIG, COMPLETION, UPDATE, EXTENSION, POM);
     private static final String DRY_RUN = "--dry-run";
     private static final String PORT = "--port";
     private static final String EXAMPLES = "Examples:";
@@ -84,6 +86,7 @@ public final class CliParser {
             case BUILD                      -> parseBuild(args, 1);
             case CLEAN                      -> parseClean(args, 1);
             case EXTENSION, "ext"             -> parseExtension(args, 1);
+            case POM                          -> parsePom(args, 1);
             case CONFIG                       -> parseConfig(args, 1);
             case COMPLETION                   -> parseCompletion(args, 1);
             case UPDATE                     -> parseUpdate(args, 1);
@@ -229,6 +232,7 @@ public final class CliParser {
         String parentVersion = null;
         boolean main = false;
         boolean openModule = false;
+        boolean withParent = false;
         Set<String> extensions = new LinkedHashSet<>();
         Iterator<String> it = tokens(args, from);
         while (it.hasNext()) {
@@ -238,21 +242,50 @@ public final class CliParser {
                 case "--group-id", "-g"  -> groupId = next(it, "--group-id");
                 case "--package"         -> pkg     = next(it, "--package");
                 case "--extension", "-x" -> extensions.add(next(it, "--extension"));
-                case "--parent-version"  -> parentVersion = next(it, "--parent-version");
+                // The Vidocq version the project builds on; the parent's with --with-parent (#380).
+                case "--vidocq-version", "--parent-version" -> parentVersion = next(it, arg);
+                case "--with-parent"     -> withParent = true;
                 case "--main"            -> main = true;
                 case "--open-module"     -> openModule = true;
                 default                  -> unknownOpt(arg, CREATE);
             }
         }
         if (name == null) {
-            return new Command.CreateInteractively(groupId, pkg, extensions, parentVersion, main, openModule);
+            return new Command.CreateInteractively(groupId, pkg, extensions, parentVersion, main, openModule,
+                    withParent);
         }
         try {
             return new Command.Create(ProjectSpec.of(name, groupId, pkg, extensions, parentVersion, main, openModule,
-                    "--package <pkg>"));
+                    withParent, "--package <pkg>"));
         } catch (IllegalArgumentException e) {
             throw new CliException(e.getMessage());
         }
+    }
+
+    /** {@code vidocq pom convert --to parentless|parent [--check]} (Vidocq/vidocq#380). */
+    private static Command parsePom(String[] args, int from) {
+        if (from >= args.length || !"convert".equals(args[from])) {
+            throw new CliException("'pom' takes a sub-command: convert. Run 'vidocq help pom'.");
+        }
+        PomConverter.Target target = null;
+        boolean check = false;
+        Iterator<String> it = tokens(args, from + 1);
+        while (it.hasNext()) {
+            String arg = it.next();
+            switch (arg) {
+                case "--to" -> {
+                    String value = next(it, "--to");
+                    target = PomConverter.Target.of(value).orElseThrow(() -> new CliException(
+                            "Option --to expects parentless or parent, got: " + value));
+                }
+                case CHECK -> check = true;
+                default -> unknownOpt(arg, "pom convert");
+            }
+        }
+        if (target == null) {
+            throw new CliException("'pom convert' requires --to <parentless|parent>.");
+        }
+        return new Command.PomConvert(target, check);
     }
 
     /** Java keywords and literals, which no package segment may be (JLS §3.9, §3.10). */
@@ -432,6 +465,7 @@ public final class CliParser {
         cmd("extension list",   "List installed (and optionally available) extensions.");
         cmd("extension add",    "Add extensions to the current project's pom.xml.");
         cmd("extension remove", "Remove extensions from the current project's pom.xml.");
+        cmd("pom convert --to <parentless|parent>", "Convert the pom to the style without vidocq-runtime-parent, or back.");
         cmd("config get|set|list", "Read or write keys in vidocq.properties.");
         cmd("update [--check] [--release|--snapshot]", "Update the CLI: latest release, or latest SNAPSHOT build.");
         cmd("completion bash|zsh", "Print a shell completion script.");
@@ -509,8 +543,11 @@ public final class CliParser {
                 opt("--group-id, -g <groupId>",  "Maven groupId            (default: io.example)");
                 opt("--package <pkg>",            "Root Java package        (default: <groupId>.<name>)");
                 opt("--extension, -x <id>",       "Extension to enable, repeatable");
-                opt("--parent-version <version>", "Vidocq runtime parent version   (default: the CLI's runtime version)");
-                opt("",                           "a SNAPSHOT adds the Central snapshot repository to the pom");
+                opt("--vidocq-version <version>", "Vidocq version the project builds on (default: the CLI's runtime");
+                opt("",                           "version); a SNAPSHOT adds the Vidocq snapshot repositories to the pom");
+                opt("--parent-version <version>", "The same option, as it was named until 0.4.0");
+                opt("--with-parent",              "Inherit vidocq-runtime-parent instead of importing the BOM and loading");
+                opt("",                           "the plugin as a build extension (the default from 0.4.0)");
                 opt("--main",                     "Also write an @VidocqMain trampoline (default: none, the runtime");
                 opt("",                           "boots the app) — for an IDE Run or a VidocqApp");
                 opt("--open-module",              "Declare an open module: every package open to reflection, so no");
@@ -550,6 +587,15 @@ public final class CliParser {
                 opt("--offline, -o", "Run Maven offline (-o)");
                 opt(DRY_RUN,     "Print the Maven command without running it");
                 opt("-- <args...>",  "Pass everything after -- straight to Maven");
+            }
+            case POM -> {
+                topic("pom convert", "Convert the pom from one style to the other",
+                        "A Vidocq application either inherits vidocq-runtime-parent, or imports",
+                        "vidocq-runtime-bom and loads vidocq-runtime-maven-plugin as a build extension,",
+                        "which gives the build what the parent carried (the default from 0.4.0).",
+                        "The conversion keeps everything else of the pom and prints the diff first.");
+                options("--to <parentless|parent>", "The style to convert to (required)",
+                        CHECK,                       "Report only: exit 1 when a conversion is needed, 0 otherwise");
             }
             case EXTENSION -> {
                 CliOutput.println(CliOutput.bold("vidocq extension") + " — Manage extensions");

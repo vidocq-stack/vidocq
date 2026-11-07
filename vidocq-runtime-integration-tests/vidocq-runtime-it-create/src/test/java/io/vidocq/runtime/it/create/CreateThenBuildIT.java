@@ -40,11 +40,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * Vidocq/vidocq#339 (evolution 6): the project {@code vidocq create -x cassini-rest} writes passes
- * {@code mvn verify vidocq:jlink} on this build: it compiles on {@code vidocq-runtime-parent}, whose plugin wires the
- * codegen bundles, its first test starts the application with {@code @VidocqTest} and calls {@code GET /hello},
- * {@code vidocq:package} writes the distribution, and {@code vidocq:jlink} the self-contained image
- * ({@code vidocq build jlink}).
+ * Vidocq/vidocq#339 (evolution 6) and #380: the project {@code vidocq create -x cassini-rest} writes passes
+ * {@code mvn verify vidocq:jlink} on this build. Without a parent, the plugin declared as a build extension gives the
+ * build what {@code vidocq-runtime-parent} carried, and wires the codegen bundles: the Cassini processor writes the
+ * resource's adapter source into {@code target/generated-sources/annotations}, the first test starts the application
+ * with {@code @VidocqTest} and calls {@code GET /hello}, {@code vidocq:package} writes the distribution, and
+ * {@code vidocq:jlink} the self-contained image ({@code vidocq build jlink}). With {@code --with-parent}, the same
+ * project builds under the parent.
  */
 class CreateThenBuildIT {
 
@@ -85,8 +87,19 @@ class CreateThenBuildIT {
         }
         String output = read(log);
         assertEquals(0, build.exitValue(), () -> "mvn verify vidocq:jlink failed:\n" + output);
-        assertFalse(Files.readString(project.resolve("pom.xml")).contains("annotationProcessorPaths"),
-                "the parent's plugin wires the codegen bundles: the created pom lists none");
+        String pom = Files.readString(project.resolve("pom.xml"));
+        assertFalse(pom.contains("<parent>"), "the created project builds without a parent (#380):\n" + pom);
+        assertTrue(pom.contains("<extensions>true</extensions>"), pom);
+        assertFalse(pom.contains("annotationProcessorPaths"),
+                "the plugin wires the codegen bundles: the created pom lists none");
+        assertTrue(output.contains("no Vidocq parent in the pom, the plugin adds"),
+                "the plugin did not complete the build of the parentless project:\n" + output);
+        // What the plugin wired runs: the Cassini processor writes the resource's adapter, as a source the IDE sees.
+        assertTrue(Files.isRegularFile(project.resolve(
+                        "target/generated-sources/annotations/com/acme/demo/app/HelloResource$$CassiniAdapter.java")),
+                "the Cassini processor wrote no adapter source:\n" + output);
+        assertTrue(Files.isRegularFile(project.resolve("target/classes/META-INF/vidocq/build-info/demo-app.properties")),
+                "vidocq:build-info wrote no build identity:\n" + output);
 
         assertTrue(output.contains("Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed")
                 && output.contains("in com.acme.demo.app.HelloResourceTest"), "the first test did not run:\n" + output);
@@ -102,6 +115,36 @@ class CreateThenBuildIT {
         assertEquals(List.of(), warnings, "the created project builds with warnings:\n" + output);
         long lastRound = output.lines().filter(l -> l.contains(LAST_ROUND)).count();
         assertTrue(lastRound == 0 || lastRound == 2, () -> lastRound + " last-round warnings:\n" + output);
+    }
+
+    /** {@code vidocq create --with-parent}: the previous style still builds and tests itself under the parent. */
+    @Test
+    void aCreatedApplicationWithTheParentStillBuildsAndTestsItself(@TempDir Path dir) throws Exception {
+        String version = System.getProperty("it.version");
+        ProjectScaffolder.scaffold(new ProjectSpec("demo-app", "com.acme", "com.acme.demo.app",
+                Set.of("cassini-rest"), null, false, false, true), dir, version, SILENT);
+        Path project = dir.resolve("demo-app");
+        useThisBuildsArtifacts(project);
+
+        Path log = Files.createDirectories(Path.of(System.getProperty("it.logs"))).resolve("create-with-parent.log");
+        Process build = new ProcessBuilder("mvn", "-ntp", "-B", "verify")
+                .directory(project.toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(log.toFile())
+                .start();
+        if (!build.waitFor(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
+            build.destroyForcibly();
+            fail("mvn verify did not end within " + TIMEOUT + ":\n" + read(log));
+        }
+        String output = read(log);
+        assertEquals(0, build.exitValue(), () -> "mvn verify failed:\n" + output);
+        String pom = Files.readString(project.resolve("pom.xml"));
+        assertTrue(pom.contains("<artifactId>vidocq-runtime-parent</artifactId>"), pom);
+        assertFalse(output.contains("no Vidocq parent in the pom"), "the plugin added to a project under the parent:\n"
+                + output);
+        assertTrue(output.contains("in com.acme.demo.app.HelloResourceTest"), "the first test did not run:\n" + output);
+        assertTrue(Files.isRegularFile(project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh")),
+                "vidocq:package wrote no launcher:\n" + output);
     }
 
     /**

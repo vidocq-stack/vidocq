@@ -222,12 +222,18 @@ public final class ProjectDoctor {
         if (PomDependencies.runtimeVersion(pom).filter(ProjectScaffolder::parentRunsGenerate).isPresent()) {
             return Diagnostic.ok(GENERATE_CHECK, "vidocq:generate runs on every build (vidocq-runtime-parent)");
         }
+        // Without the parent, the plugin declared as a build extension binds the goal itself (Vidocq/vidocq#380).
+        if (PomDependencies.runtimeVersion(pom).isEmpty() && PomDependencies.codegenWiredByPlugin(pom)) {
+            return Diagnostic.ok(GENERATE_CHECK,
+                    "vidocq:generate runs on every build (vidocq-runtime-maven-plugin, a build extension)");
+        }
         if (compact.contains("<goal>generate</goal>")) {
             return Diagnostic.ok(GENERATE_CHECK, "vidocq:generate declared in the pom");
         }
         return Diagnostic.warn(GENERATE_CHECK, "vidocq:generate does not run",
-                "The dependency jars get no generated code. Upgrade vidocq-runtime-parent, or add"
-                        + " <goal>generate</goal> to an execution of vidocq-runtime-maven-plugin.");
+                "The dependency jars get no generated code. Upgrade vidocq-runtime-parent, declare"
+                        + " vidocq-runtime-maven-plugin with <extensions>true</extensions>, or add"
+                        + " <goal>generate</goal> to an execution of it.");
     }
 
     private static Diagnostic checkModuleDirectives(Facts facts, Map<String, ExtensionCoordinate> extensions) {

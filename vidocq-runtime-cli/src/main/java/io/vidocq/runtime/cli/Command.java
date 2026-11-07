@@ -98,11 +98,23 @@ public sealed interface Command {
      * the group id and the extensions the command line left out (Vidocq/vidocq#339).
      */
     record CreateInteractively(String groupId, String pkg, java.util.Set<String> extensions, String parentVersion,
-                               boolean main, boolean openModule) implements Command {
+                               boolean main, boolean openModule, boolean withParent) implements Command {
         public CreateInteractively {
             extensions = java.util.Collections.unmodifiableSet(new java.util.LinkedHashSet<>(extensions));
         }
+
+        /** Without the parent (the default from 0.4.0). */
+        public CreateInteractively(String groupId, String pkg, java.util.Set<String> extensions, String parentVersion,
+                                   boolean main, boolean openModule) {
+            this(groupId, pkg, extensions, parentVersion, main, openModule, false);
+        }
     }
+
+    /**
+     * {@code vidocq pom convert --to parentless|parent [--check]}: the project's pom in the other style, through
+     * {@link io.vidocq.runtime.tooling.PomConverter} (Vidocq/vidocq#380). {@code check} reports only.
+     */
+    record PomConvert(io.vidocq.runtime.tooling.PomConverter.Target target, boolean check) implements Command {}
 
     record Build(
             BuildType type,
