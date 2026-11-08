@@ -15,6 +15,7 @@
 ** xref:tck.adoc[TCK status]
 ** xref:reference.adoc[Reference]
 ** xref:migration.adoc[Migration]
+** xref:security.adoc[Security]
 ** Reactor sub-modules
 *** xref:modules/vidocq-runtime-core.adoc[vidocq-runtime-core]
 *** xref:modules/vidocq-runtime-spi.adoc[vidocq-runtime-spi]

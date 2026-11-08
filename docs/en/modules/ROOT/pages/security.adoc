@@ -1,0 +1,68 @@
+= Security
+:description: Supported versions, how to report a vulnerability privately, response times and the vulnerability process of Vidocq Runtime.
+
+[.lead]
+How to report a vulnerability in Vidocq Runtime, what to expect in return, and how a fix reaches a release. The same policy, in the same words, is in the `SECURITY.md` at the root of every Vidocq repository.
+
+== Supported versions
+
+[cols="2,1"]
+|===
+| Version | Supported
+
+| `main` (development, `-SNAPSHOT`)
+| Fixes land here first
+
+| `0.4.x`
+| Yes
+
+| `0.3.x` and older
+| No
+|===
+
+Before 1.0.0, only the latest release line is supported. From 1.0.0, the latest minor line of the current major is supported, and the previous minor line for the fixes rated critical.
+
+== Reporting a vulnerability
+
+WARNING: Do not open a public issue, pull request or discussion for a vulnerability.
+
+Report it privately by email to mailto:contribute@vidocq.io[contribute@vidocq.io], the maintainers' mailbox, with the subject `SECURITY: vidocq - <short title>`. Include the affected repository and version, a description and the impact, the steps or a minimal proof of concept, and how you want to be credited. Never send a secret, a token or personal data you do not need to demonstrate the issue.
+
+== Response times
+
+These are targets set by volunteer maintainers; you are told when one cannot be met.
+
+[cols="3,2"]
+|===
+| Step | Target
+
+| Acknowledgement of your report
+| 3 working days
+
+| Triage: confirmed or not, severity, affected versions
+| 10 working days
+
+| Fix for a critical or high severity issue
+| 30 days after triage
+
+| Fix for a medium or low severity issue
+| Next regular release
+
+| Public advisory
+| At the release of the fix, at the latest 90 days after your report
+|===
+
+== Vulnerability process
+
+. *Receipt.* A maintainer acknowledges the report and opens a private working note. The report stays confidential until the advisory.
+. *Triage.* The maintainers reproduce the issue, decide whether it is a vulnerability, rate its severity (CVSS v4.0 base score: critical 9.0-10.0, high 7.0-8.9, medium 4.0-6.9, low 0.1-3.9) and list the affected versions. The reporter is told the outcome, including a refusal and its reason.
+. *Fix.* The fix is prepared in private, with the regression test written first, on a branch that is not published before the release. When other repositories must follow, the maintainers coordinate companion branches so the fixed releases go out together.
+. *Advisory and CVE request.* The maintainers write the advisory (description, impact, affected and fixed versions, workaround, credit) and, when the issue deserves one, request a CVE identifier.
+. *Release.* The fixed versions go out through the normal release pipeline, with signed commits and tags. The fix, the advisory and the release notes are published together.
+. *Disclosure and credit.* The advisory is published at the release and the reporter is credited unless they asked otherwise. The 90-day limit prevails over a disagreement on the date, except for an issue under active exploitation, disclosed as soon as a fix or a workaround exists.
+
+== Scope
+
+In scope: the code and the artifacts published by the repository. Out of scope: vulnerabilities of the application built with the artifacts, of third-party software, and findings without security impact.
+
+For what the runtime defends against and what it leaves to the application, see `THREAT-MODEL.md` at the root of the repository.
