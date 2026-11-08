@@ -76,6 +76,8 @@ public final class PomConverter {
     private static final String ARTIFACT_ID = "artifactId";
     private static final String VERSION = "version";
     private static final String RELEASE_PROPERTY = "maven.compiler.release";
+    private static final String ENCODING_PROPERTY = "project.build.sourceEncoding";
+    private static final String UTF_8 = "UTF-8";
     private static final String M2E_APT_PROPERTY = "m2e.apt.activation";
     private static final String DEFAULT_INDENT = "    ";
     private static final String NOT_RECOGNISED = "the pom is not recognised as a Vidocq application's: ";
@@ -115,7 +117,10 @@ public final class PomConverter {
                 unit + "<version>" + ProjectScaffolder.APPLICATION_VERSION + "</version>\n");
     }
 
-    /** {@code vidocq.version} and the Java release first among the properties, where the pom lacks them. */
+    /**
+     * {@code vidocq.version}, the Java release and the UTF-8 encoding first among the properties, where the pom
+     * lacks them.
+     */
     private static String withProperties(String pom, String unit, String version) {
         StringBuilder lines = new StringBuilder();
         Optional<Element> properties = topLevel(pom, PROPERTIES);
@@ -125,6 +130,9 @@ public final class PomConverter {
         if (properties.isEmpty() || !setsTheRelease(pom, properties.get())) {
             lines.append(unit).append(unit).append(element(RELEASE_PROPERTY, ProjectScaffolder.JAVA_RELEASE))
                     .append('\n');
+        }
+        if (properties.isEmpty() || child(pom, properties.get(), ENCODING_PROPERTY).isEmpty()) {
+            lines.append(unit).append(unit).append(element(ENCODING_PROPERTY, UTF_8)).append('\n');
         }
         if (lines.isEmpty()) {
             return pom;
@@ -283,7 +291,7 @@ public final class PomConverter {
     private static String withoutParentProperties(String pom) {
         String edited = pom;
         for (String[] property : new String[][] {{RELEASE_PROPERTY, ProjectScaffolder.JAVA_RELEASE},
-                {M2E_APT_PROPERTY, "jdt_apt"}}) {
+                {ENCODING_PROPERTY, UTF_8}, {M2E_APT_PROPERTY, "jdt_apt"}}) {
             Optional<Element> element = property(edited, property[0]);
             if (element.isPresent() && property[1].equals(text(edited, element.get()))) {
                 edited = removeLines(edited, element.get());

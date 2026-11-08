@@ -201,6 +201,7 @@ The CLI is a convenience, not a requirement. The project above is plain Maven â€
     <properties>
         <vidocq.version>{release-version}</vidocq.version>
         <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <vidocq.mainModule>com.acme.todo</vidocq.mainModule>
     </properties>
 
@@ -263,7 +264,7 @@ extensions, the build identity. The application keeps a parent of its own if it 
 `vidocq create --with-parent` writes the previous style, under `vidocq-runtime-parent`, and
 xref:modules/vidocq-runtime-cli.adoc#pom-convert[`vidocq pom convert`] turns an existing pom from one style into
 the other. `maven.compiler.release` is the one line Maven does not need: IntelliJ IDEA reads the language level from
-the pom alone. See xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[the plugin without the parent].
+the pom alone, and the project is created in UTF-8 (`project.build.sourceEncoding`). See xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[the plugin without the parent].
 
 NOTE: This is the pom of 0.4.0. Until then, the project inherited `vidocq-runtime-parent`, pinned every Vidocq
 version, bound the `package` execution and listed each extension's codegen bundle in a `maven-compiler-plugin`

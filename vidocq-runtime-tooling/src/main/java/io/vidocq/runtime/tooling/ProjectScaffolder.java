@@ -220,6 +220,7 @@ public final class ProjectScaffolder {
                     <properties>
                         <vidocq.version>%s</vidocq.version>
                         <maven.compiler.release>%s</maven.compiler.release>
+                        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
                         <vidocq.mainModule>%s</vidocq.mainModule>
                 %s    </properties>
                 %s

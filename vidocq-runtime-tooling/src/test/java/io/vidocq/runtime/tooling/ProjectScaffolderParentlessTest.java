@@ -50,6 +50,8 @@ class ProjectScaffolderParentlessTest {
         assertTrue(pom.contains("<vidocq.version>0.4.0</vidocq.version>"), pom);
         // IntelliJ IDEA reads the language level from the pom alone; Maven and the plugin know it without the line.
         assertTrue(pom.contains("<maven.compiler.release>25</maven.compiler.release>"), pom);
+        // The project is created in UTF-8, the charset of its sources and resources, whatever the Maven in use.
+        assertTrue(pom.contains("<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>"), pom);
         assertTrue(pom.contains("""
                             <dependency>
                                 <groupId>io.vidocq.runtime</groupId>
@@ -92,6 +94,7 @@ class ProjectScaffolderParentlessTest {
         assertFalse(pom.contains("vidocq-runtime-bom"), "the parent imports the BOM:\n" + pom);
         assertFalse(pom.contains("<extensions>"), "the parent loads the plugin as an extension:\n" + pom);
         assertFalse(pom.contains("maven.compiler.release"), "the parent sets the release:\n" + pom);
+        assertFalse(pom.contains("sourceEncoding"), "the parent sets the encoding:\n" + pom);
     }
 
     /** The plugin gives a parentless build its executions from 0.4.0: an older runtime, or a release candidate, keeps the parent. */
