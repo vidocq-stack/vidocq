@@ -425,3 +425,10 @@ The `otlp` exporter follows the OTLP JSON encoding, as the OpenTelemetry Java 1.
 * Compatible with CDI 4.1 Lite (Vauban) and JAX-RS 4.0 (Cassini). Also proven on Weld SE 6.0 and on Open Liberty (CDI 4.0, Jakarta REST 3.1): see <<other-containers>>.
 
 Next: xref:internals.adoc[Internals].
+
+== Architecture rules
+
+`io.vidocq.humboldt:humboldt-architecture-tests` is a **test-only** module, never released. It runs Humboldt's architecture
+rules on the classes of every shipped module: the dependencies of each module (the OpenTelemetry API and context, never the OpenTelemetry SDK outside the interop bridge, and the Jakarta APIs the adapters read), the layers between the modules, no reflection outside the documented fallbacks of `internals.adoc`, no platform thread, no
+`ThreadLocal`. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`,
+in test scope; it brings ArchUnit (Apache-2.0), also test scope. A change that breaks a rule fails the build.
