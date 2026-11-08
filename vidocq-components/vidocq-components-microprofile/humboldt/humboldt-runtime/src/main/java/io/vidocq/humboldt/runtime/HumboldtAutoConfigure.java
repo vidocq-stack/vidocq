@@ -116,43 +116,34 @@ public final class HumboldtAutoConfigure {
         return configure(env, extraSpanExporters, overrideSampler, null);
     }
 
-    /** Variant with additional metric exporters (M4b — OTel SDK bridge). */
+    /**
+     * Variant with sampler override + propagators override, without additional metric exporters.
+     *
+     * @see #configure(EnvConfig, List, Sampler, ContextPropagators, List)
+     */
     public static AutoConfiguredHumboldt configure(EnvConfig env,
                                                     List<SpanExporter> extraSpanExporters,
                                                     Sampler overrideSampler,
-                                                    io.opentelemetry.context.propagation.ContextPropagators overridePropagators,
-                                                    List<io.vidocq.humboldt.sdk.metric.export.MetricExporter> extraMetricExporters) {
-        EXTRA_METRIC_EXPORTERS.set(extraMetricExporters == null ? List.of() : extraMetricExporters);
-        try {
-            return configure(env, extraSpanExporters, overrideSampler, overridePropagators);
-        } finally {
-            EXTRA_METRIC_EXPORTERS.remove();
-        }
+                                                    ContextPropagators overridePropagators) {
+        return configure(env, extraSpanExporters, overrideSampler, overridePropagators, null);
     }
 
     /**
-     * ThreadLocal slot used to pass the extra MetricExporters from the 5-arg public
-     * overload down to the SdkMeterProvider construction (which happens inside the
-     * main {@code configure(env, extras, sampler, propagators)} method). Avoids
-     * duplicating the entire pipeline.
-     */
-    private static final ThreadLocal<List<io.vidocq.humboldt.sdk.metric.export.MetricExporter>>
-            EXTRA_METRIC_EXPORTERS = ThreadLocal.withInitial(List::of);
-
-    /**
-     * Full variant with sampler override + propagators override — for Arquillian
-     * harnesses that load a {@code ConfigurableSamplerProvider} and/or
+     * Full variant with sampler override + propagators override + additional metric exporters (M4b — OTel SDK
+     * bridge) — for Arquillian harnesses that load a {@code ConfigurableSamplerProvider} and/or
      * {@code ConfigurablePropagatorProvider} OTel SPI from the WAR.
      *
      * @param overrideSampler     sampler to use for the tracer provider; if {@code null},
      *                            falls back to standard parsing of {@code OTEL_TRACES_SAMPLER}.
      * @param overridePropagators propagators to use; if {@code null}, falls back to
      *                            {@link W3CPropagators#get()} (W3C TraceContext + Baggage).
+     * @param extraMetricExporters additional metric exporters, read with a short interval; may be {@code null}.
      */
     public static AutoConfiguredHumboldt configure(EnvConfig env,
                                                     List<SpanExporter> extraSpanExporters,
                                                     Sampler overrideSampler,
-                                                    ContextPropagators overridePropagators) {
+                                                    ContextPropagators overridePropagators,
+                                                    List<io.vidocq.humboldt.sdk.metric.export.MetricExporter> extraMetricExporters) {
         Resource resource = buildResource(env);
 
         // MP Telemetry 2.2 §"Enabling OpenTelemetry support": by default the OpenTelemetry SDK is disabled.
@@ -189,7 +180,8 @@ public final class HumboldtAutoConfigure {
         InMemoryMetricExporter inMemMetric = IN_MEMORY.equals(metricsExporter)
                 ? InMemoryMetricExporter.create() : null;
         SdkMeterProvider meterProvider =
-                buildMeterProvider(env, resource, metricsExporter, inMemMetric, releasables);
+                buildMeterProvider(env, resource, metricsExporter, inMemMetric, releasables,
+                        extraMetricExporters == null ? List.of() : extraMetricExporters);
 
         // --- Logger ---
         String logsExporter = env.getOrDefault("OTEL_LOGS_EXPORTER", "otlp");
@@ -245,7 +237,8 @@ public final class HumboldtAutoConfigure {
     }
 
     private static SdkMeterProvider buildMeterProvider(EnvConfig env, Resource resource,
-            String metricsExporter, InMemoryMetricExporter inMemMetric, List<Releasable> releasables) {
+            String metricsExporter, InMemoryMetricExporter inMemMetric, List<Releasable> releasables,
+            List<io.vidocq.humboldt.sdk.metric.export.MetricExporter> extraMetricExporters) {
         SdkMeterProvider.Builder mpBuilder = SdkMeterProvider.builder().setResource(resource);
         MetricExporter metricExporter = switch (metricsExporter) {
             case NONE -> null;
@@ -260,9 +253,9 @@ public final class HumboldtAutoConfigure {
                     .build());
         }
         // Extra MetricExporters (M4b — OTel SDK bridge via humboldt-tck) passed via the
-        // EXTRA_METRIC_EXPORTERS ThreadLocal. TCK case: InMemoryMetricExporter from the WAR.
+        // the extraMetricExporters parameter. TCK case: InMemoryMetricExporter from the WAR.
         // Short interval to allow awaitility.until() in metric tests (10s timeout).
-        for (var extra : EXTRA_METRIC_EXPORTERS.get()) {
+        for (var extra : extraMetricExporters) {
             mpBuilder.registerMetricReader(PeriodicMetricReader.builder(extra)
                     .setInterval(Duration.ofMillis(200))
                     .build());
@@ -272,7 +265,7 @@ public final class HumboldtAutoConfigure {
         // M4b — JVM metrics OTel SemConv 1.27+: binds Observable instruments
         // (memory, cpu, class, thread, gc) on the humboldt-runtime Meter. Conformant
         // with MP Telemetry 2.2 §"Required Metrics". Skipped if no exporter (none).
-        if (metricExporter != null || !EXTRA_METRIC_EXPORTERS.get().isEmpty()) {
+        if (metricExporter != null || !extraMetricExporters.isEmpty()) {
             try {
                 JvmMetricsBinder.bindAll(meterProvider.get("io.vidocq.humboldt.runtime.jvm"));
             } catch (RuntimeException _) {
