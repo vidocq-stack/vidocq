@@ -67,6 +67,7 @@
     <module>grimm-it-other-containers</module>
     <module>grimm-bench</module>
     <module>grimm-examples</module>
+    <module>grimm-architecture-tests</module>
   </modules>
 
   <properties>
