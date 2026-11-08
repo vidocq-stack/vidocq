@@ -160,3 +160,10 @@ The application provides Jakarta REST, JSON-P and CDI, as any server does. With 
 * xref:concepts.adoc[Concepts] — the model behind these artefacts.
 * xref:internals.adoc[Internals] — implementation details.
 * xref:tck.adoc[TCK status] — conformance.
+
+== Architecture rules
+
+`io.vidocq.knock:knock-architecture-tests` is a **test-only** module, never released. It runs Knock's architecture
+rules on the classes of every shipped module: the dependencies of each module (the MicroProfile Health API, Jakarta JSON-P and the Jakarta APIs it reads, nothing else), the layers between the modules, no reflection (Knock has no reflective path, `internals.adoc`), no platform thread, no
+`ThreadLocal`. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`,
+in test scope; it brings ArchUnit (Apache-2.0), also test scope. A change that breaks a rule fails the build.
