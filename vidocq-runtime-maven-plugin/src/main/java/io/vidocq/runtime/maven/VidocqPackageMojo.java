@@ -170,9 +170,18 @@ public class VidocqPackageMojo extends AbstractMojo {
 
             // vidocq.app.layer=all: the parent layer stays in lib/, the other libraries ship in app/.
             Set<Path> toApp = splitForAppLayer(packaged);
+            List<DistributionSbom.Component> shipped = new ArrayList<>();
             for (Packaged p : packaged) {
-                ship(p, toApp.contains(p.src()) ? appJarDir : libDir);
+                Path destDir = toApp.contains(p.src()) ? appJarDir : libDir;
+                ship(p, destDir);
+                Artifact a = p.artifact();
+                shipped.add(new DistributionSbom.Component(a.getGroupId(), a.getArtifactId(), a.getVersion(),
+                        destDir.resolve(p.src().getFileName().toString())));
             }
+            // The CycloneDX SBOM of what the distribution ships (Vidocq/vidocq#270), inside it.
+            DistributionSbom.write(distRoot.resolve(distName + "-cyclonedx.json"),
+                    new DistributionSbom.Subject(project.getGroupId(), project.getArtifactId(), project.getVersion()),
+                    shipped);
 
             // Generate launch scripts (module-path based)
             generateShScript(binDir);

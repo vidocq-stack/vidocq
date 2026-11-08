@@ -191,6 +191,8 @@ public class VidocqJlinkMojo extends AbstractMojo {
             String rootModules = resolveAddModules();
             runJlink(rootModules, launch);
             List<Path> conf = copyResources();
+            DistributionSbom.write(sbomFile(), new DistributionSbom.Subject(project.getGroupId(),
+                    project.getArtifactId(), project.getVersion()), sbomComponents);
             PortableImage.write(buildDir.toPath(), portableJlinkArgs(rootModules, launch), launch.entryPoint(), conf);
             getLog().info("jlink image ready: " + distDir.toPath().toAbsolutePath());
             getLog().info("Run with: " + distDir.toPath().toAbsolutePath() + "/bin/" + launcher);
@@ -220,7 +222,29 @@ public class VidocqJlinkMojo extends AbstractMojo {
         }
         checkNamedModules(stage);
         checkSharedResources(stage);
+        writeSbom(stage);
     }
+
+    /** Where the SBOM of the image is written: {@code target/dist/}, next to {@code bin/} (Vidocq/vidocq#270). */
+    private Path sbomFile() {
+        return distDir.toPath().resolve(project.getArtifactId() + "-" + project.getVersion() + "-cyclonedx.json");
+    }
+
+    /** Lists the staged jars (the ones the image is made of) in a CycloneDX SBOM; jlink recreates the image directory. */
+    private void writeSbom(Path stage) throws IOException {
+        List<DistributionSbom.Component> shipped = new ArrayList<>();
+        for (var artifact : project.getArtifacts()) {
+            File f = artifact.getFile();
+            Path staged = f == null ? null : stage.resolve(f.getName());
+            if (staged != null && Files.isRegularFile(staged)) {
+                shipped.add(new DistributionSbom.Component(artifact.getGroupId(), artifact.getArtifactId(),
+                        artifact.getVersion(), staged));
+            }
+        }
+        sbomComponents = shipped;
+    }
+
+    private List<DistributionSbom.Component> sbomComponents = List.of();
 
     /**
      * Patches the automatic jars of the dependency closure into {@code target/vauban-modularized/}, where

@@ -63,6 +63,26 @@ parent, no profile and no `distributionManagement`, so an application inherits o
 declare and nothing of the repository's own build. It is a build tool of this reactor and never reaches an
 application.
 
+[#sbom]
+== Software bill of materials (CycloneDX)
+
+Every artifact a release publishes on Maven Central carries its CycloneDX SBOM (Vidocq/vidocq#270):
+
+* In the `release` profile of `io.vidocq:vidocq-parent`, `org.cyclonedx:cyclonedx-maven-plugin` (`makeBom`, bound to
+  `package`) writes `<artifactId>-<version>-cyclonedx.json` and attaches it with the classifier `cyclonedx` and the
+  type `json`. `maven-gpg-plugin` signs it at `verify` like the jars, so Central holds
+  `-cyclonedx.json` and `-cyclonedx.json.asc` next to them. The SBOM lists what the artifact ships: the compile and
+  runtime dependencies, not the test, provided or system ones. Every repository whose parent is `vidocq-parent` inherits it
+  with its next release, with no change of its own.
+* `vidocq:package` writes `<name>-<version>-cyclonedx.json` at the root of the distribution (so inside the `-dist.zip`),
+  and `vidocq:jlink` writes it at the root of the image (`target/dist/`). It lists the jars the distribution ships, as they
+  ship (an enriched or modularized copy is hashed, not the jar on Central), with their SHA-256 and their Maven
+  coordinates. The plugin writes it itself: no dependency.
+
+NOTE: `cyclonedx-maven-plugin` is build tooling: it runs on the build machine at release and never reaches an application.
+It is the plugin the CI already runs to feed the dependency scan (Vidocq/vidocq#269), at the same version, so no rewriting of
+what exists elsewhere.
+
 == Exported Java modules
 
 [cols="1,3"]
