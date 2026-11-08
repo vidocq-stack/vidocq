@@ -127,6 +127,7 @@
         <module>cervantes-it-other-containers</module>
         <module>cervantes-bench</module>
         <module>cervantes-examples</module>
+        <module>cervantes-architecture-tests</module>
     </modules>
 
     <profiles>

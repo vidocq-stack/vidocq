@@ -334,3 +334,10 @@ The configuration is validated when the container starts, never during compilati
 * xref:concepts.adoc[Concepts] — claims, signature, JWK Set, JWE.
 * xref:internals.adoc[Internals] — pipeline and threading.
 * xref:tck.adoc[TCK] — status and execution.
+
+== Architecture rules
+
+`io.vidocq.cervantes:cervantes-architecture-tests` is a **test-only** module, never released. It runs Cervantes's architecture
+rules on the classes of every shipped module: the dependencies of each module (the MicroProfile JWT API, Jakarta JSON-P and the Jakarta APIs it reads, nothing else), the layers between the modules, no reflection outside the documented fallbacks of `internals.adoc`, no platform thread, no
+`ThreadLocal`. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`,
+in test scope; it brings ArchUnit (Apache-2.0), also test scope. A change that breaks a rule fails the build.
