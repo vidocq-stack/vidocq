@@ -17,7 +17,7 @@ Adding this dependency is enough to expose `/health*`:
 </dependency>
 ```
 
-(the version is managed by the `vidocq-runtime-parent` BOM.)
+(the version is managed by `vidocq-runtime-bom`.)
 
 This aggregate transitively depends on:
 
