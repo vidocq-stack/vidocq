@@ -112,6 +112,8 @@
         <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
         <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
         <maven.gpg.plugin.version>3.2.7</maven.gpg.plugin.version>
+        <!-- Same version as the SBOM the CI writes for the dependency scan (Vidocq/ci sonar-analysis). -->
+        <cyclonedx.maven.plugin.version>2.9.3</cyclonedx.maven.plugin.version>
         <central.publishing.plugin.version>0.10.0</central.publishing.plugin.version>
         <!-- 3.1.1 pinned so that all releases (via Vidocq/ci/release-maven@v1)
              use a proven, stable version on Maven 3.9.x. -->
@@ -473,6 +475,33 @@
                             <execution>
                                 <id>attach-javadocs</id>
                                 <goals><goal>jar</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!-- One CycloneDX SBOM per published artifact (Vidocq/vidocq#270): written at
+                         package, attached with the classifier cyclonedx and the type json
+                         (<artifactId>-<version>-cyclonedx.json), so the gpg plugin below signs it
+                         at verify like the jars and Maven Central carries it with its .asc.
+                         What the artifact ships only: compile and runtime scopes. Build tooling,
+                         never in an application. -->
+                    <plugin>
+                        <groupId>org.cyclonedx</groupId>
+                        <artifactId>cyclonedx-maven-plugin</artifactId>
+                        <version>${cyclonedx.maven.plugin.version}</version>
+                        <configuration>
+                            <outputFormat>json</outputFormat>
+                            <!-- Named like the file it becomes on Central. -->
+                            <outputName>${project.build.finalName}-cyclonedx</outputName>
+                            <includeTestScope>false</includeTestScope>
+                            <includeProvidedScope>false</includeProvidedScope>
+                            <includeSystemScope>false</includeSystemScope>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-sbom</id>
+                                <phase>package</phase>
+                                <goals><goal>makeBom</goal></goals>
                             </execution>
                         </executions>
                     </plugin>
