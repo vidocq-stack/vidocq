@@ -30,7 +30,7 @@ Report it privately by email to mailto:contribute@vidocq.io[contribute@vidocq.io
 
 == Response times
 
-These are targets set by volunteer maintainers; you are told when one cannot be met.
+Vidocq is an open source project run by its maintainers on a best-effort basis. These are targets, not commitments or a service level; you are told when one cannot be met.
 
 [cols="3,2"]
 |===
