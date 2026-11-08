@@ -17,6 +17,7 @@
 - Current priority: **M5 = TCK MicroProfile Config 3.1 (100% PASS) + JMH bench `ravel-bench`** vs Smallrye Config on the same JVM. M4 can be completed incrementally (hardened BCE validation, extended CDI coverage) but the focus is now on the TCK.
 
 ## Boundaries not to break
+- The architecture rules (module dependencies, layers, no reflection outside the documented fallbacks, no platform thread, no `ThreadLocal`) are ArchUnit tests in `ravel-architecture-tests`, built on the shared `vidocq-archrules` library of `vidocq-parent` (test scope; Vidocq/vidocq#289). A new reflective path is documented in `internals.adoc` and added to `REFLECTIVE_FALLBACKS` with its reason, never silently.
 - Never put `ravel-tck` back into the reactor: the parent `pom.xml` deliberately excludes it due to ShrinkWrap Maven Resolver / Model 4.0.0 vs 4.1.0.
 - `ravel-core` only depends on `org.eclipse.microprofile.config` at compile/runtime; CDI stays in `ravel-cdi-vauban`. `jakarta.annotation` is allowed **in test scope only** to validate `@Priority` reading.
 - Keep `io.vidocq.ravel.internal.*` unexported; any extension must go through the SPI or MicroProfile types.

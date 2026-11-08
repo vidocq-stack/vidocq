@@ -63,6 +63,8 @@ ravel-core         ← Implementation: ConfigSources (SysProps/EnvVars/Propertie
                      built-in and SPI type converters, property expressions, config profiles
 ravel-cdi-vauban   ← CDI Vauban integration: @Inject @ConfigProperty, BCE, Optional injection
 ravel-bench        ← JMH: comparison Smallrye Config / Helidon Config, lookup throughput, overhead
+ravel-architecture-tests ← Test-only: the architecture rules (ArchUnit, through the shared `vidocq-archrules` library of
+                     `vidocq-parent`; Vidocq/vidocq#289) on the shipped classes
 ravel-tck          ← Official MicroProfile Config 3.1 TCK runner (in reactor, `tck` profile only)
 ```
 

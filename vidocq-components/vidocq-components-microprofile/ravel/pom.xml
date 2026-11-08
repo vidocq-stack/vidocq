@@ -106,6 +106,7 @@
         <module>ravel-processor</module>
         <module>ravel-it-other-containers</module>
         <module>ravel-bench</module>
+        <module>ravel-architecture-tests</module>
     </modules>
 
     <dependencyManagement>
