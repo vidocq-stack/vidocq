@@ -105,6 +105,13 @@ peano-bench  ← Opt-in, non-published modular JMH/Expressly comparison harness
 8. **Language** — code, Javadoc, comments, commit messages and every `.md` file are in
    **English**.
 
+**Architecture rules as tests** — **ArchUnit** (`com.tngtech.archunit:archunit`, Apache-2.0, through the shared
+`vidocq-archrules` library of `vidocq-parent`) is test scope, used only by the test-only module
+`peano-architecture-tests` (Vidocq/vidocq#289): its `ArchitectureRules` turn constraints 1, 2, 5 and 6 into tests on the
+classes of every module of the default reactor. The documented reflective fallbacks are listed with their reasons in
+`ArchitectureRules.REFLECTIVE_FALLBACKS`; never add one without a documented reason there. `peano-beans-compat`
+(the `java.desktop` exception) is outside the default reactor and is not covered.
+
 Approved build-tool exception (2026-10-11): peano-processor may also be discovered
 on Maven's annotation processor classpath. Its named-module service remains supported;
 applications, generated tables and runtime modules continue to use Java Modules only.

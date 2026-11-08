@@ -370,6 +370,20 @@ normal fallback policy.
 
 `jakarta.el:jakarta.el-api:6.0.1` — nothing else. Peano does not require `java.desktop`.
 
+== Architecture rules tooling
+
+The unpublished `peano-architecture-tests` module is test only and never released. It runs Peano's architecture
+rules (allowed dependencies per module, so no `java.desktop` and nothing beyond `jakarta.el`; layers; `peano-api`
+never on `peano-core`; Peano never depending on Ibarra, Vauban or another brick; no reflection outside the documented
+fallbacks; no platform thread; no `ThreadLocal`) on the classes of `peano-api`, `peano-core`, `peano-processor` and
+`peano-compiler`. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of
+`vidocq-parent`, in test scope; it brings ArchUnit (Apache-2.0), also test scope. The reflective fallbacks are listed,
+each with its reason, in `ArchitectureRules.REFLECTIVE_FALLBACKS`: the EL API's own `java.lang.reflect.Method` type
+for functions, `java.lang.reflect.Array` for runtime-typed array coercion, the public-member metadata fallback
+governed by `peano.reflection`, and the restoration of serialized function descriptors. The opt-in
+`peano-beans-compat` module, the one approved user of `java.desktop`, is outside the default reactor and is not
+covered.
+
 == Official TCK tooling
 
 The unpublished peano-tck runner uses

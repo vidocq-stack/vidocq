@@ -84,6 +84,8 @@
         <module>peano-core</module>
         <module>peano-processor</module>
         <module>peano-compiler</module>
+        <!-- Test-only, last: it reads the classes of every module above (Vidocq/vidocq#289). -->
+        <module>peano-architecture-tests</module>
     </modules>
 
     <dependencyManagement>
