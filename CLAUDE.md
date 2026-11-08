@@ -173,3 +173,7 @@ Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a cen
 Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
 
 > When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Architecture rules
+
+- The architecture rules (SPI and core dependencies, layers, extensions on the runtime SPI only, no reflection outside the documented fallbacks, no platform thread but two documented ones, no `ThreadLocal`) are ArchUnit tests in `vidocq-runtime-architecture-tests`, built on the shared `vidocq-archrules` library of `vidocq-parent` (test scope; Vidocq/vidocq#289). A new reflective path or platform thread is documented and added to the rule's list with its reason, never silently.

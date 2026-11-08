@@ -57,6 +57,7 @@
         <module>vidocq-runtime-junit</module>
         <module>vidocq-runtime-maven-plugin</module>
         <module>vidocq-runtime-cli</module>
+        <module>vidocq-runtime-architecture-tests</module>
         <module>vidocq-runtime-integration-tests</module>
         <module>vidocq-runtime-examples</module>
     </modules>

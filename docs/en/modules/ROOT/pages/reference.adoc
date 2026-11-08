@@ -503,6 +503,21 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 | An MCP tool, prompt or resource template argument has no name.
 |===
 
+== Architecture rules
+
+`io.vidocq.runtime:vidocq-runtime-architecture-tests` is a **test-only** module, never released. It runs the runtime's
+architecture rules on the classes of `vidocq-runtime-spi`, `vidocq-runtime-core` and every delivered extension (with
+its `-dev` companion; the CRaC extension, which builds only with a CRaC JDK, is left out): the dependencies of the SPI and of the core (Vauban and the Jakarta CDI APIs, nothing else), the
+layers (the SPI reads nothing of the runtime, nothing reaches the core or an extension), extensions on the runtime SPI
+only (none reads the core, the tooling, the Maven plugin, the CLI or the dev services), no reflection outside the
+documented fallbacks, no `ThreadLocal`, and no platform thread but two. The reflective fallbacks are the launch of the
+application (main method and module layer known by name), the optional classes looked up by name, the type currency of
+the Jakarta APIs, and the dev console panels that run a repository's methods; the two platform threads are the JVM
+shutdown hook and the dev console's history ticker. Each is listed with its reason in the test's `ArchitectureRules`,
+and a test fails when an entry is no longer needed. The rules come from `io.vidocq:vidocq-archrules`, the shared build
+and test library of `vidocq-parent`, in test scope; it brings ArchUnit (Apache-2.0), also test scope. A change that
+breaks a rule fails the build.
+
 == Bugs and benchmarks
 
 * Vidocq Runtime bugs: `vidocq/BUG.md`
