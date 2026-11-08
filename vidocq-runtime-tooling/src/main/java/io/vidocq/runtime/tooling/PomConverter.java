@@ -26,7 +26,7 @@ import java.util.Optional;
 /**
  * Turns the pom of a Vidocq application from one style into the other (Vidocq/vidocq#380): with
  * {@code vidocq-runtime-parent}, or without it, on the BOM and the plugin as a build extension, which gives the build
- * what the parent carried. {@code vidocq pom convert --to parentless|parent} and {@code vidocq:convert} run it.
+ * what the parent carried. {@code vidocq pom convert --to parentless|parent} runs it.
  *
  * <p>Works on the text, as {@link PomEditor} does, so that everything that is not the style keeps its place:
  * dependencies, properties, plugins, comments, indentation. The lines it writes and removes are the ones
