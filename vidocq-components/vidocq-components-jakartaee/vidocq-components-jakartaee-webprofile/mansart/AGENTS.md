@@ -6,6 +6,14 @@ Contributor guidance for agents working on this repository. See also the compani
 
 Mansart owns Jakarta Data, the JDBC pool and Jakarta Transactions. Persistence and the provisional Validation provider moved to [Noether](https://codefloe.com/Vidocq/noether) on 2026-10-11. Read its own guidance before changing those implementations; they are no longer part of this reactor. Data production semantics stay unchanged and a Data/JPA bridge remains deferred.
 
+## Architecture rules
+
+The test-only module `mansart-architecture-tests` runs the shared `vidocq-archrules` library of
+`vidocq-parent` (test scope, brings ArchUnit, Apache-2.0) on the classes of every shipped module (Vidocq/vidocq#289):
+allowed dependencies, layers, `*-api` never on `*-core`, no reflection outside the documented fallbacks, no platform
+thread, no `ThreadLocal` outside the documented transaction context. Each fallback of
+`ArchitectureRules.REFLECTIVE_FALLBACKS` and `THREAD_LOCAL_HOLDERS` carries its reason; never add one without it.
+
 ## Documentation (Antora) conventions
 
 The project documentation lives in `docs/en` as an Antora component and is

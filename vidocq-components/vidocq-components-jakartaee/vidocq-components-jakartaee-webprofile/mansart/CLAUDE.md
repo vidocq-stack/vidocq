@@ -27,6 +27,16 @@ Provide the Vidocq ecosystem with three persistence building blocks, independent
 4. **Strict Java Modules** — each module has its `module-info.java`. The dialect SPI (`mansart-data-dialect-spi`) is `exports`; dialects (`mansart-data-dialect-h2`, `…-postgresql`) are `provides DialectFactory with …` and discovered by `ServiceLoader`.
 5. **Virtual Threads** — all `PreparedStatement.execute*` calls run from a virtual thread. A JDBC connection must never be held across a `synchronized` block that wraps a blocking operation.
 
+**Architecture rules as tests** — **ArchUnit** (`com.tngtech.archunit:archunit`, Apache-2.0, through the shared
+`vidocq-archrules` library of `vidocq-parent`) is test scope, used only by the test-only module
+`mansart-architecture-tests` (Vidocq/vidocq#289): its `ArchitectureRules` turn the constraints above into tests on
+the shipped classes. The documented reflective fallbacks (the M7 runtime path, the lookups of generated code, the
+optional JTA probe, the configured `XADataSource`, the interceptor's `Method`) are listed with their reasons in
+`ArchitectureRules.REFLECTIVE_FALLBACKS`, and the transaction context's `ThreadLocal` in `THREAD_LOCAL_HOLDERS`; a
+new one needs a documented reason there. Note: constraints 1 and 2 forbid a dynamic proxy, yet `RuntimeRepositoryProxy`
+(M7 runtime path, documented in `mansart-jakarta-data.adoc`) remains as the fallback for interfaces without a generated
+implementation.
+
 ## Delivered Modules
 
 ### mansart-jakarta-data sub-modules

@@ -66,6 +66,8 @@
         <module>mansart-transactions</module>
         <module>mansart-jakarta-data</module>
         <module>mansart-it-other-containers</module>
+        <!-- Test-only, last: it reads the classes of every module above (Vidocq/vidocq#289). -->
+        <module>mansart-architecture-tests</module>
     </modules>
 
     <properties>

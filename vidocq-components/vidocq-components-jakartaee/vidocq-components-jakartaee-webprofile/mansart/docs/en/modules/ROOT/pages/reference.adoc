@@ -49,6 +49,9 @@ Exhaustive Mansart reference. For onboarding, see xref:getting-started.adoc[Gett
 
 | `io.vidocq.noether:noether-jpa`
 | POM aggregator. Runtime applications use `noether-jpa-core`, a `noether-jpa-dialect-*` adapter and, for container injection, `noether-jpa-cdi`; APT uses `noether-jpa-processor`. See xref:noether::index.adoc[implemented modules].
+
+| `io.vidocq.mansart:mansart-architecture-tests`
+| **Test only**, never released. Runs Mansart's architecture rules (allowed dependencies per module, layers, `*-api` never on `*-core`, the pool decoupled from the other blocks, no reflection outside the documented fallbacks, no platform thread, no `ThreadLocal` outside the transaction context) on the classes of every shipped module. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`, in test scope; it brings ArchUnit (Apache-2.0), also test scope. The reflective fallbacks are listed, each with its reason, in `ArchitectureRules.REFLECTIVE_FALLBACKS`: the M7 runtime path of `mansart-data-core`, the lookups of the code the processor generates, the optional JTA probe, the `XADataSource` named by `PoolConfig.xaDataSourceClassName` and the `Method` handed to the `@Transactional` interceptor. The one `ThreadLocal` is the transaction context of `MansartTransactionManager`, a deliberate choice documented in xref:concepts.adoc[Concepts].
 |===
 
 == Java modules
