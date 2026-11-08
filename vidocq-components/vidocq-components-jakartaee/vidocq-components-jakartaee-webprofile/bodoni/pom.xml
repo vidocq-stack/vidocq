@@ -97,6 +97,8 @@
         <module>bodoni-core</module>
         <module>bodoni-peano</module>
         <module>bodoni-it-other-containers</module>
+        <!-- Test-only, last: it reads the classes of the modules above (Vidocq/vidocq#289). -->
+        <module>bodoni-architecture-tests</module>
     </modules>
 
     <dependencyManagement>

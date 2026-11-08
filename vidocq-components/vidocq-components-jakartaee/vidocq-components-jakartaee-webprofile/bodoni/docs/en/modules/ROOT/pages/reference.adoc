@@ -12,6 +12,7 @@ Bodoni publishes the five libraries of Jakarta Standard Tag Library 3.0: `c:`, `
 
 | `bodoni-core` | `io.vidocq.bodoni:bodoni-core:{project-version}`
 | `bodoni-peano` | `io.vidocq.bodoni:bodoni-peano:{project-version}` (optional engine adapter, Java module `io.vidocq.bodoni.peano`)
+| `bodoni-architecture-tests` | Unpublished, never released. Test only: Bodoni's architecture rules (allowed dependencies per module, the layers, `bodoni-core` portable and free of any Ibarra, Peano, Foy or Vauban class, no reflection outside the documented fallback, no platform thread, no `ThreadLocal`) on the classes of `bodoni-core` and `bodoni-peano`. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`, in test scope; it brings ArchUnit (Apache-2.0), also test scope. The one reflective fallback is `Class.forName(driver, true, loader)` for the JDBC driver a `sql:` data source names (Tags 3.0 section 10.2), listed with its reason in `ArchitectureRules.REFLECTIVE_FALLBACKS`.
 |===
 
 == Dependencies

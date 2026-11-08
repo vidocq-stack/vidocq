@@ -135,6 +135,12 @@ bodoni-it-other-containers/bodoni-it-openliberty ← portability proof on Open L
 9. **Language** — code, Javadoc, comments, commit messages and every `.md` file are in
    **English**.
 
+**Architecture rules as tests** — **ArchUnit** (`com.tngtech.archunit:archunit`, Apache-2.0, through the shared
+`vidocq-archrules` library of `vidocq-parent`) is test scope, used only by the test-only module
+`bodoni-architecture-tests` (Vidocq/vidocq#289): its `ArchitectureRules` turn constraints 1, 4, 5 and 6 into tests on
+the classes of `bodoni-core` and `bodoni-peano`. The one documented reflective fallback (constraint 4) is listed with
+its reason in `ArchitectureRules.REFLECTIVE_FALLBACKS`; never add one without a documented reason there.
+
 ## Conventions
 
 - **Maven groupId**: `io.vidocq.bodoni`; version `0.4.0-SNAPSHOT` (workspace dev line,
