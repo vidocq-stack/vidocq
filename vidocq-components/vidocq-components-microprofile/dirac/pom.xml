@@ -122,6 +122,7 @@
         <module>dirac-it-other-containers</module>
         <module>dirac-bench</module>
         <module>dirac-examples</module>
+        <module>dirac-architecture-tests</module>
     </modules>
 
     <dependencyManagement>
