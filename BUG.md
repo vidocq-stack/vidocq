@@ -5,6 +5,53 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261108-01 — `vidocq pom convert --to parentless` keeps `${project.parent.version}` on the plugin's dev-service dependencies
+
+- **Date**: 2026-11-08
+- **Status**: OPEN
+- **Affected module**: vidocq-runtime-tooling (`PomConverter`), a #380 follow-up
+- **Symptom**: on a pom written under `vidocq-runtime-parent` whose dev services `extension add` wired on the plugin
+  (`<dependencies>` of `vidocq-runtime-maven-plugin`, at `${project.parent.version}`), `vidocq pom convert --to parentless`
+  removes the parent, writes `vidocq.version`, `maven.compiler.release`, the BOM imports, the plugin's version and
+  `<extensions>true</extensions>`, and leaves the `${project.parent.version}` lines. Without a parent the expression
+  resolves to nothing and Maven stops before any goal:
+  `[ERROR] Internal error: java.lang.IllegalArgumentException: Invalid Collect Request: io.vidocq.runtime:vidocq-runtime-maven-plugin:jar:0.4.0-SNAPSHOT () -> [io.vidocq.runtime:vidocq-runtime-devservice-postgres:jar:${project.parent.version} (runtime), io.vidocq.runtime:vidocq-runtime-devservice-keycloak:jar:${project.parent.version} (runtime), io.vidocq.runtime:vidocq-runtime-devservice-otel:jar:${project.parent.version} (runtime)]`.
+  `--check` reports nothing on the converted pom, and a second `convert` says the pom already has the style.
+- **Minimal reproduction** (CLI 0.4.0-20261108.002217-65): `vidocq create --name demo --with-parent -x cassini-rest
+  && cd demo && vidocq extension add mansart-data mansart-pool mansart-transactions flyway-migration` writes the
+  PostgreSQL dev service at `${project.parent.version}`; `vidocq pom convert --to parentless` leaves that line
+  (`grep project.parent.version pom.xml`), and `./mvnw package` fails as above. Seen first on the tutorial's step-11
+  pom, with its three dev services.
+- **Cause**: `PomConverter` rewrites the elements the scaffolder writes and leaves the rest of the pom where it is, by
+  design. The dev-service dependencies are `extension add`'s, which names `${project.parent.version}` under the parent
+  and `${vidocq.version}` on a parentless pom: the converter removes the parent the expression points to and does not
+  rewrite the expression.
+- **Fix to make**: `--to parentless` rewrites `${project.parent.version}` to `${vidocq.version}`, and `--to parent` the
+  reverse, at least under the Vidocq plugin's `<dependencies>`; `--check` flags the expression; a test with a pom
+  holding the three dev services, both ways, byte for byte against what `extension add` writes in each style.
+- **Reported by**: the tutorial replay on the 2026-11-08 SNAPSHOT (vidocq-tutorial `FINDINGS.md` 12.5).
+
+## BUG-20261108-02 — Under Maven 3.10.0 every build with Flyway prints a `prefixes.txt … HTTP Status: 401` WARNING
+
+- **Date**: 2026-11-08
+- **Status**: OPEN — not Vidocq's code; to document as expected, or to work around in the project `vidocq create` writes
+- **Affected module**: the Maven wrapper `vidocq create` writes (3.10.0 since #487), with the `flyway-migration` extension; docs
+- **Symptom**: from the first build after `vidocq extension add flyway-migration`, with or without `vidocq-runtime-parent`,
+  with or without `-U`:
+  `[WARNING] Could not transfer metadata /.meta/prefixes.txt from/to flyway-community-db-support (https://maven.pkg.github.com/flyway/flyway-community-db-support): HTTP Status: 401`,
+  right after `[INFO] Loaded 24409 auto-discovered prefixes for remote repository maven-central`. The build goes on.
+  Maven 3.9.16 printed nothing: the tutorial's "no `[WARNING]`" checks of 2026-11-02 ran on it.
+- **Minimal reproduction**: `vidocq create --name demo -x cassini-rest && cd demo && vidocq extension add mansart-data
+  mansart-pool mansart-transactions flyway-migration && ./mvnw package`.
+- **Cause**: Maven 3.10.0 discovers the remote-repository-filter prefixes (`.meta/prefixes.txt`) of every repository the
+  resolution meets; `flyway-parent` (10.x and 11.x) declares the GitHub Packages repository `flyway-community-db-support`,
+  which answers 401 to anonymous reads, and the resolver logs the miss as a warning. Nothing in Vidocq declares that
+  repository.
+- **Options**: say the warning is expected in `getting-started.adoc`, next to the javac last-round warnings
+  (BUG-20261024-11); or find the resolver switch that turns the prefixes discovery off for a repository and let
+  `vidocq create` write it in `.mvn/maven.config`.
+- **Reported by**: the tutorial replay on the 2026-11-08 SNAPSHOT (vidocq-tutorial `FINDINGS.md` 12.5).
+
 ## BUG-20261107-01 — `vidocq:build-info` writes Maven's placeholder `1980-02-01T00:00:00Z` as the build time
 
 - **Date**: 2026-11-07
