@@ -231,7 +231,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
     }
 
     /** Lists the staged jars (the ones the image is made of) in a CycloneDX SBOM; jlink recreates the image directory. */
-    private void writeSbom(Path stage) throws IOException {
+    private void writeSbom(Path stage) {
         List<DistributionSbom.Component> shipped = new ArrayList<>();
         for (var artifact : project.getArtifacts()) {
             File f = artifact.getFile();
