@@ -41,6 +41,8 @@ import io.vidocq.ravel.internal.archfixture.CoreUsingCdiApi;
 import io.vidocq.ravel.processor.archfixture.ProcessorReachingIntoTheSpi;
 import io.vidocq.ravel.spi.archfixture.SpiReachingIntoCore;
 
+import io.vidocq.archrules.VidocqArchRules;
+
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchRule;
@@ -125,6 +127,20 @@ class ArchitectureRulesSelfTest {
         for (String allowed : ArchitectureRules.REFLECTIVE_FALLBACKS.keySet()) {
             assertTrue(SHIPPED.contain(allowed), () -> allowed + " is not a shipped class");
         }
+    }
+
+    @Test
+    void everyReflectionAllowlistEntryIsNeeded() {
+        // An entry the shipped classes no longer need would exempt a class for nothing, and hide a later breach.
+        List<String> unneeded = new java.util.ArrayList<>();
+        for (String allowed : ArchitectureRules.REFLECTIVE_FALLBACKS.keySet()) {
+            var without = new java.util.HashMap<>(ArchitectureRules.REFLECTIVE_FALLBACKS);
+            without.remove(allowed);
+            if (!VidocqArchRules.noReflection(without, "allowlist check").evaluate(SHIPPED).hasViolation()) {
+                unneeded.add(allowed);
+            }
+        }
+        assertTrue(unneeded.isEmpty(), () -> "these entries need no reflection, drop them: " + unneeded);
     }
 
     private static Arguments ruleWith(String name, ArchRule rule, Class<?> fixture) {
