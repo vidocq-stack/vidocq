@@ -102,9 +102,11 @@ class VidocqPackageMojoTest {
         mojoWith("-Xmx512m").generateShScript(binDir);
         Path fakeBin = java.nio.file.Files.createDirectories(dir.resolve("fake"));
         Path fakeJava = fakeBin.resolve("java");
-        Files.writeString(fakeJava, "#!/bin/sh\n"
-                + "if [ \"$1\" = \"-version\" ]; then echo 'openjdk version \"25\"' >&2; exit 0; fi\n"
-                + "for a in \"$@\"; do echo \"[$a]\"; done\n");
+        Files.writeString(fakeJava, """
+                #!/bin/sh
+                if [ "$1" = "-version" ]; then echo 'openjdk version "25"' >&2; exit 0; fi
+                for a in "$@"; do echo "[$a]"; done
+                """);
         assertTrue(fakeJava.toFile().setExecutable(true));
 
         ProcessBuilder run = new ProcessBuilder("sh", binDir.resolve("app.sh").toString(), "--port", "8081")
