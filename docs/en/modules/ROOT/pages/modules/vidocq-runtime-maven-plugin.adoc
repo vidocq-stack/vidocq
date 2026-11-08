@@ -524,6 +524,11 @@ By default the application jar lands in `app/`, apart from the module-path closu
 `bin/` launchers boot the runtime with `-Dvidocq.app.path="$BASEDIR/app"`: the application resolves into the
 module layer the Vauban class loader defines, as it does under `vidocq:dev` and `vidocq:run`.
 
+[[launcher-jdk]]The launchers run the `java` of `JAVA_HOME` when it is set, like the build, and the `java` of the
+`PATH` otherwise. Before starting the JVM they check that it is Java 25 or later, and stop with a sentence that names
+the Java they found and the one they need, instead of the module-descriptor error an older JDK raises on a class file
+of version 69 (Vidocq/vidocq#102).
+
 [[launcher-java-opts]]The launchers pass the `JAVA_OPTS` environment variable to the JVM, after the
 `<jvmArgs>` of the pom, so that an option set when the application starts wins; the arguments of the launcher go to
 the application:

@@ -348,7 +348,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             script = """
                     #!/bin/sh
                     BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
-                    exec java%s $JAVA_OPTS \\
+                    exec "$JAVA"%s $JAVA_OPTS \\
                       --module-path "$BASEDIR/lib:$BASEDIR/app" \\
                       --add-modules ALL-MODULE-PATH \\%s
                       --module %s \\
@@ -359,7 +359,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             script = """
                     #!/bin/sh
                     BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
-                    exec java%s $JAVA_OPTS \\
+                    exec "$JAVA"%s $JAVA_OPTS \\
                       --module-path "$BASEDIR/lib" \\
                       --add-modules %s \\%s
                       -Dvidocq.app.path="$BASEDIR/app" \\%s
@@ -371,7 +371,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             script = """
                     #!/bin/sh
                     BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
-                    exec java%s $JAVA_OPTS \\
+                    exec "$JAVA"%s $JAVA_OPTS \\
                       --module-path "$BASEDIR/lib" \\
                       --module %s \\
                       "$@"
@@ -379,10 +379,47 @@ public class VidocqPackageMojo extends AbstractMojo {
         }
 
         Path shFile = binDir.resolve(scriptName + ".sh");
-        Files.writeString(shFile, script);
+        Files.writeString(shFile, withJdkCheck(script, "#!/bin/sh\n", SH_JDK_CHECK));
         if (!shFile.toFile().setExecutable(true)) {
             getLog().warn("Could not make " + shFile + " executable: run chmod +x on it.");
         }
+    }
+
+    /**
+     * What the shell launcher does before it starts the JVM (vidocq#102): run the {@code java} of
+     * {@code JAVA_HOME} when it is set, as the build does, and stop with a sentence that names the JDK it found and
+     * the one it needs, instead of letting an older JDK fail on a module descriptor it cannot read (class file
+     * version 69).
+     */
+    private static final String SH_JDK_CHECK = """
+            JAVA=java
+            [ -n "$JAVA_HOME" ] && JAVA="$JAVA_HOME/bin/java"
+            JAVA_MAJOR=$("$JAVA" -version 2>&1 | sed -n 's/^.* version "\\([0-9]*\\).*/\\1/p' | head -n 1)
+            if [ -z "$JAVA_MAJOR" ] || [ "$JAVA_MAJOR" -lt 25 ]; then
+              echo "This application needs Java 25 or later: $JAVA is Java ${JAVA_MAJOR:-unknown}. Set JAVA_HOME to a JDK 25." >&2
+              exit 1
+            fi
+            """;
+
+    /** The same check for the Windows launcher (vidocq#102). */
+    private static final String CMD_JDK_CHECK = """
+            set "JAVA=java"
+            if defined JAVA_HOME set "JAVA=%JAVA_HOME%\\bin\\java"
+            set "JAVA_MAJOR="
+            for /f "tokens=3" %%v in ('"%JAVA%" -version 2^>^&1') do if not defined JAVA_MAJOR for /f "delims=." %%m in ("%%~v") do set "JAVA_MAJOR=%%m"
+            if not defined JAVA_MAJOR goto wrongjava
+            if %JAVA_MAJOR% LSS 25 goto wrongjava
+            goto javaok
+            :wrongjava
+            if not defined JAVA_MAJOR set "JAVA_MAJOR=unknown"
+            echo This application needs Java 25 or later: %JAVA% is Java %JAVA_MAJOR%. Set JAVA_HOME to a JDK 25. 1>&2
+            exit /b 1
+            :javaok
+            """;
+
+    /** Puts the JDK check right after the first line of a launcher. */
+    private static String withJdkCheck(String script, String firstLine, String check) {
+        return firstLine + check + script.substring(firstLine.length());
     }
 
     void generateCmdScript(Path binDir) throws IOException, MojoExecutionException {
@@ -392,7 +429,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             script = """
                     @echo off
                     set BASEDIR=%%~dp0..
-                    java%s %%JAVA_OPTS%% ^
+                    "%%JAVA%%"%s %%JAVA_OPTS%% ^
                       --module-path "%%BASEDIR%%\\lib;%%BASEDIR%%\\app" ^
                       --add-modules ALL-MODULE-PATH ^%s
                       --module %s ^
@@ -403,7 +440,7 @@ public class VidocqPackageMojo extends AbstractMojo {
             script = """
                     @echo off
                     set BASEDIR=%%~dp0..
-                    java%s %%JAVA_OPTS%% ^
+                    "%%JAVA%%"%s %%JAVA_OPTS%% ^
                       --module-path "%%BASEDIR%%\\lib" ^
                       --add-modules %s ^%s
                       -Dvidocq.app.path="%%BASEDIR%%\\app" ^%s
@@ -415,14 +452,14 @@ public class VidocqPackageMojo extends AbstractMojo {
             script = """
                     @echo off
                     set BASEDIR=%%~dp0..
-                    java%s %%JAVA_OPTS%% ^
+                    "%%JAVA%%"%s %%JAVA_OPTS%% ^
                       --module-path "%%BASEDIR%%\\lib" ^
                       --module %s ^
                       %%*
                     """.formatted(jvmArgsLine, legacyModuleRef());
         }
 
-        Files.writeString(binDir.resolve(scriptName + ".cmd"), script);
+        Files.writeString(binDir.resolve(scriptName + ".cmd"), withJdkCheck(script, "@echo off\n", CMD_JDK_CHECK));
     }
 
     /**

@@ -70,12 +70,12 @@ class VidocqPackageMojoTest {
         mojo.generateCmdScript(binDir);
 
         String sh = Files.readString(binDir.resolve("app.sh"));
-        assertTrue(sh.contains("exec java $JAVA_OPTS \\"),
+        assertTrue(sh.contains("exec \"$JAVA\" $JAVA_OPTS \\"),
                 "an absent <jvmArgs> must leave the java invocation bare: " + sh);
         assertTrue(sh.contains("--module io.repro.app/io.repro.app.Main"), sh);
 
         String cmd = Files.readString(binDir.resolve("app.cmd"));
-        assertTrue(cmd.contains("java %JAVA_OPTS% ^"), "an absent <jvmArgs> must leave the java invocation bare: " + cmd);
+        assertTrue(cmd.contains("\"%JAVA%\" %JAVA_OPTS% ^"), "an absent <jvmArgs> must leave the java invocation bare: " + cmd);
     }
 
     @Test
@@ -86,9 +86,9 @@ class VidocqPackageMojoTest {
         mojo.generateCmdScript(binDir);
 
         assertTrue(Files.readString(binDir.resolve("app.sh"))
-                .contains("exec java -Dfile.encoding=UTF-8 -Xmx512m $JAVA_OPTS \\"));
+                .contains("exec \"$JAVA\" -Dfile.encoding=UTF-8 -Xmx512m $JAVA_OPTS \\"));
         assertTrue(Files.readString(binDir.resolve("app.cmd"))
-                .contains("java -Dfile.encoding=UTF-8 -Xmx512m %JAVA_OPTS% ^"));
+                .contains("\"%JAVA%\" -Dfile.encoding=UTF-8 -Xmx512m %JAVA_OPTS% ^"));
     }
 
     /**
@@ -102,12 +102,15 @@ class VidocqPackageMojoTest {
         mojoWith("-Xmx512m").generateShScript(binDir);
         Path fakeBin = java.nio.file.Files.createDirectories(dir.resolve("fake"));
         Path fakeJava = fakeBin.resolve("java");
-        Files.writeString(fakeJava, "#!/bin/sh\nfor a in \"$@\"; do echo \"[$a]\"; done\n");
+        Files.writeString(fakeJava, "#!/bin/sh\n"
+                + "if [ \"$1\" = \"-version\" ]; then echo 'openjdk version \"25\"' >&2; exit 0; fi\n"
+                + "for a in \"$@\"; do echo \"[$a]\"; done\n");
         assertTrue(fakeJava.toFile().setExecutable(true));
 
         ProcessBuilder run = new ProcessBuilder("sh", binDir.resolve("app.sh").toString(), "--port", "8081")
                 .redirectErrorStream(true);
         run.environment().put("PATH", fakeBin + java.io.File.pathSeparator + System.getenv("PATH"));
+        run.environment().remove("JAVA_HOME");
         run.environment().put("JAVA_OPTS", "-Xmx1g -Dlibrary.max=3");
         Process process = run.start();
         String out = new String(process.getInputStream().readAllBytes());
@@ -124,7 +127,7 @@ class VidocqPackageMojoTest {
         mojo.generateShScript(binDir);
 
         String sh = Files.readString(binDir.resolve("app.sh"));
-        assertTrue(sh.contains("exec java $JAVA_OPTS \\"), sh);
+        assertTrue(sh.contains("exec \"$JAVA\" $JAVA_OPTS \\"), sh);
         assertFalse(sh.contains("java    "), "whitespace-only jvmArgs must not leak into the launcher: " + sh);
     }
 
@@ -275,24 +278,25 @@ class VidocqPackageMojoTest {
         mojo.generateShScript(binDir);
         mojo.generateCmdScript(binDir);
 
+        // After the JDK check (vidocq#102), the launchers are what they were.
+        String sh = Files.readString(binDir.resolve("app.sh"));
         assertEquals("""
-                #!/bin/sh
                 BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
-                exec java $JAVA_OPTS \\
+                exec "$JAVA" $JAVA_OPTS \\
                   --module-path "$BASEDIR/lib:$BASEDIR/app" \\
                   --add-modules ALL-MODULE-PATH \\
                   --module io.repro.app/io.repro.app.Main \\
                   "$@"
-                """, Files.readString(binDir.resolve("app.sh")));
+                """, sh.substring(sh.indexOf("BASEDIR=")));
+        String cmd = Files.readString(binDir.resolve("app.cmd"));
         assertEquals("""
-                @echo off
                 set BASEDIR=%~dp0..
-                java %JAVA_OPTS% ^
+                "%JAVA%" %JAVA_OPTS% ^
                   --module-path "%BASEDIR%\\lib;%BASEDIR%\\app" ^
                   --add-modules ALL-MODULE-PATH ^
                   --module io.repro.app/io.repro.app.Main ^
                   %*
-                """, Files.readString(binDir.resolve("app.cmd")));
+                """, cmd.substring(cmd.indexOf("set BASEDIR=")));
     }
 
     /** {@code classes} adds no {@code -Dvidocq.app.layer} line to the runtime-main scripts either. */
@@ -476,6 +480,60 @@ class VidocqPackageMojoTest {
             out.closeEntry();
         }
         return jar;
+    }
+
+    /** vidocq#102: the shell launcher runs the JDK of {@code JAVA_HOME}, and refuses one below 25 in plain words. */
+    @Test
+    void shellLauncher_refusesAJdkBelow25AndNamesIt(@TempDir Path dir) throws Exception {
+        Path bin = Files.createDirectory(dir.resolve("bin"));
+        mojoWith(null).generateShScript(bin);
+        Path jdk = fakeJdk(dir.resolve("jdk21"), "21.0.5");
+
+        ProcessBuilder launcher = new ProcessBuilder("sh", bin.resolve("app.sh").toString()).redirectErrorStream(true);
+        launcher.environment().put("JAVA_HOME", jdk.toString());
+        Process p = launcher.start();
+        String out = new String(p.getInputStream().readAllBytes());
+
+        assertEquals(1, p.waitFor(), out);
+        assertTrue(out.contains("needs Java 25") && out.contains("Java 21") && out.contains(jdk.toString()), out);
+        assertFalse(out.contains("RAN"), "the JVM must not start: " + out);
+    }
+
+    @Test
+    void shellLauncher_runsTheJdkOfJavaHomeFrom25(@TempDir Path dir) throws Exception {
+        Path bin = Files.createDirectory(dir.resolve("bin"));
+        mojoWith(null).generateShScript(bin);
+        Path jdk = fakeJdk(dir.resolve("jdk25"), "25.0.1");
+
+        ProcessBuilder launcher = new ProcessBuilder("sh", bin.resolve("app.sh").toString()).redirectErrorStream(true);
+        launcher.environment().put("JAVA_HOME", jdk.toString());
+        Process p = launcher.start();
+        String out = new String(p.getInputStream().readAllBytes());
+
+        assertEquals(0, p.waitFor(), out);
+        assertTrue(out.contains("RAN"), out);
+    }
+
+    @Test
+    void windowsLauncher_checksTheJdkToo(@TempDir Path binDir) throws Exception {
+        mojoWith(null).generateCmdScript(binDir);
+
+        String cmd = Files.readString(binDir.resolve("app.cmd"));
+        assertTrue(cmd.contains("if defined JAVA_HOME set \"JAVA=%JAVA_HOME%\\bin\\java\""), cmd);
+        assertTrue(cmd.contains("LSS 25"), cmd);
+        assertTrue(cmd.indexOf("LSS 25") < cmd.indexOf("%JAVA_OPTS%"), "the check comes before the launch: " + cmd);
+    }
+
+    /** A {@code JAVA_HOME} whose {@code bin/java} prints a version for {@code -version} and RAN otherwise. */
+    private static Path fakeJdk(Path home, String version) throws Exception {
+        Path java = Files.createDirectories(home.resolve("bin")).resolve("java");
+        Files.writeString(java, """
+                #!/bin/sh
+                if [ "$1" = "-version" ]; then echo 'openjdk version "%s" 2026-01-01' >&2; exit 0; fi
+                echo RAN
+                """.formatted(version));
+        java.toFile().setExecutable(true);
+        return home;
     }
 
     private static VidocqPackageMojo mojoWith(String jvmArgs) throws Exception {
