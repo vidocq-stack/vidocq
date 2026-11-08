@@ -341,3 +341,10 @@ The shared state registries (`CircuitBreakerStateRegistry`, `BulkheadStateRegist
 * xref:concepts.adoc[Concepts] — MP FT model, canonical order.
 * xref:internals.adoc[Internals] — pure engines, virtual threads.
 * xref:tck.adoc[TCK] — execution and status.
+
+== Architecture rules
+
+`io.vidocq.heisenberg:heisenberg-architecture-tests` is a **test-only** module, never released. It runs Heisenberg's architecture
+rules on the classes of every shipped module: the dependencies of each module (the MicroProfile Fault Tolerance and Config APIs and the Jakarta APIs it reads, nothing else), the layers between the modules, no reflection outside the documented fallbacks of `internals.adoc`, no platform thread, no
+`ThreadLocal`. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`,
+in test scope; it brings ArchUnit (Apache-2.0), also test scope. A change that breaks a rule fails the build.
