@@ -7,6 +7,12 @@
     <version>0.4.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
+    <!-- vidocq-archrules: the shared architecture rules every brick runs as ArchUnit tests (Vidocq/vidocq#289).
+         Build and test tooling, test scope in the bricks, never part of what a brick ships. -->
+    <modules>
+        <module>vidocq-archrules</module>
+    </modules>
+
     <name>Vidocq :: Parent</name>
     <description>Common parent POM for all Vidocq ecosystem projects - Java 25, Maven Central, release/snapshot/quality profiles.</description>
     <url>https://codefloe.com/Vidocq/vidocq-parent</url>
