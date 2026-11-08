@@ -23,6 +23,8 @@ import java.lang.ref.WeakReference;
 import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * The accessor catalog of each class loader, loaded once and dropped with the loader.
@@ -44,12 +46,15 @@ public final class AccessorCatalogs {
     private static final Map<ClassLoader, WeakReference<Class<?>>> ANCHORS = Collections.synchronizedMap(new WeakHashMap<>());
     /** The catalogs that hold nothing of their loader. */
     private static final Map<ClassLoader, AccessorCatalog> INDEPENDENT = Collections.synchronizedMap(new WeakHashMap<>());
-    /** Hands the catalog just loaded to the {@link ClassValue}, whose computation only knows the anchor class. */
-    private static final ThreadLocal<AccessorCatalog> PENDING = new ThreadLocal<>();
+    /**
+     * Hands the catalog just loaded to the {@link ClassValue}, whose computation only knows the anchor class: keyed
+     * by that class, held only while {@link #of} computes it (AGENTS.md: no {@code ThreadLocal}).
+     */
+    private static final ConcurrentMap<Class<?>, AccessorCatalog> PENDING = new ConcurrentHashMap<>();
     private static final ClassValue<AccessorCatalog> ANCHORED = new ClassValue<>() {
         @Override
         protected AccessorCatalog computeValue(Class<?> anchor) {
-            AccessorCatalog pending = PENDING.get();
+            AccessorCatalog pending = PENDING.get(anchor);
             return pending != null ? pending : AccessorCatalog.load(anchor.getClassLoader());
         }
     };
@@ -76,13 +81,13 @@ public final class AccessorCatalogs {
             AccessorCatalog raced = INDEPENDENT.putIfAbsent(loader, loaded);
             return raced != null ? raced : loaded;
         }
-        PENDING.set(loaded);
+        PENDING.put(owned, loaded);
         try {
             AccessorCatalog winner = ANCHORED.get(owned);
             ANCHORS.put(loader, new WeakReference<>(owned));
             return winner;
         } finally {
-            PENDING.remove();
+            PENDING.remove(owned, loaded);
         }
     }
 }

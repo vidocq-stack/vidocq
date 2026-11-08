@@ -3,6 +3,17 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## EL-024 · 2026-11-08 · AccessorCatalogs handed its catalog to a ClassValue through a ThreadLocal
+
+- Symptom: AGENTS.md constraint 6 (no `ThreadLocal`) was broken by `AccessorCatalogs.PENDING`, found by the shared
+  architecture rule `NO_THREAD_LOCAL` of `peano-architecture-tests` (Vidocq/vidocq#289). It was set and removed within one
+  call, so nothing leaked across virtual threads; the constraint is categorical.
+- Minimal reproduction: `ArchitectureRulesTest.theShippedClassesKeepTheRule` with `NO_THREAD_LOCAL`.
+- Cause: the `ClassValue` computation only knows the anchor class, so the freshly loaded catalog was passed through a
+  `ThreadLocal` (EL-023 fix).
+- Status: fixed. The catalog travels in a `ConcurrentHashMap` keyed by the anchor class, held only while `of` computes
+  the `ClassValue`; a racing caller that finds it removed loads an equivalent catalog itself.
+
 ## EL-023 · 2026-11-02 · The first expression factory kept every discarded application layer of `vidocq dev` reachable
 
 - Symptom: after N hot reloads of `vidocq dev`, N+1 application class loaders stayed alive (about 0.8 MB heap per
