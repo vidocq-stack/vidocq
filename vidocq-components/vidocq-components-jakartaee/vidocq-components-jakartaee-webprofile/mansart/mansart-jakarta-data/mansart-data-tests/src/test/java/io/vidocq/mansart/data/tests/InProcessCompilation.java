@@ -101,6 +101,15 @@ final class InProcessCompilation {
 
     /** Writes each {@code fqn -> source} pair under {@code out/src} and compiles them with extra {@code options}. */
     static Result compileSources(Path out, List<String> options, String... fqnAndSourcePairs) throws IOException {
+        return compileSources(out, options, List.of(), fqnAndSourcePairs);
+    }
+
+    /**
+     * Writes each {@code fqn -> source} pair under {@code out/src} and compiles them, with extra javac
+     * {@code options} and {@code extraClassPath} (a library jar the application depends on) after the test class path.
+     */
+    static Result compileSources(Path out, List<String> options, List<Path> extraClassPath,
+                                 String... fqnAndSourcePairs) throws IOException {
         List<Path> sources = new ArrayList<>();
         for (int i = 0; i < fqnAndSourcePairs.length; i += 2) {
             Path file = out.resolve("src").resolve(fqnAndSourcePairs[i].replace('.', '/') + JAVA);
@@ -108,10 +117,15 @@ final class InProcessCompilation {
             Files.writeString(file, fqnAndSourcePairs[i + 1], StandardCharsets.UTF_8);
             sources.add(file);
         }
-        return compile(sources, out, options);
+        return compile(sources, out, options, extraClassPath);
     }
 
     private static Result compile(List<Path> sources, Path out, List<String> options) throws IOException {
+        return compile(sources, out, options, List.of());
+    }
+
+    private static Result compile(List<Path> sources, Path out, List<String> options, List<Path> extraClassPath)
+            throws IOException {
         Path classes = Files.createDirectories(out.resolve("classes"));
         Path generated = Files.createDirectories(out.resolve("generated"));
         JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
@@ -120,7 +134,9 @@ final class InProcessCompilation {
                 StandardCharsets.UTF_8)) {
             files.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, List.of(classes));
             files.setLocationFromPaths(StandardLocation.SOURCE_OUTPUT, List.of(generated));
-            files.setLocationFromPaths(StandardLocation.CLASS_PATH, dependencyClassPath());
+            List<Path> classPath = new ArrayList<>(dependencyClassPath());
+            classPath.addAll(extraClassPath);
+            files.setLocationFromPaths(StandardLocation.CLASS_PATH, classPath);
             JavaCompiler.CompilationTask task = javac.getTask(null, files, diagnostics,
                     Stream.concat(Stream.of("-parameters", "-proc:full", "-Xlint:none"), options.stream()).toList(),
                     null,

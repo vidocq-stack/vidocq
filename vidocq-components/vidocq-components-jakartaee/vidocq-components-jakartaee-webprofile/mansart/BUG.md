@@ -9,6 +9,15 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-044 — A repository of a jar the build did not enrich failed with a bare unsatisfied dependency
+
+- **Date**: 2026-11-09
+- **Status**: FIXED on `fix/external-jar-repositories` (Vidocq/mansart#85). Under Vidocq a dependency jar is on the class path, not in the bean archive: when `vidocq:generate` did not enrich it (a signed jar `scanDependencies` does not name, a jar `scanExcludes` names, a build where the goal did not run), its `@Repository` interface is never seen by the extension, nothing implements it and the container failed with `Unsatisfied dependency: field Shelf.books of type ClassType[name=acme.lib.Books]…`, while `usage.adoc` promised a run-time implementation. `MansartDataExtension` now records, at `@Registration`, the repository interfaces the beans inject, and at `@Validation` reports every one nothing implements with the repository, the bean, the jar and the fix; only at run time (the compile-time replay by the Vauban processor cannot load the application's beans, and the jars are enriched after that compilation). The sentence of `usage.adoc` is corrected.
+- **Reproduction**: `ExternalJarRepositoryTest.aRepositoryOfAJarNotEnrichedFailsTheDeploymentNamingTheJarAndTheFix` (red first: the bare message).
+- **Reported by**: the verification of the external-jar scenarios of 2026-11-09 (ticket #85, scenarios A-G).
+
+---
+
 ## MANSART-043 — A private repository compiled with a note, then failed at startup in a named module
 
 - **Date**: 2026-11-09

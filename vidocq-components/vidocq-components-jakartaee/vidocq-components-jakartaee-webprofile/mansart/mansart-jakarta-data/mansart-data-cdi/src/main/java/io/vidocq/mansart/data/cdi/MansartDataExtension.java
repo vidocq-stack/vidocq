@@ -22,13 +22,18 @@ package io.vidocq.mansart.data.cdi;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.Discovery;
 import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
+import jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo;
+import jakarta.enterprise.inject.build.compatible.spi.Messages;
 import jakarta.enterprise.inject.build.compatible.spi.Registration;
 import jakarta.enterprise.inject.build.compatible.spi.ScannedClasses;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
+import jakarta.enterprise.inject.build.compatible.spi.Validation;
 import jakarta.data.repository.Repository;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
+import jakarta.enterprise.lang.model.declarations.DeclarationInfo;
+import jakarta.enterprise.lang.model.types.Type;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -39,6 +44,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +79,10 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
     private final Set<String> runtimeRepoFqns = new LinkedHashSet<>();
     /** Bean classes the container itself manages, seen at {@code @Registration}; per instance (DRC-005). */
     private final Set<String> managedBeanClasses = new HashSet<>();
+    /** The types of the beans the container manages, by binary name, seen at {@code @Registration}. */
+    private final Set<String> managedBeanTypes = new HashSet<>();
+    /** The {@code @Repository} interfaces the managed beans inject, by binary name, with the first bean that does. */
+    private final Map<String, String> injectedRepositories = new LinkedHashMap<>();
     private boolean registrationSeen;
 
     record RepoEntry(String itfFqn, String implFqn) {}
@@ -261,6 +271,99 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         if (bean.isClassBean()) {
             managedBeanClasses.add(bean.declaringClass().name());
         }
+        for (Type type : bean.types()) {
+            ClassInfo declaration = declarationOf(type);
+            if (declaration != null) managedBeanTypes.add(declaration.name());
+        }
+        ClassLoader cl = currentClassLoader();
+        for (InjectionPointInfo point : bean.injectionPoints()) {
+            ClassInfo declaration = declarationOf(point.type());
+            // The lang model of a class outside the bean archive (a dependency jar's) carries its name only: the
+            // interface and its @Repository are read from the class itself, the way the run-time path loads it.
+            if (declaration != null && isRepositoryInterface(cl, declaration.name())) {
+                DeclarationInfo where = point.declaration();
+                String member = where != null && where.isField() ? "." + where.asField().name() : "";
+                injectedRepositories.putIfAbsent(declaration.name(), bean.declaringClass().name() + member);
+            }
+        }
+    }
+
+    private static boolean isRepositoryInterface(ClassLoader cl, String className) {
+        try {
+            Class<?> type = cl.loadClass(className);
+            return type.isInterface() && type.isAnnotationPresent(Repository.class);
+        } catch (ClassNotFoundException | LinkageError _) {
+            return false;
+        }
+    }
+
+    /** The class a type refers to (a class or a parameterized type), or {@code null} for any other type. */
+    private static ClassInfo declarationOf(Type type) {
+        if (type.isClass()) return type.asClass().declaration();
+        if (type.isParameterizedType()) return type.asParameterizedType().declaration();
+        return null;
+    }
+
+    /**
+     * A repository a bean injects that nothing implements is, under Vidocq, the interface of a dependency jar the
+     * build did not enrich: the jar is on the class path, not in the bean archive, so the processor never saw the
+     * interface and no implementation exists. The container would report a bare unsatisfied dependency; this names
+     * the repository, the bean, the jar and the fix (mansart#85). Only at run time: while the Vauban processor
+     * replays this extension at compile time, the application's beans are not loadable yet, and the dependency jars
+     * are enriched by {@code vidocq:generate} after that compilation.
+     */
+    @Validation
+    public void everyInjectedRepositoryHasAnImplementation(Messages messages) {
+        ClassLoader cl = currentClassLoader();
+        for (Map.Entry<String, String> injected : injectedRepositories.entrySet()) {
+            String repository = injected.getKey();
+            String bean = injected.getValue();
+            if (isImplemented(repository) || !loadable(cl, bean.contains(".") ? beanClassOf(bean) : bean)) continue;
+            messages.error("Repository " + repository + ", injected in " + bean + ", has no implementation: it comes"
+                    + " from " + codeSourceOf(cl, repository) + ", which was not enriched by vidocq:generate (a signed"
+                    + " jar, processed only when scanDependencies names it; a jar scanExcludes names; a build where the"
+                    + " goal did not run; or a jar it could not process, see its log). Fix: let vidocq:generate process"
+                    + " the jar, or build the library with mansart-data-processor on its annotation processor path.");
+        }
+    }
+
+    private boolean isImplemented(String repository) {
+        String canonical = repository.replace('$', '.');
+        return runtimeRepoFqns.contains(repository) || managedBeanTypes.contains(repository)
+                || entries.stream().anyMatch(e -> e.itfFqn().equals(canonical) || e.itfFqn().equals(repository));
+    }
+
+    /** The bean's class from {@code Class.member}: the member is the last segment when there is one. */
+    private static String beanClassOf(String bean) {
+        int dot = bean.lastIndexOf('.');
+        return Character.isLowerCase(bean.charAt(dot + 1)) ? bean.substring(0, dot) : bean;
+    }
+
+    private static boolean loadable(ClassLoader cl, String className) {
+        try {
+            cl.loadClass(className);
+            return true;
+        } catch (ClassNotFoundException | LinkageError _) {
+            return false;
+        }
+    }
+
+    /** The jar or directory {@code className} is loaded from, by its name; a generic phrase when unknown. */
+    private static String codeSourceOf(ClassLoader cl, String className) {
+        try {
+            var source = cl.loadClass(className).getProtectionDomain().getCodeSource();
+            if (source != null && source.getLocation() != null) {
+                String path = source.getLocation().getPath();
+                String kind = path.endsWith("/") ? "the directory " : "the jar ";
+                while (path.endsWith("/")) {
+                    path = path.substring(0, path.length() - 1);
+                }
+                return kind + path.substring(path.lastIndexOf('/') + 1);
+            }
+        } catch (ClassNotFoundException | LinkageError | SecurityException _) {
+            // fall through: the class is not loadable, the jar stays unnamed
+        }
+        return "a dependency jar";
     }
 
     @Synthesis
