@@ -57,6 +57,68 @@ class ReflectedPackagesTest {
     private static final ClassDesc BOOK = ClassDesc.of("com.acme.shop.book.Book");
     private static final ClassDesc AUTHOR = ClassDesc.of("com.acme.shop.people.Author");
 
+    // --- referencedPackages ---
+
+    @Test
+    void aSuperclassAndAnInterfaceAreReferenced() throws IOException {
+        write(ClassDesc.of("io.app", "Child"), cb -> cb
+                .withSuperclass(ClassDesc.of("java.util", "AbstractMap"))
+                .withInterfaceSymbols(ClassDesc.of("java.io", "Serializable")));
+
+        Set<String> packages = ReflectedPackages.referencedPackages(classes);
+
+        assertTrue(packages.contains("java.util"), "the superclass's package: " + packages);
+        assertTrue(packages.contains("java.io"), "the interface's package: " + packages);
+    }
+
+    @Test
+    void aFieldTypeIsReferencedEvenWhenNothingElseMentionsIt() throws IOException {
+        write(ClassDesc.of("io.app", "Holder"), cb -> cb
+                .withField("stamp", ClassDesc.of("java.time", "Instant"), ClassFile.ACC_PRIVATE));
+
+        assertTrue(ReflectedPackages.referencedPackages(classes).contains("java.time"));
+    }
+
+    @Test
+    void methodParameterAndReturnTypesAreReferenced() throws IOException {
+        write(ClassDesc.of("io.app", "Service"), cb -> cb
+                .withMethod("convert",
+                        MethodTypeDesc.of(ClassDesc.of("java.net", "URI"), ClassDesc.of("java.sql", "Date")),
+                        ClassFile.ACC_ABSTRACT, mb -> {}));
+
+        Set<String> packages = ReflectedPackages.referencedPackages(classes);
+
+        assertTrue(packages.contains("java.net"), "the return type: " + packages);
+        assertTrue(packages.contains("java.sql"), "the parameter type: " + packages);
+    }
+
+    @Test
+    void anArrayTypeIsReportedAsItsComponentPackage() throws IOException {
+        write(ClassDesc.of("io.app", "Arrays"), cb -> cb
+                .withField("stamps", ClassDesc.of("java.time", "Instant").arrayType(), ClassFile.ACC_PRIVATE));
+
+        Set<String> packages = ReflectedPackages.referencedPackages(classes);
+
+        assertTrue(packages.contains("java.time"), "array descriptors unwrap: " + packages);
+        assertTrue(packages.stream().noneMatch(p -> p.startsWith("[")), "no raw descriptor leaks: " + packages);
+    }
+
+    @Test
+    void primitivesAndTheDefaultPackageContributeNothing() throws IOException {
+        write(ClassDesc.of("io.app", "Primitives"), cb -> cb
+                .withField("count", ConstantDescs.CD_int, ClassFile.ACC_PRIVATE)
+                .withField("flag", ConstantDescs.CD_boolean, ClassFile.ACC_PRIVATE));
+
+        Set<String> packages = ReflectedPackages.referencedPackages(classes);
+
+        assertTrue(packages.stream().allMatch(p -> p.contains(".")), "no unqualified entries: " + packages);
+    }
+
+    @Test
+    void anOutputDirectoryWithoutClassFilesReferencesNothing() throws IOException {
+        assertEquals(Set.of(), ReflectedPackages.referencedPackages(classes));
+    }
+
     private void write(ClassDesc type, Consumer<ClassBuilder> body) throws IOException {
         byte[] bytes = ClassFile.of().build(type, body);
         Path file = classes.resolve(type.packageName().replace('.', '/'))

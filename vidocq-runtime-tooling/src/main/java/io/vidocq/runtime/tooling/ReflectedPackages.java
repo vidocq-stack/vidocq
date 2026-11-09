@@ -200,10 +200,6 @@ public final class ReflectedPackages {
     }
 
     /**
-     * The packages of {@code reached} the module does not open (to anyone), nor export to all when an export is
-     * enough; none for an open module.
-     */
-    /**
      * Every package the compiled classes under {@code classes} actually refer to: the owners in each
      * constant pool plus the field and method descriptor types. Used to decide whether a {@code requires}
      * an extension's catalog states really applies to the module under build -- a module that depends on
@@ -257,6 +253,10 @@ public final class ReflectedPackages {
         }
     }
 
+    /**
+     * The packages of {@code reached} the module does not open (to anyone), nor export to all when an export is
+     * enough; none for an open module.
+     */
     public static List<String> missing(ModuleDescriptor descriptor, Reached reached) {
         if (descriptor.isOpen()) {
             return List.of();
