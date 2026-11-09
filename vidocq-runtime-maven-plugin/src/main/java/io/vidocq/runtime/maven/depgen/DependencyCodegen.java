@@ -329,6 +329,15 @@ public final class DependencyCodegen {
         return (eol < 0 ? message : message.substring(0, eol)).strip();
     }
 
+    /**
+     * The message without its final period, so that the sentence the line appends after it ("Fix the library…")
+     * does not make two: a processor's message (Mansart's, for one) ends with a period (mansart#85).
+     */
+    static String withoutTrailingPeriod(String message) {
+        String text = message.strip();
+        return text.endsWith(".") ? text.substring(0, text.length() - 1).stripTrailing() : text;
+    }
+
     private static List<Path> files(Path root) throws IOException {
         try (Stream<Path> walk = Files.walk(root)) {
             return walk.filter(Files::isRegularFile).sorted().toList();
@@ -358,7 +367,7 @@ public final class DependencyCodegen {
     private record Problem(Path jar, String coordinates, String logDisplay) {
         String line(String bricks, String what, String message) {
             return "vidocq:generate: " + jar.getFileName() + " — " + bricks + " " + what + ": "
-                    + firstLine(message)
+                    + withoutTrailingPeriod(firstLine(message))
                     + ". Fix the library, or leave the jar out with <scanExcludes>" + coordinates
                     + "</scanExcludes>. Full javac output: " + logDisplay;
         }

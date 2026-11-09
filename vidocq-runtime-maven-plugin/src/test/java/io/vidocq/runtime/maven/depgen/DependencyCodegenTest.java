@@ -126,6 +126,20 @@ class DependencyCodegenTest {
         assertEquals(Map.of(), output.files());
     }
 
+    /**
+     * A processor message that ends with a period (Mansart's do) is followed by "Fix the library": one period
+     * between them, not two (mansart#85).
+     */
+    @Test
+    void aMessageEndingWithAPeriodIsNotFollowedByASecondOne() {
+        assertEquals("cannot implement lib.Books.byAuthor: annotate the parameters with @By",
+                DependencyCodegen.withoutTrailingPeriod(
+                        "cannot implement lib.Books.byAuthor: annotate the parameters with @By."));
+        assertEquals("cannot handle com.acme.Foo",
+                DependencyCodegen.withoutTrailingPeriod("cannot handle com.acme.Foo"));
+        assertEquals("", DependencyCodegen.withoutTrailingPeriod("."));
+    }
+
     @Test
     void aProcessorErrorFailsWithOneLine() throws Exception {
         var failure = assertThrows(DependencyCodegen.Failure.class, () -> run(acme(), brick("Epsilon", "ProcessorE")));

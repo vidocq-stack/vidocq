@@ -372,16 +372,20 @@ class VidocqGenerateDependencyCodegenTest {
         assertFalse(Files.exists(JpmsPatches.patchDirFor(buildDir, "lib")));
     }
 
+    /** A signed jar left alone is a warning that says what it costs: the brick's output is missing at run time. */
     @Test
-    void aSignedJarIsLeftAloneWithOneLine() throws Exception {
+    void aSignedJarIsLeftAloneWithAWarningThatSaysTheConsequence() throws Exception {
         Path lib = plainJar("lib-1.0", Map.of(ALPHA_MARKER, "", "META-INF/ACME.SF", "", "META-INF/ACME.RSA", ""));
 
         var result = run(dir.resolve("target"), List.of(fakeBrick("Alpha")), fake(Map.of(), List.of()), lib);
 
         assertEquals(0, generated.get());
         assertEquals(List.of(), result.processed());
-        assertEquals(List.of("vidocq:generate: lib-1.0.jar is signed; not processed for Alpha"
-                + " (name it in scanDependencies to process it)"), info);
+        assertEquals(List.of(), info);
+        assertEquals(List.of("vidocq:generate: lib-1.0.jar is signed; not processed for Alpha: what Alpha generates"
+                + " for it is missing at run time, and the application fails when it uses the jar's Alpha components."
+                + " Name the jar in scanDependencies to process it (its signature files are then dropped from the"
+                + " enriched copy)."), warn);
     }
 
     @Test
@@ -405,6 +409,9 @@ class VidocqGenerateDependencyCodegenTest {
 
         assertEquals(0, generated.get());
         assertEquals(List.of(), result.processed());
+        // The jar that carries the marker says so in the log; the excluded one is reported by the selection.
+        assertEquals(List.of("vidocq:generate: done-1.0.jar — already processed for Alpha"
+                + " (META-INF/fixture/alpha-done); left alone"), info);
     }
 
     @Test

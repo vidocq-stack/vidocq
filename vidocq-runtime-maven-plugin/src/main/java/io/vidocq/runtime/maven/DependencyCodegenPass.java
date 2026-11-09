@@ -264,6 +264,12 @@ final class DependencyCodegenPass {
         List<EnrichedJars.Scanned> processed = new ArrayList<>();
         List<String> failures = new ArrayList<>();
         for (Selection selection : selections) {
+            // A jar a brick already processed (it carries the brick's marker) is left alone, and the log says so:
+            // a silent skip read as a jar the goal missed (mansart#85).
+            for (DependencyCodegenSelection.Skip skip : selection.decision().skips()) {
+                info.accept(LOG_PREFIX + selection.dependency().jar().getFileName() + " — already processed for "
+                        + skip.brick().brick() + " (" + skip.marker() + "); left alone");
+            }
             if (!selection.bricks().isEmpty()) {
                 EnrichedJars.Scanned scanned = generateJar(selection, classpath, classpathCoordinates, release,
                         scanDependencies, mergedResources, failures);
@@ -295,8 +301,12 @@ final class DependencyCodegenPass {
         String names = selected.stream().map(b -> b.hints().brick()).collect(Collectors.joining(", "));
         String file = jar.getFileName().toString();
         if (selection.decision().signed() && !matchesAny(scanDependencies, dep)) {
-            info.accept(LOG_PREFIX + file + " is signed; not processed for " + names
-                    + " (name it in scanDependencies to process it)");
+            // A warning, not a note: what the brick would generate is missing at run time, and the application
+            // fails when it reaches the jar's components (a Mansart repository has no implementation, mansart#85).
+            warn.accept(LOG_PREFIX + file + " is signed; not processed for " + names + ": what " + names
+                    + " generates for it is missing at run time, and the application fails when it uses the jar's "
+                    + names + " components. Name the jar in scanDependencies to process it (its signature files are"
+                    + " then dropped from the enriched copy).");
             return null;
         }
         String key = DependencyCodegenCache.key(jar, selected, release, classpathCoordinates);
