@@ -26,8 +26,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * The repositories Mansart implements at run time because the build did not: an interface compiled without the
  * annotation processor ({@code mansart-data-processor}). That path is kept, but it is the exception: it costs startup
  * time and has no ahead-of-time equivalent (native image, CDS). So each repository served that way is announced by a
- * framed warning, once per JVM. A repository the run-time generator could not implement either, and that a
- * {@link java.lang.reflect.Proxy} serves instead, gets its own warning, which names the cause.
+ * framed warning, once per JVM. A repository the run-time generator cannot implement fails with an exception that
+ * names the cause: there is no {@link java.lang.reflect.Proxy} fallback.
  */
 final class RuntimeGeneration {
 
@@ -68,13 +68,6 @@ final class RuntimeGeneration {
                 """ + FIX;
     }
 
-    /** A repository the generator failed on, served by a {@code Proxy}: warns unless a warning already named it. */
-    static void proxied(Class<?> repository, Throwable cause) {
-        if (ANNOUNCED.add(repository.getName())) {
-            LOG.log(System.Logger.Level.WARNING, proxiedWarning(repository.getName(), cause), cause);
-        }
-    }
-
     static String generatedWarning(String repositoryName, String cause) {
         return "\n" + RULE + "\n"
                 + "MANSART — RUNTIME CODE GENERATION FALLBACK\n"
@@ -84,19 +77,6 @@ final class RuntimeGeneration {
                 This fallback is exceptional: it slows the startup, cannot run ahead of time (native image, CDS) and,
                 in a named module, reaches the repository's package by reflection.
                 """
-                + RULE;
-    }
-
-    static String proxiedWarning(String repositoryName, Throwable cause) {
-        return "\n" + RULE + "\n"
-                + "MANSART — DYNAMIC PROXY FALLBACK\n"
-                + "The repository " + repositoryName + " is served by a java.lang.reflect.Proxy: the run-time\n"
-                + "generator could not implement it (" + cause + ").\n"
-                + """
-                It was compiled without the Mansart annotation processor, and the run-time fallback failed too. Every
-                call goes through reflection: this is the slowest path, and it cannot run ahead of time.
-                """
-                + FIX
                 + RULE;
     }
 }

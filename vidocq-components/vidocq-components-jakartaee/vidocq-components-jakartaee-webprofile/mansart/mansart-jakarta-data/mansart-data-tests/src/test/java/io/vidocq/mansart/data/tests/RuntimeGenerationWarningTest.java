@@ -20,6 +20,7 @@
 package io.vidocq.mansart.data.tests;
 
 import io.vidocq.mansart.data.core.MansartData;
+import io.vidocq.mansart.data.core.MansartDataException;
 import jakarta.data.repository.BasicRepository;
 import jakarta.data.repository.Repository;
 import org.h2.jdbcx.JdbcDataSource;
@@ -37,11 +38,12 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * A repository compiled without {@code mansart-data-processor} is implemented at run time. That fallback is kept but
  * exceptional, so it is announced by a framed warning at startup, once per repository; a repository the run-time
- * generator fails on, served by a {@code java.lang.reflect.Proxy}, gets a warning naming the cause.
+ * generator fails on throws an exception naming the cause (no {@code java.lang.reflect.Proxy} fallback).
  */
 class RuntimeGenerationWarningTest {
 
@@ -51,7 +53,7 @@ class RuntimeGenerationWarningTest {
     }
 
     @Repository
-    public interface ProxiedAuthorRepo extends BasicRepository<Author, Long> {
+    public interface UnlinkableAuthorRepo extends BasicRepository<Author, Long> {
         List<Author> findByName(String name);
     }
 
@@ -100,21 +102,21 @@ class RuntimeGenerationWarningTest {
 
     /**
      * The generated class is defined next to the interface, in its loader; when it cannot be linked there (here the
-     * interface is cut off from its nest host and from Mansart), the {@code Proxy} safety net serves the repository.
+     * interface is cut off from its nest host and from Mansart), there is no {@code Proxy} safety net: the creation
+     * fails loudly and names the repository and the cause.
      */
     @Test
-    void aRepositoryServedByTheProxySafetyNetNamesTheCause() throws Exception {
+    void aRepositoryTheGeneratorCannotImplementFailsLoudly() throws Exception {
         Class<?> repoInterface = new CoreHidingLoader(getClass().getClassLoader())
-                .loadClass(ProxiedAuthorRepo.class.getName());
+                .loadClass(UnlinkableAuthorRepo.class.getName());
 
-        Object repo = data.runtimeRepository(repoInterface);
-
-        assertThat(Proxy.isProxyClass(repo.getClass())).isTrue();
-        assertThat(warnings).hasSize(1);
-        assertThat(warnings.getFirst())
-                .contains("MANSART — DYNAMIC PROXY FALLBACK")
-                .contains(ProxiedAuthorRepo.class.getName())
-                .contains("could not implement it (java.lang.");
+        assertThatThrownBy(() -> data.runtimeRepository(repoInterface))
+                .isInstanceOf(MansartDataException.class)
+                .hasMessageContaining(UnlinkableAuthorRepo.class.getName())
+                .hasMessageContaining("no java.lang.reflect.Proxy fallback")
+                .hasMessageContaining("mansart-data-processor")
+                .hasCauseInstanceOf(LinkageError.class);
+        assertThat(warnings).isEmpty();
     }
 
     /** Defines the repository interface itself, and hides the Mansart runtime from it. */
@@ -129,7 +131,7 @@ class RuntimeGenerationWarningTest {
             if (name.startsWith("io.vidocq.mansart.data.core.")) {
                 throw new ClassNotFoundException(name);
             }
-            if (!name.equals(ProxiedAuthorRepo.class.getName())) {
+            if (!name.equals(UnlinkableAuthorRepo.class.getName())) {
                 return super.loadClass(name, resolve);
             }
             Class<?> loaded = findLoadedClass(name);

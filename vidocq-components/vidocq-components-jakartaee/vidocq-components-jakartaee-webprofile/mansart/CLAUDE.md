@@ -33,9 +33,7 @@ Provide the Vidocq ecosystem with three persistence building blocks, independent
 the shipped classes. The documented reflective fallbacks (the M7 runtime path, the lookups of generated code, the
 optional JTA probe, the configured `XADataSource`, the interceptor's `Method`) are listed with their reasons in
 `ArchitectureRules.REFLECTIVE_FALLBACKS`, and the transaction context's `ThreadLocal` in `THREAD_LOCAL_HOLDERS`; a
-new one needs a documented reason there. Note: constraints 1 and 2 forbid a dynamic proxy, yet `RuntimeRepositoryProxy`
-(M7 runtime path, documented in `mansart-jakarta-data.adoc`) remains as the fallback for interfaces without a generated
-implementation.
+new one needs a documented reason there. Note: `RuntimeRepositoryProxy` (M7 runtime path, documented in `mansart-jakarta-data.adoc`) implements interfaces without a generated implementation with a Class-File API class; it has no `java.lang.reflect.Proxy` fallback.
 
 ## Delivered Modules
 

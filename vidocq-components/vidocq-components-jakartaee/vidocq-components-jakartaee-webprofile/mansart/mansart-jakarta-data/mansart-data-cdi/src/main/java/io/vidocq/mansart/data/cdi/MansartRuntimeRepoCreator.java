@@ -33,7 +33,7 @@ import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
  *
  * <p>The {@code itfClass} parameter holds the {@code @Repository} interface; this creator
  * resolves the shared {@link RepositoryRuntime} from the container and builds a
- * {@link java.lang.reflect.Proxy}-backed instance via {@link RuntimeRepositoryProxy#create}.
+ * generated-class instance via {@link RuntimeRepositoryProxy#create}.
  */
 public final class MansartRuntimeRepoCreator implements SyntheticBeanCreator<Object> {
 

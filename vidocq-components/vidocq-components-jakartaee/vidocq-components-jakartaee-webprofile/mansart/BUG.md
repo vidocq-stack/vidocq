@@ -9,6 +9,14 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-042 — Runtime repositories: the `java.lang.reflect.Proxy` fallback removed
+
+- **Date**: 2026-11-09
+- **Status**: FIXED on `feat/no-proxy-fallback`. Experiment first: with the fallback turned into a failure, the whole reactor (498 tests of `mansart-data-tests`) and the Jakarta Data TCK (73 EntityTests + SignatureTests, H2) were run. Only repositories compiled without the processor and living in another class loader than Mansart fell back (`GeneratedComponentsFallbackTest`, `RuntimeFindWithoutParameterNamesTest`): `MethodHandles.privateLookupIn` across modules or loaders drops the module mode, so `defineHiddenClass` throws `IllegalAccessException`. `RuntimeRepositoryClassGenerator` now defines the class in a dedicated child loader of the repository's for a public, exported repository; the `Proxy` path, `RuntimeGeneration.proxied` and its warning are deleted. A shape still unsupported (non-public repository seen from another loader, unexported package, unlinkable class) throws a `MansartDataException` naming the cause.
+- **Reproduction**: `RuntimeGenerationWarningTest.aRepositoryTheGeneratorCannotImplementFailsLoudly`, `GeneratedComponentsFallbackTest.aPackagePrivateRepositoryOfAnotherLoaderFailsLoudly`.
+
+---
+
 ## MANSART-041 — The runtime of a routed data store outlived its CDI container
 
 - **Date**: 2026-11-02

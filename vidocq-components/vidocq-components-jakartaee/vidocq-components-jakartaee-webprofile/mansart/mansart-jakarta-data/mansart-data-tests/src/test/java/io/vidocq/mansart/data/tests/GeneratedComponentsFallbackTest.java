@@ -146,4 +146,38 @@ class GeneratedComponentsFallbackTest {
                     .singleElement().hasToString("Row[id=1, title=Vidocq]");
         }
     }
+
+    /** In another loader, Mansart sees only the public API: a package-private repository fails loudly, no Proxy. */
+    @Test
+    void aPackagePrivateRepositoryOfAnotherLoaderFailsLoudly() throws Exception {
+        var result = InProcessCompilation.compileSources(out,
+                "hidden.Item", """
+                        package hidden;
+
+                        @jakarta.persistence.Entity
+                        public class Item {
+                            @jakarta.persistence.Id
+                            public Long id;
+                        }
+                        """,
+                "hidden.Items", """
+                        package hidden;
+
+                        @jakarta.data.repository.Repository
+                        interface Items extends jakarta.data.repository.BasicRepository<Item, Long> {
+                        }
+                        """);
+        assertThat(result.errors()).isEmpty();
+        try (var loader = new URLClassLoader(new URL[] {result.classes().toUri().toURL()},
+                getClass().getClassLoader())) {
+            Class<?> items = loader.loadClass("hidden.Items");
+            MansartData data = h2("package-private-other-loader");
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> data.runtimeRepository(items))
+                    .isInstanceOf(io.vidocq.mansart.data.core.MansartDataException.class)
+                    .hasMessageContaining("hidden.Items")
+                    .hasMessageContaining("is not public")
+                    .hasMessageContaining("no java.lang.reflect.Proxy fallback");
+        }
+    }
 }

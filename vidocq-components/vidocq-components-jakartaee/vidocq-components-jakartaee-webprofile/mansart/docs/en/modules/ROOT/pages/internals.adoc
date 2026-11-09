@@ -20,8 +20,8 @@ entity by reflection stay as the fallback, unchanged (<<_the_run_time_fallback>>
 | `mansart-data-processor` in javac; on Vidocq the `vidocq-runtime-mansart-data-extension-codegen` bundle puts it on
   the processor path, and `vidocq:generate` runs it over the dependency jars that hold repositories
 | `MansartRepoCreator` when the repository bean is created, through the package's `_MansartComponents` below
-| `RuntimeRepositoryProxy` and `RuntimeRepositoryClassGenerator` implement it at run time with the Class-File API, or
-  a `java.lang.reflect.Proxy` when that fails; both announced.
+| `RuntimeRepositoryProxy` and `RuntimeRepositoryClassGenerator` implement it at run time with the Class-File API
+  (announced); there is no `java.lang.reflect.Proxy` fallback.
 
 | `_Book` (Mansart's entity model, `$MODEL`) and `Book_` (the Jakarta Data static metamodel)
 | `mansart-data-processor`, for each `@Entity`
@@ -55,8 +55,7 @@ method is first called (`JdqlExecutor.executeJdql`), with the repository method 
 === Which path ran
 
 * A framed `WARNING` from `io.vidocq.mansart.data.core.RuntimeGeneration`, once per repository:
-  _MANSART — RUNTIME CODE GENERATION FALLBACK_, or _MANSART — DYNAMIC PROXY FALLBACK_ when the run-time generator
-  failed too.
+  _MANSART — RUNTIME CODE GENERATION FALLBACK_.
 * xref:vidocq::modules/vidocq-runtime-extensions.adoc#mansart-data-001[`MANSART-DATA-001`] in the Vidocq startup report
   (in `dev` and `detailed` mode) when the model of an entity cannot be read.
 
@@ -134,14 +133,13 @@ package "Application" {
 
 === The run-time fallback
 
-A repository compiled without `mansart-data-processor` (the Jakarta Data TCK jar, for instance) is implemented at run time: `RuntimeRepositoryProxy` builds its dispatchers and `RuntimeRepositoryClassGenerator` writes a hidden class with the Class-File API, defined next to the interface. When that class cannot be defined or linked, a `java.lang.reflect.Proxy` serves the repository instead.
+A repository compiled without `mansart-data-processor` (the Jakarta Data TCK jar, for instance) is implemented at run time: `RuntimeRepositoryProxy` builds its dispatchers and `RuntimeRepositoryClassGenerator` writes a hidden class with the Class-File API, defined next to the interface. When the repository lives in another module or class loader than Mansart (a named application module, a web application loader), the lookup needed to define a hidden class there is not available, so the class is defined in a dedicated child loader of the repository's and implements it through its public API.
 
-Both are exceptional, and both are announced at startup by a framed `WARNING`, once per repository, from the `io.vidocq.mansart.data.core.RuntimeGeneration` logger:
+There is no `java.lang.reflect.Proxy` fallback (it has no ahead-of-time equivalent): a repository the generator cannot implement (a package-private repository seen from another module or loader, a package that is not exported, a loader that cannot link the generated class) fails with a `MansartDataException` that names the repository and the cause.
 
-* `MANSART — RUNTIME CODE GENERATION FALLBACK` — the repository is implemented at run time;
-* `MANSART — DYNAMIC PROXY FALLBACK` — the run-time generator failed too; the warning names the cause.
+The run-time path is exceptional, and announced at startup by a framed `WARNING`, once per repository, from the `io.vidocq.mansart.data.core.RuntimeGeneration` logger: `MANSART — RUNTIME CODE GENERATION FALLBACK`.
 
-The fix is the same for both: add `mansart-data-processor` to the annotation processor path of the module that declares the repository.
+The fix is the same in every case: add `mansart-data-processor` to the annotation processor path of the module that declares the repository.
 
 == The `Connection` wrapper (hand-written)
 

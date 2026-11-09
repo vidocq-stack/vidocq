@@ -24,10 +24,8 @@ import io.vidocq.mansart.data.dialect.EntityModel;
 import io.vidocq.mansart.data.dialect.OrderBy;
 import io.vidocq.mansart.data.dialect.Where;
 
-import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Proxy;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
@@ -37,10 +35,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * M7-1/M7-2 runtime fallback for {@code @Repository} interfaces that have no compile-time
- * {@code *Impl}. Uses {@code java.lang.reflect.Proxy}, with one pre-built dispatcher per method
- * (computed at proxy creation, cached for the proxy's lifetime). {@code java.lang.classfile}
- * bytecode generation lands in M7-3.
+ * Runtime fallback for {@code @Repository} interfaces that have no compile-time {@code *Impl}.
+ * Implements them with a hidden class generated through the Class-File API
+ * ({@link RuntimeRepositoryClassGenerator}), with one pre-built dispatcher per method. There is no
+ * {@code java.lang.reflect.Proxy} safety net: a shape the generator cannot implement throws a
+ * {@link MansartDataException}.
  *
  * <p>Supports:
  * <ul>
@@ -89,32 +88,19 @@ public final class RuntimeRepositoryProxy {
         Map<Method, EntityModel<?>> methodModel = mapMethodToModel(repoInterface, primary, models);
         Map<Method, Dispatcher> dispatchers = buildDispatchersMulti(repoInterface, methodModel, primary);
 
-        // M7-25 — try a generated hidden class first (Class-File API). Falls back to
-        // java.lang.reflect.Proxy if generation throws — keeps the runtime path resilient
-        // while we ship and validate the bytecode emitter. Both are announced at startup.
+        // The Class-File API generator is the only run-time implementation: no java.lang.reflect.Proxy
+        // safety net (AOT, GraalVM and Leyden cannot follow a dynamic proxy). A shape the generator
+        // cannot implement fails loudly, naming the repository and the cause.
         try {
             R generated = (R) createGenerated(repoInterface, methodModel, dispatchers, primary, runtime);
             RuntimeGeneration.generated(repoInterface);
             return generated;
         } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
-            // The generator is the canonical runtime impl; java.lang.reflect.Proxy stays as a
-            // safety net for shapes not yet supported by RuntimeRepositoryClassGenerator.
-            RuntimeGeneration.proxied(repoInterface, e);
+            throw new MansartDataException("Mansart cannot implement the repository " + repoInterface.getName()
+                    + " at run time: the Class-File API generator failed (" + e + "). There is no"
+                    + " java.lang.reflect.Proxy fallback; add mansart-data-processor to the annotation processor"
+                    + " path of the module that declares it, or make the repository visible to Mansart.", e);
         }
-
-        InvocationHandler handler = (proxy, method, args) -> {
-            if (method.isDefault()) {
-                return InvocationHandler.invokeDefault(proxy, method, args);
-            }
-            Dispatcher d = dispatchers.get(method);
-            if (d == null) {
-                throw unsupported(method, "no Mansart dispatcher built for this method");
-            }
-            EntityModel<?> em = methodModel.getOrDefault(method, primary);
-            return d.invoke(runtime, em, args);
-        };
-        return (R) Proxy.newProxyInstance(repoInterface.getClassLoader(),
-                new Class<?>[]{ repoInterface }, handler);
     }
 
     private static Object createGenerated(Class<?> repoInterface,

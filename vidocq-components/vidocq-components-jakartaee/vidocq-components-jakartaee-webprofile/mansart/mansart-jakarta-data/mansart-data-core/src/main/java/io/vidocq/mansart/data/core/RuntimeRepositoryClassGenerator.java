@@ -29,8 +29,8 @@ import java.lang.reflect.Modifier;
 import java.util.List;
 
 /**
- * M7-25 — generates a hidden class that implements a {@code @Repository} interface, replacing
- * the {@code java.lang.reflect.Proxy} fallback used by {@link RuntimeRepositoryProxy}. Each
+ * M7-25 — generates a hidden class that implements a {@code @Repository} interface for
+ * {@link RuntimeRepositoryProxy} (there is no {@code java.lang.reflect.Proxy} fallback). Each
  * abstract method on the interface becomes a tiny stub that:
  *
  * <ol>
@@ -44,7 +44,9 @@ import java.util.List;
  * left alone — the generated class inherits them from {@link Object}.
  *
  * <p>The class is loaded via {@link MethodHandles.Lookup#defineHiddenClass}, scoped to the
- * repo interface's package. No global classloader entry, no leak.
+ * repo interface's package. No global classloader entry, no leak. When the repository lives in
+ * another module or loader than Mansart, where that lookup is not allowed, the class is defined in a
+ * dedicated child loader of the repository's, which requires a public, exported repository.
  */
 final class RuntimeRepositoryClassGenerator {
 
@@ -91,9 +93,64 @@ final class RuntimeRepositoryClassGenerator {
             }
         });
 
+        return new GeneratedRepo(define(repoInterface, thisCd, bytes), List.copyOf(methods));
+    }
+
+    /**
+     * Defines the generated class. Next to the repository, as a hidden class, when Mansart can get a
+     * full-privilege lookup in its package (same module: any repository on the class path, in the same loader).
+     * Otherwise, the repository lives in another module or loader (a named application module, a web application
+     * loader): the lookup then lacks the module mode a hidden class needs, so the class is defined in a loader of
+     * its own, a child of the repository's, and implements the repository through its public API.
+     */
+    private static Class<?> define(Class<?> repoInterface, ClassDesc thisCd, byte[] bytes)
+            throws ReflectiveOperationException {
         MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(repoInterface, MethodHandles.lookup());
-        Class<?> implClass = lookup.defineHiddenClass(bytes, true).lookupClass();
-        return new GeneratedRepo(implClass, List.copyOf(methods));
+        if ((lookup.lookupModes() & MethodHandles.Lookup.MODULE) != 0) {
+            return lookup.defineHiddenClass(bytes, true).lookupClass();
+        }
+        requirePublicApi(repoInterface);
+        return new GeneratedLoader(repoInterface.getClassLoader())
+                .define(thisCd.packageName().isEmpty() ? thisCd.displayName()
+                        : thisCd.packageName() + "." + thisCd.displayName(), bytes);
+    }
+
+    /** A repository in another module can only be implemented through its exported, public types. */
+    private static void requirePublicApi(Class<?> repoInterface) throws IllegalAccessException {
+        Class<?> notPublic = firstNotPublic(repoInterface);
+        if (notPublic != null) {
+            throw new IllegalAccessException(notPublic.getName() + " is not public: Mansart, in another module or"
+                    + " loader, cannot implement it");
+        }
+        if (!repoInterface.getModule().isExported(repoInterface.getPackageName())) {
+            throw new IllegalAccessException("package " + repoInterface.getPackageName() + " of module "
+                    + repoInterface.getModule() + " is not exported: Mansart cannot implement "
+                    + repoInterface.getName());
+        }
+    }
+
+    /** The first type, from the repository outwards, that is not public; {@code null} if all are. */
+    private static Class<?> firstNotPublic(Class<?> type) {
+        Class<?> current = type;
+        while (current != null) {
+            if (!Modifier.isPublic(current.getModifiers())) {
+                return current;
+            }
+            current = current.getEnclosingClass();
+        }
+        return null;
+    }
+
+    /** One generated class, one loader: nothing is kept once the repository is unreachable. */
+    private static final class GeneratedLoader extends ClassLoader {
+
+        GeneratedLoader(ClassLoader parent) {
+            super(parent);
+        }
+
+        Class<?> define(String name, byte[] bytes) {
+            return defineClass(name, bytes, 0, bytes.length);
+        }
     }
 
     /**
