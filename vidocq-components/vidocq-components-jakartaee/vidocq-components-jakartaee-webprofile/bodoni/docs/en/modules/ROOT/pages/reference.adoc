@@ -334,7 +334,7 @@ The JDBC-string data source has no pool and opens a connection for each action: 
 [NOTE]
 .JNDI under Vidocq
 ====
-Bodoni does the standard `new InitialContext()` lookup and ships no naming implementation. Under Vidocq, `java:comp` comes from the runtime's naming extension, which is not available yet (link:https://codefloe.com/Vidocq/vidocq/issues/297[vidocq#297]): until then a JNDI path such as `jdbc/shop` is read as a JDBC parameter string and fails with `no JDBC driver accepts 'jdbc/shop'`. The `DataSource` object and JDBC-string forms work.
+Bodoni does the standard `new InitialContext()` lookup and ships no naming implementation. Under Vidocq, `java:comp` comes from the runtime's naming extension (`vidocq-runtime-naming-extension`, link:https://codefloe.com/Vidocq/vidocq/issues/297[vidocq#297]): without it, a JNDI path such as `jdbc/shop` is read as a JDBC parameter string and fails with `no JDBC driver accepts 'jdbc/shop'`. The `DataSource` object and JDBC-string forms work.
 ====
 
 === XML tags (`x:`)

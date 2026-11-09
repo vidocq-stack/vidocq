@@ -52,7 +52,7 @@ The TLDs are packaged in `META-INF` of `bodoni-core`: the Pages container finds 
 </ul>
 ----
 
-Under Vidocq, the runtime extension (planned) brings Bodoni, Ibarra and Peano together; the page is precompiled at build time.
+Under Vidocq, the runtime extension `vidocq-runtime-bodoni-jstl-extension` brings Bodoni, Ibarra and Peano together (and `bodoni-peano`, for `peano.reflection=deny`); the page is precompiled at build time. The application declares the extension only: `vidocq extension add bodoni-jstl`.
 
 [NOTE]
 ====

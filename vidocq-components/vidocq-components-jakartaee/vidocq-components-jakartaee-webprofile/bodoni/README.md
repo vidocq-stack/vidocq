@@ -18,7 +18,7 @@ are implemented in `bodoni-core`. XML external references follow a same-origin p
 (`jakarta.tck:tags-tck:11.0.3`) run in `bodoni-tck`: after the TCK fixes they pass 541 of 541
 (the first baseline passed 452 of 541, 83.5 %), recorded in
 [bodoni-tck/BASELINE.md](bodoni-tck/BASELINE.md). It is a compatibility measurement on Bodoni +
-Ibarra + Foy + Peano, not a certification. Under Peano with `peano.reflection=deny`, add `bodoni-peano` so that the properties of `varStatus` and of the `sql:query` `Result` can be read (BOD-001, fixed, see [BUG.md](BUG.md)). Bodoni is required by Jakarta EE Web Profile 11 and tracked by
+Ibarra + Foy + Peano, not a certification. Under Peano with `peano.reflection=deny`, add `bodoni-peano` so that the properties of `varStatus` and of the `sql:query` `Result` can be read (BOD-001, fixed, see [BUG.md](BUG.md)). Under Vidocq, the runtime extension `vidocq-runtime-bodoni-jstl-extension` assembles Bodoni, Ibarra and Peano (and `bodoni-peano`). Bodoni is required by Jakarta EE Web Profile 11 and tracked by
 [Vidocq/vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266). The design of record is
 [PLAN.md](PLAN.md) (spec scope, brick rule, Java Modules layout, Ibarra build-time
 inlining, friction points, TCK plan, milestones B0–B7, open questions).

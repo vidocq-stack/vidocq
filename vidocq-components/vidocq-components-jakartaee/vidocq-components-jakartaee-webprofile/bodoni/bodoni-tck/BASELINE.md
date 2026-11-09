@@ -408,3 +408,12 @@ other fixes stay guarded by their unit tests (`LegacyRtTldTest`, `TagLibraryVali
 `LocalizationContextAccessorTableTest`, `MessageTagTest`, `ParseDateTagTest`,
 `ForTokensTagTest`), by the Ibarra IT (39/39, which now runs the validators on its pages) and
 by the full run, whose 100 % PASS is the merge gate.
+
+## Re-run from a clean state (0.4.0 preparation)
+
+Date: 2026-11-09 (09:46 to 09:48 CEST). Bodoni `0.4.0-SNAPSHOT` at `main` `2c1d3e6`, a fresh
+worktree, same JVM (Temurin 25+36), Maven 3.9.16 and machine as the earlier runs. Command
+`./run-official-tck-tags-3.0.sh all` (the Derby DDL extracted by the script, Bodoni installed by it,
+Ibarra, Foy, Peano and Chappe resolved as `0.4.0-SNAPSHOT`). Result: 541 tests, 0 failures, 0 errors,
+0 skipped; the runner's own tests 39/39. Same scope and caveat as above: a compatibility
+measurement, not a certification.
