@@ -611,9 +611,9 @@ public final class RuntimeRepositoryProxy {
                                 List<jakarta.data.Sort<?>> sorts) {
 
         /**
-         * Resolution order per Jakarta Data: {@code @By("attr")} or {@code @Param("attr")} &gt; parameter
-         * name match &gt; positional (single attribute of matching type) for the remaining non-control
-         * parameters.
+         * Resolution per Jakarta Data 1.0 §4.3: {@code @By("attr")} or {@code @Param("attr")}, else the parameter's
+         * own name. A parameter bound neither way is refused when the repository is created: Mansart does not guess
+         * the attribute, not even the entity's only one of that type (mansart#85).
          */
         static FindBindings of(Method m, EntityModel<?> model, Map<String, Attribute<?, ?>> attrIndex) {
             var params = m.getParameters();
@@ -631,27 +631,19 @@ public final class RuntimeRepositoryProxy {
                 Attribute<?, ?> a = attrIndex.get(paramHint == null ? params[i].getName() : paramHint);
                 if (a != null) { paramIndexes.add(i); attributes.add(a); consumed.add(i); }
             }
-            // Positional fallback: any remaining non-control param is matched against the entity
-            // attribute whose Java type is assignable from the parameter type (single-candidate
-            // only, first-fit). Covers @Find(char ch, String hex) where the param names ch/hex
-            // don't match thisCharacter/hexadecimal.
+            // mansart#40: a parameter left unbound would be dropped from the query, which would then return every
+            // row. A repository compiled without -parameters reaches this unless its parameters carry @By.
             for (int i = 0; i < params.length; i++) {
-                Attribute<?, ?> match = consumed.contains(i) ? null
-                        : singleAttributeOfType(model, paramTypes[i], attributes);
-                if (match != null) { paramIndexes.add(i); attributes.add(match); }
-                // mansart#40: a parameter left unbound would be dropped from the query, which would then return
-                // every row; a repository compiled without -parameters reaches this when its type is ambiguous.
-                else if (!consumed.contains(i)) throw unbound(m, i, paramTypes[i]);
+                if (!consumed.contains(i)) throw unbound(m, i, paramTypes[i]);
             }
             return new FindBindings(List.copyOf(paramIndexes), List.copyOf(attributes), orderBySorts(m));
         }
 
         private static MansartDataException unbound(Method m, int index, Class<?> type) {
             return new MansartDataException("Cannot run " + m.getDeclaringClass().getName() + "." + m.getName()
-                    + ": its @Find parameter " + index + " (" + type.getSimpleName() + ") matches no attribute — its"
+                    + ": its @Find parameter " + index + " (" + type.getSimpleName() + ") matches no attribute: its"
                     + " name is not an attribute of the entity, or is missing from the class file (compiled without"
-                    + " -parameters), and the entity has no single attribute of that type. Annotate the parameter"
-                    + " with @By, or compile the repository with -parameters.");
+                    + " -parameters). Annotate the parameter with @By, or compile the repository with -parameters.");
         }
 
         private static List<jakarta.data.Sort<?>> orderBySorts(Method m) {
@@ -829,31 +821,6 @@ public final class RuntimeRepositoryProxy {
         if (by != null && !by.value().isEmpty()) return by.value();
         jakarta.data.repository.Param p = param.getDeclaredAnnotation(jakarta.data.repository.Param.class);
         return p == null || p.value().isEmpty() ? null : p.value();
-    }
-
-    private static Attribute<?, ?> singleAttributeOfType(EntityModel<?> model, Class<?> paramType,
-                                                         List<Attribute<?, ?>> alreadyMatched) {
-        Class<?> wanted = boxedClass(paramType);
-        Attribute<?, ?> only = null;
-        int hits = 0;
-        for (Attribute<?, ?> a : model.attributes()) {
-            if (alreadyMatched.contains(a)) continue;
-            Class<?> t = boxedClass(a.javaType());
-            if (t == wanted) { only = a; hits++; }
-        }
-        return hits == 1 ? only : null;
-    }
-
-    private static Class<?> boxedClass(Class<?> c) {
-        if (c == boolean.class) return Boolean.class;
-        if (c == byte.class)    return Byte.class;
-        if (c == short.class)   return Short.class;
-        if (c == int.class)     return Integer.class;
-        if (c == long.class)    return Long.class;
-        if (c == float.class)   return Float.class;
-        if (c == double.class)  return Double.class;
-        if (c == char.class)    return Character.class;
-        return c;
     }
 
     /* ---- M7-12 — Jakarta Data control parameters ---- */

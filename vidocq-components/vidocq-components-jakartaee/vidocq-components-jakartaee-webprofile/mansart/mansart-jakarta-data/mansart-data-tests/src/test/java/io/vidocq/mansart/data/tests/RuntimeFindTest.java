@@ -76,10 +76,6 @@ class RuntimeFindTest {
         @Find
         List<Author> byIdAndName(@Param("id") Long id, @Param(NAME) String name);
 
-        /** No {@code @Param}: bound to the only {@code String} attribute, {@code name}. */
-        @Find
-        List<Author> byPosition(String value);
-
         @Find
         Stream<Author> sorted(Sort<Author> sort);
 
@@ -148,11 +144,6 @@ class RuntimeFindTest {
 
         assertThat(repo.byIdAndName(adaId, ADA)).extracting(Author::getName).containsExactly(ADA);
         assertThat(repo.byIdAndName(adaId, BOB)).isEmpty();
-    }
-
-    @Test
-    void bindsAnUnnamedParameterToTheOnlyAttributeOfItsType() {
-        assertThat(repo.byPosition(BOB)).extracting(Author::getName).containsExactly(BOB);
     }
 
     @Test

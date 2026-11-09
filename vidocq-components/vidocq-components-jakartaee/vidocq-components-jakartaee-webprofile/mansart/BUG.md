@@ -9,6 +9,15 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-045 — A nameless `@Find` parameter was bound to the entity's only attribute of its type
+
+- **Date**: 2026-11-09
+- **Status**: FIXED on `fix/find-without-parameter-names` (Vidocq/mansart#85). Since commit 95158224 (mansart#40) a `@Find` parameter with no name in the class file (a library compiled without `-parameters`) and no `@By` was compared to the entity's only attribute of its type, by the processor (`RepositoryWriter.attributeOfType`) and by the run-time path (`FindBindings` positional fallback). Jakarta Data 1.0 §4.3 binds a parameter by `@By` or by its name only, and `usage.adoc` said Mansart never guesses an attribute. Both paths now refuse such a parameter, naming the method, `@By` and `-parameters`; the type-based lookup and its two-candidates diagnostic are gone.
+- **Reproduction**: `ProcessorClassFileInputTest.aFindParameterWithoutANameIsAnErrorNamingTheMethod`, `RuntimeFindWithoutParameterNamesTest.aParameterWithoutANameIsRefusedEvenWhenOneAttributeHasItsType` (red first: `byKey(Long)` was bound to `id`).
+- **Reported by**: the review of the external-jar scenarios of 2026-11-09 (ticket #85).
+
+---
+
 ## MANSART-044 — A repository of a jar the build did not enrich failed with a bare unsatisfied dependency
 
 - **Date**: 2026-11-09

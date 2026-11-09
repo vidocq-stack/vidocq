@@ -434,12 +434,15 @@ final class RepositoryWriter {
 
     /**
      * The attribute a {@code @Find} parameter is compared to: the one its {@code @By} names, the entity's id for
-     * {@code @By(By.ID)} (MANSART-018), else the attribute of the parameter's own name.
+     * {@code @By(By.ID)} (MANSART-018), else the attribute of the parameter's own name (Jakarta Data 1.0 §4.3). A
+     * parameter with neither, because the class file was compiled without {@code -parameters}, is an error: Mansart
+     * does not guess the attribute, not even the entity's only one of that type (mansart#85).
      */
     private String findAttribute(ExecutableElement m, javax.lang.model.element.VariableElement param) {
         String attribute = annotationValue(param, "jakarta.data.repository.By");
         if (attribute == null) {
-            return withoutParameterNames(m) ? attributeOfType(m, param) : param.getSimpleName().toString();
+            if (withoutParameterNames(m)) throw new IllegalStateException(nameless(m));
+            return param.getSimpleName().toString();
         }
         if (!attribute.equals("id(this)")) return attribute;
         TypeElement entity = entityForRepo(m);
@@ -466,41 +469,12 @@ final class RepositoryWriter {
         return !params.isEmpty();
     }
 
-    /**
-     * The attribute a nameless {@code @Find} parameter is compared to: the entity's only attribute of its type, as
-     * the run-time path resolves it. Two candidates, or none, and the method cannot be implemented: the error names
-     * it, and no query is guessed (mansart#40).
-     */
-    private String attributeOfType(ExecutableElement m, javax.lang.model.element.VariableElement param) {
-        TypeElement entity = entityForRepo(m);
-        String match = null;
-        for (var member : entity.getEnclosedElements()) {
-            if (member.getKind() == javax.lang.model.element.ElementKind.FIELD
-                    && !member.getModifiers().contains(javax.lang.model.element.Modifier.STATIC)
-                    && types.isSameType(boxed(member.asType()), boxed(param.asType()))) {
-                if (match != null) {
-                    throw new IllegalStateException(nameless(m, "has several attributes of type " + param.asType()));
-                }
-                match = member.getSimpleName().toString();
-            }
-        }
-        if (match == null) {
-            throw new IllegalStateException(nameless(m, "has no attribute of type " + param.asType()));
-        }
-        return match;
-    }
-
-    private javax.lang.model.type.TypeMirror boxed(javax.lang.model.type.TypeMirror type) {
-        return type instanceof javax.lang.model.type.PrimitiveType primitive
-                ? types.boxedClass(primitive).asType() : types.erasure(type);
-    }
-
-    private static String nameless(ExecutableElement m, String why) {
+    private static String nameless(ExecutableElement m) {
         TypeElement repo = (TypeElement) m.getEnclosingElement();
         return "cannot implement " + repo.getQualifiedName() + "." + m.getSimpleName() + ": its parameters have no"
-                + " names in the class file (the library was compiled without -parameters) and the entity " + why
-                + ", so the attribute each parameter is compared to is unknown. Annotate the parameters with @By,"
-                + " or compile the library with -parameters.";
+                + " names in the class file (the library was compiled without -parameters), so the attribute each"
+                + " parameter is compared to is unknown. Annotate the parameters with @By, or compile the library"
+                + " with -parameters.";
     }
 
     /** The {@code ORDER BY} list of a {@code @Find} method's {@code @OrderBy} annotations, in declaration order. */

@@ -105,8 +105,13 @@ class ProcessorClassFileInputTest {
         assertThat(result.classes().resolve(DependencyHints.INDEX)).exists();
     }
 
+    /**
+     * A {@code @Find} parameter with no name in the class file and no {@code @By} is an error, whatever its type: the
+     * specification (§4.3) binds by {@code @By} or by name, and Mansart no longer guesses the entity's only attribute
+     * of that type (mansart#85).
+     */
     @Test
-    void aFindParameterOfATypeNoAttributeHasIsAnErrorNamingTheMethod() throws IOException {
+    void aFindParameterWithoutANameIsAnErrorNamingTheMethod() throws IOException {
         var library = InProcessCompilation.compileLibrary(out.resolve("lib"), false, BOOK, BOOK_SOURCE, BOOKS,
                 repository("""
                     @Find
@@ -116,9 +121,14 @@ class ProcessorClassFileInputTest {
 
         var result = InProcessCompilation.processClassFiles(library.classes(), out.resolve("gen"), BOOK, BOOKS);
 
-        assertThat(result.errors()).anySatisfy(error -> assertThat(error)
+        assertThat(result.errors()).hasSize(1);
+        assertThat(result.errors().getFirst())
                 .contains("lib.Books.publishedIn")
-                .contains("has no attribute of type java.lang.Integer"));
+                .contains("its parameters have no names in the class file (the library was compiled without"
+                        + " -parameters), so the attribute each parameter is compared to is unknown. Annotate the"
+                        + " parameters with @By, or compile the library with -parameters.")
+                .doesNotContain("..")
+                .doesNotContain("of type");
     }
 
     /**

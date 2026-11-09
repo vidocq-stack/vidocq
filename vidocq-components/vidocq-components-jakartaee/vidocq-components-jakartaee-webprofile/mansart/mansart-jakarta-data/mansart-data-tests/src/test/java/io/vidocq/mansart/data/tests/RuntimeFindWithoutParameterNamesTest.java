@@ -127,15 +127,24 @@ class RuntimeFindWithoutParameterNamesTest {
         }
     }
 
+    /**
+     * Jakarta Data 1.0 §4.3 binds a {@code @Find} parameter by {@code @By} or by its name; Mansart used to bind a
+     * nameless one to the entity's only attribute of its type (mansart#85): a guess the specification does not
+     * allow, refused now even when it would be unambiguous.
+     */
     @Test
-    void aParameterOfAUniqueAttributeTypeStillBindsByType() throws Throwable {
+    void aParameterWithoutANameIsRefusedEvenWhenOneAttributeHasItsType() throws Exception {
         var library = InProcessCompilation.compileLibrary(out, false, "lib.Book", BOOK_SOURCE, "lib.Keys",
                 KEYS_SOURCE);
+        assertThat(library.success()).as(library.errors().toString()).isTrue();
         try (var loader = new URLClassLoader(new URL[] {library.classes().toUri().toURL()},
                 getClass().getClassLoader())) {
-            Object keys = repository(loader, "lib.Keys");
-
-            assertThat((List<?>) call(keys, "byKey", Long.class, 3L)).hasSize(1);
+            assertThatThrownBy(() -> repository(loader, "lib.Keys"))
+                    .isInstanceOf(MansartDataException.class)
+                    .hasMessageContaining("lib.Keys.byKey")
+                    .hasMessageContaining("compiled without -parameters")
+                    .hasMessageContaining("@By")
+                    .hasMessageNotContaining("of that type");
         }
     }
 }
