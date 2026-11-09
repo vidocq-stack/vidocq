@@ -5,6 +5,37 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261109-02 — every example test that boots the runtime fails when something already listens on 8080
+
+- **Date**: 2026-11-09
+- **Status**: WORKED AROUND in the tests on `fix/example-tests-free-port`; the fixed port in the examples'
+  own configuration is left as it is (see **Not fixed here**).
+- **Reported by**: a full `mvn install` on a machine running an unrelated container that publishes 8080:
+  `TransactionalRollbackTest.aWriteInsideAFailedTransactionIsRolledBack` fails with
+  `ChappeException$ServerException: Failed to bind to 0.0.0.0:8080`, caused by
+  `java.net.BindException: Address already in use`.
+- **Minimal reproduction**: `docker run -p 8080:80 nginx`, then
+  `./mvnw -pl vidocq-runtime-examples/vidocq-runtime-petstore-example test`.
+- **Cause**: six examples pin `vidocq.chappe.listener.default.port=8080` in their own
+  `src/main/resources/vidocq.properties`, and the three tests that boot the runtime inherit it.
+  None of them makes an HTTP call -- the petstore test's own javadoc says "no HTTP call is needed to
+  reproduce the defect" -- so the listener is incidental to every one of them.
+- **Fix (tests only)**: each test takes a port from `new ServerSocket(0)` and sets
+  `vidocq.chappe.listener.default.port` as a system property before booting, restoring the previous value
+  afterwards. `SystemPropertiesConfigSource` has ordinal 400 against `PropertiesFileConfigSource`'s 100, so
+  the property wins over the packaged file and no production configuration changes.
+  Not chosen: overriding the port on the Maven command line, which would have to be repeated by every
+  contributor and every CI job rather than fixed once.
+- **Not affected**: `vidocq-runtime-cyrano-rest-client-example`, which already uses 18091, and the dev
+  console, which already binds a dynamic port (its snapshot test matches `http://127.0.0.1:(\d+)/`).
+- **Not fixed here**: that an example ships a fixed application port its tests then inherit. A test that
+  needs no HTTP listener should arguably not start one at all, and an example that demonstrates a port
+  should not dictate the test's. Both are design questions for the maintainers rather than a workaround.
+- **Known limitation**: `ServerSocket(0)` then bind is a race -- the port can be taken in between. It is
+  the portable approach and `ChappeServer.bindWithRetry` gives some slack, but it is not a guarantee.
+
+---
+
 ## BUG-20261108-01 — `vidocq pom convert --to parentless` keeps `${project.parent.version}` on the plugin's dev-service dependencies
 
 - **Date**: 2026-11-08

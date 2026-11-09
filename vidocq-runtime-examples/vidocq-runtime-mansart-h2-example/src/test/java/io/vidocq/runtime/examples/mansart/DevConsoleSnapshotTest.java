@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.ServerSocket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -103,12 +104,21 @@ class DevConsoleSnapshotTest {
     private static String body;
     /** The same body, parsed: maps, lists, strings, numbers and booleans. */
     private static Map<?, ?> snapshot;
+    /**
+     * The example pins 8080 in its own {@code vidocq.properties}, which makes the build fail wherever
+     * something else already listens there -- and this test needs no HTTP at all. It therefore picks a
+     * free port; a system property wins over the packaged file (ordinal 400 against 100).
+     */
+    private static final String PORT_KEY = "vidocq.chappe.listener.default.port";
+    private static String previousPort;
 
     @BeforeAll
     static void bootInDevModeAndReadTheSnapshot() throws Exception {
         consoleLogger = Logger.getLogger(CONSOLE_LOGGER);
         CAPTURE.setLevel(Level.ALL);
         consoleLogger.addHandler(CAPTURE);
+        previousPort = System.getProperty(PORT_KEY);
+        System.setProperty(PORT_KEY, String.valueOf(freePort()));
         bootstrap = VidocqBootstrap.create().configure().start();
         body = get(consoleUrl() + "api/snapshot", "application/json");
         try (Jsonb jsonb = JsonbBuilder.create()) {
@@ -123,6 +133,7 @@ class DevConsoleSnapshotTest {
                 bootstrap.shutdown();
             }
         } finally {
+            restorePort(previousPort);
             if (consoleLogger != null) {
                 consoleLogger.removeHandler(CAPTURE);
             }
@@ -504,6 +515,21 @@ class DevConsoleSnapshotTest {
             }
         } finally {
             connection.disconnect();
+        }
+    }
+
+    /** A port free at this instant: the only portable way, and what the runtime's own ITs rely on. */
+    private static int freePort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
+        }
+    }
+
+    private static void restorePort(String previous) {
+        if (previous == null) {
+            System.clearProperty(PORT_KEY);
+        } else {
+            System.setProperty(PORT_KEY, previous);
         }
     }
 }

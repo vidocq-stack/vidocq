@@ -23,6 +23,9 @@ import io.vidocq.runtime.core.VidocqBootstrap;
 import jakarta.enterprise.inject.spi.CDI;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.net.ServerSocket;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -61,9 +64,23 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 class TransactionalRollbackTest {
 
+    /**
+     * The example pins 8080 in its own {@code vidocq.properties}, which makes the build fail wherever
+     * something else already listens there -- and this test needs no HTTP at all. It therefore picks a
+     * free port; a system property wins over the packaged file (ordinal 400 against 100).
+     */
+    private static final String PORT_KEY = "vidocq.chappe.listener.default.port";
+
     @Test
-    void aWriteInsideAFailedTransactionIsRolledBack() {
-        VidocqBootstrap bootstrap = VidocqBootstrap.create().configure().start();
+    void aWriteInsideAFailedTransactionIsRolledBack() throws IOException {
+        String previousPort = System.getProperty(PORT_KEY);
+        System.setProperty(PORT_KEY, String.valueOf(freePort()));
+        VidocqBootstrap bootstrap;
+        try {
+            bootstrap = VidocqBootstrap.create().configure().start();
+        } finally {
+            restorePort(previousPort);
+        }
         try {
             PetRepository pets = CDI.current().select(PetRepository.class).get();
             PetService service = CDI.current().select(PetService.class).get();
@@ -79,6 +96,21 @@ class TransactionalRollbackTest {
                             + "transaction rollback (Vidocq/vidocq#97)");
         } finally {
             bootstrap.shutdown();
+        }
+    }
+
+    /** A port free at this instant: the only portable way, and what the runtime's own ITs rely on. */
+    private static int freePort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
+        }
+    }
+
+    private static void restorePort(String previous) {
+        if (previous == null) {
+            System.clearProperty(PORT_KEY);
+        } else {
+            System.setProperty(PORT_KEY, previous);
         }
     }
 }
