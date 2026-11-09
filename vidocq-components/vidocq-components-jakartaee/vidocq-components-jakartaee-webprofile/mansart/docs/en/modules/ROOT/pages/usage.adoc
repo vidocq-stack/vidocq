@@ -6,6 +6,8 @@ Common recipes for `mansart-jakarta-data`, `mansart-transactions`, and `mansart-
 
 == Jakarta Data repositories
 
+NOTE: A named-module application not created by `vidocq create` needs `requires static java.compiler;` in its `module-info.java`: `javac` resolves `@javax.annotation.processing.Generated` on the generated sources (`vidocq create` already writes it).
+
 === `BasicRepository<T, K>` and `CrudRepository<T, K>`
 
 `BasicRepository` covers `save`, `saveAll`, `findById`, `findAll`, `deleteById`, `delete`, `deleteAll`. `CrudRepository` adds `insert`/`insertAll`/`update`/`updateAll`. To go further, declare specialized methods on the interface; the APT turns them into static query plans.

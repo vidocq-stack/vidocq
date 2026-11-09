@@ -119,8 +119,7 @@ public final class RuntimeEntityModelBuilder {
             throw new MansartDataException(entityClass.getName()
                     + " must declare a no-arg constructor (Mansart/JPA convention).", e);
         } catch (IllegalAccessException e) {
-            throw new MansartDataException("Cannot privateLookupIn " + entityClass.getName()
-                    + " — open the entity package to mansart-data-core via `opens` in your module-info.", e);
+            throw new MansartDataException(OpensHint.message(entityClass), e);
         }
     }
 

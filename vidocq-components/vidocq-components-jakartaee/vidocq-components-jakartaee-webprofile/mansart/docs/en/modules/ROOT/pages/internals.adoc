@@ -143,6 +143,8 @@ The run-time path is exceptional, and announced at startup by a framed `WARNING`
 
 The fix is the same in every case: add `mansart-data-processor` to the annotation processor path of the module that declares the repository.
 
+When the run-time path cannot `privateLookupIn` an entity or repository package of a named module, the error prints the exact line to write, for example `opens com.acme to io.vidocq.mansart.data.core;`, and says that the compile-time path (the annotation processor on the module, or `vidocq:generate` on a dependency jar) needs no `opens`.
+
 == The `Connection` wrapper (hand-written)
 
 `mansart-pool` ships a plain hand-written `PooledConnection implements Connection`: every method delegates to the physical connection, and `close()` returns the connection to the pool instead of closing it.

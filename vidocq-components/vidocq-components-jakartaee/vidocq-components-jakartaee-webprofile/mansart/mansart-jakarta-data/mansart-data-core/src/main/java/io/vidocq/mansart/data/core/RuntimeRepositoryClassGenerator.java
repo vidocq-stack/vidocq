@@ -105,7 +105,12 @@ final class RuntimeRepositoryClassGenerator {
      */
     private static Class<?> define(Class<?> repoInterface, ClassDesc thisCd, byte[] bytes)
             throws ReflectiveOperationException {
-        MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(repoInterface, MethodHandles.lookup());
+        MethodHandles.Lookup lookup;
+        try {
+            lookup = MethodHandles.privateLookupIn(repoInterface, MethodHandles.lookup());
+        } catch (IllegalAccessException e) {
+            throw new IllegalAccessException(OpensHint.message(repoInterface));
+        }
         if ((lookup.lookupModes() & MethodHandles.Lookup.MODULE) != 0) {
             return lookup.defineHiddenClass(bytes, true).lookupClass();
         }
