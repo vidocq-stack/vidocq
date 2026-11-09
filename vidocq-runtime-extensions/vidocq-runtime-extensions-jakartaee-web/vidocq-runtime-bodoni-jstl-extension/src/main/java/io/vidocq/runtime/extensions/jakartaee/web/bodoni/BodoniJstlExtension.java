@@ -55,7 +55,7 @@ public final class BodoniJstlExtension implements VidocqExtension, StartupReport
             "io.vidocq.bodoni.core.tags.sql", "sql");
 
     private final Supplier<List<String>> catalog;
-    private final AtomicReference<List<String>> libraries = new AtomicReference<>();
+    private final AtomicReference<List<String>> startedWith = new AtomicReference<>();
 
     /** Created by the runtime's service loader: the tag libraries of the application layer. */
     public BodoniJstlExtension() {
@@ -75,17 +75,17 @@ public final class BodoniJstlExtension implements VidocqExtension, StartupReport
 
     @Override
     public void onStart(ExtensionContext context) {
-        libraries.set(catalog.get());
+        startedWith.set(catalog.get());
     }
 
     @Override
     public void onStop() {
-        libraries.set(null);
+        startedWith.set(null);
     }
 
     @Override
     public void contribute(StartupReportContext context, StartupReportSection section) {
-        List<String> available = libraries.get();
+        List<String> available = startedWith.get();
         section.summary("Jakarta Standard Tag Library 3.0");
         if (available == null) {
             section.row(TAGLIBS, "not initialized");
