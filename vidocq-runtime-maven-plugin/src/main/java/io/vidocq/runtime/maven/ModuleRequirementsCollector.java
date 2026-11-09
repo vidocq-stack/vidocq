@@ -38,6 +38,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.TreeSet;
 import java.util.Set;
@@ -103,7 +104,7 @@ final class ModuleRequirementsCollector {
      *                        resource-only packages included once the resources plugin has run)
      */
     static Set<Requirement> applicableTo(Set<Requirement> required, File outputDirectory) {
-        return applicableTo(required, outputDirectory, null);
+        return applicableTo(required, outputDirectory, Optional.empty());
     }
 
     /**
@@ -114,16 +115,17 @@ final class ModuleRequirementsCollector {
      * only to extend it uses none of it (BUG-20261109-01 -- the first version of this check demanded five
      * directives of Vidocq's own cassini-rest dev panel, which imports nothing from Jakarta REST).
      *
-     * @param modulesInUse the modules the compiled classes refer to, or {@code null} when that could not be
-     *                     determined (no classes yet, or an unreadable module path) -- then no
+     * @param modulesInUse the modules the compiled classes refer to, or empty when that could not be
+     *                     determined (an unreadable output directory or module path) -- then no
      *                     {@code requires} is filtered out, so the check stays conservative
      */
-    static Set<Requirement> applicableTo(Set<Requirement> required, File outputDirectory, Set<String> modulesInUse) {
+    static Set<Requirement> applicableTo(Set<Requirement> required, File outputDirectory,
+                                         Optional<Set<String>> modulesInUse) {
         Set<Requirement> out = new LinkedHashSet<>();
         for (Requirement r : required) {
             boolean keep = switch (r.kind()) {
                 case OPENS -> containsPackage(outputDirectory, r.name());
-                case REQUIRES, REQUIRES_STATIC -> modulesInUse == null || modulesInUse.contains(r.name());
+                case REQUIRES, REQUIRES_STATIC -> modulesInUse.map(u -> u.contains(r.name())).orElse(true);
             };
             if (keep) {
                 out.add(r);
@@ -134,29 +136,29 @@ final class ModuleRequirementsCollector {
 
     /**
      * The modules whose exported packages the compiled classes under {@code outputDirectory} refer to, or
-     * an empty set when the module has no compiled main code at all (a test-only module), and {@code null}
-     * only when the scan itself failed -- an unreadable output directory or a module path that
-     * {@link ModuleFinder} rejects -- so that a real error keeps the check conservative instead of silently
-     * passing. The system modules are included, so a {@code requires static java.compiler} is kept exactly
-     * for a module that really uses {@code javax.annotation.processing}.
+     * an empty set when the module has no compiled main code at all (a test-only module), and an empty
+     * {@link Optional} only when the scan itself failed -- an unreadable output directory or a module path
+     * that {@link ModuleFinder} rejects -- so that a real error keeps the check conservative instead of
+     * silently passing. The system modules are included, so a {@code requires static java.compiler} is kept
+     * exactly for a module that really uses {@code javax.annotation.processing}.
      */
-    static Set<String> modulesInUse(File outputDirectory, Set<Artifact> artifacts, Log log) {
+    static Optional<Set<String>> modulesInUse(File outputDirectory, Set<Artifact> artifacts, Log log) {
         if (outputDirectory == null || !outputDirectory.isDirectory()) {
             // No compiled output: nothing in this module can use an extension's API.
-            return Set.of();
+            return Optional.of(Set.of());
         }
         Set<String> referenced;
         try {
             referenced = ReflectedPackages.referencedPackages(outputDirectory.toPath());
         } catch (IOException e) {
             log.debug("Vidocq: cannot scan " + outputDirectory + " for referenced packages: " + e);
-            return null;
+            return Optional.empty();
         }
         if (referenced.isEmpty()) {
             // An output directory without a single class file -- a test-only module, for instance.
             // Any class at all would at least reference java.lang, so this is "no main code", not a
             // failed scan: the module needs no directive (BUG-20261109-01).
-            return Set.of();
+            return Optional.of(Set.of());
         }
         List<Path> path = new ArrayList<>();
         for (Artifact artifact : artifacts) {
@@ -176,9 +178,9 @@ final class ModuleRequirementsCollector {
             }
         } catch (FindException e) {
             log.debug("Vidocq: cannot read the module path to tell which modules are in use: " + e);
-            return null;
+            return Optional.empty();
         }
-        return inUse;
+        return Optional.of(inUse);
     }
 
     /** The packages {@code reference} offers to any reader: all of them for an automatic module. */

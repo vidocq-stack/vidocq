@@ -27,11 +27,17 @@ import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.OutputStream;
+import java.lang.classfile.ClassFile;
+import java.lang.constant.ClassDesc;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -125,7 +131,7 @@ class ModuleRequirementsCollectorTest {
         // Vidocq's own cassini-rest dev panel: it depends on the extension to extend it and imports
         // nothing from Jakarta REST, so the check must demand nothing (BUG-20261109-01).
         Set<Requirement> applicable =
-                ModuleRequirementsCollector.applicableTo(required, empty.toFile(), Set.of());
+                ModuleRequirementsCollector.applicableTo(required, empty.toFile(), Optional.of(Set.of()));
 
         assertTrue(applicable.isEmpty(), "a module that uses none of the API needs no requires: " + applicable);
     }
@@ -137,7 +143,7 @@ class ModuleRequirementsCollectorTest {
                 Requirement.requires("jakarta.json.bind", "cassini-rest does not re-export it"));
 
         Set<Requirement> applicable = ModuleRequirementsCollector.applicableTo(
-                required, empty.toFile(), Set.of("jakarta.ws.rs"));
+                required, empty.toFile(), Optional.of(Set.of("jakarta.ws.rs")));
 
         assertEquals(1, applicable.size(), "only the module actually used stays: " + applicable);
         assertEquals("requires jakarta.ws.rs;", applicable.iterator().next().directive());
@@ -148,21 +154,98 @@ class ModuleRequirementsCollectorTest {
         Set<Requirement> required = Set.of(Requirement.requires("jakarta.ws.rs", "x"));
 
         // null means "could not tell" -- the check must stay conservative rather than silently pass.
-        assertEquals(1, ModuleRequirementsCollector.applicableTo(required, empty.toFile(), null).size());
+        assertEquals(1, ModuleRequirementsCollector.applicableTo(required, empty.toFile(), Optional.empty()).size());
     }
 
     @Test
     void aModuleWithoutCompiledMainCodeNeedsNothing(@TempDir Path noClasses) {
         // A test-only integration module: target/classes exists but holds no class file, so nothing
         // in it can use an extension's API and no directive may be demanded (BUG-20261109-01).
-        assertEquals(Set.of(),
+        assertEquals(Optional.of(Set.of()),
                 ModuleRequirementsCollector.modulesInUse(noClasses.toFile(), Set.of(), new SystemStreamLog()));
     }
 
     @Test
     void aMissingOutputDirectoryNeedsNothing() {
-        assertEquals(Set.of(), ModuleRequirementsCollector.modulesInUse(
+        assertEquals(Optional.of(Set.of()), ModuleRequirementsCollector.modulesInUse(
                 new java.io.File("does-not-exist"), Set.of(), new SystemStreamLog()));
+    }
+
+    // --- modulesInUse: the usage analysis behind the requires filter ---
+
+    @Test
+    void aReferencedSystemModuleIsInUse(@TempDir Path classes) throws Exception {
+        writeClassReferencing(classes, "io.app", "Uses", ClassDesc.of("java.sql", "Date"));
+
+        Set<String> inUse = ModuleRequirementsCollector.modulesInUse(classes.toFile(), Set.of(), new SystemStreamLog())
+                .orElseThrow();
+
+        assertTrue(inUse.contains("java.sql"), "java.sql exports java.sql, which the class names: " + inUse);
+        assertFalse(inUse.contains("java.compiler"), "nothing here touches javax.annotation.processing: " + inUse);
+    }
+
+    @Test
+    void javaCompilerIsInUseOnlyForAModuleTouchingAnnotationProcessing(@TempDir Path classes) throws Exception {
+        writeClassReferencing(classes, "io.app", "Generated",
+                ClassDesc.of("javax.annotation.processing", "Generated"));
+
+        assertTrue(ModuleRequirementsCollector
+                        .modulesInUse(classes.toFile(), Set.of(), new SystemStreamLog())
+                        .orElseThrow()
+                        .contains("java.compiler"),
+                "this is what keeps `requires static java.compiler` honest");
+    }
+
+    @Test
+    void anAutomaticModuleOnThePathCountsAllItsPackages(@TempDir Path dir) throws Exception {
+        // A jar without module-info is an automatic module: it offers every package it holds.
+        Path jar = jarContaining(dir.resolve("vendor.lib-1.0.jar"), "com.vendor.api", "Client");
+        Path classes = Files.createDirectories(dir.resolve("classes"));
+        writeClassReferencing(classes, "io.app", "Consumer", ClassDesc.of("com.vendor.api", "Client"));
+
+        Set<String> inUse = ModuleRequirementsCollector.modulesInUse(
+                classes.toFile(), Set.of(artifact("com.vendor", "lib", jar)), new SystemStreamLog()).orElseThrow();
+
+        assertTrue(inUse.contains("vendor.lib"), "automatic module named from the jar: " + inUse);
+    }
+
+    @Test
+    void anUnreadableModulePathLeavesEveryRequirementInPlace(@TempDir Path dir) throws Exception {
+        Path classes = Files.createDirectories(dir.resolve("classes"));
+        writeClassReferencing(classes, "io.app", "Uses", ClassDesc.of("java.sql", "Date"));
+        Path broken = Files.write(dir.resolve("broken.jar"), new byte[] {1, 2, 3});
+
+        Optional<Set<String>> inUse = ModuleRequirementsCollector.modulesInUse(
+                classes.toFile(), Set.of(artifact("com.vendor", "broken", broken)), new SystemStreamLog());
+
+        // An empty Optional means "could not tell", and applicableTo then filters no requires away.
+        assertEquals(1, ModuleRequirementsCollector.applicableTo(
+                        Set.of(Requirement.requires("jakarta.ws.rs", "x")), classes.toFile(), inUse)
+                .size(),
+                "a module path ModuleFinder rejects must not silently drop requirements");
+    }
+
+    /** A class whose only interesting feature is a field of {@code referenced}. */
+    private static void writeClassReferencing(Path classes, String pkg, String name, ClassDesc referenced)
+            throws Exception {
+        ClassDesc type = ClassDesc.of(pkg, name);
+        byte[] bytes = ClassFile.of().build(type, cb -> cb.withField("field", referenced, ClassFile.ACC_PRIVATE));
+        Path file = classes.resolve(pkg.replace('.', '/')).resolve(name + ".class");
+        Files.createDirectories(file.getParent());
+        Files.write(file, bytes);
+    }
+
+    /** A jar with one class and no module-info, so ModuleFinder sees an automatic module. */
+    private static Path jarContaining(Path jar, String pkg, String name) throws Exception {
+        ClassDesc type = ClassDesc.of(pkg, name);
+        byte[] bytes = ClassFile.of().build(type, cb -> {});
+        try (OutputStream out = Files.newOutputStream(jar);
+                JarOutputStream jos = new JarOutputStream(out)) {
+            jos.putNextEntry(new JarEntry(pkg.replace('.', '/') + "/" + name + ".class"));
+            jos.write(bytes);
+            jos.closeEntry();
+        }
+        return jar;
     }
 
     private static Artifact artifact(String groupId, String artifactId, Path file) {
