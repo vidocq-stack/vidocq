@@ -81,7 +81,8 @@ public class VidocqCompleteModuleInfoMojo extends AbstractMojo {
         }
 
         Set<Requirement> required = ModuleRequirementsCollector.applicableTo(
-                ModuleRequirementsCollector.collect(project.getArtifacts(), getLog()), outputDirectory);
+                ModuleRequirementsCollector.collect(project.getArtifacts(), getLog()), outputDirectory,
+                ModuleRequirementsCollector.modulesInUse(outputDirectory, project.getArtifacts(), getLog()));
         List<Requirement> missing = computeMissing(required);
         if (missing.isEmpty()) {
             getLog().info("Vidocq complete-module-info: no directive to add for this module.");

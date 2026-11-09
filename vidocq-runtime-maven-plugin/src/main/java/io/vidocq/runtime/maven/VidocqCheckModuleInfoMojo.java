@@ -111,7 +111,8 @@ public class VidocqCheckModuleInfoMojo extends AbstractMojo {
         }
 
         Set<Requirement> required = ModuleRequirementsCollector.applicableTo(
-                ModuleRequirementsCollector.collect(project.getArtifacts(), getLog()), outputDirectory);
+                ModuleRequirementsCollector.collect(project.getArtifacts(), getLog()), outputDirectory,
+                ModuleRequirementsCollector.modulesInUse(outputDirectory, project.getArtifacts(), getLog()));
 
         File moduleInfo = new File(outputDirectory, "module-info.class");
         if (!moduleInfo.isFile()) {

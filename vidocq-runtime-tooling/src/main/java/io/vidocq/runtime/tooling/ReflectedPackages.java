@@ -26,6 +26,8 @@ import java.lang.classfile.ClassModel;
 import java.lang.classfile.FieldModel;
 import java.lang.classfile.MethodModel;
 import java.lang.classfile.constantpool.ClassEntry;
+import java.lang.classfile.constantpool.PoolEntry;
+import java.lang.constant.ClassDesc;
 import java.lang.module.ModuleDescriptor;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -200,6 +203,60 @@ public final class ReflectedPackages {
      * The packages of {@code reached} the module does not open (to anyone), nor export to all when an export is
      * enough; none for an open module.
      */
+    /**
+     * Every package the compiled classes under {@code classes} actually refer to: the owners in each
+     * constant pool plus the field and method descriptor types. Used to decide whether a {@code requires}
+     * an extension's catalog states really applies to the module under build -- a module that depends on
+     * an extension to extend it, rather than to use the API it leaves to the application, refers to none
+     * of those packages and must not be told to require them (BUG-20261109-01).
+     *
+     * <p>Own packages are included; callers intersect with the exports of the module they are testing,
+     * so that costs nothing. Returns an empty set when {@code classes} holds no class files.</p>
+     */
+    public static Set<String> referencedPackages(Path classes) throws IOException {
+        Set<String> packages = new TreeSet<>();
+        for (ClassModel model : read(classes).values()) {
+            for (PoolEntry entry : model.constantPool()) {
+                if (entry instanceof ClassEntry type) {
+                    add(packages, type.asInternalName());
+                }
+            }
+            for (FieldModel field : model.fields()) {
+                addDesc(packages, field.fieldTypeSymbol());
+            }
+            for (MethodModel method : model.methods()) {
+                addDesc(packages, method.methodTypeSymbol().returnType());
+                method.methodTypeSymbol().parameterList().forEach(p -> addDesc(packages, p));
+            }
+        }
+        return packages;
+    }
+
+    /** Records the package of an internal name, unwrapping array descriptors and ignoring primitives. */
+    private static void add(Set<String> packages, String internalName) {
+        String name = internalName;
+        while (name.startsWith("[")) {
+            name = name.substring(1);
+        }
+        if (name.startsWith("L") && name.endsWith(";")) {
+            name = name.substring(1, name.length() - 1);
+        }
+        if (name.isEmpty() || !name.contains("/")) {
+            return;
+        }
+        packages.add(packageOf(name));
+    }
+
+    private static void addDesc(Set<String> packages, ClassDesc desc) {
+        ClassDesc type = desc;
+        while (type.isArray()) {
+            type = type.componentType();
+        }
+        if (type.isClassOrInterface()) {
+            add(packages, type.descriptorString());
+        }
+    }
+
     public static List<String> missing(ModuleDescriptor descriptor, Reached reached) {
         if (descriptor.isOpen()) {
             return List.of();

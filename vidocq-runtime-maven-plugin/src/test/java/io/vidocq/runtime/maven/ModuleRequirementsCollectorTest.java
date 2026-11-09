@@ -116,6 +116,55 @@ class ModuleRequirementsCollectorTest {
                 "it must be collected as a static requirement instead");
     }
 
+    @Test
+    void aCatalogRequiresIsDroppedForAModuleThatUsesNoneOfTheExtensionsApi(@TempDir Path empty) {
+        Set<Requirement> required = Set.of(
+                Requirement.requires("jakarta.ws.rs", "cassini-rest does not re-export it"),
+                Requirement.requiresStatic("java.compiler", "generated sources need it"));
+
+        // Vidocq's own cassini-rest dev panel: it depends on the extension to extend it and imports
+        // nothing from Jakarta REST, so the check must demand nothing (BUG-20261109-01).
+        Set<Requirement> applicable =
+                ModuleRequirementsCollector.applicableTo(required, empty.toFile(), Set.of());
+
+        assertTrue(applicable.isEmpty(), "a module that uses none of the API needs no requires: " + applicable);
+    }
+
+    @Test
+    void aCatalogRequiresIsKeptForAModuleThatUsesTheApi(@TempDir Path empty) {
+        Set<Requirement> required = Set.of(
+                Requirement.requires("jakarta.ws.rs", "cassini-rest does not re-export it"),
+                Requirement.requires("jakarta.json.bind", "cassini-rest does not re-export it"));
+
+        Set<Requirement> applicable = ModuleRequirementsCollector.applicableTo(
+                required, empty.toFile(), Set.of("jakarta.ws.rs"));
+
+        assertEquals(1, applicable.size(), "only the module actually used stays: " + applicable);
+        assertEquals("requires jakarta.ws.rs;", applicable.iterator().next().directive());
+    }
+
+    @Test
+    void withoutUsageInformationNoRequiresIsFilteredOut(@TempDir Path empty) {
+        Set<Requirement> required = Set.of(Requirement.requires("jakarta.ws.rs", "x"));
+
+        // null means "could not tell" -- the check must stay conservative rather than silently pass.
+        assertEquals(1, ModuleRequirementsCollector.applicableTo(required, empty.toFile(), null).size());
+    }
+
+    @Test
+    void aModuleWithoutCompiledMainCodeNeedsNothing(@TempDir Path noClasses) {
+        // A test-only integration module: target/classes exists but holds no class file, so nothing
+        // in it can use an extension's API and no directive may be demanded (BUG-20261109-01).
+        assertEquals(Set.of(),
+                ModuleRequirementsCollector.modulesInUse(noClasses.toFile(), Set.of(), new SystemStreamLog()));
+    }
+
+    @Test
+    void aMissingOutputDirectoryNeedsNothing() {
+        assertEquals(Set.of(), ModuleRequirementsCollector.modulesInUse(
+                new java.io.File("does-not-exist"), Set.of(), new SystemStreamLog()));
+    }
+
     private static Artifact artifact(String groupId, String artifactId, Path file) {
         Artifact artifact = new DefaultArtifact(groupId, artifactId, "0.4.0", "compile", "jar", null,
                 new DefaultArtifactHandler("jar"));
