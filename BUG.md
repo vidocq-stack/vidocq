@@ -34,6 +34,38 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Known limitation**: `ServerSocket(0)` then bind is a race -- the port can be taken in between. It is
   the portable approach and `ChappeServer.bindWithRetry` gives some slack, but it is not a guarantee.
 
+## BUG-20261109-01 — a catalog `requires` was demanded of every module depending on the extension, not only of its users
+
+- **Date**: 2026-11-09
+- **Status**: FIXED on `fix/module-info-catalog-requires`, in the same change that introduced the defect
+  (BUG-20261107-02 made the catalog's `requires` reach the check for the first time, so nothing had ever needed
+  to decide whom they apply to).
+- **Reported by**: the reactor build itself, twice. `vidocq:check-module-info` failed
+  `vidocq-runtime-cassini-rest-extension-dev` with five directives — `requires jakarta.cdi`, `jakarta.inject`,
+  `jakarta.ws.rs`, `jakarta.json.bind` and `requires static java.compiler` — although that module imports only
+  `io.vidocq.cassini.spi.http`, two `io.vidocq.runtime.extensions.jakartaee.core.cassini.live` packages and four
+  dev-console SPI types. It then failed `vidocq-runtime-it-cassini-rest`, a test-only module whose
+  `target/classes` holds no class file at all.
+- **Minimal reproduction**: `ModuleRequirementsCollector.applicableTo(Set.of(Requirement.requires(
+  "jakarta.ws.rs", "...")), outputDirectory)` returned the requirement for any module, whatever its classes
+  referred to.
+- **Cause**: `applicableTo` filtered only `opens`, by whether the module contains the package. The catalog's
+  `module-info.requires` states what an application USING the extension's API must declare; a module that
+  depends on the extension to extend it uses none of it. Adding those directives would have made the module read
+  four modules it never touches — against the workspace rule of minimal `requires`.
+- **Fix**: `ReflectedPackages.referencedPackages(Path)` collects every package the compiled classes refer to
+  (constant-pool owners plus field and method descriptor types), `ModuleRequirementsCollector.modulesInUse`
+  maps the module path through `ModuleFinder.compose(of(artifacts), ofSystem())` and keeps the modules whose
+  unqualified exports intersect it, and `applicableTo` filters `REQUIRES`/`REQUIRES_STATIC` by that set.
+  Composing with the system modules is what keeps `requires static java.compiler` exactly for a module that
+  really uses `javax.annotation.processing`.
+- **Not affected**: the descriptor path. The only `module-requirements.properties` in the tree declares `opens`
+  alone, so no descriptor-derived `requires` exists to filter.
+- **Second iteration**: an output directory without a single class file first returned "cannot tell", which kept
+  every requirement and broke the test-only IT module. Any real class refers to at least `java.lang`, so an
+  empty result means no main code and the module needs nothing. `null` — keep everything, stay conservative —
+  is now reserved for a failed scan or a module path `ModuleFinder` rejects.
+
 ---
 
 ## BUG-20261108-01 — `vidocq pom convert --to parentless` keeps `${project.parent.version}` on the plugin's dev-service dependencies
