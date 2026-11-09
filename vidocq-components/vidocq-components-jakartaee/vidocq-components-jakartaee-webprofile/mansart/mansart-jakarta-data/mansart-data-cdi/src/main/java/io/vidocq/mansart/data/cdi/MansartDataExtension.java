@@ -352,11 +352,11 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
     }
 
     private boolean hasManagedImplFor(ClassLoader cl, String itfFqn) {
-        // Convention: APT-generated implementation lives next to the interface as <Itf>Impl.
-        // We accept multi-package layouts only via the explicit compile-time list above; this
-        // heuristic is the runtime-path twin and only checks the conventional sibling name.
+        // Convention: the APT-generated implementation lives next to the interface, named after its binary name
+        // with _ for $ (Generated.implementationName). We accept multi-package layouts only via the explicit
+        // compile-time list above; this heuristic is the runtime-path twin and only checks the conventional sibling.
         try {
-            Class<?> impl = cl.loadClass(itfFqn + "Impl");
+            Class<?> impl = cl.loadClass(io.vidocq.mansart.data.core.Generated.implementationName(itfFqn));
             return isManagedBean(impl);
         } catch (ClassNotFoundException _) {
             return false;

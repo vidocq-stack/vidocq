@@ -83,7 +83,7 @@ public final class MansartData {
         if (generated != null) {
             return itf.cast(generated);
         }
-        String implName = itf.getName() + "Impl";
+        String implName = Generated.implementationName(itf.getName());
         try {
             Class<?> impl = Class.forName(implName, true, itf.getClassLoader());
             Constructor<?> ctor = impl.getDeclaredConstructor(RepositoryRuntime.class);

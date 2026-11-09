@@ -53,6 +53,16 @@ public final class Generated {
     private Generated() {
     }
 
+    /**
+     * The name of the implementation {@code mansart-data-processor} generates for the repository of this binary name:
+     * the name plus {@code Impl}, with {@code _} for the {@code $} of a nested interface ({@code demo.Kennel$Pets}
+     * gives {@code demo.Kennel_PetsImpl}), since the implementation is a top-level class of the repository's package
+     * and a {@code $} in its name would read as nesting (mansart#85). The processor applies the same rule.
+     */
+    public static String implementationName(String repositoryBinaryName) {
+        return repositoryBinaryName.replace('$', '_') + "Impl";
+    }
+
     /** The generated model of {@code entity}, or {@code null}. */
     public static <T> EntityModel<T> model(Class<T> entity) {
         for (GeneratedComponents components : PROVIDERS.get(entity)) {

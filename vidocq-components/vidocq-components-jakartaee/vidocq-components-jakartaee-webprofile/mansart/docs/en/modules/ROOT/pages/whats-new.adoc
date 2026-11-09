@@ -7,3 +7,4 @@ New in the `{project-version}` development line — everything listed here lande
 == Build
 
 * xref:usage.adoc#private-repositories[A private repository is a compile error] [.tag-new]#NEW# — a `@Repository` interface that is `private`, or nested in a `private` type, fails the build with the fix in the message, instead of a compiler note and a repository served at run time, which a named module cannot do; `-Amansart.privateRepositories=warn` keeps the previous behaviour. A repository declared inside a method is refused at run time with a message (Vidocq/mansart#85).
+* xref:internals.adoc#codegen-apt[`Outer_BookRepositoryImpl`] [.tag-new]#NEW# — the implementation of a nested repository is named with `_` where its binary name has `$`, so no top-level generated class carries a `$`; `META-INF/mansart-repositories.list` names the class, so an index written by an earlier processor stays valid (Vidocq/mansart#85).

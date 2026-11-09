@@ -35,9 +35,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Repositories nested in another type: each one gets its own implementation, named after its binary name
- * ({@code Outer$RepoImpl}) so that two nested repositories of the same simple name do not clash, and so that
- * {@link MansartData#repository(Class)} finds it; one the generated class cannot implement (private, or nested in
+ * Repositories nested in another type: each one gets its own implementation, named after its binary name with
+ * {@code _} for {@code $} ({@code Outer_RepoImpl}: no {@code $} in the name of a top-level class), so that two
+ * nested repositories of the same simple name do not clash, and so that {@link MansartData#repository(Class)} finds
+ * it; one the generated class cannot implement (private, or nested in
  * a private type) fails the build, unless {@code -Amansart.privateRepositories=warn} leaves it to the run-time path.
  */
 class ProcessorNestedRepositoryTest {
@@ -89,16 +90,16 @@ class ProcessorNestedRepositoryTest {
 
         assertThat(result.errors()).isEmpty();
         assertThat(result.success()).isTrue();
-        assertThat(result.generatedSource("demo.Kennel$PetsImpl")).contains("implements Kennel.Pets");
-        assertThat(result.generatedSource("demo.Shelter$PetsImpl")).contains("implements Shelter.Pets");
+        assertThat(result.generatedSource("demo.Kennel_PetsImpl")).contains("implements Kennel.Pets");
+        assertThat(result.generatedSource("demo.Shelter_PetsImpl")).contains("implements Shelter.Pets");
         assertThat(Files.readString(result.classes().resolve("META-INF/mansart-repositories.list")))
-                .contains("demo.Kennel.Pets=demo.Kennel$PetsImpl", "demo.Shelter.Pets=demo.Shelter$PetsImpl");
+                .contains("demo.Kennel.Pets=demo.Kennel_PetsImpl", "demo.Shelter.Pets=demo.Shelter_PetsImpl");
 
         try (URLClassLoader loader = new URLClassLoader(new URL[]{result.classes().toUri().toURL()},
                 getClass().getClassLoader())) {
             Class<?> pets = loader.loadClass("demo.Kennel$Pets");
             Object repository = data().repository(pets);
-            assertThat(repository.getClass().getName()).isEqualTo("demo.Kennel$PetsImpl");
+            assertThat(repository.getClass().getName()).isEqualTo("demo.Kennel_PetsImpl");
             assertThat(((BasicRepository<?, ?>) repository).findAll().toList()).isEmpty();
         }
     }
@@ -116,7 +117,7 @@ class ProcessorNestedRepositoryTest {
 
         assertThat(result.success()).isFalse();
         assertThat(result.errors()).containsExactly(PRIVATE_PETS + RELAX);
-        assertThat(result.generated().resolve("demo/Hidden$PetsImpl.java")).doesNotExist();
+        assertThat(result.generated().resolve("demo/Hidden_PetsImpl.java")).doesNotExist();
         assertThat(result.classes().resolve("META-INF/mansart-repositories.list")).doesNotExist();
     }
 
@@ -154,7 +155,7 @@ class ProcessorNestedRepositoryTest {
         assertThat(result.errors()).isEmpty();
         assertThat(result.warnings()).containsExactly(PRIVATE_PETS + " It is left to the run-time path, which serves it"
                 + " on the class path only, never from a named module (-Amansart.privateRepositories=warn).");
-        assertThat(result.generated().resolve("demo/Hidden$PetsImpl.java")).doesNotExist();
+        assertThat(result.generated().resolve("demo/Hidden_PetsImpl.java")).doesNotExist();
         assertThat(result.classes().resolve("META-INF/mansart-repositories.list")).doesNotExist();
     }
 
