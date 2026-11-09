@@ -109,7 +109,7 @@ final class RuntimeRepositoryClassGenerator {
         try {
             lookup = MethodHandles.privateLookupIn(repoInterface, MethodHandles.lookup());
         } catch (IllegalAccessException e) {
-            throw new IllegalAccessException(OpensHint.message(repoInterface));
+            throw (IllegalAccessException) new IllegalAccessException(OpensHint.message(repoInterface)).initCause(e);
         }
         if ((lookup.lookupModes() & MethodHandles.Lookup.MODULE) != 0) {
             return lookup.defineHiddenClass(bytes, true).lookupClass();
