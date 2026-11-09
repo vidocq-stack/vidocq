@@ -140,16 +140,20 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Not affected**: the `opens` half. `ReflectedPackages` derives it from the compiled classes (`@Path`,
   `@Provider`, entity annotations, private interceptor methods), which is stronger than a descriptor flag, and
   `complete-module-info` writing only `opens` is deliberate.
-- **Not fixed here**: `requires static` -- see BUG-20261107-03.
+- **Also fixed on this branch**: `requires static` -- see BUG-20261107-03.
 
 ---
 
 ## BUG-20261107-03 — `Requirement` cannot express `requires static`, so two catalog entries stay unchecked
 
 - **Date**: 2026-11-07
-- **Status**: OPEN. Deliberately out of scope of `fix/module-info-catalog-requires`, which pins the behaviour with
-  `ModuleRequirementsCollectorTest.catalogRequiresStaticIsNotReportedAsAPlainRequires`: a `mansart-data` artifact
-  must not contribute `java.compiler` as a plain `requires`.
+- **Status**: FIXED on `fix/module-info-catalog-requires`: `Requirement.Kind` gains `REQUIRES_STATIC` and
+  `ModuleInfoRequirements` keeps the subset of declared `requires` carrying the `STATIC` modifier, so satisfaction
+  is asymmetric -- a static requirement accepts either flavour, a plain one accepts only a non-static declaration.
+  Four tests in `ModuleInfoRequirementsTest`;
+  `ModuleRequirementsCollectorTest.catalogRequiresStaticIsNotReportedAsAPlainRequires` keeps its invariant (a
+  `mansart-data` artifact must not contribute `java.compiler` as a plain `requires`) and additionally asserts the
+  static kind.
 - **Reported by**: the same `social-metricbot` port, while fixing BUG-20261107-02.
 - **Minimal reproduction**: `cassini-rest.module-info.requires.static = java.compiler` and
   `mansart-data.module-info.requires.static = java.compiler` in `extension-catalog.properties`. There is no way to
@@ -160,7 +164,8 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   `ModuleInfoRequirements.missing(...)` compares names without looking at
   `ModuleDescriptor.Requires.modifiers()`, so `STATIC` is invisible on both sides -- in what the catalog asks for
   and in what the application's `module-info` already declares.
-- **Suggested fix**: add a third kind (`REQUIRES_STATIC`) or a boolean on `Requirement`, read
+- **Fix**: a third kind (`REQUIRES_STATIC`) rather than a boolean on `Requirement` -- adding a constant
+  breaks exactly two exhaustive switches, while changing the record's components breaks every call site; read
   `module-info.requires.static` in `KnownExtensions.moduleRequires`'s sibling accessor, and make
   `ModuleInfoRequirements.missing(...)` treat a declared `requires static X` as satisfying a static requirement
   for `X` -- and a declared plain `requires X` as satisfying it too, since it is stronger.

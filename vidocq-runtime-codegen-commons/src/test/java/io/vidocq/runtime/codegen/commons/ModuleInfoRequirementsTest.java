@@ -28,6 +28,7 @@ import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 import java.io.File;
+import java.lang.module.ModuleDescriptor;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -103,6 +104,48 @@ class ModuleInfoRequirementsTest {
     @Test
     void requirementRendersRequiresDirective() {
         assertEquals("requires java.sql;", Requirement.requires("java.sql", "x").directive());
+    }
+
+    @Test
+    void requirementRendersRequiresStaticDirective() {
+        assertEquals("requires static java.compiler;",
+                Requirement.requiresStatic("java.compiler", "x").directive());
+    }
+
+    @Test
+    void aStaticRequirementIsSatisfiedByAStaticDeclaration() {
+        ModuleDescriptor app = ModuleDescriptor.newModule("io.app")
+                .requires(Set.of(ModuleDescriptor.Requires.Modifier.STATIC), "java.compiler")
+                .build();
+
+        assertTrue(ModuleInfoRequirements
+                .missing(app, List.of(Requirement.requiresStatic("java.compiler", "x")))
+                .isEmpty());
+    }
+
+    @Test
+    void aStaticRequirementIsSatisfiedByAPlainDeclaration() {
+        // `requires java.compiler` is stronger than `requires static java.compiler`.
+        ModuleDescriptor app = ModuleDescriptor.newModule("io.app").requires("java.compiler").build();
+
+        assertTrue(ModuleInfoRequirements
+                .missing(app, List.of(Requirement.requiresStatic("java.compiler", "x")))
+                .isEmpty());
+    }
+
+    @Test
+    void aPlainRequirementIsNotSatisfiedByAStaticDeclaration() {
+        // `requires static` is compile-time only: at run time the module is absent, so a plain
+        // requirement stays unmet and the check must say so (BUG-20261107-03).
+        ModuleDescriptor app = ModuleDescriptor.newModule("io.app")
+                .requires(Set.of(ModuleDescriptor.Requires.Modifier.STATIC), "jakarta.ws.rs")
+                .build();
+
+        List<Requirement> unmet =
+                ModuleInfoRequirements.missing(app, List.of(Requirement.requires("jakarta.ws.rs", "x")));
+
+        assertEquals(1, unmet.size(), "a static declaration must not satisfy a plain requirement");
+        assertEquals("requires jakarta.ws.rs;", unmet.get(0).directive());
     }
 
     @Test

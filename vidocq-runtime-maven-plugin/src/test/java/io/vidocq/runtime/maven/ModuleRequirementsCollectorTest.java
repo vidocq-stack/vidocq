@@ -106,9 +106,14 @@ class ModuleRequirementsCollectorTest {
 
         Set<Requirement> collected = ModuleRequirementsCollector.collect(Set.of(mansartData), new SystemStreamLog());
 
-        assertFalse(collected.contains(Requirement.requires("java.compiler", "")),
+        assertTrue(collected.stream()
+                        .noneMatch(r -> "java.compiler".equals(r.name())
+                                && r.kind() == Requirement.Kind.REQUIRES),
                 "mansart-data declares java.compiler as requires static, which must not become a plain requires");
-        assertTrue(collected.stream().noneMatch(r -> "java.compiler".equals(r.name())));
+        assertTrue(collected.stream()
+                        .anyMatch(r -> "java.compiler".equals(r.name())
+                                && r.kind() == Requirement.Kind.REQUIRES_STATIC),
+                "it must be collected as a static requirement instead");
     }
 
     private static Artifact artifact(String groupId, String artifactId, Path file) {

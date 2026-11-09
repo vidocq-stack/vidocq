@@ -65,12 +65,20 @@ public final class ModuleInfoRequirements {
             return List.of();
         }
         Set<String> requiresDeclared = new HashSet<>();
+        // the subset declared `requires static`: compile-time only, so weaker at run time.
+        Set<String> requiresStaticDeclared = new HashSet<>();
         // package -> declared target modules; an empty set means an UNQUALIFIED `opens <pkg>;`.
         Map<String, Set<String>> opensDeclared = new HashMap<>();
         for (ModuleElement.Directive directive : consumer.getDirectives()) {
             switch (directive.getKind()) {
-                case REQUIRES -> requiresDeclared.add(
-                        ((RequiresDirective) directive).getDependency().getQualifiedName().toString());
+                case REQUIRES -> {
+                    RequiresDirective requires = (RequiresDirective) directive;
+                    String module = requires.getDependency().getQualifiedName().toString();
+                    requiresDeclared.add(module);
+                    if (requires.isStatic()) {
+                        requiresStaticDeclared.add(module);
+                    }
+                }
                 case OPENS -> recordOpens((OpensDirective) directive, opensDeclared);
                 default -> {
                     // exports / uses / provides are not part of the requirement model.
@@ -84,7 +92,7 @@ public final class ModuleInfoRequirements {
             if (r.kind() == Requirement.Kind.OPENS && openModule) {
                 continue;
             }
-            if (!isSatisfied(r, requiresDeclared, opensDeclared)) {
+            if (!isSatisfied(r, requiresDeclared, requiresStaticDeclared, opensDeclared)) {
                 unmet.add(r);
             }
         }
@@ -119,6 +127,10 @@ public final class ModuleInfoRequirements {
         Set<String> requiresDeclared = descriptor.requires().stream()
                 .map(ModuleDescriptor.Requires::name)
                 .collect(Collectors.toSet());
+        Set<String> requiresStaticDeclared = descriptor.requires().stream()
+                .filter(r -> r.modifiers().contains(ModuleDescriptor.Requires.Modifier.STATIC))
+                .map(ModuleDescriptor.Requires::name)
+                .collect(Collectors.toSet());
         Map<String, Set<String>> opensDeclared = new HashMap<>();
         for (ModuleDescriptor.Opens o : descriptor.opens()) {
             opensDeclared.put(o.source(), o.isQualified() ? new HashSet<>(o.targets()) : Set.of());
@@ -130,7 +142,7 @@ public final class ModuleInfoRequirements {
             if (r.kind() == Requirement.Kind.OPENS && openModule) {
                 continue;
             }
-            if (!isSatisfied(r, requiresDeclared, opensDeclared)) {
+            if (!isSatisfied(r, requiresDeclared, requiresStaticDeclared, opensDeclared)) {
                 unmet.add(r);
             }
         }
@@ -138,9 +150,14 @@ public final class ModuleInfoRequirements {
     }
 
     private static boolean isSatisfied(Requirement r, Set<String> requiresDeclared,
+                                       Set<String> requiresStaticDeclared,
                                        Map<String, Set<String>> opensDeclared) {
         return switch (r.kind()) {
-            case REQUIRES -> requiresDeclared.contains(r.name());
+            // A `requires static` declaration does NOT satisfy a plain requirement: the module is
+            // absent at run time (BUG-20261107-03). The reverse does, being stronger.
+            case REQUIRES -> requiresDeclared.contains(r.name())
+                    && !requiresStaticDeclared.contains(r.name());
+            case REQUIRES_STATIC -> requiresDeclared.contains(r.name());
             case OPENS -> {
                 if (!opensDeclared.containsKey(r.name())) {
                     yield false;

@@ -25,9 +25,9 @@ import java.util.TreeSet;
 /**
  * A single JPMS directive a Vidocq extension needs its consumer module to declare, plus a short
  * human reason used in diagnostics. Either a {@code requires <module>;} or an
- * {@code opens <package>[ to <modules>];}.
+ * {@code opens <package>[ to <modules>];}, where a {@code requires} may be plain or {@code static}.
  *
- * @param kind   whether this is a {@code requires} or an {@code opens}
+ * @param kind   whether this is a {@code requires}, a {@code requires static} or an {@code opens}
  * @param name   the required module name (for {@code requires}) or the opened package (for {@code opens})
  * @param to     for a qualified {@code opens}, the target modules; empty means an unqualified {@code opens}
  * @param reason a short explanation surfaced in the diagnostic (why the directive is needed)
@@ -35,7 +35,7 @@ import java.util.TreeSet;
 public record Requirement(Kind kind, String name, Set<String> to, String reason) {
 
     /** The directive flavour. */
-    public enum Kind {REQUIRES, OPENS}
+    public enum Kind {REQUIRES, REQUIRES_STATIC, OPENS}
 
     public Requirement {
         if (name == null || name.isBlank()) {
@@ -48,6 +48,14 @@ public record Requirement(Kind kind, String name, Set<String> to, String reason)
     /** A {@code requires <module>;} requirement. */
     public static Requirement requires(String module, String reason) {
         return new Requirement(Kind.REQUIRES, module, Set.of(), reason);
+    }
+
+    /**
+     * A {@code requires static <module>;} requirement: the consumer needs the module to compile,
+     * not at run time. A plain {@code requires} satisfies it too, being stronger.
+     */
+    public static Requirement requiresStatic(String module, String reason) {
+        return new Requirement(Kind.REQUIRES_STATIC, module, Set.of(), reason);
     }
 
     /** An unqualified {@code opens <package>;} requirement. */
@@ -64,6 +72,7 @@ public record Requirement(Kind kind, String name, Set<String> to, String reason)
     public String directive() {
         return switch (kind) {
             case REQUIRES -> "requires " + name + ";";
+            case REQUIRES_STATIC -> "requires static " + name + ";";
             case OPENS -> to.isEmpty()
                     ? "opens " + name + ";"
                     : "opens " + name + " to " + String.join(", ", new TreeSet<>(to)) + ";";

@@ -320,11 +320,21 @@ public final class KnownExtensions {
      * {@code id} does not re-export them -- Cassini does not re-export Jakarta REST. Empty for an id outside
      * the catalog.
      *
-     * <p>The {@code module-info.requires.static} entries are deliberately not part of this list: they are a
-     * separate key, and the module-info check has no way to express a static requirement.</p>
+     * <p>The {@code module-info.requires.static} entries are not part of this list: they are a separate
+     * key with a weaker directive, served by {@link #moduleRequiresStatic(String)}.</p>
      */
     public static List<String> moduleRequires(String id) {
         return byId(id).map(e -> csv(property(e.id(), "module-info.requires"))).orElse(List.of());
+    }
+
+    /**
+     * The modules {@code id} needs its consumer to declare as {@code requires static}: needed to
+     * compile against the extension's generated sources, absent at run time. Empty for an id outside
+     * the catalog. Two ids use the key today ({@code cassini-rest} and {@code mansart-data}, both
+     * {@code java.compiler}, for the {@code @Generated} annotation).
+     */
+    public static List<String> moduleRequiresStatic(String id) {
+        return byId(id).map(e -> csv(property(e.id(), "module-info.requires.static"))).orElse(List.of());
     }
 
     /**

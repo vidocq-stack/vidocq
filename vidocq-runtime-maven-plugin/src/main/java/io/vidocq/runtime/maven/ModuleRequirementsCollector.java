@@ -78,6 +78,9 @@ final class ModuleRequirementsCollector {
         for (String module : KnownExtensions.moduleRequires(id)) {
             out.add(Requirement.requires(module, id + " does not re-export it"));
         }
+        for (String module : KnownExtensions.moduleRequiresStatic(id)) {
+            out.add(Requirement.requiresStatic(module, id + "'s generated sources need it to compile"));
+        }
         return out;
     }
 
