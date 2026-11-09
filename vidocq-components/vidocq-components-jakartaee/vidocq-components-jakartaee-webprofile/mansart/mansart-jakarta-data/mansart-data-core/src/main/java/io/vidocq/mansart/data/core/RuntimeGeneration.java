@@ -52,15 +52,15 @@ final class RuntimeGeneration {
 
     /**
      * Why the build did not implement {@code repository}: a type no generated top-level class of its package can see
-     * (nested in a private type, or local), or, otherwise, a module compiled without the processor.
+     * (private, or nested in a private type; a local one is refused before), or a module compiled without the
+     * processor.
      */
     static String cause(Class<?> repository) {
         for (Class<?> type = repository; type != null; type = type.getEnclosingClass()) {
-            if (java.lang.reflect.Modifier.isPrivate(type.getModifiers()) || type.isLocalClass()
-                    || type.isAnonymousClass()) {
-                return "It is not visible from its package (" + type.getName() + " is private or local), so no"
-                        + " generated class can implement it. Make it, and the types it is nested in, at least"
-                        + " package-private.\n";
+            if (java.lang.reflect.Modifier.isPrivate(type.getModifiers())) {
+                return "It is not visible from its package (" + type.getName() + " is private), so no generated"
+                        + " class can implement it. Make it, and the types it is nested in, at least package-private"
+                        + " (the build said so too, unless -Amansart.privateRepositories=warn silenced it).\n";
             }
         }
         return """

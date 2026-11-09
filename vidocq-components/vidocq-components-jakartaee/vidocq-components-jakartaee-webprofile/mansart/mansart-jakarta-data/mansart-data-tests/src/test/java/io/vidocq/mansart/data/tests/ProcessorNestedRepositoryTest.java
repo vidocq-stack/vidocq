@@ -30,14 +30,15 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Repositories nested in another type: each one gets its own implementation, named after its binary name
  * ({@code Outer$RepoImpl}) so that two nested repositories of the same simple name do not clash, and so that
- * {@link MansartData#repository(Class)} finds it; one the generated class cannot implement is left to the run-time
- * path instead of failing the build.
+ * {@link MansartData#repository(Class)} finds it; one the generated class cannot implement (private, or nested in
+ * a private type) fails the build, unless {@code -Amansart.privateRepositories=warn} leaves it to the run-time path.
  */
 class ProcessorNestedRepositoryTest {
 
@@ -102,15 +103,57 @@ class ProcessorNestedRepositoryTest {
         }
     }
 
+    private static final String PRIVATE_PETS = "[mansart-data] demo.Hidden.Pets is private, so no class of its"
+            + " package can implement it: make it, and the types it is nested in, at least package-private.";
+    private static final String RELAX = " -Amansart.privateRepositories=warn turns this error into a warning and"
+            + " leaves the repository to the run-time path, which serves it on the class path only, never from a named"
+            + " module.";
+
     @Test
-    void aPrivateNestedRepositoryIsLeftToTheRunTimePath() throws IOException {
+    void aPrivateNestedRepositoryFailsTheBuild() throws IOException {
         InProcessCompilation.Result result = InProcessCompilation.compileSources(out, PET, PET_SOURCE,
                 "demo.Hidden", holder("Hidden", "private"));
 
-        assertThat(result.errors()).isEmpty();
+        assertThat(result.success()).isFalse();
+        assertThat(result.errors()).containsExactly(PRIVATE_PETS + RELAX);
+        assertThat(result.generated().resolve("demo/Hidden$PetsImpl.java")).doesNotExist();
+        assertThat(result.classes().resolve("META-INF/mansart-repositories.list")).doesNotExist();
+    }
+
+    @Test
+    void aRepositoryNestedInAPrivateTypeFailsTheBuild() throws IOException {
+        InProcessCompilation.Result result = InProcessCompilation.compileSources(out, PET, PET_SOURCE,
+                "demo.Vault", """
+                        package demo;
+
+                        import jakarta.data.repository.BasicRepository;
+                        import jakarta.data.repository.Repository;
+
+                        public class Vault {
+                            private static class Wing {
+                                @Repository
+                                public interface Pets extends BasicRepository<Pet, Long> {
+                                }
+                            }
+                        }
+                        """);
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.errors()).containsExactly("[mansart-data] demo.Vault.Wing.Pets is nested in the private type"
+                + " demo.Vault.Wing, so no class of its package can implement it: make it, and the types it is nested"
+                + " in, at least package-private." + RELAX);
+    }
+
+    @Test
+    void thePrivateRepositoriesOptionLeavesItToTheRunTimePath() throws IOException {
+        InProcessCompilation.Result result = InProcessCompilation.compileSources(out,
+                List.of("-Amansart.privateRepositories=warn"), PET, PET_SOURCE,
+                "demo.Hidden", holder("Hidden", "private"));
+
         assertThat(result.success()).isTrue();
-        assertThat(result.diagnostics()).anySatisfy(d -> assertThat(d.getMessage(java.util.Locale.ROOT))
-                .contains("demo.Hidden.Pets", "run-time"));
+        assertThat(result.errors()).isEmpty();
+        assertThat(result.warnings()).containsExactly(PRIVATE_PETS + " It is left to the run-time path, which serves it"
+                + " on the class path only, never from a named module (-Amansart.privateRepositories=warn).");
         assertThat(result.generated().resolve("demo/Hidden$PetsImpl.java")).doesNotExist();
         assertThat(result.classes().resolve("META-INF/mansart-repositories.list")).doesNotExist();
     }

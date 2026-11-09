@@ -150,6 +150,9 @@
                         <!-- TransactionalArticleRepository.findByTitleSensitive derives no query on purpose: it
                              only checks @Transactional propagation, so the stub is kept (MANSART-030). -->
                         <arg>-Amansart.unresolvedMethods=warn</arg>
+                        <!-- RuntimeGenerationWarningTest.Hidden.HiddenAuthorRepo is private on purpose: it checks
+                             what the run-time path says about such a repository (mansart#85). -->
+                        <arg>-Amansart.privateRepositories=warn</arg>
                     </compilerArgs>
                 </configuration>
             </plugin>

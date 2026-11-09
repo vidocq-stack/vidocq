@@ -101,7 +101,7 @@ The whole hot path is reflection-free: query plans are prepared once and cached,
 
 . For each class annotated `@Entity` (Mansart or JPA) → generates `_Book.java` (rich metamodel) and `Book_.java` (JPA standard metamodel).
 . For each interface annotated `@Repository` → generates `BookRepositoryImpl.java` (final public implementation class) + an entry in `META-INF/mansart-repositories.list`.
-. A nested repository's implementation is named after its binary name, `Outer$BookRepositoryImpl`, so two nested repositories with the same simple name do not clash. A repository that a top-level class of its package cannot implement (a private or local interface, or one nested in a private type) gets no implementation; a compiler NOTE says so, and it is served on the run-time path.
+. A nested repository's implementation is named after its binary name, `Outer$BookRepositoryImpl`, so two nested repositories with the same simple name do not clash. A repository that a top-level class of its package cannot implement (a `private` interface, or one nested in a `private` type) is a compile error that names the fix; `-Amansart.privateRepositories=warn` turns it into a warning and leaves the repository to the run-time path, which serves it on the class path only (xref:usage.adoc#private-repositories[Usage]). A local interface is never seen by a processor, and the run-time path refuses it with a message.
 . An invalid `@Query`, or a method the processor cannot implement, is a compile error on the repository; no partial source is written.
 
 Source code generated under `target/generated-sources/annotations/`, marked `@Generated("io.vidocq.mansart.data.processor.MansartProcessor")`. The processor has no runtime dependency — it lives only in the consuming module's APT classpath.
@@ -131,6 +131,7 @@ package "Application" {
 . **Zero warmup** — no dynamic classloading on first call.
 . **strict Java Modules-friendly** — generated classes are in the same package as sources, no need for `opens`.
 
+[[runtime-fallback]]
 === The run-time fallback
 
 A repository compiled without `mansart-data-processor` (the Jakarta Data TCK jar, for instance) is implemented at run time: `RuntimeRepositoryProxy` builds its dispatchers and `RuntimeRepositoryClassGenerator` writes a hidden class with the Class-File API, defined next to the interface. When the repository lives in another module or class loader than Mansart (a named application module, a web application loader), the lookup needed to define a hidden class there is not available, so the class is defined in a dedicated child loader of the repository's and implements it through its public API.

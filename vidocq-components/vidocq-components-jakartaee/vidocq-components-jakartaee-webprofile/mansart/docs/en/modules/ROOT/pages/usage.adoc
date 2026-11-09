@@ -25,6 +25,8 @@ Mansart parses the name into a neutral AST, then produces SQL via the target dia
 
 [[unresolved-methods]]A repository method the annotation processor derives no query from fails the build: _Mansart could not derive a query for '…'_. Fix the name, or write a `@Query`. The processor option `-Amansart.unresolvedMethods=warn` turns the error back into a warning, and the generated method then throws `UnsupportedOperationException` when called.
 
+[[private-repositories]]A repository no class of its package can implement fails the build too [.tag-new]#NEW#: a `private` interface, or one nested in a `private` type, since the generated implementation is a top-level class of the repository's package. The error names the interface and the fix: make it, and the types it is nested in, at least package-private (a package-private top-level repository, or a public one nested in its entity or in another public class, is fine). The processor option `-Amansart.privateRepositories=warn` turns the error into a warning and leaves the repository to the xref:internals.adoc#runtime-fallback[run-time path], which can serve it on the class path only, never from a named module. A repository declared inside a method is never seen by an annotation processor; the run-time path refuses it with a message that says so.
+
 [source,java]
 ----
 List<Author> findByName(String name);

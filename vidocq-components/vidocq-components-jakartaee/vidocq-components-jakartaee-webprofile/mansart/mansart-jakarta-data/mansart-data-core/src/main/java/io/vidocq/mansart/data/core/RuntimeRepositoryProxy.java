@@ -62,7 +62,34 @@ public final class RuntimeRepositoryProxy {
 
     private RuntimeRepositoryProxy() {}
 
+    /**
+     * A repository declared inside a method, or nested in such a type, is never handed to an annotation processor
+     * (javac processes top-level types and their members only), and nothing can implement it: refuse it with the
+     * reason rather than fail on an access check in the generator (mansart#85).
+     */
+    private static void refuseLocal(Class<?> repoInterface) {
+        for (Class<?> type = repoInterface; type != null; type = enclosingOrNull(type)) {
+            if (type.isLocalClass() || type.isAnonymousClass()) {
+                String where = type == repoInterface ? " is a local interface"
+                        : " is nested in the local type " + type.getName();
+                throw new MansartDataException(repoInterface.getName() + where + ": no annotation processor can see"
+                        + " it, so Mansart has nothing to implement it with, at build time or at run time; declare it"
+                        + " as a member or a top-level interface.");
+            }
+        }
+    }
+
+    /** The enclosing class, or {@code null} when a loader cut the type off from it (the generator says so later). */
+    private static Class<?> enclosingOrNull(Class<?> type) {
+        try {
+            return type.getEnclosingClass();
+        } catch (LinkageError _) {
+            return null;
+        }
+    }
+
     public static <R> R create(Class<R> repoInterface, RepositoryRuntime runtime) {
+        refuseLocal(repoInterface);
         EntityAndKey ek = resolveEntityAndKey(repoInterface);
         if (ek == null) {
             throw new MansartDataException(repoInterface.getName()

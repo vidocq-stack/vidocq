@@ -9,6 +9,15 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-043 — A private repository compiled with a note, then failed at startup in a named module
+
+- **Date**: 2026-11-09
+- **Status**: FIXED on `fix/non-public-repositories` (Vidocq/mansart#85). A `@Repository` interface that is `private`, or nested in a `private` type, cannot be implemented by the generated top-level class of its package. The processor said so with a compiler NOTE, invisible in a Maven build, and left the repository to the run-time path, which a named application module cannot serve (`privateLookupIn` drops the module mode a hidden class needs, and a child loader can only implement a public interface): the application failed at startup. It is now a compile error that names the interface and the fix; `-Amansart.privateRepositories=warn` turns it back into a warning and the run-time path, for a class-path application. A repository declared inside a method is never handed to a processor; `RuntimeRepositoryProxy` now refuses it with a message instead of failing on an access check in the generator. Hibernate Processor 7.4.9 silently skips every one of these shapes.
+- **Reproduction**: `ProcessorNestedRepositoryTest.aPrivateNestedRepositoryFailsTheBuild`, `aRepositoryNestedInAPrivateTypeFailsTheBuild`, `thePrivateRepositoriesOptionLeavesItToTheRunTimePath`; `RuntimeLocalRepositoryTest.aLocalRepositoryIsRefusedWithAClearMessage` (all red first).
+- **Reported by**: the study of non-public repositories of 2026-11-09 (Hibernate Processor vs Mansart, six shapes, class path and named module).
+
+---
+
 ## MANSART-042 — Runtime repositories: the `java.lang.reflect.Proxy` fallback removed
 
 - **Date**: 2026-11-09

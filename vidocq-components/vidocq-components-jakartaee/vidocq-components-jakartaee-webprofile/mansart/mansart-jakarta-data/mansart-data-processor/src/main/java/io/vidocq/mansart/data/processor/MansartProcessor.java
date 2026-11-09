@@ -28,7 +28,6 @@ import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
-import javax.lang.model.element.NestingKind;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic;
@@ -37,7 +36,8 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 @SupportedSourceVersion(SourceVersion.RELEASE_25)
-@SupportedOptions({MansartProcessor.UNRESOLVED_METHODS, MansartProcessor.MIGRATION_CHECK, MansartProcessor.MIGRATIONS})
+@SupportedOptions({MansartProcessor.UNRESOLVED_METHODS, MansartProcessor.MIGRATION_CHECK, MansartProcessor.MIGRATIONS,
+        MansartProcessor.PRIVATE_REPOSITORIES})
 @SupportedAnnotationTypes({
         "jakarta.persistence.Entity",
         "jakarta.data.repository.Repository"
@@ -58,6 +58,13 @@ public final class MansartProcessor extends AbstractProcessor {
 
     /** Comma-separated directories of SQL migrations to read instead of {@code <class output>/db/migration}. */
     static final String MIGRATIONS = "mansart.migrations";
+
+    /**
+     * How a repository no class of its package can implement (a private interface, or one nested in a private type) is
+     * reported (mansart#85): {@code error} (the default) fails the build, {@code warn} leaves it to the run-time path,
+     * which serves it on the class path only.
+     */
+    static final String PRIVATE_REPOSITORIES = "mansart.privateRepositories";
 
     private EntityScanner             scanner;
     private MansartMetamodelWriter    mansartWriter;
@@ -205,13 +212,12 @@ public final class MansartProcessor extends AbstractProcessor {
     }
 
     private void writeRepository(TypeElement repo) {
-        if (!implementableFromItsPackage(repo)) {
-            // The generated class is a top-level class of the repository's package: it cannot implement a
-            // private or local interface, nor one nested in a private type. MansartData.runtimeRepository and the
-            // CDI extension serve it on the run-time path.
-            processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE,
-                    "[mansart-data] " + repo.getQualifiedName() + " is not visible from its package: no "
-                            + "implementation is generated, it is served on the run-time path.", repo);
+        TypeElement hidden = notVisibleFromItsPackage(repo);
+        if (hidden != null) {
+            // The generated class is a top-level class of the repository's package: it cannot implement a private
+            // interface, nor one nested in a private type. An error by default; with the option, a warning, and
+            // MansartData.runtimeRepository or the CDI extension serve it on the run-time path (class path only).
+            reportPrivateRepository(repo, hidden);
             return;
         }
         writeMissingMetamodel(repo);
@@ -250,16 +256,34 @@ public final class MansartProcessor extends AbstractProcessor {
         return processingEnv.getElementUtils().getPackageOf(type).getQualifiedName().toString();
     }
 
-    /** Whether a top-level class of the repository's package can implement it. */
-    private static boolean implementableFromItsPackage(TypeElement repo) {
+    /**
+     * The type that keeps a top-level class of the repository's package from implementing it: the repository itself
+     * when it is private, else the private type it is nested in; {@code null} when every type is visible.
+     */
+    private static TypeElement notVisibleFromItsPackage(TypeElement repo) {
         for (Element e = repo; e instanceof TypeElement type; e = e.getEnclosingElement()) {
-            NestingKind kind = type.getNestingKind();
-            if (kind == NestingKind.LOCAL || kind == NestingKind.ANONYMOUS
-                    || type.getModifiers().contains(Modifier.PRIVATE)) {
-                return false;
+            if (type.getModifiers().contains(Modifier.PRIVATE)) {
+                return type;
             }
         }
-        return true;
+        return null;
+    }
+
+    /** The error, or the warning with {@code -Amansart.privateRepositories=warn}, for a private repository. */
+    private void reportPrivateRepository(TypeElement repo, TypeElement hidden) {
+        String what = hidden == repo ? " is private" : " is nested in the private type " + hidden.getQualifiedName();
+        String message = "[mansart-data] " + repo.getQualifiedName() + what + ", so no class of its package can"
+                + " implement it: make it, and the types it is nested in, at least package-private.";
+        if ("warn".equalsIgnoreCase(processingEnv.getOptions().get(PRIVATE_REPOSITORIES))) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.WARNING, message + " It is left to the run-time"
+                    + " path, which serves it on the class path only, never from a named module (-A"
+                    + PRIVATE_REPOSITORIES + "=warn).", repo);
+            return;
+        }
+        failed = true;
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message + " -A" + PRIVATE_REPOSITORIES
+                + "=warn turns this error into a warning and leaves the repository to the run-time path, which"
+                + " serves it on the class path only, never from a named module.", repo);
     }
 
     /** Writes {@link #MARKER}: which processor generated the jar's Mansart classes. */
