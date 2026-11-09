@@ -107,6 +107,16 @@ class KnownExtensionsTest {
                 KnownExtensions.moduleDirectives("ibarra-pages", "consumer"));
     }
 
+    /** vidocq#266: the pages read Bodoni's tag handlers, and the Ibarra and Peano APIs, themselves. */
+    @Test
+    void bodoniJstlRequiresTheModulesItsCompiledPagesUse() {
+        assertEquals("vidocq-runtime-bodoni-jstl-extension", KnownExtensions.resolve("bodoni-jstl").artifactId());
+        assertEquals(java.util.Optional.empty(), KnownExtensions.codegenBundle("bodoni-jstl"));
+        assertEquals(List.of("requires io.vidocq.runtime.extensions.jakartaee.web.bodoni",
+                        "requires io.vidocq.bodoni.core", "requires io.vidocq.ibarra.api", "requires io.vidocq.peano.api"),
+                KnownExtensions.moduleDirectives("bodoni-jstl", "consumer"));
+    }
+
     /** vidocq#297: the java: namespace needs no codegen and no directive beyond its module. */
     @Test
     void namingIsAWebExtensionWithoutCodegen() {

@@ -157,6 +157,7 @@ jobs:
             vidocq-runtime-it-cyrano-jpms
             vidocq-runtime-it-foy-servlet
             vidocq-runtime-it-ibarra-pages
+            vidocq-runtime-it-bodoni-jstl
             vidocq-runtime-it-naming
             vidocq-runtime-it-ravel-config
             vidocq-runtime-examples

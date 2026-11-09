@@ -62,6 +62,10 @@
 | `jakartaee-web`
 | Serves the application's JSP pages, compiled at build time by xref:ibarra::index.adoc[Ibarra], through the Servlet extension, with Jakarta EL from Peano. See <<ibarra-pages>>.
 
+| `vidocq-runtime-bodoni-jstl-extension`
+| `jakartaee-web`
+| Gives the pages compiled by Ibarra the Jakarta Standard Tag Library 3.0 of link:https://codefloe.com/Vidocq/bodoni[Bodoni] (`c:`, `fmt:`, `fn:`, `x:`, `sql:`), with Ibarra, the Servlet extension and Peano. See <<bodoni-jstl>>.
+
 | `vidocq-runtime-naming-extension`
 | `jakartaee-web`
 | Answers the JNDI `java:` names `vidocq.properties` declares from the running container, through xref:vauban::jndi.adoc[Vauban Naming]: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")`. See <<naming>>.
@@ -346,6 +350,50 @@ At run time, Foy finds Ibarra's JSP engine and the compiled pages in the applica
 The `pages` section of the startup report counts the compiled pages and lists their paths; when none was compiled, it reports an anomaly with the steps above.
 
 Not covered yet: expressions on CDI beans by name (`${cart.total}` on a `@Named` bean) need an EL resolver from Vauban (Vidocq/vauban#150); a page reads request, session and application attributes.
+
+[[bodoni-jstl]]
+== Jakarta Standard Tag Library (Bodoni)
+
+`vidocq-runtime-bodoni-jstl-extension` lets the pages of <<ibarra-pages>> use the standard tags: `c:` (core), `fmt:` (formatting and internationalisation), `fn:` (functions), `x:` (XML) and `sql:` (relational database access). link:https://codefloe.com/Vidocq/bodoni[Bodoni] implements Jakarta Standard Tag Library 3.0 and depends on its APIs only; this extension assembles the rest. It brings with it the Pages extension (<<ibarra-pages>>, which brings the Servlet extension and <<peano-el>>) and `bodoni-peano`, the accessor tables Peano needs under `-Dpeano.reflection=deny` to read the `varStatus` of `c:forEach`, the items of a `Map` and the `Result` of `sql:query`. An application declares the extension, nothing else of that chain.
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-bodoni-jstl-extension</artifactId>
+</dependency>
+----
+
+The application module reads Bodoni's tag handlers, which its compiled pages construct, and the APIs of Ibarra and Peano:
+
+[source,java]
+----
+module com.acme.shop {
+    requires io.vidocq.runtime.extensions.jakartaee.web.bodoni;
+    requires io.vidocq.bodoni.core;
+    requires io.vidocq.ibarra.api;
+    requires io.vidocq.peano.api;
+}
+----
+
+`vidocq extension add bodoni-jstl` adds the dependency and these directives. A page then declares a library with the URI of the specification and uses it as on any Pages container:
+
+[source,jsp]
+----
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
+<c:forEach items="${names}" var="n" varStatus="s">${s.index}: ${fn:toUpperCase(n)}</c:forEach>
+----
+
+`vidocq:generate` compiles the page like any other, at build time: the tag handlers are called directly, no tag library is parsed while the application runs. `sql:` looks a data source up under `java:comp/env`, which <<naming>> provides.
+
+The `jstl` section of the startup report counts the tag libraries found in the module graph and lists their prefixes; when Bodoni is missing, it reports an anomaly that names the `requires` to add.
+
+[WARNING]
+====
+.Deploying on an application server
+The same `bodoni-core` jar is the JSTL implementation in a WAR on Open Liberty (tested by Bodoni's `bodoni-it-openliberty` module): keep the server's own Standard Tag Library feature off for that application, as the Deploying on an application server block of the Bodoni reference page says. The extension is for Vidocq only; on a server, the server assembles Pages, Servlet and Expression Language.
+====
 
 [[naming]]
 == JNDI `java:` names

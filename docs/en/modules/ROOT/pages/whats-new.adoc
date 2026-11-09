@@ -4,6 +4,10 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
+== Jakarta EE web
+
+* xref:modules/vidocq-runtime-extensions.adoc#bodoni-jstl[Jakarta Standard Tag Library 3.0 (Bodoni)] [.tag-new]#NEW# — `vidocq-runtime-bodoni-jstl-extension` gives the pages Ibarra compiles the `c:`, `fmt:`, `fn:`, `x:` and `sql:` tags (official Tags TCK 541/541 on Bodoni + Ibarra + Foy + Peano, not a certification), with Ibarra, the Servlet extension and Peano; `vidocq extension add bodoni-jstl` wires it (Vidocq/vidocq#266).
+
 == Build
 
 * xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[An application without `vidocq-runtime-parent`] [.tag-new]#NEW# — `vidocq create` writes a pom that imports the BOM and declares the plugin as a build extension; the plugin gives the build what the parent carried (the executions, the Java release, the source encoding, the compiler argument, the lifecycle plugin versions, the Surefire property, the m2e switch), once, and leaves what the pom has. A company parent stays. `--with-parent` writes the previous style (Vidocq/vidocq#380).

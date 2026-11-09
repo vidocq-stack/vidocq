@@ -43,6 +43,9 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-ibarra-pages-extension:{project-version}`
 | Jakarta Pages 4.0 through Ibarra: Foy serves the JSP pages `vidocq:generate` compiled into the application module, and the `pages` startup report lists them. See xref:modules/vidocq-runtime-extensions.adoc#ibarra-pages[Jakarta Pages (Ibarra)].
 
+| `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-bodoni-jstl-extension:{project-version}`
+| Jakarta Standard Tag Library 3.0 through Bodoni: the `c:`, `fmt:`, `fn:`, `x:` and `sql:` tags in the pages Ibarra compiles, with Ibarra, the Servlet extension and Peano (and `bodoni-peano`, for `peano.reflection=deny`), and the `jstl` startup report. See xref:modules/vidocq-runtime-extensions.adoc#bodoni-jstl[Jakarta Standard Tag Library (Bodoni)].
+
 | `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-naming-extension:{project-version}`
 | JNDI `java:` names answered by the running container through Vauban Naming, each declared by a `vidocq.naming.<name without java:>` key: a bean (`javax.sql.DataSource @Named("orders")`) or a link to another name. Sets `java.naming.factory.initial` only when the application chose no factory. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
 

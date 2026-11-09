@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-bodoni-jstl-extension</artifactId>
+    <name>Vidocq :: Web Extensions :: Jakarta Standard Tag Library (Bodoni)</name>
+    <description>Vidocq Runtime extension that gives the pages compiled by Ibarra the Jakarta Standard Tag Library
+        3.0 of Bodoni, with Jakarta Expression Language from Peano</description>
+
+    <properties>
+        <!--
+            checkpom asks for the companion codegen bundle of every vidocq-runtime-*-extension this pom declares.
+            The Pages extension is aggregated here for the applications' run time only; this module has no
+            source for its processors to process.
+        -->
+        <vidocq.checkpom.skip>true</vidocq.checkpom.skip>
+    </properties>
+
+    <dependencies>
+        <!-- Bodoni is a brick: it depends on APIs only. This extension brings the implementations around it. -->
+        <dependency>
+            <groupId>io.vidocq.bodoni</groupId>
+            <artifactId>bodoni-core</artifactId>
+        </dependency>
+        <!-- Accessor tables for peano.reflection=deny (varStatus, Map.Entry, sql:query results). -->
+        <dependency>
+            <groupId>io.vidocq.bodoni</groupId>
+            <artifactId>bodoni-peano</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-ibarra-pages-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
