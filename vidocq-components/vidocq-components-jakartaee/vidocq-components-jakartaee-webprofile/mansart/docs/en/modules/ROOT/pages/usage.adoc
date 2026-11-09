@@ -212,7 +212,7 @@ A library compiled against the Jakarta Data API — by a third party, without Ma
 
 What the library must give: derived queries (`findByTitle(String)`) and positional `@Query` parameters (`?1`) work as they are. Names need the class file to keep them: `@Find` matches attributes by parameter name, and `@Query` refers to `:name` — annotate the parameters with `@By` / `@Param`, or compile the library with `-parameters`. When a name is missing, the build fails naming the method; Mansart never guesses an attribute.
 
-A library compiled with another provider's processor also ships that provider's implementation — `Books_` for a repository `Books`, Hibernate Processor's convention. Mansart vetoes it (a log line says so) and implements `Books` itself: the other class would need its provider, and would make the repository ambiguous.
+A library compiled with another provider's processor also ships that provider's implementation — `Books_` for a repository `Books`, Hibernate Processor's convention — and the JPA metamodel `Book_`. Mansart reuses the metamodel [.tag-new]#NEW# (it writes its own `_Book` only), vetoes the implementation (a log line says so) and implements `Books` itself: the other class would need its provider, and would make the repository ambiguous. A repository that names its provider, `@Repository(provider = "Hibernate")`, is left to that provider [.tag-new]#NEW#: Mansart generates nothing for it and does not serve it at run time; when nothing on the class path implements it, the deployment error says which provider is missing.
 
 == Composition with other modules
 

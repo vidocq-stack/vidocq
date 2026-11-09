@@ -132,6 +132,36 @@ class ProcessorClassFileInputTest {
     }
 
     /**
+     * A library built with Hibernate Processor ships the JPA metamodel {@code Book_}: Mansart reuses it and writes
+     * its own {@code _Book} only, instead of a second {@code Book_} the enriched jar cannot hold (mansart#85).
+     */
+    @Test
+    void aMetamodelTheLibraryShipsIsNotGeneratedAgain() throws IOException {
+        var library = InProcessCompilation.compileLibrary(out.resolve("lib"), true, BOOK, BOOK_SOURCE, "lib.Book_", """
+                package lib;
+
+                import jakarta.persistence.metamodel.SingularAttribute;
+                import jakarta.persistence.metamodel.StaticMetamodel;
+
+                @StaticMetamodel(Book.class)
+                public abstract class Book_ {
+                    public static volatile SingularAttribute<Book, Long> id;
+                    public static volatile SingularAttribute<Book, String> title;
+                }
+                """, BOOKS, repository("""
+                    List<Book> findByTitle(String title);
+                """));
+        assertThat(library.success()).as(library.errors().toString()).isTrue();
+
+        var result = InProcessCompilation.processClassFiles(library.classes(), out.resolve("gen"), BOOKS);
+
+        assertThat(result.errors()).isEmpty();
+        assertThat(result.generated().resolve("lib/_Book.java")).exists();
+        assertThat(result.generated().resolve("lib/Book_.java")).doesNotExist();
+        assertThat(result.generatedSource("lib.BooksImpl")).contains("class BooksImpl");
+    }
+
+    /**
      * {@code vidocq:generate} hands the processor the classes whose bytes name {@code @Repository}: the repository,
      * not its entity. The processor generates the entity's metamodel itself, and the result compiles.
      */

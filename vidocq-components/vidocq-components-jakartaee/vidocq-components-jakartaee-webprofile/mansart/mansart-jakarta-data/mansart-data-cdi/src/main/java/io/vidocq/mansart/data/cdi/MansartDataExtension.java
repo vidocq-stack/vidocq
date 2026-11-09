@@ -82,7 +82,10 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
     /** The types of the beans the container manages, by binary name, seen at {@code @Registration}. */
     private final Set<String> managedBeanTypes = new HashSet<>();
     /** The {@code @Repository} interfaces the managed beans inject, by binary name, with the first bean that does. */
-    private final Map<String, String> injectedRepositories = new LinkedHashMap<>();
+    private final Map<String, Injection> injectedRepositories = new LinkedHashMap<>();
+
+    /** Where a repository is injected, and the provider its annotation names when it is not Mansart. */
+    record Injection(String bean, String foreignProvider) {}
     private boolean registrationSeen;
 
     record RepoEntry(String itfFqn, String implFqn) {}
@@ -175,6 +178,7 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         // as a name match against the index, without forcing the annotation type itself to
         // be loadable through the bean archive index (unlike iterating annotations()).
         if (!info.hasAnnotation(Repository.class)) return;
+        if (foreignProvider(info.annotation(Repository.class)) != null) return;   // another provider's (§4)
         String fqn = info.name();
         for (RepoEntry e : entries) {
             if (e.itfFqn().equals(fqn)) return;     // already covered by compile-time entry
@@ -218,6 +222,9 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         for (Class<?> itf : impl.getInterfaces()) {
             Repository ann = itf.getAnnotation(Repository.class);
             if (ann != null) {
+                if (foreignProvider(ann.provider()) != null) {
+                    return;     // the repository names that provider: its implementation is the bean (mansart#85)
+                }
                 if (isRouted(ann.dataStore())) {
                     clazz.addAnnotation(jakarta.enterprise.inject.Vetoed.class);
                 } else if (isForeignImplementation(impl, itf)) {
@@ -280,21 +287,34 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
             ClassInfo declaration = declarationOf(point.type());
             // The lang model of a class outside the bean archive (a dependency jar's) carries its name only: the
             // interface and its @Repository are read from the class itself, the way the run-time path loads it.
-            if (declaration != null && isRepositoryInterface(cl, declaration.name())) {
+            Repository repository = declaration == null ? null : repositoryAnnotation(cl, declaration.name());
+            if (repository != null) {
                 DeclarationInfo where = point.declaration();
                 String member = where != null && where.isField() ? "." + where.asField().name() : "";
-                injectedRepositories.putIfAbsent(declaration.name(), bean.declaringClass().name() + member);
+                injectedRepositories.putIfAbsent(declaration.name(),
+                        new Injection(bean.declaringClass().name() + member, foreignProvider(repository.provider())));
             }
         }
     }
 
-    private static boolean isRepositoryInterface(ClassLoader cl, String className) {
+    /** The {@code @Repository} of the interface {@code className} names, or {@code null} for any other type. */
+    private static Repository repositoryAnnotation(ClassLoader cl, String className) {
         try {
             Class<?> type = cl.loadClass(className);
-            return type.isInterface() && type.isAnnotationPresent(Repository.class);
+            return type.isInterface() ? type.getAnnotation(Repository.class) : null;
         } catch (ClassNotFoundException | LinkageError _) {
-            return false;
+            return null;
         }
+    }
+
+    /** The provider a repository names when it is not Mansart (Jakarta Data §4), else {@code null}. */
+    private static String foreignProvider(jakarta.enterprise.lang.model.AnnotationInfo repository) {
+        var member = repository.member("provider");
+        return member == null ? null : foreignProvider(member.asString());
+    }
+
+    private static String foreignProvider(String provider) {
+        return provider == null || provider.isEmpty() || provider.equalsIgnoreCase("mansart") ? null : provider;
     }
 
     /** The class a type refers to (a class or a parameterized type), or {@code null} for any other type. */
@@ -315,16 +335,27 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
     @Validation
     public void everyInjectedRepositoryHasAnImplementation(Messages messages) {
         ClassLoader cl = currentClassLoader();
-        for (Map.Entry<String, String> injected : injectedRepositories.entrySet()) {
-            String repository = injected.getKey();
-            String bean = injected.getValue();
-            if (isImplemented(repository) || !loadable(cl, bean.contains(".") ? beanClassOf(bean) : bean)) continue;
-            messages.error("Repository " + repository + ", injected in " + bean + ", has no implementation: it comes"
-                    + " from " + codeSourceOf(cl, repository) + ", which was not enriched by vidocq:generate (a signed"
-                    + " jar, processed only when scanDependencies names it; a jar scanExcludes names; a build where the"
-                    + " goal did not run; or a jar it could not process, see its log). Fix: let vidocq:generate process"
-                    + " the jar, or build the library with mansart-data-processor on its annotation processor path.");
+        for (Map.Entry<String, Injection> injected : injectedRepositories.entrySet()) {
+            String bean = injected.getValue().bean();
+            if (!isImplemented(injected.getKey()) && loadable(cl, bean.contains(".") ? beanClassOf(bean) : bean)) {
+                messages.error(notImplemented(cl, injected.getKey(), injected.getValue()));
+            }
         }
+    }
+
+    /** Why nothing implements {@code repository}: the provider it names, or the jar the build did not enrich. */
+    private static String notImplemented(ClassLoader cl, String repository, Injection injected) {
+        String where = "Repository " + repository + ", injected in " + injected.bean() + ", ";
+        if (injected.foreignProvider() != null) {
+            return where + "is declared for the Jakarta Data provider \"" + injected.foreignProvider()
+                    + "\" (@Repository(provider)), and nothing on the class path implements it: add that provider, or"
+                    + " remove the provider attribute for Mansart to implement it.";
+        }
+        return where + "has no implementation: it comes from " + codeSourceOf(cl, repository) + ", which was not"
+                + " enriched by vidocq:generate (a signed jar, processed only when scanDependencies names it; a jar"
+                + " scanExcludes names; a build where the goal did not run; or a jar it could not process, see its"
+                + " log). Fix: let vidocq:generate process the jar, or build the library with mansart-data-processor"
+                + " on its annotation processor path.";
     }
 
     private boolean isImplemented(String repository) {

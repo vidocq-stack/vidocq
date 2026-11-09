@@ -9,6 +9,15 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-046 — A library built with Hibernate Processor failed `vidocq:generate` on its `Book_` metamodel
+
+- **Date**: 2026-11-09
+- **Status**: FIXED on `fix/library-metamodel-and-provider` (Vidocq/mansart#85). Over a dependency jar, `writeMissingMetamodel` wrote both `_Book` and the JPA metamodel `Book_` whenever `_Book` was missing; a library built with Hibernate Processor already ships `Book_`, and the enriched copy cannot hold a second one: `vidocq:generate` failed with `Mansart generated acme/lib/Book_.class, which the jar already has`. The processor now reuses the `Book_` the jar ships and writes `_Book` only. It also honours `@Repository(provider)` (Jakarta Data §4): a repository declared for another provider gets no implementation and no index entry (a compiler note says so), the extension does not serve it at run time nor vetoes that provider's implementation, and when nothing implements it the deployment error names the missing provider.
+- **Reproduction**: `ProcessorClassFileInputTest.aMetamodelTheLibraryShipsIsNotGeneratedAgain`, `ProcessorProviderTest`, `ForeignProviderRepositoryTest` (red first).
+- **Reported by**: the verification of the external-jar scenarios of 2026-11-09 (ticket #85, scenario with a Hibernate-built library).
+
+---
+
 ## MANSART-045 — A nameless `@Find` parameter was bound to the entity's only attribute of its type
 
 - **Date**: 2026-11-09

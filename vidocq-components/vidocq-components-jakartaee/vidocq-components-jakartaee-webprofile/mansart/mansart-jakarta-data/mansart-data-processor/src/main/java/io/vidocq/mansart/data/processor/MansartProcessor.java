@@ -148,6 +148,11 @@ public final class MansartProcessor extends AbstractProcessor {
     }
 
     private void writeMetamodels(TypeElement type) {
+        writeMetamodels(type, true);
+    }
+
+    /** Writes {@code _Entity} and, when {@code jpaMetamodel} and the JPA SPI are present, {@code Entity_}. */
+    private void writeMetamodels(TypeElement type, boolean jpaMetamodel) {
         EntityScanner.EntityDescriptor descriptor = scanner.scan(type);
         if (descriptor == null) return;
         // M8-3i — register the entity facet so RepositoryWriter can resolve
@@ -156,7 +161,7 @@ public final class MansartProcessor extends AbstractProcessor {
         checkTable(descriptor);
         try {
             mansartWriter.write(descriptor);
-            if (jpaWriter != null) jpaWriter.write(descriptor);
+            if (jpaMetamodel && jpaWriter != null) jpaWriter.write(descriptor);
             String qualified = type.getQualifiedName().toString();
             int dot = qualified.lastIndexOf('.');
             String metamodelPkg = dot < 0 ? "" : qualified.substring(0, dot);
@@ -212,6 +217,14 @@ public final class MansartProcessor extends AbstractProcessor {
     }
 
     private void writeRepository(TypeElement repo) {
+        String provider = foreignProvider(repo);
+        if (provider != null) {
+            // Jakarta Data §4: @Repository(provider) names the provider that implements the repository.
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, "[mansart-data] " + repo.getQualifiedName()
+                    + " is declared for the Jakarta Data provider \"" + provider + "\" (@Repository(provider)):"
+                    + " Mansart leaves it to that provider.", repo);
+            return;
+        }
         TypeElement hidden = notVisibleFromItsPackage(repo);
         if (hidden != null) {
             // The generated class is a top-level class of the repository's package: it cannot implement a private
@@ -248,8 +261,31 @@ public final class MansartProcessor extends AbstractProcessor {
         TypeElement entity = repositoryWriter.entityTypeOf(repo);
         if (entity == null || entityRegistry.get(entity.getQualifiedName().toString()) != null) return;
         String pkg = processingEnv.getElementUtils().getPackageOf(entity).getQualifiedName().toString();
-        String metamodel = (pkg.isEmpty() ? "" : pkg + ".") + "_" + entity.getSimpleName();
-        if (processingEnv.getElementUtils().getTypeElement(metamodel) == null) writeMetamodels(entity);
+        String prefix = pkg.isEmpty() ? "" : pkg + ".";
+        if (processingEnv.getElementUtils().getTypeElement(prefix + "_" + entity.getSimpleName()) != null) return;
+        // A library built with another provider's processor already ships the JPA metamodel, Book_: it is reused,
+        // a second one could not go into the jar's enriched copy (mansart#85).
+        boolean jpaMetamodelPresent = processingEnv.getElementUtils()
+                .getTypeElement(prefix + entity.getSimpleName() + "_") != null;
+        writeMetamodels(entity, !jpaMetamodelPresent);
+    }
+
+    /**
+     * The provider {@code @Repository(provider)} names when it is not Mansart (Jakarta Data §4), else {@code null}:
+     * a repository declared for another provider is left to it, at build time and at run time.
+     */
+    private static String foreignProvider(TypeElement repo) {
+        for (var mirror : repo.getAnnotationMirrors()) {
+            if (!((TypeElement) mirror.getAnnotationType().asElement()).getQualifiedName()
+                    .contentEquals("jakarta.data.repository.Repository")) continue;
+            for (var entry : mirror.getElementValues().entrySet()) {
+                if (entry.getKey().getSimpleName().contentEquals("provider")) {
+                    String provider = String.valueOf(entry.getValue().getValue());
+                    return provider.isEmpty() || provider.equalsIgnoreCase("mansart") ? null : provider;
+                }
+            }
+        }
+        return null;
     }
 
     private String packageOf(TypeElement type) {
