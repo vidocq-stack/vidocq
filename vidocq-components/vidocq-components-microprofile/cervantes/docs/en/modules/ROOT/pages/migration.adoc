@@ -102,7 +102,7 @@ SmallRye JWT is the reference implementation in Quarkus and in several Jakarta E
 . Run unit tests: `./mvnw test`.
 . Run the TCK to validate conformance: `./run-official-tck-mp-jwt-2.2.sh` (see xref:tck.adoc[TCK]).
 . Verify in a staging environment: a valid token passes through with 200, an expired one with 401, a missing role with 403.
-. Measure validation latency and compare (see xref:reference.adoc[Reference] and `BENCH.md`). Cervantes is ~1.5× slower than SmallRye on the RS256 hot-path — a deliberate trade-off against ~3 MB of vanished transitive dependencies.
+. Measure validation latency on your own workload (see xref:reference.adoc[Reference] and `BENCH.md`). Cervantes trades some RS256 hot-path speed for ~3 MB of vanished transitive dependencies.
 
 == Further reading
 
