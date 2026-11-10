@@ -103,7 +103,7 @@ If you identify a TCK failure that's not documented:
 
 == Performance verification
 
-While not part of TCK compliance, Ravel includes JMH benchmarks (`ravel-bench`) for performance comparison against Smallrye Config and Helidon Config:
+While not part of TCK compliance, Ravel includes JMH benchmarks (`ravel-bench`) for performance measurement:
 
 [source,bash]
 ----

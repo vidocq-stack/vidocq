@@ -26,7 +26,7 @@ implementation for the [Vidocq](https://codefloe.com/Vidocq) ecosystem.
 | `ravel-api` | Re-export of the `org.eclipse.microprofile.config` spec |
 | `ravel-core` | Standalone `Config` implementation: built-in sources, converters, profiles, expressions |
 | `ravel-cdi-vauban` | CDI Vauban integration: `@ConfigProperty`, BCE, `Optional<T>` injection |
-| `ravel-bench` | JMH benchmarks — comparison vs Smallrye Config |
+| `ravel-bench` | JMH benchmarks (figures in `BENCH.md`) |
 | `ravel-tck` | Official MicroProfile Config 3.1 TCK runner (**out of reactor**, POM Model 4.0.0) |
 
 ## Getting started

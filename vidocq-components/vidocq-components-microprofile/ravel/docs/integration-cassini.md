@@ -178,20 +178,12 @@ Register via `META-INF/services/org.eclipse.microprofile.config.spi.ConfigSource
 com.example.DatabaseConfigSource
 ```
 
-## Ravel vs Smallrye Config Comparison
+## What Ravel provides
 
-Ravel is a drop-in replacement for Smallrye Config:
+- `@ConfigProperty` CDI injection and `@ConfigProperties`.
+- Property expressions `${key}`, profiles `%dev.`, arrays and collections, implicit converters.
+- Zero third-party dependencies.
+- MicroProfile Config TCK: 100% pass.
 
-| Feature | Ravel | Smallrye |
-|---|---|---|
-| `@ConfigProperty` CDI | ✅ | ✅ |
-| `@ConfigProperties` | ✅ | ✅ |
-| Property expressions `${key}` | ✅ | ✅ |
-| Profiles `%dev.` | ✅ | ✅ |
-| Arrays / Collections | ✅ | ✅ |
-| Implicit converters | ✅ | ✅ |
-| **Zero dependencies** | ✅ | ❌ (Smallrye Common, etc.) |
-| **TCK 100% PASS** | ✅ | ✅ |
-
-To migrate from Smallrye, remove `io.smallrye.config:smallrye-config` and add
+To migrate from Smallrye Config, remove `io.smallrye.config:smallrye-config` and add
 `io.vidocq.ravel:ravel-cdi-vauban`. No application code changes are required.
