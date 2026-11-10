@@ -74,13 +74,6 @@ public final class ReflectionExceptions {
         return text.toString();
     }
 
-    private static String requireText(String value, String what) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("a reflective exception needs its " + what);
-        }
-        return value;
-    }
-
     /** One exception: what it covers and why. */
     private interface Entry {
         boolean covers(JavaClass type);
@@ -143,10 +136,19 @@ public final class ReflectionExceptions {
     /** Collects the exceptions; each one is refused without its reason. */
     public static final class Builder {
 
+        private static final String REASON = "reason";
+
         private final List<Entry> entries = new ArrayList<>();
 
         private Builder() {
             // Through ReflectionExceptions.builder().
+        }
+
+        private static String requireText(String value, String what) {
+            if (value == null || value.isBlank()) {
+                throw new IllegalArgumentException("a reflective exception needs its " + what);
+            }
+            return value;
         }
 
         /**
@@ -157,7 +159,7 @@ public final class ReflectionExceptions {
          * @param reason why reflection is wanted there, in one sentence
          */
         public Builder inPackage(String packagePattern, String reason) {
-            entries.add(new PackageEntry(requireText(packagePattern, "package"), requireText(reason, "reason")));
+            entries.add(new PackageEntry(requireText(packagePattern, "package"), requireText(reason, REASON)));
             return this;
         }
 
@@ -178,7 +180,7 @@ public final class ReflectionExceptions {
          * @param reason why reflection is wanted in the annotated classes, in one sentence
          */
         public Builder annotatedWith(String annotationName, String reason) {
-            entries.add(new AnnotationEntry(requireText(annotationName, "annotation"), requireText(reason, "reason")));
+            entries.add(new AnnotationEntry(requireText(annotationName, "annotation"), requireText(reason, REASON)));
             return this;
         }
 
@@ -190,7 +192,7 @@ public final class ReflectionExceptions {
          * @param reason why reflection is wanted in this class, in one sentence
          */
         public Builder inClass(String className, String reason) {
-            entries.add(new ClassEntry(requireText(className, "class name"), requireText(reason, "reason")));
+            entries.add(new ClassEntry(requireText(className, "class name"), requireText(reason, REASON)));
             return this;
         }
 

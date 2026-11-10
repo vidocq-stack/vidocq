@@ -139,7 +139,7 @@ public final class VidocqArchRules {
      * @deprecated read the intent: {@link #noReflection(ReflectionExceptions, String)} lets a type token through and
      *     declares an exception by package or annotation
      */
-    @Deprecated(since = "0.4.0")
+    @Deprecated(since = "0.4.0") // NOSONAR java:S1133 - kept on purpose for the bricks on the released parent, removed in 1.0
     public static ArchRule noReflection(Map<String, String> documentedFallbacks, String source) {
         documentedFallbacks.forEach((name, why) -> {
             if (why == null || why.isBlank()) {
