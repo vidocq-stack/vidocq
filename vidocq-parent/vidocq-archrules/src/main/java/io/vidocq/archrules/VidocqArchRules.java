@@ -134,12 +134,13 @@ public final class VidocqArchRules {
      * The legacy form of the reflection rule: no {@code java.lang.reflect} at all, even a type token, outside a
      * list of class names.
      *
+     * <p>Superseded by {@link #noReflection(ReflectionExceptions, String)}, which lets a type token through and
+     * declares an exception by package or annotation. This form stays for the bricks that pin a released parent, and
+     * goes away in 1.0.
+     *
      * @param documentedFallbacks the top-level class names allowed to use reflection, each with its reason
      * @param source the document the rule comes from, which also documents the fallbacks
-     * @deprecated read the intent: {@link #noReflection(ReflectionExceptions, String)} lets a type token through and
-     *     declares an exception by package or annotation
      */
-    @Deprecated(since = "0.4.0") // NOSONAR java:S1133 - kept on purpose for the bricks on the released parent, removed in 1.0
     public static ArchRule noReflection(Map<String, String> documentedFallbacks, String source) {
         documentedFallbacks.forEach((name, why) -> {
             if (why == null || why.isBlank()) {
