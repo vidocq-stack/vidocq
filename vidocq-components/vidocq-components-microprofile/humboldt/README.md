@@ -24,15 +24,13 @@ See [`PLAN.md`](PLAN.md) for the detailed M0 → M9 roadmap, and [`tasks/todo.md
 - ❌ No JVM bytecode agent (instrumentation via APT + Class-File API at build time, never at runtime)
 - ❌ No Netty / grpc-java / OkHttp / Guava dependency
 
-## Differentiation vs SmallRye Telemetry
+## What Humboldt guarantees
 
-| | SmallRye | **Humboldt** |
-|---|---|---|
-| Runtime dependencies | ~25 jars (otel-sdk, exporter-otlp, grpc-java, netty, guava, protobuf, perfmark, …) | **6 jars** (`opentelemetry-api`, `-context`, `-semconv`, `protobuf-java`, humboldt-*, `microprofile-telemetry-api`) |
-| Runtime reflection | yes (Weld + OTel reflection) | **no** — APT + Class-File API at `process-classes` |
-| Virtual threads pinning | risk (`ThreadLocal` Context) | **no** — `ScopedValue<Context>` (JEP 506) |
-| AOT-ready (GraalVM, Leyden) | partial | **yes** from the design |
-| OTLP transport v1 | gRPC or HTTP | **HTTP/protobuf** only (gRPC via future native `chappe-grpc`) |
+- **Runtime dependencies**: 6 jars (`opentelemetry-api`, `-context`, `-semconv`, `protobuf-java`, humboldt-*, `microprofile-telemetry-api`).
+- **No runtime reflection**: APT + Class-File API at `process-classes`.
+- **No virtual-thread pinning from the context**: `ScopedValue<Context>` (JEP 506).
+- **AOT-ready** (GraalVM, Leyden) from the design.
+- **OTLP transport v1**: HTTP/protobuf only (gRPC via a future native `chappe-grpc`).
 
 ## Startup
 
