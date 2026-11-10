@@ -28,7 +28,7 @@ Web Profile is certified later, after the same audits and tests on the web tier.
 | Version | Content | Estimate |
 |---|---|---|
 | **0.4.0-RC1** | MicroProfile 7.2 on the staging artifacts; Servlet (Foy), Pages (Ibarra), Expression Language (Peano), Standard Tag Library (Bodoni) | Q4 2026 |
-| **0.4.0** | MicroProfile 7.2 on the final artifacts; security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, a self-hosted SonarQube Community Build with the community branch plugin analysing every pull request (report mode first), static analysis in the Maven build for what SonarQube cannot do, the ecosystem's architecture rules as tests, a CycloneDX SBOM per release re-scanned on a schedule; Persistence 3.2 (Noether, Antoine's project) if its first release is out in time, else in 1.0.0 | Q4 2026 |
+| **0.4.0** | MicroProfile 7.2 on the final artifacts; security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, a self-hosted SonarQube Community Build with the community branch plugin analysing every pull request (report mode first), static analysis in the Maven build for what SonarQube cannot do, the ecosystem's architecture rules as tests, a CycloneDX SBOM per release re-scanned on a schedule; Persistence 3.2 (Noether, Antoine's project) is planned for 1.0.0, where it is certified, and may be pulled into a 0.4.x release if Noether publishes in time | Q4 2026 |
 | **1.0.0-RC1 — production readiness** | The fixes found by the comparative benchmarks (exceptions thrown on the hot path, generated code left unused such as the static JSON-B generation); fuzzing of every parser exposed to the network; soak and chaos tests; end-to-end benchmarks on a dedicated bench with an external load generator, with a published, reproducible method and a performance regression gate in CI; threat model and internal audit; the static analysis findings fixed on the network-facing bricks; the external audit ordered | Q1 2027 |
 | **1.0.0 — ready for production** | Certified: Core Profile + MicroProfile 7.2 + Persistence 3.2, clean, documented, fast; the other components keep shipping, not certified yet. The fixes of the release candidate and of the external security audit; migration tooling from Spring Boot. The first stable line: the public APIs, configuration keys, extension SPI and Maven plugin goals stay compatible within 1.x | end of S1 2027 |
 | **1.1.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.1, Transactions full TCK and XA, Debugging Support 2.0; CDI 4.1 Full groundwork (Vauban: Full runner, failure map, deployment and archive model) | S2 2027 |
@@ -160,7 +160,7 @@ Additional infrastructure bricks delivered as Vidocq extensions, useful to the e
 | Jakarta Data 1.0 (repositories) | [mansart-jakarta-data](../mansart) | `vidocq-runtime-mansart-data-extension` ✅ |
 | Virtual-thread-native JDBC pool | [mansart-pool](../mansart) | `vidocq-runtime-mansart-pool-extension` ✅ |
 | JTA transactions | [mansart-transactions](../mansart) | `vidocq-runtime-mansart-transactions-extension` ✅ |
-| Jakarta Persistence 3.2 (JPA) | Antoine's project, split out of Mansart | ⏳ planned for 0.4.0 if its first release is out in time, else 1.0.0; the TCK runs |
+| Jakarta Persistence 3.2 (JPA) | Antoine's project, split out of Mansart | ⏳ planned for 1.0.0 (certified there), and may be pulled into a 0.4.x release if Noether publishes in time; the TCK runs |
 
 ## Jakarta EE Core Profile 11 certification
 

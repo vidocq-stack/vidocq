@@ -22,7 +22,7 @@ already tracked in `CERTIFICATION.md`) plus:
 | Jakarta Expression Language | 6.0 | `peano` | ✅ official TCK 361/361 and signatures; extension `vidocq-runtime-peano-el-extension` | done |
 | Jakarta Data | 1.0 | `mansart-jakarta-data` | ✅ official TCK 73/73 + signature (SQL; NoSQL out of scope) | done |
 | Jakarta Transactions (JTA) | 2.0 | `mansart-transactions` | 🟡 minimal JTA, no XA recovery; smoke 5/5 + signatures, full suite in progress | 1.1.0 |
-| Jakarta Persistence (JPA) | 3.2 | Antoine's project, split out of Mansart | 🟡 TCK 2131/2135 on a locally patched 3.2.1 suite, not an official result; first release pending | 0.4.0, else 1.1.0 |
+| Jakarta Persistence (JPA) | 3.2 | Antoine's project, split out of Mansart | 🟡 TCK 2131/2135 on a locally patched 3.2.1 suite, not an official result; first release pending | 1.0.0; may be pulled into a 0.4.x release if Noether publishes in time |
 | Jakarta Validation (Bean Validation) | 3.1 | `erasmus` | 🟡 21/22 built-in constraints; cascading, groups, executable validation, TCK and runtime extension to do — [#64](https://codefloe.com/Vidocq/vidocq/issues/64) | 1.1.0 |
 | Jakarta Concurrency | 3.1 | — | ❌ no implementation, a natural fit for virtual threads — [#72](https://codefloe.com/Vidocq/vidocq/issues/72) | 1.1.0 |
 | Jakarta WebSocket | 2.2 | Chappe (protocol only) | ❌ Chappe speaks RFC 6455; the annotated and programmatic API, encoders/decoders and Servlet integration are missing — [#65](https://codefloe.com/Vidocq/vidocq/issues/65) | 1.1.0 |
@@ -175,7 +175,7 @@ Updated on 2026-10-22.
   Expression Language 6.0 (Peano), Data 1.0 (Mansart), each with its runtime extension and
   its official TCK passing; the `java:comp/env` naming context for data sources
   (`vidocq-runtime-naming-extension`, Vauban Naming).
-- **In progress:** Persistence 3.2 (Antoine's project, for 0.4.0, else 1.1.0), Validation 3.1 (Erasmus),
+- **In progress:** Persistence 3.2 (Antoine's project, planned for 1.0.0; may be pulled into a 0.4.x release if Noether publishes in time), Validation 3.1 (Erasmus),
   Transactions 2.0 beyond minimal JTA.
 - **Not started:** Concurrency, WebSocket API, Security / Authentication / Authorization,
   Standard Tag Library, Debugging Support (1.1.0); CDI Full and Enterprise Beans Lite
