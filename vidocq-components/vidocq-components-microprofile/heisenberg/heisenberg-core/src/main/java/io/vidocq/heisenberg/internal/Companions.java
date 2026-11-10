@@ -32,7 +32,7 @@ import java.util.Set;
  * path needs neither {@code exports} nor {@code opens} that way), then the companion's name. A bean class without
  * one has its annotations read by reflection, which {@link #reflecting} announces once per class.
  */
-final class Companions {
+public final class Companions {
 
     private static final System.Logger LOG = System.getLogger(Companions.class.getName());
 
@@ -56,6 +56,16 @@ final class Companions {
     };
 
     private Companions() {
+    }
+
+    /**
+     * Whether the Heisenberg processor already checked the Fault Tolerance definitions of {@code beanClass} when it
+     * compiled it: its companion says so. {@code false} for a class without a companion, or with one from an older
+     * processor, which the container boot validates by reflection.
+     */
+    public static boolean validatedAtBuild(Class<?> beanClass) {
+        FaultToleranceCompanion companion = of(beanClass);
+        return companion != null && companion.validated();
     }
 
     /** The companion of {@code beanClass}, or {@code null}. */

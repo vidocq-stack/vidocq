@@ -22,6 +22,7 @@ package io.vidocq.heisenberg.cdi.internal;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import io.vidocq.heisenberg.spi.gen.FaultToleranceCompanion;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import org.eclipse.microprofile.faulttolerance.Asynchronous;
@@ -36,6 +37,51 @@ import org.junit.jupiter.api.Test;
 class HeisenbergExtensionTest {
 
     private final HeisenbergExtension extension = new HeisenbergExtension();
+
+    // vidocq-workspace#40 item 6: the processor validated the classes it generated a companion for.
+
+    @Test
+    void aClassWithoutCompanionIsValidatedAtBoot() {
+        assertThrows(FaultToleranceDefinitionException.class,
+                () -> extension.validateUnlessCheckedAtBuild(InvalidTimeoutBean.class));
+    }
+
+    @Test
+    void aClassWhoseCompanionWasValidatedAtBuildIsNotValidatedAtBoot() {
+        assertDoesNotThrow(() -> extension.validateUnlessCheckedAtBuild(BuiltInvalidBean.class));
+    }
+
+    @Test
+    void aCompanionOfAnOlderProcessorDoesNotSkipTheBootValidation() {
+        assertThrows(FaultToleranceDefinitionException.class,
+                () -> extension.validateUnlessCheckedAtBuild(OldCompanionInvalidBean.class));
+    }
+
+    /** Invalid on purpose: only the companion below says the processor already checked it. */
+    static class BuiltInvalidBean {
+        @Timeout(-1)
+        String call() {
+            return "invalid";
+        }
+    }
+
+    public static class BuiltInvalidBean$$HeisenbergPolicies implements FaultToleranceCompanion {
+        @Override public Class<?> beanClass() { return BuiltInvalidBean.class; }
+        @Override public boolean validated() { return true; }
+        @Override public Policies policies(String key) { return null; }
+    }
+
+    static class OldCompanionInvalidBean {
+        @Timeout(-1)
+        String call() {
+            return "invalid";
+        }
+    }
+
+    public static class OldCompanionInvalidBean$$HeisenbergPolicies implements FaultToleranceCompanion {
+        @Override public Class<?> beanClass() { return OldCompanionInvalidBean.class; }
+        @Override public Policies policies(String key) { return null; }
+    }
 
     @Test
     void validatesCorrectFallbackMethodDefinition() {

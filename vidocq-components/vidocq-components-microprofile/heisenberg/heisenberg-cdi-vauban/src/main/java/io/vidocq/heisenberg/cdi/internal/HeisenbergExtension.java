@@ -19,6 +19,7 @@
  */
 package io.vidocq.heisenberg.cdi.internal;
 
+import io.vidocq.heisenberg.internal.Companions;
 import io.vidocq.heisenberg.internal.ConfigResolver;
 import io.vidocq.heisenberg.internal.FallbackResolver;
 import java.lang.reflect.Method;
@@ -118,7 +119,7 @@ public class HeisenbergExtension implements BuildCompatibleExtension {
 		}
 		Class<?> beanClass = resolveClass(classConfig);
 		if (beanClass != null) {
-			validateClass(beanClass);
+			validateUnlessCheckedAtBuild(beanClass);
 		}
 		classConfig.addAnnotation(FaultToleranceBinding.class);
 	}
@@ -147,6 +148,17 @@ public class HeisenbergExtension implements BuildCompatibleExtension {
 		private final int value;
 		PriorityLiteral(int value) { this.value = value; }
 		@Override public int value() { return value; }
+	}
+
+	/**
+	 * Validates the definitions of {@code beanClass} by reflection, unless the Heisenberg processor did when it
+	 * compiled the class (vidocq-workspace#40, item 6): its companion then says {@code validated()}, and the
+	 * definition errors were compile errors. A class without a companion keeps this portable path.
+	 */
+	void validateUnlessCheckedAtBuild(Class<?> beanClass) {
+		if (!Companions.validatedAtBuild(beanClass)) {
+			validateClass(beanClass);
+		}
 	}
 
 	public void validateClass(Class<?> beanClass) {
