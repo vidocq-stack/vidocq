@@ -39,6 +39,25 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- Official TCK jars and their tooling (ShrinkWrap Resolver, the sigtest plugin, the MicroProfile Health
+                 TCK) bring old, vulnerable libraries at test scope. These runners are never published, so they are
+                 aligned here instead of being left on the versions OSV-Scanner reports (Vidocq/vidocq#269):
+                 Guava 31.1-jre (CVE-2023-2976, CVE-2020-8908), commons-compress 1.8.1 and jackson-databind 2.2.3. -->
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>33.5.0-jre</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>failureaccess</artifactId>
+                <version>1.0.3</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-compress</artifactId>
+                <version>1.28.0</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

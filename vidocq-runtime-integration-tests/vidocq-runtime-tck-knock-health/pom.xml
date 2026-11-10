@@ -30,6 +30,28 @@
         approach as the other vidocq-runtime-it-* modules.
     -->
 
+    <!-- The Health TCK's json-schema-validator pulls jackson-databind 2.2.3 (a dozen known vulnerabilities), test
+         scope only; aligned with the version the OpenAPI TCK runner already resolves (Vidocq/vidocq#269). -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>2.22.3</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>2.22.3</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>2.22</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <!-- Vidocq runtime under test -->
         <dependency>
@@ -87,7 +109,6 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>failureaccess</artifactId>
-            <version>1.0.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
