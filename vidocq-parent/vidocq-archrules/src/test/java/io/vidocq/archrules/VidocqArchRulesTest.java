@@ -22,6 +22,10 @@ package io.vidocq.archrules;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -78,6 +82,7 @@ class VidocqArchRulesTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     void theReflectionRuleCatchesAClassLookupByNameAndAReflectiveRead() {
         ArchRule rule = VidocqArchRules.noReflection(Map.of(), SOURCE);
         RuleAssertions.assertViolated(rule, LooksUpAClassByName.class);
@@ -87,6 +92,7 @@ class VidocqArchRulesTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     void theReflectionRuleSpareADocumentedFallbackAndItsNestedClasses() {
         ArchRule rule = VidocqArchRules.noReflection(
                 Map.of(VidocqArchRulesTest.class.getName(), "loads a class recorded at build time"), SOURCE);
@@ -96,10 +102,102 @@ class VidocqArchRulesTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     void aReflectiveFallbackWithoutAReasonIsRefused() {
         Map<String, String> fallbackWithoutReason = Map.of(LooksUpAClassByName.class.getName(), " ");
         assertThrows(
                 IllegalArgumentException.class, () -> VidocqArchRules.noReflection(fallbackWithoutReason, SOURCE));
+    }
+
+    @Test
+    void theIntentRuleLetsATypeTokenThroughAndStopsAMemberRead() {
+        ArchRule rule = VidocqArchRules.noReflection(ReflectionExceptions.none(), SOURCE);
+        RuleAssertions.assertKept(rule, HoldsATypeToken.class, UsesTheJdkOnly.class);
+        RuleAssertions.assertViolated(rule, LooksUpAClassByName.class);
+        RuleAssertions.assertViolated(rule, ReadsAMethodReflectively.class);
+        RuleAssertions.assertViolated(rule, ReadsAnAnnotation.class);
+        RuleAssertions.assertViolated(rule, InvokesAMethod.class);
+        RuleAssertions.assertViolated(rule, LoadsByTheClassLoader.class);
+    }
+
+    @Test
+    void anExceptionByPackageSparesThePackageOnly() {
+        ReflectionExceptions here = ReflectionExceptions.builder()
+                .inPackage("io.vidocq.archrules", "the adapter that reads user annotations")
+                .build();
+        RuleAssertions.assertKept(
+                VidocqArchRules.noReflection(here, SOURCE), LooksUpAClassByName.class, InvokesAMethod.class, CoreClass.class);
+        ReflectionExceptions elsewhere =
+                ReflectionExceptions.builder().inPackage("some.other..", "elsewhere").build();
+        RuleAssertions.assertViolated(VidocqArchRules.noReflection(elsewhere, SOURCE), LooksUpAClassByName.class);
+    }
+
+    @Test
+    void anExceptionByAnnotationSparesTheAnnotatedClassAndItsNestedClasses() {
+        ReflectionExceptions annotated = ReflectionExceptions.builder()
+                .annotatedWith(ReflectiveAdapter.class, "reads user annotations at run time")
+                .build();
+        ArchRule rule = VidocqArchRules.noReflection(annotated, SOURCE);
+        RuleAssertions.assertKept(rule, AnnotatedAdapter.class, AnnotatedAdapter.Inner.class, UsesTheJdkOnly.class);
+        RuleAssertions.assertViolated(rule, LooksUpAClassByName.class);
+        ReflectionExceptions byName = ReflectionExceptions.builder()
+                .annotatedWith(ReflectiveAdapter.class.getName(), "same, by name")
+                .build();
+        RuleAssertions.assertKept(VidocqArchRules.noReflection(byName, SOURCE), AnnotatedAdapter.class, UsesTheJdkOnly.class);
+    }
+
+    @Test
+    void anExceptionByClassSparesItsNestedClasses() {
+        ReflectionExceptions byClass = ReflectionExceptions.builder()
+                .inClass(VidocqArchRulesTest.class.getName(), "the test class stands for an adapter")
+                .build();
+        RuleAssertions.assertKept(
+                VidocqArchRules.noReflection(byClass, SOURCE),
+                LooksUpAClassByName.class,
+                ReadsAMethodReflectively.class,
+                CoreClass.class);
+    }
+
+    @Test
+    void everyExceptionNeedsItsReason() {
+        ReflectionExceptions.Builder builder = ReflectionExceptions.builder();
+        assertThrows(IllegalArgumentException.class, () -> builder.inPackage("a..", " "));
+        assertThrows(IllegalArgumentException.class, () -> builder.inPackage("a..", null));
+        assertThrows(IllegalArgumentException.class, () -> builder.annotatedWith(ReflectiveAdapter.class, ""));
+        assertThrows(IllegalArgumentException.class, () -> builder.annotatedWith("a.B", null));
+        assertThrows(IllegalArgumentException.class, () -> builder.inClass("a.B", " "));
+        assertThrows(IllegalArgumentException.class, () -> builder.inPackage(" ", "why"));
+    }
+
+    @Test
+    void theRulePrintsTheSourceTheExceptionsAndTheirReasons() {
+        ReflectionExceptions exceptions = ReflectionExceptions.builder()
+                .inPackage("io.vidocq.x.gen..", "generated code loads classes by name")
+                .annotatedWith(ReflectiveAdapter.class, "reads user annotations at run time")
+                .inClass("io.vidocq.x.Boot", "loads the build-time index")
+                .build();
+        String description = VidocqArchRules.noReflection(exceptions, SOURCE).getDescription();
+        assertTrue(description.contains(SOURCE), description);
+        assertTrue(description.contains("io.vidocq.x.gen.."), description);
+        assertTrue(description.contains("generated code loads classes by name"), description);
+        assertTrue(description.contains("@ReflectiveAdapter"), description);
+        assertTrue(description.contains("reads user annotations at run time"), description);
+        assertTrue(description.contains("io.vidocq.x.Boot"), description);
+        assertTrue(description.contains("loads the build-time index"), description);
+    }
+
+    @Test
+    void aNewCallOutsideAnExceptionFailsWithAReadableMessage() {
+        ReflectionExceptions exceptions = ReflectionExceptions.builder()
+                .inPackage("io.vidocq.x.gen..", "generated code loads classes by name")
+                .build();
+        ArchRule rule = VidocqArchRules.noReflection(exceptions, SOURCE);
+        AssertionError error = assertThrows(AssertionError.class, () -> RuleAssertions.assertKept(rule, LooksUpAClassByName.class));
+        String message = error.getMessage();
+        assertTrue(message.contains("LooksUpAClassByName"), message);
+        assertTrue(message.contains("Class.forName"), message);
+        assertTrue(message.contains(SOURCE), message);
+        assertTrue(message.contains("ReflectionExceptions"), message);
     }
 
     @Test
@@ -208,6 +306,41 @@ class VidocqArchRulesTest {
     static final class ReadsAnAnnotation {
         boolean marked() {
             return String.class.isAnnotationPresent(Deprecated.class);
+        }
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface ReflectiveAdapter {
+    }
+
+    @ReflectiveAdapter
+    static final class AnnotatedAdapter {
+        Class<?> find(String name) throws ClassNotFoundException {
+            return Class.forName(name);
+        }
+
+        static final class Inner {
+            Object method() throws NoSuchMethodException {
+                return String.class.getDeclaredMethod("length");
+            }
+        }
+    }
+
+    static final class HoldsATypeToken {
+        Type argument(Type type) {
+            return type instanceof ParameterizedType parameterized ? parameterized.getActualTypeArguments()[0] : type;
+        }
+    }
+
+    static final class InvokesAMethod {
+        Object call(java.lang.reflect.Method method, Object target) throws ReflectiveOperationException {
+            return method.invoke(target);
+        }
+    }
+
+    static final class LoadsByTheClassLoader {
+        Class<?> load(ClassLoader loader, String name) throws ClassNotFoundException {
+            return loader.loadClass(name);
         }
     }
 

@@ -30,6 +30,7 @@ import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ThreadFactory;
@@ -55,6 +56,16 @@ public final class VidocqArchRules {
 
     private static final String REFLECTIVE_CALLS = "forName|newInstance|getDeclared.*|getMethods?|getFields?"
             + "|getConstructors?|getRecordComponents|getAnnotations?|getAnnotationsByType|isAnnotationPresent";
+
+    /** The {@code java.lang.reflect} types that carry a type or a flag and read no member. */
+    private static final Set<String> TYPE_ONLY = Set.of(
+            "java.lang.reflect.Type",
+            "java.lang.reflect.ParameterizedType",
+            "java.lang.reflect.WildcardType",
+            "java.lang.reflect.TypeVariable",
+            "java.lang.reflect.GenericArrayType",
+            "java.lang.reflect.GenericDeclaration",
+            "java.lang.reflect.Modifier");
 
     private static final String PLATFORM_POOLS = "newFixedThreadPool|newCachedThreadPool|newSingleThreadExecutor"
             + "|newScheduledThreadPool|newSingleThreadScheduledExecutor|newWorkStealingPool"
@@ -84,13 +95,51 @@ public final class VidocqArchRules {
     }
 
     /**
-     * The reflection-free rule: no {@code java.lang.reflect}, no class looked up by name, no member or annotation
-     * read reflectively, except in the documented fallbacks. A nested class shares the entry of its top-level
-     * class.
+     * The reflection rule, split by intent: no reflection that reads or invokes user code (a class looked up by
+     * name, a member or annotation read, a method invoked, a proxy, an array created by component type), except in
+     * the documented adapters. A {@code java.lang.reflect.Type} (and its sub-types) and a {@code Modifier} carry a
+     * type or a flag and read no member: they are allowed everywhere, as is any call that does not read a member
+     * ({@code getName}, {@code getGenericSuperclass}...).
+     *
+     * <p>The description of the rule lists every adapter with its reason, and a violation says how to declare a
+     * new one: see {@link ReflectionExceptions}.
+     *
+     * @param exceptions the documented adapters, each declared with its reason
+     * @param source the document the rule comes from, which also documents the adapters
+     */
+    public static ArchRule noReflection(ReflectionExceptions exceptions, String source) {
+        DescribedPredicate<JavaClass> readsUserCode = DescribedPredicate.describe(
+                "use the reflective API on a member",
+                type -> type.getPackageName().startsWith("java.lang.reflect") && !isTypeOnly(type));
+        return noClasses()
+                .that(exceptions.covering())
+                .should()
+                .dependOnClassesThat(readsUserCode)
+                .orShould()
+                .callMethodWhere(target(owner(type(Class.class))).and(target(nameMatching(REFLECTIVE_CALLS))))
+                .orShould()
+                .callMethodWhere(target(owner(type(ClassLoader.class))).and(target(nameMatching("loadClass"))))
+                .because(reason(
+                        "no reflection that reads or invokes user code outside the documented adapters; to document"
+                                + " an adapter, declare it with its reason in ReflectionExceptions ("
+                                + exceptions.describe() + ")",
+                        source));
+    }
+
+    private static boolean isTypeOnly(JavaClass type) {
+        return TYPE_ONLY.contains(type.getName());
+    }
+
+    /**
+     * The legacy form of the reflection rule: no {@code java.lang.reflect} at all, even a type token, outside a
+     * list of class names.
      *
      * @param documentedFallbacks the top-level class names allowed to use reflection, each with its reason
      * @param source the document the rule comes from, which also documents the fallbacks
+     * @deprecated read the intent: {@link #noReflection(ReflectionExceptions, String)} lets a type token through and
+     *     declares an exception by package or annotation
      */
+    @Deprecated(since = "0.4.0")
     public static ArchRule noReflection(Map<String, String> documentedFallbacks, String source) {
         documentedFallbacks.forEach((name, why) -> {
             if (why == null || why.isBlank()) {
