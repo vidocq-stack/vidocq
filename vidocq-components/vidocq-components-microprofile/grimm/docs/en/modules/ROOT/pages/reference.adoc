@@ -24,7 +24,7 @@ This page consolidates Grimm's public surface: artefacts to declare, exported Ja
 
 | `io.vidocq.grimm`
 | `grimm-bench`
-| JMH benchmarks (vs SmallRye). Not for production.
+| JMH benchmarks. Not for production.
 
 | `io.vidocq.grimm`
 | `grimm-examples`
