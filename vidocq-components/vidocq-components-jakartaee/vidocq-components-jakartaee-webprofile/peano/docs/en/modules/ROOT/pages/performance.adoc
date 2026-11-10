@@ -39,7 +39,7 @@ Its compiled arithmetic baseline was noisy; the reported mean delta is descripti
 
 * Interpreted vs compiled evaluation of the same expressions.
 * Generated-accessor resolution vs the spec's reflective `BeanELResolver`.
-* Peano vs Expressly (the Jakarta EE compatible implementation) on the same corpus.
+* A reference baseline on Expressly (the Jakarta EE compatible implementation) with the same corpus; it is not a ranking.
 
 The corpus includes a shared public-getter model: Peano uses its generated table,
 while Expressly uses reflective BeanELResolver access. The model package has a qualified

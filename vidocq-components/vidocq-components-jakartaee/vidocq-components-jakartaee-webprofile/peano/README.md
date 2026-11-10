@@ -105,7 +105,7 @@ ExpressionCompiler.functions returns AST function occurrences and syntactic arit
 for consumers that validate and bind declarations at build time.
 Chained callable results and lambda construction compile with lexical argument capture,
 immediate invocation and nested parameter shadowing. The opt-in peano-bench harness
-compares warmed arithmetic evaluation and repeated expression creation with Expressly;
+measures warmed arithmetic evaluation and repeated expression creation, with Expressly as a reference baseline;
 initial results are recorded in [BENCH.md](BENCH.md).
 The selected optimization campaign is documented in [OPTIMS.md](OPTIMS.md), with
 final comparisons, allocation, concurrent creation and bounded-cache retention in
