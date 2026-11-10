@@ -334,7 +334,7 @@ The shared state registries (`CircuitBreakerStateRegistry`, `BulkheadStateRegist
 == Bugs and benchmarks
 
 * link:https://codefloe.com/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
-* link:https://codefloe.com/Vidocq/heisenberg/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks vs SmallRye Fault Tolerance.
+* link:https://codefloe.com/Vidocq/heisenberg/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks, dated runs.
 
 == Going further
 

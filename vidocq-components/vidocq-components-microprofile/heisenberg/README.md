@@ -31,7 +31,7 @@ Implementation of **MicroProfile Fault Tolerance 4.1** in the Vidocq ecosystem.
 | `heisenberg-api` | Re-exposes the MP FT 4.1 spec + Vidocq SPI |
 | `heisenberg-core` | Pure Java 25 policy engines (without CDI) |
 | `heisenberg-cdi-vauban` | CDI interceptor + Vauban BCE |
-| `heisenberg-bench` | JMH benchmarks vs SmallRye Fault Tolerance |
+| `heisenberg-bench` | JMH benchmarks (figures in `BENCH.md`) |
 | `heisenberg-tck` | Official TCK runner (in-reactor, gated by the `tck` Maven profile) |
 | `heisenberg-examples` | Usage examples |
 
