@@ -23,14 +23,15 @@
 
 Vidocq is a modular Java SE application runtime built on [Vauban](https://codefloe.com/Vidocq/vauban) (CDI 4.1 Lite). It progressively implements the MicroProfile 7.2 specifications via a lightweight extension system inspired by Quarkus.
 
-### Why Vidocq?
+### What Vidocq is
 
-| | Quarkus | Helidon | **Vidocq** |
-|---|---|---|---|
-| CDI | ArC (partial) | Weld | **Vauban (native Java Modules CDI Lite)** |
-| Java Modules | No | Partial | **Native (module-info.java)** |
-| Approach | Build-time + extensions | Microframework | **MicroProfile extensions on CDI Lite** |
-| Minimum JDK | 17 | 21 | **25** |
+- **CDI Lite on Java Modules**: the container is [Vauban](https://codefloe.com/Vidocq/vauban), CDI 4.1 Lite, and every module declares a `module-info.java`.
+- **Extensions on CDI Lite**: each MicroProfile specification is an independent extension on top of the container.
+- **Build-time generation**: proxies, interceptors and wiring are generated at compile time with the JDK 25 Class-File API rather than at runtime.
+- **Virtual threads**: I/O runs on virtual threads, with `ScopedValue` (JEP 487) carrying the `@RequestScoped` context.
+- **JDK 25**: the minimum JDK is 25.
+
+Measured figures are recorded in [BENCH.md](BENCH.md); the README makes no comparison with other products.
 
 ### Philosophy
 
