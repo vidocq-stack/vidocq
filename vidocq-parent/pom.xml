@@ -128,6 +128,8 @@
              script when the upstream dependency is expressed via a property. -->
         <versions.plugin.version>2.18.0</versions.plugin.version>
         <jacoco.version>0.8.13</jacoco.version>
+        <!-- Error Prone, for the errorprone profile: a javac plugin, build side only (Vidocq/vidocq#269). -->
+        <errorprone.version>2.50.0</errorprone.version>
         <!--
             Empty by default so that a module that needs its own JVM options for its tests
             writes them as <argLine>@{argLine} its options</argLine> in surefire. Under the
@@ -647,6 +649,44 @@
                         <artifactId>jacoco-maven-plugin</artifactId>
                     </plugin>
                 </plugins>
+            </build>
+        </profile>
+
+        <!-- Error Prone (Vidocq/vidocq#269): opt-in with -Perrorprone, and by the SonarQube job, which imports
+             its warnings as external issues. Report mode, like the rest of the analysis: every finding is a
+             warning (-XepAllErrorsAsWarnings), none stops the build. Nothing is added to what ships: Error Prone
+             only runs inside javac. Error Prone needs the javac internals a repository opens in
+             .mvn/jvm.config (see QUALITY.md). A module that sets its own annotationProcessorPaths keeps this
+             path thanks to combine.children="append". -->
+        <profile>
+            <id>errorprone</id>
+            <build>
+                <pluginManagement>
+                    <plugins>
+                        <plugin>
+                            <groupId>org.apache.maven.plugins</groupId>
+                            <artifactId>maven-compiler-plugin</artifactId>
+                            <configuration>
+                                <compilerArgs combine.children="append">
+                                    <arg>-XDcompilePolicy=simple</arg>
+                                    <arg>--should-stop=ifError=FLOW</arg>
+                                    <arg>-Xplugin:ErrorProne -XepAllErrorsAsWarnings -XepExcludedPaths:.*(generated|generated-sources)/.* -XepDisableWarningsInGeneratedCode</arg>
+                                    <!-- javac stops printing warnings after 100 per module by default: SonarQube
+                                         would only import the first 100 findings of a module. -->
+                                    <arg>-Xmaxwarns</arg>
+                                    <arg>100000</arg>
+                                </compilerArgs>
+                                <annotationProcessorPaths combine.children="append">
+                                    <path>
+                                        <groupId>com.google.errorprone</groupId>
+                                        <artifactId>error_prone_core</artifactId>
+                                        <version>${errorprone.version}</version>
+                                    </path>
+                                </annotationProcessorPaths>
+                            </configuration>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
             </build>
         </profile>
     </profiles>
