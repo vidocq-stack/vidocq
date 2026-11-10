@@ -61,6 +61,76 @@ Vidocq is an open source project run by its maintainers on a best-effort basis. 
 . *Release.* The fixed versions go out through the normal release pipeline, with signed commits and tags. The fix, the advisory and the release notes are published together.
 . *Disclosure and credit.* The advisory is published at the release and the reporter is credited unless they asked otherwise. The 90-day limit prevails over a disagreement on the date, except for an issue under active exploitation, disclosed as soon as a fix or a workaround exists.
 
+== Compromised eMudhra intermediate CAs (October 2026)
+
+On 2026-10-20, Mozilla disclosed that the private keys of eight eMudhra intermediate certification authorities can be recovered from their certificates (incident page: https://emudhra.we-have-a-problem.com/). With such a key, anyone can mint a certificate for any host name. Browsers have blocked these intermediates since 17-20 October. No JDK vendor has shipped a fix yet.
+
+NOTE: This is not a vulnerability of Vidocq. Vidocq's own certificates come from Let's Encrypt and Google Trust Services and are not affected. The exposure is in the JDK your applications and builds run on.
+
+=== What you are exposed to
+
+A JDK checks no revocation by default, and every JDK tested on 2026-10-21 accepted the forged chains: Temurin 25, 25.0.3 and 26.0.2 through the eMudhra root; Temurin 17, Temurin 21 and Oracle JDK 26 also through the path cross-signed by Sectigo. Someone on the network path can therefore intercept:
+
+* the Maven downloads of your builds (Maven Central, snapshot repositories);
+* every HTTPS call an application makes on an unpatched JDK: a MicroProfile REST Client, the JWKS fetch of MicroProfile JWT, the OTLP export of MicroProfile Telemetry, and any other outgoing HTTPS client.
+
+=== Mitigation
+
+Give the JVMs that download or call HTTPS services a trust store without the three roots the forged certificates chain to:
+
+[cols="1,3"]
+|===
+| Root | SHA-256 fingerprint
+
+| emSign ECC Root CA - G3
+| `86A1ECBA089C4A8D3BBE2734C612BA341D813E043CF9E8A862CD5C57A36BBE6B`
+
+| emSign Root TLS CA - G3
+| `7DD78D5F4F13459A83DFF9ABBBA62EDBAF6F2D102BF257FD712F4D9F2746ED8D`
+
+| AAA Certificate Services (Sectigo)
+| `D7A7A0FB5D7E2731D771E9484EBCDEF71D5F0C3E0A2948782BC83EE0EA699EF4`
+|===
+
+Sectigo's current chains end at the USERTrust roots, which stay in the store, so legitimate sites keep validating. Do not delete roots from the JDK's own `cacerts` and do not enable revocation checking: the first breaks the JDK image (below), the second makes TLS fail whenever an OCSP or CRL server is unreachable.
+
+. Copy the JDK's trust store; the copy is yours, the JDK stays untouched:
++
+[source,bash]
+----
+cp "$JAVA_HOME/lib/security/cacerts" my-cacerts
+chmod 644 my-cacerts
+----
+. List it and find the alias of each root by its fingerprint (aliases differ between JDK builds):
++
+[source,bash]
+----
+keytool -list -v -keystore my-cacerts -storepass changeit | grep -E '^Alias name|SHA256'
+----
+. Delete the three roots from the copy:
++
+[source,bash]
+----
+keytool -delete -alias <alias> -keystore my-cacerts -storepass changeit
+----
+. List again and check that none of the three fingerprints is left.
+. Hand the copy to the JVM:
++
+[source,bash]
+----
+# Maven's own JVM, for instance in ~/.mavenrc
+MAVEN_OPTS="-Djavax.net.ssl.trustStore=/path/to/my-cacerts -Djavax.net.ssl.trustStorePassword=changeit"
+
+# An application
+java -Djavax.net.ssl.trustStore=/path/to/my-cacerts -Djavax.net.ssl.trustStorePassword=changeit ...
+----
+
+The Vidocq CI automates the same steps in the `setup-maven/block-emudhra-intermediates.sh` script of the `Vidocq/ci` repository, which matches the roots by fingerprint whatever their alias: `block-emudhra-intermediates.sh <java-home> <trust-store>`. Its scope is Maven's own JVM; test JVMs forked by Surefire keep the JDK's default trust store, so pass the same system properties to them if they call out over HTTPS.
+
+WARNING: Do not edit the JDK itself, for instance its `lib/security/blocked.certs`. A JDK without jmods (Temurin 24 and later) links images from its own files, and `jlink` refuses to run once one of them has changed (JEP 493).
+
+Remove the custom trust store once your JDK vendor ships a release that blocks these certificates. Follow the progress in https://codefloe.com/Vidocq/vidocq/issues/292[Vidocq/vidocq#292].
+
 == Scope
 
 In scope: the code and the artifacts published by the repository. Out of scope: vulnerabilities of the application built with the artifacts, of third-party software, and findings without security impact.
