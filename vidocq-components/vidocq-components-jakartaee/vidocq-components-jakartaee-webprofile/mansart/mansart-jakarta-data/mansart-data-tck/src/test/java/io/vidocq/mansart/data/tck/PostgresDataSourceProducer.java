@@ -23,7 +23,7 @@ import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 import org.postgresql.ds.PGSimpleDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import javax.sql.DataSource;
 
@@ -45,10 +45,10 @@ import javax.sql.DataSource;
 @Singleton
 public class PostgresDataSourceProducer {
 
-    private static final PostgreSQLContainer<?> CONTAINER;
+    private static final PostgreSQLContainer CONTAINER;
 
     static {
-        CONTAINER = new PostgreSQLContainer<>("postgres:17-alpine")
+        CONTAINER = new PostgreSQLContainer("postgres:17-alpine")
                 .withDatabaseName("mansart_tck")
                 .withUsername("mansart")
                 .withPassword("mansart")

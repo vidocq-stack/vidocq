@@ -34,8 +34,8 @@
         <shrinkwrap.version>1.2.6</shrinkwrap.version>
         <testng.version>7.10.2</testng.version>
         <h2.version>2.3.232</h2.version>
-        <postgresql.version>42.7.4</postgresql.version>
-        <testcontainers.version>1.20.4</testcontainers.version>
+        <postgresql.version>42.7.10</postgresql.version>
+        <testcontainers.version>2.0.5</testcontainers.version>
 
         <!-- Removed in M6.3 — kept for documentation / older references:
              weld.version (5.1.5.Final), arquillian.weld.version (4.0.1.Final).
@@ -150,7 +150,7 @@
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>postgresql</artifactId>
+            <artifactId>testcontainers-postgresql</artifactId>
             <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
