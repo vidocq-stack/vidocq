@@ -173,6 +173,12 @@ public final class SchemaGenerator {
         if (scalar != null) {
             return scalar;
         }
+        // A JAX-RS Response carries an entity the declared type does not tell: an opaque object, never its
+        // getters (status, headers, URI, Locale, MediaType…), which would publish components colliding with the
+        // application's own classes.
+        if (jakarta.ws.rs.core.Response.class.isAssignableFrom(clazz)) {
+            return objectSchema();
+        }
         // POJO — intern as named component.
         return registerPojo(clazz);
     }

@@ -303,7 +303,7 @@ public final class GrimmModelProcessor extends AbstractProcessor {
         return operation;
     }
 
-    /** Maps a scalar TypeMirror to the real JDK class so SchemaGenerator runs for real. */
+    /** Maps a scalar TypeMirror, or a JAX-RS {@code Response}, to the real class so SchemaGenerator runs for real. */
     private Class<?> scalarClass(TypeMirror type, ExecutableElement method) throws SkipGeneration {
         switch (type.getKind()) {
             case BOOLEAN: return boolean.class;
@@ -326,6 +326,8 @@ public final class GrimmModelProcessor extends AbstractProcessor {
                     case "java.lang.Long" -> Long.class;
                     case "java.lang.Float" -> Float.class;
                     case "java.lang.Double" -> Double.class;
+                    // The first non-scalar shape: an opaque object, no getter scan (vidocq-workspace#40, item 4).
+                    case "jakarta.ws.rs.core.Response" -> jakarta.ws.rs.core.Response.class;
                     default -> throw newSkip(fqn, method);
                 };
             }

@@ -243,6 +243,45 @@ class GrimmModelProcessorOracleTest {
         assertFragmentMatchesScan(compilation, "t.TaskResource");
     }
 
+    /**
+     * A method returning a JAX-RS {@code Response} is generated at build (the first non-scalar shape): its entity is
+     * an opaque object, with no getter scan and no {@code Response}/{@code URI}/{@code Locale}/{@code MediaType}
+     * component (vidocq-workspace#40, item 4).
+     */
+    @Test
+    void responseReturnType_isGeneratedAsOpaqueObject_withoutComponents() throws Exception {
+        var compilation = compile(writeSource("t/ReplyResource.java", """
+                package t;
+                import jakarta.ws.rs.GET;
+                import jakarta.ws.rs.Path;
+                import jakarta.ws.rs.PathParam;
+                import jakarta.ws.rs.Produces;
+                import jakarta.ws.rs.core.Response;
+
+                @Path("/replies")
+                @Produces("application/json")
+                public class ReplyResource {
+
+                    @GET
+                    @Path("/{id}")
+                    public Response get(@PathParam("id") long id) {
+                        return Response.ok().build();
+                    }
+                }
+                """));
+        assertFragmentMatchesScan(compilation, "t.ReplyResource");
+
+        OpenApiContribution contribution = (OpenApiContribution) compilation.loader()
+                .loadClass("t.ReplyResource$$GrimmModel").getDeclaredConstructor().newInstance();
+        var model = new JsonDeserializer().deserialize(contribution.openApiJson());
+        assertTrue(model.getComponents() == null || model.getComponents().getSchemas() == null
+                || model.getComponents().getSchemas().isEmpty(),
+                () -> "stray components: " + model.getComponents().getSchemas().keySet());
+        var schema = model.getPaths().getPathItem("/replies/{id}").getGET().getResponses()
+                .getAPIResponse("200").getContent().getMediaType("application/json").getSchema();
+        assertEquals(List.of(org.eclipse.microprofile.openapi.models.media.Schema.SchemaType.OBJECT), schema.getType());
+    }
+
     @Test
     void multiVerbsParamsAndScalars_matchScan() throws Exception {
         var compilation = compile(writeSource("t/CrudResource.java", """

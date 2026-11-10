@@ -19,7 +19,7 @@ resource class, built at compile time; the annotation scan of the <<build-pipeli
   javac with Grimm's own model objects and schema generator, so it matches what the scan would produce
 | `grimm-processor` in javac, for the resource classes within its subset (class and method `@Path`, HTTP verbs,
   scalar path, query and header parameters without Bean Validation constraints, `@Produces`, inferred 200
-  responses); on Vidocq the `vidocq-runtime-grimm-openapi-extension-codegen` bundle puts it on the processor path
+  responses whose entity is a scalar or a JAX-RS `Response`); on Vidocq the `vidocq-runtime-grimm-openapi-extension-codegen` bundle puts it on the processor path
 | Step 3 of the pipeline, once when the container activates: `ContributionRegistry` tries the `ServiceLoader` of
   `OpenApiContribution` (module layer aware), then `Class.forName(<resource>$$GrimmModel)`, and `FragmentMerger`
   folds the fragments in
@@ -42,7 +42,11 @@ resource class, built at compile time; the annotation scan of the <<build-pipeli
 | Cassini's fallback.
 |===
 
-Not generated yet, so described by the scan: a resource class that returns or takes a non-scalar type (an
+A JAX-RS `Response` is described as an opaque `type: object` schema, by the scan and by the processor alike: its
+getters are never read and no `Response`, `URI`, `Locale` or `MediaType` component is published. The `mp.openapi.schema.<FQCN>`
+override of `jakarta.ws.rs.core.Response` still wins over it.
+
+Not generated yet, so described by the scan: a resource class that returns or takes any other non-scalar type (an
 application POJO), consumes a request body, has a sub-resource locator, is nested or generic, or carries MicroProfile
 OpenAPI annotations or Bean Validation constraints on its methods. Most real resources return a POJO, so on most
 applications the scan still does the bulk of the work.
