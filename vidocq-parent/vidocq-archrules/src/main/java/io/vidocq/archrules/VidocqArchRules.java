@@ -29,6 +29,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.Architectures.layeredArchitecture;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ThreadFactory;
@@ -194,8 +195,8 @@ public final class VidocqArchRules {
 
     private static String topLevel(JavaClass type) {
         JavaClass top = type;
-        while (top.getEnclosingClass().isPresent()) {
-            top = top.getEnclosingClass().get();
+        for (Optional<JavaClass> outer = top.getEnclosingClass(); outer.isPresent(); outer = top.getEnclosingClass()) {
+            top = outer.get();
         }
         return top.getName();
     }

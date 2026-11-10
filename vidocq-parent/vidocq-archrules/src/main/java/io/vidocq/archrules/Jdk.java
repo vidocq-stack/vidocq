@@ -19,26 +19,35 @@
  */
 package io.vidocq.archrules;
 
-/** The JDK packages a Vidocq module may depend on, for {@link VidocqArchRules#dependOnlyOn}. */
+/**
+ * The JDK packages a Vidocq module may depend on, for {@link VidocqArchRules#dependOnlyOn}. Each method returns a
+ * fresh array, so a caller cannot change what the next one gets.
+ */
 public final class Jdk {
 
+    private static final String JAVA = "java..";
+
     /** Every {@code java} and {@code javax} package: for a module that may use the whole JDK. */
-    public static final String[] ANY = {"java..", "javax.."};
+    public static String[] any() {
+        return new String[] {JAVA, "javax.."};
+    }
 
     /**
      * The JDK packages a runtime module may use: java.base, and java.xml for a parser. A {@code javax} package
      * outside the JDK (the old {@code javax.servlet}, {@code javax.inject}) is not one.
      */
-    public static final String[] RUNTIME = {
-        "java..", "javax.crypto..", "javax.net..", "javax.security..", "javax.xml..", "org.w3c.dom..", "org.xml.sax.."
-    };
+    public static String[] runtime() {
+        return new String[] {
+            JAVA, "javax.crypto..", "javax.net..", "javax.security..", "javax.xml..", "org.w3c.dom..", "org.xml.sax.."
+        };
+    }
 
     /** The JDK packages of an annotation processor: java.base and java.compiler. */
-    public static final String[] COMPILER = {
-        "java..", "javax.annotation.processing..", "javax.lang.model..", "javax.tools.."
-    };
+    public static String[] compiler() {
+        return new String[] {JAVA, "javax.annotation.processing..", "javax.lang.model..", "javax.tools.."};
+    }
 
     private Jdk() {
-        // Constants only.
+        // Factories only.
     }
 }
