@@ -56,6 +56,9 @@ import javax.tools.StandardLocation;
  * each annotation from the method's nearest declaration in the class hierarchy, else from the nearest class carrying
  * it. The runtime then needs no reflection on the annotations, which matters for ahead-of-time compilation.
  *
+ * <p>The same walk checks the definitions: the MicroProfile Fault Tolerance 4.1 definition errors are compile errors
+ * ({@link DefinitionValidator}), so the container boot has nothing left to validate for a class with a companion.</p>
+ *
  * <p>A class the processor cannot serve is skipped with a compiler note and read by reflection at run time: a class
  * the companion cannot name (private, local, anonymous), or annotation values naming a class it cannot reach.</p>
  */
@@ -83,6 +86,7 @@ public final class FaultTolerancePoliciesProcessor extends AbstractProcessor {
 
     private final Set<String> companions = new TreeSet<>();
     private final Set<String> seen = new TreeSet<>();
+    private DefinitionValidator validator;
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
@@ -138,7 +142,7 @@ public final class FaultTolerancePoliciesProcessor extends AbstractProcessor {
             return;
         }
         List<TypeElement> chain = classChain(type);
-        Map<String, Map<String, AnnotationMirror>> byMethod = byMethod(chain, classLevel(chain));
+        Map<String, Map<String, AnnotationMirror>> byMethod = byMethod(type, chain, classLevel(chain));
         if (byMethod.isEmpty()) {
             return;
         }
@@ -167,7 +171,7 @@ public final class FaultTolerancePoliciesProcessor extends AbstractProcessor {
     }
 
     /** The annotations of every guardable method with any, by key; a nearer declaration hides a farther one. */
-    private Map<String, Map<String, AnnotationMirror>> byMethod(List<TypeElement> chain,
+    private Map<String, Map<String, AnnotationMirror>> byMethod(TypeElement type, List<TypeElement> chain,
                                                                 Map<String, AnnotationMirror> classLevel) {
         Map<String, Map<String, AnnotationMirror>> byMethod = new LinkedHashMap<>();
         Set<String> keys = new TreeSet<>();
@@ -175,11 +179,25 @@ public final class FaultTolerancePoliciesProcessor extends AbstractProcessor {
             for (ExecutableElement method : ElementFilter.methodsIn(c.getEnclosedElements())) {
                 if (guardable(method) && keys.add(methodKey(method))) {
                     Map<String, AnnotationMirror> resolved = resolve(method, classLevel);
-                    if (!resolved.isEmpty()) byMethod.put(methodKey(method), resolved);
+                    if (!resolved.isEmpty()) {
+                        byMethod.put(methodKey(method), resolved);
+                        reportDefinitionErrors(type, method, resolved);
+                    }
                 }
             }
         }
         return byMethod;
+    }
+
+    private void reportDefinitionErrors(TypeElement type, ExecutableElement method,
+                                        Map<String, AnnotationMirror> resolved) {
+        if (validator == null) {
+            validator = new DefinitionValidator(processingEnv);
+        }
+        for (String error : validator.check(type, method, resolved)) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "[Heisenberg] Fault Tolerance definition error, " + error, method);
+        }
     }
 
     /** Interceptors guard neither static nor private methods. */
@@ -307,6 +325,7 @@ public final class FaultTolerancePoliciesProcessor extends AbstractProcessor {
             w.write("@SuppressWarnings({\"unchecked\", \"rawtypes\"})\n");
             w.write("public final class " + simpleCompanion + " implements " + COMPANION + " {\n\n");
             for (String f : fields) w.write(f + "\n\n");
+            w.write("    @Override\n    public boolean validated() {\n        return true;\n    }\n\n");
             w.write("    @Override\n    public Class<?> beanClass() {\n        return "
                     + type.getQualifiedName() + ".class;\n    }\n\n");
             w.write("    @Override\n    public " + COMPANION + ".Policies policies(String key) {\n"

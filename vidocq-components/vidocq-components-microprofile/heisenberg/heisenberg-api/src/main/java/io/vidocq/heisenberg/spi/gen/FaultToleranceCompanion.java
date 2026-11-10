@@ -50,6 +50,16 @@ public interface FaultToleranceCompanion {
     Class<?> beanClass();
 
     /**
+     * Whether the processor checked the Fault Tolerance definitions of this class when it compiled it: the
+     * MicroProfile Fault Tolerance 4.1 definition errors are then compile errors, and the container boot has
+     * nothing to validate by reflection. {@code false} for a companion an older processor generated, whose class
+     * the run-time validation still checks.
+     */
+    default boolean validated() {
+        return false;
+    }
+
+    /**
      * The annotations of the method {@code key} names, or {@code null} when it carries none, directly or through
      * its class.
      *

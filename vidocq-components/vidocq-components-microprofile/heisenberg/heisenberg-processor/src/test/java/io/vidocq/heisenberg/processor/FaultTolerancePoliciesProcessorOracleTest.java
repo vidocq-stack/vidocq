@@ -75,6 +75,15 @@ class FaultTolerancePoliciesProcessorOracleTest {
                     public String handle(ExecutionContext context) { return "handled"; }
                 }
                 """);
+        SOURCES.put("t/AsyncHandler.java", """
+                package t;
+                import java.util.concurrent.CompletionStage;
+                import org.eclipse.microprofile.faulttolerance.ExecutionContext;
+                import org.eclipse.microprofile.faulttolerance.FallbackHandler;
+                class AsyncHandler implements FallbackHandler<CompletionStage<String>> {
+                    public CompletionStage<String> handle(ExecutionContext context) { return null; }
+                }
+                """);
         SOURCES.put("t/Base.java", """
                 package t;
                 import java.time.temporal.ChronoUnit;
@@ -112,7 +121,7 @@ class FaultTolerancePoliciesProcessorOracleTest {
                     }
                     @Retry(maxRetries = 1, jitter = 0, abortOn = {})
                     public <T extends CharSequence> T generic(T value) { return value; }
-                    @Fallback(Handler.class)
+                    @Fallback(AsyncHandler.class)
                     @Asynchronous
                     public java.util.concurrent.CompletionStage<String> async() { return null; }
                     @CircuitBreaker(failOn = RuntimeException.class, delay = 5, requestVolumeThreshold = 2,
@@ -123,7 +132,7 @@ class FaultTolerancePoliciesProcessorOracleTest {
                     public static class Nested {
                         @org.eclipse.microprofile.faulttolerance.Timeout(42)
                         public String call() { return "nested"; }
-                        @Fallback
+                        @Fallback(Handler.class)
                         public String defaultHandler() { return "default"; }
                     }
                     private static class Hidden {
@@ -236,6 +245,11 @@ class FaultTolerancePoliciesProcessorOracleTest {
     @Test
     void theCompanionOfAClassMatchesTheReflectiveReadingOfEveryMethod() throws Exception {
         assertMatchesReflection("t.Service");
+    }
+
+    @Test
+    void aCompanionSaysItsDefinitionsWereValidatedAtBuild() throws Exception {
+        assertTrue(companion("t.Service").validated());
     }
 
     @Test

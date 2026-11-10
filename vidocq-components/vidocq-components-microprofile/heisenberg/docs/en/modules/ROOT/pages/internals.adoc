@@ -37,9 +37,8 @@ the fallback, unchanged.
 | The core adds the read edge itself, and the bean's package must be opened to `io.vidocq.heisenberg.core`.
 |===
 
-Not generated yet: the validation of the definitions (`@Asynchronous` return type, `@Bulkhead` bounds, the
-`@Fallback` method signature…). Wherever `HeisenbergExtension` runs, it loads each guarded class and walks its
-declared methods by reflection.
+The validation of the definitions is generated too, as compile errors: see <<definition-errors>>. A class without a
+companion is still validated by `HeisenbergExtension` at boot, by reflection.
 
 === When the fallback runs
 
@@ -196,7 +195,38 @@ public void addFaultToleranceBinding(ClassConfig classConfig) {
 }
 ----
 
-Startup validation is crucial: any malformed annotation (`@Asynchronous void m()`, `@Bulkhead(value=0)`, a `@Fallback` whose fallback method does not match the guarded signature) raises `FaultToleranceDefinitionException` and immediately aborts application startup — no late runtime surprise.
+Startup validation stays the portable path: any malformed annotation (`@Asynchronous void m()`, `@Bulkhead(value=0)`, a `@Fallback` whose fallback method does not match the guarded signature) raises `FaultToleranceDefinitionException` and immediately aborts application startup — no late runtime surprise.
+
+[#definition-errors]
+== Definition errors at build time
+
+The processor reports the MicroProfile Fault Tolerance 4.1 definition errors as compile errors, one per rule, with the
+messages of `FaultToleranceDefinitionException`. It checks every method an interceptor guards, with the annotations the
+interceptor applies (the method's own, else the nearest class's). A class that has a companion carries
+`validated() == true`, and the container boot does not validate it again; a class without one (compiled without the
+processor, a class the processor could not name, a companion of an older processor) is validated by reflection at boot as before.
+
+[cols="1,3",options="header"]
+|===
+| Annotation | Error
+| `@Asynchronous` | return type neither `Future` nor `CompletionStage` (or a subtype)
+| `@Bulkhead` | `value < 1`; `waitingTaskQueue < 0` together with `@Asynchronous`
+| `@CircuitBreaker` | `failureRatio` outside [0,1]; `requestVolumeThreshold < 1`; `successThreshold < 1`
+| `@Retry` | `maxRetries < -1`; negative `delay`, `jitter` or `maxDuration`; `0 < maxDuration < delay` (numbers compared as written, as at run time)
+| `@Timeout` | `value < 0`
+| `@Fallback` | not exactly one of `fallbackMethod` and `value`; no `fallbackMethod` of that name with identical parameter types, an assignable return type and agreeing generic arguments, visible from the bean class (bean class, superclasses, interfaces); a `FallbackHandler<X>` whose `X` does not fit the (boxed) return type
+|===
+
+What changes compared with the boot validation, for the classes the processor serves:
+
+* A definition error is a build error instead of a startup error (same rule, same text).
+* Inherited methods are checked too: the boot walked only the methods declared by the bean class.
+* A nearer class annotation hides a farther one, as for the interceptor: the boot looked at the method's declaring class.
+* An annotation on a `private` or `static` method, which no interceptor guards, is not checked any more.
+* An abstract class is checked through its concrete subclasses.
+
+Rules the processor does not check, because they need the running container: that a `FallbackHandler` can be
+instantiated, and a fallback method's lookup rights in a named application module.
 
 [#compile-time-policies]
 == Annotations read at compile time
