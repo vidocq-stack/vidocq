@@ -36,7 +36,7 @@ This page consolidates the public surface of Dirac: artefacts to declare, export
 
 | `io.vidocq.dirac`
 | `dirac-bench`
-| JMH benchmarks vs Micrometer / SmallRye Metrics. Not for production.
+| JMH benchmarks. Not for production.
 
 | `io.vidocq.dirac`
 | `dirac-examples`

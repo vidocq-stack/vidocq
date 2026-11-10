@@ -62,7 +62,7 @@ The M9 smoke uses the reactor artifact `dirac-mp-metrics-api`, which repackages
 | `dirac-core` | Pure Java 25 implementations (Counter, Gauge, Histogram, Timer, registry, formatters) |
 | `dirac-cdi-vauban` | CDI interceptors + Vauban BCE (DiracExtension) |
 | `dirac-rest` | JAX-RS `GET /metrics` endpoint — optional, enabled when Cassini is present |
-| `dirac-bench` | JMH benchmarks vs Micrometer and SmallRye Metrics |
+| `dirac-bench` | JMH benchmarks (figures in `BENCH.md`) |
 | `dirac-tck` | Official TCK runner (in-reactor, gated by the `tck` Maven profile) |
 | `dirac-examples` | Standalone usage examples and integration with vidocq-mps |
 
