@@ -59,7 +59,7 @@ class SqlLanguageTest {
                             "NOT", "NULL", "IS", "IN", "LIKE", "BETWEEN", "GROUP", "BY", "HAVING", "ORDER", "ASC",
                             "DESC", "LIMIT", "OFFSET", "INSERT", "INTO", "VALUES", "UPDATE", "SET", "DELETE", "WITH",
                             "DISTINCT", "CASE", "WHEN", "THEN", "ELSE", "END", "COUNT", "MAX", "TRUE", "FALSE",
-                            "INTEGER"],
+                            "INTEGER", "UNION", "INTERSECT", "EXCEPT", "ALL", "USING"],
                "functions": ["COUNT", "MAX", "UPPER", "COALESCE"],
                "clauses": ["SELECT", "FROM", "JOIN", "ON", "WHERE", "GROUP BY", "HAVING", "ORDER BY", "LIMIT",
                            "OFFSET", "SET", "VALUES", "UPDATE", "DELETE FROM", "INSERT INTO"],
@@ -232,7 +232,7 @@ class SqlLanguageTest {
     /** Every keyword of the fixture but its functions, in its order: what follows them in a clause. */
     private static final String OTHER_KEYWORDS = "SELECT FROM WHERE JOIN LEFT INNER OUTER ON AS AND OR NOT NULL IS "
             + "IN LIKE BETWEEN GROUP BY HAVING ORDER ASC DESC LIMIT OFFSET INSERT INTO VALUES UPDATE SET DELETE WITH "
-            + "DISTINCT CASE WHEN THEN ELSE END TRUE FALSE INTEGER";
+            + "DISTINCT CASE WHEN THEN ELSE END TRUE FALSE INTEGER UNION INTERSECT EXCEPT ALL USING";
 
     private static Value completion(String marked) {
         int caret = marked.indexOf('|');
@@ -314,6 +314,42 @@ class SqlLanguageTest {
         assertEquals("null", complete("SELECT * FROM tasks -- ti|"), "nothing in a comment");
     }
 
+    /** The fixture with a column named limit in tasks, and, when {@code reserved} is not null, that dialect member. */
+    private static Value withLimitColumn(String reserved) {
+        String text = SQL.replace("\"project_id\": {\"type\": \"integer\", \"detail\": \"int8 · column\", "
+                + "\"target\": \"projects\"}}},", "\"project_id\": {\"type\": \"integer\", \"detail\": \"int8 · column\", "
+                + "\"target\": \"projects\"}, \"limit\": {\"type\": \"integer\"}, \"owner\": {\"type\": "
+                + "\"string\"}}},");
+        if (reserved != null) {
+            text = text.replace("\"aliases\": true,", "\"reserved\": " + reserved + ", \"aliases\": true,");
+        }
+        return json.invokeMember("parse", text);
+    }
+
+    private static String insertions(Value data, String marked) {
+        int caret = marked.indexOf('|');
+        Value found = language.invokeMember("complete", marked.substring(0, caret) + marked.substring(caret + 1), caret,
+                data);
+        List<String> out = new ArrayList<>();
+        Value items = found.getMember("items");
+        for (long i = 0; i < items.getArraySize(); i++) {
+            out.add(items.getArrayElement(i).getMember("insert").asString());
+        }
+        return String.join(" ", out);
+    }
+
+    @Test
+    void aDialectThatListsItsReservedWordsQuotesOnlyThose() {
+        assertTrue(insertions(withLimitColumn(null), "SELECT t.| FROM tasks t").contains("\"limit\""),
+                "without a list, every keyword is quoted as a name");
+        Value reserved = withLimitColumn("[\"LIMIT\", \"SELECT\"]");
+        String items = insertions(reserved, "SELECT t.| FROM tasks t");
+        assertTrue(items.contains("\"limit\"") && items.contains(" owner"), "limit is reserved, owner is not: " + items);
+        String unreserved = insertions(withLimitColumn("[\"SELECT\"]"), "SELECT t.| FROM tasks t");
+        assertTrue(unreserved.contains(" limit ") && !unreserved.contains("\"limit\""),
+                "a keyword the database leaves unreserved is a plain name: " + unreserved);
+    }
+
     @Test
     void aQueryBeingTypedCompletesAtEveryCaretAndNeverThrows() {
         for (String typed : new String[] {"", "S", "SELECT * FROM ", "SELECT t. FROM tasks t", "SELECT \"",
@@ -357,6 +393,47 @@ class SqlLanguageTest {
                 diagnose("SELECT title FROM tasks t JOIN projects p ON p.id = t.project_id"));
         assertEquals("", diagnose("SELECT t.title, lead FROM tasks t JOIN projects p ON p.id = t.project_id"),
                 "named with its alias, or a column of one table only");
+    }
+
+    @Test
+    void aColumnAUsingListNamesIsNoAmbiguityAndTheOthersStillAre() {
+        assertEquals("", diagnose("SELECT * FROM tasks t JOIN projects p USING (id)"),
+                "USING names the column in both tables by definition");
+        assertEquals("", diagnose("SELECT * FROM tasks t JOIN projects p USING (id, title)"));
+        assertEquals("warning 7-12 title is in tasks t and projects p",
+                diagnose("SELECT title FROM tasks t JOIN projects p USING (id)"), "a column outside the list");
+    }
+
+    @Test
+    void eachBranchOfAUnionIntersectOrExceptHasItsOwnScope() {
+        assertEquals("", diagnose("SELECT title FROM tasks UNION SELECT title FROM projects"));
+        assertEquals("", diagnose("SELECT title FROM tasks UNION ALL SELECT title FROM projects"));
+        assertEquals("", diagnose("SELECT title FROM tasks INTERSECT SELECT title FROM projects EXCEPT "
+                + "SELECT title FROM tasks"));
+        assertEquals("error 7-11 unknown column lead of tasks",
+                diagnose("SELECT lead FROM tasks UNION SELECT title FROM projects"),
+                "a column of the other branch's table is not in this branch's scope");
+        assertEquals("warning 33-38 title is in tasks t and projects p",
+                diagnose("SELECT 1 FROM tasks UNION SELECT title FROM tasks t, projects p"),
+                "two targets of one branch still make a warning");
+    }
+
+    @Test
+    void completionOffersTheColumnsOfTheCaretsBranchOnly() {
+        String items = complete("SELECT * FROM tasks UNION SELECT * FROM projects WHERE |");
+
+        assertTrue(items.contains(" projects id title lead "), items);
+        assertTrue(!items.contains("due_date"), "no column of the other branch's table: " + items);
+    }
+
+    @Test
+    void aColonThenADigitIsNoParameterAsTheServerBindsOnlyLetterNames() {
+        assertEquals("{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"integer\",\"description\":"
+                + "\"compared with id (integer)\"}},\"required\":[\"p\"],\"additionalProperties\":false}",
+                json.invokeMember("stringify", language.invokeMember("parameters",
+                        "SELECT * FROM tasks WHERE id = :p AND price > :1", sql)).asString());
+        assertTrue(tokens("SELECT :1").contains("invalid"), tokens("SELECT :1"));
+        assertEquals("keyword:SELECT parameter::_x1", tokens("SELECT :_x1"));
     }
 
     @Test

@@ -74,12 +74,13 @@ function safely(compute, fallback) {
  * screen reader. {@code onDraw}, when given, is called with the text at the end of each draw, in its animation frame.
  * setData(data, note) gives it other data (a query's language once fetched, the schema a query's parameters follow):
  * tokens, colours and diagnostics are computed again, an open completion list closes, the text and the caret stay;
- * note, when given, is said under the editor, such as why the data could not be had.
+ * note, when given, is said under the editor, such as why the data could not be had. needsData, when true, keeps Format
+ * off while data is null: a SQL query formatted with another dialect's words and comments would be rewritten.
  *
  * @returns {{root: HTMLElement, value(): string, setValue(text: string): void, setData(data: *, note: string): void,
  *   disable(on: boolean): void, focus(): void, textarea: HTMLTextAreaElement}}
  */
-export function createEditor({ language, data, value, rows, label, onDraw }) {
+export function createEditor({ language, data, value, rows, label, onDraw, needsData }) {
   const id = "ed-" + ++editors;
   const root = el("div", "ed");
   const box = el("div", "ed-box");
@@ -114,6 +115,15 @@ export function createEditor({ language, data, value, rows, label, onDraw }) {
   format.title = "Format (Shift+Alt+F)";
   foot.append(note, format);
   root.append(box, foot);
+  let locked = false;           // disable(true): the whole editor is off
+  const lacksData = () => needsData === true && (data === null || data === undefined);
+  /** Format is off while the editor is disabled, or while a field that needs its vocabulary has none. */
+  function syncFormat() {
+    format.disabled = locked || lacksData();
+    format.title = lacksData() ? "Format needs the language of the query, which is not loaded"
+      : "Format (Shift+Alt+F)";
+  }
+  syncFormat();
 
   let frame = 0;                // the pending animation frame of a draw, 0 when none
   let hoverFrame = 0;           // the pending animation frame of a pointer move, 0 when none
@@ -418,6 +428,11 @@ export function createEditor({ language, data, value, rows, label, onDraw }) {
   }
 
   function formatText() {
+    if (lacksData()) {
+      formatNote = "not formatted: the language of the query is not loaded";
+      say();
+      return;
+    }
     let formatted;
     try {
       formatted = language.format(textarea.value, data);
@@ -593,12 +608,14 @@ export function createEditor({ language, data, value, rows, label, onDraw }) {
     setData(next, why) {
       data = next;
       dataNote = typeof why === "string" ? why : "";
+      syncFormat();
       closeList();
       schedule();
     },
     disable(on) {
       textarea.disabled = on;
-      format.disabled = on;
+      locked = on;
+      syncFormat();
       root.classList.toggle("ed-disabled", on);
       if (on) closeList();
     },

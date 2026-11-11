@@ -792,6 +792,8 @@ const SQL_OPERATORS = ["||", ...OPERATORS, "%"];
 /** What starts a name and what continues it, as JDQL reads them: a letter or _, then digits too. */
 const NAME_START = /[\p{L}_]/u;
 const NAME_PART = /[\p{L}\p{N}_]/u;
+/** The words that join two queries: each branch has its own targets. */
+const SET_OPERATORS = new Set(["UNION", "INTERSECT", "EXCEPT"]);
 const isDigit = (c) => c !== undefined && c >= "0" && c <= "9";
 /** The vocabularies read so far, by the data they were read from: a large one is read once, not on every key. */
 const VOCABULARIES = new WeakMap();
@@ -806,7 +808,8 @@ const wordsOf = (list, fallback) => (Array.isArray(list) ? list : fallback)
  * first), targetAfter (a Set), self (null when the dialect says null), quote, and targets, a Map of each target's name
  * to { name, detail, schema, attributes }, attributes a Map of each name to { name, type, format, enum, detail,
  * target }. SQL's options (SQL spec §3): aliases, identifierQuote (null for none) and unquotedCase ("lower", "upper"
- * or null), how the database stores a name written without quotes. Anything odd is left out; data that is no object
+ * or null), how the database stores a name written without quotes, and reserved (a Set of capitals, null when the
+ * dialect lists none): the words a name needs quotes for, where the keywords are all that colouring reads. Anything odd is left out; data that is no object
  * reads as the default dialect and no target.
  */
 function vocabulary(data) {
@@ -846,7 +849,7 @@ function readVocabulary(data) {
   return { keywords: new Set(keywords), keywordList: keywords, functions: new Set(functions), functionList: functions,
     clauses: wordsOf(d.clauses, DIALECT.clauses).map((c) => c.split(/\s+/)).sort((a, b) => b.length - a.length),
     targetAfter: new Set(wordsOf(d.targetAfter, DIALECT.targetAfter)), self, quote, targets,
-    aliases: d.aliases === true, identifierQuote: isQuote(d.identifierQuote) && d.identifierQuote !== quote
+    reserved: Array.isArray(d.reserved) ? new Set(wordsOf(d.reserved, [])) : null, aliases: d.aliases === true, identifierQuote: isQuote(d.identifierQuote) && d.identifierQuote !== quote
       ? d.identifierQuote : null, unquotedCase: d.unquotedCase === "lower" || d.unquotedCase === "upper"
       ? d.unquotedCase : null };
 }
@@ -908,7 +911,7 @@ function lexQuery(text, v) {
     } else if (sql && c === ":" && text[j] === ":") {
       kind = "operator";
       j = i + 2;
-    } else if ((c === ":" && j < n && NAME_PART.test(text[j])) || (c === "?" && isDigit(text[j]))) {
+    } else if ((c === ":" && j < n && NAME_START.test(text[j])) || (c === "?" && isDigit(text[j]))) {
       kind = "parameter";
       while (j < n && (c === ":" ? NAME_PART.test(text[j]) : isDigit(text[j]))) j++;
     } else if ("(),.".includes(c)) {
@@ -1132,6 +1135,12 @@ function readSql(text, v, tokens) {
     t.sub = open.length > 0 && open[open.length - 1];
     if (punctIs(t, "(")) open.push(t.sub || ["SELECT", "WITH", "VALUES"].some((w) => word(tokens[k + 1], w)));
   });
+  // Which branch of a UNION, INTERSECT or EXCEPT each token is in: every branch is a statement with a scope of its own.
+  let branch = 0;
+  for (const t of tokens) {
+    if (t.depth === 0 && (t.kind === "keyword" || t.kind === "name") && !t.quoted && SET_OPERATORS.has(t.word)) branch++;
+    t.branch = branch;
+  }
   // The index of the token that closes the parenthesis at k, the last token when none does.
   const closing = (k) => {
     for (let j = k + 1; j < tokens.length; j++) if (punctIs(tokens[j], ")") && tokens[j].depth === tokens[k].depth) {
@@ -1195,7 +1204,7 @@ function readSql(text, v, tokens) {
             next = columns + 1;
           }
         }
-        scope.push({ entry: null, label: call ? text.slice(first.from, first.to) : "sub-query",
+        scope.push({ branch: t.branch, entry: null, label: call ? text.slice(first.from, first.to) : "sub-query",
           name: alias !== null ? key(alias) : call ? key(first) : "", alias: alias === null ? null : key(alias),
           written: alias === null ? null : nameOf(text, alias, v), derived: true });
         if (t.word !== "FROM" || !punctIs(tokens[next], ",")) return;
@@ -1232,7 +1241,7 @@ function readSql(text, v, tokens) {
         alias.kind = "target";
         alias.position = "alias";
       }
-      scope.push({ entry, label: entry !== null ? entry.name : text.slice(first.from, last.to),
+      scope.push({ branch: t.branch, entry, label: entry !== null ? entry.name : text.slice(first.from, last.to),
         name: keys[keys.length - 1], alias: alias === null ? null : key(alias),
         written: alias === null ? null : nameOf(text, alias, v) });
       if (t.word !== "FROM" || !punctIs(tokens[next], ",")) return;
@@ -1263,11 +1272,24 @@ function readSql(text, v, tokens) {
   // Every other name heads a path, from an alias or a table of the scope, or from a column of its targets. A bare
   // name that no target has is an error only when every target in scope is known with its columns.
   const isValue = valueTest(text, tokens);
-  const known = scope.length > 0 && scope.every((s) => s.entry !== null && s.entry.attributes.size > 0);
+  const knownIn = (inScope) => inScope.length > 0
+    && inScope.every((s) => s.entry !== null && s.entry.attributes.size > 0);
+  // Whether token k is a column of a USING (…) list, which names it in both tables by definition.
+  const usingList = (k) => {
+    let depth = 0;
+    for (let i = k - 1; i >= 0; i--) {
+      if (punctIs(tokens[i], ")")) depth++;
+      else if (punctIs(tokens[i], "(") && depth-- === 0) {
+        return tokens[i - 1] !== undefined && tokens[i - 1].word === "USING";
+      }
+    }
+    return false;
+  };
   tokens.forEach((head, k) => {
     if (!isName(head) || head.position !== undefined || (isDot(tokens[k - 1]) && joined(tokens[k - 1], head))) return;
     const dotted = isDot(tokens[k + 1]) && joined(head, tokens[k + 1]);
-    const owner = dotted ? scoped(v, scope, key(head)) : null;
+    const here = scope.filter((s) => s.branch === head.branch);
+    const owner = dotted ? scoped(v, here, key(head)) : null;
     const field = head.depth > 0 && word(tokens[k + 1], "FROM");      // EPOCH in EXTRACT(EPOCH FROM d)
     if (head.sub || field || (head.quoted && !isClosed(text, head)) || (owner === null && isValue(k))) {
       for (let at = k; tokens[at] !== undefined && (at === k || isName(tokens[at])); at += 2) {
@@ -1282,22 +1304,22 @@ function readSql(text, v, tokens) {
       head.kind = "target";
       entry = owner.entry;
     } else {
-      const owners = scope.filter((s) => s.entry !== null
+      const owners = here.filter((s) => s.entry !== null
         && lookup(v, s.entry.attributes, key(head), head.quoted === true) !== null);
       if (owners.length) {
         head.kind = "attribute";
         head.attribute = lookup(v, owners[0].entry.attributes, key(head), head.quoted === true);
-        if (owners.length > 1) {
+        if (owners.length > 1 && !usingList(k)) {
           head.warning = nameOf(text, head, v) + " is in " + sentence(owners.map(scopeName), "and");
         }
-      } else if (!dotted && scoped(v, scope, key(head)) !== null) {
+      } else if (!dotted && scoped(v, here, key(head)) !== null) {
         head.kind = "target";
       } else {
         head.kind = "identifier";
         if (dotted && v.targets.size) {
           head.problem = "unknown table or alias " + nameOf(text, head, v);
-        } else if (!dotted && known && !outputs.some((o) => sameName(v, o, key(head)))) {
-          head.problem = "unknown column " + nameOf(text, head, v) + " of " + sentence(scope.map(scopeName), "or");
+        } else if (!dotted && knownIn(here) && !outputs.some((o) => sameName(v, o, key(head)))) {
+          head.problem = "unknown column " + nameOf(text, head, v) + " of " + sentence(here.map(scopeName), "or");
         }
       }
     }
@@ -1415,11 +1437,14 @@ function completeQuery(text, caret, data) {
 /**
  * {@code name} as a SQL query writes it (SQL spec §3): between the dialect's identifier quotes, a quote inside it
  * doubled, when it is no plain name (letters, digits and _, not first a digit), when it is a keyword, or when the
- * database would store it otherwise; as it is when none of these holds, or when the dialect quotes no name.
+ * database would store it otherwise (a keyword is quoted only when the dialect reserves it, when it lists its
+ * reserved words); as it is when none of these holds, or when the dialect quotes no name.
  */
 function written(v, name) {
   const q = v.identifierQuote;
-  if (q === null || (/^[\p{L}_][\p{L}\p{N}_]*$/u.test(name) && !v.keywords.has(name.toUpperCase())
+  const upper = name.toUpperCase();
+  const reserved = v.reserved !== null ? v.reserved.has(upper) : v.keywords.has(upper);
+  if (q === null || (/^[\p{L}_][\p{L}\p{N}_]*$/u.test(name) && !reserved
     && folded(v, name) === name)) return name;
   return q + name.replaceAll(q, q + q) + q;
 }
@@ -1440,8 +1465,10 @@ const columnItems = (v, entry, table) => [...entry.attributes.values()].map((a) 
  * self when the dialect has one, the functions and the other keywords; anywhere else the keywords. Each name is
  * inserted as the database needs it.
  */
-function sqlItems(text, v, tokens, scope, target, p, from, to) {
+function sqlItems(text, v, tokens, statementScope, target, p, from, to) {
   const previous = tokens[p];
+  // only the targets of the branch of a UNION, INTERSECT or EXCEPT the caret is in
+  const scope = previous === undefined ? statementScope : statementScope.filter((s) => s.branch === previous.branch);
   const punctIs = (t, c) => t !== undefined && t.kind === "punct" && text[t.from] === c;
   const keywords = v.keywordList.map((k) => ({ insert: k, label: k, detail: "keyword", kind: "keyword" }));
   if (punctIs(previous, ".") && previous.to === from) {

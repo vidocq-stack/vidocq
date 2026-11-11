@@ -922,7 +922,7 @@ function jsonField(argument, panelId) {
    */
   function queryEditor(definition, path) {
     const query = { editor: null, data: null, followers: [] };
-    query.editor = createEditor({ language: queryLanguage(), data: null, value: "", rows: 5, label: path,
+    query.editor = createEditor({ language: queryLanguage(), data: null, value: "", rows: 5, label: path, needsData: true,
       onDraw: (text) => { for (const follow of query.followers) follow(text, query.data); } });
     const id = definition[LANGUAGE];
     if (typeof id === "string" && id !== "") {

@@ -163,7 +163,7 @@ class PageTest {
         String editor = file("editor.js");
 
         assertEquals(List.of("./editor-core.js"), IMPORT.matcher(editor).results().map(m -> m.group(1)).toList());
-        assertTrue(editor.contains("export function createEditor({ language, data, value, rows, label, onDraw })"),
+        assertTrue(editor.contains("export function createEditor({ language, data, value, rows, label, onDraw, needsData })"),
                 "spec §4");
         assertTrue(editor.contains("span.textContent = text.slice(part.from, part.to);"), "the <pre>'s text, as text");
         assertTrue(editor.contains("if (frame === 0) frame = requestAnimationFrame("), "one draw per frame at most");
@@ -211,6 +211,20 @@ class PageTest {
         assertTrue(editor.contains("if (onDraw) safely(() => onDraw(text), null);"),
                 "after each draw, in its animation frame: the parameters follow the query");
         assertTrue(editor.contains("export { jsonLanguage, queryLanguage, FORMAT_EXAMPLES };"));
+    }
+
+    @Test
+    void aQueryFieldWithoutItsLanguageCannotBeFormatted() {
+        String editor = file("editor.js");
+        String console = file("console.js");
+
+        assertTrue(editor.contains("const lacksData = () => needsData === true && (data === null || data === undefined);"),
+                "a field that needs its vocabulary says when it has none");
+        assertTrue(editor.contains("format.disabled = locked || lacksData();"),
+                "Format is off while the vocabulary has not arrived, and after it failed");
+        assertTrue(editor.contains("if (lacksData()) {"), "Shift+Alt+F and the button share the guard");
+        assertTrue(console.contains("rows: 5, label: path, needsData: true"),
+                "the query editors of a panel's language wait for it before they format");
     }
 
     @Test
