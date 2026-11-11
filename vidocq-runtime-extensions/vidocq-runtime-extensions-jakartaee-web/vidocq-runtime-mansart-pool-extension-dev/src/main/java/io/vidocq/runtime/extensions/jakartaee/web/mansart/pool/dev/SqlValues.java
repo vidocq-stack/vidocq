@@ -35,9 +35,11 @@ import java.sql.Types;
 import java.time.OffsetDateTime;
 import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.IntFunction;
 
 /**
  * A value of a row as the body of a result of rows holds it (SQL spec §4.2): a number as a number, a
@@ -185,6 +187,15 @@ final class SqlValues {
         return cut(Json.write(json(raw, 0)));
     }
 
+    /** The {@code length} values {@code at} gives, as a list. */
+    private static List<Object> boxed(int length, IntFunction<Object> at) {
+        List<Object> out = new ArrayList<>(length);
+        for (int i = 0; i < length; i++) {
+            out.add(at.apply(i));
+        }
+        return out;
+    }
+
     /** {@code element} as the JSON it is written as: an array, whatever its kind, as a list of its elements. */
     private static Object json(Object element, int depth) throws SQLException {
         return switch (element) {
@@ -192,14 +203,19 @@ final class SqlValues {
             case Number _, Boolean _, String _ -> element;
             case byte[] bytes -> hex(bytes, bytes.length);
             case Array array when depth < MAX_DEPTH -> json(array.getArray(), depth + 1);
-            case Object other when other.getClass().isArray() && depth < MAX_DEPTH -> {
-                int length = java.lang.reflect.Array.getLength(other);
-                List<Object> out = new ArrayList<>(length);
-                for (int i = 0; i < length; i++) {
-                    out.add(json(java.lang.reflect.Array.get(other, i), depth + 1));
+            case Object[] values when depth < MAX_DEPTH -> {
+                List<Object> out = new ArrayList<>(values.length);
+                for (Object each : values) {
+                    out.add(json(each, depth + 1));
                 }
                 yield out;
             }
+            case int[] values -> Arrays.stream(values).boxed().map(Object.class::cast).toList();
+            case long[] values -> Arrays.stream(values).boxed().map(Object.class::cast).toList();
+            case double[] values -> Arrays.stream(values).boxed().map(Object.class::cast).toList();
+            case short[] values -> boxed(values.length, i -> values[i]);
+            case float[] values -> boxed(values.length, i -> values[i]);
+            case boolean[] values -> boxed(values.length, i -> values[i]);
             default -> element.toString();
         };
     }
