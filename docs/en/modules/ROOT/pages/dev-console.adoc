@@ -536,7 +536,8 @@ A panel answers rows with `PanelAction.ActionResult.rows(summary, columns, rows,
 `ActionResult.Column(name, type)` records, a name and a type of 200 characters at most; each row holds one value per
 column, `null`, a `Boolean`, a `Number` or a `String`, anything else written as its `toString()`. The body,
 `{"columns": [{"name", "type"}…], "rows": [[…]…], "more": bool}` of type `application/x-rows+json`
-(`ActionResult.ROWS`), stays within the 256 KiB of a result: the rows past it are left out and `more` set. A body of
+(`ActionResult.ROWS`), stays within the 256 KiB of a result: the rows past it are left out and `more` set; `ActionResult.rowsHeld(columns,
+rows)` says how many rows the body holds, which a summary that counts rows says, never the number read. A body of
 another shape is shown as any other JSON.
 
 [#json-editor]
@@ -657,17 +658,22 @@ their table in their detail (`varchar(200) · column · tasks`), the functions a
 — a keyword, a space, a capital the database would not keep — is inserted with them.
 * **Diagnostics.** An unknown table, an unknown column of a table or an alias, and an unknown alias before a dot
 (`unknown table or alias x`) are errors; a column named alone that two tables in scope have is a warning, `title is in
-tasks t and projects p`. A table written with its schema is looked up as written, then without it, and not checked
+tasks t and projects p`, unless a `USING (id)` list names it, which names it in both tables by definition. Each branch
+of a `UNION`, `INTERSECT` or `EXCEPT` is a statement with a scope of its own: `SELECT title FROM tasks UNION SELECT
+title FROM projects` warns of nothing, and completion offers the columns of the caret's branch only. A table written with its schema is looked up as written, then without it, and not checked
 when neither is known. What a sub-query, a `WITH`'s table, an alias of the select list, a cast's type (`::text`) or a
 function the editor does not know holds is never checked: the database judges it when the statement runs. A sub-query
 or a function's rows after `FROM` or `JOIN`, `LATERAL` or not — `(SELECT …) x`, `generate_series(1, 3) AS g(n)` —
 is a table whose columns are unknown, named by its alias, and so is a `WITH r(a) AS (…)`; the field of
 `EXTRACT(EPOCH FROM due_date)` is no column.
 * **Format.** Each clause on a line of its own, a `LEFT JOIN … ON` on one line, `AND` and `OR` indented, the keywords
-in capitals, quoted names, strings and comments as written, a sub-query on the line it is on.
+in capitals, quoted names, strings and comments as written, a sub-query on the line it is on. *Format* is off while the
+field has no language — it is not loaded yet, or the console could not get it — because the editor would then read the
+text with JDQL's dialect and rewrite `"due date"`, `-- a note`, `/* … */` and `a::text`.
 
 A `:name` in the statement is a parameter, as in JDQL: `params` follows it, and a parameter compared with `t.price`
-takes the type of `price` in `t`'s table.
+takes the type of `price` in `t`'s table. A name starts with a letter or `_`, as the server binds it: `:1` is no
+parameter, and reaches the database as it is.
 
 [#query-language]
 === A query language for a panel
@@ -731,7 +737,10 @@ with SQL's own words; JDQL declares none of them:
 
 `aliases` puts every target after a `targetAfter` word in scope, with its alias, skips `--` and `/*` comments, and
 leaves a sub-query unchecked; `identifierQuote` makes a quoted name a name; `unquotedCase`, `lower` or `upper`, says how
-the database stores a name written without quotes, and is left out when it keeps it as written; `"self": null` says
+the database stores a name written without quotes, and is left out when it keeps it as written; `reserved`, a list of
+words, is the words a name needs quotes for, where `keywords` is what colouring and the clauses read: a dialect that has
+no `reserved` quotes every keyword, and one that has it (PostgreSQL's reserved words) leaves `position`, `comments` or
+`text` as plain names; `"self": null` says
 there is none. A target of another schema is keyed `schema.name` and says its `"schema"`, so that completion quotes each
 part as needed.
 
