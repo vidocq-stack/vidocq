@@ -29,7 +29,12 @@ on:
         description: "io.vidocq:vidocq-parent — stable version (must be released on Central first)"
         type: string
         required: true
-        default:     "0.3.0"
+        default:     "0.4.0-RC2"
+      peano_release:
+        description: "io.vidocq.peano:* (all artifacts under io.vidocq.peano) — stable version (must be released on Central first)"
+        type: string
+        required: true
+        default:     "0.4.0-RC2"
 
 jobs:
   release:
@@ -52,6 +57,10 @@ jobs:
           auto-publish:     ${{ inputs.auto_publish == 'auto' && 'true' || 'false' }}
           overrides: |
             io.vidocq=${{ inputs.vidocq_parent_release }}
+            io.vidocq.peano=${{ inputs.peano_release }}
+          excluded-modules: |
+            bodoni-it-other-containers
+            bodoni-architecture-tests
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
           gpg-private-key:  ${{ secrets.GPG_PRIVATE_KEY }}
@@ -63,7 +72,8 @@ jobs:
           git-signing-key-id:      ${{ secrets.CI_BOT_GPG_KEY_ID }}
 
       - name: Notify Slack — release success
-        if: success()
+        # A dry run publishes nothing and creates no tag: it must not announce a release.
+        if: success() && inputs.dry_run != 'true'
         uses: https://codefloe.com/Vidocq/ci/notify-slack@main
         with:
           webhook-url:      ${{ secrets.SLACK_WEBHOOK_URL }}
