@@ -216,7 +216,7 @@ public interface DialectFactory {
 - [x] `module-info.java` for each (strict Java Modules, minimal exports, `provides DialectFactory` for H2/PG, `uses` on SPI side, `provides Processor` on APT side).
 - [x] `mansart-data-api`: 13 Mansart annotations (Entity, Table, Id, GeneratedValue, GenerationType, Column, Version, Transient, Enumerated, EnumType, FetchType, ManyToOne, OneToOne, JoinColumn, Embeddable, Embedded, MansartDataSource).
 - [x] `mansart-data-dialect-spi`: `Dialect`, `DialectFactory`, `EntityModel`, `Attribute` (sealed) + 7 record subtypes (`IdAttribute`, `TextAttribute`, `NumericAttribute`, `TemporalAttribute`, `ReferenceAttribute`, `EnumAttribute`, `VersionAttribute`), `Where` (sealed AST), `OrderBy`, `Pagination` (sealed: None/Offset/Keyset), `SqlFragment` + `BindSite`, `SqlNames` (snake_case + pluralization).
-- [x] `mansart-data-processor`: `MansartProcessor` (`SourceVersion.RELEASE_25`, `@SupportedAnnotationTypes` Mansart + JPA), `EntityScanner` (detects both annotation dialects, conflict = compile error, derives `EntityKind`/columns/FK), `MansartMetamodelWriter` (generates `_Entity` with `MethodHandles.privateLookupIn` in `<clinit>`), `JpaMetamodelWriter` (generates standard `Entity_` if `jakarta.persistence-api` detected).
+- [x] `mansart-data-processor`: `MansartProcessor` (`SourceVersion.RELEASE_25`, `@SupportedAnnotationTypes` Mansart + JPA), `EntityScanner` (detects both annotation dialects, conflict = compile error, derives `EntityKind`/columns/FK), `MansartMetamodelWriter` (generates `_Entity` with `MethodHandles.privateLookupIn` in `<clinit>`), `JpaMetamodelWriter` (generates standard `Entity_` if `jakarta.persistence-api` detected; removed on 2026-11-11, see "Metamodel (decision 2)").
 - [x] Test: `Book` (FK to `Author`, `@Version`) compiled → `_Book` produced with `tableName="books"`, FK column `author_id`, `published_on` snake_case, typed attributes (`IdAttribute<Book, Long>`, `TextAttribute<Book>`, `ReferenceAttribute<Book, Author>`, `TemporalAttribute<Book, LocalDate>`, `VersionAttribute<Book, Integer>`). MethodHandles verified for read/write.
 
 **Results**: `mvn clean install` BUILD SUCCESS on 9 modules. `mvn test` 7/7 PASS on `MetamodelGenerationTest`.
@@ -400,7 +400,7 @@ Changes:
 - No more conceptual duplication between Mansart and JPA.
 - No more "if both annotation sets are present → compile error" rule to maintain.
 - Total interop with Hibernate, EclipseLink, Spring Data, and external Noether Persistence (standard JPA 3.2).
-- Standard JPA static metamodel (`Author_.id`, `Author_.name`) usable in parallel with rich Mansart (`_Author.$MODEL`).
+- Standard JPA static metamodel (`Author_.id`, `Author_.name`) usable in parallel with rich Mansart (`_Author.$MODEL`) — written by the persistence provider's processor since 2026-11-11, see "Metamodel (decision 2)".
 - Consistency: `jakarta.data-api` + `jakarta.persistence-api` on API side, Mansart only re-exposes its proprietary extensions (`@MansartDataSource`).
 
 **Regression**:
@@ -467,7 +467,16 @@ mansart-jakarta-data/
 
 ## Metamodel (decision 2 — detailed)
 
-`mansart-data-processor` **systematically** generates `_Book`. It **also** generates `Book_` (standard JPA) **if** `jakarta.persistence-api` is on the user module's compile-classpath (detection: `processingEnv.getElementUtils().getTypeElement("jakarta.persistence.metamodel.SingularAttribute") != null`).
+`mansart-data-processor` **systematically** generates `_Book`, and only `_Book`.
+
+> **Revised on 2026-11-11 (Vidocq/noether#45, F15; Noether BUG-20261009-09).** Up to 0.4.0-RC2 the processor
+> **also** generated `Book_` (standard JPA) when `jakarta.persistence-api` was on the compile class path. That `Book_`
+> declared every attribute a `SingularAttribute`, plural ones included (`List<Tag> tags` →
+> `SingularAttribute<Book, List>`), and kept the persistence provider's processor from writing its own, so Noether
+> could not fill `Book_.tags` and Criteria on a collection failed. The maintainer chose to stop writing `Book_` rather
+> than emit the plural kinds: the JPA canonical metamodel belongs to the persistence provider's processor (Noether,
+> Hibernate Processor…). An application that referred to `Book_` without any JPA processor loses it, and uses `_Book`.
+> The `Book_` format below is kept as the record of what was generated.
 
 ### `_Book` Format (Mansart, rich)
 
@@ -493,7 +502,7 @@ public final class _Book {
 
 Each attribute exposes: `columnName()`, `javaType()`, `nullable()`, `unique()`, `MethodHandle getter()`, `MethodHandle setter()`. MethodHandles obtained via `MethodHandles.privateLookupIn(Book.class, lookup)` at `<clinit>` — **a single lookup**, never reflection at use.
 
-### `Book_` Format (standard JPA, interop)
+### `Book_` Format (standard JPA, interop — no longer generated since 2026-11-11)
 
 ```java
 @StaticMetamodel(Book.class)
@@ -591,7 +600,7 @@ Clear errors emitted by `mansart-data-processor` when:
 6. ~~Separate CDI module or integrated in core?~~ → **separate module** `mansart-data-cdi` (locked — 9 modules in `mansart-jakarta-data` reactor).
 7. ~~Integrated connection pool?~~ → **YES, dedicated Mansart sub-module** but **NOT** under `mansart-jakarta-data`. It's a peer sub-project (`mansart-pool`) in the `mansart/` workspace, optional and independent. `mansart-jakarta-data` continues to only accept a standard `DataSource` — whether it's Hikari, Agroal, or Mansart Pool is invisible on the repository side. See [`../mansart-pool/PLAN.md`](../mansart-pool/PLAN.md).
 
-2. **Metamodel format: Mansart-only or JPA-compatible?** Proposal: generate **two** classes — `_Book` (Mansart, richly typed attributes) and `Book_` (standard JPA static metamodel, `SingularAttribute<Book, String> title`) for interop with existing code and with `noether-persistence`.
+2. **Metamodel format: Mansart-only or JPA-compatible?** Proposal: generate **two** classes — `_Book` (Mansart, richly typed attributes) and `Book_` (standard JPA static metamodel, `SingularAttribute<Book, String> title`) for interop with existing code and with `noether-persistence`. *Revised on 2026-11-11: `_Book` only; `Book_` is the persistence provider's (Vidocq/noether#45, F15).*
 
 3. **Entity detection: `@jakarta.persistence.Entity` or proprietary Mansart annotation?** Proposal: accept both. APT scans `@Entity` (JPA, already standard) AND `@io.vidocq.mansart.data.Entity` (zero-dep if user doesn't want the JPA JAR in compile-only).
 

@@ -9,6 +9,28 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-048 — The processor's JPA metamodel `Book_` gave a collection a singular kind and kept Noether's out
+
+- **Date**: 2026-11-11
+- **Status**: FIXED on `fix/data-no-jpa-metamodel`. `JpaMetamodelWriter` is removed: `mansart-data-processor`
+  writes the Jakarta Data metamodel `_Book` only, and the JPA canonical metamodel `Book_` is left to the persistence
+  provider's processor. The maintainer chose this over emitting the plural kinds (Vidocq/noether#45, F15); an
+  application that referred to `Book_` without a JPA processor uses `_Book` (`migration.adoc`, Upgrading from 0.3.0).
+- **Module**: `mansart-data-processor` (`JpaMetamodelWriter`, `MansartProcessor.init`)
+- **Symptom**: with `jakarta.persistence-api` on the compile class path, the processor wrote `Book_` with every
+  attribute a `SingularAttribute`, plural ones included (`List<Tag> tags` → `SingularAttribute<Book, List>`). Next
+  to Noether's processor, which leaves `Book_` to a processor that already wrote it, Noether could not fill
+  `Book_.tags` at bootstrap and a Criteria query on the collection failed (Noether BUG-20261009-09). When the
+  provider's `Book_` was in the same compilation, the build failed: `Failed to write metamodel for shop.Book: Attempt
+  to recreate a file for type shop.Book_`.
+- **Reproduction**: `ProcessorJpaMetamodelTest` (`mansart-data-tests`), red on `f67d5ca2`: a JPA entity got a
+  `Book_`, and a `Book_` written beside it (with a `ListAttribute`) failed the compilation.
+- **Cause**: the processor wrote a metamodel whose attribute kinds only the persistence provider knows; the writer
+  emitted `SingularAttribute` for every attribute.
+- **Reported by**: Noether's audit, Vidocq/noether#45 F15 (BUG-20261009-09 in `noether-persistence/BUG.md`).
+
+---
+
 ## MANSART-047 — A pooled connection kept the session settings of its previous borrower
 
 - **Date**: 2026-11-11

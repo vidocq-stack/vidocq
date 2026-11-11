@@ -3,9 +3,11 @@
 Mansart annotation processor (APT) — **`SourceVersion.RELEASE_25`**. Generates, at user module compilation:
 
 1. The **rich Mansart metamodel** `_<Entity>` (typed attributes, static `EntityModel<T>`).
-2. The **standard JPA metamodel** `<Entity>_` (only if `jakarta.persistence-api` is on the compile-classpath).
-3. The **static implementation** `<Repo>Impl` for each detected `@Repository` interface.
-4. The `META-INF/mansart-repositories.list` file (used by the CDI BCE).
+2. The **static implementation** `<Repo>Impl` for each detected `@Repository` interface.
+3. The `META-INF/mansart-repositories.list` file (used by the CDI BCE).
+
+It does not write the JPA canonical metamodel `<Entity>_`: that one belongs to the persistence provider's processor
+(Noether's `noether-jpa-processor`, Hibernate Processor…), which knows the kind of every attribute (Vidocq/noether#45, F15).
 
 ## When to use it
 
@@ -55,7 +57,6 @@ The APT remains useful for:
 
 ```
 shop/_Author.java       ← rich Mansart metamodel
-shop/Author_.java       ← standard JPA metamodel (if jakarta.persistence-api present)
 shop/AuthorRepositoryImpl.java
 META-INF/mansart-repositories.list
 ```

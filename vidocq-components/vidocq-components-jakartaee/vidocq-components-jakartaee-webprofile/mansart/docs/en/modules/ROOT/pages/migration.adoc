@@ -11,6 +11,15 @@ Mansart targets the standard ({spec-data-1}[Jakarta Data 1.0] + {spec-jpa-3-2}[J
 [#upgrading-from-0-3-0]
 == Upgrading from 0.3.0
 
+=== `Book_` is no longer generated
+
+Up to 0.4.0-RC2, `mansart-data-processor` also wrote the JPA canonical metamodel `Book_` when `jakarta.persistence-api` was on the compile class path. It no longer does: it writes the Jakarta Data metamodel `_Book` only, and `Book_` belongs to the persistence provider's processor (xref:concepts.adoc#static-metamodel[Concepts]). The `Book_` Mansart wrote declared every attribute a `SingularAttribute`, a collection included, and was never filled at run time.
+
+Code that uses `_Book` is unaffected. Code that refers to `Book_`:
+
+* *with Noether or another JPA provider* — put the provider's processor on the annotation processor path, next to `mansart-data-processor` (Noether's is `noether-jpa-processor`); it writes `Book_` with the right attribute kinds, and the provider fills it at startup;
+* *with Mansart Data alone* — use `_Book` instead: the attribute name `Book_.TITLE` becomes `_Book.title.name()`, or the literal `"title"` where Java needs a constant (an annotation value such as `@OrderBy`).
+
 === `@Enumerated(EnumType.ORDINAL)` now stores the index
 
 Mansart 0.3.0 ignored `@Enumerated`: every enum attribute was stored by its constant name, in a text column, whatever the annotation said. From 0.4, `@Enumerated(EnumType.ORDINAL)` and a bare `@Enumerated` store the constant's index in an integer column (see xref:reference.adoc#enum-storage[enum storage]). An attribute with no `@Enumerated`, or with `@Enumerated(EnumType.STRING)`, is unaffected: it is still stored by name.

@@ -56,7 +56,8 @@ Note: `mansart-data-api` was removed in M7-29 (redundant with `jakarta.persisten
 
 - PostgreSQL integration tests via **Testcontainers** in `<scope>test</scope>` only — never at runtime.
 - Generated Data metamodel under `target/generated-sources/annotations/`: `_Entity` is the Data DSL convention.
-  Standard JPA canonical classes use `Entity_`; both producers retain foreign canonical ownership rather than collide.
+  The JPA canonical metamodel `Entity_` belongs to the persistence provider's processor (Noether, Hibernate
+  Processor): Mansart never writes it (Vidocq/noether#45, F15).
 - All generated queries go through the `mansart-data-dialect-spi` AST — never inline SQL in `mansart-data-core`.
 - Reproducible bugs → `BUG.md` (skill `/log-bug`). Performance measurements → `BENCH.md` (skill `/log-bench`).
 - **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.

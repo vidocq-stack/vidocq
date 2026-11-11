@@ -100,7 +100,7 @@ The whole hot path is reflection-free: query plans are prepared once and cached,
 
 `mansart-data-processor` is a `javax.annotation.processing.Processor` that scans compiled CUs:
 
-. For each class annotated `@Entity` (Mansart or JPA) → generates `_Book.java` (rich metamodel) and `Book_.java` (JPA standard metamodel).
+. For each class annotated `@Entity` (Mansart or JPA) → generates `_Book.java`, the Jakarta Data metamodel. The JPA canonical metamodel `Book_.java` is left to the persistence provider's processor [.tag-new]#NEW# (xref:concepts.adoc#static-metamodel[Concepts]).
 . For each interface annotated `@Repository` → generates `BookRepositoryImpl.java` (final public implementation class) + an entry in `META-INF/mansart-repositories.list`.
 . A nested repository's implementation is named after its binary name, with `_` for `$`: `Outer_BookRepositoryImpl`, so two nested repositories with the same simple name do not clash and no top-level generated class carries a `$` in its name. A repository that a top-level class of its package cannot implement (a `private` interface, or one nested in a `private` type) is a compile error that names the fix; `-Amansart.privateRepositories=warn` turns it into a warning and leaves the repository to the run-time path, which serves it on the class path only (xref:usage.adoc#private-repositories[Usage]). A local interface is never seen by a processor, and the run-time path refuses it with a message.
 . An invalid `@Query`, or a method the processor cannot implement, is a compile error on the repository; no partial source is written.
@@ -114,7 +114,6 @@ package "mansart-data-processor (APT)" {
   [DataProcessor] --> [EntityModelWriter]
   [DataProcessor] --> [RepositoryWriter]
   [EntityModelWriter] --> [_Book.java]
-  [EntityModelWriter] --> [Book_.java]
   [RepositoryWriter] --> [BookRepositoryImpl.java]
   [RepositoryWriter] --> [META-INF/mansart-repositories.list]
 }

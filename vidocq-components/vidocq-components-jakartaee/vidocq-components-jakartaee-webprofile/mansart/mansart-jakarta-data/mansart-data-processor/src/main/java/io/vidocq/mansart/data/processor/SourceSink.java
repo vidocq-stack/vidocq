@@ -24,7 +24,7 @@ import java.io.Writer;
 
 /**
  * Abstraction over the destination of a generated {@code .java} source, decoupling the code
- * emitters ({@link MansartMetamodelWriter}, {@link RepositoryWriter}, {@link JpaMetamodelWriter})
+ * emitters ({@link MansartMetamodelWriter}, {@link RepositoryWriter})
  * from the annotation-processing {@link javax.annotation.processing.Filer}.
  *
  * <p>Inside the APT this is backed by {@link FilerSourceSink}. The {@code mansart-data-maven-plugin}

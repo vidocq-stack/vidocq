@@ -226,7 +226,7 @@ Mansart uses standard **`jakarta.persistence.*`** annotations (Jakarta Persisten
 | `@jakarta.persistence.Embedded` / `@Embeddable` | Inline mapping. |
 | `@jakarta.data.repository.Repository(dataStore = "name")` | Multi-DataSource selection: Mansart resolves the value as a CDI `@Named` on `DataSource` (`java:` prefix → JNDI). No proprietary annotation. |
 
-Secondary benefit: total interop with Hibernate, EclipseLink, Spring Data, and the external Noether Persistence (JPA 3.2). Standard JPA static metamodel (`Author_.id`, `Author_.name`) generated in parallel with the rich Mansart metamodel (`_Author.$MODEL`).
+Secondary benefit: total interop with Hibernate, EclipseLink, Spring Data, and the external Noether Persistence (JPA 3.2). The standard JPA static metamodel (`Author_`) is left to the persistence provider's processor; Mansart generates its rich metamodel (`_Author.$MODEL`) only.
 
 Default conventions (without `@Table` / `@Column`):
 - Table = plural snake_case (`Book` → `books`, `OrderLine` → `order_lines`).
@@ -330,7 +330,7 @@ The TCK runner is in standalone `modelVersion 4.0.0`, **deliberately detached** 
 | [`mansart-data-dialects/mansart-data-dialect-h2`](mansart-data-dialects/mansart-data-dialect-h2/) | H2 dialect (`provides DialectFactory`). |
 | [`mansart-data-dialects/mansart-data-dialect-postgresql`](mansart-data-dialects/mansart-data-dialect-postgresql/) | PostgreSQL dialect (`provides DialectFactory`). |
 | [`mansart-data-core`](mansart-data-core/) | Runtime: `MansartData`, `RepositoryRuntime`, JDQL parser/executor, runtime `EntityModel`, **hidden classes via Class-File API**. |
-| [`mansart-data-processor`](mansart-data-processor/) | APT (`SourceVersion.RELEASE_25`) — generates `_<Entity>` (rich Mansart metamodel) + `<Entity>_` (JPA static metamodel) + `<Repo>Impl`. |
+| [`mansart-data-processor`](mansart-data-processor/) | APT (`SourceVersion.RELEASE_25`) — generates `_<Entity>` (rich Mansart metamodel) + `<Repo>Impl`; the JPA static metamodel `<Entity>_` is the persistence provider's. |
 | [`mansart-data-cdi`](mansart-data-cdi/) | CDI 4.1 Lite bootstrap — `BuildCompatibleExtension` discovering `@Repository` and registering `@Singleton` synthetic beans. |
 | [`mansart-data-tests`](mansart-data-tests/) | Internal tests: CRUD, pagination, JDQL, virtual threads, lifecycle. |
 | [`mansart-data-tck`](mansart-data-tck/) | Jakarta Data 1.0 TCK runner — **outside reactor**. |

@@ -68,7 +68,6 @@ public final class MansartProcessor extends AbstractProcessor {
 
     private EntityScanner             scanner;
     private MansartMetamodelWriter    mansartWriter;
-    private JpaMetamodelWriter        jpaWriter;
     private RepositoryWriter          repositoryWriter;
     private ComponentsWriter          componentsWriter;
     private EntityRegistry            entityRegistry;
@@ -89,13 +88,9 @@ public final class MansartProcessor extends AbstractProcessor {
         super.init(env);
         FilerSourceSink sink  = new FilerSourceSink(env.getFiler());
         this.scanner          = new EntityScanner(env);
+        // The Jakarta Data metamodel _Book only: the JPA canonical metamodel Book_ belongs to the persistence
+        // provider's processor, which knows the kind of every attribute (Vidocq/noether#45, F15).
         this.mansartWriter    = new MansartMetamodelWriter(sink);
-        // M7-29 — JPA static metamodel emission only when the SingularAttribute SPI is present
-        // on the user's classpath (jakarta.persistence-api 3.2 ships it). Always-on otherwise
-        // would force the dep on every consumer.
-        this.jpaWriter        = env.getElementUtils()
-                .getTypeElement("jakarta.persistence.metamodel.SingularAttribute") != null
-                ? new JpaMetamodelWriter(sink) : null;
         this.entityRegistry   = new EntityRegistry();
         this.componentsWriter = new ComponentsWriter(sink);
         this.repositoryWriter = new RepositoryWriter(sink,
@@ -135,7 +130,7 @@ public final class MansartProcessor extends AbstractProcessor {
             }
         }
 
-        for (TypeElement type : entities) writeMetamodels(type);
+        for (TypeElement type : entities) writeMetamodel(type);
         for (TypeElement repo : repositories) writeRepository(repo);
         try {
             componentsWriter.endOfRound();
@@ -147,12 +142,8 @@ public final class MansartProcessor extends AbstractProcessor {
         return true;
     }
 
-    private void writeMetamodels(TypeElement type) {
-        writeMetamodels(type, true);
-    }
-
-    /** Writes {@code _Entity} and, when {@code jpaMetamodel} and the JPA SPI are present, {@code Entity_}. */
-    private void writeMetamodels(TypeElement type, boolean jpaMetamodel) {
+    /** Writes the Jakarta Data metamodel {@code _Entity}; the JPA metamodel {@code Entity_} is the provider's. */
+    private void writeMetamodel(TypeElement type) {
         EntityScanner.EntityDescriptor descriptor = scanner.scan(type);
         if (descriptor == null) return;
         // M8-3i — register the entity facet so RepositoryWriter can resolve
@@ -161,7 +152,6 @@ public final class MansartProcessor extends AbstractProcessor {
         checkTable(descriptor);
         try {
             mansartWriter.write(descriptor);
-            if (jpaMetamodel && jpaWriter != null) jpaWriter.write(descriptor);
             String qualified = type.getQualifiedName().toString();
             int dot = qualified.lastIndexOf('.');
             String metamodelPkg = dot < 0 ? "" : qualified.substring(0, dot);
@@ -263,11 +253,7 @@ public final class MansartProcessor extends AbstractProcessor {
         String pkg = processingEnv.getElementUtils().getPackageOf(entity).getQualifiedName().toString();
         String prefix = pkg.isEmpty() ? "" : pkg + ".";
         if (processingEnv.getElementUtils().getTypeElement(prefix + "_" + entity.getSimpleName()) != null) return;
-        // A library built with another provider's processor already ships the JPA metamodel, Book_: it is reused,
-        // a second one could not go into the jar's enriched copy (mansart#85).
-        boolean jpaMetamodelPresent = processingEnv.getElementUtils()
-                .getTypeElement(prefix + entity.getSimpleName() + "_") != null;
-        writeMetamodels(entity, !jpaMetamodelPresent);
+        writeMetamodel(entity);
     }
 
     /**
