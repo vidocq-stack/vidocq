@@ -57,6 +57,8 @@ public final class CliParser {
     private static final String CONFIG = "config";
     private static final String COMPLETION = "completion";
     private static final String POM = "pom";
+    private static final String RELEASE_OPTION = "--release";
+    private static final String SNAPSHOT_OPTION = "--snapshot";
     /** The built-in commands that show their own help on {@code --help}. */
     private static final Set<String> HELP_TOPICS = Set.of(START, "dev", DOCTOR, "test", "idea", VSCODE, ECLIPSE, CREATE,
             BUILD, CLEAN, CONFIG, COMPLETION, UPDATE, EXTENSION, POM);
@@ -306,8 +308,8 @@ public final class CliParser {
             switch (arg) {
                 case "--to" -> to = next(it, "--to");
                 case CHECK -> check = true;
-                case "--release" -> release = true;
-                case "--snapshot" -> snapshot = true;
+                case RELEASE_OPTION -> release = true;
+                case SNAPSHOT_OPTION -> snapshot = true;
                 default -> unknownOpt(arg, "pom upgrade");
             }
         }
@@ -398,8 +400,8 @@ public final class CliParser {
         for (String arg : Arrays.asList(args).subList(from, args.length)) {
             switch (arg) {
                 case CHECK -> check = true;
-                case "--release" -> release = true;
-                case "--snapshot" -> snapshot = true;
+                case RELEASE_OPTION -> release = true;
+                case SNAPSHOT_OPTION -> snapshot = true;
                 default -> unknownOpt(arg, UPDATE);
             }
         }
@@ -626,8 +628,8 @@ public final class CliParser {
                         "and writes it. Versions that disagree are reported, never aligned. With no option the pom",
                         "follows its channel: the latest release, or the latest SNAPSHOT line for a SNAPSHOT.");
                 options("--to <version>", "Move to exactly this version",
-                        "--release",       "Move to the latest release of Maven Central",
-                        "--snapshot",      "Move to the latest SNAPSHOT line (adds the snapshot repositories)",
+                        RELEASE_OPTION,    "Move to the latest release of Maven Central",
+                        SNAPSHOT_OPTION,   "Move to the latest SNAPSHOT line (adds the snapshot repositories)",
                         CHECK,             "Report only: exit 1 when an upgrade is available, 0 otherwise");
                 CliOutput.println();
                 topic("pom convert", "Convert the pom from one style to the other",

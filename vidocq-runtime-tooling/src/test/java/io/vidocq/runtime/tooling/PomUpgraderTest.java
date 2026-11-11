@@ -184,10 +184,16 @@ class PomUpgraderTest {
 
     @Test
     void aPomWithRepositoriesOfItsOwnIsToldToAddTheSnapshotOnes() {
-        String pom = scaffolded(false, "0.4.0").replace("    <dependencyManagement>",
-                "    <repositories>\n        <repository>\n            <id>acme</id>\n"
-                        + "            <url>https://repo.acme.test/</url>\n        </repository>\n"
-                        + "    </repositories>\n\n    <dependencyManagement>");
+        String own = """
+                    <repositories>
+                        <repository>
+                            <id>acme</id>
+                            <url>https://repo.acme.test/</url>
+                        </repository>
+                    </repositories>
+
+                    <dependencyManagement>""";
+        String pom = scaffolded(false, "0.4.0").replace("    <dependencyManagement>", own);
 
         PomUpgrader.Result result = PomUpgrader.upgrade(pom, "0.5.0-SNAPSHOT");
 
@@ -208,6 +214,8 @@ class PomUpgraderTest {
 
     @Test
     void aBlankTargetIsRefused() {
-        assertThrows(IllegalArgumentException.class, () -> PomUpgrader.upgrade(scaffolded(false, "0.4.0"), " "));
+        String pom = scaffolded(false, "0.4.0");
+
+        assertThrows(IllegalArgumentException.class, () -> PomUpgrader.upgrade(pom, " "));
     }
 }
