@@ -225,9 +225,22 @@ was not run.
 `~/.m2`, whatever the command line uses.
 |===
 
-NOTE: A modular Vaadin application does not compile in Eclipse or VS Code, with or without the parent: m2e puts the
-Vaadin automatic modules that `module-info` does not require explicitly on the class path, where a named module
-cannot see them. IntelliJ, which runs javac, compiles it. Vidocq/vidocq#509 tracks it.
+[#ide-automatic-modules]
+NOTE: A modular Vaadin application compiles in Eclipse and VS Code only when its `module-info` names every
+automatic module whose types the code reaches, even indirectly. Maven's compiler plugin puts on the module path the
+modules `module-info` requires, and leaves the rest of the Vaadin jars on the class path, where javac still reads the
+supertypes it needs. m2e does the same split (a jar goes to the module path when a `requires` reaches it; an automatic
+module's own dependencies are unknown, so nothing follows from one), but the Eclipse compiler is stricter: it reports
+a type of a class-path jar that a module-path type extends or uses, for instance `HasThemeVariant` behind
+`VerticalLayout`, and stops the build ("The project was not built since its build path is incomplete"). On the
+Vaadin example (Vaadin 25.3, jdt.ls 1.61 with m2e 2.7.8, driven headless) two more `requires` make the IDE build clean,
+with Maven unchanged: `requires vaadin.flow.components.base;` and `requires vaadin.renderer.flow;` (the automatic names
+of `vaadin-flow-components-base` and `vaadin-renderer-flow`). Add the module an error names, until none is left.
+Neither a pom setting nor a goal can do it for you: `--add-reads org.tlr=ALL-UNNAMED` in `<compilerArgs>` (m2e writes
+it as an `add-reads` attribute, and the error stays) and `--add-modules` (m2e does not read it) change nothing, no
+`maven.compiler` property moves a jar to the module path, and the class path container belongs to m2e, so
+`vidocq:vscode` and `vidocq:eclipse` have nothing to write that m2e would keep. IntelliJ, which runs javac, compiles the unmodified
+application. Maven is the build of record either way. Vidocq/vidocq#509.
 
 An IDE build needs the Vauban processor of 0.4.0 or later: before it (VAU-APT-005), Eclipse's compiler stopped it in
 its last round, and an application built by Eclipse or VS Code started without its beans.
