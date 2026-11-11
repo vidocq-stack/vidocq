@@ -225,10 +225,10 @@ public class VidocqRunMojo extends AbstractMojo {
         // Universal-loader mode, as vidocq:dev and the production launcher use it: the application
         // classes stay off the module path and boot in a Vauban-defined module layer.
         ApplicationLaunch.Layered launch = launchPaths(project, build, classes, mode,
-                LayerSplit.patterns(appLayerKeep),
                 jar -> getLog().info(PREFIX + "using the modularized copy of " + jar.getFileName()),
                 id -> getLog().warn(DevOnlyJars.droppedWarning(id)),
-                LayerSplit.requested(appLayer), message -> getLog().warn(PREFIX + message));
+                new ApplicationLaunch.LayerOptions(LayerSplit.patterns(appLayerKeep), LayerSplit.requested(appLayer),
+                        message -> getLog().warn(PREFIX + message)));
         mode = launch.mode();
         List<Path> modulePath = launch.modulePath();
         List<Path> appPath = launch.appPath();
@@ -295,7 +295,8 @@ public class VidocqRunMojo extends AbstractMojo {
     static ApplicationLaunch.Layered launchPaths(MavenProject project, Path build, Path classes,
             LayerSplit.Mode mode, List<String> keep, Consumer<Path> modularized, Consumer<String> dropped)
             throws MojoExecutionException {
-        return launchPaths(project, build, classes, mode, keep, modularized, dropped, true, message -> { });
+        return launchPaths(project, build, classes, mode, modularized, dropped,
+                new ApplicationLaunch.LayerOptions(keep, true, message -> { }));
     }
 
     /**
@@ -304,10 +305,10 @@ public class VidocqRunMojo extends AbstractMojo {
      */
     // package-private for the unit test.
     static ApplicationLaunch.Layered launchPaths(MavenProject project, Path build, Path classes,
-            LayerSplit.Mode mode, List<String> keep, Consumer<Path> modularized, Consumer<String> dropped,
-            boolean requested, Consumer<String> warn) throws MojoExecutionException {
+            LayerSplit.Mode mode, Consumer<Path> modularized, Consumer<String> dropped,
+            ApplicationLaunch.LayerOptions options) throws MojoExecutionException {
         if (mode == LayerSplit.Mode.ALL) {
-            return ApplicationLaunch.layered(project, build, classes, modularized, true, dropped, keep, requested, warn);
+            return ApplicationLaunch.layered(project, build, classes, modularized, true, dropped, options);
         }
         return new ApplicationLaunch.Layered(
                 ApplicationLaunch.modulePath(project, build, classes, true, modularized, true, dropped),

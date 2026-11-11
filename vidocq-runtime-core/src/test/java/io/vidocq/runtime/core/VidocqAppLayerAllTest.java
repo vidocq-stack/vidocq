@@ -121,9 +121,10 @@ class VidocqAppLayerAllTest {
         assertEquals(1, warnings.size(), warnings.toString());
         assertTrue(warnings.getFirst().contains("vidocq.app.layer=classes"), warnings.getFirst());
         assertTrue(warnings.getFirst().contains("acme.pricing"), warnings.getFirst());
+        var pins = List.of("acme.pricing");
+        var pinnedOut = new LinkedHashMap<String, String>();
         var failure = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
-                () -> VidocqAppLayer.applicationPaths(config, "acme.app", "all", List.of("acme.pricing"),
-                        new LinkedHashMap<>(), warnings::add));
+                () -> VidocqAppLayer.applicationPaths(config, "acme.app", "all", pins, pinnedOut, warnings::add));
         assertTrue(failure.getMessage().contains("acme.pricing"), failure.getMessage());
     }
 

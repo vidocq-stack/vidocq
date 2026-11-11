@@ -253,9 +253,19 @@ public final class ApplicationLaunch {
     public static Layered layered(MavenProject project, Path buildDir, Path classesDir, Consumer<Path> modularized,
                                   boolean dropDevOnly, Consumer<String> dropped, List<String> keepPatterns)
             throws MojoExecutionException {
-        return layered(project, buildDir, classesDir, modularized, dropDevOnly, dropped, keepPatterns, true,
-                message -> { });
+        return layered(project, buildDir, classesDir, modularized, dropDevOnly, dropped,
+                new LayerOptions(keepPatterns, true, message -> { }));
     }
+
+    /**
+     * What a launch asks of the split.
+     *
+     * @param keep      the patterns of {@code vidocq.app.layer.keep}
+     * @param requested whether {@code vidocq.app.layer=all} was asked for ({@link LayerSplit#requested}): if not, what
+     *                  {@code all} cannot serve degrades with a warning instead of failing the goal
+     * @param warn      receives each warning of a degradation
+     */
+    public record LayerOptions(List<String> keep, boolean requested, Consumer<String> warn) {}
 
     /**
      * {@link #layered(MavenProject, Path, Path, Consumer, boolean, Consumer, List)} for a launch where {@code all}
@@ -264,12 +274,14 @@ public final class ApplicationLaunch {
      * application) gives the {@code classes} launch with a warning; the result's {@link Layered#mode()} says which.
      * When it was {@code requested}, both fail the goal.
      *
-     * @param requested whether {@code vidocq.app.layer=all} was asked for ({@link LayerSplit#requested})
-     * @param warn      receives each warning of a degradation
+     * @param options   the pins, and whether {@code all} was requested
      */
     public static Layered layered(MavenProject project, Path buildDir, Path classesDir, Consumer<Path> modularized,
-                                  boolean dropDevOnly, Consumer<String> dropped, List<String> keepPatterns,
-                                  boolean requested, Consumer<String> warn) throws MojoExecutionException {
+                                  boolean dropDevOnly, Consumer<String> dropped, LayerOptions options)
+            throws MojoExecutionException {
+        List<String> keepPatterns = options.keep();
+        boolean requested = options.requested();
+        Consumer<String> warn = options.warn();
         List<LayerSplit.Candidate> candidates = new ArrayList<>();
         List<Artifact> artifacts = new ArrayList<>();
         Map<String, String> moduleByCoordinates = new LinkedHashMap<>();

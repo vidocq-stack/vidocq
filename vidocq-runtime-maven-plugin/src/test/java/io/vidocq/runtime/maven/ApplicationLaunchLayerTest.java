@@ -123,7 +123,8 @@ class ApplicationLaunchLayerTest {
         var warnings = new java.util.ArrayList<String>();
 
         var layered = ApplicationLaunch.layered(project, build, build.resolve("classes"), jar -> { }, true,
-                id -> { }, List.of(), false, warnings::add);
+                id -> { },
+                new ApplicationLaunch.LayerOptions(List.of(), false, warnings::add));
 
         assertEquals(LayerSplit.Mode.ALL, layered.mode());
         assertEquals(List.of(bad), layered.modulePath(), "unchanged from the classes launch: the module path");
@@ -146,7 +147,7 @@ class ApplicationLaunchLayerTest {
         var warnings = new java.util.ArrayList<String>();
 
         var layered = ApplicationLaunch.layered(project, build, classes, jar -> { }, true, id -> { },
-                List.of("acme.helper"), false, warnings::add);
+                new ApplicationLaunch.LayerOptions(List.of("acme.helper"), false, warnings::add));
 
         assertEquals(LayerSplit.Mode.CLASSES, layered.mode());
         assertEquals(List.of(helper), layered.modulePath());

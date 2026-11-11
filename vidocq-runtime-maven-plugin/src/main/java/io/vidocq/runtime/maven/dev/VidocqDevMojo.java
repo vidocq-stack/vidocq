@@ -747,9 +747,10 @@ public class VidocqDevMojo extends AbstractMojo {
             return new ApplicationLaunch.Layered(ApplicationLaunch.modulePath(project, build, classes, false,
                     modularized), List.of(), Map.of(), LayerSplit.Mode.CLASSES);
         }
-        return launchPaths(project, build, classes, mode, LayerSplit.patterns(appLayerKeep), modularized,
+        return launchPaths(project, build, classes, mode, modularized,
                 id -> { /* vidocq:dev keeps a declared dev-only jar, nothing is dropped */ },
-                LayerSplit.requested(appLayer), message -> getLog().warn(message));
+                new ApplicationLaunch.LayerOptions(LayerSplit.patterns(appLayerKeep), LayerSplit.requested(appLayer),
+                        message -> getLog().warn(message)));
     }
 
     /**
@@ -760,7 +761,8 @@ public class VidocqDevMojo extends AbstractMojo {
     static ApplicationLaunch.Layered launchPaths(MavenProject project, Path build, Path classes,
             LayerSplit.Mode mode, List<String> keep, Consumer<Path> modularized, Consumer<String> dropped)
             throws MojoExecutionException {
-        return launchPaths(project, build, classes, mode, keep, modularized, dropped, true, message -> { });
+        return launchPaths(project, build, classes, mode, modularized, dropped,
+                new ApplicationLaunch.LayerOptions(keep, true, message -> { }));
     }
 
     /**
@@ -769,11 +771,10 @@ public class VidocqDevMojo extends AbstractMojo {
      */
     // package-private for the unit test.
     static ApplicationLaunch.Layered launchPaths(MavenProject project, Path build, Path classes,
-            LayerSplit.Mode mode, List<String> keep, Consumer<Path> modularized, Consumer<String> dropped,
-            boolean requested, Consumer<String> warn) throws MojoExecutionException {
+            LayerSplit.Mode mode, Consumer<Path> modularized, Consumer<String> dropped,
+            ApplicationLaunch.LayerOptions options) throws MojoExecutionException {
         if (mode == LayerSplit.Mode.ALL) {
-            return ApplicationLaunch.layered(project, build, classes, modularized, false, dropped, keep, requested,
-                    warn);
+            return ApplicationLaunch.layered(project, build, classes, modularized, false, dropped, options);
         }
         return new ApplicationLaunch.Layered(
                 ApplicationLaunch.modulePath(project, build, classes, true, modularized, false, dropped),
