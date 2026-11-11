@@ -86,18 +86,18 @@ public final class PoolsLivePanel implements LivePanel {
     }
 
     /**
-     * The {@code sql-<pool>} language of each pool whose tables the boot read, from what it read; none for a pool
-     * whose language is past the size a panel language may hold even at its leanest, which a WARNING says.
+     * The {@code sql-<pool>} language of each pool, from what the boot read of its tables; SQL's dialect alone, no
+     * table, for a pool whose tables could not be read or whose language is past the size a panel language may hold
+     * even at its leanest, so that its editors never fall back to JDQL's dialect. None only when even that is past
+     * the size, which a WARNING says.
      */
     @Override
     public List<PanelLanguage> languages() {
         List<PanelLanguage> languages = new ArrayList<>();
         for (PoolActions pool : pools()) {
-            if (pool.metadata() == null) {
-                continue;
-            }
             try {
-                languages.add(new PanelLanguage(pool.languageId(), SqlLanguage.json(pool.label(), pool.metadata())));
+                languages.add(new PanelLanguage(pool.languageId(), pool.metadata() == null
+                        ? SqlLanguage.dialectOnly(null) : SqlLanguage.json(pool.label(), pool.metadata())));
             } catch (IllegalStateException tooBig) {
                 // the page says "no vocabulary: not offered", and its editor colours the words it knows alone
                 LOG.log(System.Logger.Level.WARNING, "Mansart pools: no SQL language for pool '" + pool.label()

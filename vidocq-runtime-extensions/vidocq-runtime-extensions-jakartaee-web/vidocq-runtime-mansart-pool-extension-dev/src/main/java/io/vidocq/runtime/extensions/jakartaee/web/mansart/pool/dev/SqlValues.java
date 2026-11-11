@@ -19,6 +19,9 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.Reader;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Array;
@@ -26,6 +29,7 @@ import java.sql.Blob;
 import java.sql.Clob;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
 import java.sql.SQLXML;
 import java.sql.Types;
 import java.time.OffsetDateTime;
@@ -55,6 +59,15 @@ final class SqlValues {
 
     /** The value of {@code column} of the current row, {@code type} and {@code typeName} its SQL type. */
     static Object of(ResultSet results, int column, int type, String typeName) throws SQLException {
+        Streamed streamed = switch (type) {
+            case Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY, Types.BLOB -> binary(results, column);
+            case Types.CHAR, Types.VARCHAR, Types.LONGVARCHAR, Types.NCHAR, Types.NVARCHAR, Types.LONGNVARCHAR,
+                 Types.CLOB, Types.NCLOB -> text(results, column);
+            default -> null;
+        };
+        if (streamed != null) {
+            return streamed.value();
+        }
         Object value = results.getObject(column);
         return switch (value) {
             case null -> null;
@@ -84,6 +97,53 @@ final class SqlValues {
         };
     }
 
+    /** What was read of a value through a stream; {@code value} is {@code null} for an SQL null. */
+    private record Streamed(Object value) {}
+
+    /**
+     * A binary value read through its stream, {@value #MAX_BYTES} bytes and one more to know whether there are more:
+     * never the whole of it, which {@code getObject} would load. {@code null} when the driver gives no stream.
+     */
+    private static Streamed binary(ResultSet results, int column) throws SQLException {
+        try (InputStream in = results.getBinaryStream(column)) {
+            if (in == null) {
+                return new Streamed(null);
+            }
+            byte[] read = in.readNBytes(MAX_BYTES + 1);
+            return new Streamed(hex(read, read.length));
+        } catch (SQLFeatureNotSupportedException _) {
+            return null;
+        } catch (IOException failed) {
+            throw new SQLException(failed.getClass().getSimpleName(), failed);
+        }
+    }
+
+    /**
+     * A text read through its stream, {@value #MAX_TEXT} characters and one more to know whether there are more.
+     * {@code null} when the driver gives no stream.
+     */
+    private static Streamed text(ResultSet results, int column) throws SQLException {
+        try (Reader in = results.getCharacterStream(column)) {
+            if (in == null) {
+                return new Streamed(null);
+            }
+            char[] read = new char[MAX_TEXT + 1];
+            int length = 0;
+            while (length < read.length) {
+                int n = in.read(read, length, read.length - length);
+                if (n < 0) {
+                    break;
+                }
+                length += n;
+            }
+            return new Streamed(length > MAX_TEXT ? new String(read, 0, MAX_TEXT) + "…" : new String(read, 0, length));
+        } catch (SQLFeatureNotSupportedException _) {
+            return null;
+        } catch (IOException failed) {
+            throw new SQLException(failed.getClass().getSimpleName(), failed);
+        }
+    }
+
     /** {@code text}, cut past {@value #MAX_TEXT} characters with {@code …}. */
     private static String cut(String text) {
         return text.length() > MAX_TEXT ? text.substring(0, MAX_TEXT) + "…" : text;
@@ -111,7 +171,10 @@ final class SqlValues {
         return "0x" + HexFormat.of().formatHex(bytes, 0, shown) + (length > shown ? "…" : "");
     }
 
-    /** The elements of an array as JSON text, each a number, a boolean, a string or {@code null}. */
+    /** How deep arrays of arrays are written; past it an element is its text. */
+    private static final int MAX_DEPTH = 8;
+
+    /** The elements of an array as JSON text, each a number, a boolean, a string, {@code null} or an array again. */
     private static String elements(Array array) throws SQLException {
         Object raw = array.getArray();
         try {
@@ -119,14 +182,25 @@ final class SqlValues {
         } catch (SQLException _) {
             // a driver that keeps nothing to free
         }
-        if (!(raw instanceof Object[] values)) {
-            return cut(String.valueOf(raw));
-        }
-        List<Object> out = new ArrayList<>(values.length);
-        for (Object element : values) {
-            out.add(element == null || element instanceof Number || element instanceof Boolean
-                    || element instanceof String ? element : element.toString());
-        }
-        return cut(Json.write(out));
+        return cut(Json.write(json(raw, 0)));
+    }
+
+    /** {@code element} as the JSON it is written as: an array, whatever its kind, as a list of its elements. */
+    private static Object json(Object element, int depth) throws SQLException {
+        return switch (element) {
+            case null -> null;
+            case Number _, Boolean _, String _ -> element;
+            case byte[] bytes -> hex(bytes, bytes.length);
+            case Array array when depth < MAX_DEPTH -> json(array.getArray(), depth + 1);
+            case Object other when other.getClass().isArray() && depth < MAX_DEPTH -> {
+                int length = java.lang.reflect.Array.getLength(other);
+                List<Object> out = new ArrayList<>(length);
+                for (int i = 0; i < length; i++) {
+                    out.add(json(java.lang.reflect.Array.get(other, i), depth + 1));
+                }
+                yield out;
+            }
+            default -> element.toString();
+        };
     }
 }

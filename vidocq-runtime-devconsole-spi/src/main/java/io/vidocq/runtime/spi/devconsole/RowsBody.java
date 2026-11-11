@@ -43,6 +43,18 @@ final class RowsBody {
     private RowsBody() {}
 
     static String write(List<Column> columns, List<? extends List<?>> rows, boolean more) {
+        return build(columns, rows, more).body();
+    }
+
+    /** How many leading rows {@link #write} keeps: all of them unless the body would pass the limit. */
+    static int held(List<Column> columns, List<? extends List<?>> rows) {
+        return build(columns, rows, false).kept();
+    }
+
+    /** A body and how many of the rows given it holds. */
+    private record Built(String body, int kept) {}
+
+    private static Built build(List<Column> columns, List<? extends List<?>> rows, boolean more) {
         Objects.requireNonNull(columns, "columns");
         Objects.requireNonNull(rows, "rows");
         int width = columns.size();
@@ -59,6 +71,7 @@ final class RowsBody {
                     + " characters");
         }
         boolean cut = false;
+        int kept = 0;
         StringBuilder row = new StringBuilder();
         for (int r = 0; r < rows.size() && !cut; r++) {
             row.setLength(0);
@@ -67,9 +80,10 @@ final class RowsBody {
             cut = out.length() + row.length() + MORE.length() > ActionResult.MAX_CONTENT;
             if (!cut) {
                 out.append(row);
+                kept++;
             }
         }
-        return out.append(cut || more ? MORE : ALL).toString();
+        return new Built(out.append(cut || more ? MORE : ALL).toString(), kept);
     }
 
     /** The body up to the opening of its rows: the columns, each with its name and type. */

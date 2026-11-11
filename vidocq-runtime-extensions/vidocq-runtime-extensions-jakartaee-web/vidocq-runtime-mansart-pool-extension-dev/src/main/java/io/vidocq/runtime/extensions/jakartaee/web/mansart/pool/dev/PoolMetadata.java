@@ -23,7 +23,9 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Types;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -45,12 +47,20 @@ import java.util.Set;
  * @param unquotedCase    how it stores a name written without quotes, {@code lower}, {@code upper}, or {@code null}
  *                        when it keeps it as written
  * @param keywords        the words of {@link DatabaseMetaData#getSQLKeywords()}, in capitals
+ * @param reserved        the words that cannot be a name unquoted, in capitals, when the database says which (on
+ *                        PostgreSQL, the {@code R} and {@code T} words of {@code pg_get_keywords()}), {@code null}
+ *                        when it does not: every keyword is then taken for one
  * @param tables          the tables and views
  */
 record PoolMetadata(String catalog, String schema, char identifierQuote, String unquotedCase, List<String> keywords,
-                    List<Table> tables) {
+                    List<Table> tables, List<String> reserved) {
 
     /** The schemas of a database's own catalog, in lower case: never listed. */
+    /** How long the boot spends on the foreign keys of all the tables. */
+    static final Duration REFERENCES_BUDGET = Duration.ofSeconds(10);
+
+    private static final System.Logger LOG = System.getLogger(PoolMetadata.class.getName());
+
     private static final Set<String> SYSTEM_SCHEMAS = Set.of("information_schema", "pg_catalog", "pg_toast", "sys",
             "mysql", "performance_schema");
 
@@ -104,6 +114,36 @@ record PoolMetadata(String catalog, String schema, char identifierQuote, String 
      *                   for its language; Tables does not
      */
     static PoolMetadata read(Connection connection, boolean references) throws SQLException {
+        return read(connection, references, REFERENCES_BUDGET);
+    }
+
+    /**
+     * The boot's read: on a read-only connection, given back as it was, with the foreign keys of every table within
+     * {@link #REFERENCES_BUDGET}.
+     */
+    static PoolMetadata readOnly(Connection connection) throws SQLException {
+        boolean readOnly = connection.isReadOnly();
+        try {
+            connection.setReadOnly(true);
+        } catch (SQLException | RuntimeException _) {
+            // a driver that refuses it is read as it is
+        }
+        try {
+            return read(connection, true);
+        } finally {
+            try {
+                connection.setReadOnly(readOnly);
+            } catch (SQLException | RuntimeException _) {
+                // the connection goes back to the pool all the same, which validates it
+            }
+        }
+    }
+
+    /**
+     * {@link #read(Connection, boolean)} with the foreign keys read for at most {@code budget}: the tables that none
+     * was read for have no {@code target}, and a WARNING says so.
+     */
+    static PoolMetadata read(Connection connection, boolean references, Duration budget) throws SQLException {
         DatabaseMetaData meta = connection.getMetaData();
         String catalog = connection.getCatalog();
         String schema = currentSchema(connection);
@@ -143,28 +183,51 @@ record PoolMetadata(String catalog, String schema, char identifierQuote, String 
         }
         PoolMetadata read = new PoolMetadata(catalog, schema, identifierQuote, unquotedCase, keywords,
                 tables.values().stream().sorted(Comparator.comparing((Table t) -> Objects.requireNonNullElse(
-                        t.schema(), "")).thenComparing(Table::name)).toList());
-        return references ? read.withReferences(meta) : read;
+                        t.schema(), "")).thenComparing(Table::name)).toList(), reserved(connection, meta));
+        return references ? read.withReferences(meta, budget) : read;
+    }
+
+    /**
+     * The words PostgreSQL does not let a name be unquoted: the {@code R} (reserved) and {@code T} (reserved, but
+     * allowed as a function or a type) words of {@code pg_get_keywords()}, which {@link DatabaseMetaData#getSQLKeywords()}
+     * mixes with every unreserved one ({@code comments}, {@code owner}, {@code text}…). {@code null} on any other
+     * database, and when PostgreSQL does not answer.
+     */
+    private static List<String> reserved(Connection connection, DatabaseMetaData meta) {
+        try {
+            if (!"PostgreSQL".equals(meta.getDatabaseProductName())) {
+                return null;
+            }
+            try (Statement statement = connection.createStatement();
+                 ResultSet words = statement.executeQuery("SELECT word, catcode FROM pg_get_keywords()")) {
+                return reservedWords(words);
+            }
+        } catch (SQLException | RuntimeException _) {
+            return null;
+        }
+    }
+
+    /** The {@code word}s, in capitals, whose {@code catcode} is {@code R} or {@code T}, in the order read. */
+    static List<String> reservedWords(ResultSet words) throws SQLException {
+        List<String> reserved = new ArrayList<>();
+        while (words.next()) {
+            String category = words.getString("catcode");
+            if ("R".equals(category) || "T".equals(category)) {
+                reserved.add(words.getString("word").toUpperCase(Locale.ROOT));
+            }
+        }
+        return List.copyOf(reserved);
     }
 
     /** This metadata, each column of a single-column foreign key to a listed table given its {@code target}. */
-    private PoolMetadata withReferences(DatabaseMetaData meta) throws SQLException {
+    private PoolMetadata withReferences(DatabaseMetaData meta, Duration budget) throws SQLException {
         Map<String, Table> byKey = new LinkedHashMap<>();
         tables.forEach(table -> byKey.put(key(table.schema(), table.name()), table));
+        Map<String, Map<String, List<String[]>>> keys = importedKeys(meta, budget);
         List<Table> out = new ArrayList<>(tables.size());
         for (Table table : tables) {
-            Map<String, List<String[]>> keys = new LinkedHashMap<>();
-            try (ResultSet found = meta.getImportedKeys(catalog, table.schema(), table.name())) {
-                while (found.next()) {
-                    String constraint = Objects.requireNonNullElse(found.getString("FK_NAME"),
-                            found.getString("FKCOLUMN_NAME"));
-                    keys.computeIfAbsent(constraint, k -> new ArrayList<>()).add(new String[] {
-                        found.getString("FKCOLUMN_NAME"), key(found.getString("PKTABLE_SCHEM"),
-                                found.getString("PKTABLE_NAME"))});
-                }
-            }
             Map<String, String> targets = new LinkedHashMap<>();
-            for (List<String[]> columns : keys.values()) {
+            for (List<String[]> columns : keys.getOrDefault(key(table.schema(), table.name()), Map.of()).values()) {
                 Table referenced = columns.size() == 1 ? byKey.get(columns.getFirst()[1]) : null;
                 if (referenced != null) {
                     targets.put(columns.getFirst()[0], shown(referenced));
@@ -173,7 +236,74 @@ record PoolMetadata(String catalog, String schema, char identifierQuote, String 
             out.add(new Table(table.schema(), table.name(), table.kind(), table.columns().stream()
                     .map(c -> new Column(c.name(), c.jdbcType(), c.sqlType(), targets.get(c.name()))).toList()));
         }
-        return new PoolMetadata(catalog, schema, identifierQuote, unquotedCase, keywords, List.copyOf(out));
+        return new PoolMetadata(catalog, schema, identifierQuote, unquotedCase, keywords, List.copyOf(out),
+                reserved);
+    }
+
+    /**
+     * The foreign keys of every table, by table then by constraint: one call per schema where the driver accepts it,
+     * one per table otherwise, for at most {@code budget}; a WARNING says when some tables were left.
+     */
+    private Map<String, Map<String, List<String[]>>> importedKeys(DatabaseMetaData meta, Duration budget)
+            throws SQLException {
+        Map<String, Map<String, List<String[]>>> keys = new LinkedHashMap<>();
+        long deadline = System.nanoTime() + budget.toNanos();
+        boolean complete = true;
+        for (String each : tables.stream().map(Table::schema).distinct().toList()) {
+            complete = System.nanoTime() - deadline < 0 && (importedKeysOfSchema(meta, each, keys)
+                    || importedKeysOfTables(meta, each, keys, deadline));
+            if (!complete) {
+                break;
+            }
+        }
+        if (!complete) {
+            LOG.log(System.Logger.Level.WARNING, "Mansart pools: the foreign keys of some tables were not read within "
+                    + budget.toSeconds() + " s: their columns have no reference in the SQL language");
+        }
+        return keys;
+    }
+
+    /** One call per table of {@code each}, a driver having refused the call with none; {@code false} past the deadline. */
+    private boolean importedKeysOfTables(DatabaseMetaData meta, String each,
+                                         Map<String, Map<String, List<String[]>>> keys, long deadline)
+            throws SQLException {
+        for (Table table : tables.stream().filter(t -> Objects.equals(t.schema(), each)).toList()) {
+            if (System.nanoTime() - deadline >= 0) {
+                return false;
+            }
+            try (ResultSet found = meta.getImportedKeys(catalog, table.schema(), table.name())) {
+                collect(found, keys);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Reads the foreign keys of every table of {@code each} with one call, no table given, into {@code keys}; {@code
+     * false}, and nothing added, when the driver refuses it.
+     */
+    private boolean importedKeysOfSchema(DatabaseMetaData meta, String each,
+                                         Map<String, Map<String, List<String[]>>> keys) {
+        Map<String, Map<String, List<String[]>>> read = new LinkedHashMap<>();
+        try (ResultSet found = meta.getImportedKeys(catalog, each, null)) {
+            collect(found, read);
+        } catch (SQLException | RuntimeException _) {
+            return false;
+        }
+        keys.putAll(read);
+        return true;
+    }
+
+    /** Adds the foreign keys of {@code found} to {@code keys}: by table, then by constraint, its columns in order. */
+    private static void collect(ResultSet found, Map<String, Map<String, List<String[]>>> keys) throws SQLException {
+        while (found.next()) {
+            String constraint = Objects.requireNonNullElse(found.getString("FK_NAME"),
+                    found.getString("FKCOLUMN_NAME"));
+            keys.computeIfAbsent(key(found.getString("FKTABLE_SCHEM"), found.getString("FKTABLE_NAME")),
+                    k -> new LinkedHashMap<>()).computeIfAbsent(constraint, k -> new ArrayList<>()).add(new String[] {
+                found.getString("FKCOLUMN_NAME"), key(found.getString("PKTABLE_SCHEM"),
+                        found.getString("PKTABLE_NAME"))});
+        }
     }
 
     /**

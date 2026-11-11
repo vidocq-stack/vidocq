@@ -163,8 +163,7 @@ final class ResultJson {
         }
         List<Column> columns = types.entrySet().stream().map(type -> new Column(type.getKey(), type.getValue()))
                 .toList();
-        return new Result(ActionResult.rows(null, columns, rows, more).body(),
-                more ? FIRST_ROWS : count(rows.size()), true);
+        return held(columns, rows, more);
     }
 
     /**
@@ -180,8 +179,18 @@ final class ResultJson {
         for (Object[] row : kept) {
             out.add(cells(row, columns.size(), entities));
         }
-        return new Result(ActionResult.rows(null, shown, out, more).body(),
-                more ? FIRST_ROWS : count(out.size()), true);
+        return held(shown, out, more);
+    }
+
+    /**
+     * A table of rows and its summary words: the body drops the rows that would pass its limit, so the words count the
+     * rows it holds, {@code first N rows} when it was cut, never the rows given.
+     */
+    private static Result held(List<Column> columns, List<List<Object>> rows, boolean more) {
+        int held = ActionResult.rowsHeld(columns, rows);
+        boolean cut = more || held < rows.size();
+        return new Result(ActionResult.rows(null, columns, rows.subList(0, held), cut).body(),
+                cut ? "first " + held + " rows" : count(held), true);
     }
 
     /** The columns, each typed from {@code types} by its name, or {@code object} when it holds entities. */

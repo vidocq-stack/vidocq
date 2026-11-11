@@ -122,7 +122,7 @@ class PoolLanguageTest {
     }
 
     @Test
-    void aLanguagePastItsLimitIsWrittenWithoutDetailsThenWithoutTypesThenNotAtAll() {
+    void aLanguagePastItsLimitIsWrittenWithoutDetailsThenWithoutTypesThenAsItsDialectAlone() {
         pools = TestPools.withTables();
         PoolMetadata metadata = PoolActions.of(MansartPoolsLive.pools()).getFirst().metadata();
         String full = SqlLanguage.json("@Default", metadata);
@@ -133,16 +133,66 @@ class PoolLanguageTest {
         String leaner = SqlLanguage.json("@Default", metadata, lean.length() - 1);
         assertFalse(leaner.contains("\"type\":\"integer\"") || leaner.contains("\"format\""), leaner);
         assertTrue(leaner.contains("\"project_id\":{\"target\":\"projects\"}"), "every column and reference stays");
+        String dialect = SqlLanguage.dialectOnly(metadata);
+        String alone = SqlLanguage.json("@Default", metadata, leaner.length() - 1);
+        assertEquals(dialect, alone, "no tables at all, but SQL's words, so that the editor never reads JDQL's");
+        assertTrue(alone.contains("\"targets\":{}") && alone.contains("\"aliases\":true"), alone);
         IllegalStateException refused = assertThrows(IllegalStateException.class,
                 () -> SqlLanguage.json("@Default", metadata, 100));
         assertTrue(refused.getMessage().startsWith("the SQL language of 4 tables is "), refused.getMessage());
     }
 
     @Test
-    void aPoolWhoseTablesCannotBeReadHasNoLanguage() {
+    void onlyAReservedWordOfTheDatabaseIsAKeywordWhereItListsThemAndTheOthersArePlainNames() {
+        PoolMetadata postgres = new PoolMetadata("db", "public", '"', "lower",
+                List.of("COMMENTS", "LABEL", "OWNER", "TEXT", "MODE", "SELECT", "ORDER", "POSITION", "CASCADE"),
+                List.of(), List.of("SELECT", "ORDER", "USER"));
+
+        Map<?, ?> dialect = member((Map<?, ?>) Json.parse(SqlLanguage.dialectOnly(postgres)), "dialect");
+        List<?> keywords = (List<?>) dialect.get("keywords");
+
+        assertEquals(List.of("SELECT", "ORDER", "USER"), dialect.get("reserved"), "the words a name needs quotes for");
+        assertTrue(keywords.containsAll(List.of("SELECT", "ORDER", "USER", "FROM", "BETWEEN", "SET", "BY", "VALUES",
+                "NULLS", "UNION", "INSERT")), "reserved, and the words of a query's structure: " + keywords);
+        for (String plain : List.of("COMMENTS", "LABEL", "OWNER", "TEXT", "MODE", "POSITION", "VALUE", "LEVEL", "KEY",
+                "DATE", "COUNT")) {
+            assertFalse(keywords.contains(plain), plain + " is no keyword here: " + keywords);
+        }
+    }
+
+    @Test
+    void aDatabaseThatListsNoReservedWordsKeepsEveryKeywordAndPublishesNoList() {
+        pools = TestPools.withTables();
+
+        Map<?, ?> dialect = member(language("sql-default"), "dialect");
+
+        assertFalse(dialect.containsKey("reserved"), "H2: the keywords are what a name is quoted for");
+        assertTrue(((List<?>) dialect.get("keywords")).contains("POSITION"));
+    }
+
+    @Test
+    void theReservedWordsAreThoseOfCatcodeRAndTOfPgGetKeywords() throws Exception {
+        pools = TestPools.withTables();
+        try (java.sql.Connection connection = pools.pool("@Default").getConnection();
+             java.sql.Statement statement = connection.createStatement();
+             java.sql.ResultSet words = statement.executeQuery("SELECT 'select' AS word, 'R' AS catcode UNION ALL "
+                     + "SELECT 'join', 'T' UNION ALL SELECT 'between', 'C' UNION ALL SELECT 'comments', 'U'")) {
+            assertEquals(List.of("SELECT", "JOIN"), PoolMetadata.reservedWords(words));
+        }
+    }
+
+    @Test
+    void aPoolWhoseTablesCannotBeReadHasItsDialectAloneWithTheDoubleQuote() {
         pools = TestPools.boot("vidocq.pool.url", "jdbc:h2:tcp://127.0.0.1:1/nothing", "vidocq.pool.acquireTimeout",
                 "PT1S");
 
-        assertEquals(List.of(), panel.languages());
+        assertEquals(List.of("sql-default"), panel.languages().stream().map(PanelLanguage::id).toList());
+        Map<?, ?> language = language("sql-default");
+        assertEquals(Map.of(), language.get("targets"), "no table is known");
+        Map<?, ?> dialect = member(language, "dialect");
+        assertEquals(Boolean.TRUE, dialect.get("aliases"), "SQL's, so that Format keeps a comment and a quoted name");
+        assertEquals("\"", dialect.get("identifierQuote"));
+        assertTrue(((List<?>) dialect.get("keywords")).contains("SELECT"));
+        assertFalse(dialect.containsKey("unquotedCase"), "not known without the database");
     }
 }

@@ -303,6 +303,108 @@ class SqlRunnerTest {
     }
 
     @Test
+    void aSchemaASessionStatementSetsIsGivenBackWithTheConnection() throws SQLException {
+        List<Connection> held = new ArrayList<>();
+        try (Connection probe = pool.getConnection()) {
+            assertEquals("public", probe.getSchema());
+        }
+        runner.execute("SET SCHEMA sales", Map.of(), false);
+        runner.execute("SET SCHEMA sales", Map.of(), true);
+        try {
+            for (int i = 0; i < pool.config().maxSize(); i++) {
+                held.add(pool.getConnection());
+            }
+            for (Connection connection : held) {
+                assertEquals("public", connection.getSchema(), "the application finds its own schema");
+            }
+        } finally {
+            for (Connection connection : held) {
+                connection.close();
+            }
+        }
+        assertEquals("[[\"first\"]]", title(1), "and the next call reads its own tables");
+    }
+
+    @Test
+    void theCatalogAndTheIsolationOfAConnectionAreGivenBackToo() throws SQLException {
+        List<String> sets = new ArrayList<>();
+        Map<String, Integer> asks = new HashMap<>();
+        DataSource recording = proxy(DataSource.class, (self, method, arguments) -> {
+            Object result = call(method, pool, arguments);
+            return result instanceof Connection connection ? proxy(Connection.class, (c, asked, values) -> {
+                switch (asked.getName()) {
+                    case "setCatalog", "setSchema", "setTransactionIsolation" -> {
+                        sets.add(asked.getName() + Arrays.toString(values));
+                        return null;
+                    }
+                    case "getTransactionIsolation" -> {
+                        return asks.merge("isolation", 1, Integer::sum) == 1 ? Connection.TRANSACTION_READ_COMMITTED
+                                : Connection.TRANSACTION_SERIALIZABLE;
+                    }
+                    case "getCatalog" -> {
+                        return asks.merge("catalog", 1, Integer::sum) == 1 ? "app" : "other";
+                    }
+                    case "getSchema" -> {
+                        return asks.merge("schema", 1, Integer::sum) == 1 ? "app_schema" : "other";
+                    }
+                    case "getMetaData" -> {
+                        DatabaseMetaData real = connection.getMetaData();
+                        return proxy(DatabaseMetaData.class, (meta, named, args) -> named.getName()
+                                .equals("getDatabaseProductName") ? "PostgreSQL" : call(named, real, args));
+                    }
+                    default -> {
+                        // the real connection runs it
+                    }
+                }
+                return call(asked, connection, values);
+            }) : result;
+        });
+
+        new SqlRunner(recording, '"', 30, "url", "user", "secret").execute("SELECT 1", Map.of(), false);
+
+        assertEquals(List.of("setSchema[app_schema]", "setCatalog[app]",
+                "setTransactionIsolation[" + Connection.TRANSACTION_READ_COMMITTED + "]"), sets,
+                "each is restored when the call left it other than it was");
+    }
+
+    @Test
+    void theRoleOrTheUserOfAMessageIsMaskedWhereverItIsQuotedAndSoIsTheHostOfTheUrl() {
+        SqlRunner postgres = new SqlRunner(pool, '"', 30, "jdbc:postgresql://db.internal:5432/tasks?ssl=true", "app",
+                "hunter22");
+
+        assertEquals("role \"***\" does not exist", postgres.masked("role \"app\" does not exist"));
+        assertEquals("role '***' does not exist", postgres.masked("role 'app' does not exist"));
+        assertEquals("Connection to *** refused", postgres.masked("Connection to db.internal:5432 refused"));
+        assertEquals("no route to ***", postgres.masked("no route to db.internal"), "the host alone");
+        assertEquals("the application keeps its words", postgres.masked("the application keeps its words"),
+                "app inside another word is no user");
+        SqlRunner file = new SqlRunner(pool, '"', 30, "jdbc:h2:file:/var/data/app/tasks;MODE=PostgreSQL", "sa", null);
+        assertEquals("cannot open ***.mv.db", file.masked("cannot open /var/data/app/tasks.mv.db"),
+                "the path of a file database");
+        SqlRunner memory = new SqlRunner(pool, '"', 30, "jdbc:h2:mem:tasks", "sa", null);
+        assertEquals("Table \"TASKS\" not found", memory.masked("Table \"TASKS\" not found"), "nothing to mask");
+    }
+
+    @Test
+    void aSummaryCountsTheRowsTheBodyHoldsNotTheRowsRead() {
+        ActionResult result = runner.query("SELECT REPEAT('x', 10000) AS t FROM SYSTEM_RANGE(1, 100)", Map.of());
+
+        String body = result.body();
+        int held = body.split("\\],\\[", -1).length;
+        assertTrue(held < 100 && held > 10, "the body was cut: " + held);
+        assertTrue(body.endsWith("\"more\":true}"), "and says so");
+        assertTrue(result.summary().matches("first " + held + " rows in \\d+ ms"), result.summary());
+    }
+
+    @Test
+    void anArrayOfArraysIsShownAsNestedJson() {
+        ActionResult result = runner.query("SELECT ARRAY[ARRAY[1, 2], ARRAY[3, 4]] AS grid", Map.of());
+
+        assertFalse(result.error(), result.summary());
+        assertEquals("[[\"[[1,2],[3,4]]\"]]", rows(result));
+    }
+
+    @Test
     void aValueJsonCannotHoldAsSuchIsWrittenAsText() {
         String sql = "SELECT CAST('12345678901234567890123456789012345678' AS NUMERIC(38)) AS big, "
                 + "CAST(9007199254740993 AS BIGINT) AS long, X'0102' AS bin, "

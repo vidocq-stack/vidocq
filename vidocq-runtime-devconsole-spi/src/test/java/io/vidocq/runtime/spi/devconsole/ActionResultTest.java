@@ -70,6 +70,23 @@ class ActionResultTest {
     }
 
     @Test
+    void rowsHeldIsHowManyLeadingRowsTheBodyHoldsWithinItsLimit() {
+        List<Column> one = List.of(new Column("t", ""));
+        List<List<Object>> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            rows.add(List.of("x".repeat(10_000)));
+        }
+
+        int held = ActionResult.rowsHeld(one, rows);
+
+        assertTrue(held > 10 && held < 100, "cut at 256 KiB: " + held);
+        ActionResult body = ActionResult.rows(null, one, rows, false);
+        assertEquals(held, body.body().split("\\],\\[", -1).length, "the rows the body holds");
+        assertEquals(3, ActionResult.rowsHeld(one, List.of(List.of("a"), List.of("b"), List.of("c"))));
+        assertEquals(0, ActionResult.rowsHeld(one, List.of()));
+    }
+
+    @Test
     void aRowsResultIsItsColumnsItsRowsAndWhetherThereAreMore() {
         ActionResult rows = ActionResult.rows("2 rows in 3 ms",
                 List.of(new Column("id", "BIGINT"), new Column("title", "VARCHAR(200)"), new Column("done", "")),

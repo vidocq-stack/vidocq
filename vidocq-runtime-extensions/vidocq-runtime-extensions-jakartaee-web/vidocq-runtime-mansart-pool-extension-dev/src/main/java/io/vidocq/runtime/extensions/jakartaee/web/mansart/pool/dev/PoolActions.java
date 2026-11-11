@@ -114,7 +114,7 @@ final class PoolActions {
                     config.username(), config.password());
             PoolMetadata metadata = null;
             try (Connection connection = pool.pool().getConnection()) {
-                metadata = PoolMetadata.read(connection, true);
+                metadata = PoolMetadata.readOnly(connection);
             } catch (SQLException | RuntimeException failed) {
                 String why = failed instanceof SQLException ? reader.masked(String.valueOf(failed.getMessage()))
                         .replaceAll("\\s+", " ") : failed.getClass().getName();

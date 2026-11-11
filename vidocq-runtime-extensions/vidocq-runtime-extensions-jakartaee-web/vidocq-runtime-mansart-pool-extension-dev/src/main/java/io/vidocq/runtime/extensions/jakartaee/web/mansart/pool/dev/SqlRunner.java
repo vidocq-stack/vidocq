@@ -31,6 +31,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.SQLTimeoutException;
+import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,7 +44,9 @@ import java.util.regex.Pattern;
 /**
  * Runs SQL on one pool for the pools panel (SQL spec §4.2). A call takes a connection from the pool, turns its
  * autoCommit off, runs one statement, commits only when asked and rolls back otherwise, always when the call throws,
- * then gives the connection back with its autoCommit and its read-only flag as they were. What only reads runs on a
+ * then gives the connection back with its autoCommit, its read-only flag, its schema, its catalog and its transaction
+ * isolation as they were (what else a statement sets on a session, such as PostgreSQL's {@code SET ROLE} or
+ * {@code SET search_path} past the schema, is the database's to roll back, or not). What only reads runs on a
  * read-only connection too. A statement is cancelled past its timeout. A named parameter {@code :name} is bound from
  * {@code params}: a string, a number, a boolean or {@code null} with {@code setObject}, a list as an array where the
  * driver makes one. On PostgreSQL a string is bound untyped, so that the database types it from where it is, such as a
@@ -68,6 +71,9 @@ final class SqlRunner {
     private static final String CANCELLED = "57014";
     /** The SQLState of a parameter whose type PostgreSQL cannot determine, such as {@code :p} in {@code :p IS NULL}. */
     private static final String UNTYPABLE = "42P18";
+
+    /** A file database's path in a URL: absolute, from the home directory, relative, or a Windows drive's. */
+    private static final Pattern FILE_PATH = Pattern.compile("^(/|~|\\./|\\w:[/\\\\]).*");
 
     /** How a statement's strings and nulls are bound. */
     private enum Binding {
@@ -211,6 +217,7 @@ final class SqlRunner {
                                  boolean commit, int limit) throws SQLException {
         boolean autoCommit = connection.getAutoCommit();
         boolean readOnly = connection.isReadOnly();
+        Session session = Session.of(connection);
         try {
             if (reads) {
                 readOnly(connection, true);
@@ -231,7 +238,54 @@ final class SqlRunner {
             if (reads) {
                 readOnly(connection, readOnly);
             }
+            session.restore(connection, identifierQuote);
         }
+    }
+
+    /** The session state a statement may change and the pool does not reset: schema, catalog, isolation. */
+    private record Session(String schema, String catalog, Integer isolation) {
+
+        static Session of(Connection connection) {
+            return new Session(get(connection::getSchema), get(connection::getCatalog),
+                    get(connection::getTransactionIsolation));
+        }
+
+        /**
+         * Gives {@code connection} back its schema, catalog and isolation, each only when it changed. H2 does not hold
+         * {@code setSchema} once a statement ran {@code SET SCHEMA}, so there the statement is run.
+         */
+        void restore(Connection connection, char quote) {
+            if (schema != null && !schema.equals(get(connection::getSchema))) {
+                if ("H2".equals(get(() -> connection.getMetaData().getDatabaseProductName()))) {
+                    String name = quote + schema.replace(String.valueOf(quote), "" + quote + quote) + quote;
+                    quietly(() -> {
+                        try (Statement statement = connection.createStatement()) {
+                            statement.execute("SET SCHEMA " + name);
+                        }
+                    });
+                } else {
+                    quietly(() -> connection.setSchema(schema));
+                }
+            }
+            if (catalog != null && !catalog.equals(get(connection::getCatalog))) {
+                quietly(() -> connection.setCatalog(catalog));
+            }
+            if (isolation != null && !isolation.equals(get(connection::getTransactionIsolation))) {
+                quietly(() -> connection.setTransactionIsolation(isolation));
+            }
+        }
+
+        private static <T> T get(Getter<T> getter) {
+            try {
+                return getter.get();
+            } catch (SQLException | RuntimeException | AbstractMethodError _) {
+                return null;
+            }
+        }
+    }
+
+    private interface Getter<T> {
+        T get() throws SQLException;
     }
 
     /**
@@ -295,9 +349,11 @@ final class SqlRunner {
         if (answer.columns() == null) {
             return new ActionResult(count(answer.count(), false) + after, null, null, false, Json.write(details));
         }
-        ActionResult rows = ActionResult.rows(count(answer.rows().size(), answer.more()) + " in "
-                + (System.nanoTime() - start) / 1_000_000 + " ms" + after, answer.columns(), answer.rows(),
-                answer.more());
+        // the body drops the rows that would pass its limit: the line counts the rows it holds
+        int held = ActionResult.rowsHeld(answer.columns(), answer.rows());
+        boolean more = answer.more() || held < answer.rows().size();
+        ActionResult rows = ActionResult.rows(count(held, more) + " in " + (System.nanoTime() - start) / 1_000_000
+                + " ms" + after, answer.columns(), answer.rows().subList(0, held), more);
         return new ActionResult(rows.summary(), rows.contentType(), rows.body(), false, Json.write(details));
     }
 
@@ -370,20 +426,73 @@ final class SqlRunner {
                 true, Json.write(details));
     }
 
-    /** {@code text} with the pool's URL, its password and its user after the word user replaced by {@code ***}. */
+    /**
+     * {@code text} with the pool's URL, its password, its user and the URL's host or file path replaced by
+     * {@code ***}: the user after the word user and wherever it is quoted, between double or single quotes
+     * ({@code role "app" does not exist}); the host of the URL, with or without its port, and the path of a file
+     * database, which a connection error names.
+     */
     String masked(String text) {
         String out = text;
         if (url != null && !url.isBlank()) {
             out = out.replace(url, "***");
+            for (String part : urlSecrets(url)) {
+                out = Pattern.compile("(?<![\\w.-])" + Pattern.quote(part) + "(?![\\w-])").matcher(out)
+                        .replaceAll("***");
+            }
         }
         if (password != null && password.length() >= 4) {
             out = out.replace(password, "***");
         }
         if (user != null && !user.isBlank()) {
-            out = Pattern.compile("(?i)(user\\s+\"?)" + Pattern.quote(user) + "(?![\\w])").matcher(out)
-                    .replaceAll("$1***");
+            String name = Pattern.quote(user);
+            out = Pattern.compile("(?i)(user\\s+\"?)" + name + "(?![\\w])").matcher(out).replaceAll("$1***");
+            out = Pattern.compile("([\"'])" + name + "\\1").matcher(out).replaceAll("$1***$1");
         }
         return out;
+    }
+
+    /**
+     * What of a JDBC URL a message must not show besides the URL itself: its authority, {@code host:port}, then its
+     * host alone (a message may name either), or the path of a file database. Longest first.
+     */
+    static List<String> urlSecrets(String url) {
+        String rest = url.startsWith("jdbc:") ? url.substring(5) : url;
+        int cut = rest.indexOf(':');
+        rest = cut < 0 ? "" : rest.substring(cut + 1);
+        int end = indexOfAny(rest, ";?");
+        rest = end < 0 ? rest : rest.substring(0, end);
+        if (rest.startsWith("file:")) {
+            rest = rest.substring(5);
+        }
+        int slashes = rest.indexOf("//");
+        List<String> secrets = new ArrayList<>();
+        if (slashes >= 0) {
+            String authority = rest.substring(slashes + 2);
+            int path = authority.indexOf('/');
+            authority = path < 0 ? authority : authority.substring(0, path);
+            authority = authority.substring(authority.indexOf('@') + 1);
+            String host = authority.startsWith("[") ? authority.substring(0, authority.indexOf(']') + 1)
+                    : authority.contains(":") ? authority.substring(0, authority.lastIndexOf(':')) : authority;
+            if (!authority.isBlank()) {
+                secrets.add(authority);
+            }
+            if (!host.isBlank() && !host.equals(authority)) {
+                secrets.add(host);
+            }
+        } else if (FILE_PATH.matcher(rest).matches()) {
+            secrets.add(rest);
+        }
+        return secrets.stream().filter(secret -> secret.length() >= 3).toList();
+    }
+
+    private static int indexOfAny(String text, String chars) {
+        for (int i = 0; i < text.length(); i++) {
+            if (chars.indexOf(text.charAt(i)) >= 0) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static String cut(String name) {

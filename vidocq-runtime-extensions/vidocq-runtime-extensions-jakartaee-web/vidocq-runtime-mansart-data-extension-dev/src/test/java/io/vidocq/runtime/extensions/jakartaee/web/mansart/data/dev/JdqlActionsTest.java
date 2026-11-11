@@ -282,6 +282,21 @@ class JdqlActionsTest {
     }
 
     @Test
+    void aSummaryCountsTheRowsTheBodyHoldsWhenItIsCutBeforeTheHundredthRow() {
+        RepositoryActions actions = build();
+        runner.answer = new JdqlResult.Rows(List.of("name"), java.util.stream.IntStream.range(0, 100)
+                .mapToObj(i -> new Object[] {"x".repeat(10_000)}).toList());
+
+        ActionResult result = query(actions, "{\"query\":\"SELECT name FROM Gizmo\"}");
+
+        Map<?, ?> body = (Map<?, ?>) Json.parse(result.body());
+        int held = ((List<?>) body.get("rows")).size();
+        assertTrue(held < 100, "the body was cut: " + held);
+        assertEquals(Boolean.TRUE, body.get("more"));
+        assertTrue(result.summary().matches("first " + held + " rows in \\d+ ms"), result.summary());
+    }
+
+    @Test
     void aWriteRunsInATransactionRolledBackByDefault() {
         RepositoryActions actions = build();
         runner.answer = new JdqlResult.Count(4);

@@ -398,6 +398,19 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
         }
 
         /**
+         * How many of the leading {@code rows} the body of {@link #rows} holds: all of them, unless it would pass
+         * {@value #MAX_CONTENT} characters. A summary that counts rows says this number, not the number read.
+         *
+         * @param columns the columns, in order
+         * @param rows    the rows, in order, as {@link #rows} takes them
+         * @return how many rows the body holds
+         * @throws IllegalArgumentException as {@link #rows} does
+         */
+        public static int rowsHeld(List<Column> columns, List<? extends List<?>> rows) {
+            return RowsBody.held(columns, rows);
+        }
+
+        /**
          * A column of a {@link #ROWS} result.
          *
          * @param name its name, such as {@code title}, at most {@value #MAX_NAME} characters

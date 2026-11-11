@@ -77,6 +77,17 @@ final class SqlLanguage {
     /** The words after which a table is named. */
     static final List<String> TARGET_AFTER = List.of("FROM", "JOIN", UPDATE, "INTO");
 
+    /**
+     * The words that give a query its structure: kept as keywords on a database that lists its reserved words, where
+     * the others (a column may be called {@code position} or {@code comments}) are plain names.
+     */
+    private static final Set<String> STRUCTURE = Set.of("SELECT", "FROM", "JOIN", "ON", "WHERE", "GROUP", "BY",
+            "HAVING", "ORDER", "LIMIT", "OFFSET", "SET", "VALUES", UPDATE, "DELETE", "INSERT", "INTO", "AS", "ASC",
+            "DESC", "NULLS", "BETWEEN", "IN", "EXISTS", "LIKE", "ILIKE", "IS", "NOT", "NULL", "AND", "OR", "UNION",
+            "INTERSECT", "EXCEPT", "ALL", "DISTINCT", "CASE", "WHEN", "THEN", "ELSE", "END", "TRUE", "FALSE", "WITH",
+            "USING", "LEFT", "RIGHT", "INNER", "OUTER", "FULL", "CROSS", "NATURAL", "OVER", "PARTITION", "FILTER",
+            "LATERAL", "RECURSIVE", "RETURNING");
+
     private static final System.Logger LOG = System.getLogger(SqlLanguage.class.getName());
 
     private SqlLanguage() {}
@@ -84,8 +95,8 @@ final class SqlLanguage {
     /**
      * The language's JSON, {@code {"mode": "query", "dialect": {…}, "targets": {…}}}, within the
      * {@value PanelLanguage#MAX_JSON} characters of a panel language: past them, written again without the
-     * {@code detail}s, then without the {@code type}s and {@code format}s too (every table and column stays), saying
-     * so; past them still, refused.
+     * {@code detail}s, then without the {@code type}s and {@code format}s too (every table and column stays), then
+     * as its {@link #dialectOnly dialect alone}, saying so; past them still, refused.
      *
      * @param label    the pool's label, which a log names
      * @param metadata what the boot read of its tables
@@ -115,8 +126,27 @@ final class SqlLanguage {
                 return json;
             }
         }
-        throw new IllegalStateException("the SQL language of " + targets.size() + " tables is " + json.length()
-                + " characters even without details or types, past the " + limit + " a panel language may hold");
+        json = dialectOnly(metadata);
+        if (json.length() <= limit) {
+            LOG.log(System.Logger.Level.INFO, "Mansart pools: the SQL language of pool '" + label + "', "
+                    + targets.size() + " tables, is " + full + " characters, past the " + limit
+                    + " a panel language may hold: written with SQL's dialect alone, no table");
+            return json;
+        }
+        throw new IllegalStateException("the SQL language of " + targets.size() + " tables is " + full
+                + " characters even without details or types, and its dialect alone " + json.length()
+                + ", past the " + limit + " a panel language may hold");
+    }
+
+    /**
+     * SQL's dialect and no table: what the editor needs not to read a SQL text with JDQL's words, comments and quotes,
+     * and always far under the limit of a panel language.
+     *
+     * @param metadata what the boot read, whose keywords, quote and storage of names are used; {@code null} when it
+     *                 could not be read: the double quote, and a name stored as written
+     */
+    static String dialectOnly(PoolMetadata metadata) {
+        return write(dialect(metadata), new LinkedHashMap<>());
     }
 
     private static String write(Map<String, Object> dialect, Map<String, Object> targets) {
@@ -130,17 +160,29 @@ final class SqlLanguage {
     /** SQL's dialect for this database: its keywords, its quote, how it stores a name; no self. */
     private static Map<String, Object> dialect(PoolMetadata metadata) {
         Set<String> keywords = new LinkedHashSet<>(KEYWORDS);
-        keywords.addAll(metadata.keywords());
+        if (metadata != null) {
+            keywords.addAll(metadata.keywords());
+        }
+        List<String> reserved = metadata == null ? null : metadata.reserved();
+        if (reserved != null) {
+            // the database says which words need quotes: the others, unreserved, are names like any other
+            Set<String> words = new LinkedHashSet<>(reserved);
+            keywords.removeIf(word -> !words.contains(word) && !STRUCTURE.contains(word));
+            keywords.addAll(words);
+        }
         Map<String, Object> dialect = new LinkedHashMap<>();
         dialect.put("keywords", List.copyOf(keywords));
+        if (reserved != null) {
+            dialect.put("reserved", reserved);
+        }
         dialect.put("functions", FUNCTIONS);
         dialect.put("clauses", CLAUSES);
         dialect.put("targetAfter", TARGET_AFTER);
         dialect.put("aliases", true);
         dialect.put("self", null);
         dialect.put("quote", "'");
-        dialect.put("identifierQuote", String.valueOf(metadata.identifierQuote()));
-        if (metadata.unquotedCase() != null) {
+        dialect.put("identifierQuote", metadata == null ? "\"" : String.valueOf(metadata.identifierQuote()));
+        if (metadata != null && metadata.unquotedCase() != null) {
             dialect.put("unquotedCase", metadata.unquotedCase());
         }
         return dialect;
