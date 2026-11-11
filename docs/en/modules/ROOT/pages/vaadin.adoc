@@ -20,17 +20,17 @@ together: the pom below with production mode set, and a `jlink` profile with the
 | `vidocq:dev`
 | The application in a child JVM, reloaded on every change
 | ~330 ms
-| `vidocq.app.layer=all`
+| Nothing to set: `all` is the default <<app-layer,application layer>>
 
 | `vidocq:run`
 | The application in a child JVM, as in production
 | ~310 ms
-| `vidocq.app.layer=all`
+| Nothing to set: `all` is the default <<app-layer,application layer>>
 
 | `vidocq:package`
 | `target/<app>/` with `lib/`, `app/` and launch scripts, 19 MB without a JDK
 | ~310 ms
-| `vidocq.app.layer=all`
+| Nothing to set: `all` is the default <<app-layer,application layer>>
 
 | `vidocq:jlink`
 | `target/dist/`, a 68 MB image with its own JDK
@@ -108,7 +108,6 @@ xref:modules/vidocq-runtime-cli.adoc#create-snapshot[Trying a SNAPSHOT].
   <vaadin.version>25.3.2</vaadin.version>
   <!-- The application's Java module: the runtime's own main boots it, no main class needed. -->
   <vidocq.mainModule>com.example.app</vidocq.mainModule>
-  <vidocq.app.layer>all</vidocq.app.layer>
   <!-- Production mode under vidocq:dev, vidocq:run and in the vidocq:package launch scripts. -->
   <vidocq.dev.jvmArgs>-Dvaadin.productionMode=true</vidocq.dev.jvmArgs>
   <vidocq.run.jvmArgs>-Dvaadin.productionMode=true</vidocq.run.jvmArgs>
@@ -239,21 +238,17 @@ vidocq.servlet.context-path=/
 ----
 
 [#app-layer]
-=== Why `vidocq.app.layer=all`
+=== Why Vaadin needs `vidocq.app.layer=all`, the default
 
 Vaadin looks the application's resources up, `META-INF/VAADIN/webapp/index.html` first, through the class loader
-that loaded Vaadin. Under the default `vidocq.app.layer=classes`, Vaadin stays in the parent layer and the application
-sits in a child layer, so Vaadin does not find them. Every request then answers 500 with _Unable to find index.html_.
+that loaded Vaadin. If Vaadin stayed in the parent layer while the application sat in a child layer
+(`vidocq.app.layer=classes`), Vaadin would not find them, and every request would answer 500 with _Unable to find
+index.html_.
 
-`vidocq.app.layer=all` puts the libraries outside the runtime in the application layer too, the way `WEB-INF/lib`
-works in a servlet container. Set it in the pom so that every goal uses it:
-
-[source,xml]
-----
-<properties>
-  <vidocq.app.layer>all</vidocq.app.layer>
-</properties>
-----
+Since Vidocq 0.4.0, `vidocq.app.layer=all` is the default: the libraries outside the runtime go in the application
+layer with the application, the way `WEB-INF/lib` works in a servlet container. You do not set anything for Vaadin.
+Do not set `vidocq.app.layer=classes` in a Vaadin project. If an older pom still sets `vidocq.app.layer=all`, delete
+the line.
 
 See xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer]. Asking Vaadin to use the context
 class loader instead is tracked in Vidocq/vidocq#256.
@@ -431,8 +426,8 @@ be a valid version but is '${vauban.version}'_.
 | Pass `-Dvaadin.productionMode=true`. See <<production-mode>>.
 
 | Every request answers 500 with _Unable to find index.html_.
-| Vaadin is outside the application layer.
-| Set `vidocq.app.layer=all`. See <<app-layer>>.
+| Vaadin is outside the application layer: the project sets `vidocq.app.layer=classes`.
+| Remove the setting: `all` is the default. See <<app-layer>>.
 
 |In a jlink image only, the first request gets no answer, and the log shows
 _ServiceConfigurationError: com.example.app.AppShell: module flow.server does not declare `uses`_.
@@ -482,7 +477,7 @@ xref:modules/vidocq-runtime-extensions.adoc#vaadin[the extension].
 
 * Only production mode was checked, on one view: the bootstrap page and the frontend bundles are served. Server
   round-trips, push, websockets and the routes of a real application were not exercised in this setup.
-* `vidocq.app.layer=classes` does not work for Vaadin: see <<app-layer>>.
+* `vidocq.app.layer=classes`, the opt-out, does not work for Vaadin: see <<app-layer>>.
 * In a jlink image, Collaboration Engine and LitTemplate are not available while `forceExplicit` is needed.
 *In a jlink image, an `AppShellConfigurator` needs `vidocq-runtime-vaadin-extension`: see
   <<jlink-app-shell>>.

@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.core.LayerSplit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -32,26 +33,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ImageLaunchTest {
 
     @Test
-    @DisplayName("an application main class is launched as it is, with no option added to the image")
+    @DisplayName("an application main class is launched as it is, with the mode of the application layer as the only option")
     void anApplicationMainClassIsLaunchedAsItIs() {
-        var launch = ImageLaunch.of("com.acme.shop", "com.acme.shop.App");
+        var launch = ImageLaunch.of("com.acme.shop", "com.acme.shop.App", LayerSplit.Mode.ALL);
         assertEquals("com.acme.shop/com.acme.shop.App", launch.entryPoint());
-        assertEquals(List.of(), launch.vmOptions());
+        assertEquals(List.of("-Dvidocq.app.layer=all"), launch.vmOptions(), "only the mode of the layer");
     }
 
     @Test
     @DisplayName("a legacy module/class main class keeps its class part")
     void aLegacyModuleSlashClassKeepsItsClass() {
-        var launch = ImageLaunch.of("com.acme.shop", "com.acme.shop/com.acme.shop.App");
+        var launch = ImageLaunch.of("com.acme.shop", "com.acme.shop/com.acme.shop.App", LayerSplit.Mode.ALL);
         assertEquals("com.acme.shop/com.acme.shop.App", launch.entryPoint());
     }
 
     @Test
     @DisplayName("without a main class, the runtime's main starts and re-layers the application module")
     void withoutAMainClassTheRuntimeMainStarts() {
-        var expected = List.of("--add-modules=com.acme.shop", "-Dvidocq.app.module=com.acme.shop");
+        var expected = List.of("--add-modules=com.acme.shop", "-Dvidocq.app.module=com.acme.shop",
+                "-Dvidocq.app.layer=all");
         for (String none : new String[] {null, "", "  ", "io.vidocq.runtime.core.Vidocq"}) {
-            var launch = ImageLaunch.of("com.acme.shop", none);
+            var launch = ImageLaunch.of("com.acme.shop", none, LayerSplit.Mode.ALL);
             assertEquals("io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq", launch.entryPoint(),
                     "main class " + none);
             assertEquals(expected, launch.vmOptions(), "main class " + none);
@@ -59,9 +61,18 @@ class ImageLaunchTest {
     }
 
     @Test
+    @DisplayName("the image carries the mode it was built under, classes too")
+    void theImageCarriesItsMode() {
+        assertEquals("-Dvidocq.app.layer=classes",
+                ImageLaunch.of("com.acme.shop", null, LayerSplit.Mode.CLASSES).vmOptions().getLast());
+        assertEquals(List.of("-Dvidocq.app.layer=classes"),
+                ImageLaunch.of("com.acme.shop", "com.acme.shop.App", LayerSplit.Mode.CLASSES).vmOptions());
+    }
+
+    @Test
     @DisplayName("no main module is a failure that names the property to set")
     void noMainModuleNamesTheProperty() {
-        var failure = assertThrows(IllegalArgumentException.class, () -> ImageLaunch.of(" ", null));
+        var failure = assertThrows(IllegalArgumentException.class, () -> ImageLaunch.of(" ", null, LayerSplit.Mode.ALL));
         assertTrue(failure.getMessage().contains("vidocq.mainModule"), failure.getMessage());
     }
 
@@ -69,7 +80,7 @@ class ImageLaunchTest {
     @DisplayName("the runtime's module as main module, without an application main class, is a failure")
     void theRuntimeModuleIsNotTheApplication() {
         var failure = assertThrows(IllegalArgumentException.class,
-                () -> ImageLaunch.of("io.vidocq.runtime.core", "io.vidocq.runtime.core.Vidocq"));
+                () -> ImageLaunch.of("io.vidocq.runtime.core", "io.vidocq.runtime.core.Vidocq", LayerSplit.Mode.ALL));
         assertTrue(failure.getMessage().contains("the application's own module"), failure.getMessage());
     }
 
@@ -78,10 +89,12 @@ class ImageLaunchTest {
     void jlinkBakesTheOptionsIntoTheImage() {
         assertEquals(List.of("--launcher", "shop=io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq",
                         // One argument: jlink refuses a separate value that starts with "--".
-                        "--add-options=--add-modules=com.acme.shop -Dvidocq.app.module=com.acme.shop"),
-                VidocqJlinkMojo.launcherArgs("shop", ImageLaunch.of("com.acme.shop", null)));
-        assertEquals(List.of("--launcher", "shop=com.acme.shop/com.acme.shop.App"),
-                VidocqJlinkMojo.launcherArgs("shop", ImageLaunch.of("com.acme.shop", "com.acme.shop.App")));
+                        "--add-options=--add-modules=com.acme.shop -Dvidocq.app.module=com.acme.shop"
+                                + " -Dvidocq.app.layer=all"),
+                VidocqJlinkMojo.launcherArgs("shop", ImageLaunch.of("com.acme.shop", null, LayerSplit.Mode.ALL)));
+        assertEquals(List.of("--launcher", "shop=com.acme.shop/com.acme.shop.App",
+                        "--add-options=-Dvidocq.app.layer=all"),
+                VidocqJlinkMojo.launcherArgs("shop", ImageLaunch.of("com.acme.shop", "com.acme.shop.App", LayerSplit.Mode.ALL)));
     }
 
     @Test
@@ -89,9 +102,11 @@ class ImageLaunchTest {
     void jpackageLaunchesTheSameEntryPoint() {
         assertEquals(List.of("--module", "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq",
                         "--java-options", "--add-modules=com.acme.shop",
-                        "--java-options", "-Dvidocq.app.module=com.acme.shop"),
-                VidocqJpackageMojo.entryArgs(ImageLaunch.of("com.acme.shop", null)));
-        assertEquals(List.of("--module", "com.acme.shop/com.acme.shop.App"),
-                VidocqJpackageMojo.entryArgs(ImageLaunch.of("com.acme.shop", "com.acme.shop.App")));
+                        "--java-options", "-Dvidocq.app.module=com.acme.shop",
+                        "--java-options", "-Dvidocq.app.layer=all"),
+                VidocqJpackageMojo.entryArgs(ImageLaunch.of("com.acme.shop", null, LayerSplit.Mode.ALL)));
+        assertEquals(List.of("--module", "com.acme.shop/com.acme.shop.App",
+                        "--java-options", "-Dvidocq.app.layer=all"),
+                VidocqJpackageMojo.entryArgs(ImageLaunch.of("com.acme.shop", "com.acme.shop.App", LayerSplit.Mode.ALL)));
     }
 }

@@ -207,11 +207,22 @@ class LayerSplitTest {
     @Test
     @DisplayName("the mode accepts classes and all, nothing else")
     void mode() {
-        assertEquals(LayerSplit.Mode.CLASSES, LayerSplit.Mode.of(null));
+        assertEquals(LayerSplit.Mode.ALL, LayerSplit.Mode.of(null));
+        assertEquals(LayerSplit.Mode.ALL, LayerSplit.Mode.of("  "));
         assertEquals(LayerSplit.Mode.CLASSES, LayerSplit.Mode.of(" classes "));
         assertEquals(LayerSplit.Mode.ALL, LayerSplit.Mode.of("all"));
         var e = assertThrows(IllegalArgumentException.class, () -> LayerSplit.Mode.of("libs"));
         assertEquals("vidocq.app.layer must be classes or all, not 'libs'", e.getMessage());
+    }
+
+    @Test
+    @DisplayName("all is the default (Vidocq/vidocq#247); a value that is set, blank or not, is told from none")
+    void allIsTheDefault() {
+        assertEquals(LayerSplit.Mode.ALL, LayerSplit.Mode.DEFAULT);
+        assertTrue(!LayerSplit.requested(null));
+        assertTrue(!LayerSplit.requested(" "));
+        assertTrue(LayerSplit.requested("all"));
+        assertTrue(LayerSplit.requested("classes"));
     }
 
     @Test

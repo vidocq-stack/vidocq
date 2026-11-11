@@ -562,9 +562,10 @@ other. The launchers used to pass the class name alone to `--module`, and the JV
 | Property | Default | Meaning
 
 | `vidocq.app.layer`
-| `classes`
-| `classes`: the application layer holds the project's classes, its dependencies stay on the module path. `all`: it
-  also holds every dependency outside the runtime's closure, as `WEB-INF/lib` does in a servlet container.
+| `all` (`classes` before 0.4.0)
+| `all`: the application layer holds the project's classes and every dependency outside the runtime's closure, as
+  `WEB-INF/lib` does in a servlet container. `classes`: it holds the project's classes only, the dependencies stay
+  on the module path.
 
 | `vidocq.app.layer.keep`
 | _(empty)_
@@ -572,12 +573,40 @@ other. The launchers used to pass the class name alone to `--module`, and the JV
   or as a suffix.
 |===
 
-`all` needs the layer mode: `vidocq.dev.layer` for `vidocq:dev`, `vidocq.package.layer` for `vidocq:package`
-(both `true` by default). With the layer mode off, the goal fails.
+`all` is the default since 0.4.0, in `vidocq:run`, `vidocq:dev`, an IDE launch and `vidocq:package` alike, so that
+development and production behave the same way. `classes` is the opt-out. The goals hand the mode they settled on to the
+application as `-Dvidocq.app.layer`, `classes` included.
 
-The build logs `application layer: <n> libraries, <m> kept in the parent layer by a pin`. A dependency whose
-module name cannot be derived fails the build under `all`, with a message that names the jar: give it an
-`Automatic-Module-Name`, or set `vidocq.app.layer=classes`.
+`all` needs the layer mode: `vidocq.dev.layer` for `vidocq:dev`, `vidocq.package.layer` for `vidocq:package`
+(both `true` by default). What happens when it cannot be honoured depends on whether you asked for it:
+
+[cols="2,2,2"]
+|===
+| Case | `vidocq.app.layer` left to the default | `-Dvidocq.app.layer=all` asked for
+
+| The layer mode is off
+| Falls back to `classes`, with a warning.
+| The goal fails.
+
+| A dependency whose module name cannot be derived
+| The jar stays in the parent layer, with a warning that names it. Give it an `Automatic-Module-Name` to move it.
+| The build fails, naming the jar.
+
+| A pinned module reads a module of the application
+| Falls back to `classes`, with a warning that names both modules.
+| The build fails, naming both modules.
+|===
+
+The build logs `application layer: <n> libraries, <m> kept in the parent layer by a pin`.
+
+*Jlink, jpackage and Docker.* `vidocq:jlink` links one boot layer, and the runtime re-layers the application at start,
+as it does for an IDE launch (Vidocq/vidocq#247): the application and its libraries go into the application layer,
+the runtime and the bricks stay. The goal bakes `-Dvidocq.app.layer=` with its mode into the launcher
+(`--add-options`; `vidocq:jpackage` passes it with `--java-options`), `classes` included, so the image keeps the mode it
+was built under. `vidocq:docker` wraps the jlink image. To opt out, build the image with `-Dvidocq.app.layer=classes`.
+*Native code and threads.* A library with native code (JNI) cannot be loaded twice by the JVM, so the dev reload cannot reload it: pin it
+with `vidocq.app.layer.keep`. A thread that a library leaves running keeps the previous layer in memory; the reload
+warns. The `layer` section of the startup report lists the libraries.
 
 The parent layer also keeps the dependencies that a kept module declares in Maven: the Liquibase extension keeps
 `liquibase.core` and, through Maven's dependency trails, its own dependencies. Maven records one path per
@@ -587,7 +616,7 @@ application layer: pin it with `vidocq.app.layer.keep`.
 Under `vidocq:package` with `all`, `lib/` holds the parent layer and `app/` holds the application jar and its
 libraries. Both launchers boot the runtime with `-Dvidocq.app.path` pointing at `app/` and
 `-Dvidocq.app.main` naming the main class, also when `vidocq.mainModule` is set: the trampoline launch would keep the
-automatic libraries in the boot layer. They carry `-Dvidocq.app.layer=all`, and the pinned list when there is one.
+automatic libraries in the boot layer. They carry `-Dvidocq.app.layer=` with the mode, and the pinned list when there is one.
 A jar with classes parked by `vidocq:generate` ships enriched with them, so it moves to `app/` as well. The rule and the
 limits are in xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer].
 
@@ -687,6 +716,9 @@ target/
   with jlink's `--add-options`: `--add-modules=<mainModule>`, because no module of the runtime reads the
   application module and the JVM would leave it out of the boot layer, and `-Dvidocq.app.module=<mainModule>`,
   which tells `Vidocq.main` to re-layer that module the way the trampoline does.
+
+Either way the goal adds `-Dvidocq.app.layer=<mode>` (`all` by default, `classes` when the build sets it), so that the
+image keeps the mode it was built under.
 
 The application boots in the same Vauban layer either way: the startup report reads
 `layer … (boot-layer detection from <mainModule>)` in both. Being in the image, the options apply to every way of
@@ -840,10 +872,10 @@ run always uses.
 | How long the application has to stop after Ctrl+C before it is force-killed.
 
 | `vidocq.app.layer`
-| `classes`
-| `classes`: the application layer holds the project's classes, its dependencies stay on the module path. `all`: it
-  also holds every dependency outside the runtime's closure, as `WEB-INF/lib` does in a servlet container. Needs the
-  layer mode. See <<app-layer-property,the `vidocq.app.layer` property>>.
+| `all`
+| `all`: the application layer holds the project's classes and every dependency outside the runtime's closure, as
+  `WEB-INF/lib` does in a servlet container. `classes`: the project's classes only. See
+  <<app-layer-property,the `vidocq.app.layer` property>>.
 
 | `vidocq.app.layer.keep`
 | _(empty)_

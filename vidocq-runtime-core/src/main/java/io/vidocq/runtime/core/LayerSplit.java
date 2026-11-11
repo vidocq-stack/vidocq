@@ -55,15 +55,22 @@ public final class LayerSplit {
     private static final List<String> RUNTIME_PREFIXES = List.of(
             "java.", "jdk.", "jakarta.", "org.eclipse.microprofile.", "io.vidocq.");
 
-    /** The value of {@value #MODE_PROPERTY}. */
+    /**
+     * The value of {@value #MODE_PROPERTY}. {@link #ALL} is the default since Vidocq 0.4.0 (Vidocq/vidocq#247):
+     * {@link #CLASSES} is the opt-out.
+     */
     public enum Mode {
         CLASSES, ALL;
 
-        /** {@code classes} when {@code value} is {@code null} or blank. */
+        /** What an unset or blank {@value #MODE_PROPERTY} means. */
+        public static final Mode DEFAULT = ALL;
+
+        /** {@link #DEFAULT} when {@code value} is {@code null} or blank. */
         public static Mode of(String value) {
             String v = value == null ? "" : value.strip();
             return switch (v) {
-                case "", "classes" -> CLASSES;
+                case "" -> DEFAULT;
+                case "classes" -> CLASSES;
                 case "all" -> ALL;
                 default -> throw new IllegalArgumentException(
                         MODE_PROPERTY + " must be classes or all, not '" + value + "'");
@@ -124,6 +131,15 @@ public final class LayerSplit {
     }
 
     private LayerSplit() {}
+
+    /**
+     * Whether {@code value} of {@value #MODE_PROPERTY} was asked for. Asked for, {@code all} fails the build or the
+     * launch where it cannot be honoured; left to the default, it degrades to {@code classes} with a warning, so that
+     * an application that worked before the default changed keeps working.
+     */
+    public static boolean requested(String value) {
+        return value != null && !value.isBlank();
+    }
 
     /**
      * Splits {@code candidates}, with no declared dependencies for the automatic modules.

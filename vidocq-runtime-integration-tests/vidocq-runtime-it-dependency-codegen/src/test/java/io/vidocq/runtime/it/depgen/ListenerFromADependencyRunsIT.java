@@ -64,10 +64,10 @@ class ListenerFromADependencyRunsIT {
             Fixture.stop(mvn);
         }
 
-        // The default layer (classes): the selection does not depend on it, so the listener runs there too. The
+        // The classes layer, the opt-out: the selection does not depend on it, so the listener runs there too. The
         // library is in the parent layer, which the report does not count.
         Path classes = Fixture.logs().resolve("runs-run-classes.log");
-        Process defaultLayer = Fixture.start(project.resolve("app"), classes, "vidocq:run", cache,
+        Process defaultLayer = Fixture.start(project.resolve("app"), classes, "vidocq:run", "-Dvidocq.app.layer=classes", cache,
                 "-Dvidocq.chappe.listener.default.port=" + Fixture.freePort());
         try {
             Fixture.awaitLog(defaultLayer, classes, "Vidocq - Started in");

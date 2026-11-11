@@ -40,7 +40,7 @@ class AppLayerDevIT {
         Fixture.install(project, Fixture.logs().resolve("dev-install.log"));
         Path log = Fixture.logs().resolve("dev-all.log");
 
-        Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:dev", "-Dvidocq.app.layer=all");
+        Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:dev"); // all is the default
         try {
             Fixture.awaitLog(mvn, log, FOUND);
             Fixture.awaitLog(mvn, log, "SQL-OK");

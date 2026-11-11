@@ -92,11 +92,13 @@ public class VidocqPackageMojo extends AbstractMojo {
     private boolean layerMode;
 
     /**
-     * {@code classes} (default): the application layer holds the project's classes; {@code all}: it holds every
-     * dependency outside the runtime's closure too (Vidocq/vidocq#247). Under {@code all}, {@code lib/} keeps the
-     * parent layer and {@code app/} the application jar with its libraries.
+     * {@code all} (the default since 0.4.0): the application layer holds the project's classes and every dependency
+     * outside the runtime's closure (Vidocq/vidocq#247): {@code lib/} keeps the parent layer and {@code app/} the
+     * application jar with its libraries. {@code classes}: the application layer holds the project's classes only.
+     * Left unset, a build that {@code all} cannot serve degrades to {@code classes} with a warning; set explicitly,
+     * {@code all} fails it.
      */
-    @Parameter(property = "vidocq.app.layer", defaultValue = "classes")
+    @Parameter(property = "vidocq.app.layer")
     private String appLayer;
 
     /** Comma-separated patterns ({@code module} or {@code groupId:artifactId}) kept in the parent layer under {@code all}. */
@@ -105,6 +107,9 @@ public class VidocqPackageMojo extends AbstractMojo {
 
     /** The modules kept in the parent layer by a pin, with the reason: set by {@link #execute()} under {@code all}. */
     private Map<String, String> pinned = Map.of();
+
+    /** The mode the distribution is built under: set by {@link #execute()}, {@code classes} when {@code all} degrades. */
+    private LayerSplit.Mode mode;
 
     /** The distribution's {@code app/} directory under the layer launch, whose modules may require JDK modules. */
     private Path appDir;
@@ -269,19 +274,12 @@ public class VidocqPackageMojo extends AbstractMojo {
      * {@link ApplicationLaunch#layered} computes them, so that a kept automatic module keeps its dependencies.
      */
     private Set<Path> splitForAppLayer(List<Packaged> packaged) throws MojoExecutionException {
-        LayerSplit.Mode mode;
-        try {
-            mode = LayerSplit.Mode.of(appLayer);
-        } catch (IllegalArgumentException e) {
-            throw new MojoExecutionException(e.getMessage(), e);
-        }
+        mode = ApplicationLaunch.effectiveMode(appLayer, layerMode, "vidocq.package.layer", getLog()::warn);
         pinned = Map.of();
         if (mode != LayerSplit.Mode.ALL) {
             return Set.of();
         }
-        if (!layerMode) {
-            throw new MojoExecutionException("vidocq.app.layer=all needs vidocq.package.layer=true");
-        }
+        boolean requested = LayerSplit.requested(appLayer);
         List<LayerSplit.Candidate> candidates = new ArrayList<>();
         List<Artifact> artifacts = new ArrayList<>();
         Map<String, String> moduleByCoordinates = new LinkedHashMap<>();
@@ -293,6 +291,10 @@ public class VidocqPackageMojo extends AbstractMojo {
             try {
                 candidate = LayerSplit.candidate(p.src(), a.getGroupId() + ":" + a.getArtifactId());
             } catch (IOException e) {
+                if (!requested) {
+                    getLog().warn(ApplicationLaunch.unreadableModuleWarning(e.getMessage()));
+                    continue;
+                }
                 throw new MojoExecutionException("vidocq.app.layer=all reads the module of every dependency: "
                         + e.getMessage() + ". Give the jar an Automatic-Module-Name, or use vidocq.app.layer=classes.",
                         e);
@@ -306,7 +308,12 @@ public class VidocqPackageMojo extends AbstractMojo {
             split = LayerSplit.split(candidates, Set.of(), LayerSplit.patterns(appLayerKeep), Map.of(),
                     ApplicationLaunch.declaredReads(artifacts, moduleByCoordinates));
         } catch (IllegalStateException e) {
-            throw new MojoExecutionException(e.getMessage(), e);
+            if (requested) {
+                throw new MojoExecutionException(e.getMessage(), e);
+            }
+            getLog().warn(ApplicationLaunch.splitFallbackWarning(e.getMessage()));
+            mode = LayerSplit.Mode.CLASSES;
+            return Set.of();
         }
         pinned = split.pinned();
         Set<Path> toApp = new HashSet<>(split.applicationPaths());
@@ -317,10 +324,9 @@ public class VidocqPackageMojo extends AbstractMojo {
 
     /** The JVM options the {@code all} mode adds to a launcher, each followed by the line continuation. */
     private String appLayerOptions(String continuation) {
-        if (LayerSplit.Mode.of(appLayer) != LayerSplit.Mode.ALL) {
-            return "";
-        }
-        String options = "\n  -Dvidocq.app.layer=all " + continuation;
+        // The mode is always written, classes too: a runtime that finds it unset takes the default, all.
+        String options = "\n  -Dvidocq.app.layer=" + effectiveMode().name().toLowerCase(java.util.Locale.ROOT)
+                + " " + continuation;
         if (!pinned.isEmpty()) {
             options += "\n  \"-D" + LayerSplit.PINNED_PROPERTY + "=" + LayerSplit.encodePinned(pinned) + "\" "
                     + continuation;
@@ -381,10 +387,10 @@ public class VidocqPackageMojo extends AbstractMojo {
                     #!/bin/sh
                     BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
                     exec "$JAVA"%s $JAVA_OPTS \\
-                      --module-path "$BASEDIR/lib" \\
+                      --module-path "$BASEDIR/lib" \\%s
                       --module %s \\
                       "$@"
-                    """.formatted(jvmArgsLine, legacyModuleRef());
+                    """.formatted(jvmArgsLine, appLayerOptions("\\"), legacyModuleRef());
         }
 
         Path shFile = binDir.resolve(scriptName + ".sh");
@@ -462,10 +468,10 @@ public class VidocqPackageMojo extends AbstractMojo {
                     @echo off
                     set BASEDIR=%%~dp0..
                     "%%JAVA%%"%s %%JAVA_OPTS%% ^
-                      --module-path "%%BASEDIR%%\\lib" ^
+                      --module-path "%%BASEDIR%%\\lib" ^%s
                       --module %s ^
                       %%*
-                    """.formatted(jvmArgsLine, legacyModuleRef());
+                    """.formatted(jvmArgsLine, appLayerOptions("^"), legacyModuleRef());
         }
 
         Files.writeString(binDir.resolve(scriptName + ".cmd"), withJdkCheck(script, "@echo off\n", CMD_JDK_CHECK));
@@ -499,7 +505,18 @@ public class VidocqPackageMojo extends AbstractMojo {
      * trampoline's module path would keep the automatic libraries in the boot layer (Vidocq/vidocq#247).
      */
     private boolean trampolineLaunch() {
-        return layerMode && trampolineRef() != null && LayerSplit.Mode.of(appLayer) != LayerSplit.Mode.ALL;
+        return layerMode && trampolineRef() != null && effectiveMode() != LayerSplit.Mode.ALL;
+    }
+
+    /**
+     * The mode of the launchers: the one {@link #execute()} settled on, or, for a script written on its own, the
+     * configured one ({@code classes} when the layer mode is off).
+     */
+    private LayerSplit.Mode effectiveMode() {
+        if (mode != null) {
+            return mode;
+        }
+        return layerMode ? LayerSplit.Mode.of(appLayer) : LayerSplit.Mode.CLASSES;
     }
 
     /**

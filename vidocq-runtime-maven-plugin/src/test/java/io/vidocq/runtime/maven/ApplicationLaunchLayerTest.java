@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.core.LayerSplit;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
@@ -73,6 +74,86 @@ class ApplicationLaunchLayerTest {
         assertEquals(Map.of("vidocq.app.layer", "all"), ApplicationLaunch.layerProperties(Map.of()));
         assertEquals(Map.of("vidocq.app.layer", "all", "vidocq.app.layer.pinned", "flow.server=vidocq.app.layer.keep"),
                 ApplicationLaunch.layerProperties(Map.of("flow.server", "vidocq.app.layer.keep")));
+    }
+
+    /** The mode is always handed to the application, classes included: unset, the runtime takes the default, all. */
+    @Test
+    void classesIsHandedOnToo() {
+        assertEquals(Map.of("vidocq.app.layer", "classes"),
+                ApplicationLaunch.layerProperties(LayerSplit.Mode.CLASSES, Map.of()));
+    }
+
+    @Test
+    void theModeIsAllUnlessSaidOtherwise() throws Exception {
+        var warnings = new java.util.ArrayList<String>();
+
+        assertEquals(LayerSplit.Mode.ALL, ApplicationLaunch.effectiveMode(null, true, "vidocq.dev.layer", warnings::add));
+        assertEquals(LayerSplit.Mode.ALL, ApplicationLaunch.effectiveMode(" ", true, "vidocq.dev.layer", warnings::add));
+        assertEquals(LayerSplit.Mode.CLASSES,
+                ApplicationLaunch.effectiveMode("classes", false, "vidocq.dev.layer", warnings::add));
+        assertEquals(LayerSplit.Mode.ALL, ApplicationLaunch.effectiveMode("all", true, "vidocq.dev.layer", warnings::add));
+        assertTrue(warnings.isEmpty(), warnings.toString());
+    }
+
+    @Test
+    void theDefaultDegradesWithoutTheLayerModeAndARequestFails() throws Exception {
+        var warnings = new java.util.ArrayList<String>();
+
+        assertEquals(LayerSplit.Mode.CLASSES,
+                ApplicationLaunch.effectiveMode(null, false, "vidocq.dev.layer", warnings::add));
+        assertEquals(1, warnings.size());
+        assertTrue(warnings.getFirst().contains("vidocq.dev.layer"), warnings.getFirst());
+        var e = assertThrows(MojoExecutionException.class,
+                () -> ApplicationLaunch.effectiveMode("all", false, "vidocq.dev.layer", warnings::add));
+        assertEquals("vidocq.app.layer=all needs vidocq.dev.layer=true", e.getMessage());
+    }
+
+    @Test
+    void theDefaultKeepsAnUnreadableModuleInTheParentLayer(@TempDir Path dir) throws Exception {
+        Path bad = dir.resolve("1-bad.jar");
+        try (var out = new JarOutputStream(Files.newOutputStream(bad))) {
+            out.putNextEntry(new ZipEntry("x/Y.class"));
+            out.write(new byte[] {(byte) 0xCA});
+            out.closeEntry();
+        }
+        Path flow = moduleJar(dir, "flow-server.jar", "flow.server", false);
+        MavenProject project = project();
+        project.setArtifacts(new LinkedHashSet<>(List.of(artifact("bad", bad), artifact("flow-server", flow))));
+        Path build = dir.resolve("target");
+        var warnings = new java.util.ArrayList<String>();
+
+        var layered = ApplicationLaunch.layered(project, build, build.resolve("classes"), jar -> { }, true,
+                id -> { }, List.of(), false, warnings::add);
+
+        assertEquals(LayerSplit.Mode.ALL, layered.mode());
+        assertEquals(List.of(bad), layered.modulePath(), "unchanged from the classes launch: the module path");
+        assertEquals(List.of(build.resolve("classes"), flow), layered.appPath());
+        assertEquals(1, warnings.size());
+        assertTrue(warnings.getFirst().contains("1-bad.jar"), warnings.getFirst());
+        assertTrue(warnings.getFirst().contains("Automatic-Module-Name"), warnings.getFirst());
+    }
+
+    @Test
+    void theDefaultFallsBackToClassesWhenAPinReadsTheApplication(@TempDir Path dir) throws Exception {
+        Path build = dir.resolve("target");
+        Path classes = Files.createDirectories(build.resolve("classes"));
+        Files.write(classes.resolve("module-info.class"),
+                ClassFile.of().buildModule(ModuleAttribute.of(ModuleDesc.of("acme.app"), mb ->
+                        mb.requires(ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null)))));
+        Path helper = moduleJar(dir, "helper.jar", "acme.helper", true, "acme.app");
+        MavenProject project = project();
+        project.setArtifacts(Set.of(artifact("helper", helper)));
+        var warnings = new java.util.ArrayList<String>();
+
+        var layered = ApplicationLaunch.layered(project, build, classes, jar -> { }, true, id -> { },
+                List.of("acme.helper"), false, warnings::add);
+
+        assertEquals(LayerSplit.Mode.CLASSES, layered.mode());
+        assertEquals(List.of(helper), layered.modulePath());
+        assertEquals(List.of(classes), layered.appPath());
+        assertEquals(Map.of(), layered.pinned());
+        assertEquals(1, warnings.size());
+        assertTrue(warnings.getFirst().contains("Falling back to vidocq.app.layer=classes"), warnings.getFirst());
     }
 
     @Test

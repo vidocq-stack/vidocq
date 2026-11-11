@@ -153,16 +153,70 @@ public final class ApplicationLaunch {
      * runtime reads back (the dev reload's thread warning), and the pinned modules when there are some.
      */
     public static Map<String, String> layerProperties(Map<String, String> pinned) {
+        return layerProperties(LayerSplit.Mode.ALL, pinned);
+    }
+
+    /**
+     * The system properties the launch hands to the application for the mode it settled on. The mode is always
+     * written, {@code classes} included: a runtime that finds the property unset takes the default, {@code all}.
+     */
+    public static Map<String, String> layerProperties(LayerSplit.Mode mode, Map<String, String> pinned) {
         Map<String, String> properties = new java.util.LinkedHashMap<>();
-        properties.put(LayerSplit.MODE_PROPERTY, "all");
+        properties.put(LayerSplit.MODE_PROPERTY, mode.name().toLowerCase(java.util.Locale.ROOT));
         if (!pinned.isEmpty()) {
             properties.put(LayerSplit.PINNED_PROPERTY, LayerSplit.encodePinned(pinned));
         }
         return properties;
     }
 
-    /** A launch split by {@link LayerSplit}: the module path, the application path, the pinned modules. */
-    public record Layered(List<Path> modulePath, List<Path> appPath, Map<String, String> pinned) {}
+    /**
+     * A launch split by {@link LayerSplit}: the module path, the application path, the pinned modules, and the mode
+     * the launch settled on, which is {@code classes} when the default {@code all} could not be honoured.
+     */
+    public record Layered(List<Path> modulePath, List<Path> appPath, Map<String, String> pinned,
+                          LayerSplit.Mode mode) {}
+
+    /**
+     * The mode a goal runs under: {@code appLayer} is the value of {@code vidocq.app.layer}, {@code null} or blank
+     * when nobody set it ({@link LayerSplit.Mode#DEFAULT}, {@code all}). {@code all} needs the layer mode of the goal
+     * ({@code layerProperty}, for example {@code vidocq.dev.layer}). Without it, a requested {@code all} fails the
+     * goal, as it always did, and the default degrades to {@code classes} with a warning, so an application that
+     * turned the layer mode off keeps its previous launch.
+     *
+     * @throws MojoExecutionException for an unknown value, or a requested {@code all} without the layer mode
+     */
+    public static LayerSplit.Mode effectiveMode(String appLayer, boolean layerMode, String layerProperty,
+                                                Consumer<String> warn) throws MojoExecutionException {
+        LayerSplit.Mode mode;
+        try {
+            mode = LayerSplit.Mode.of(appLayer);
+        } catch (IllegalArgumentException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        }
+        if (mode == LayerSplit.Mode.ALL && !layerMode) {
+            if (LayerSplit.requested(appLayer)) {
+                throw new MojoExecutionException("vidocq.app.layer=all needs " + layerProperty + "=true");
+            }
+            warn.accept("vidocq.app.layer=all, the default, needs " + layerProperty + "=true: it is off, so the"
+                    + " libraries stay on the module path (vidocq.app.layer=classes).");
+            return LayerSplit.Mode.CLASSES;
+        }
+        return mode;
+    }
+
+    /** The warning for a dependency whose module cannot be read, when {@code all} is only the default. */
+    static String unreadableModuleWarning(String reason) {
+        return "vidocq.app.layer=all, the default, cannot read a module: " + reason + " The jar stays in the parent"
+                + " layer, as with vidocq.app.layer=classes. Give it an Automatic-Module-Name or a module-info to"
+                + " move it into the application layer.";
+    }
+
+    /** The warning for a launch where the default {@code all} cannot split the modules. */
+    static String splitFallbackWarning(String reason) {
+        return "vidocq.app.layer=all, the default, cannot split this launch: " + reason
+                + " Falling back to vidocq.app.layer=classes. Fix the cause, or set vidocq.app.layer=classes to"
+                + " silence this.";
+    }
 
     private record Entry(Artifact artifact, Path path) {}
 
@@ -199,16 +253,39 @@ public final class ApplicationLaunch {
     public static Layered layered(MavenProject project, Path buildDir, Path classesDir, Consumer<Path> modularized,
                                   boolean dropDevOnly, Consumer<String> dropped, List<String> keepPatterns)
             throws MojoExecutionException {
+        return layered(project, buildDir, classesDir, modularized, dropDevOnly, dropped, keepPatterns, true,
+                message -> { });
+    }
+
+    /**
+     * {@link #layered(MavenProject, Path, Path, Consumer, boolean, Consumer, List)} for a launch where {@code all}
+     * may be only the default. When it was not {@code requested}, a dependency whose module cannot be read stays on
+     * the module path (the parent layer) with a warning, and a split that cannot be made (a pinned module reads the
+     * application) gives the {@code classes} launch with a warning; the result's {@link Layered#mode()} says which.
+     * When it was {@code requested}, both fail the goal.
+     *
+     * @param requested whether {@code vidocq.app.layer=all} was asked for ({@link LayerSplit#requested})
+     * @param warn      receives each warning of a degradation
+     */
+    public static Layered layered(MavenProject project, Path buildDir, Path classesDir, Consumer<Path> modularized,
+                                  boolean dropDevOnly, Consumer<String> dropped, List<String> keepPatterns,
+                                  boolean requested, Consumer<String> warn) throws MojoExecutionException {
         List<LayerSplit.Candidate> candidates = new ArrayList<>();
         List<Artifact> artifacts = new ArrayList<>();
         Map<String, String> moduleByCoordinates = new LinkedHashMap<>();
         Map<String, String> forced = new LinkedHashMap<>();
+        List<Path> unreadable = new ArrayList<>();
         for (Entry entry : entries(project, buildDir, modularized, dropDevOnly, dropped)) {
             Artifact a = entry.artifact();
             LayerSplit.Candidate candidate;
             try {
                 candidate = LayerSplit.candidate(entry.path(), a.getGroupId() + ":" + a.getArtifactId());
             } catch (IOException e) {
+                if (!requested) {
+                    warn.accept(unreadableModuleWarning(e.getMessage()));
+                    unreadable.add(entry.path());
+                    continue;
+                }
                 throw new MojoExecutionException("vidocq.app.layer=all reads the module of every dependency: "
                         + e.getMessage() + ". Give the jar an Automatic-Module-Name, or use vidocq.app.layer=classes.",
                         e);
@@ -226,12 +303,19 @@ public final class ApplicationLaunch {
             split = LayerSplit.split(candidates, applicationModules(classesDir), keepPatterns, forced,
                     declaredReads(artifacts, moduleByCoordinates));
         } catch (IllegalStateException e) {
-            throw new MojoExecutionException(e.getMessage(), e);
+            if (requested) {
+                throw new MojoExecutionException(e.getMessage(), e);
+            }
+            warn.accept(splitFallbackWarning(e.getMessage()));
+            return new Layered(modulePath(project, buildDir, classesDir, true, jar -> { }, dropDevOnly, dropped),
+                    appPath(classesDir, true), Map.of(), LayerSplit.Mode.CLASSES);
         }
         List<Path> appPath = new ArrayList<>();
         appPath.add(classesDir);
         appPath.addAll(split.applicationPaths());
-        return new Layered(new ArrayList<>(split.parentPaths()), appPath, split.pinned());
+        List<Path> modulePath = new ArrayList<>(split.parentPaths());
+        modulePath.addAll(unreadable);
+        return new Layered(modulePath, appPath, split.pinned(), LayerSplit.Mode.ALL);
     }
 
     /**

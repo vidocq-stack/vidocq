@@ -174,10 +174,12 @@ public class VidocqRunMojo extends AbstractMojo {
     private Boolean devServices;
 
     /**
-     * {@code classes}: the application layer holds the project's classes, its dependencies stay on the module path.
-     * {@code all}: it holds every dependency outside the runtime's closure too (Vidocq/vidocq#247).
+     * {@code all} (the default since 0.4.0): the application layer holds the project's classes and every dependency
+     * outside the runtime's closure (Vidocq/vidocq#247). {@code classes}: it holds the project's classes only, the
+     * dependencies stay on the module path. Left unset, a build that {@code all} cannot serve degrades to
+     * {@code classes} with a warning; set explicitly, {@code all} fails it.
      */
-    @Parameter(property = "vidocq.app.layer", defaultValue = "classes")
+    @Parameter(property = "vidocq.app.layer")
     private String appLayer;
 
     /** Comma-separated patterns ({@code module} or {@code groupId:artifactId}) kept in the parent layer under {@code all}. */
@@ -213,12 +215,7 @@ public class VidocqRunMojo extends AbstractMojo {
             getLog().info(PREFIX + "skipped (vidocq.run.skip=true)");
             return;
         }
-        LayerSplit.Mode mode;
-        try {
-            mode = LayerSplit.Mode.of(appLayer);
-        } catch (IllegalArgumentException e) {
-            throw new MojoExecutionException(e.getMessage(), e);
-        }
+        LayerSplit.Mode mode = ApplicationLaunch.effectiveMode(appLayer, true, "", message -> getLog().warn(PREFIX + message));
         Path projectDir = baseDir.toPath();
         Path build = buildDirPath();
         Path classes = classesDir.toPath();
@@ -230,15 +227,18 @@ public class VidocqRunMojo extends AbstractMojo {
         ApplicationLaunch.Layered launch = launchPaths(project, build, classes, mode,
                 LayerSplit.patterns(appLayerKeep),
                 jar -> getLog().info(PREFIX + "using the modularized copy of " + jar.getFileName()),
-                id -> getLog().warn(DevOnlyJars.droppedWarning(id)));
+                id -> getLog().warn(DevOnlyJars.droppedWarning(id)),
+                LayerSplit.requested(appLayer), message -> getLog().warn(PREFIX + message));
+        mode = launch.mode();
         List<Path> modulePath = launch.modulePath();
         List<Path> appPath = launch.appPath();
         Map<String, String> systemProperties = buildSystemProperties();
         if (mode == LayerSplit.Mode.ALL) {
             getLog().info(PREFIX + ApplicationLaunch.layerSummary(appPath.size() - 1, launch.pinned().size()));
             launch.pinned().forEach((m, why) -> getLog().info(PREFIX + "  parent layer: " + m + " (" + why + ")"));
-            systemProperties.putAll(ApplicationLaunch.layerProperties(launch.pinned()));
         }
+        // The mode is always handed on, classes too: a runtime that finds it unset takes the default, all.
+        systemProperties.putAll(ApplicationLaunch.layerProperties(mode, launch.pinned()));
         List<String> jvmArgs = buildJvmArgs();
 
         try {
@@ -295,12 +295,23 @@ public class VidocqRunMojo extends AbstractMojo {
     static ApplicationLaunch.Layered launchPaths(MavenProject project, Path build, Path classes,
             LayerSplit.Mode mode, List<String> keep, Consumer<Path> modularized, Consumer<String> dropped)
             throws MojoExecutionException {
+        return launchPaths(project, build, classes, mode, keep, modularized, dropped, true, message -> { });
+    }
+
+    /**
+     * {@link #launchPaths(MavenProject, Path, Path, LayerSplit.Mode, List, Consumer, Consumer)} for an {@code all}
+     * that may be only the default: when it was not {@code requested}, what it cannot serve degrades with a warning.
+     */
+    // package-private for the unit test.
+    static ApplicationLaunch.Layered launchPaths(MavenProject project, Path build, Path classes,
+            LayerSplit.Mode mode, List<String> keep, Consumer<Path> modularized, Consumer<String> dropped,
+            boolean requested, Consumer<String> warn) throws MojoExecutionException {
         if (mode == LayerSplit.Mode.ALL) {
-            return ApplicationLaunch.layered(project, build, classes, modularized, true, dropped, keep);
+            return ApplicationLaunch.layered(project, build, classes, modularized, true, dropped, keep, requested, warn);
         }
         return new ApplicationLaunch.Layered(
                 ApplicationLaunch.modulePath(project, build, classes, true, modularized, true, dropped),
-                ApplicationLaunch.appPath(classes, true), Map.of());
+                ApplicationLaunch.appPath(classes, true), Map.of(), LayerSplit.Mode.CLASSES);
     }
 
     /**

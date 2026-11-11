@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.core.LayerSplit;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -58,6 +59,14 @@ import java.util.stream.Stream;
       defaultPhase = LifecyclePhase.PACKAGE,
       requiresDependencyResolution = ResolutionScope.RUNTIME)
 public class VidocqJpackageMojo extends AbstractMojo {
+
+    /**
+     * The mode of the application layer the image starts under, baked into its launcher as
+     * {@code -Dvidocq.app.layer}: {@code all} (the default since 0.4.0) or {@code classes}. The image re-layers the
+     * application at start, as {@code vidocq:run} does (Vidocq/vidocq#247).
+     */
+    @Parameter(property = "vidocq.app.layer")
+    private String appLayer;
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
@@ -122,7 +131,7 @@ public class VidocqJpackageMojo extends AbstractMojo {
         String version = sanitizeVersion(appVersion);
         ImageLaunch launch;
         try {
-            launch = ImageLaunch.of(mainModule, mainClass);
+            launch = ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer));
         } catch (IllegalArgumentException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         }

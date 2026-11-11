@@ -27,16 +27,16 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** vidocq:run: the library sees the application's resource under all, not under classes. */
+/** vidocq:run: the library sees the application's resource under all, the default, and not under classes. */
 class AppLayerRunIT {
 
     @Test
-    void allLetsTheLibrarySeeTheApplicationsResource(@TempDir Path dir) throws Exception {
+    void allIsTheDefaultAndLetsTheLibrarySeeTheApplicationsResource(@TempDir Path dir) throws Exception {
         Path project = Fixture.copy(dir);
         Fixture.install(project, Fixture.logs().resolve("run-install.log"));
         Path log = Fixture.logs().resolve("run-all.log");
 
-        Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:run", "-Dvidocq.app.layer=all");
+        Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:run");
         try {
             Fixture.awaitLog(mvn, log, "LOOKUP-FOUND");
             assertTrue(Fixture.read(log).contains("application layer: 2 libraries,"), Fixture.read(log));
@@ -52,7 +52,7 @@ class AppLayerRunIT {
         Fixture.install(project, Fixture.logs().resolve("run-classes-install.log"));
         Path log = Fixture.logs().resolve("run-classes.log");
 
-        Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:run");
+        Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:run", "-Dvidocq.app.layer=classes");
         try {
             Fixture.awaitLog(mvn, log, "LOOKUP-MISSING");
             assertFalse(Fixture.read(log).contains("LOOKUP-FOUND"));

@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.runtime.core.LayerSplit;
 import io.vidocq.runtime.core.VidocqAppLayer;
 
 import java.util.List;
@@ -33,8 +34,13 @@ import java.util.List;
  * reads, into the boot layer, and {@value VidocqAppLayer#APP_MODULE_PROPERTY} tells {@code Vidocq.main} to
  * re-layer it. The application then boots in the same layer as with a trampoline.
  *
+ * <p>Both ways bake {@code -Dvidocq.app.layer=} with the mode of the build ({@code all} unless the build asked for
+ * {@code classes}): the image re-layers at start, so it must carry the mode it was built under, and never leave it
+ * to a default that a later runtime could change (Vidocq/vidocq#247).
+ *
  * @param entryPoint the {@code <module>/<class>} the launcher runs
- * @param vmOptions  the JVM options the image needs, empty with an application main class
+ * @param vmOptions  the JVM options the image needs: the mode of the application layer, and, without an application
+ *                   main class, the application module
  */
 record ImageLaunch(String entryPoint, List<String> vmOptions) {
 
@@ -51,10 +57,11 @@ record ImageLaunch(String entryPoint, List<String> vmOptions) {
      * @param mainModule the application's own module ({@code vidocq.mainModule})
      * @param mainClass  its main class ({@code vidocq.mainClass}), or {@code null}, blank or the runtime's main
      *                   when it has none
+     * @param layerMode  the mode of the application layer the image starts under ({@code vidocq.app.layer})
      * @throws IllegalArgumentException when {@code mainModule} is missing, or names the runtime without a main
      *                                  class of the application
      */
-    static ImageLaunch of(String mainModule, String mainClass) {
+    static ImageLaunch of(String mainModule, String mainClass, LayerSplit.Mode layerMode) {
         if (mainModule == null || mainModule.isBlank()) {
             throw new IllegalArgumentException("The image needs the application's module: set vidocq.mainModule"
                     + " (or <mainModule>) to the name its module-info.java declares.");
@@ -62,13 +69,18 @@ record ImageLaunch(String entryPoint, List<String> vmOptions) {
         String module = mainModule.strip();
         String application = ApplicationMainClass.normalize(mainClass == null ? null : mainClass.strip());
         if (application != null) {
-            return new ImageLaunch(module + "/" + application, List.of());
+            return new ImageLaunch(module + "/" + application, List.of(layerOption(layerMode)));
         }
         if (RUNTIME_MODULE.equals(module)) {
             throw new IllegalArgumentException("vidocq.mainModule is the runtime's module " + RUNTIME_MODULE
                     + ": set it to the application's own module, the runtime's main then starts it.");
         }
         return new ImageLaunch(RUNTIME_MODULE + "/" + ApplicationMainClass.RUNTIME_MAIN_CLASS,
-                List.of("--add-modules=" + module, "-D" + VidocqAppLayer.APP_MODULE_PROPERTY + "=" + module));
+                List.of("--add-modules=" + module, "-D" + VidocqAppLayer.APP_MODULE_PROPERTY + "=" + module,
+                        layerOption(layerMode)));
+    }
+
+    private static String layerOption(LayerSplit.Mode layerMode) {
+        return "-D" + LayerSplit.MODE_PROPERTY + "=" + layerMode.name().toLowerCase(java.util.Locale.ROOT);
     }
 }

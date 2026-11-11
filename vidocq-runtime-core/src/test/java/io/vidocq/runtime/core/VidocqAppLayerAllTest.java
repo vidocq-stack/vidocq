@@ -90,6 +90,71 @@ class VidocqAppLayerAllTest {
     }
 
     @Test
+    @DisplayName("an unset mode is all: the libraries move, nothing else is told")
+    void unsetIsAll(@TempDir Path dir) throws Exception {
+        var app = TestModules.explodedModule(dir, "acme.app", List.of("acme.pricing"), "acme.app.Main");
+        var pricing = TestModules.explodedModule(dir, "acme.pricing", List.of(), "acme.pricing.Price");
+        Configuration config = ModuleLayer.boot().configuration().resolve(
+                ModuleFinder.of(app, pricing), ModuleFinder.of(), Set.of("acme.app"));
+        var warnings = new java.util.ArrayList<String>();
+
+        var moved = VidocqAppLayer.applicationPaths(config, "acme.app", null, List.of(), new LinkedHashMap<>(),
+                warnings::add);
+
+        assertEquals(Set.of(app.toRealPath(), pricing.toRealPath()), real(moved));
+        assertTrue(warnings.isEmpty(), warnings.toString());
+    }
+
+    @Test
+    @DisplayName("the default degrades to classes with a warning when a pin reads the application; all, asked for, fails")
+    void theDefaultDegradesButARequestFails(@TempDir Path dir) throws Exception {
+        var app = TestModules.explodedModule(dir, "acme.app", List.of(), "acme.app.Main");
+        var pricing = TestModules.explodedModule(dir, "acme.pricing", List.of("acme.app"), "acme.pricing.Price");
+        Configuration config = ModuleLayer.boot().configuration().resolve(
+                ModuleFinder.of(app, pricing), ModuleFinder.of(), Set.of("acme.app", "acme.pricing"));
+        var warnings = new java.util.ArrayList<String>();
+
+        var moved = VidocqAppLayer.applicationPaths(config, "acme.app", "", List.of("acme.pricing"),
+                new LinkedHashMap<>(), warnings::add);
+
+        assertEquals(real(VidocqAppLayer.applicationPaths(config, "acme.app")), real(moved));
+        assertEquals(1, warnings.size(), warnings.toString());
+        assertTrue(warnings.getFirst().contains("vidocq.app.layer=classes"), warnings.getFirst());
+        assertTrue(warnings.getFirst().contains("acme.pricing"), warnings.getFirst());
+        var failure = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> VidocqAppLayer.applicationPaths(config, "acme.app", "all", List.of("acme.pricing"),
+                        new LinkedHashMap<>(), warnings::add));
+        assertTrue(failure.getMessage().contains("acme.pricing"), failure.getMessage());
+    }
+
+    @Test
+    @DisplayName("the IDE launch and the build-time split (run, dev, package) leave the same modules in the parent layer")
+    void oneDefinitionOfTheRuntime(@TempDir Path dir) throws Exception {
+        var app = TestModules.explodedModule(dir, "acme.app", List.of("acme.lib", "io.vidocq.fake.brick"), "acme.app.Main");
+        var lib = TestModules.explodedModule(dir, "acme.lib", List.of(), "acme.lib.Lib");
+        var brick = TestModules.explodedModule(dir, "io.vidocq.fake.brick", List.of("acme.codec"),
+                "io.vidocq.fake.brick.Brick");
+        var codec = TestModules.explodedModule(dir, "acme.codec", List.of(), "acme.codec.Codec");
+        var jakarta = TestModules.explodedModule(dir, "jakarta.fake.api", List.of(), "jakarta.fake.Api");
+        var mp = TestModules.explodedModule(dir, "org.eclipse.microprofile.fake", List.of(), "org.eclipse.microprofile.fake.Mp");
+        Configuration config = ModuleLayer.boot().configuration().resolve(
+                ModuleFinder.of(app, lib, brick, codec, jakarta, mp), ModuleFinder.of(), Set.of("acme.app"));
+        var candidates = new java.util.ArrayList<LayerSplit.Candidate>();
+        for (Path p : List.of(app, lib, brick, codec, jakarta, mp)) {
+            candidates.add(LayerSplit.candidate(p, null));
+        }
+        var buildTime = LayerSplit.split(candidates, Set.of("acme.app"), List.of(), Map.of());
+
+        var ide = VidocqAppLayer.applicationPaths(config, "acme.app", null, List.of(), new LinkedHashMap<>(),
+                m -> { });
+
+        assertEquals(Set.of("io.vidocq.fake.brick", "acme.codec", "jakarta.fake.api", "org.eclipse.microprofile.fake"),
+                buildTime.parentNames(), "the runtime, the bricks, and what they read");
+        assertEquals(real(buildTime.applicationPaths()), real(ide),
+                "the application and its library move, in the IDE launch and in the build-time split alike");
+    }
+
+    @Test
     @DisplayName("classes keeps today's policy")
     void classesIsToday(@TempDir Path dir) throws Exception {
         var app = TestModules.explodedModule(dir, "acme.app", List.of("acme.pricing"), "acme.app.Main");

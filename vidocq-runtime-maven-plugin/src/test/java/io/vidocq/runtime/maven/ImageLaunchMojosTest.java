@@ -80,7 +80,7 @@ class ImageLaunchMojosTest {
 
         assertEquals("Failed to create jlink image", failure.getMessage());
         assertEquals("Vidocq jlink — main: " + RUNTIME_MAIN
-                + " --add-modules=acme.app -Dvidocq.app.module=acme.app", log.lines.getFirst());
+                + " --add-modules=acme.app -Dvidocq.app.module=acme.app -Dvidocq.app.layer=all", log.lines.getFirst());
     }
 
     @Test
@@ -88,13 +88,13 @@ class ImageLaunchMojosTest {
         VidocqJlinkMojo mojo = jlink("acme.app", null, new Infos());
         set(VidocqJlinkMojo.class, mojo, "stripDebug", true);
 
-        List<String> args = mojo.jlinkArgs("acme.app,java.base", ImageLaunch.of("acme.app", null));
+        List<String> args = mojo.jlinkArgs("acme.app,java.base", ImageLaunch.of("acme.app", null, io.vidocq.runtime.core.LayerSplit.Mode.ALL));
 
         assertEquals(dir.resolve("jlink-mods") + File.pathSeparator + System.getProperty("java.home") + "/jmods",
                 args.get(args.indexOf("--module-path") + 1));
         assertEquals("acme.app,java.base", args.get(args.indexOf("--add-modules") + 1));
         assertEquals("app=" + RUNTIME_MAIN, args.get(args.indexOf("--launcher") + 1));
-        assertTrue(args.contains("--add-options=--add-modules=acme.app -Dvidocq.app.module=acme.app"), args.toString());
+        assertTrue(args.contains("--add-options=--add-modules=acme.app -Dvidocq.app.module=acme.app -Dvidocq.app.layer=all"), args.toString());
         assertEquals(dir.resolve("dist").toString(), args.get(args.indexOf("--output") + 1));
         assertTrue(args.contains("--strip-debug"), args.toString());
         assertTrue(args.contains("--compress=zip-6"), args.toString());
@@ -106,13 +106,13 @@ class ImageLaunchMojosTest {
         VidocqJlinkMojo mojo = jlink("acme.app", null, new Infos());
         set(VidocqJlinkMojo.class, mojo, "stripDebug", true);
 
-        List<String> args = mojo.portableJlinkArgs("acme.app,java.base", ImageLaunch.of("acme.app", null));
+        List<String> args = mojo.portableJlinkArgs("acme.app,java.base", ImageLaunch.of("acme.app", null, io.vidocq.runtime.core.LayerSplit.Mode.ALL));
 
         assertTrue(args.stream().noneMatch(a -> a.equals("--module-path") || a.equals("--output")
                 || a.contains(dir.toString())), args.toString());
         assertEquals("acme.app,java.base", args.get(args.indexOf("--add-modules") + 1));
         assertEquals("app=" + RUNTIME_MAIN, args.get(args.indexOf("--launcher") + 1));
-        assertTrue(args.contains("--add-options=--add-modules=acme.app -Dvidocq.app.module=acme.app"), args.toString());
+        assertTrue(args.contains("--add-options=--add-modules=acme.app -Dvidocq.app.module=acme.app -Dvidocq.app.layer=all"), args.toString());
         assertTrue(args.contains("--strip-debug") && args.contains("--compress=zip-6"), args.toString());
     }
 
@@ -131,15 +131,16 @@ class ImageLaunchMojosTest {
     }
 
     @Test
-    void theJlinkRunOfATrampolineAddsNoOption() throws Exception {
+    void theJlinkRunOfATrampolineAddsOnlyTheLayerMode() throws Exception {
         VidocqJlinkMojo mojo = jlink("acme.app", "acme.app.App", new Infos());
         set(VidocqJlinkMojo.class, mojo, "compress", " ");
 
-        List<String> args = mojo.jlinkArgs("acme.app", ImageLaunch.of("acme.app", "acme.app.App"));
+        List<String> args = mojo.jlinkArgs("acme.app", ImageLaunch.of("acme.app", "acme.app.App", io.vidocq.runtime.core.LayerSplit.Mode.ALL));
 
         assertEquals("app=acme.app/acme.app.App", args.get(args.indexOf("--launcher") + 1));
-        assertTrue(args.stream().noneMatch(a -> a.startsWith("--add-options") || a.startsWith("--compress")
-                || a.equals("--strip-debug")), args.toString());
+        assertEquals("--add-options=-Dvidocq.app.layer=all", args.get(args.indexOf("--add-options=-Dvidocq.app.layer=all")));
+        assertTrue(args.stream().noneMatch(a -> a.contains("--add-modules") && a.startsWith("--add-options")
+                || a.startsWith("--compress") || a.equals("--strip-debug")), args.toString());
     }
 
     private VidocqJlinkMojo jlink(String mainModule, String mainClass, Infos log) throws Exception {

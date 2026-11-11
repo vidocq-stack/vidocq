@@ -49,13 +49,14 @@ class AppLayerPackageIT {
         Path log = Fixture.logs().resolve("package-all.log");
 
         Fixture.awaitSuccess(Fixture.start(project.resolve("app"), log, "package", "vidocq:package",
-                "-Dvidocq.app.layer=all", "-DskipTests"), log, "vidocq:package");
+                "-DskipTests"), log, "vidocq:package"); // all is the default
 
         Path script = script(project.resolve("app/target"));
         Path dist = script.getParent().getParent();
         assertTrue(Files.exists(dist.resolve("app/app-layer-pages-1.0.jar")), "the library is the application's");
         assertTrue(Files.notExists(dist.resolve("lib/app-layer-pages-1.0.jar")));
         assertTrue(Files.readString(script).contains("-Dvidocq.app.path="), Files.readString(script));
+        assertTrue(Files.readString(script).contains("-Dvidocq.app.layer=all"), Files.readString(script));
 
         Path runLog = Fixture.logs().resolve("package-run.log");
         String out = run(script, runLog);
@@ -72,13 +73,14 @@ class AppLayerPackageIT {
         Fixture.install(project, Fixture.logs().resolve("package-classes-install.log"));
         Path log = Fixture.logs().resolve("package-classes.log");
 
-        Fixture.awaitSuccess(Fixture.start(project.resolve("app"), log, "package", "vidocq:package", "-DskipTests"),
-                log, "vidocq:package");
+        Fixture.awaitSuccess(Fixture.start(project.resolve("app"), log, "package", "vidocq:package",
+                "-Dvidocq.app.layer=classes", "-DskipTests"), log, "vidocq:package");
 
         Path script = script(project.resolve("app/target"));
         Path dist = script.getParent().getParent();
         assertTrue(Files.exists(dist.resolve("lib/app-layer-pages-1.0.jar")), "the library stays in lib/");
         assertTrue(Files.notExists(dist.resolve("app/app-layer-pages-1.0.jar")));
+        assertTrue(Files.readString(script).contains("-Dvidocq.app.layer=classes"), Files.readString(script));
 
         Path runLog = Fixture.logs().resolve("package-classes-run.log");
         String out = run(script, runLog);

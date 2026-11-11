@@ -462,7 +462,7 @@ The application's module requires `io.vidocq.runtime.extensions.jakartaee.web.va
 
 *How Vaadin finds it.* Vaadin uses the one `AbstractLookupInitializer` its `@HandlesTypes` finds besides its own. The extension is compiled with Foy's processor, so its jar ships `META-INF/foy/class-index.list`, and Foy hands the class to Vaadin as it does the application's classes. An application that ships a `LookupInitializer` of its own cannot add the extension: Vaadin refuses two.
 
-*Its layer.* Vaadin must be in the application layer (`vidocq.app.layer=all`, see xref:vaadin.adoc#app-layer[the guide]). A module named `io.vidocq.…` stays in the runtime's layer, with what it requires, so the extension's jar carries the `Vidocq-Application-Layer: true` manifest attribute: it goes to the application layer with Vaadin instead of keeping `flow.server` out of it (xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer]).
+*Its layer.* Vaadin must be in the application layer, which is the default (`vidocq.app.layer=all` since 0.4.0, nothing to set; see xref:vaadin.adoc#app-layer[the guide]). A module named `io.vidocq.…` stays in the runtime's layer, with what it requires, so the extension's jar carries the `Vidocq-Application-Layer: true` manifest attribute: it goes to the application layer with Vaadin instead of keeping `flow.server` out of it (xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer]).
 
 *Dependencies.* The extension depends on Vaadin's `flow-server` at `provided` scope: the application brings Vaadin, at the version its Vaadin BOM chooses, and the extension is compiled against Flow 25.3.4 without imposing it. This is the one third-party API it names, as the workspace rule on what ships requires.
 

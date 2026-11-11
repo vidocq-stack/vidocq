@@ -222,11 +222,11 @@ public final class VidocqAppLayer {
         }
         var explicit = System.getProperty("vidocq.app.modules", "").strip();
         var configuration = callerLayer.configuration();
-        var mode = LayerSplit.Mode.of(System.getProperty(LayerSplit.MODE_PROPERTY));
         var pinned = new java.util.LinkedHashMap<String, String>();
         var paths = explicit.isEmpty()
-                ? applicationPaths(configuration, callerModule.getName(), mode,
-                        LayerSplit.patterns(System.getProperty(LayerSplit.KEEP_PROPERTY)), pinned)
+                ? applicationPaths(configuration, callerModule.getName(), System.getProperty(LayerSplit.MODE_PROPERTY),
+                        LayerSplit.patterns(System.getProperty(LayerSplit.KEEP_PROPERTY)), pinned,
+                        message -> LOG.log(System.Logger.Level.WARNING, message))
                 : explicitPaths(configuration, java.util.Set.of(commaSeparated(explicit).toArray(String[]::new)));
         if (paths.isEmpty()) {
             return false;
@@ -279,6 +279,33 @@ public final class VidocqAppLayer {
     }
 
     /**
+     * The trampoline's re-layer policy for the value of {@value LayerSplit#MODE_PROPERTY}: {@code all} when it is
+     * unset ({@link LayerSplit.Mode#DEFAULT}). A launch that left the default alone and where {@code all} cannot be
+     * honoured (a pinned module reads the application, a module cannot be read) falls back to {@code classes}, and
+     * says so through {@code warn}; a launch that asked for {@code all} fails, as before.
+     *
+     * @param pinnedOut receives the pinned modules and why, under {@code all}
+     * @param warn      receives the warning of a fallback
+     */
+    static List<Path> applicationPaths(java.lang.module.Configuration configuration, String callerModule,
+            String modeValue, List<String> keepPatterns, java.util.Map<String, String> pinnedOut,
+            java.util.function.Consumer<String> warn) {
+        var mode = LayerSplit.Mode.of(modeValue);
+        try {
+            return applicationPaths(configuration, callerModule, mode, keepPatterns, pinnedOut);
+        } catch (IllegalStateException e) {
+            if (LayerSplit.requested(modeValue)) {
+                throw e;
+            }
+            pinnedOut.clear();
+            warn.accept("vidocq.app.layer=all, the default, cannot split this launch (" + e.getMessage()
+                    + "). Falling back to vidocq.app.layer=classes: the libraries stay in the boot layer."
+                    + " Fix the cause, or set -Dvidocq.app.layer=classes to silence this.");
+            return applicationPaths(configuration, callerModule);
+        }
+    }
+
+    /**
      * The trampoline's re-layer policy under {@code mode}: {@link LayerSplit.Mode#CLASSES} is the policy of
      * {@link #applicationPaths(java.lang.module.Configuration, String)}; {@link LayerSplit.Mode#ALL} keeps the
      * {@link LayerSplit} parent layer and Vauban's own rules (automatic modules stay: re-created next to their boot
@@ -296,6 +323,10 @@ public final class VidocqAppLayer {
             var location = resolved.reference().location()
                     .filter(uri -> "file".equals(uri.getScheme())).map(Path::of).orElse(null);
             if (location == null) {
+                // A module of a jlink image sits in the runtime image (jrt:): Vauban re-layers it from there, so the
+                // rule must see it, or the runtime's own modules would be taken for the application's.
+                candidates.add(new LayerSplit.Candidate(resolved.reference().descriptor(),
+                        Path.of("/" + resolved.name()), null, List.of()));
                 continue;
             }
             try {

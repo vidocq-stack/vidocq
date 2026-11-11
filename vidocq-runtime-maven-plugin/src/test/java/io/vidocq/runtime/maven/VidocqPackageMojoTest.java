@@ -197,6 +197,61 @@ class VidocqPackageMojoTest {
         assertTrue(failure.getMessage().contains("vidocq.mainModule"), failure.getMessage());
     }
 
+    /** {@code all} is the default (#247): the same layout as the explicit {@code all}, and the launchers say so. */
+    @Test
+    void allIsTheDefault(@TempDir Path dir) throws Exception {
+        VidocqPackageMojo mojo = packageMojo(dir, null, null);
+
+        mojo.execute();
+
+        Path dist = dir.resolve("target/app-1.0");
+        assertTrue(Files.exists(dist.resolve("lib/vidocq-runtime-core.jar")));
+        assertTrue(Files.exists(dist.resolve("app/flow-server.jar")));
+        assertFalse(Files.exists(dist.resolve("lib/flow-server.jar")));
+        assertTrue(Files.readString(dist.resolve("bin/app.sh")).contains("-Dvidocq.app.layer=all \\"));
+    }
+
+    /** With the layer mode off, the default cannot hold: it degrades to {@code classes}, and says so in the launcher. */
+    @Test
+    void theDefaultDegradesWithoutTheLayerMode(@TempDir Path dir) throws Exception {
+        VidocqPackageMojo mojo = packageMojo(dir, null, null);
+        setBoolean(mojo, "layerMode", false);
+
+        mojo.execute();
+
+        Path dist = dir.resolve("target/app-1.0");
+        assertTrue(Files.exists(dist.resolve("lib/flow-server.jar")), "the legacy layout: everything in lib/");
+        assertTrue(Files.readString(dist.resolve("bin/app.sh")).contains("-Dvidocq.app.layer=classes"));
+    }
+
+    /** Asked for, {@code all} without the layer mode still fails the build. */
+    @Test
+    void anExplicitAllStillNeedsTheLayerMode(@TempDir Path dir) throws Exception {
+        VidocqPackageMojo mojo = packageMojo(dir, "all", null);
+        setBoolean(mojo, "layerMode", false);
+
+        var e = assertThrows(MojoExecutionException.class, mojo::execute);
+        assertEquals("vidocq.app.layer=all needs vidocq.package.layer=true", e.getMessage());
+    }
+
+    /** The default keeps a dependency whose module cannot be read in {@code lib/}, with a warning, and builds. */
+    @Test
+    void theDefaultKeepsAnUnreadableModuleInLib(@TempDir Path dir) throws Exception {
+        Path bad = dir.resolve("1-bad.jar");
+        try (var out = new JarOutputStream(Files.newOutputStream(bad))) {
+            out.putNextEntry(new ZipEntry("x/Y.class"));
+            out.write(new byte[] {(byte) 0xCA});
+            out.closeEntry();
+        }
+        VidocqPackageMojo mojo = packageMojo(dir, null, null, artifact("bad", bad));
+
+        mojo.execute();
+
+        Path dist = dir.resolve("target/app-1.0");
+        assertTrue(Files.exists(dist.resolve("lib/1-bad.jar")));
+        assertTrue(Files.exists(dist.resolve("app/app-1.0.jar")));
+    }
+
     /** {@code vidocq.app.layer=all}: the parent layer stays in {@code lib/}, the rest ships in {@code app/} (#247). */
     @Test
     void allPutsTheLibrariesInApp(@TempDir Path dir) throws Exception {
@@ -214,7 +269,7 @@ class VidocqPackageMojoTest {
 
     @Test
     void classesKeepsTodaysLayout(@TempDir Path dir) throws Exception {
-        VidocqPackageMojo mojo = packageMojo(dir, null, null);
+        VidocqPackageMojo mojo = packageMojo(dir, "classes", null);
 
         mojo.execute();
 
@@ -272,7 +327,10 @@ class VidocqPackageMojoTest {
         assertTrue(cmd.contains("--add-modules ALL-MODULE-PATH,java.sql ^"), cmd);
     }
 
-    /** {@code classes} keeps today's trampoline scripts byte for byte, without any {@code -Dvidocq.app.layer} line. */
+    /**
+     * {@code classes} keeps today's trampoline scripts, plus the one {@code -Dvidocq.app.layer=classes} line: the
+     * trampoline re-layers the boot layer, and a runtime that finds the mode unset takes the default, {@code all}.
+     */
     @Test
     void classesKeepsTheTrampolineScripts(@TempDir Path binDir) throws Exception {
         VidocqPackageMojo mojo = trampolineMojo("classes");
@@ -287,6 +345,7 @@ class VidocqPackageMojoTest {
                 exec "$JAVA" $JAVA_OPTS \\
                   --module-path "$BASEDIR/lib:$BASEDIR/app" \\
                   --add-modules ALL-MODULE-PATH \\
+                  -Dvidocq.app.layer=classes \\
                   --module io.repro.app/io.repro.app.Main \\
                   "$@"
                 """, sh.substring(sh.indexOf("BASEDIR=")));
@@ -296,14 +355,15 @@ class VidocqPackageMojoTest {
                 "%JAVA%" %JAVA_OPTS% ^
                   --module-path "%BASEDIR%\\lib;%BASEDIR%\\app" ^
                   --add-modules ALL-MODULE-PATH ^
+                  -Dvidocq.app.layer=classes ^
                   --module io.repro.app/io.repro.app.Main ^
                   %*
                 """, cmd.substring(cmd.indexOf("set BASEDIR=")));
     }
 
-    /** {@code classes} adds no {@code -Dvidocq.app.layer} line to the runtime-main scripts either. */
+    /** {@code classes} is written into the runtime-main scripts too, never left to the runtime's default. */
     @Test
-    void classesAddsNoModeLineToTheAppPathScripts(@TempDir Path binDir) throws Exception {
+    void classesIsWrittenIntoTheAppPathScripts(@TempDir Path binDir) throws Exception {
         VidocqPackageMojo mojo = mojoWith(null);
         setBoolean(mojo, "layerMode", true);
         set(mojo, "appLayer", "classes");
@@ -311,8 +371,8 @@ class VidocqPackageMojoTest {
         mojo.generateShScript(binDir);
         mojo.generateCmdScript(binDir);
 
-        assertFalse(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.layer"));
-        assertFalse(Files.readString(binDir.resolve("app.cmd")).contains("-Dvidocq.app.layer"));
+        assertTrue(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.layer=classes \\"));
+        assertTrue(Files.readString(binDir.resolve("app.cmd")).contains("-Dvidocq.app.layer=classes ^"));
     }
 
     /**
