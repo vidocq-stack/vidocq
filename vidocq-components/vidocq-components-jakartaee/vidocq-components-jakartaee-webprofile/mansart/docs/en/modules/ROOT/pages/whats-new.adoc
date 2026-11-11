@@ -6,6 +6,7 @@ New in the `{project-version}` development line — everything listed here lande
 
 == Pool
 
+* xref:modules/mansart-pool.adoc#session-reset[Session attributes put back on release] [.tag-new]#NEW# — the transaction isolation, read-only flag, catalog, schema, holdability, network timeout and type map a borrower changed no longer reach the next borrower of the same connection; only the attributes changed are read and put back (MANSART-047).
 * xref:modules/mansart-pool.adoc#pending-work[No second rollback on release] [.tag-new]#NEW# — a connection handed back out of auto-commit is rolled back only when a statement ran since the last `commit()` or `rollback()`; a committed transaction no longer pays a rollback, which on H2 emptied the statement cache. Statements are wrapped to track this, and `Statement.getConnection()` now returns the pooled connection instead of the driver's (Vidocq/noether#45).
 
 == Build

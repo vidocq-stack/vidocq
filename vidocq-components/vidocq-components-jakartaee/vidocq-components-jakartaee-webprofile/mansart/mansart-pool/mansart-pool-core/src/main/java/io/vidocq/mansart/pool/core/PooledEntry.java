@@ -34,8 +34,10 @@ import java.sql.SQLException;
  */
 final class PooledEntry {
 
-    final Connection delegate;
-    final long       createdAtNanos;
+    final Connection   delegate;
+    final long         createdAtNanos;
+    /** The session attributes borrowers changed, put back on each release (MANSART-047). */
+    final SessionState session = new SessionState();
     volatile long    lastUsedAtNanos;
 
     /** {@code 0} when not currently borrowed; {@code System.nanoTime()} captured at acquire otherwise. */
@@ -76,13 +78,15 @@ final class PooledEntry {
     /**
      * Reset driver state to a sane default before parking the entry back into the idle deque. A connection
      * out of auto-commit is rolled back only when {@code workPending}: a transaction the client already
-     * committed or rolled back needs no second rollback (Vidocq/noether#45).
+     * committed or rolled back needs no second rollback (Vidocq/noether#45). The session attributes a borrower
+     * changed are then put back, outside any transaction since auto-commit is on again (MANSART-047).
      */
     void resetForReuse(boolean workPending) throws SQLException {
         if (!delegate.getAutoCommit()) {
             if (workPending) delegate.rollback();
             delegate.setAutoCommit(true);
         }
+        session.restore(delegate);
         delegate.clearWarnings();
         lastUsedAtNanos = System.nanoTime();
     }

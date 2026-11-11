@@ -94,7 +94,7 @@ Acquire (`getConnection()`):
 
 Release (`Connection.close()` on the wrapper):
 
-. Restore defaults — a connection out of auto-commit is rolled back when work may be pending (<<pending-work>>), then put back in `autoCommit=true`; warnings are cleared.
+. Restore defaults — a connection out of auto-commit is rolled back when work may be pending (<<pending-work>>), then put back in `autoCommit=true`; the session attributes the borrower changed are put back (<<session-reset>>); warnings are cleared.
 . `inUse.remove(entry)`.
 . Still valid and younger than `maxLifetime` → `idle.offerFirst(entry)`; otherwise → close physically.
 . `permits.release()`.
@@ -114,6 +114,13 @@ The pool still rolls back, whatever the mark says, after any call that hands out
 * a statement created with a result-set concurrency other than `CONCUR_READ_ONLY`: `ResultSet.updateRow()` writes without an `execute*`.
 
 `createBlob()`, `createClob()`, `createNClob()` and `createSQLXML()` mark the connection too, since a driver may create the large object in the database. One path stays out of sight: `ResultSet.getStatement()` returns the driver's statement, and SQL run on it after the last commit is committed by the return to auto-commit instead of being rolled back.
+
+[[session-reset]]
+=== Session attributes put back on release [.tag-new]#NEW#
+
+What a borrower changes through the JDBC `Connection` API outlives its borrow on the physical connection, so the pool puts it back before lending the connection again (MANSART-047): transaction isolation, read-only flag, catalog, schema, holdability, network timeout and type map. The driver's value is read the first time a borrower calls the setter, so a client that changes nothing pays no extra call, and the release sets only the attributes a borrower left on another value: a client that puts its isolation back itself costs no second call. The pool puts them back after auto-commit is on again, outside any transaction.
+
+When the driver cannot read an attribute before the borrower changes it, the change still goes through and the pool closes the connection on release instead of lending it again. A setting changed with SQL (`SET SCHEMA`, `SET TRANSACTION ISOLATION LEVEL`) instead of the JDBC setter is not seen. Client info and sharding keys are left as the borrower set them.
 
 == Transactions integration
 

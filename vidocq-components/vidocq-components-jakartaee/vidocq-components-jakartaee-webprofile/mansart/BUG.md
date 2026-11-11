@@ -9,6 +9,30 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-047 — A pooled connection kept the session settings of its previous borrower
+
+- **Date**: 2026-11-11
+- **Status**: FIXED on `fix/pool-reset-session-state`, after Vidocq/mansart#93. The wrapper's setters record
+  the attribute before the driver changes it (`SessionState`, one per physical connection): the driver's value is
+  read the first time, and the release puts back, once auto-commit is on again, every attribute a borrower left on
+  another value. An attribute the driver cannot read makes the release close the connection.
+- **Module**: `mansart-pool-core` (`PooledEntry.resetForReuse`, `PooledConnection`)
+- **Symptom**: what a borrower changes on its connection through the JDBC API reaches the next borrower of the same
+  physical connection: transaction isolation, read-only flag, catalog, schema, holdability, network timeout and
+  type map. A borrower that sets `TRANSACTION_SERIALIZABLE` or `setReadOnly(true)` and closes the connection hands
+  a serializable or read-only session to whoever borrows it next. The release only restores auto-commit and clears
+  the warnings, while `modules/mansart-pool.adoc` and `mansart-pool/PLAN.md` said it restored the default isolation.
+- **Reproduction**: `SessionStateResetTest` (`mansart-pool-tests`): a pool of one connection, a first borrow that
+  changes the attribute, a second borrow that reads it. 7 of 8 tests red on `d78f0fd3`; the eighth, a borrow that
+  changes nothing, checks that the release then calls no session setter. Then red too: an attribute the driver
+  cannot read keeps the borrower's value instead of the connection being discarded.
+- **Cause**: `resetForReuse` never had the code: neither the wrapper nor the entry tracks which attributes a borrow
+  changed, nor what the driver had opened the connection with.
+- **Reported by**: found while fixing Vidocq/noether#45 F17 (mansart#93), when the release section of the pool page
+  was checked against the code.
+
+---
+
 ## MANSART-046 — A library built with Hibernate Processor failed `vidocq:generate` on its `Book_` metamodel
 
 - **Date**: 2026-11-09

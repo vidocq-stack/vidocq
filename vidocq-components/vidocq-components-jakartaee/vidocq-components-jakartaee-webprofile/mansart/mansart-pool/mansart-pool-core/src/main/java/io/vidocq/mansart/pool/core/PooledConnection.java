@@ -40,6 +40,14 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executor;
 
+import static io.vidocq.mansart.pool.core.SessionAttribute.CATALOG;
+import static io.vidocq.mansart.pool.core.SessionAttribute.HOLDABILITY;
+import static io.vidocq.mansart.pool.core.SessionAttribute.NETWORK_TIMEOUT;
+import static io.vidocq.mansart.pool.core.SessionAttribute.READ_ONLY;
+import static io.vidocq.mansart.pool.core.SessionAttribute.SCHEMA;
+import static io.vidocq.mansart.pool.core.SessionAttribute.TRANSACTION_ISOLATION;
+import static io.vidocq.mansart.pool.core.SessionAttribute.TYPE_MAP;
+
 /**
  * Wrapper handed to the user on each {@link ConnectionPool#acquire()}. New instance per borrow:
  * once {@link #close()} returns, this wrapper is dead — even if the underlying {@link PooledEntry}
@@ -59,6 +67,10 @@ import java.util.concurrent.Executor;
  * the pool rolls the connection back on release, as it always did. One path stays out of sight: a
  * driver {@code ResultSet}'s {@code getStatement()} returns the driver's statement, and SQL run on it
  * after the last commit is not seen.
+ *
+ * <p>The setters of a {@link SessionAttribute session attribute} (isolation, read-only flag, catalog,
+ * schema, holdability, network timeout, type map) record it in the entry's {@link SessionState} before
+ * the driver changes it, so the release puts it back for the next borrower (MANSART-047).
  *
  * <p>Every other JDBC method is a pure passthrough; calling them after {@code close()} surfaces as
  * the standard JDBC error from the driver since we route to {@code delegate} unconditionally — the
@@ -98,6 +110,11 @@ final class PooledConnection implements Connection {
     /** Called when a driver object that can run SQL leaves the wrapper: the release always rolls back. */
     void markUntracked() {
         untracked = true;
+    }
+
+    /** Called before a setter changes a session attribute: the release puts it back (MANSART-047). */
+    private void changing(SessionAttribute attribute, Object value) {
+        entry.session.changing(delegate, attribute, value);
     }
 
     @Override
@@ -148,24 +165,24 @@ final class PooledConnection implements Connection {
     @Override public Savepoint  setSavepoint() throws SQLException                           { return delegate.setSavepoint(); }
     @Override public Savepoint  setSavepoint(String name) throws SQLException                { return delegate.setSavepoint(name); }
     @Override public void       releaseSavepoint(Savepoint savepoint) throws SQLException    { delegate.releaseSavepoint(savepoint); }
-    @Override public void       setTransactionIsolation(int level) throws SQLException       { delegate.setTransactionIsolation(level); }
+    @Override public void       setTransactionIsolation(int level) throws SQLException       { changing(TRANSACTION_ISOLATION, level); delegate.setTransactionIsolation(level); }
     @Override public int        getTransactionIsolation() throws SQLException                { return delegate.getTransactionIsolation(); }
 
     /* ---- Misc state (passthrough) ---- */
 
     /** Untracked: {@code DatabaseMetaData.getConnection()} is the driver's connection. */
     @Override public DatabaseMetaData getMetaData() throws SQLException                      { markUntracked(); return delegate.getMetaData(); }
-    @Override public void       setReadOnly(boolean readOnly) throws SQLException            { delegate.setReadOnly(readOnly); }
+    @Override public void       setReadOnly(boolean readOnly) throws SQLException            { changing(READ_ONLY, readOnly); delegate.setReadOnly(readOnly); }
     @Override public boolean    isReadOnly() throws SQLException                             { return delegate.isReadOnly(); }
-    @Override public void       setCatalog(String catalog) throws SQLException               { delegate.setCatalog(catalog); }
+    @Override public void       setCatalog(String catalog) throws SQLException               { changing(CATALOG, catalog); delegate.setCatalog(catalog); }
     @Override public String     getCatalog() throws SQLException                             { return delegate.getCatalog(); }
-    @Override public void       setSchema(String schema) throws SQLException                 { delegate.setSchema(schema); }
+    @Override public void       setSchema(String schema) throws SQLException                 { changing(SCHEMA, schema); delegate.setSchema(schema); }
     @Override public String     getSchema() throws SQLException                              { return delegate.getSchema(); }
     @Override public SQLWarning getWarnings() throws SQLException                            { return delegate.getWarnings(); }
     @Override public void       clearWarnings() throws SQLException                          { delegate.clearWarnings(); }
     @Override public Map<String, Class<?>> getTypeMap() throws SQLException                  { return delegate.getTypeMap(); }
-    @Override public void       setTypeMap(Map<String, Class<?>> map) throws SQLException    { delegate.setTypeMap(map); }
-    @Override public void       setHoldability(int holdability) throws SQLException          { delegate.setHoldability(holdability); }
+    @Override public void       setTypeMap(Map<String, Class<?>> map) throws SQLException    { changing(TYPE_MAP, map); delegate.setTypeMap(map); }
+    @Override public void       setHoldability(int holdability) throws SQLException          { changing(HOLDABILITY, holdability); delegate.setHoldability(holdability); }
     @Override public int        getHoldability() throws SQLException                         { return delegate.getHoldability(); }
     @Override public boolean    isValid(int timeout) throws SQLException                     { return delegate.isValid(timeout); }
     @Override public String     nativeSQL(String sql) throws SQLException                    { return delegate.nativeSQL(sql); }
@@ -193,7 +210,7 @@ final class PooledConnection implements Connection {
     /* ---- Network / timeout / abort (passthrough) ---- */
 
     @Override public void setNetworkTimeout(Executor executor, int milliseconds) throws SQLException
-                                                                                             { delegate.setNetworkTimeout(executor, milliseconds); }
+                                                                                             { changing(NETWORK_TIMEOUT, milliseconds); delegate.setNetworkTimeout(executor, milliseconds); }
     @Override public int  getNetworkTimeout() throws SQLException                            { return delegate.getNetworkTimeout(); }
     @Override public void abort(Executor executor) throws SQLException                       { delegate.abort(executor); }
 
