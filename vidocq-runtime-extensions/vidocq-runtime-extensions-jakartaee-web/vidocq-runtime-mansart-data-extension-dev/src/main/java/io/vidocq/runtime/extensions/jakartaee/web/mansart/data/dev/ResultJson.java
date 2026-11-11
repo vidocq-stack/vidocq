@@ -50,7 +50,8 @@ final class ResultJson {
     private static final String NO_ROW = "no row";
     private static final String ONE_ROW = "1 row";
     /** The summary of a list cut at {@value #MAX_ROWS} rows. */
-    private static final String FIRST_ROWS = "first " + MAX_ROWS + " rows";
+    private static final String ROWS = " rows";
+    private static final String FIRST_ROWS = "first " + MAX_ROWS + ROWS;
 
     /**
      * @param body the JSON text, {@code null} for {@code void}
@@ -125,7 +126,7 @@ final class ResultJson {
         if (n == 0) {
             return NO_ROW;
         }
-        return n == 1 ? ONE_ROW : n + " rows";
+        return n == 1 ? ONE_ROW : n + ROWS;
     }
 
     /**
@@ -190,7 +191,7 @@ final class ResultJson {
         int held = ActionResult.rowsHeld(columns, rows);
         boolean cut = more || held < rows.size();
         return new Result(ActionResult.rows(null, columns, rows.subList(0, held), cut).body(),
-                cut ? "first " + held + " rows" : count(held), true);
+                cut ? "first " + held + ROWS : count(held), true);
     }
 
     /** The columns, each typed from {@code types} by its name, or {@code object} when it holds entities. */

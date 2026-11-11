@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -55,12 +56,12 @@ import java.util.Set;
 record PoolMetadata(String catalog, String schema, char identifierQuote, String unquotedCase, List<String> keywords,
                     List<Table> tables, List<String> reserved) {
 
-    /** The schemas of a database's own catalog, in lower case: never listed. */
     /** How long the boot spends on the foreign keys of all the tables. */
     static final Duration REFERENCES_BUDGET = Duration.ofSeconds(10);
 
     private static final System.Logger LOG = System.getLogger(PoolMetadata.class.getName());
 
+    /** The schemas of a database's own catalog, in lower case: never listed. */
     private static final Set<String> SYSTEM_SCHEMAS = Set.of("information_schema", "pg_catalog", "pg_toast", "sys",
             "mysql", "performance_schema");
 
@@ -183,27 +184,27 @@ record PoolMetadata(String catalog, String schema, char identifierQuote, String 
         }
         PoolMetadata read = new PoolMetadata(catalog, schema, identifierQuote, unquotedCase, keywords,
                 tables.values().stream().sorted(Comparator.comparing((Table t) -> Objects.requireNonNullElse(
-                        t.schema(), "")).thenComparing(Table::name)).toList(), reserved(connection, meta));
+                        t.schema(), "")).thenComparing(Table::name)).toList(), reserved(connection, meta).orElse(null));
         return references ? read.withReferences(meta, budget) : read;
     }
 
     /**
      * The words PostgreSQL does not let a name be unquoted: the {@code R} (reserved) and {@code T} (reserved, but
      * allowed as a function or a type) words of {@code pg_get_keywords()}, which {@link DatabaseMetaData#getSQLKeywords()}
-     * mixes with every unreserved one ({@code comments}, {@code owner}, {@code text}…). {@code null} on any other
+     * mixes with every unreserved one ({@code comments}, {@code owner}, {@code text}…). Empty on any other
      * database, and when PostgreSQL does not answer.
      */
-    private static List<String> reserved(Connection connection, DatabaseMetaData meta) {
+    private static Optional<List<String>> reserved(Connection connection, DatabaseMetaData meta) {
         try {
             if (!"PostgreSQL".equals(meta.getDatabaseProductName())) {
-                return null;
+                return Optional.empty();
             }
             try (Statement statement = connection.createStatement();
                  ResultSet words = statement.executeQuery("SELECT word, catcode FROM pg_get_keywords()")) {
-                return reservedWords(words);
+                return Optional.of(reservedWords(words));
             }
         } catch (SQLException | RuntimeException _) {
-            return null;
+            return Optional.empty();
         }
     }
 

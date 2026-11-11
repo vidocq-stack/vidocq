@@ -21,7 +21,6 @@ package io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.dev;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
 import java.lang.reflect.Proxy;

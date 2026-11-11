@@ -326,7 +326,7 @@ class SqlRunnerTest {
     }
 
     @Test
-    void theCatalogAndTheIsolationOfAConnectionAreGivenBackToo() throws SQLException {
+    void theCatalogAndTheIsolationOfAConnectionAreGivenBackToo() {
         List<String> sets = new ArrayList<>();
         Map<String, Integer> asks = new HashMap<>();
         DataSource recording = proxy(DataSource.class, (self, method, arguments) -> {

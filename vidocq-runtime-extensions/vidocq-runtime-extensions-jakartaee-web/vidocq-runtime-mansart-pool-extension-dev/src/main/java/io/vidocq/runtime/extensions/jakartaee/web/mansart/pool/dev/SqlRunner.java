@@ -250,6 +250,12 @@ final class SqlRunner {
                     get(connection::getTransactionIsolation));
         }
 
+        /** {@code SET SCHEMA} of a name quoted as the database does, its own quotes doubled. */
+        private static String setSchemaSql(String name, char quote) {
+            String doubled = name.replace(String.valueOf(quote), String.valueOf(quote) + quote);
+            return "SET SCHEMA " + quote + doubled + quote;
+        }
+
         /**
          * Gives {@code connection} back its schema, catalog and isolation, each only when it changed. H2 does not hold
          * {@code setSchema} once a statement ran {@code SET SCHEMA}, so there the statement is run.
@@ -257,10 +263,10 @@ final class SqlRunner {
         void restore(Connection connection, char quote) {
             if (schema != null && !schema.equals(get(connection::getSchema))) {
                 if ("H2".equals(get(() -> connection.getMetaData().getDatabaseProductName()))) {
-                    String name = quote + schema.replace(String.valueOf(quote), "" + quote + quote) + quote;
+                    String sql = setSchemaSql(schema, quote);
                     quietly(() -> {
                         try (Statement statement = connection.createStatement()) {
-                            statement.execute("SET SCHEMA " + name);
+                            statement.execute(sql);
                         }
                     });
                 } else {
@@ -468,22 +474,33 @@ final class SqlRunner {
         int slashes = rest.indexOf("//");
         List<String> secrets = new ArrayList<>();
         if (slashes >= 0) {
-            String authority = rest.substring(slashes + 2);
-            int path = authority.indexOf('/');
-            authority = path < 0 ? authority : authority.substring(0, path);
-            authority = authority.substring(authority.indexOf('@') + 1);
-            String host = authority.startsWith("[") ? authority.substring(0, authority.indexOf(']') + 1)
-                    : authority.contains(":") ? authority.substring(0, authority.lastIndexOf(':')) : authority;
-            if (!authority.isBlank()) {
-                secrets.add(authority);
-            }
-            if (!host.isBlank() && !host.equals(authority)) {
-                secrets.add(host);
-            }
+            addAuthority(secrets, rest.substring(slashes + 2));
         } else if (FILE_PATH.matcher(rest).matches()) {
             secrets.add(rest);
         }
         return secrets.stream().filter(secret -> secret.length() >= 3).toList();
+    }
+
+    /** Adds the {@code host:port} of what follows {@code //}, then the host alone, when there is one. */
+    private static void addAuthority(List<String> secrets, String afterSlashes) {
+        int path = afterSlashes.indexOf('/');
+        String authority = path < 0 ? afterSlashes : afterSlashes.substring(0, path);
+        authority = authority.substring(authority.indexOf('@') + 1);
+        if (!authority.isBlank()) {
+            secrets.add(authority);
+        }
+        String host = hostOf(authority);
+        if (!host.isBlank() && !host.equals(authority)) {
+            secrets.add(host);
+        }
+    }
+
+    private static String hostOf(String authority) {
+        if (authority.startsWith("[")) {
+            return authority.substring(0, authority.indexOf(']') + 1);
+        }
+        int colon = authority.lastIndexOf(':');
+        return colon < 0 ? authority : authority.substring(0, colon);
     }
 
     private static int indexOfAny(String text, String chars) {

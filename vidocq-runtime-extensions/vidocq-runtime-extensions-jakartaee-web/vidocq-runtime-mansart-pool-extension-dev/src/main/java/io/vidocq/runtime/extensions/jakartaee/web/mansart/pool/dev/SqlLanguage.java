@@ -40,6 +40,12 @@ import java.util.Set;
  */
 final class SqlLanguage {
     private static final String UPDATE = "UPDATE";
+    private static final String SELECT = "SELECT";
+    private static final String HAVING = "HAVING";
+    private static final String VALUES = "VALUES";
+    private static final String OFFSET = "OFFSET";
+    private static final String LIMIT = "LIMIT";
+    private static final String WHERE = "WHERE";
     private static final String DETAIL = "detail";
 
     /** SQL-92's reserved words, and the few of SQL:2003 a query of today writes, which are no column. */
@@ -53,7 +59,7 @@ final class SqlLanguage {
             "DEFERRABLE", "DEFERRED", "DELETE", "DESC", "DESCRIBE", "DESCRIPTOR", "DIAGNOSTICS", "DISCONNECT",
             "DISTINCT", "DOMAIN", "DOUBLE", "DROP", "ELSE", "END", "ESCAPE", "EXCEPT", "EXCEPTION", "EXEC",
             "EXECUTE", "EXISTS", "EXTERNAL", "EXTRACT", "FALSE", "FETCH", "FIRST", "FLOAT", "FOR", "FOREIGN",
-            "FOUND", "FROM", "FULL", "GET", "GLOBAL", "GO", "GOTO", "GRANT", "GROUP", "HAVING", "HOUR", "IDENTITY",
+            "FOUND", "FROM", "FULL", "GET", "GLOBAL", "GO", "GOTO", "GRANT", "GROUP", HAVING, "HOUR", "IDENTITY",
             "IMMEDIATE", "IN", "INDICATOR", "INITIALLY", "INNER", "INPUT", "INSENSITIVE", "INSERT", "INT", "INTEGER",
             "INTERSECT", "INTERVAL", "INTO", "IS", "ISOLATION", "JOIN", "KEY", "LANGUAGE", "LAST", "LEADING", "LEFT",
             "LEVEL", "LIKE", "LOCAL", "LOWER", "MATCH", "MAX", "MIN", "MINUTE", "MODULE", "MONTH", "NAMES",
@@ -61,19 +67,19 @@ final class SqlLanguage {
             "ON", "ONLY", "OPEN", "OPTION", "OR", "ORDER", "OUTER", "OUTPUT", "OVERLAPS", "PAD", "PARTIAL",
             "POSITION", "PRECISION", "PREPARE", "PRESERVE", "PRIMARY", "PRIOR", "PRIVILEGES", "PROCEDURE", "PUBLIC",
             "READ", "REAL", "REFERENCES", "RELATIVE", "RESTRICT", "REVOKE", "RIGHT", "ROLLBACK", "ROWS", "SCHEMA",
-            "SCROLL", "SECOND", "SECTION", "SELECT", "SESSION", "SESSION_USER", "SET", "SIZE", "SMALLINT", "SOME",
+            "SCROLL", "SECOND", "SECTION", SELECT, "SESSION", "SESSION_USER", "SET", "SIZE", "SMALLINT", "SOME",
             "SPACE", "SQL", "SQLCODE", "SQLERROR", "SQLSTATE", "SUBSTRING", "SUM", "SYSTEM_USER", "TABLE",
             "TEMPORARY", "THEN", "TIME", "TIMESTAMP", "TIMEZONE_HOUR", "TIMEZONE_MINUTE", "TO", "TRAILING",
             "TRANSACTION", "TRANSLATE", "TRANSLATION", "TRIM", "TRUE", "UNION", "UNIQUE", "UNKNOWN", UPDATE,
-            "UPPER", "USAGE", "USER", "USING", "VALUE", "VALUES", "VARCHAR", "VARYING", "VIEW", "WHEN", "WHENEVER",
-            "WHERE", "WITH", "WORK", "WRITE", "YEAR", "ZONE", "LIMIT", "OFFSET", "NULLS", "RECURSIVE", "RETURNING",
+            "UPPER", "USAGE", "USER", "USING", "VALUE", VALUES, "VARCHAR", "VARYING", "VIEW", "WHEN", "WHENEVER",
+            WHERE, "WITH", "WORK", "WRITE", "YEAR", "ZONE", LIMIT, OFFSET, "NULLS", "RECURSIVE", "RETURNING",
             "ILIKE", "OVER", "PARTITION", "LATERAL", "FILTER");
     /** The functions a query of every database calls, each followed by {@code (}. */
     static final List<String> FUNCTIONS = List.of("COUNT", "SUM", "AVG", "MIN", "MAX", "UPPER", "LOWER", "LENGTH",
             "TRIM", "COALESCE", "NULLIF", "CAST", "ABS", "ROUND", "SUBSTRING", "CONCAT", "REPLACE", "EXTRACT", "NOW");
     /** The words that start a clause (SQL spec §3). */
-    static final List<String> CLAUSES = List.of("SELECT", "FROM", "JOIN", "ON", "WHERE", "GROUP BY", "HAVING",
-            "ORDER BY", "LIMIT", "OFFSET", "SET", "VALUES", UPDATE, "DELETE FROM", "INSERT INTO");
+    static final List<String> CLAUSES = List.of(SELECT, "FROM", "JOIN", "ON", WHERE, "GROUP BY", HAVING,
+            "ORDER BY", LIMIT, OFFSET, "SET", VALUES, UPDATE, "DELETE FROM", "INSERT INTO");
     /** The words after which a table is named. */
     static final List<String> TARGET_AFTER = List.of("FROM", "JOIN", UPDATE, "INTO");
 
@@ -81,8 +87,8 @@ final class SqlLanguage {
      * The words that give a query its structure: kept as keywords on a database that lists its reserved words, where
      * the others (a column may be called {@code position} or {@code comments}) are plain names.
      */
-    private static final Set<String> STRUCTURE = Set.of("SELECT", "FROM", "JOIN", "ON", "WHERE", "GROUP", "BY",
-            "HAVING", "ORDER", "LIMIT", "OFFSET", "SET", "VALUES", UPDATE, "DELETE", "INSERT", "INTO", "AS", "ASC",
+    private static final Set<String> STRUCTURE = Set.of(SELECT, "FROM", "JOIN", "ON", WHERE, "GROUP", "BY",
+            HAVING, "ORDER", LIMIT, OFFSET, "SET", VALUES, UPDATE, "DELETE", "INSERT", "INTO", "AS", "ASC",
             "DESC", "NULLS", "BETWEEN", "IN", "EXISTS", "LIKE", "ILIKE", "IS", "NOT", "NULL", "AND", "OR", "UNION",
             "INTERSECT", "EXCEPT", "ALL", "DISTINCT", "CASE", "WHEN", "THEN", "ELSE", "END", "TRUE", "FALSE", "WITH",
             "USING", "LEFT", "RIGHT", "INNER", "OUTER", "FULL", "CROSS", "NATURAL", "OVER", "PARTITION", "FILTER",
