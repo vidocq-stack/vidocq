@@ -116,6 +116,14 @@ public sealed interface Command {
      */
     record PomConvert(io.vidocq.runtime.tooling.PomConverter.Target target, boolean check) implements Command {}
 
+    /**
+     * {@code vidocq pom upgrade [--to <version>|--release|--snapshot] [--check]}: the project's pom on another
+     * Vidocq version, through {@link io.vidocq.runtime.tooling.PomUpgrader} (Vidocq/vidocq#510). {@code to} is
+     * {@code null} when the {@code channel} chooses; {@code check} reports only.
+     */
+    record PomUpgrade(String to, io.vidocq.runtime.cli.update.UpdatePlan.Channel channel, boolean check)
+            implements Command {}
+
     record Build(
             BuildType type,
             boolean offline,

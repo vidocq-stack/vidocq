@@ -61,7 +61,7 @@ public final class CompletionSpec {
     /** Commands whose first argument is a sub-command, with the sub-commands offered. */
     static final Map<String, List<String>> SUBCOMMANDS = ordered(
             "extension", List.of("list", "add", "remove"),
-            "pom", List.of("convert"),
+            "pom", List.of("convert", "upgrade"),
             "config", List.of("get", "set", "list"),
             "completion", List.of("bash", "zsh", "install", "uninstall"));
 
@@ -88,6 +88,7 @@ public final class CompletionSpec {
             "create", List.of("--name", "--group-id", "--package", "--extension", "--vidocq-version", "--with-parent",
                     "--main", "--open-module"),
             "pom convert", List.of("--to", CHECK),
+            "pom upgrade", List.of("--to", "--release", "--snapshot", CHECK),
             "build", List.of("--offline", "--skip-tests", "--dry-run"),
             "clean", List.of("--offline", "--dry-run"),
             "update", List.of(CHECK, "--release", "--snapshot"),

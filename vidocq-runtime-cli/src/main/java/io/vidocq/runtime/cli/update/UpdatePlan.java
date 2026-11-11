@@ -136,7 +136,7 @@ public final class UpdatePlan {
     private static Decision planRelease(String current, Function<String, Optional<String>> fetch,
                                         String central, boolean switching) {
         String url = central + MAVEN_METADATA;
-        Optional<String> latest = fetch.apply(url).flatMap(xml -> first(RELEASE, xml));
+        Optional<String> latest = latestRelease(fetch, central);
         if (latest.isEmpty()) {
             return new Unavailable("no release found at " + url);
         }
@@ -152,10 +152,7 @@ public final class UpdatePlan {
                                          Function<String, Optional<String>> fetch, String snapshots,
                                          boolean switching) {
         String url = snapshots + MAVEN_METADATA;
-        Optional<String> highest = fetch.apply(url).flatMap(xml -> VERSION.matcher(xml).results()
-                .map(m -> m.group(1))
-                .filter(v -> v.endsWith(SNAPSHOT))
-                .max(Comparator.comparing(v -> v, UpdatePlan::compare)));
+        Optional<String> highest = highestSnapshot(fetch, snapshots);
         if (highest.isEmpty()) {
             return new Unavailable("no SNAPSHOT found at " + url);
         }
@@ -178,6 +175,19 @@ public final class UpdatePlan {
             }
         }
         return new Update(line, snapshots + "/" + line + "/" + ARTIFACT + "-" + build.get() + "-cli.zip", build);
+    }
+
+    /** The latest release the metadata under {@code central} names, empty when it cannot be read. */
+    public static Optional<String> latestRelease(Function<String, Optional<String>> fetch, String central) {
+        return fetch.apply(central + MAVEN_METADATA).flatMap(xml -> first(RELEASE, xml));
+    }
+
+    /** The highest SNAPSHOT line the metadata under {@code snapshots} lists, empty when none can be read. */
+    public static Optional<String> highestSnapshot(Function<String, Optional<String>> fetch, String snapshots) {
+        return fetch.apply(snapshots + MAVEN_METADATA).flatMap(xml -> VERSION.matcher(xml).results()
+                .map(m -> m.group(1))
+                .filter(v -> v.endsWith(SNAPSHOT))
+                .max(Comparator.comparing(v -> v, UpdatePlan::compare)));
     }
 
     /** Compares the numeric {@code major.minor.patch} parts; a qualifier is ignored. */

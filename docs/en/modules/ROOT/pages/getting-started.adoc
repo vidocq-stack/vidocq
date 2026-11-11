@@ -263,7 +263,8 @@ the Java release, the executions of its goals, the versions of the lifecycle plu
 extensions, the build identity. The application keeps a parent of its own if it has one, above the `groupId`.
 `vidocq create --with-parent` writes the previous style, under `vidocq-runtime-parent`, and
 xref:modules/vidocq-runtime-cli.adoc#pom-convert[`vidocq pom convert`] turns an existing pom from one style into
-the other. `maven.compiler.release` is the one line Maven does not need: IntelliJ IDEA reads the language level from
+the other, and xref:modules/vidocq-runtime-cli.adoc#pom-upgrade[`vidocq pom upgrade`] moves it to another Vidocq version.
+`maven.compiler.release` is the one line Maven does not need: IntelliJ IDEA reads the language level from
 the pom alone, and the project is created in UTF-8 (`project.build.sourceEncoding`). See xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[the plugin without the parent].
 
 NOTE: This is the pom of 0.4.0. Until then, the project inherited `vidocq-runtime-parent`, pinned every Vidocq

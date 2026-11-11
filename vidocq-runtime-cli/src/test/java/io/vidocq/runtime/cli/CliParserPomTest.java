@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.cli;
 
+import io.vidocq.runtime.cli.update.UpdatePlan;
 import io.vidocq.runtime.tooling.PomConverter;
 import org.junit.jupiter.api.Test;
 
@@ -60,13 +61,55 @@ class CliParserPomTest {
                 () -> CliParser.parse(new String[]{"pom", "convert", "--to", "sideways"}));
         CliException noSubCommand = assertThrows(CliException.class, () -> CliParser.parse(new String[]{"pom"}));
         CliException otherSubCommand = assertThrows(CliException.class,
-                () -> CliParser.parse(new String[]{"pom", "upgrade"}));
+                () -> CliParser.parse(new String[]{"pom", "sideways"}));
 
         assertTrue(missing.getMessage().contains("--to"), missing.getMessage());
         assertTrue(unknown.getMessage().contains("parentless") && unknown.getMessage().contains("parent"),
                 unknown.getMessage());
         assertTrue(noSubCommand.getMessage().contains("convert"), noSubCommand.getMessage());
         assertTrue(otherSubCommand.getMessage().contains("convert"), otherSubCommand.getMessage());
+    }
+
+    @Test
+    void upgradesToTheChannelOfThePom() {
+        Command.PomUpgrade c = (Command.PomUpgrade) CliParser.parse(new String[]{"pom", "upgrade"});
+
+        assertEquals(null, c.to());
+        assertEquals(UpdatePlan.Channel.INSTALLED, c.channel());
+        assertFalse(c.check());
+    }
+
+    @Test
+    void upgradesToAVersionOrAChannelAndOnlyChecks() {
+        Command.PomUpgrade to = (Command.PomUpgrade) CliParser.parse(
+                new String[]{"pom", "upgrade", "--to", "0.5.0", "--check"});
+        Command.PomUpgrade release = (Command.PomUpgrade) CliParser.parse(new String[]{"pom", "upgrade", "--release"});
+        Command.PomUpgrade snapshot = (Command.PomUpgrade) CliParser.parse(new String[]{"pom", "upgrade", "--snapshot"});
+
+        assertEquals("0.5.0", to.to());
+        assertTrue(to.check());
+        assertEquals(UpdatePlan.Channel.RELEASE, release.channel());
+        assertEquals(UpdatePlan.Channel.SNAPSHOT, snapshot.channel());
+    }
+
+    @Test
+    void theTargetsExcludeEachOther() {
+        for (String[] args : new String[][] {
+                {"pom", "upgrade", "--release", "--snapshot"},
+                {"pom", "upgrade", "--to", "0.5.0", "--release"},
+                {"pom", "upgrade", "--to"},
+                {"pom", "upgrade", "--sideways"}}) {
+            assertThrows(CliException.class, () -> CliParser.parse(args), String.join(" ", args));
+        }
+    }
+
+    @Test
+    void theHelpDescribesTheUpgrade() {
+        String help = help("pom");
+
+        assertTrue(help.contains("vidocq pom upgrade"), help);
+        assertTrue(help.contains("--to <version>"), help);
+        assertTrue(help.contains("--release") && help.contains("--snapshot"), help);
     }
 
     @Test

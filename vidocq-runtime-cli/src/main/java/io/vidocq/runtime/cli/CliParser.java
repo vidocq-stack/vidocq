@@ -262,14 +262,21 @@ public final class CliParser {
         }
     }
 
-    /** {@code vidocq pom convert --to parentless|parent [--check]} (Vidocq/vidocq#380). */
+    /** {@code vidocq pom convert ...} (Vidocq/vidocq#380) and {@code vidocq pom upgrade ...} (#510). */
     private static Command parsePom(String[] args, int from) {
-        if (from >= args.length || !"convert".equals(args[from])) {
-            throw new CliException("'pom' takes a sub-command: convert. Run 'vidocq help pom'.");
+        if (from < args.length && "convert".equals(args[from])) {
+            return parsePomConvert(args, from + 1);
         }
+        if (from < args.length && "upgrade".equals(args[from])) {
+            return parsePomUpgrade(args, from + 1);
+        }
+        throw new CliException("'pom' takes a sub-command: convert or upgrade. Run 'vidocq help pom'.");
+    }
+
+    private static Command parsePomConvert(String[] args, int from) {
         PomConverter.Target target = null;
         boolean check = false;
-        Iterator<String> it = tokens(args, from + 1);
+        Iterator<String> it = tokens(args, from);
         while (it.hasNext()) {
             String arg = it.next();
             switch (arg) {
@@ -286,6 +293,28 @@ public final class CliParser {
             throw new CliException("'pom convert' requires --to <parentless|parent>.");
         }
         return new Command.PomConvert(target, check);
+    }
+
+    private static Command parsePomUpgrade(String[] args, int from) {
+        String to = null;
+        boolean check = false;
+        boolean release = false;
+        boolean snapshot = false;
+        Iterator<String> it = tokens(args, from);
+        while (it.hasNext()) {
+            String arg = it.next();
+            switch (arg) {
+                case "--to" -> to = next(it, "--to");
+                case CHECK -> check = true;
+                case "--release" -> release = true;
+                case "--snapshot" -> snapshot = true;
+                default -> unknownOpt(arg, "pom upgrade");
+            }
+        }
+        if ((release ? 1 : 0) + (snapshot ? 1 : 0) + (to != null ? 1 : 0) > 1) {
+            throw new CliException("'pom upgrade' takes one of --to <version>, --release or --snapshot.");
+        }
+        return new Command.PomUpgrade(to, UpdatePlan.Channel.of(release, snapshot), check);
     }
 
     /** Java keywords and literals, which no package segment may be (JLS §3.9, §3.10). */
@@ -466,6 +495,8 @@ public final class CliParser {
         cmd("extension add",    "Add extensions to the current project's pom.xml.");
         cmd("extension remove", "Remove extensions from the current project's pom.xml.");
         cmd("pom convert --to <parentless|parent>", "Convert the pom to the style without vidocq-runtime-parent, or back.");
+        cmd("pom upgrade [--to <version>|--release|--snapshot] [--check]",
+                "Move the pom to another Vidocq version (default: the latest of its channel).");
         cmd("config get|set|list", "Read or write keys in vidocq.properties.");
         cmd("update [--check] [--release|--snapshot]", "Update the CLI: latest release, or latest SNAPSHOT build.");
         cmd("completion bash|zsh", "Print a shell completion script.");
@@ -589,6 +620,16 @@ public final class CliParser {
                 opt("-- <args...>",  "Pass everything after -- straight to Maven");
             }
             case POM -> {
+                topic("pom upgrade", "Move the pom to another Vidocq version",
+                        "Finds where the pom carries the Vidocq version (the vidocq.version property, the version of",
+                        "vidocq-runtime-parent, or the literal versions of a pom written before 0.4.0), prints the diff",
+                        "and writes it. Versions that disagree are reported, never aligned. With no option the pom",
+                        "follows its channel: the latest release, or the latest SNAPSHOT line for a SNAPSHOT.");
+                options("--to <version>", "Move to exactly this version",
+                        "--release",       "Move to the latest release of Maven Central",
+                        "--snapshot",      "Move to the latest SNAPSHOT line (adds the snapshot repositories)",
+                        CHECK,             "Report only: exit 1 when an upgrade is available, 0 otherwise");
+                CliOutput.println();
                 topic("pom convert", "Convert the pom from one style to the other",
                         "A Vidocq application either inherits vidocq-runtime-parent, or imports",
                         "vidocq-runtime-bom and loads vidocq-runtime-maven-plugin as a build extension,",

@@ -364,7 +364,7 @@ public final class ProjectScaffolder {
      * The Vidocq snapshot repository and its mirror, for dependencies and for the SNAPSHOT
      * {@code vidocq-runtime-maven-plugin}. Releases stay on Maven Central.
      */
-    private static String snapshotRepositories() {
+    static String snapshotRepositories() {
         return """
 
                     <repositories>

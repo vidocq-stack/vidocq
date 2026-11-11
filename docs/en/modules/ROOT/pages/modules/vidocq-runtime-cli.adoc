@@ -264,6 +264,9 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | `vidocq pom convert --to <parentless\|parent> [--check]`
 | Convert the pom to the style without `vidocq-runtime-parent`, or back; `--check` reports only (see <<pom-convert>>).
 
+| `vidocq pom upgrade [--to <version>\|--release\|--snapshot] [--check]`
+| Move the pom to another Vidocq version, in either pom style; `--check` reports only (see <<pom-upgrade>>).
+
 | `vidocq help [command]`
 | Show the command list or detailed help for one command.
 |===
@@ -367,6 +370,46 @@ Vidocq version is a SNAPSHOT keeps the snapshot repositories it has; the command
 | `--to <parentless\|parent>` | The style to convert to (required).
 | `--check` | Report only: print the diff, exit with 1 when a conversion is needed and 0 when the pom already has the style. For CI.
 |===
+
+[#pom-upgrade]
+=== `vidocq pom upgrade`
+
+Moves the pom of a Vidocq application to another Vidocq version (Vidocq/vidocq#510), in both pom styles. It reads the
+pom as <<pom-convert,`vidocq pom convert`>> does, on the text, and finds where the version lives: the `vidocq.version`
+property of a pom without a parent, the `<version>` of `vidocq-runtime-parent` of a pom under it, and, in a pom written
+before 0.4.0, the literal versions of the plugin, the BOM, the extensions and the codegen bundles of the processor path.
+Only the version changes; the command does not convert a pom from one style to the other.
+
+[source,bash]
+----
+vidocq pom upgrade                  # the latest of the pom's channel: a release, or the latest SNAPSHOT line
+vidocq pom upgrade --release        # the latest release of Maven Central
+vidocq pom upgrade --snapshot       # the latest SNAPSHOT line (adds the snapshot repositories)
+vidocq pom upgrade --to 0.4.1       # exactly this version, without reading the catalogue
+vidocq pom upgrade --check          # the diff only; exit 1 when an upgrade is available, 0 otherwise
+----
+
+The target is resolved from the same catalogue as `vidocq update --release|--snapshot`. With no option a pom on a
+release follows the releases and a pom on a SNAPSHOT follows the SNAPSHOTs, and neither is moved back. The diff is
+printed before anything is written, and a pom already on the target is left as it is, so the command can run on every
+build.
+
+A pom whose Vidocq versions disagree (a literal left behind next to `vidocq.version`, a plugin one release behind the
+BOM) is reported with every place and its version, and nothing is written, `--check` included: aligning them
+silently would hide which one was meant. A SNAPSHOT target gets the snapshot repositories `vidocq create` writes; a pom
+with repositories of its own is told to add them.
+
+[cols="1,2"]
+|===
+| Option | Description
+
+| `--to <version>` | Move to exactly this version.
+| `--release` | Move to the latest release of Maven Central.
+| `--snapshot` | Move to the latest SNAPSHOT line.
+| `--check` | Report only: print the diff, exit with 1 when an upgrade is available and 0 when the pom is up to date. For CI.
+|===
+
+`--to`, `--release` and `--snapshot` exclude each other.
 
 [#dev]
 === `vidocq dev`

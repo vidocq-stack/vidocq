@@ -35,6 +35,7 @@ import io.vidocq.runtime.cli.spi.CliPlugins;
 import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
 import io.vidocq.runtime.cli.update.CliInstaller;
 import io.vidocq.runtime.cli.update.HttpDownloads;
+import io.vidocq.runtime.cli.update.PomUpgradeTarget;
 import io.vidocq.runtime.cli.update.UpdateNotice;
 import io.vidocq.runtime.cli.update.UpdatePlan;
 import io.vidocq.runtime.tooling.ConfigFile;
@@ -59,6 +60,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Supplier;
 /**
  * Dispatches a parsed {@link Command} to its implementation.
@@ -93,6 +95,7 @@ public final class CommandRunner {
             case Command.Create c              -> runCreate(c);
             case Command.CreateInteractively c -> runCreateInteractively(c);
             case Command.PomConvert p          -> runPomConvert(p, Path.of(""));
+            case Command.PomUpgrade p          -> runPomUpgrade(p, Path.of(""));
             case Command.Build b               -> runBuild(b);
             case Command.Clean cl              -> runClean(cl);
             case Command.Config cfg            -> switch (cfg) {
@@ -369,6 +372,68 @@ public final class CommandRunner {
         }
         CliOutput.success(POM_XML + " converted to the " + style + " style.");
         return 0;
+    }
+
+    private static int runPomUpgrade(Command.PomUpgrade upgrade, Path dir) {
+        try (HttpDownloads http = new HttpDownloads()) {
+            return runPomUpgrade(upgrade, dir, http::fetch);
+        }
+    }
+
+    /**
+     * {@code vidocq pom upgrade} on the pom in {@code dir}: resolves the target (the catalogue {@code fetch} reads,
+     * unless {@code --to}), prints the diff, then writes the pom, unless {@code --check}, which exits with 1 when an
+     * upgrade is available. A pom whose Vidocq versions disagree, or that is not recognised, is refused with its
+     * reason and left alone (Vidocq/vidocq#510).
+     */
+    static int runPomUpgrade(Command.PomUpgrade upgrade, Path dir, Function<String, Optional<String>> fetch) {
+        Path pom = dir.resolve(POM_XML);
+        if (!Files.isRegularFile(pom)) {
+            CliOutput.error("No " + POM_XML + " in " + dir.toAbsolutePath() + ".");
+            return 1;
+        }
+        try {
+            String before = Files.readString(pom);
+            String current = io.vidocq.runtime.tooling.PomUpgrader.current(before).version();
+            String target = upgrade.to() != null ? upgrade.to() : resolvePomTarget(current, upgrade, fetch);
+            if (target == null) {
+                return 1;
+            }
+            var result = io.vidocq.runtime.tooling.PomUpgrader.upgrade(before, target);
+            if (!result.changed()) {
+                CliOutput.success(POM_XML + " already is on Vidocq " + current + ".");
+                return 0;
+            }
+            CliOutput.println(io.vidocq.runtime.tooling.TextDiff.unified(before, result.pom()));
+            result.notes().forEach(CliOutput::warning);
+            if (upgrade.check()) {
+                CliOutput.warning("Vidocq " + target + " is available (" + POM_XML + " is on " + current
+                        + "): run without --check to upgrade.");
+                return 1;
+            }
+            Files.writeString(pom, result.pom());
+            CliOutput.success(POM_XML + " upgraded from Vidocq " + current + " to " + target + ".");
+            return 0;
+        } catch (IOException e) {
+            CliOutput.error("Cannot read or write " + pom + ": " + e.getMessage());
+            return 1;
+        } catch (IllegalArgumentException e) {
+            CliOutput.error(e.getMessage());
+            return 1;
+        }
+    }
+
+    /** The version the catalogue gives {@code current}, or {@code null} after saying it cannot be read. */
+    private static String resolvePomTarget(String current, Command.PomUpgrade upgrade,
+                                           Function<String, Optional<String>> fetch) {
+        String central = env("VIDOCQ_CENTRAL", "https://repo1.maven.org/maven2") + CLI_PATH;
+        String snapshots = env("VIDOCQ_SNAPSHOTS", "https://maven.vidocq.dev/snapshots") + CLI_PATH;
+        Optional<String> target = PomUpgradeTarget.resolve(current, upgrade.channel(), fetch, central, snapshots);
+        if (target.isEmpty()) {
+            CliOutput.error("Could not read the Vidocq versions at " + central + " or " + snapshots
+                    + ": use --to <version>.");
+        }
+        return target.orElse(null);
     }
 
     private static int runBuild(Command.Build build) {

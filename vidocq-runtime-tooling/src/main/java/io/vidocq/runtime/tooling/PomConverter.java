@@ -344,11 +344,11 @@ public final class PomConverter {
                 + ", no version on " + PLUGIN_ARTIFACT + ", " + BOM_ARTIFACT + " or vidocq-runtime-core");
     }
 
-    private static boolean literal(String version) {
+    static boolean literal(String version) {
         return version != null && !version.isBlank() && !version.contains("${");
     }
 
-    private static boolean isVidocqParent(String pom, Element parent) {
+    static boolean isVidocqParent(String pom, Element parent) {
         return PARENT_ARTIFACT.equals(childText(pom, parent, ARTIFACT_ID))
                 && RUNTIME_GROUP.equals(childText(pom, parent, GROUP_ID));
     }
@@ -376,7 +376,7 @@ public final class PomConverter {
                 .findFirst();
     }
 
-    private static IllegalArgumentException refused(String why) {
+    static IllegalArgumentException refused(String why) {
         return new IllegalArgumentException(NOT_RECOGNISED + why);
     }
 
@@ -397,16 +397,16 @@ public final class PomConverter {
         return indent.isBlank() && !indent.isEmpty() ? indent : DEFAULT_INDENT;
     }
 
-    private static int lineStart(String text, int position) {
+    static int lineStart(String text, int position) {
         return text.lastIndexOf('\n', position - 1) + 1;
     }
 
-    private static int lineEnd(String text, int position) {
+    static int lineEnd(String text, int position) {
         int newline = text.indexOf('\n', position);
         return newline < 0 ? text.length() : newline + 1;
     }
 
-    private static String insert(String text, int at, String block) {
+    static String insert(String text, int at, String block) {
         return text.substring(0, at) + block + text.substring(at);
     }
 
@@ -430,25 +430,25 @@ public final class PomConverter {
     /** An element: where it starts and ends in the text, and where its content lies (none when self-closing). */
     record Element(String name, int start, int end, int contentStart, int contentEnd) {}
 
-    private static Optional<Element> topLevel(String pom, String name) {
+    static Optional<Element> topLevel(String pom, String name) {
         Element project = children(pom, 0, pom.length()).stream().filter(e -> "project".equals(e.name())).findFirst()
                 .orElseThrow(() -> refused("no <project> element"));
         return child(pom, project, name);
     }
 
-    private static Optional<Element> child(String pom, Element parent, String name) {
+    static Optional<Element> child(String pom, Element parent, String name) {
         return children(pom, parent).stream().filter(e -> name.equals(e.name())).findFirst();
     }
 
-    private static String childText(String pom, Element parent, String name) {
+    static String childText(String pom, Element parent, String name) {
         return child(pom, parent, name).map(e -> text(pom, e)).orElse(null);
     }
 
-    private static String text(String pom, Element element) {
+    static String text(String pom, Element element) {
         return element.contentStart() < 0 ? "" : pom.substring(element.contentStart(), element.contentEnd()).strip();
     }
 
-    private static List<Element> children(String pom, Element parent) {
+    static List<Element> children(String pom, Element parent) {
         return parent.contentStart() < 0 ? List.of() : children(pom, parent.contentStart(), parent.contentEnd());
     }
 
