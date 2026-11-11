@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.vidocq.bodoni</groupId>
         <artifactId>bodoni-it-other-containers</artifactId>
-        <version>0.4.0-SNAPSHOT</version>
+        <version>0.4.0-RC2</version>
     </parent>
 
     <artifactId>bodoni-it-openliberty</artifactId>
