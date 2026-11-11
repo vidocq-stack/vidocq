@@ -4,6 +4,10 @@
 [.lead]
 New in the `{project-version}` development line — everything listed here landed **after the {release-version} release** and is not part of it. Every entry links to the section that documents it, and those sections carry the [.tag-new]#NEW# badge. Each brick of the suite keeps its own page of this kind; xref:home::whats-new.adoc[the ecosystem index] gathers them. When the next release train ships, this page is frozen with it and restarts empty on the dev line.
 
+== Pool
+
+* xref:modules/mansart-pool.adoc#pending-work[No second rollback on release] [.tag-new]#NEW# — a connection handed back out of auto-commit is rolled back only when a statement ran since the last `commit()` or `rollback()`; a committed transaction no longer pays a rollback, which on H2 emptied the statement cache. Statements are wrapped to track this, and `Statement.getConnection()` now returns the pooled connection instead of the driver's (Vidocq/noether#45).
+
 == Build
 
 * xref:usage.adoc#private-repositories[A private repository is a compile error] [.tag-new]#NEW# — a `@Repository` interface that is `private`, or nested in a `private` type, fails the build with the fix in the message, instead of a compiler note and a repository served at run time, which a named module cannot do; `-Amansart.privateRepositories=warn` keeps the previous behaviour. A repository declared inside a method is refused at run time with a message (Vidocq/mansart#85).

@@ -27,6 +27,7 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.NClob;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLClientInfoException;
 import java.sql.SQLException;
 import java.sql.SQLWarning;
@@ -45,10 +46,23 @@ import java.util.concurrent.Executor;
  * is later re-borrowed, that reuse goes through a fresh wrapper. A user holding a stale reference
  * always sees {@code isClosed() == true}.
  *
- * <p>The whole point is to intercept exactly one method, {@link #close()}, and return the
- * underlying entry to the pool instead of closing the socket. Every other JDBC method is a pure
- * passthrough; calling them after {@code close()} surfaces as the standard JDBC error from the
- * driver since we route to {@code delegate} unconditionally — the misuse is observable.
+ * <p>The wrapper intercepts {@link #close()}, which returns the underlying entry to the pool instead
+ * of closing the socket. It also tells the pool whether work may be pending when the connection comes
+ * back out of auto-commit (Vidocq/noether#45): statements are wrapped ({@link PooledStatement}) so
+ * that each {@code execute*} marks the connection, and {@link #commit()} / {@link #rollback()} clear
+ * the mark. A transaction the client already ended then costs no second rollback on release.
+ *
+ * <p>Some calls hand out a driver object that can run SQL where the wrapper cannot see it: an
+ * {@link #unwrap unwrapped} driver connection or statement, the {@link #getMetaData() metadata} (whose
+ * {@code getConnection()} is the driver's), a {@link #prepareCall callable statement} (not wrapped),
+ * a statement whose result sets are updatable. After any of them the borrow is <i>untracked</i> and
+ * the pool rolls the connection back on release, as it always did. One path stays out of sight: a
+ * driver {@code ResultSet}'s {@code getStatement()} returns the driver's statement, and SQL run on it
+ * after the last commit is not seen.
+ *
+ * <p>Every other JDBC method is a pure passthrough; calling them after {@code close()} surfaces as
+ * the standard JDBC error from the driver since we route to {@code delegate} unconditionally — the
+ * misuse is observable.
  */
 final class PooledConnection implements Connection {
 
@@ -56,6 +70,10 @@ final class PooledConnection implements Connection {
     private final ConnectionPool pool;
     private final Connection   delegate;
     private volatile boolean   closed;
+    /** A statement ran since the last {@link #commit()} or {@link #rollback()}. */
+    private volatile boolean   workPending;
+    /** A driver object that can run SQL out of the wrapper's sight was handed out: roll back on release. */
+    private volatile boolean   untracked;
 
     PooledConnection(PooledEntry entry, ConnectionPool pool) {
         this.entry    = entry;
@@ -69,7 +87,17 @@ final class PooledConnection implements Connection {
     public void close() throws SQLException {
         if (closed) return;
         closed = true;
-        pool.release(entry);
+        pool.release(entry, untracked || workPending);
+    }
+
+    /** Called before a wrapped statement runs: from here on, a release out of auto-commit rolls back. */
+    void markWork() {
+        if (!workPending) workPending = true;
+    }
+
+    /** Called when a driver object that can run SQL leaves the wrapper: the release always rolls back. */
+    void markUntracked() {
+        untracked = true;
     }
 
     @Override
@@ -77,35 +105,45 @@ final class PooledConnection implements Connection {
         return closed || delegate.isClosed();
     }
 
-    /* ---- Statement / PreparedStatement / CallableStatement creation (passthrough) ---- */
+    /* ---- Statement / PreparedStatement creation (wrapped: their execute* calls mark the connection) ---- */
 
-    @Override public Statement createStatement() throws SQLException                         { return delegate.createStatement(); }
+    @Override public Statement createStatement() throws SQLException                         { return statement(delegate.createStatement()); }
     @Override public Statement createStatement(int rsType, int rsConcurrency) throws SQLException
-                                                                                             { return delegate.createStatement(rsType, rsConcurrency); }
+                                                                                             { watch(rsConcurrency); return statement(delegate.createStatement(rsType, rsConcurrency)); }
     @Override public Statement createStatement(int rsType, int rsConcurrency, int rsHoldability) throws SQLException
-                                                                                             { return delegate.createStatement(rsType, rsConcurrency, rsHoldability); }
+                                                                                             { watch(rsConcurrency); return statement(delegate.createStatement(rsType, rsConcurrency, rsHoldability)); }
 
-    @Override public PreparedStatement prepareStatement(String sql) throws SQLException                       { return delegate.prepareStatement(sql); }
-    @Override public PreparedStatement prepareStatement(String sql, int autoGenKeys) throws SQLException      { return delegate.prepareStatement(sql, autoGenKeys); }
-    @Override public PreparedStatement prepareStatement(String sql, int[] columnIndexes) throws SQLException  { return delegate.prepareStatement(sql, columnIndexes); }
-    @Override public PreparedStatement prepareStatement(String sql, String[] columnNames) throws SQLException { return delegate.prepareStatement(sql, columnNames); }
+    @Override public PreparedStatement prepareStatement(String sql) throws SQLException                       { return prepared(delegate.prepareStatement(sql)); }
+    @Override public PreparedStatement prepareStatement(String sql, int autoGenKeys) throws SQLException      { return prepared(delegate.prepareStatement(sql, autoGenKeys)); }
+    @Override public PreparedStatement prepareStatement(String sql, int[] columnIndexes) throws SQLException  { return prepared(delegate.prepareStatement(sql, columnIndexes)); }
+    @Override public PreparedStatement prepareStatement(String sql, String[] columnNames) throws SQLException { return prepared(delegate.prepareStatement(sql, columnNames)); }
     @Override public PreparedStatement prepareStatement(String sql, int rsType, int rsConcurrency) throws SQLException
-                                                                                             { return delegate.prepareStatement(sql, rsType, rsConcurrency); }
+                                                                                             { watch(rsConcurrency); return prepared(delegate.prepareStatement(sql, rsType, rsConcurrency)); }
     @Override public PreparedStatement prepareStatement(String sql, int rsType, int rsConcurrency, int rsHoldability) throws SQLException
-                                                                                             { return delegate.prepareStatement(sql, rsType, rsConcurrency, rsHoldability); }
+                                                                                             { watch(rsConcurrency); return prepared(delegate.prepareStatement(sql, rsType, rsConcurrency, rsHoldability)); }
 
-    @Override public CallableStatement prepareCall(String sql) throws SQLException                              { return delegate.prepareCall(sql); }
+    private Statement statement(Statement raw)                                               { return new PooledStatement<>(raw, this); }
+    private PreparedStatement prepared(PreparedStatement raw)                                { return new PooledPreparedStatement(raw, this); }
+
+    /** An updatable result set writes through {@code updateRow()}, which no statement wrapper sees. */
+    private void watch(int rsConcurrency) {
+        if (rsConcurrency != ResultSet.CONCUR_READ_ONLY) markUntracked();
+    }
+
+    /* ---- CallableStatement creation (passthrough, untracked: stored procedures are no hot path) ---- */
+
+    @Override public CallableStatement prepareCall(String sql) throws SQLException                              { markUntracked(); return delegate.prepareCall(sql); }
     @Override public CallableStatement prepareCall(String sql, int rsType, int rsConcurrency) throws SQLException
-                                                                                             { return delegate.prepareCall(sql, rsType, rsConcurrency); }
+                                                                                             { markUntracked(); return delegate.prepareCall(sql, rsType, rsConcurrency); }
     @Override public CallableStatement prepareCall(String sql, int rsType, int rsConcurrency, int rsHoldability) throws SQLException
-                                                                                             { return delegate.prepareCall(sql, rsType, rsConcurrency, rsHoldability); }
+                                                                                             { markUntracked(); return delegate.prepareCall(sql, rsType, rsConcurrency, rsHoldability); }
 
-    /* ---- Transaction / autoCommit / savepoints (passthrough) ---- */
+    /* ---- Transaction / autoCommit / savepoints (commit and rollback end the pending work) ---- */
 
     @Override public void       setAutoCommit(boolean autoCommit) throws SQLException        { delegate.setAutoCommit(autoCommit); }
     @Override public boolean    getAutoCommit() throws SQLException                          { return delegate.getAutoCommit(); }
-    @Override public void       commit() throws SQLException                                 { delegate.commit(); }
-    @Override public void       rollback() throws SQLException                               { delegate.rollback(); }
+    @Override public void       commit() throws SQLException                                 { delegate.commit(); workPending = false; }
+    @Override public void       rollback() throws SQLException                               { delegate.rollback(); workPending = false; }
     @Override public void       rollback(Savepoint savepoint) throws SQLException            { delegate.rollback(savepoint); }
     @Override public Savepoint  setSavepoint() throws SQLException                           { return delegate.setSavepoint(); }
     @Override public Savepoint  setSavepoint(String name) throws SQLException                { return delegate.setSavepoint(name); }
@@ -115,7 +153,8 @@ final class PooledConnection implements Connection {
 
     /* ---- Misc state (passthrough) ---- */
 
-    @Override public DatabaseMetaData getMetaData() throws SQLException                      { return delegate.getMetaData(); }
+    /** Untracked: {@code DatabaseMetaData.getConnection()} is the driver's connection. */
+    @Override public DatabaseMetaData getMetaData() throws SQLException                      { markUntracked(); return delegate.getMetaData(); }
     @Override public void       setReadOnly(boolean readOnly) throws SQLException            { delegate.setReadOnly(readOnly); }
     @Override public boolean    isReadOnly() throws SQLException                             { return delegate.isReadOnly(); }
     @Override public void       setCatalog(String catalog) throws SQLException               { delegate.setCatalog(catalog); }
@@ -131,12 +170,12 @@ final class PooledConnection implements Connection {
     @Override public boolean    isValid(int timeout) throws SQLException                     { return delegate.isValid(timeout); }
     @Override public String     nativeSQL(String sql) throws SQLException                    { return delegate.nativeSQL(sql); }
 
-    /* ---- LOB / structured types (passthrough) ---- */
+    /* ---- LOB / structured types (a large object may live in the database: work pending) ---- */
 
-    @Override public Clob   createClob()    throws SQLException                              { return delegate.createClob(); }
-    @Override public Blob   createBlob()    throws SQLException                              { return delegate.createBlob(); }
-    @Override public NClob  createNClob()   throws SQLException                              { return delegate.createNClob(); }
-    @Override public SQLXML createSQLXML()  throws SQLException                              { return delegate.createSQLXML(); }
+    @Override public Clob   createClob()    throws SQLException                              { markWork(); return delegate.createClob(); }
+    @Override public Blob   createBlob()    throws SQLException                              { markWork(); return delegate.createBlob(); }
+    @Override public NClob  createNClob()   throws SQLException                              { markWork(); return delegate.createNClob(); }
+    @Override public SQLXML createSQLXML()  throws SQLException                              { markWork(); return delegate.createSQLXML(); }
     @Override public Array  createArrayOf(String typeName, Object[] elements) throws SQLException
                                                                                              { return delegate.createArrayOf(typeName, elements); }
     @Override public Struct createStruct(String typeName, Object[] attributes) throws SQLException
@@ -170,12 +209,13 @@ final class PooledConnection implements Connection {
                                                                                              { delegate.setShardingKey(shardingKey, superShardingKey); }
     @Override public void setShardingKey(ShardingKey shardingKey) throws SQLException        { delegate.setShardingKey(shardingKey); }
 
-    /* ---- Wrapper ---- */
+    /* ---- Wrapper: handing out the driver's connection hands out an untracked way to run SQL ---- */
 
     @Override
     @SuppressWarnings("unchecked")
     public <T> T unwrap(Class<T> iface) throws SQLException {
         if (iface.isInstance(this))      return (T) this;
+        markUntracked();
         if (iface.isInstance(delegate))  return (T) delegate;
         return delegate.unwrap(iface);
     }

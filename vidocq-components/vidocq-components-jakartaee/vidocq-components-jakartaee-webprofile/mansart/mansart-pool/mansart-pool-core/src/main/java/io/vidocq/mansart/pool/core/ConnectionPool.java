@@ -135,10 +135,10 @@ final class ConnectionPool implements AutoCloseable {
         }
     }
 
-    void release(PooledEntry entry) {
+    void release(PooledEntry entry, boolean workPending) {
         boolean keep;
         try {
-            entry.resetForReuse();
+            entry.resetForReuse(workPending);
             keep = !closed && !entry.expired(
                     config.maxLifetime().toNanos(),
                     config.idleTimeout().toNanos(),

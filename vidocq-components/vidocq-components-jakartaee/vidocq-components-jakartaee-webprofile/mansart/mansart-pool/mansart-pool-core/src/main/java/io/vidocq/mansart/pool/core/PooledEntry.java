@@ -73,10 +73,14 @@ final class PooledEntry {
         return borrowedAt != 0L && nowNanos - borrowedAt > thresholdNanos;
     }
 
-    /** Reset driver state to a sane default before parking the entry back into the idle deque. */
-    void resetForReuse() throws SQLException {
+    /**
+     * Reset driver state to a sane default before parking the entry back into the idle deque. A connection
+     * out of auto-commit is rolled back only when {@code workPending}: a transaction the client already
+     * committed or rolled back needs no second rollback (Vidocq/noether#45).
+     */
+    void resetForReuse(boolean workPending) throws SQLException {
         if (!delegate.getAutoCommit()) {
-            delegate.rollback();
+            if (workPending) delegate.rollback();
             delegate.setAutoCommit(true);
         }
         delegate.clearWarnings();

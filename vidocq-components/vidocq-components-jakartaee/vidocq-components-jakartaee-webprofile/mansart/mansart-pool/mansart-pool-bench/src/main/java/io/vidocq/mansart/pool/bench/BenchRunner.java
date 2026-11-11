@@ -41,6 +41,7 @@ public final class BenchRunner {
         OptionsBuilder b = new OptionsBuilder();
         b.include(BorrowReleaseBench.class.getSimpleName());
         b.include(ConcurrentBorrowBench.class.getSimpleName());
+        b.include(TransactionCycleBench.class.getSimpleName());
         if (full) {
             b.forks(5)
              .warmupIterations(5).warmupTime(TimeValue.seconds(3))
