@@ -273,6 +273,13 @@ class VidocqArchRulesTest {
         assertTrue(List.of(Jdk.any()).contains("java.."));
     }
 
+    @Test
+    void theJdkConstantsOfTheBricksEqualTheMethods() {
+        assertTrue(java.util.Arrays.equals(Jdk.ANY, Jdk.any()));
+        assertTrue(java.util.Arrays.equals(Jdk.RUNTIME, Jdk.runtime()));
+        assertTrue(java.util.Arrays.equals(Jdk.COMPILER, Jdk.compiler()));
+    }
+
     static final class UsesALibrary {
         void check() {
             org.junit.jupiter.api.Assertions.fail("a library outside the JDK");

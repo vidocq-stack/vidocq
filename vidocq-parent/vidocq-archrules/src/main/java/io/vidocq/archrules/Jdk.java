@@ -22,10 +22,25 @@ package io.vidocq.archrules;
 /**
  * The JDK packages a Vidocq module may depend on, for {@link VidocqArchRules#dependOnlyOn}. Each method returns a
  * fresh array, so a caller cannot change what the next one gets.
+ *
+ * <p>The {@link #ANY}, {@link #RUNTIME} and {@link #COMPILER} constants are the form every brick's architecture tests
+ * use today. They stay until the bricks have moved to the methods; a caller must not change them.
  */
 public final class Jdk {
 
     private static final String JAVA = "java..";
+
+    /** Same packages as {@link #any()}, kept for the bricks that still read the constant. */
+    @SuppressWarnings("java:S2386") // shared constant of the published API, read-only by contract
+    public static final String[] ANY = any();
+
+    /** Same packages as {@link #runtime()}, kept for the bricks that still read the constant. */
+    @SuppressWarnings("java:S2386")
+    public static final String[] RUNTIME = runtime();
+
+    /** Same packages as {@link #compiler()}, kept for the bricks that still read the constant. */
+    @SuppressWarnings("java:S2386")
+    public static final String[] COMPILER = compiler();
 
     /** Every {@code java} and {@code javax} package: for a module that may use the whole JDK. */
     public static String[] any() {
