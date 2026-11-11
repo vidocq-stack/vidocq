@@ -5,6 +5,28 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261111-01 — `vidocq-runtime-vaadin-extension` does not resolve with a Vaadin whose `flow-server` names its module
+
+- **Date**: 2026-11-11
+- **Status**: FIXED on `fix/vaadin-module-names`
+- **Affected module**: vidocq-runtime-vaadin-extension
+- **Symptom**: the extension's descriptor `requires flow.server`, the name Java derives from the file name of
+  `flow-server` up to Vaadin 25.3. Vaadin is giving its jars an `Automatic-Module-Name` (vaadin/flow#26731, a draft
+  on 2026-11-11), which makes `flow-server` the module `com.vaadin.flow.server`. With such a Vaadin, resolution fails:
+  `FindException: Module flow.server not found, required by io.vidocq.runtime.extensions.jakartaee.web.vaadin`.
+  Found while reviewing vaadin/flow#7482 against Vidocq/vidocq#256, before any Vaadin release had the name.
+- **Minimal reproduction**: `FlowServerModuleNamesTest.theAutomaticModuleNameIsRead`: the real `flow-server` jar with
+  `Automatic-Module-Name: com.vaadin.flow.server` in its manifest, this module and the Servlet API in a layer. It
+  fails as above with the descriptor of `origin/main`.
+- **Fix**: the descriptor requires both names, `static`: a static dependence is read when the module is resolved,
+  and the application, which requires Vaadin, resolves the one its Vaadin has. `javac` and the release's `javadoc`
+  need a module for every name a `requires` gives, a static one included, so the build compiles an empty
+  `com.vaadin.flow.server` from `src/module-stubs` first (execution `module-stubs`) and passes it to both with
+  `--upgrade-module-path`. It is never packaged. `javadoc` refuses that option with `--release`, so the extension's
+  `javadoc` takes `--source` instead. `FlowServerModuleNamesTest` loads `ModuleLookupInitializer` against both names.
+- **Known noise**: the second execution of `compiler:compile` makes Maven log `Overwriting artifact's file` once per
+  build; the jar holds `target/classes` only.
+
 ## BUG-20261109-02 — every example test that boots the runtime fails when something already listens on 8080
 
 - **Date**: 2026-11-09

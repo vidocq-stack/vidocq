@@ -42,6 +42,24 @@
     </dependencies>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <!-- The release profile's javadoc reads module-info.java too: it needs the stand-in of
+                     com.vaadin.flow.server as javac does (see the module-stubs execution below). javadoc refuses
+                     the upgrade module path with release, so it takes source instead. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <configuration>
+                        <release combine.self="override"/>
+                        <source>${maven.compiler.release}</source>
+                        <additionalOptions combine.children="append">
+                            <additionalOption>--upgrade-module-path '${project.build.directory}/module-stubs'</additionalOption>
+                        </additionalOptions>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -56,6 +74,43 @@
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
+                <executions>
+                    <!-- module-info.java requires flow-server under both of its names, static. javac needs a module
+                         for each: flow-server 25.3 is flow.server, and this empty stand-in, never packaged, is
+                         com.vaadin.flow.server. -->
+                    <execution>
+                        <id>module-stubs</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                        <configuration>
+                            <compileSourceRoots>
+                                <compileSourceRoot>${project.basedir}/src/module-stubs/com.vaadin.flow.server</compileSourceRoot>
+                            </compileSourceRoots>
+                            <outputDirectory>${project.build.directory}/module-stubs/com.vaadin.flow.server</outputDirectory>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>default-compile</id>
+                        <configuration>
+                            <compilerArgs combine.children="append">
+                                <arg>--upgrade-module-path</arg>
+                                <arg>${project.build.directory}/module-stubs</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <compilerArgs combine.children="append">
+                                <arg>--upgrade-module-path</arg>
+                                <arg>${project.build.directory}/module-stubs</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <!-- Vaadin lives in the application layer (vidocq.app.layer=all): this module goes with it, where
                  its io.vidocq name would keep it, and flow.server it requires, in the runtime's layer. -->

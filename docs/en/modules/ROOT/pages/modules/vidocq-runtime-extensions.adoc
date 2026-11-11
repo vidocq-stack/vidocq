@@ -466,6 +466,8 @@ The application's module requires `io.vidocq.runtime.extensions.jakartaee.web.va
 
 *Dependencies.* The extension depends on Vaadin's `flow-server` at `provided` scope: the application brings Vaadin, at the version its Vaadin BOM chooses, and the extension is compiled against Flow 25.3.4 without imposing it. This is the one third-party API it names, as the workspace rule on what ships requires.
 
+*Both names of `flow-server`.* Up to Vaadin 25.3, `flow-server` is the automatic module `flow.server`, named after its file. Vaadin is giving it the `Automatic-Module-Name` `com.vaadin.flow.server` (vaadin/flow#26731). The extension's descriptor requires both names `static`, so the extension reads the one the application resolves, whatever the Vaadin version. `javac` and `javadoc` need a module for every name a `requires` gives, a static one included, so the build compiles an empty `com.vaadin.flow.server` from `src/module-stubs` first and passes it to both with `--upgrade-module-path`; it is never packaged. Once Vaadin ships its own module descriptors, whose `Lookup` declares its uses itself, the extension is no longer needed in a jlink image.
+
 == Typical lifecycle — Chappe example
 
 The `vidocq-runtime-chappe-webserver-extension` extension illustrates the pattern. Four hook points:

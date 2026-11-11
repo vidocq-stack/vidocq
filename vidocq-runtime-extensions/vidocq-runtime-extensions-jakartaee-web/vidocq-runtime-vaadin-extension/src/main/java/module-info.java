@@ -24,7 +24,12 @@
  * own, loads services from this module, which may declare any use at run time.
  */
 module io.vidocq.runtime.extensions.jakartaee.web.vaadin {
-    requires flow.server;
+    // flow-server under the two names its versions give it: flow.server, derived from the jar's name up to
+    // Vaadin 25.3, and com.vaadin.flow.server, its Automatic-Module-Name from vaadin/flow#26731 on. Each is
+    // static, so this module reads the one the application resolves, and needs neither. javac reaches the second
+    // through the empty stand-in of src/module-stubs.
+    requires static flow.server;
+    requires static com.vaadin.flow.server;
     requires jakarta.servlet;
 
     // Vaadin instantiates the initializer reflectively.

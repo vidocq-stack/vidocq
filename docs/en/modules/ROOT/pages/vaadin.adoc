@@ -190,9 +190,14 @@ xref:modules/vidocq-runtime-cli.adoc#create-snapshot[Trying a SNAPSHOT].
 </build>
 ----
 
-The application is a named module. The Vaadin jars have no `module-info`: their module names come from their file
-names (`flow.server`, `vaadin.button.flow`, …). Vaadin creates the routes by reflection, so the package that holds them
-is open.
+The application is a named module. The Vaadin jars have no `module-info`: up to Vaadin 25.3, their module names come
+from their file names (`flow.server`, `vaadin.button.flow`, …). Vaadin creates the routes by reflection, so the package
+that holds them is open.
+
+NOTE: Vaadin is giving its jars stable names (vaadin/flow#26731, vaadin/flow-components#10527): `flow-server` becomes
+`com.vaadin.flow.server`, a component jar takes its root package, such as `com.vaadin.flow.component.button`. With a
+Vaadin that ships them, require those names instead. `vidocq-runtime-vaadin-extension` reads `flow-server` under
+either name.
 
 [source,java]
 ----
