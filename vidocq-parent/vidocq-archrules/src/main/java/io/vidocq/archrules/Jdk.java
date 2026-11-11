@@ -30,20 +30,20 @@ public final class Jdk {
 
     private static final String JAVA = "java..";
 
-    /** Same packages as {@link #any()}, kept for the bricks that still read the constant. */
+    /** Same packages as {@link #anyPackages()}, kept for the bricks that still read the constant. */
     @SuppressWarnings("java:S2386") // shared constant of the published API, read-only by contract
-    public static final String[] ANY = any();
+    public static final String[] ANY = anyPackages();
 
-    /** Same packages as {@link #runtime()}, kept for the bricks that still read the constant. */
+    /** Same packages as {@link #runtimePackages()}, kept for the bricks that still read the constant. */
     @SuppressWarnings("java:S2386")
-    public static final String[] RUNTIME = runtime();
+    public static final String[] RUNTIME = runtimePackages();
 
-    /** Same packages as {@link #compiler()}, kept for the bricks that still read the constant. */
+    /** Same packages as {@link #compilerPackages()}, kept for the bricks that still read the constant. */
     @SuppressWarnings("java:S2386")
-    public static final String[] COMPILER = compiler();
+    public static final String[] COMPILER = compilerPackages();
 
     /** Every {@code java} and {@code javax} package: for a module that may use the whole JDK. */
-    public static String[] any() {
+    public static String[] anyPackages() {
         return new String[] {JAVA, "javax.."};
     }
 
@@ -51,14 +51,14 @@ public final class Jdk {
      * The JDK packages a runtime module may use: java.base, and java.xml for a parser. A {@code javax} package
      * outside the JDK (the old {@code javax.servlet}, {@code javax.inject}) is not one.
      */
-    public static String[] runtime() {
+    public static String[] runtimePackages() {
         return new String[] {
             JAVA, "javax.crypto..", "javax.net..", "javax.security..", "javax.xml..", "org.w3c.dom..", "org.xml.sax.."
         };
     }
 
     /** The JDK packages of an annotation processor: java.base and java.compiler. */
-    public static String[] compiler() {
+    public static String[] compilerPackages() {
         return new String[] {JAVA, "javax.annotation.processing..", "javax.lang.model..", "javax.tools.."};
     }
 

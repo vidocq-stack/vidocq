@@ -57,7 +57,7 @@ class VidocqArchRulesTest {
 
     @Test
     void theDependencyRuleCatchesALibraryOutsideTheAllowedPackages() {
-        ArchRule rule = VidocqArchRules.dependOnlyOn(new String[0], Jdk.any(), SOURCE);
+        ArchRule rule = VidocqArchRules.dependOnlyOn(new String[0], Jdk.anyPackages(), SOURCE);
         RuleAssertions.assertViolated(rule, UsesALibrary.class);
         RuleAssertions.assertKept(rule, UsesTheJdkOnly.class);
     }
@@ -66,17 +66,17 @@ class VidocqArchRulesTest {
     void theDependencyRuleLooksAtTheNamedPackagesOnly() {
         String api = "io.vidocq.archrules.fixture.api..";
         String core = "io.vidocq.archrules.fixture.core..";
-        ArchRule rule = VidocqArchRules.dependOnlyOn(new String[] {api}, Packages.of(Jdk.any(), api), SOURCE);
+        ArchRule rule = VidocqArchRules.dependOnlyOn(new String[] {api}, Packages.of(Jdk.anyPackages(), api), SOURCE);
         RuleAssertions.assertViolated(rule, ApiReachingIntoCore.class, CoreClass.class);
-        ArchRule allowed = VidocqArchRules.dependOnlyOn(new String[] {api}, Packages.of(Jdk.any(), api, core), SOURCE);
+        ArchRule allowed = VidocqArchRules.dependOnlyOn(new String[] {api}, Packages.of(Jdk.anyPackages(), api, core), SOURCE);
         RuleAssertions.assertKept(allowed, ApiReachingIntoCore.class, CoreClass.class);
-        ArchRule coreOnly = VidocqArchRules.dependOnlyOn(new String[] {core}, Jdk.any(), SOURCE);
+        ArchRule coreOnly = VidocqArchRules.dependOnlyOn(new String[] {core}, Jdk.anyPackages(), SOURCE);
         RuleAssertions.assertKept(coreOnly, ApiReachingIntoCore.class, CoreClass.class);
     }
 
     @Test
     void theJdkListsDistinguishTheXmlApiFromTheOldServletPackages() {
-        ArchRule rule = VidocqArchRules.dependOnlyOn(new String[0], Packages.of(Jdk.runtime(), "io.vidocq.archrules.."), SOURCE);
+        ArchRule rule = VidocqArchRules.dependOnlyOn(new String[0], Packages.of(Jdk.runtimePackages(), "io.vidocq.archrules.."), SOURCE);
         RuleAssertions.assertViolated(rule, UsesAnOldJavaxPackage.class);
         RuleAssertions.assertKept(rule, UsesTheJdkOnly.class);
     }
@@ -270,14 +270,14 @@ class VidocqArchRulesTest {
         ArchRule rule = VidocqArchRules.noThreadLocal("why", SOURCE);
         assertThrows(AssertionError.class, () -> RuleAssertions.assertViolated(rule, UsesVirtualThreads.class));
         assertThrows(AssertionError.class, () -> RuleAssertions.assertKept(rule, KeepsAThreadLocal.class));
-        assertTrue(List.of(Jdk.any()).contains("java.."));
+        assertTrue(List.of(Jdk.anyPackages()).contains("java.."));
     }
 
     @Test
     void theJdkConstantsOfTheBricksEqualTheMethods() {
-        assertTrue(java.util.Arrays.equals(Jdk.ANY, Jdk.any()));
-        assertTrue(java.util.Arrays.equals(Jdk.RUNTIME, Jdk.runtime()));
-        assertTrue(java.util.Arrays.equals(Jdk.COMPILER, Jdk.compiler()));
+        assertTrue(java.util.Arrays.equals(Jdk.ANY, Jdk.anyPackages()));
+        assertTrue(java.util.Arrays.equals(Jdk.RUNTIME, Jdk.runtimePackages()));
+        assertTrue(java.util.Arrays.equals(Jdk.COMPILER, Jdk.compilerPackages()));
     }
 
     static final class UsesALibrary {
