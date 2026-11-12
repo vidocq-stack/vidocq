@@ -176,6 +176,9 @@ The storage applies wherever Mansart knows which attribute a value belongs to: i
 
 **Outside the Jakarta Data backend scope**: `@OneToMany`, `@ManyToMany`, `@MappedSuperclass`, `@Inheritance`, `@Convert`/`AttributeConverter`. Persistence implements these within its documented mapping boundaries.
 
+[#plural-attributes]
+A plural attribute — `@ElementCollection`, `@OneToMany`, `@ManyToMany`, or a field whose type is a `Collection` or a `Map` — is not a column of the entity's table, and Mansart leaves it to the persistence provider [.tag-new]#NEW#: it is not in `_Book`, a Mansart repository neither reads nor writes it (an entity it loads keeps the field's initial value), and a derived query on it (`findByTags`) is a method no query derives from (xref:usage.adoc#unresolved-methods[a build error naming it]). The processor says so in a compiler note per attribute. An entity can therefore carry collections that xref:noether::index.adoc[Noether] maps, and still be served by Mansart repositories for its columns. Before, the processor treated such a field as a column, and the generated `_Book` did not compile.
+
 == Repository annotations
 
 [cols="2,3"]

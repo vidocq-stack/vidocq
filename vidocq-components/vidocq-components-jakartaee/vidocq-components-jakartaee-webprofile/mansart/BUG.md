@@ -9,6 +9,33 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-049 — An entity with a collection field got a `_Book` that did not compile
+
+- **Date**: 2026-11-11
+- **Status**: FIXED on `fix/data-collection-attribute`. A plural attribute — `@ElementCollection`, `@OneToMany`,
+  `@ManyToMany`, or a field typed as a `Collection` or a `Map` — is not a column: `PluralAttributes` makes the
+  scanner leave it out of `_Book` (with a compiler note) and the repository writer out of the derived-query
+  attributes, and `RuntimeEntityModelBuilder` leaves it out of the run-time model. Mansart repositories read and
+  write the entity's columns and leave its collections to the persistence provider.
+- **Module**: `mansart-data-processor` (`EntityScanner`, `RepositoryWriter`), `mansart-data-core`
+  (`RuntimeEntityModelBuilder`)
+- **Symptom**: `@Entity class Book { @Id Long id; @ElementCollection List<String> tags; }` compiled with the
+  processor produced `NumericAttribute<Book, java.util.List<java.lang.String>> tags = new NumericAttribute<>(…,
+  java.util.List<java.lang.String>.class, …)`, and javac failed on `<identifier> expected`. A raw `List` broke
+  `NumericAttribute`'s bound instead. On the run-time path the model took the field for a column, and `save` failed
+  with `Column "tags" not found`. A derived query `findByTags` failed in the generated implementation
+  (`cannot find symbol: variable tags`) instead of naming the method.
+- **Reproduction**: `ProcessorPluralAttributeTest` (4 tests) and `RuntimePluralAttributeTest` (2 tests), in
+  `mansart-data-tests`, red on `5d5fd8e6`.
+- **Cause**: Mansart Data maps an entity to the columns of one table and has no plural kind; `EntityScanner.kindOf`
+  and `RuntimeEntityModelBuilder` sent every unknown type to the numeric fallback, and the writer printed the
+  declared type, type arguments included, before `.class`.
+- **Reported by**: Noether, BUG-20261111-06, while writing the two-processor coexistence test after
+  Vidocq/mansart#95; Noether's `MansartDataCoexistenceTest` maps its collection through an `@Access(PROPERTY)` getter
+  over a `@Transient` field until this lands.
+
+---
+
 ## MANSART-048 — The processor's JPA metamodel `Book_` gave a collection a singular kind and kept Noether's out
 
 - **Date**: 2026-11-11

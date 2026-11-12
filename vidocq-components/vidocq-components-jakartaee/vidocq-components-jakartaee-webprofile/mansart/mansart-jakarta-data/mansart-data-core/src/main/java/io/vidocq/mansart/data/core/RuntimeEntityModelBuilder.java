@@ -126,7 +126,20 @@ public final class RuntimeEntityModelBuilder {
     private static boolean isPersisted(Field field) {
         int mods = field.getModifiers();
         return !Modifier.isStatic(mods) && !Modifier.isTransient(mods)
-                && !hasAnnotation(field, "jakarta.persistence.Transient");
+                && !hasAnnotation(field, "jakarta.persistence.Transient")
+                && !isPlural(field);
+    }
+
+    /**
+     * {@code @ElementCollection}, {@code @OneToMany}, {@code @ManyToMany}, or a collection or map type: not a column of
+     * the entity's table, so Mansart Data neither reads nor writes it, as the processor does (MANSART-049).
+     */
+    private static boolean isPlural(Field field) {
+        return hasAnnotation(field, "jakarta.persistence.ElementCollection")
+                || hasAnnotation(field, "jakarta.persistence.OneToMany")
+                || hasAnnotation(field, "jakarta.persistence.ManyToMany")
+                || java.util.Collection.class.isAssignableFrom(field.getType())
+                || java.util.Map.class.isAssignableFrom(field.getType());
     }
 
     private static boolean isExplicitId(Field field) {

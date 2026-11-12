@@ -988,7 +988,9 @@ final class RepositoryWriter {
         for (var member : entity.getEnclosedElements()) {
             if (member.getKind() == javax.lang.model.element.ElementKind.FIELD
                     && !member.getModifiers().contains(javax.lang.model.element.Modifier.STATIC)
-                    && !member.getModifiers().contains(javax.lang.model.element.Modifier.TRANSIENT)) {
+                    && !member.getModifiers().contains(javax.lang.model.element.Modifier.TRANSIENT)
+                    && PluralAttributes.kind((javax.lang.model.element.VariableElement) member, elements, types)
+                            == null) {
                 names.add(member.getSimpleName().toString());
             }
         }

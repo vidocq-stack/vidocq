@@ -88,6 +88,12 @@ final class EntityScanner {
         for (Element member : type.getEnclosedElements()) {
             if (!isPersistentField(member)) continue;
             VariableElement field = (VariableElement) member;
+            String plural = PluralAttributes.kind(field, elements, types);
+            if (plural != null) {
+                note(field, type.getQualifiedName() + "." + field.getSimpleName() + " is " + plural
+                        + ", not a column: Mansart Data neither reads nor writes it, the persistence provider maps it.");
+                continue;
+            }
             AttributeDescriptor a = describe(field);
             attributes.add(a);
             if (a.kind == AttributeKind.ID) {
@@ -258,6 +264,12 @@ final class EntityScanner {
     private void error(Element element, String message) {
         if (messager != null) {
             messager.printMessage(Diagnostic.Kind.ERROR, "[mansart-data] " + message, element);
+        }
+    }
+
+    private void note(Element element, String message) {
+        if (messager != null) {
+            messager.printMessage(Diagnostic.Kind.NOTE, "[mansart-data] " + message, element);
         }
     }
 
