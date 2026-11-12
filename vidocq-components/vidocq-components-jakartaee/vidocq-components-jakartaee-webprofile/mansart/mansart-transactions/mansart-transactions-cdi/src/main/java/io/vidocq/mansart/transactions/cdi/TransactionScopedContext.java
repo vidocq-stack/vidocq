@@ -115,18 +115,16 @@ public final class TransactionScopedContext implements AlterableContext {
 
     private ConcurrentMap<Contextual<?>, Holder<?>> registerCleanup(Transaction tx) {
         ConcurrentMap<Contextual<?>, Holder<?>> map = new ConcurrentHashMap<>();
-        try {
-            tx.registerSynchronization(new Synchronization() {
-                @Override public void beforeCompletion() { /* no-op */ }
-                @Override public void afterCompletion(int status) {
-                    ConcurrentMap<Contextual<?>, Holder<?>> dead = store.remove(tx);
-                    if (dead == null) return;
-                    dead.forEach((c, h) -> destroyHolder(c, h));
-                }
-            });
-        } catch (Exception _) {
-            // TX is already terminating — destroy will run via the next get() / explicit destroy().
-        }
+        // Interposed: a transaction marked rollback-only takes it too, so its beans are always
+        // destroyed (MANSART-063).
+        MansartTransactionsProducer.tm().registerInterposedSynchronization(tx, new Synchronization() {
+            @Override public void beforeCompletion() { /* no-op */ }
+            @Override public void afterCompletion(int status) {
+                ConcurrentMap<Contextual<?>, Holder<?>> dead = store.remove(tx);
+                if (dead == null) return;
+                dead.forEach((c, h) -> destroyHolder(c, h));
+            }
+        });
         return map;
     }
 

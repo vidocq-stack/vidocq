@@ -9,6 +9,37 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-060 to MANSART-064 — Five defects in what keeps the transaction manager sound over time
+
+Found by reading `mansart-transactions` on 2026-11-12 (pool and transactions audit). **Status** of the five: FIXED
+on `fix/tx-robustness`; reproduction in `TransactionRobustnessTest` (`mansart-transactions-core`) and
+`RegistryOnRollbackOnlyTest` (`mansart-transactions-cdi`). The tests use the API the fix adds (node id, journal
+threshold, interposed registration), so they did not compile before it.
+
+- **MANSART-060 — The global transaction id was a counter starting at 1 in every JVM.** With a durable journal, a
+  transaction begun after a restart took the id of one left in doubt, and its `COMPLETED` record erased the other
+  from the recovery scan; two instances on one database produced the same Xid (`XAER_DUPID`). Fix: the id is the
+  node id (`mansart.tx.node-id`, drawn at random by default), the manager's start instant and a sequence.
+- **MANSART-061 — `setTransactionTimeout` was accepted and never applied.** A transaction could stay active, with
+  its connection, for ever. Fix: a virtual thread marks the transaction rollback-only when its time is up; the
+  commit rolls back and throws `RollbackException`; leaving `STATUS_ACTIVE` is a compare-and-set.
+- **MANSART-062 — The recovery journal grew for ever and kept orphan records.** Three lines per two-phase
+  transaction, never removed; a transaction rolled back after its prepare (last-resource commit failure) kept a
+  `PREPARED` record reported in doubt at every start; a journal that refused a record left the prepared branches
+  as they were, `afterCompletion` not run. Fix: the journal is rewritten with what is in doubt, at opening and every
+  1024 completed transactions; the rollback writes `COMPLETED`; a refused record rolls back or is reported with the
+  completion callbacks run.
+- **MANSART-063 — A `@TransactionScoped` bean or a registry resource first used on a rollback-only transaction was
+  never released.** `registerSynchronization` refuses a transaction marked rollback-only; the context and the
+  registry swallowed that and kept their per-transaction map for ever. Interposed synchronizations also ran in
+  registration order. Fix: `MansartTransactionManager.registerInterposedSynchronization`, with the order the
+  specification gives them, accepted on a rollback-only transaction.
+- **MANSART-064 — A one-phase commit the database rolled back was a `SystemException` with no cause.** Status
+  `STATUS_UNKNOWN`, error code only. Fix: an `XA_RB*` code is `RollbackException` and `STATUS_ROLLEDBACK`; the
+  `XAException` is the cause in both cases.
+
+---
+
 ## MANSART-058 — The default validation mode validated nothing, and `validationQuery` was never run
 
 - **Date**: 2026-11-12

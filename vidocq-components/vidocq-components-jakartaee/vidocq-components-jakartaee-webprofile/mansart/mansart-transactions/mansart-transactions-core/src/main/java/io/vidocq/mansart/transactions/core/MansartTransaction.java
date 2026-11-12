@@ -31,11 +31,13 @@ import javax.transaction.xa.XAException;
 import javax.transaction.xa.XAResource;
 import javax.transaction.xa.Xid;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Single-thread, in-memory {@link Transaction}. Holds nothing but a status word for M1 — resource
@@ -61,8 +63,19 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 final class MansartTransaction implements Transaction {
 
-    private static final AtomicLong XID_COUNTER = new AtomicLong();
-    private static byte[] longToBytes(long v) {
+    private static final System.Logger LOG = System.getLogger("io.vidocq.mansart.transactions");
+
+    /** Compare-and-set on {@link #status}: the timeout marks the transaction from another thread. */
+    private static final VarHandle STATE;
+    static {
+        try {
+            STATE = MethodHandles.lookup().findVarHandle(MansartTransaction.class, "status", int.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    static byte[] longToBytes(long v) {
         return new byte[] {
                 (byte)(v >>> 56), (byte)(v >>> 48), (byte)(v >>> 40), (byte)(v >>> 32),
                 (byte)(v >>> 24), (byte)(v >>> 16), (byte)(v >>> 8),  (byte) v };
@@ -70,25 +83,67 @@ final class MansartTransaction implements Transaction {
 
     private volatile int status = Status.STATUS_ACTIVE;
     private final List<Synchronization> syncs = new ArrayList<>();
+    /** Synchronizations of the platform (TransactionSynchronizationRegistry): last before, first after. */
+    private final List<Synchronization> interposed = new ArrayList<>();
     private final List<XAResource> resources = new ArrayList<>();
     /** Resources whose {@code end()} has already been called by an explicit
      *  {@link #delistResource(XAResource, int)} — they must not be re-ended at commit. */
     private final Set<XAResource> alreadyEnded =
             java.util.Collections.newSetFromMap(new IdentityHashMap<>());
-    private final byte[] gtrid = longToBytes(XID_COUNTER.incrementAndGet());
+    private final byte[] gtrid;
     /** Journal identity of the whole transaction (branch qualifier 0 is never handed to a resource). */
-    private final Xid xid = new MansartXid(gtrid, new byte[]{0});
+    private final Xid xid;
     /** One XA branch per enlisted resource — same gtrid, DISTINCT branch qualifier (XA spec). */
     private final IdentityHashMap<XAResource, Xid> branchXids = new IdentityHashMap<>();
     private int branchSequence;
     private final RecoveryLog recoveryLog;
 
-    MansartTransaction() {
-        this(NoOpRecoveryLog.INSTANCE);
+    /** Seconds this transaction may stay active, {@code 0} for no limit. */
+    private final int timeoutSeconds;
+    private volatile boolean timedOut;
+    /** The virtual thread that marks the transaction when its timeout expires; {@code null} without a timeout. */
+    private Thread reaper;
+
+    /**
+     * @param gtrid          a global transaction id no other transaction manager produces (MANSART-060)
+     * @param timeoutSeconds seconds the transaction may stay active, {@code 0} for no limit
+     */
+    MansartTransaction(RecoveryLog recoveryLog, byte[] gtrid, int timeoutSeconds) {
+        this.recoveryLog = recoveryLog;
+        this.gtrid = gtrid;
+        this.xid = new MansartXid(gtrid, new byte[]{0});
+        this.timeoutSeconds = timeoutSeconds;
     }
 
-    MansartTransaction(RecoveryLog recoveryLog) {
-        this.recoveryLog = recoveryLog;
+    /**
+     * Starts the timeout, when there is one: a virtual thread that sleeps it out, then marks the transaction
+     * rollback-only (MANSART-061). The thread that runs the transaction is not interrupted: its commit then rolls
+     * back and throws {@link RollbackException}.
+     */
+    void armTimeout() {
+        if (timeoutSeconds <= 0) return;
+        reaper = Thread.ofVirtual().name("mansart-tx-timeout").start(() -> {
+            try {
+                Thread.sleep(Duration.ofSeconds(timeoutSeconds));
+                expire();
+            } catch (InterruptedException _) {
+                Thread.currentThread().interrupt();   // the transaction ended in time
+            }
+        });
+    }
+
+    private void expire() {
+        timedOut = true;
+        if (STATE.compareAndSet(this, Status.STATUS_ACTIVE, Status.STATUS_MARKED_ROLLBACK)) {
+            LOG.log(System.Logger.Level.WARNING, "Transaction {0} timed out after {1} s: marked rollback-only",
+                    xid, timeoutSeconds);
+        }
+    }
+
+    private RollbackException rolledBackAtCommit() {
+        return new RollbackException(timedOut && timeoutSeconds > 0
+                ? "Transaction timed out after " + timeoutSeconds + " s and was rolled back"
+                : "Transaction was marked rollback-only");
     }
 
     @Override
@@ -100,7 +155,7 @@ final class MansartTransaction implements Transaction {
     public void commit() throws RollbackException, SystemException {
         if (status == Status.STATUS_MARKED_ROLLBACK) {
             doRollback();
-            throw new RollbackException("Transaction was marked rollback-only");
+            throw rolledBackAtCommit();
         }
         if (status != Status.STATUS_ACTIVE) {
             throw new IllegalStateException(
@@ -119,15 +174,17 @@ final class MansartTransaction implements Transaction {
         }
         // A participant may mark the transaction rollback-only from beforeCompletion (a flush that
         // fails, typically): the mark is honoured, as it is when set before commit() (MANSART-051).
-        if (status == Status.STATUS_MARKED_ROLLBACK) {
+        // The same goes for the timeout, which marks from another thread: leaving ACTIVE is one
+        // compare-and-set, so a transaction is either marked or on its way to commit (MANSART-061).
+        int next = resources.size() > 1 ? Status.STATUS_PREPARING : Status.STATUS_COMMITTING;
+        if (!STATE.compareAndSet(this, Status.STATUS_ACTIVE, next)) {
             doRollback();
-            throw new RollbackException("Transaction was marked rollback-only during beforeCompletion");
+            throw rolledBackAtCommit();
         }
         // End every resource that wasn't explicitly delisted before commit.
         endActiveResources(XAResource.TMSUCCESS);
 
         if (resources.isEmpty()) {
-            status = Status.STATUS_COMMITTING;
             status = Status.STATUS_COMMITTED;
             invokeAfterCompletion(Status.STATUS_COMMITTED);
         } else if (resources.size() == 1) {
@@ -138,14 +195,25 @@ final class MansartTransaction implements Transaction {
     }
 
     /** 1PC degenerate path — a single resource: skip prepare entirely. */
-    private void commitOnePhase(XAResource resource) throws SystemException {
+    private void commitOnePhase(XAResource resource) throws RollbackException, SystemException {
         status = Status.STATUS_COMMITTING;
         try {
             resource.commit(xidFor(resource), true);
         } catch (XAException ex) {
+            // XA_RB*: the resource rolled its branch back, the outcome is known (MANSART-064).
+            if (ex.errorCode >= XAException.XA_RBBASE && ex.errorCode <= XAException.XA_RBEND) {
+                status = Status.STATUS_ROLLEDBACK;
+                invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
+                RollbackException rex = new RollbackException(
+                        "The resource rolled the transaction back at commit: " + ex.errorCode);
+                rex.initCause(ex);
+                throw rex;
+            }
             status = Status.STATUS_UNKNOWN;
             invokeAfterCompletion(Status.STATUS_UNKNOWN);
-            throw new SystemException("XA single-resource commit failed: " + ex.errorCode);
+            SystemException sys = new SystemException("XA single-resource commit failed: " + ex.errorCode);
+            sys.initCause(ex);
+            throw sys;
         }
         status = Status.STATUS_COMMITTED;
         invokeAfterCompletion(Status.STATUS_COMMITTED);
@@ -159,7 +227,19 @@ final class MansartTransaction implements Transaction {
         // Durable record : every yes-voter is now in-doubt until COMPLETED is appended.
         // If we crash between here and the matching COMPLETED line, recover() will surface
         // these branches with type=PREPARED/COMMITTING and the operator can replay.
-        appendOrFailSystem(RecoveryLog.Type.PREPARED);
+        try {
+            recoveryLog.append(new RecoveryLog.Record(RecoveryLog.Type.PREPARED, xid));
+        } catch (java.io.IOException ex) {
+            // Nothing is committed yet: without a journal there is no safe commit, so roll back.
+            status = Status.STATUS_ROLLING_BACK;
+            rollbackQuietly(prepared);
+            status = Status.STATUS_ROLLEDBACK;
+            invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
+            RollbackException rex = new RollbackException(
+                    "The recovery log refused the PREPARED record — transaction rolled back");
+            rex.initCause(ex);
+            throw rex;
+        }
 
         // LRCO — single-phase resources (JDBC local transactions wrapped as XAResource) cannot
         // really prepare: their commit IS the decision. Commit them first, while the real XA
@@ -177,7 +257,16 @@ final class MansartTransaction implements Transaction {
         status = Status.STATUS_COMMITTING;
         // Crossing the point of no return — write before any resource.commit() call so that a
         // crash during the loop still allows on-restart recovery to commit the rest.
-        appendOrFailSystem(RecoveryLog.Type.COMMITTING);
+        try {
+            recoveryLog.append(new RecoveryLog.Record(RecoveryLog.Type.COMMITTING, xid));
+        } catch (java.io.IOException ex) {
+            // A single-phase resource may have committed already: the outcome is not ours to state.
+            status = Status.STATUS_UNKNOWN;
+            invokeAfterCompletion(Status.STATUS_UNKNOWN);
+            SystemException sys = new SystemException("Failed to append COMMITTING to the recovery log: " + ex);
+            sys.initCause(ex);
+            throw sys;
+        }
         // The decision is commit: every branch gets its commit, whatever the others answer. A branch
         // left prepared would hold its locks until the next recovery scan (MANSART-055).
         XAException failure = null;
@@ -198,7 +287,7 @@ final class MansartTransaction implements Transaction {
             throw sys;
         }
         status = Status.STATUS_COMMITTED;
-        appendOrFailSystem(RecoveryLog.Type.COMPLETED);
+        appendCompleted();
         invokeAfterCompletion(Status.STATUS_COMMITTED);
     }
 
@@ -244,6 +333,8 @@ final class MansartTransaction implements Transaction {
                 // Remaining single-phase resources have not committed yet — roll them back too.
                 rollbackQuietly(lastResources.subList(i + 1, lastResources.size()));
                 status = Status.STATUS_ROLLEDBACK;
+                // The PREPARED record has its end: nothing stays in doubt (MANSART-062).
+                appendCompleted();
                 invokeAfterCompletion(Status.STATUS_ROLLEDBACK);
                 RollbackException rex = new RollbackException(
                         "Last-resource commit failed — transaction rolled back");
@@ -259,14 +350,15 @@ final class MansartTransaction implements Transaction {
         }
     }
 
-    private void appendOrFailSystem(RecoveryLog.Type type) throws SystemException {
+    /**
+     * Closes the transaction's journal entry. The outcome is settled by then, so a journal that refuses the record
+     * does not fail the transaction: the entry stays, and the next recovery scan finds no branch behind it.
+     */
+    private void appendCompleted() {
         try {
-            recoveryLog.append(new RecoveryLog.Record(type, xid));
+            recoveryLog.append(new RecoveryLog.Record(RecoveryLog.Type.COMPLETED, xid));
         } catch (java.io.IOException ex) {
-            // A failed write means the on-disk view is now inconsistent with reality — escalate.
-            // The volatile NoOpRecoveryLog never throws, so this only fires for FileRecoveryLog.
-            status = Status.STATUS_UNKNOWN;
-            throw new SystemException("Failed to append " + type + " to recovery log: " + ex);
+            LOG.log(System.Logger.Level.WARNING, "The recovery log refused the COMPLETED record of " + xid, ex);
         }
     }
 
@@ -311,38 +403,64 @@ final class MansartTransaction implements Transaction {
     /**
      * By index, not by iterator: a participant may register another one from {@code beforeCompletion} (a flush
      * that takes its connection then), and the late one gets its own {@code beforeCompletion} (MANSART-052).
+     * The interposed synchronizations run once the others are done (Jakarta Transactions, section 4.2 of the
+     * TransactionSynchronizationRegistry contract).
      */
     private void invokeBeforeCompletion() {
-        for (int i = 0; i < syncs.size(); i++) {
-            syncs.get(i).beforeCompletion();
+        int next = 0;
+        int nextInterposed = 0;
+        while (next < syncs.size() || nextInterposed < interposed.size()) {
+            if (next < syncs.size()) {
+                syncs.get(next++).beforeCompletion();
+            } else {
+                interposed.get(nextInterposed++).beforeCompletion();
+            }
         }
     }
 
     /**
      * After-completion callbacks run when the transaction is finalised — by spec they should
      * never propagate an exception. We swallow each one so that one failing sync can't stop the
-     * others from observing the outcome.
+     * others from observing the outcome. The interposed synchronizations run first.
      */
     private void invokeAfterCompletion(int finalStatus) {
-        for (int i = 0; i < syncs.size(); i++) {
+        if (reaper != null) reaper.interrupt();
+        afterCompletion(interposed, finalStatus);
+        afterCompletion(syncs, finalStatus);
+    }
+
+    private static void afterCompletion(List<Synchronization> participants, int finalStatus) {
+        for (int i = 0; i < participants.size(); i++) {
             try {
-                syncs.get(i).afterCompletion(finalStatus);
+                participants.get(i).afterCompletion(finalStatus);
             } catch (RuntimeException _) {
                 // spec §3.3.5 — afterCompletion exceptions are swallowed
             }
         }
     }
 
+    /**
+     * Registers a synchronization of the platform: it may join a transaction marked rollback-only, where
+     * {@link #registerSynchronization} refuses, since what it cleans up exists whatever the outcome (MANSART-063).
+     */
+    void registerInterposed(Synchronization sync) {
+        if (status != Status.STATUS_ACTIVE && status != Status.STATUS_MARKED_ROLLBACK) {
+            throw new IllegalStateException(
+                    "An interposed synchronization requires STATUS_ACTIVE or STATUS_MARKED_ROLLBACK, was "
+                            + statusName(status));
+        }
+        interposed.add(sync);
+    }
+
     @Override
     public void setRollbackOnly() {
         // Marking twice is no error: each @Transactional frame an exception crosses marks (MANSART-053).
-        if (status == Status.STATUS_MARKED_ROLLBACK) return;
-        if (status != Status.STATUS_ACTIVE) {
-            throw new IllegalStateException(
-                    "setRollbackOnly() requires STATUS_ACTIVE or STATUS_MARKED_ROLLBACK, was "
-                            + statusName(status));
+        if (STATE.compareAndSet(this, Status.STATUS_ACTIVE, Status.STATUS_MARKED_ROLLBACK)
+                || status == Status.STATUS_MARKED_ROLLBACK) {
+            return;
         }
-        status = Status.STATUS_MARKED_ROLLBACK;
+        throw new IllegalStateException(
+                "setRollbackOnly() requires STATUS_ACTIVE or STATUS_MARKED_ROLLBACK, was " + statusName(status));
     }
 
     @Override
@@ -356,6 +474,8 @@ final class MansartTransaction implements Transaction {
         }
         Xid branchXid = new MansartXid(gtrid, longToBytes(++branchSequence));
         try {
+            // Before start(): XA applies a timeout to the branches started after it is set.
+            if (timeoutSeconds > 0) xaRes.setTransactionTimeout(timeoutSeconds);
             xaRes.start(branchXid, XAResource.TMNOFLAGS);
         } catch (XAException ex) {
             throw new SystemException("XAResource.start failed: " + ex.errorCode);

@@ -25,6 +25,7 @@ import jakarta.transaction.InvalidTransactionException;
 import jakarta.transaction.NotSupportedException;
 import jakarta.transaction.RollbackException;
 import jakarta.transaction.Status;
+import jakarta.transaction.Synchronization;
 import jakarta.transaction.SystemException;
 import jakarta.transaction.Transaction;
 import jakarta.transaction.TransactionManager;
@@ -32,9 +33,14 @@ import jakarta.transaction.TransactionManager;
 import javax.transaction.xa.XAException;
 import javax.transaction.xa.XAResource;
 import javax.transaction.xa.Xid;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Local-only Jakarta Transactions 2.0 {@link TransactionManager}.
@@ -52,8 +58,18 @@ import java.util.List;
  */
 public class MansartTransactionManager implements TransactionManager {
 
+    /** System property naming this transaction manager among those that share a database (MANSART-060). */
+    public static final String NODE_ID_PROPERTY = "mansart.tx.node-id";
+    /** A node id, an 8-byte start instant and an 8-byte sequence fit the 64 bytes of a global transaction id. */
+    public static final int MAX_NODE_ID_BYTES = 32;
+
     private final ThreadLocal<MansartTransaction> active = new ThreadLocal<>();
+    /** Seconds given by {@link #setTransactionTimeout(int)} to the transactions this thread begins. */
+    private final ThreadLocal<Integer> timeoutSeconds = new ThreadLocal<>();
     private final RecoveryLog recoveryLog;
+    /** Node id then start instant: what opens every global transaction id of this manager. */
+    private final byte[] gtridPrefix;
+    private final AtomicLong sequence = new AtomicLong();
 
     /** Volatile TM (no recovery log) — the most common case for embedded apps and tests. */
     public MansartTransactionManager() {
@@ -63,7 +79,59 @@ public class MansartTransactionManager implements TransactionManager {
     /** Durable TM — pass a {@link FileRecoveryLog} (or any custom impl) to enable in-doubt
      *  transaction detection on restart. */
     public MansartTransactionManager(RecoveryLog recoveryLog) {
+        this(recoveryLog, defaultNodeId());
+    }
+
+    /**
+     * @param nodeId names this transaction manager among those that share a database: it opens every global
+     *               transaction id, followed by the instant this manager started and a sequence, so that no two
+     *               managers, and no two runs of one, produce the same id (MANSART-060). At most
+     *               {@value #MAX_NODE_ID_BYTES} bytes of UTF-8.
+     */
+    public MansartTransactionManager(RecoveryLog recoveryLog, String nodeId) {
+        byte[] node = nodeId.getBytes(StandardCharsets.UTF_8);
+        if (node.length == 0 || node.length > MAX_NODE_ID_BYTES) {
+            throw new IllegalArgumentException("The transaction manager's node id must be 1 to "
+                    + MAX_NODE_ID_BYTES + " bytes of UTF-8, got " + node.length + ": " + nodeId);
+        }
         this.recoveryLog = recoveryLog;
+        this.gtridPrefix = Arrays.copyOf(node, node.length + Long.BYTES);
+        System.arraycopy(MansartTransaction.longToBytes(System.currentTimeMillis()), 0,
+                gtridPrefix, node.length, Long.BYTES);
+    }
+
+    /** The {@value #NODE_ID_PROPERTY} system property, else an id drawn at random for this manager. */
+    private static String defaultNodeId() {
+        String configured = System.getProperty(NODE_ID_PROPERTY);
+        return configured != null && !configured.isBlank()
+                ? configured
+                : HexFormat.of().toHexDigits(UUID.randomUUID().getMostSignificantBits());
+    }
+
+    private byte[] nextGtrid() {
+        byte[] gtrid = Arrays.copyOf(gtridPrefix, gtridPrefix.length + Long.BYTES);
+        System.arraycopy(MansartTransaction.longToBytes(sequence.incrementAndGet()), 0,
+                gtrid, gtridPrefix.length, Long.BYTES);
+        return gtrid;
+    }
+
+    /**
+     * Registers a synchronization of the platform on {@code tx}: it runs after the application's in
+     * {@code beforeCompletion} and before them in {@code afterCompletion}, and may join a transaction marked
+     * rollback-only (MANSART-063). This is what {@code TransactionSynchronizationRegistry} hands over.
+     *
+     * @throws IllegalStateException when the transaction is completing or completed
+     */
+    public void registerInterposedSynchronization(Transaction tx, Synchronization sync) {
+        if (tx instanceof MansartTransaction own) {
+            own.registerInterposed(sync);
+            return;
+        }
+        try {
+            tx.registerSynchronization(sync);
+        } catch (RollbackException | SystemException e) {
+            throw new IllegalStateException("Cannot register an interposed synchronization", e);
+        }
     }
 
     /**
@@ -91,7 +159,10 @@ public class MansartTransactionManager implements TransactionManager {
                     "A transaction is already active on this thread — nested transactions "
                             + "are not supported (use suspend()/resume() in M3+)");
         }
-        active.set(new MansartTransaction(recoveryLog));
+        Integer timeout = timeoutSeconds.get();
+        MansartTransaction tx = new MansartTransaction(recoveryLog, nextGtrid(), timeout == null ? 0 : timeout);
+        active.set(tx);
+        tx.armTimeout();
     }
 
     @Override
@@ -136,7 +207,12 @@ public class MansartTransactionManager implements TransactionManager {
         if (seconds < 0) {
             throw new SystemException("Negative transaction timeout: " + seconds);
         }
-        // Accepted but not enforced yet: transaction timeouts land with the reaper task (M2).
+        // For the transactions this thread begins from now on; 0 puts the default back: no timeout.
+        if (seconds == 0) {
+            timeoutSeconds.remove();
+        } else {
+            timeoutSeconds.set(seconds);
+        }
     }
 
     @Override

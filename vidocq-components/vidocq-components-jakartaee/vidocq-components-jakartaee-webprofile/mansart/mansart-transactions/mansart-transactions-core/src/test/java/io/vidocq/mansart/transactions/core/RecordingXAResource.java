@@ -39,13 +39,17 @@ final class RecordingXAResource implements XAResource {
     boolean prepareThrowsRollback;
     /** When true, commit throws XAException(XAER_RMFAIL) — used to test heuristic paths later. */
     boolean commitThrows;
+    /** The error code of the {@link XAException} thrown by commit when {@link #commitThrows}. */
+    int commitErrorCode = XAException.XAER_RMFAIL;
+    /** The branch this resource was last started with. */
+    Xid startedWith;
 
     RecordingXAResource(String name, List<String> log) {
         this.name = name;
         this.log = log;
     }
 
-    @Override public void start(Xid xid, int flags) { log.add(name + ".start"); }
+    @Override public void start(Xid xid, int flags) { startedWith = xid; log.add(name + ".start"); }
     @Override public void end(Xid xid, int flags)   { log.add(name + ".end(" + flagName(flags) + ")"); }
     @Override public int  prepare(Xid xid) throws XAException {
         log.add(name + ".prepare");
@@ -57,7 +61,7 @@ final class RecordingXAResource implements XAResource {
     @Override public void commit(Xid xid, boolean onePhase) throws XAException {
         log.add(name + ".commit(onePhase=" + onePhase + ")");
         if (commitThrows) {
-            throw new XAException(XAException.XAER_RMFAIL);
+            throw new XAException(commitErrorCode);
         }
     }
     @Override public void rollback(Xid xid)               { log.add(name + ".rollback"); }
@@ -65,7 +69,7 @@ final class RecordingXAResource implements XAResource {
     @Override public Xid[] recover(int flag)              { return new Xid[0]; }
     @Override public boolean isSameRM(XAResource other)   { return this == other; }
     @Override public int     getTransactionTimeout()      { return 0; }
-    @Override public boolean setTransactionTimeout(int s) { return false; }
+    @Override public boolean setTransactionTimeout(int s) { log.add(name + ".timeout(" + s + ")"); return true; }
 
     private static String flagName(int f) {
         return switch (f) {

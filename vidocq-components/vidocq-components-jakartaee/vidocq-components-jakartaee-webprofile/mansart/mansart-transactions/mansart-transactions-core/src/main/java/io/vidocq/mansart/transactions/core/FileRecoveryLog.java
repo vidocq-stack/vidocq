@@ -57,14 +57,63 @@ public final class FileRecoveryLog implements RecoveryLog {
             StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND,
             StandardOpenOption.DSYNC };
 
+    /** Completed transactions after which the journal is rewritten without them. */
+    private static final int COMPACT_EVERY = 1024;
+
     private final Path file;
+    private final int compactEvery;
     private java.nio.channels.FileChannel channel;
     private boolean closed;
+    private int completedSinceCompaction;
 
     public FileRecoveryLog(Path file) throws IOException {
+        this(file, COMPACT_EVERY);
+    }
+
+    /**
+     * @param compactEvery completed transactions after which the journal is rewritten with the transactions still
+     *                     in doubt only (MANSART-062); it is also rewritten when opened
+     */
+    public FileRecoveryLog(Path file, int compactEvery) throws IOException {
         this.file = file;
+        this.compactEvery = compactEvery;
         Files.createDirectories(file.toAbsolutePath().getParent());
+        compact();
         this.channel = java.nio.channels.FileChannel.open(file, APPEND_OPTS);
+    }
+
+    /**
+     * Rewrites the journal with the last record of each transaction that has no {@code COMPLETED} one: a temporary
+     * file, forced to disk, then moved over the journal in one step, so a crash leaves the old journal or the new.
+     */
+    private void compact() throws IOException {
+        if (!Files.exists(file)) return;
+        var inDoubt = new java.util.LinkedHashMap<String, String>();
+        for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+            int sep = line.indexOf(SEP);
+            if (sep < 0 || line.split("\\|").length != 4) continue;      // corrupt or truncated line
+            String transaction = line.substring(sep);
+            if (line.startsWith(Type.COMPLETED.name() + SEP)) {
+                inDoubt.remove(transaction);
+            } else {
+                inDoubt.put(transaction, line);
+            }
+        }
+        if (channel != null) {
+            channel.close();
+            channel = null;
+        }
+        Path rewritten = file.resolveSibling(file.getFileName() + ".compact");
+        var content = new StringBuilder();
+        inDoubt.values().forEach(line -> content.append(line).append('\n'));
+        try (var out = java.nio.channels.FileChannel.open(rewritten, StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            out.write(java.nio.ByteBuffer.wrap(content.toString().getBytes(StandardCharsets.UTF_8)));
+            out.force(true);
+        }
+        Files.move(rewritten, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        completedSinceCompaction = 0;
     }
 
     @Override
@@ -79,6 +128,10 @@ public final class FileRecoveryLog implements RecoveryLog {
         // DSYNC open option already forces sync on every write, force(true) is belt-and-suspenders
         // — kept explicit so a future migration to plain WRITE doesn't silently lose durability.
         channel.force(true);
+        if (entry.type() == Type.COMPLETED && ++completedSinceCompaction >= compactEvery) {
+            compact();
+            reopen();
+        }
     }
 
     @Override

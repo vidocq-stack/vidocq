@@ -77,6 +77,33 @@ sequenceDiagram
 * **An `Error` ends the transaction too.** An `AssertionError` or a `StackOverflowError` out of a `@Transactional` method rolls its transaction back, like a `RuntimeException`; no transaction stays bound to the thread.
 * **Once the decision is commit, every two-phase branch gets its commit.** When one resource fails, the others are still committed; `commit()` then throws `SystemException` with the first `XAException` as its cause, the status is `STATUS_UNKNOWN`, and the journal keeps the transaction for the next recovery scan to finish the failed branch.
 
+[#timeout]
+== Transaction timeout [.tag-new]#NEW#
+
+`TransactionManager.setTransactionTimeout(seconds)` and `UserTransaction.setTransactionTimeout(seconds)` are applied (MANSART-061): the transactions the calling thread begins from then on get that many seconds, and `0` puts the default back, which is no timeout.
+
+When the time is up, a virtual thread marks the transaction rollback-only and logs a `WARNING` naming it. The thread that runs the transaction is not interrupted: what it does next on the transaction follows the rollback-only rules, and its `commit()` rolls back and throws `RollbackException` (`Transaction timed out after 30 s and was rolled back`). A `@Transactional` method whose transaction timed out returns normally with its work rolled back, as it does after `setRollbackOnly()`. The timeout is also handed to each enlisted resource (`XAResource.setTransactionTimeout`), before its branch starts.
+
+[#transaction-ids]
+== Transaction ids and the node id [.tag-new]#NEW#
+
+A global transaction id is the node id, the instant the transaction manager started, then a sequence (MANSART-060). The node id names a transaction manager among those that share a database: set it with the `mansart.tx.node-id` system property (1 to 32 bytes of UTF-8, the pod or host name for instance), or leave it out and one is drawn at random when the manager is created. Either way no two managers, and no two runs of one, produce the same id: an id journaled before a crash cannot be taken again after the restart, and two instances on one database do not collide on `XAER_DUPID`. Recovery resolves the transactions of its own journal only, so it never touches the branches of another node.
+
+[#journal]
+== The recovery journal stays small [.tag-new]#NEW#
+
+`FileRecoveryLog` rewrites its file with the transactions still in doubt only, when it is opened and every 1024 completed transactions (MANSART-062): a temporary file forced to disk, then moved over the journal in one step. A transaction rolled back after its prepare — a single-phase resource that fails its commit — gets its `COMPLETED` record, so nothing is reported in doubt for it. A journal that refuses a record before anything is committed rolls the transaction back (`RollbackException`); one that refuses the `COMPLETED` record of a settled transaction is logged, and does not fail it.
+
+[#one-phase]
+== One-phase commit outcome [.tag-new]#NEW#
+
+With a single resource, a commit the resource answers with an `XA_RB*` code is a rollback: `commit()` throws `RollbackException`, status `STATUS_ROLLEDBACK` — a constraint the database checks at commit, for a JDBC connection. Any other failure is `SystemException`, status `STATUS_UNKNOWN`. Both carry the `XAException` as their cause (MANSART-064).
+
+[#interposed]
+== Interposed synchronizations [.tag-new]#NEW#
+
+A synchronization registered through `TransactionSynchronizationRegistry.registerInterposedSynchronization` runs after the application's in `beforeCompletion` and before them in `afterCompletion`, and may join a transaction marked rollback-only (MANSART-063). `@TransactionScoped` beans and the registry's resources are released that way, whatever the state the transaction was in when they were first used.
+
 == Roadmap
 
 * ✅ **M1** — Local single-thread (TM, UT, status).

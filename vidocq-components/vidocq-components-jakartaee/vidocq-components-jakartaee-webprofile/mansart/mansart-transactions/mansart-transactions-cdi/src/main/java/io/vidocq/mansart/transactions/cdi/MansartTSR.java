@@ -19,6 +19,7 @@
  */
 package io.vidocq.mansart.transactions.cdi;
 
+import io.vidocq.mansart.transactions.core.MansartTransactionManager;
 import jakarta.transaction.Status;
 import jakarta.transaction.Synchronization;
 import jakarta.transaction.SystemException;
@@ -38,10 +39,9 @@ import java.util.concurrent.ConcurrentMap;
  * an auto-registered cleanup {@link Synchronization} removes the per-tx map at completion so
  * we never leak across runs.
  *
- * <p>Interposed synchronisations are registered as plain {@link Transaction#registerSynchronization(Synchronization)}
- * for now — Jakarta Transactions §10.3 mandates a specific ordering (interposed run AFTER normal
- * syncs in {@code beforeCompletion}, BEFORE in {@code afterCompletion}) which {@link MansartTransaction}
- * does not yet differentiate ; see {@code BUG.md}/M8 for the follow-up.
+ * <p>Interposed synchronisations go to {@link MansartTransactionManager#registerInterposedSynchronization}: they
+ * run after the application's in {@code beforeCompletion}, before them in {@code afterCompletion}, and may join a
+ * transaction marked rollback-only (MANSART-063).
  */
 final class MansartTSR implements TransactionSynchronizationRegistry {
 
@@ -67,15 +67,12 @@ final class MansartTSR implements TransactionSynchronizationRegistry {
         Objects.requireNonNull(key, "TSR resource key must not be null");
         Transaction tx = requireActiveTx();
         ConcurrentMap<Object, Object> map = perTxResources.computeIfAbsent(tx, t -> {
-            try {
-                t.registerSynchronization(new Synchronization() {
-                    @Override public void beforeCompletion() { /* no-op */ }
-                    @Override public void afterCompletion(int status) { perTxResources.remove(t); }
-                });
-            } catch (Exception _) {
-                // The TX may already be committing/rolling back — accept the leak ; the entry
-                // becomes weakly reachable when the Transaction is garbage-collected.
-            }
+            // Interposed: a transaction marked rollback-only takes it too, so its resources are
+            // always let go (MANSART-063).
+            interpose(t, new Synchronization() {
+                @Override public void beforeCompletion() { /* no-op */ }
+                @Override public void afterCompletion(int status) { perTxResources.remove(t); }
+            });
             return new ConcurrentHashMap<>();
         });
         map.put(key, value);
@@ -91,7 +88,15 @@ final class MansartTSR implements TransactionSynchronizationRegistry {
 
     @Override
     public void registerInterposedSynchronization(Synchronization sync) {
-        Transaction tx = requireActiveTx();
+        interpose(requireActiveTx(), sync);
+    }
+
+    /** After the application's synchronizations before completion, ahead of them after it. */
+    private void interpose(Transaction tx, Synchronization sync) {
+        if (tm instanceof MansartTransactionManager own) {
+            own.registerInterposedSynchronization(tx, sync);
+            return;
+        }
         try {
             tx.registerSynchronization(sync);
         } catch (Exception e) {
