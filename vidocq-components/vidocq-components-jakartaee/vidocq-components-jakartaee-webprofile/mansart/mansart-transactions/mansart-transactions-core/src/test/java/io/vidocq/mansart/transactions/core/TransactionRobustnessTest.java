@@ -91,7 +91,7 @@ class TransactionRobustnessTest {
 
         byte[] node = "node-a".getBytes(StandardCharsets.UTF_8);
         assertThat(Arrays.copyOf(xid.getGlobalTransactionId(), node.length)).isEqualTo(node);
-        assertThat(xid.getGlobalTransactionId().length).isLessThanOrEqualTo(Xid.MAXGTRIDSIZE);
+        assertThat(xid.getGlobalTransactionId()).hasSizeLessThanOrEqualTo(Xid.MAXGTRIDSIZE);
     }
 
     @Test
@@ -283,7 +283,9 @@ class TransactionRobustnessTest {
         var tx = tm.getTransaction();
         tm.commit();
 
-        assertThatThrownBy(() -> tm.registerInterposedSynchronization(tx, recording("late")))
+        Synchronization late = recording("late");
+
+        assertThatThrownBy(() -> tm.registerInterposedSynchronization(tx, late))
                 .isInstanceOf(IllegalStateException.class);
     }
 
