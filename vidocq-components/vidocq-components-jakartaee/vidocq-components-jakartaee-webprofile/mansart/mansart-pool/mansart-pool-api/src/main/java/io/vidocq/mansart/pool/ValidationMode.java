@@ -33,7 +33,7 @@ public enum ValidationMode {
     ON_BORROW,
 
     /**
-     * Validate idle connections in the housekeeper, not on the borrow path.
+     * Validate idle connections in the housekeeper, every {@code idleTimeout / 4}, not on the borrow path.
      * Trades freshness for a fully lock-free borrow path on the hot loop.
      */
     PERIODIC

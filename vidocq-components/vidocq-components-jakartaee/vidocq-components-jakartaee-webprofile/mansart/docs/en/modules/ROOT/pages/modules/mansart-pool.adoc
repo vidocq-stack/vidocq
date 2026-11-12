@@ -129,6 +129,17 @@ When the driver cannot read an attribute before the borrower changes it, the cha
 
 When the driver fails while the pool resets a connection — an `SQLException` or an unchecked exception — the pool closes that connection and the next borrower opens a new one: `maxSize` places stay available (MANSART-057).
 
+[[idle-maintenance]]
+=== Idle connections: validation and `minIdle` [.tag-new]#NEW#
+
+A housekeeper virtual thread looks at the idle connections every `idleTimeout / 4` (never more often than once a second, or every 50 ms when leak detection is on). On each pass it:
+
+. closes the idle connections past `maxLifetime` or `idleTimeout`. The pool holds `minIdle` connections through the idle timeout: when closing one would leave fewer, the connection is checked instead, and stays if it answers;
+. in `ValidationMode.PERIODIC` — the default when no `validationQuery` is set — checks every idle connection and closes the dead ones, so a connection the database dropped (a restart, a firewall idle cut) is found by the pool, not by the next borrower (MANSART-058);
+. opens connections until the pool holds `minIdle` again. When the database is down the pass ends there and the next one tries again (MANSART-059).
+
+A check runs the `validationQuery` when one is configured, with `validationTimeout` as its query timeout, else `Connection.isValid(validationTimeout)`. `ON_BORROW` runs the same check on the borrow path; `NEVER` runs none.
+
 == Transactions integration
 
 The pool carries no transactional context itself: JTA enlistment is the job of `mansart-transactions` (its JDBC bridge enlists the connection with the transaction manager). See xref:modules/mansart-transactions.adoc[mansart-transactions].

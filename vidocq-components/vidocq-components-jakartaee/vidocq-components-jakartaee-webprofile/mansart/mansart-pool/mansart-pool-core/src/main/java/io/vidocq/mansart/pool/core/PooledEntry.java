@@ -49,6 +49,8 @@ final class PooledEntry {
     volatile Throwable  borrowStack;
     /** Set once per borrow when a leak warning has been emitted, so the housekeeper does not spam. */
     volatile boolean    leakWarned;
+    /** The {@link ConnectionPool#validateIdle() validation pass} that last checked this entry; housekeeper only. */
+    long                validatedInPass;
 
     PooledEntry(Connection delegate) {
         this.delegate        = delegate;
@@ -95,8 +97,17 @@ final class PooledEntry {
         try { delegate.close(); } catch (SQLException _) { /* best-effort */ }
     }
 
+    boolean pastLifetime(long maxLifetimeNanos, long nowNanos) {
+        return nowNanos - createdAtNanos > maxLifetimeNanos;
+    }
+
+    /** The pool checked this idle connection and keeps it: its idle time starts again. */
+    void touch() {
+        lastUsedAtNanos = System.nanoTime();
+    }
+
     boolean expired(long maxLifetimeNanos, long idleTimeoutNanos, long nowNanos) {
-        if (nowNanos - createdAtNanos  > maxLifetimeNanos) return true;
+        if (pastLifetime(maxLifetimeNanos, nowNanos)) return true;
         return nowNanos - lastUsedAtNanos > idleTimeoutNanos;
     }
 }

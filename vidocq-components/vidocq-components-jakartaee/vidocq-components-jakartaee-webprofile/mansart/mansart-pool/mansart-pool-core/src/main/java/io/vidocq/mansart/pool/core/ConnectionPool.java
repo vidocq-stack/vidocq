@@ -197,15 +197,28 @@ final class ConnectionPool implements AutoCloseable {
         if (entry.expired(config.maxLifetime().toNanos(), config.idleTimeout().toNanos(), now)) {
             return false;
         }
-        if (config.validation() == ValidationMode.ON_BORROW) {
-            try {
-                int timeoutSec = (int) Math.max(1, config.validationTimeout().toSeconds());
+        return config.validation() != ValidationMode.ON_BORROW || alive(entry);
+    }
+
+    /**
+     * Whether the driver's connection still answers: the {@code validationQuery} when one is configured, else
+     * {@link Connection#isValid(int)}, within {@code validationTimeout}. A driver that throws is a dead connection.
+     */
+    private boolean alive(PooledEntry entry) {
+        int timeoutSec = (int) Math.max(1, config.validationTimeout().toSeconds());
+        try {
+            String query = config.validationQuery();
+            if (query == null) {
                 return entry.delegate.isValid(timeoutSec);
-            } catch (SQLException _) {
-                return false;
             }
+            try (java.sql.Statement statement = entry.delegate.createStatement()) {
+                statement.setQueryTimeout(timeoutSec);
+                statement.execute(query);
+                return true;
+            }
+        } catch (SQLException | RuntimeException _) {
+            return false;
         }
-        return true;
     }
 
     private PooledEntry open() throws SQLException {
@@ -233,15 +246,63 @@ final class ConnectionPool implements AutoCloseable {
         return found;
     }
 
-    /** Called by the {@link Housekeeper} on its own virtual thread. */
+    /**
+     * Called by the {@link Housekeeper} on its own virtual thread: closes the idle connections past
+     * {@code maxLifetime} or {@code idleTimeout}. The pool keeps {@code minIdle} connections through the idle
+     * timeout: one of those is checked instead, and stays when it answers (MANSART-059).
+     */
     void sweep(long nowNanos) {
         long maxLife = config.maxLifetime().toNanos();
         long maxIdle = config.idleTimeout().toNanos();
         Iterator<PooledEntry> it = idle.iterator();
         while (it.hasNext()) {
             PooledEntry e = it.next();
-            if (e.expired(maxLife, maxIdle, nowNanos) && idle.remove(e)) {
+            if (!e.expired(maxLife, maxIdle, nowNanos) || !idle.remove(e)) continue;
+            boolean keep = !e.pastLifetime(maxLife, nowNanos)
+                    && idle.size() + inUse.size() < config.minIdle()
+                    && alive(e);
+            if (keep) {
+                e.touch();
+                idle.offerLast(e);
+            } else {
                 e.closeUnderlying();
+            }
+        }
+    }
+
+    /**
+     * Called by the {@link Housekeeper} in {@link ValidationMode#PERIODIC} mode: checks every idle connection and
+     * closes the dead ones, so that a connection the database dropped is not the next borrower's error
+     * (MANSART-058). One connection at a time leaves the deque, from its cold end, and goes back to its hot end:
+     * a full pass leaves the order as it was.
+     */
+    void validateIdle() {
+        if (config.validation() != ValidationMode.PERIODIC) return;
+        long pass = System.nanoTime();
+        for (int remaining = idle.size(); remaining > 0 && !closed; remaining--) {
+            PooledEntry e = idle.pollLast();
+            if (e == null) return;
+            if (e.validatedInPass == pass) {
+                idle.offerLast(e);
+                return;
+            }
+            e.validatedInPass = pass;
+            if (alive(e)) {
+                idle.offerFirst(e);
+            } else {
+                e.closeUnderlying();
+            }
+        }
+    }
+
+    /** Called by the {@link Housekeeper}: opens connections until the pool holds {@code minIdle} (MANSART-059). */
+    void refill() {
+        while (!closed && idle.size() + inUse.size() < config.minIdle()) {
+            try {
+                idle.offerLast(open());
+            } catch (SQLException e) {
+                LOG.log(System.Logger.Level.DEBUG, "Pool could not open a connection to reach minIdle", e);
+                return;
             }
         }
     }

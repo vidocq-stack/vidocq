@@ -83,6 +83,8 @@ final class Housekeeper {
             long now = System.nanoTime();
             try {
                 pool.sweep(now);
+                pool.validateIdle();
+                pool.refill();
                 pool.detectLeaks(now);
             } catch (Throwable t) {
                 LOG.log(Level.WARNING, "housekeeper sweep failed", t);

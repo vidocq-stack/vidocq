@@ -9,6 +9,34 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-058 — The default validation mode validated nothing, and `validationQuery` was never run
+
+- **Date**: 2026-11-12
+- **Status**: FIXED on `fix/pool-validation`.
+- **Module**: `mansart-pool-core` (`ConnectionPool`, `Housekeeper`)
+- **Symptom**: `ValidationMode.PERIODIC`, the default when no `validationQuery` is set, was read nowhere: no idle
+  connection was ever checked, and one the database had dropped was handed to the next borrower. `validationQuery`
+  was read nowhere either: `ON_BORROW` always called `Connection.isValid`.
+- **Reproduction**: `IdleMaintenanceTest.periodicValidationClosesAnIdleConnectionTheDatabaseDropped`,
+  `theValidationQueryIsWhatChecksAConnectionOnBorrow` (`mansart-pool-tests`), red on `fix/pool-tx-audit`.
+- **Fix**: the housekeeper checks every idle connection in `PERIODIC` mode and closes the dead ones; a check runs
+  the `validationQuery` when one is set, else `isValid`.
+
+## MANSART-059 — `minIdle` was honoured at start-up only
+
+- **Date**: 2026-11-12
+- **Status**: FIXED on `fix/pool-validation`.
+- **Module**: `mansart-pool-core` (`ConnectionPool.sweep`, `refill`)
+- **Symptom**: the pool opened `minIdle` connections when built, then closed them all after `idleTimeout` and never
+  opened one again unless a borrower asked: a pool configured warm was cold after ten idle minutes, and stayed
+  empty when the database was down at start-up.
+- **Reproduction**: `IdleMaintenanceTest.minIdleConnectionsOutliveTheIdleTimeout`,
+  `thePoolOpensConnectionsAgainToReachMinIdle`, red on `fix/pool-tx-audit`.
+- **Fix**: the sweep keeps `minIdle` connections through the idle timeout, checking each one it keeps, and the
+  housekeeper opens connections until the pool holds `minIdle`.
+
+---
+
 ## MANSART-051 to MANSART-055 — Five defects in how a transaction completes
 
 Found by reading `mansart-transactions` on 2026-11-12 (pool and transactions audit); each has a test that is red on
