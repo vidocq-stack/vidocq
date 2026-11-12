@@ -9,6 +9,75 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-051 to MANSART-055 — Five defects in how a transaction completes
+
+Found by reading `mansart-transactions` on 2026-11-12 (pool and transactions audit); each has a test that is red on
+`5d5fd8e6`. **Status** of the five: FIXED on `fix/pool-tx-audit`.
+
+- **MANSART-051 — A rollback-only mark set during `beforeCompletion` was ignored: the transaction committed.**
+  `MansartTransaction.commit()` read the status before `beforeCompletion` only. A participant whose flush fails
+  there and calls `setRollbackOnly()` saw its transaction committed. Reproduction:
+  `CompletionContractTest.aRollbackOnlyMarkSetInBeforeCompletionRollsBack`. Fix: the status is read again after
+  `beforeCompletion`; a mark rolls back and throws `RollbackException`.
+- **MANSART-052 — Registering a synchronization from `beforeCompletion` rolled the transaction back.** The
+  callbacks were run with an iterator over the list `registerSynchronization` appends to:
+  `ConcurrentModificationException`, taken for a `beforeCompletion` failure. A flush that takes its connection at
+  that moment does exactly this (`JtaTransactionBridge.connectionFor` registers the synchronization that closes the
+  connection). Reproduction: `CompletionContractTest.aSynchronizationMayRegisterAnotherFromBeforeCompletion`. Fix:
+  the callbacks are run by index, and a late participant gets its own callbacks.
+- **MANSART-053 — The caller of nested `@Transactional` methods got an `IllegalStateException` instead of its
+  exception.** `setRollbackOnly()` on a transaction already marked threw `setRollbackOnly() requires STATUS_ACTIVE,
+  was STATUS_MARKED_ROLLBACK`; the interceptor marks in each joined frame an exception crosses, so from two joined
+  calls on, the second mark's failure replaced the business exception. Reproduction:
+  `CompletionContractTest.settingRollbackOnlyTwiceIsAllowed`,
+  `TransactionalFailureTest.anExceptionCrossingTwoJoinedCallsReachesTheCallerUnchanged`. Fix: marking twice is a
+  no-op, and the interceptor attaches a failure of the marking as a suppressed exception.
+- **MANSART-054 — An `Error` out of a `@Transactional` method left its transaction bound to the thread.**
+  `TransactionalInterceptor.executeWithOwnTx` caught `Exception` only: after an `AssertionError` or a
+  `StackOverflowError` the transaction was neither committed nor rolled back, its connections were never given
+  back to the pool, and a pooled thread carried it to its next task. Reproduction:
+  `TransactionalFailureTest.anErrorLeavesNoTransactionBoundToTheThread`. Fix: the interceptor ends the transaction
+  on any `Throwable`.
+- **MANSART-055 — A two-phase commit stopped at the first resource that failed.** The other branches stayed
+  prepared, their locks held, until a restart ran recovery; the `XAException` was dropped (error code only).
+  Reproduction: `CompletionContractTest.aTwoPhaseCommitThatFailsOnOneResourceStillCommitsTheOthers`. Fix: every
+  branch gets its commit; the `SystemException` then thrown has the first `XAException` as its cause, and no
+  `COMPLETED` record is written, so recovery finishes the failed branch.
+
+---
+
+## MANSART-056 — A closed pooled connection still reached the physical connection, by then another borrower's
+
+- **Date**: 2026-11-12
+- **Status**: FIXED on `fix/pool-tx-audit`.
+- **Module**: `mansart-pool-core` (`PooledConnection`, `PooledStatement`)
+- **Symptom**: after `close()`, every method of the handle but `isClosed()` still went to the driver's connection,
+  and so did the statements the handle had created. The physical connection was back in the pool: a `rollback()`
+  on the closed handle rolled back the transaction of the borrower that held it next, and a kept statement wrote
+  inside that transaction. The class comment claimed the driver would raise its own error; the driver's connection
+  is not closed, so it raised none.
+- **Reproduction**: `ClosedConnectionTest` (`mansart-pool-tests`), red on `5d5fd8e6`:
+  `aClosedHandleCannotRollBackTheNextBorrowersTransaction`,
+  `aStatementOfAClosedHandleCannotWriteOnTheNextBorrowersConnection`.
+- **Cause**: the wrapper routed to the delegate unconditionally. `close()` also read then wrote its flag, so two
+  threads closing one handle could release the entry twice (`closingAHandleFromTwoThreadsReleasesItOnce`; that race
+  was read in the code, the test did not hit it in 2000 rounds on `5d5fd8e6`).
+- **Fix**: a closed handle throws `SQLException` (SQLSTATE 08003) from every method but `close()`, `isClosed()` and
+  `isValid()`, and from the `execute*` of its statements; `close()` is a compare-and-set.
+
+## MANSART-057 — A driver's unchecked exception during the reset cost the pool a place for good
+
+- **Date**: 2026-11-12
+- **Status**: FIXED on `fix/pool-tx-audit`.
+- **Module**: `mansart-pool-core` (`ConnectionPool.release`)
+- **Symptom**: `release` caught `SQLException` only. A `RuntimeException` from the driver in `getAutoCommit`,
+  `rollback`, a session attribute setter or `clearWarnings` left the entry in `inUse` and its permit never given
+  back: the pool had one place fewer until restart.
+- **Reproduction**: `ReleaseFailureTest` (`mansart-pool-tests`). Written with the fix, not seen red.
+- **Fix**: `release` discards the connection on a `RuntimeException` too, and gives the permit back.
+
+---
+
 ## MANSART-049 — An entity with a collection field got a `_Book` that did not compile
 
 - **Date**: 2026-11-11

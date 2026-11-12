@@ -143,8 +143,10 @@ final class ConnectionPool implements AutoCloseable {
                     config.maxLifetime().toNanos(),
                     config.idleTimeout().toNanos(),
                     System.nanoTime());
-        } catch (SQLException _) {
-            keep = false;        // reset failed → discard
+        } catch (SQLException | RuntimeException _) {
+            // Reset failed → discard. A driver's RuntimeException too: the permit below must be
+            // given back whatever the driver throws, or the pool shrinks for good (MANSART-057).
+            keep = false;
         }
         inUse.remove(entry);
         entry.markIdle();

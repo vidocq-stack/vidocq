@@ -8,6 +8,15 @@ New in the `{project-version}` development line — everything listed here lande
 
 * xref:modules/mansart-pool.adoc#session-reset[Session attributes put back on release] [.tag-new]#NEW# — the transaction isolation, read-only flag, catalog, schema, holdability, network timeout and type map a borrower changed no longer reach the next borrower of the same connection; only the attributes changed are read and put back (MANSART-047).
 * xref:modules/mansart-pool.adoc#pending-work[No second rollback on release] [.tag-new]#NEW# — a connection handed back out of auto-commit is rolled back only when a statement ran since the last `commit()` or `rollback()`; a committed transaction no longer pays a rollback, which on H2 emptied the statement cache. Statements are wrapped to track this, and `Statement.getConnection()` now returns the pooled connection instead of the driver's (Vidocq/noether#45).
+* xref:modules/mansart-pool.adoc#closed-handle[A closed connection is dead] [.tag-new]#NEW# — after `close()` the handle and its statements throw `SQLException` (SQLSTATE `08003`) instead of reaching the physical connection, which another borrower may hold: a `rollback()` on a closed handle rolled back that borrower's transaction. A driver's unchecked exception during the reset no longer costs the pool one of its `maxSize` places (MANSART-056, MANSART-057).
+
+== Transactions
+
+* xref:modules/mansart-transactions.adoc#completion[A rollback-only mark set in `beforeCompletion` rolls back] [.tag-new]#NEW# — the transaction was committed all the same; `commit()` now rolls back and throws `RollbackException` (MANSART-051).
+* xref:modules/mansart-transactions.adoc#completion[A synchronization may register another from `beforeCompletion`] [.tag-new]#NEW# — it failed with `ConcurrentModificationException` and the transaction rolled back (MANSART-052).
+* xref:modules/mansart-transactions.adoc#completion[The caller of nested `@Transactional` methods sees its own exception] [.tag-new]#NEW# — a second `setRollbackOnly()` threw `IllegalStateException`, which replaced the business exception as soon as it crossed two joined calls (MANSART-053).
+* xref:modules/mansart-transactions.adoc#completion[An `Error` rolls the transaction back] [.tag-new]#NEW# — it left the transaction bound to the thread, its connections never given back (MANSART-054).
+* xref:modules/mansart-transactions.adoc#completion[A two-phase commit reaches every resource] [.tag-new]#NEW# — the first failing resource stopped the loop and left the others prepared, their locks held, until a restart (MANSART-055).
 
 == Build
 

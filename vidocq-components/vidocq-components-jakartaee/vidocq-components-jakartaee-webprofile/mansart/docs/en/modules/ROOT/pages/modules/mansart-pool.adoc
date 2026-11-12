@@ -122,6 +122,13 @@ What a borrower changes through the JDBC `Connection` API outlives its borrow on
 
 When the driver cannot read an attribute before the borrower changes it, the change still goes through and the pool closes the connection on release instead of lending it again. A setting changed with SQL (`SET SCHEMA`, `SET TRANSACTION ISOLATION LEVEL`) instead of the JDBC setter is not seen. Client info and sharding keys are left as the borrower set them.
 
+[[closed-handle]]
+=== A closed connection is dead [.tag-new]#NEW#
+
+`close()` gives the physical connection back to the pool, where the next borrower takes it. The handle that was closed no longer reaches it (MANSART-056): every method but `close()`, `isClosed()` and `isValid()` throws `SQLException` with SQLSTATE `08003`, and so does every `execute*` of a statement the handle created. Code that calls `rollback()` in a `finally` after its `close()`, or keeps a statement past its connection, gets that error instead of acting on another borrower's transaction. Two threads that close one handle give the connection back once.
+
+When the driver fails while the pool resets a connection — an `SQLException` or an unchecked exception — the pool closes that connection and the next borrower opens a new one: `maxSize` places stay available (MANSART-057).
+
 == Transactions integration
 
 The pool carries no transactional context itself: JTA enlistment is the job of `mansart-transactions` (its JDBC bridge enlists the connection with the transaction manager). See xref:modules/mansart-transactions.adoc[mansart-transactions].
