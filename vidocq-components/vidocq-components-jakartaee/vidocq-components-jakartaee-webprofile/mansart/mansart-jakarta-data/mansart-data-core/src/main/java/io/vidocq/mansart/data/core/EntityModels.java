@@ -93,7 +93,10 @@ public final class EntityModels {
         if (fromProvider != null) {
             return fromProvider;
         }
-        String generatedName = pkg + (pkg.isEmpty() ? "" : ".") + "_" + entityType.getSimpleName();
+        // _Book for shop.Book, _Library_Shelf for the nested shop.Library$Shelf: the binary name with _ where it
+        // has $, as mansart-data-processor names it (MANSART-050).
+        String binary = entityType.getName().substring(pkg.isEmpty() ? 0 : pkg.length() + 1);
+        String generatedName = pkg + (pkg.isEmpty() ? "" : ".") + "_" + binary.replace('$', '_');
         try {
             Class<?> meta = Class.forName(generatedName, true, entityType.getClassLoader());
             Field model = meta.getField("$MODEL");

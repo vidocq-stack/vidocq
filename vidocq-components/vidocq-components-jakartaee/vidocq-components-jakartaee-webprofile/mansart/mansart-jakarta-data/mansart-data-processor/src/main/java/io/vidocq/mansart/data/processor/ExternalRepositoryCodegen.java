@@ -106,9 +106,7 @@ public final class ExternalRepositoryCodegen {
                                       EntityRegistry registry, MansartMetamodelWriter metaWriter,
                                       String targetPackage) throws IOException {
         String entityFqn = entity.getQualifiedName().toString();
-        String entityPkg = elements.getPackageOf(entity).getQualifiedName().toString();
-        String entitySimple = entity.getSimpleName().toString();
-        String existingMeta = entityPkg.isEmpty() ? "_" + entitySimple : entityPkg + "._" + entitySimple;
+        String existingMeta = MetamodelName.qualified(entity);
         if (elements.getTypeElement(existingMeta) != null) return existingMeta;
 
         EntityScanner.EntityDescriptor descriptor = scanner.scan(entity);

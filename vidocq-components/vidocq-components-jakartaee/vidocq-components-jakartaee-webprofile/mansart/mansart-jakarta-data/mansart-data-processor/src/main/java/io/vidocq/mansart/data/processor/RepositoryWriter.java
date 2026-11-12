@@ -157,9 +157,7 @@ final class RepositoryWriter {
         String repoFqn   = repo.getQualifiedName().toString();
         String repoRef   = pkg.isEmpty() ? repoFqn : repoFqn.substring(pkg.length() + 1);
         TypeElement entityType = (TypeElement) args.entity.asElement();
-        String entitySimple = entityType.getSimpleName().toString();
-        String entityPkg = elements.getPackageOf(entityType).getQualifiedName().toString();
-        String metamodel = entityPkg.isEmpty() ? "_" + entitySimple : entityPkg + "._" + entitySimple;
+        String metamodel = MetamodelName.qualified(entityType);
         return emit(repo, args, pkg, implName, repoRef, metamodel);
     }
 

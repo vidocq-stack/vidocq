@@ -9,6 +9,28 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-050 — A static nested entity did not compile: its metamodel went to a package named after the outer class
+
+- **Date**: 2026-11-12 (found on 2026-11-11 while writing the tests of MANSART-049)
+- **Status**: FIXED on `fix/data-nested-entity`.
+- **Module**: `mansart-data-processor` (`MansartMetamodelWriter.write`, `MansartProcessor`)
+- **Symptom**: for `class Library { @Entity static class Shelf { ... } }` the processor wrote `_Shelf` with
+  `package shop.Library;`, and the compilation failed: `class shop.Library clashes with package of same name`, then
+  `cannot find symbol` on every attribute type. Jakarta Persistence allows the shape ("a non-final top-level class
+  or static inner class").
+- **Reproduction**: `ProcessorNestedEntityTest`, and `RuntimeNestedEntityTest` whose own nested entity kept the test
+  module from compiling (`mansart-data-tests`), red on `5bd81456`.
+- **Cause**: the writer took the package from the text of the qualified name, up to its last dot, which for a nested
+  class is the outer class. `RepositoryWriter`, `EntityModels` (run time) and `writeMissingMetamodel` named the
+  metamodel `_Shelf` in the real package instead: a name two nested entities of one package would share.
+- **Fix**: the metamodel of `shop.Library.Shelf` is `shop._Library_Shelf` — the entity's package, its binary name
+  with `_` for `$` — in the writer, the repository implementations and the run-time lookup alike (`MetamodelName`,
+  `EntityModels`). A first attempt kept `_Shelf` in the package: the run-time lookup then gave that metamodel to
+  the unrelated nested `Crate` classes of other tests (`Unknown attribute 'status' on Crate`), which is why the
+  name carries the outer class.
+
+---
+
 ## MANSART-060 to MANSART-064 — Five defects in what keeps the transaction manager sound over time
 
 Found by reading `mansart-transactions` on 2026-11-12 (pool and transactions audit). **Status** of the five: FIXED

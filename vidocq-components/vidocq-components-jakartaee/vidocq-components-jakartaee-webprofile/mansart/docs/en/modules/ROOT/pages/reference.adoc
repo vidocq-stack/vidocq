@@ -179,6 +179,9 @@ The storage applies wherever Mansart knows which attribute a value belongs to: i
 [#plural-attributes]
 A plural attribute — `@ElementCollection`, `@OneToMany`, `@ManyToMany`, or a field whose type is a `Collection` or a `Map` — is not a column of the entity's table, and Mansart leaves it to the persistence provider [.tag-new]#NEW#: it is not in `_Book`, a Mansart repository neither reads nor writes it (an entity it loads keeps the field's initial value), and a derived query on it (`findByTags`) is a method no query derives from (xref:usage.adoc#unresolved-methods[a build error naming it]). The processor says so in a compiler note per attribute. An entity can therefore carry collections that xref:noether::index.adoc[Noether] maps, and still be served by Mansart repositories for its columns. Before, the processor treated such a field as a column, and the generated `_Book` did not compile.
 
+[#nested-entities]
+An entity may be a static nested class [.tag-new]#NEW#. The metamodel of `shop.Library.Shelf` is `shop._Library_Shelf`: in the entity's package, named after the entity's binary name with `_` where it has `$` — the rule the implementation of a nested repository follows — so that `Library.Shelf` and `Archive.Shelf` each have their own (MANSART-050). Application code that uses the metamodel writes `_Library_Shelf.name`.
+
 == Repository annotations
 
 [cols="2,3"]

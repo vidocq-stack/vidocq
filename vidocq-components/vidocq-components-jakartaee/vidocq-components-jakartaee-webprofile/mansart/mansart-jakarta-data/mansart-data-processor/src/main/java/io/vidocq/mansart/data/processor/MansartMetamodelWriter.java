@@ -31,7 +31,8 @@ import java.io.PrintWriter;
  * <p>Two emission modes:
  * <ul>
  *   <li><b>In-place</b> (APT) — {@link #write(EntityDescriptor)} emits {@code _Book} in the
- *       entity's own package, referring to the entity by simple name.</li>
+ *       entity's own package, referring to the entity by its name from that package ({@code Book}, or
+ *       {@code Library.Shelf} for a nested entity).</li>
  *   <li><b>Relocated</b> (Maven plugin / {@link ExternalRepositoryCodegen}) —
  *       {@link #write(EntityDescriptor, String, String, String)} emits the metamodel into an
  *       application-owned package and refers to the (external) entity by its fully-qualified name,
@@ -48,11 +49,11 @@ final class MansartMetamodelWriter {
 
     MansartMetamodelWriter(SourceSink sink) { this.sink = sink; }
 
-    /** In-place emission: metamodel lives in the entity's package, entity referenced by simple name. */
+    /** In-place emission: metamodel lives in the entity's package, entity referenced by its name from there. */
     void write(EntityDescriptor e) throws IOException {
-        String pkg = packageOf(e.type().getQualifiedName().toString());
-        String simple = e.type().getSimpleName().toString();
-        write(e, pkg, "_" + simple, simple);
+        // A nested entity is Library.Shelf from its package, and its metamodel _Library_Shelf (MANSART-050).
+        write(e, MetamodelName.packageOf(e.type()), MetamodelName.simple(e.type()),
+                MetamodelName.entityFromItsPackage(e.type()));
     }
 
     /**
@@ -187,11 +188,6 @@ final class MansartMetamodelWriter {
         w.println("            throw new ExceptionInInitializerError(\"" + entityRef + " must have a no-arg constructor\");");
         w.println("        }");
         w.println(CLOSE_MEMBER);
-    }
-
-    private static String packageOf(String fqn) {
-        int i = fqn.lastIndexOf('.');
-        return i < 0 ? "" : fqn.substring(0, i);
     }
 
     static String box(String javaType) {

@@ -153,10 +153,7 @@ public final class MansartProcessor extends AbstractProcessor {
         try {
             mansartWriter.write(descriptor);
             String qualified = type.getQualifiedName().toString();
-            int dot = qualified.lastIndexOf('.');
-            String metamodelPkg = dot < 0 ? "" : qualified.substring(0, dot);
-            componentsWriter.entity(packageOf(type), qualified,
-                    (metamodelPkg.isEmpty() ? "" : metamodelPkg + ".") + "_" + type.getSimpleName());
+            componentsWriter.entity(packageOf(type), qualified, MetamodelName.qualified(type));
             generated = true;
         } catch (IOException ex) {
             failed = true;
@@ -250,9 +247,7 @@ public final class MansartProcessor extends AbstractProcessor {
     private void writeMissingMetamodel(TypeElement repo) {
         TypeElement entity = repositoryWriter.entityTypeOf(repo);
         if (entity == null || entityRegistry.get(entity.getQualifiedName().toString()) != null) return;
-        String pkg = processingEnv.getElementUtils().getPackageOf(entity).getQualifiedName().toString();
-        String prefix = pkg.isEmpty() ? "" : pkg + ".";
-        if (processingEnv.getElementUtils().getTypeElement(prefix + "_" + entity.getSimpleName()) != null) return;
+        if (processingEnv.getElementUtils().getTypeElement(MetamodelName.qualified(entity)) != null) return;
         writeMetamodel(entity);
     }
 
