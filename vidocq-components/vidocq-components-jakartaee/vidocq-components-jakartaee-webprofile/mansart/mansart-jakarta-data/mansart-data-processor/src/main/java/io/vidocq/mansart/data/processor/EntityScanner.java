@@ -86,14 +86,8 @@ final class EntityScanner {
         AttributeDescriptor       version    = null;
 
         for (Element member : type.getEnclosedElements()) {
-            if (!isPersistentField(member)) continue;
+            if (!isPersistentField(member) || isPlural(type, (VariableElement) member)) continue;
             VariableElement field = (VariableElement) member;
-            String plural = PluralAttributes.kind(field, elements, types);
-            if (plural != null) {
-                note(field, type.getQualifiedName() + "." + field.getSimpleName() + " is " + plural
-                        + ", not a column: Mansart Data neither reads nor writes it, the persistence provider maps it.");
-                continue;
-            }
             AttributeDescriptor a = describe(field);
             attributes.add(a);
             if (a.kind == AttributeKind.ID) {
@@ -122,6 +116,15 @@ final class EntityScanner {
                 && !member.getModifiers().contains(Modifier.STATIC)
                 && !member.getModifiers().contains(Modifier.TRANSIENT)
                 && !hasAnnotation(member, TRANSIENT_ANNO);
+    }
+
+    /** A collection, a map or a to-many association: not a column, so left out with a note naming it (MANSART-049). */
+    private boolean isPlural(TypeElement type, VariableElement field) {
+        String plural = PluralAttributes.kind(field, elements, types);
+        if (plural == null) return false;
+        note(field, type.getQualifiedName() + "." + field.getSimpleName() + " is " + plural
+                + ", not a column: Mansart Data neither reads nor writes it, the persistence provider maps it.");
+        return true;
     }
 
     private AttributeDescriptor describe(VariableElement field) {
