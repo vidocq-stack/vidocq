@@ -98,7 +98,7 @@ class IdleMaintenanceTest {
     }
 
     @Test
-    void minIdleConnectionsOutliveTheIdleTimeout() throws Exception {
+    void minIdleConnectionsOutliveTheIdleTimeout() {
         ds = MansartDataSource.of(config().minIdle(2).idleTimeout(Duration.ofSeconds(1)).build());
         assertThat(ds.snapshot().idle()).isEqualTo(2);
 
@@ -111,7 +111,7 @@ class IdleMaintenanceTest {
     }
 
     @Test
-    void thePoolOpensConnectionsAgainToReachMinIdle() throws Exception {
+    void thePoolOpensConnectionsAgainToReachMinIdle() {
         ds = MansartDataSource.of(config().minIdle(2).idleTimeout(Duration.ofSeconds(4)).build());
         driver.dead.set(true);
         await(() -> ds.snapshot().idle() == 0);
