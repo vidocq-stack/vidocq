@@ -64,7 +64,9 @@ import java.util.stream.StreamSupport;
  *
  * <p>An entity's package is not listed when Mansart's processor generated its model (MANSART-038): the
  * {@code _MansartComponents} its services file lists names the entity, and hands Mansart the model by plain calls. An
- * entity it does not name is read by reflection, Mansart's fallback, and its package must be opened.</p>
+ * entity it does not name is read by reflection, Mansart's fallback, and its package must be opened. Nor when
+ * Noether's processor generated its access: the {@code _NoetherJpaAccess} its services file lists names a
+ * {@code ManagedAccess} per entity, which Noether calls instead of reflecting.</p>
  */
 public final class ReflectedPackages {
 
@@ -86,6 +88,10 @@ public final class ReflectedPackages {
     private static final String ENTITY = "an entity (Jakarta Data) without a model generated at build time";
     private static final String MANSART_COMPONENTS_SERVICES =
             "META-INF/services/io.vidocq.mansart.data.core.GeneratedComponents";
+    private static final String NOETHER_ACCESS_SERVICES =
+            "META-INF/services/io.vidocq.noether.jpa.core.spi.ManagedAccessProvider";
+    /** The superclass of the per-entity access Noether's processor generates. */
+    private static final String NOETHER_MANAGED_ACCESS = "io/vidocq/noether/jpa/core/spi/ManagedAccess";
     /** Where Champollion's processor lists the entities the code gives a JAX-RS {@code Response}. */
     static final String RESPONSE_ENTITIES = "META-INF/champollion/rest-entity-types";
     /** The type argument of {@code JsonbBinding<T>} in a binding's class signature. */
@@ -131,6 +137,7 @@ public final class ReflectedPackages {
         Map<String, List<String>> subtypes = subtypes(application);
         Set<String> bound = boundTypes(classes, application);
         Set<String> modelled = mansartModelled(classes, application);
+        modelled.addAll(noetherModelled(classes, application));
         Set<String> seen = new HashSet<>();
         while (!queue.isEmpty()) {
             String[] next = queue.poll();
@@ -382,6 +389,42 @@ public final class ReflectedPackages {
                     .forEach(entry -> modelled.add(((ClassEntry) entry).asInternalName()));
         }
         return modelled;
+    }
+
+    /**
+     * The entities Noether's processor generated an access for: the classes the {@code ManagedAccess} subclasses the
+     * {@code _NoetherJpaAccess} its services file lists refer to. Noether reaches them through that access, by method
+     * handles the processor planned; an entity it does not name is read through a private lookup, which needs its
+     * package opened.
+     */
+    private static Set<String> noetherModelled(Path classes, Map<String, ClassModel> application) throws IOException {
+        Path services = classes.resolve(NOETHER_ACCESS_SERVICES);
+        Set<String> modelled = new HashSet<>();
+        if (!Files.isRegularFile(services)) {
+            return modelled;
+        }
+        try (Stream<String> lines = Files.lines(services)) {
+            lines.map(String::strip)
+                    .filter(provider -> !provider.isEmpty() && !provider.startsWith("#"))
+                    .map(provider -> application.get(provider.replace('.', '/')))
+                    .filter(java.util.Objects::nonNull)
+                    .flatMap(ReflectedPackages::classEntries)
+                    .map(application::get)
+                    .filter(java.util.Objects::nonNull)
+                    .filter(access -> access.superclass()
+                            .filter(superclass -> NOETHER_MANAGED_ACCESS.equals(superclass.asInternalName()))
+                            .isPresent())
+                    .flatMap(ReflectedPackages::classEntries)
+                    .forEach(modelled::add);
+        }
+        return modelled;
+    }
+
+    /** The classes the constant pool of {@code model} names. */
+    private static Stream<String> classEntries(ClassModel model) {
+        return StreamSupport.stream(model.constantPool().spliterator(), false)
+                .filter(ClassEntry.class::isInstance)
+                .map(entry -> ((ClassEntry) entry).asInternalName());
     }
 
     /** The types the non-static fields and the getters of {@code model} hold. */

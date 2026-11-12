@@ -291,6 +291,59 @@ class ReflectedPackagesTest {
                 ReflectedPackages.of(classes).reasons());
     }
 
+    /**
+     * The access Noether's processor generates in a package of entities, as it writes it: the
+     * {@code _NoetherJpaAccess} provider listed in the services file names one {@code ManagedAccess} subclass per
+     * entity, which reaches the entity's members by method handles the processor planned (no reflection).
+     */
+    private void noetherAccess(ClassDesc... entities) throws IOException {
+        String pkg = entities[0].packageName();
+        ClassDesc provider = ClassDesc.of(pkg, "_NoetherJpaAccess");
+        for (ClassDesc entity : entities) {
+            write(ClassDesc.of(pkg, entity.displayName() + "$$NoetherFieldAccess"), cb -> {
+                cb.withSuperclass(ClassDesc.of("io.vidocq.noether.jpa.core.spi.ManagedAccess"));
+                cb.withMethodBody("type", MethodTypeDesc.of(ConstantDescs.CD_Class), ClassFile.ACC_PUBLIC,
+                        code -> code.ldc(entity).areturn());
+            });
+        }
+        write(provider, cb -> {
+            cb.withInterfaceSymbols(ClassDesc.of("io.vidocq.noether.jpa.core.spi.ManagedAccessProvider"));
+            cb.withMethodBody("accesses", MethodTypeDesc.of(ConstantDescs.CD_Object), ClassFile.ACC_PUBLIC, code -> {
+                for (ClassDesc entity : entities) {
+                    code.ldc(ClassDesc.of(pkg, entity.displayName() + "$$NoetherFieldAccess")).pop();
+                }
+                code.aconst_null().areturn();
+            });
+        });
+        Path services = classes.resolve("META-INF/services/io.vidocq.noether.jpa.core.spi.ManagedAccessProvider");
+        Files.createDirectories(services.getParent());
+        Files.writeString(services, pkg + "._NoetherJpaAccess\n");
+    }
+
+    /** Noether reaches an entity its processor generated an access for through that access, without reflection. */
+    @Test
+    void anEntityWithAnAccessNoetherGeneratedNeedsNoDirective() throws IOException {
+        ClassDesc loan = ClassDesc.of("com.acme.shop.data.Loan");
+        write(loan, annotated("jakarta.persistence.Entity",
+                cb -> cb.withField("id", ConstantDescs.CD_long, ClassFile.ACC_PRIVATE)));
+        noetherAccess(loan);
+
+        assertEquals(Map.of(), ReflectedPackages.of(classes).reasons());
+    }
+
+    @Test
+    void anEntityTheGeneratedNoetherAccessDoesNotNameNeedsItsPackageOpened() throws IOException {
+        ClassDesc loan = ClassDesc.of("com.acme.shop.data.Loan");
+        ClassDesc fee = ClassDesc.of("com.acme.shop.data.Fee");
+        write(loan, annotated("jakarta.persistence.Entity", cb -> { }));
+        write(fee, annotated("jakarta.persistence.Entity", cb -> { }));
+        noetherAccess(loan);
+
+        assertEquals(Map.of("com.acme.shop.data",
+                        "com.acme.shop.data.Fee, an entity (Jakarta Data) without a model generated at build time"),
+                ReflectedPackages.of(classes).reasons());
+    }
+
     /** JSON-B and Mansart's reflective fallback read the inherited fields too: the superclass, and what its fields hold, need their packages. */
     @Test
     void theSuperclassOfAReachedTypeAndWhatItHoldsAreReachedToo() throws IOException {
