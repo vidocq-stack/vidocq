@@ -30,12 +30,15 @@ import org.junit.jupiter.api.io.TempDir;
 import javax.transaction.xa.XAException;
 import javax.transaction.xa.XAResource;
 import javax.transaction.xa.Xid;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.locks.LockSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -108,7 +111,7 @@ class TransactionRobustnessTest {
         tm.begin();
         tm.getTransaction().enlistResource(new RecordingXAResource("r", log));
 
-        Thread.sleep(1_400);
+        letPass(Duration.ofMillis(1_400));
 
         assertThat(tm.getStatus()).isEqualTo(Status.STATUS_MARKED_ROLLBACK);
         assertThatThrownBy(tm::commit).isInstanceOf(RollbackException.class).hasMessageContaining("timed out");
@@ -122,7 +125,7 @@ class TransactionRobustnessTest {
         var tx = tm.getTransaction();
         tm.commit();
 
-        Thread.sleep(1_400);
+        letPass(Duration.ofMillis(1_400));
 
         assertThat(tx.getStatus()).isEqualTo(Status.STATUS_COMMITTED);
     }
@@ -133,12 +136,78 @@ class TransactionRobustnessTest {
         tm.setTransactionTimeout(0);
         tm.begin();
 
-        Thread.sleep(1_400);
+        letPass(Duration.ofMillis(1_400));
 
         assertThatCode(tm::commit).doesNotThrowAnyException();
     }
 
+    /** Waits out {@code time} without a sleep the thread could be woken from early. */
+    private static void letPass(Duration time) {
+        long deadline = System.nanoTime() + time.toNanos();
+        for (long left = time.toNanos(); left > 0; left = deadline - System.nanoTime()) {
+            LockSupport.parkNanos(left);
+        }
+    }
+
+    @Test
+    void theNodeIdComesFromItsSystemPropertyWhenSet() throws Exception {
+        System.setProperty(MansartTransactionManager.NODE_ID_PROPERTY, "pod-7");
+        try {
+            Xid xid = branchOfANewTransaction(new MansartTransactionManager());
+
+            assertThat(new String(xid.getGlobalTransactionId(), 0, 5, StandardCharsets.UTF_8)).isEqualTo("pod-7");
+        } finally {
+            System.clearProperty(MansartTransactionManager.NODE_ID_PROPERTY);
+        }
+    }
+
     /* ---- journal ---- */
+
+    /** A journal that refuses the records of one type. */
+    private static final class RefusingLog implements RecoveryLog {
+        private final Type refused;
+        RefusingLog(Type refused) { this.refused = refused; }
+        @Override public void append(Record entry) throws IOException {
+            if (entry.type() == refused) throw new IOException("disk full");
+        }
+        @Override public List<Record> scan() { return List.of(); }
+        @Override public void close() { /* nothing */ }
+    }
+
+    private void beginWithTwoResources(RecoveryLog journal) throws Exception {
+        tm = new MansartTransactionManager(journal);
+        tm.begin();
+        tm.getTransaction().enlistResource(new RecordingXAResource("a", log));
+        tm.getTransaction().enlistResource(new RecordingXAResource("b", log));
+    }
+
+    @Test
+    void aJournalThatRefusesThePreparedRecordRollsTheTransactionBack() throws Exception {
+        beginWithTwoResources(new RefusingLog(RecoveryLog.Type.PREPARED));
+        var tx = tm.getTransaction();
+
+        assertThatThrownBy(tm::commit).isInstanceOf(RollbackException.class).hasCauseInstanceOf(IOException.class);
+        assertThat(log).contains("a.rollback", "b.rollback").doesNotContain("a.commit(onePhase=false)");
+        assertThat(tx.getStatus()).isEqualTo(Status.STATUS_ROLLEDBACK);
+    }
+
+    @Test
+    void aJournalThatRefusesTheCommittingRecordLeavesTheOutcomeUnknown() throws Exception {
+        beginWithTwoResources(new RefusingLog(RecoveryLog.Type.COMMITTING));
+        var tx = tm.getTransaction();
+
+        assertThatThrownBy(tm::commit).isInstanceOf(SystemException.class).hasCauseInstanceOf(IOException.class);
+        assertThat(tx.getStatus()).isEqualTo(Status.STATUS_UNKNOWN);
+    }
+
+    @Test
+    void aJournalThatRefusesTheCompletedRecordDoesNotFailACommittedTransaction() throws Exception {
+        beginWithTwoResources(new RefusingLog(RecoveryLog.Type.COMPLETED));
+        var tx = tm.getTransaction();
+
+        assertThatCode(tm::commit).doesNotThrowAnyException();
+        assertThat(tx.getStatus()).isEqualTo(Status.STATUS_COMMITTED);
+    }
 
     @Test
     void theJournalIsCompactedAndKeepsWhatIsInDoubt() throws Exception {
@@ -206,6 +275,16 @@ class TransactionRobustnessTest {
         tm.rollback();
 
         assertThat(log).containsExactly("platform.after");
+    }
+
+    @Test
+    void anInterposedSynchronizationIsRefusedOnceTheTransactionIsOver() throws Exception {
+        tm.begin();
+        var tx = tm.getTransaction();
+        tm.commit();
+
+        assertThatThrownBy(() -> tm.registerInterposedSynchronization(tx, recording("late")))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     /* ---- one-phase commit ---- */
