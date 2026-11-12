@@ -244,7 +244,8 @@ class ExtensionEditorTest {
         assertFalse(outcome.succeeded());
         assertEquals(before, pom());
         assertTrue(reporter.lines.contains("error: Invalid extension id 'mansart-persistence': not in the Vidocq"
-                + " catalog. Did you mean: mansart-data, mansart-pool, mansart-transactions? An extension outside"
+                + " catalog. Did you mean: mansart-data, mansart-pool, mansart-transactions, noether-persistence? An"
+                + " extension outside"
                 + " the catalog is added as groupId:artifactId."), reporter.lines.toString());
     }
 

@@ -160,8 +160,9 @@ class KnownExtensionsTest {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> KnownExtensions.resolve("mansart-persistence"));
 
-        assertEquals("not in the Vidocq catalog. Did you mean: mansart-data, mansart-pool, mansart-transactions?"
-                + " An extension outside the catalog is added as groupId:artifactId.", e.getMessage());
+        assertEquals("not in the Vidocq catalog. Did you mean: mansart-data, mansart-pool, mansart-transactions,"
+                + " noether-persistence? An extension outside the catalog is added as groupId:artifactId.",
+                e.getMessage());
         assertFalse(KnownExtensions.isKnown("mansart-persistence"));
     }
 

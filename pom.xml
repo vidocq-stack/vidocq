@@ -114,6 +114,7 @@
         <foy.version>0.4.0-SNAPSHOT</foy.version>
         <ravel.version>0.4.0-SNAPSHOT</ravel.version>
         <mansart.version>0.4.0-SNAPSHOT</mansart.version>
+        <noether.version>0.4.0-SNAPSHOT</noether.version>
         <knock.version>0.4.0-SNAPSHOT</knock.version>
         <dirac.version>0.4.0-SNAPSHOT</dirac.version>
         <!-- Heisenberg (MicroProfile Fault Tolerance 4.1) — aligned on the 0.4.0-SNAPSHOT global
@@ -426,6 +427,16 @@
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                <artifactId>vidocq-runtime-noether-persistence-extension</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                <artifactId>vidocq-runtime-noether-persistence-extension-codegen</artifactId>
                 <version>0.4.0-SNAPSHOT</version>
             </dependency>
             <dependency>
@@ -802,6 +813,12 @@
             <dependency>
                 <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                 <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
+                <version>0.4.0-SNAPSHOT</version>
+                <type>pom</type>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                <artifactId>vidocq-runtime-noether-persistence-extension-codegen</artifactId>
                 <version>0.4.0-SNAPSHOT</version>
                 <type>pom</type>
             </dependency>

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-noether-persistence-extension</artifactId>
+    <name>Vidocq :: Core Extensions :: Noether Persistence</name>
+    <description>Wires Jakarta Persistence 3.2 (Noether) into the Vidocq lifecycle. The noether-jpa-cdi
+        BuildCompatibleExtension is auto-discovered by Vauban; this extension hands each persistence unit the
+        application's Mansart pool, enlisted in the Mansart transaction manager for a JTA unit, and creates the
+        factories on boot so that a broken unit fails the start.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- The provider, its CDI integration (@PersistenceContext, @PersistenceUnit) and its JTA bridge, which
+             noether-jpa-cdi brings. Pulled transitively so the application declares this extension alone. -->
+        <dependency>
+            <groupId>io.vidocq.noether</groupId>
+            <artifactId>noether-jpa-core</artifactId>
+            <version>${noether.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.noether</groupId>
+            <artifactId>noether-jpa-cdi</artifactId>
+            <version>${noether.version}</version>
+        </dependency>
+        <!-- Both SQL dialects Noether ships, as Mansart Data does: each leaves its JDBC driver provided, so an
+             application gets the dialect of its database without declaring it, and never a driver it did not ask
+             for. -->
+        <dependency>
+            <groupId>io.vidocq.noether</groupId>
+            <artifactId>noether-jpa-dialect-h2</artifactId>
+            <version>${noether.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.noether</groupId>
+            <artifactId>noether-jpa-dialect-postgresql</artifactId>
+            <version>${noether.version}</version>
+        </dependency>
+        <!-- The JDBC adapter that enlists a pool connection in the Mansart transaction manager
+             (ConnectionXAResource). The manager itself, with the TransactionSynchronizationRegistry bean
+             noether-jpa-cdi needs, comes with the mansart-transactions extension (requires-extensions). -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-transactions-jdbc</artifactId>
+            <version>${mansart.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
+            <version>2.0.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.3.232</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- H2 is a test dependency without a module of the test's own: the class path keeps the
+                         unit tests free of module wiring. -->
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

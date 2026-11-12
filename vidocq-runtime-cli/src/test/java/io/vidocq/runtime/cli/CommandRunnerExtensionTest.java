@@ -133,7 +133,7 @@ class CommandRunnerExtensionTest {
 
         assertEquals(1, run.exit());
         assertEquals(before, pom());
-        assertTrue(run.out().contains("Did you mean: mansart-data, mansart-pool, mansart-transactions?"), run.out());
+        assertTrue(run.out().contains("Did you mean: mansart-data, mansart-pool, mansart-transactions, noether-persistence?"), run.out());
     }
 
     @Test

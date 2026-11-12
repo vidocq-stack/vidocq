@@ -59,6 +59,21 @@ class VidocqAppLayerSelectionTest {
     }
 
     @Test
+    @DisplayName("Noether Persistence is a runtime brick: it stays even when the application reads it without the extension")
+    void noetherStaysWithTheRuntimeBricks(@TempDir Path dir) throws Exception {
+        var app = TestModules.explodedModule(dir, "acme.app", List.of("io.vidocq.noether.jpa.core"), "acme.app.Main");
+        var noether = TestModules.explodedModule(dir, "io.vidocq.noether.jpa.core", List.of(),
+                "io.vidocq.noether.jpa.core.NoetherPersistenceProvider");
+
+        var config = ModuleLayer.boot().configuration().resolve(
+                ModuleFinder.of(app, noether), ModuleFinder.of(), Set.of("acme.app"));
+
+        assertEquals(Set.of(real(app)), relayered(VidocqAppLayer.applicationPaths(config, "acme.app")),
+                "the persistence provider stays in the boot layer with Mansart's pool and transactions it runs on, "
+                        + "and finds the application's generated accessors through the loader it is given");
+    }
+
+    @Test
     @DisplayName("the dev console and its panel SPI stay, so that a panel of the application is the console's type")
     void theDevConsoleAndItsPanelSpiStay(@TempDir Path dir) throws Exception {
         var app = TestModules.explodedModule(dir, "acme.app", List.of("io.vidocq.runtime.spi.devconsole",

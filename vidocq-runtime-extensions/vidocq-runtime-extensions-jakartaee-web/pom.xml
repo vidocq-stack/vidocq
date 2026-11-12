@@ -14,7 +14,7 @@
     <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
     <packaging>pom</packaging>
     <name>Vidocq :: Extensions :: Jakarta EE Web</name>
-    <description>Jakarta EE web/data extensions (Mansart Data, Persistence, connection pool)</description>
+    <description>Jakarta EE web/data extensions (Mansart Data, transactions and connection pool, Noether Persistence)</description>
 
     <modules>
         <module>vidocq-runtime-mansart-pool-extension</module>
@@ -26,6 +26,8 @@
         <module>vidocq-runtime-mansart-data-extension-codegen</module>
         <module>vidocq-runtime-mansart-transactions-extension</module>
         <module>vidocq-runtime-mansart-transactions-extension-codegen</module>
+        <module>vidocq-runtime-noether-persistence-extension</module>
+        <module>vidocq-runtime-noether-persistence-extension-codegen</module>
         <module>vidocq-runtime-foy-servlet-extension</module>
         <module>vidocq-runtime-foy-servlet-extension-codegen</module>
         <module>vidocq-runtime-foy-servlet-extension-dev</module>

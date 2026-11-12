@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-noether-persistence-extension-codegen</artifactId>
+    <packaging>jar</packaging>
+    <name>Vidocq :: Core Extensions :: Noether Persistence :: Codegen Bundle</name>
+    <description>
+        Companion codegen bundle for vidocq-runtime-noether-persistence-extension.
+        Declare this artifact in &lt;annotationProcessorPaths&gt; whenever the
+        application depends on the Noether Persistence extension.
+
+        Pulls in:
+          - noether-jpa-processor : generates the entity accessors (_NoetherJpaAccess, Class-File API at run time,
+            no reflection) and the static metamodel.
+          - noether-jpa-cdi       : hosts the BuildCompatibleExtension that turns @PersistenceContext and
+            @PersistenceUnit into beans. The APT classloader (isolated by Maven) must see it, or the Vauban
+            indexer rejects every such injection point.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.noether</groupId>
+            <artifactId>noether-jpa-processor</artifactId>
+            <version>${noether.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.noether</groupId>
+            <artifactId>noether-jpa-cdi</artifactId>
+            <version>${noether.version}</version>
+        </dependency>
+        <!-- noether-jpa-cdi leaves the Jakarta platform APIs to the runtime (provided, vidocq-workspace#17): on the
+             processor path nothing else brings them, and its BuildCompatibleExtension could not be loaded. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.transaction</groupId>
+            <artifactId>jakarta.transaction-api</artifactId>
+            <version>2.0.1</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Only the empty module-info to compile: no processor, not even the
+                         inherited core-codegen path. -->
+                    <proc>none</proc>
+                    <annotationProcessorPaths combine.self="override" />
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

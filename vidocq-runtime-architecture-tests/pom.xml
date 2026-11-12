@@ -169,6 +169,12 @@
         </dependency>
         <dependency>
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-noether-persistence-extension</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-naming-extension</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>

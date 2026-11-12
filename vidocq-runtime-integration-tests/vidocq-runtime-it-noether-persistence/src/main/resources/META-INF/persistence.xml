@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.2">
+    <!-- No jta-data-source: the unit takes the application's default Mansart pool (vidocq.pool.url). -->
+    <persistence-unit name="ledger" transaction-type="JTA">
+        <class>io.vidocq.runtime.it.noether.Entry</class>
+        <properties>
+            <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
+        </properties>
+    </persistence-unit>
+</persistence>

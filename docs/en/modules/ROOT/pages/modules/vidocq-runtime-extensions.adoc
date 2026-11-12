@@ -90,6 +90,10 @@
 | `jakartaee-web`
 | Handles `@Transactional` via `mansart-transactions` (companion `-codegen` artefact). One dependency is enough: it also brings the JDBC-to-JTA bridge, so Mansart Data writes actually join the transaction (<<mansart-transactions-jdbc-bridge>>).
 
+| `vidocq-runtime-noether-persistence-extension`
+| `jakartaee-web`
+| Jakarta Persistence 3.2 via xref:noether::index.adoc[Noether] — the units of `persistence.xml` on the application's Mansart pools, `@PersistenceContext` and `@PersistenceUnit` injected, JTA units in `@Transactional` (companion `-codegen` artefact). Needs the Mansart Pool and Mansart Transactions extensions (<<noether-persistence>>).
+
 | `vidocq-runtime-ravel-config-extension`
 | `microprofile`
 | {spec-mp-config} via xref:ravel::index.adoc[Ravel] — external sources, profiles, typed conversion. [[ravel-config-codegen]]Companion `-codegen` artefact: it runs Ravel's extension in the compiler, so `@Inject @ConfigProperty` points are satisfied when Vauban validates the application at build time; the values themselves are checked when the application starts. [[ravel-config-release]]The configuration of the application layer is released when the layer stops: Ravel keeps one `Config` per class loader for the life of the JVM, so each `vidocq dev` hot reload used to keep the stopped layer reachable; the extension now takes the layer's configurations out of that registry at stop.
@@ -1081,6 +1085,57 @@ Mansart Data's JDBC-to-JTA bridge (`io.vidocq.mansart.transactions.jdbc.Connecti
     <version>{project-version}</version>
 </dependency>
 ----
+
+[#noether-persistence]
+== Jakarta Persistence (Noether) [.tag-new]#NEW#
+
+`vidocq-runtime-noether-persistence-extension` runs the persistence units of the application's `META-INF/persistence.xml` on xref:noether::index.adoc[Noether], its Jakarta Persistence 3.2 provider. `vidocq extension add noether-persistence` adds it with the two extensions it runs on, Mansart Pool and Mansart Transactions; the Vidocq Maven plugin puts its `-codegen` bundle, which carries Noether's annotation processor, on the compiler's processor path.
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-noether-persistence-extension</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
+
+[source,xml]
+----
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.2">
+    <persistence-unit name="ledger" transaction-type="JTA">
+        <class>com.acme.ledger.Entry</class>
+    </persistence-unit>
+</persistence>
+----
+
+[source,java]
+----
+@ApplicationScoped
+public class Ledger {
+
+    @PersistenceContext
+    EntityManager entries;
+
+    @Transactional
+    public void record(String id) {
+        entries.persist(new Entry(id));
+    }
+}
+----
+
+*Injection.* `@PersistenceContext` gives a container-managed entity manager, transaction-scoped or extended, synchronized or not, and `@PersistenceUnit` the unit's `EntityManagerFactory`; a unit name may be left out when the application has one unit. The container owns the factory: `close()` on it throws `IllegalStateException`, and Vidocq closes it when it stops. Each factory an injection point names is created when Vidocq starts, so a unit that cannot start fails the boot, not the first request.
+
+*Data sources.* A unit takes its connections from a Mansart pool, never from its own JDBC properties when a pool is there.
+
+* *A JTA unit* uses the pool its `jta-data-source` names, `@Named("orders")` for `<jta-data-source>orders</jta-data-source>` (`vidocq.pool.orders.url`), or the default pool (`vidocq.pool.url`) when it names none. Within a transaction, every connection the unit asks for is one pool connection, enlisted in the transaction and released when it completes: the transaction manager commits or rolls it back, and the unit cannot. The unit's non-JTA data source, which the TABLE identifier generator and schema generation use outside the transaction, is the pool its `non-jta-data-source` names, or else the same pool.
+* *A RESOURCE_LOCAL unit* uses the pool its `non-jta-data-source` names, or else the default pool, or else, without a pool, the JDBC properties of the unit.
+
+A name no pool answers fails the start, naming the key to set (`vidocq.pool.<name>.url`). The pools are declared as for Mansart Data, in `vidocq.properties` or with `@VidocqDataSources`: see the named datasources of xref:mansart::usage.adoc[Mansart's usage page].
+
+*Mansart Data in the same transaction.* A Jakarta Data repository and a persistence unit enlist one connection each, and neither can prepare: Mansart Transactions commits them one after the other, so when the second commit fails, the first one stays committed. Within one `@Transactional` method, keep the writes that must commit together on one of the two.
+
+*The application module.* Noether's processor generates, per package of entities, an accessor (`_NoetherJpaAccess`) that Noether calls instead of reflecting: the package needs no `opens`, and `vidocq:check-module-info` does not ask for one. The accessor implements Noether's SPI, so the module needs `requires io.vidocq.noether.jpa.core;`, which `vidocq extension add noether-persistence` writes with the `requires` of the extension. The processor lists the accessor in `META-INF/services`, and the layer `Vidocq.run` creates for the application turns that file into the `provides` of its module; a test that boots Vidocq without that layer declares it in its `module-info.java`: `provides io.vidocq.noether.jpa.core.spi.ManagedAccessProvider with com.acme.ledger._NoetherJpaAccess;`.
 
 [#langchain4j-cdi-mcp]
 == langchain4j-cdi MCP server
