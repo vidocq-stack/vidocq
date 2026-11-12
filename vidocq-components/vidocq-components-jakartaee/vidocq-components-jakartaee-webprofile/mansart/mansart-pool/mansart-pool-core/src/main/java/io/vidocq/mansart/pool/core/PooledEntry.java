@@ -49,8 +49,6 @@ final class PooledEntry {
     volatile Throwable  borrowStack;
     /** Set once per borrow when a leak warning has been emitted, so the housekeeper does not spam. */
     volatile boolean    leakWarned;
-    /** The {@link ConnectionPool#validateIdle() validation pass} that last checked this entry; housekeeper only. */
-    long                validatedInPass;
 
     PooledEntry(Connection delegate) {
         this.delegate        = delegate;

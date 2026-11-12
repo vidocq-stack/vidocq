@@ -39,6 +39,7 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 import java.util.logging.Logger;
 
@@ -101,7 +102,9 @@ class IdleMaintenanceTest {
         ds = MansartDataSource.of(config().minIdle(2).idleTimeout(Duration.ofSeconds(1)).build());
         assertThat(ds.snapshot().idle()).isEqualTo(2);
 
-        Thread.sleep(3_500);
+        // The housekeeper checks both connections on each pass, one pass a second: three passes are three seconds,
+        // three idle timeouts.
+        await(() -> driver.checks.get() >= 6);
 
         assertThat(ds.snapshot().idle()).isEqualTo(2);
         assertThat(driver.opened).as("connections opened: the two of minIdle, kept").hasValue(2);
@@ -118,11 +121,23 @@ class IdleMaintenanceTest {
         await(() -> ds.snapshot().idle() == 2);
     }
 
-    private static void await(BooleanSupplier condition) throws InterruptedException {
-        long deadline = System.nanoTime() + Duration.ofSeconds(3).toNanos();
+    @Test
+    void aConnectionThatFailsItsValidationQueryIsReplacedOnBorrow() throws Exception {
+        ds = MansartDataSource.of(config().validationQuery("SELECT 42").build());
+        ds.getConnection().close();
+        driver.broken.set(true);
+
+        try (Connection fresh = ds.getConnection()) {
+            assertThat(fresh.isClosed()).isFalse();
+        }
+        assertThat(driver.opened).as("connections opened: the broken one, then its replacement").hasValue(2);
+    }
+
+    private static void await(BooleanSupplier condition) {
+        long deadline = System.nanoTime() + Duration.ofSeconds(6).toNanos();
         while (!condition.getAsBoolean()) {
-            assertThat(System.nanoTime()).as("condition reached within 3 s").isLessThan(deadline);
-            Thread.sleep(50);
+            assertThat(System.nanoTime()).as("condition reached within 6 s").isLessThan(deadline);
+            LockSupport.parkNanos(Duration.ofMillis(50).toNanos());
         }
     }
 
@@ -131,6 +146,9 @@ class IdleMaintenanceTest {
 
         static final String PREFIX = "jdbc:recording:";
         final AtomicBoolean dead = new AtomicBoolean();
+        /** The connections opened so far fail every statement; new ones work. */
+        final AtomicBoolean broken = new AtomicBoolean();
+        final AtomicInteger checks = new AtomicInteger();
         final AtomicInteger opened = new AtomicInteger();
         final List<String> statements = new CopyOnWriteArrayList<>();
 
@@ -139,10 +157,16 @@ class IdleMaintenanceTest {
             if (!acceptsURL(url)) return null;
             if (dead.get()) throw new SQLException("database down", "08001");
             Connection real = DriverManager.getConnection("jdbc:" + url.substring(PREFIX.length()), info);
-            opened.incrementAndGet();
+            int rank = opened.incrementAndGet();
             return (Connection) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[]{Connection.class},
                     (proxy, method, args) -> {
-                        if (method.getName().equals("isValid") && dead.get()) return false;
+                        if (method.getName().equals("isValid")) {
+                            checks.incrementAndGet();
+                            if (dead.get()) return false;
+                        }
+                        if (method.getName().equals("createStatement") && broken.get() && rank == 1) {
+                            throw new SQLException("connection reset", "08006");
+                        }
                         Object result = invoke(real, method, args);
                         return method.getName().equals("createStatement") ? recording((Statement) result) : result;
                     });

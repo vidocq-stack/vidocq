@@ -278,15 +278,8 @@ final class ConnectionPool implements AutoCloseable {
      */
     void validateIdle() {
         if (config.validation() != ValidationMode.PERIODIC) return;
-        long pass = System.nanoTime();
-        for (int remaining = idle.size(); remaining > 0 && !closed; remaining--) {
-            PooledEntry e = idle.pollLast();
-            if (e == null) return;
-            if (e.validatedInPass == pass) {
-                idle.offerLast(e);
-                return;
-            }
-            e.validatedInPass = pass;
+        PooledEntry e;
+        for (int remaining = idle.size(); remaining > 0 && !closed && (e = idle.pollLast()) != null; remaining--) {
             if (alive(e)) {
                 idle.offerFirst(e);
             } else {
