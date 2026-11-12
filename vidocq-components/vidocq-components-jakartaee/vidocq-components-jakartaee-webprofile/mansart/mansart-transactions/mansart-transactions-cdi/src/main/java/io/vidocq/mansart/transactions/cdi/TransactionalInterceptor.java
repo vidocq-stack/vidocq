@@ -137,9 +137,10 @@ public class TransactionalInterceptor {
     private Object executeJoining(InvocationContext ic, Transactional ann) throws Exception {
         try {
             return ic.proceed();
-        } catch (Exception e) {
+        } catch (Throwable e) {
             if (shouldRollback(e, ann)) {
-                tm.setRollbackOnly();
+                // The caller gets its own failure, never the one of the marking (MANSART-053).
+                try { tm.setRollbackOnly(); } catch (Exception markEx) { e.addSuppressed(markEx); }
             }
             throw e;
         }
@@ -148,26 +149,33 @@ public class TransactionalInterceptor {
     /** Owns the TX from begin to commit/rollback. */
     private Object executeWithOwnTx(InvocationContext ic, Transactional ann) throws Exception {
         tm.begin();
+        Object result;
         try {
-            Object result = ic.proceed();
-            if (tm.getStatus() == Status.STATUS_MARKED_ROLLBACK) {
-                tm.rollback();
+            result = ic.proceed();
+        } catch (Throwable e) {
+            // Throwable, not Exception: an Error ends the transaction too, or it stays bound to the
+            // thread with its connections (MANSART-054).
+            endAfterFailure(e, ann);
+            throw e;
+        }
+        if (tm.getStatus() == Status.STATUS_MARKED_ROLLBACK) {
+            tm.rollback();
+        } else {
+            tm.commit();
+        }
+        return result;
+    }
+
+    /** Rolls back on a rollback trigger or a rollback-only mark; commits on any other exception. */
+    private void endAfterFailure(Throwable e, Transactional ann) {
+        try {
+            if (shouldRollback(e, ann) || tm.getStatus() == Status.STATUS_MARKED_ROLLBACK) {
+                safeRollback();
             } else {
                 tm.commit();
             }
-            return result;
-        } catch (Exception e) {
-            if (shouldRollback(e, ann)) {
-                safeRollback();
-            } else {
-                // Exception that's NOT a rollback trigger — commit and rethrow.
-                if (tm.getStatus() == Status.STATUS_MARKED_ROLLBACK) {
-                    safeRollback();
-                } else {
-                    try { tm.commit(); } catch (Exception commitEx) { e.addSuppressed(commitEx); }
-                }
-            }
-            throw e;
+        } catch (Exception endEx) {
+            e.addSuppressed(endEx);
         }
     }
 

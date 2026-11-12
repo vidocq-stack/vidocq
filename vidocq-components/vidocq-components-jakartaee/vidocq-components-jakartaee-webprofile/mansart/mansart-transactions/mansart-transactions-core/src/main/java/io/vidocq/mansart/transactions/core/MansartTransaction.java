@@ -117,6 +117,12 @@ final class MansartTransaction implements Transaction {
             rex.initCause(ex);
             throw rex;
         }
+        // A participant may mark the transaction rollback-only from beforeCompletion (a flush that
+        // fails, typically): the mark is honoured, as it is when set before commit() (MANSART-051).
+        if (status == Status.STATUS_MARKED_ROLLBACK) {
+            doRollback();
+            throw new RollbackException("Transaction was marked rollback-only during beforeCompletion");
+        }
         // End every resource that wasn't explicitly delisted before commit.
         endActiveResources(XAResource.TMSUCCESS);
 
@@ -172,16 +178,24 @@ final class MansartTransaction implements Transaction {
         // Crossing the point of no return — write before any resource.commit() call so that a
         // crash during the loop still allows on-restart recovery to commit the rest.
         appendOrFailSystem(RecoveryLog.Type.COMMITTING);
+        // The decision is commit: every branch gets its commit, whatever the others answer. A branch
+        // left prepared would hold its locks until the next recovery scan (MANSART-055).
+        XAException failure = null;
         for (XAResource r : twoPhase) {
             try {
                 r.commit(xidFor(r), false);
             } catch (XAException ex) {
-                // Heuristic territory — for M5 we surface as SystemException ; the on-disk
-                // COMMITTING record means recovery can complete this commit on restart.
-                status = Status.STATUS_UNKNOWN;
-                invokeAfterCompletion(Status.STATUS_UNKNOWN);
-                throw new SystemException("XA two-phase commit failed: " + ex.errorCode);
+                if (failure == null) failure = ex; else failure.addSuppressed(ex);
             }
+        }
+        if (failure != null) {
+            // Heuristic territory — surfaced as SystemException ; no COMPLETED record is written, so
+            // the on-disk COMMITTING record lets recovery complete the failed branches on restart.
+            status = Status.STATUS_UNKNOWN;
+            invokeAfterCompletion(Status.STATUS_UNKNOWN);
+            SystemException sys = new SystemException("XA two-phase commit failed: " + failure.errorCode);
+            sys.initCause(failure);
+            throw sys;
         }
         status = Status.STATUS_COMMITTED;
         appendOrFailSystem(RecoveryLog.Type.COMPLETED);
@@ -294,9 +308,13 @@ final class MansartTransaction implements Transaction {
         }
     }
 
+    /**
+     * By index, not by iterator: a participant may register another one from {@code beforeCompletion} (a flush
+     * that takes its connection then), and the late one gets its own {@code beforeCompletion} (MANSART-052).
+     */
     private void invokeBeforeCompletion() {
-        for (Synchronization s : syncs) {
-            s.beforeCompletion();
+        for (int i = 0; i < syncs.size(); i++) {
+            syncs.get(i).beforeCompletion();
         }
     }
 
@@ -306,9 +324,9 @@ final class MansartTransaction implements Transaction {
      * others from observing the outcome.
      */
     private void invokeAfterCompletion(int finalStatus) {
-        for (Synchronization s : syncs) {
+        for (int i = 0; i < syncs.size(); i++) {
             try {
-                s.afterCompletion(finalStatus);
+                syncs.get(i).afterCompletion(finalStatus);
             } catch (RuntimeException _) {
                 // spec §3.3.5 — afterCompletion exceptions are swallowed
             }
@@ -317,9 +335,12 @@ final class MansartTransaction implements Transaction {
 
     @Override
     public void setRollbackOnly() {
+        // Marking twice is no error: each @Transactional frame an exception crosses marks (MANSART-053).
+        if (status == Status.STATUS_MARKED_ROLLBACK) return;
         if (status != Status.STATUS_ACTIVE) {
             throw new IllegalStateException(
-                    "setRollbackOnly() requires STATUS_ACTIVE, was " + statusName(status));
+                    "setRollbackOnly() requires STATUS_ACTIVE or STATUS_MARKED_ROLLBACK, was "
+                            + statusName(status));
         }
         status = Status.STATUS_MARKED_ROLLBACK;
     }

@@ -68,6 +68,15 @@ sequenceDiagram
     Interceptor-->>App: returnValue
 ....
 
+[#completion]
+== How a transaction completes [.tag-new]#NEW#
+
+* **Rollback-only is honoured to the end.** `setRollbackOnly()` may be called several times, and a participant may call it from `Synchronization.beforeCompletion()` — a flush that fails there, typically. `commit()` then rolls back and throws `RollbackException`.
+* **A participant may register another one from `beforeCompletion()`.** A flush that takes its connection at that moment registers the synchronization that closes it; the late participant gets its own `beforeCompletion()` and `afterCompletion()`.
+* **The caller of a `@Transactional` method sees its own exception**, through any depth of joined calls: each frame the exception crosses marks the transaction rollback-only, and a failure of the marking is attached as a suppressed exception, never thrown in its place.
+* **An `Error` ends the transaction too.** An `AssertionError` or a `StackOverflowError` out of a `@Transactional` method rolls its transaction back, like a `RuntimeException`; no transaction stays bound to the thread.
+* **Once the decision is commit, every two-phase branch gets its commit.** When one resource fails, the others are still committed; `commit()` then throws `SystemException` with the first `XAException` as its cause, the status is `STATUS_UNKNOWN`, and the journal keeps the transaction for the next recovery scan to finish the failed branch.
+
 == Roadmap
 
 * ✅ **M1** — Local single-thread (TM, UT, status).
