@@ -37,7 +37,7 @@ Found by reading `mansart-transactions` on 2026-11-12 (pool and transactions aud
   `StackOverflowError` the transaction was neither committed nor rolled back, its connections were never given
   back to the pool, and a pooled thread carried it to its next task. Reproduction:
   `TransactionalFailureTest.anErrorLeavesNoTransactionBoundToTheThread`. Fix: the interceptor ends the transaction
-  on any `Throwable`.
+  when an `Error` goes through, by a rollback.
 - **MANSART-055 — A two-phase commit stopped at the first resource that failed.** The other branches stayed
   prepared, their locks held, until a restart ran recovery; the `XAException` was dropped (error code only).
   Reproduction: `CompletionContractTest.aTwoPhaseCommitThatFailsOnOneResourceStillCommitsTheOthers`. Fix: every

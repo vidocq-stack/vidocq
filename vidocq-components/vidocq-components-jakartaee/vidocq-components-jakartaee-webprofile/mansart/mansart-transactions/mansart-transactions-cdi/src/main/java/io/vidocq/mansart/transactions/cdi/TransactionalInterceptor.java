@@ -135,39 +135,61 @@ public class TransactionalInterceptor {
     /** Joins an existing TX — never commits or rolls back, just sets rollback-only on bad
      *  exceptions so the outer caller's commit observes the marking. */
     private Object executeJoining(InvocationContext ic, Transactional ann) throws Exception {
+        boolean handled = false;
         try {
-            return ic.proceed();
-        } catch (Throwable e) {
+            Object result = ic.proceed();
+            handled = true;
+            return result;
+        } catch (Exception e) {
+            handled = true;
             if (shouldRollback(e, ann)) {
-                // The caller gets its own failure, never the one of the marking (MANSART-053).
-                try { tm.setRollbackOnly(); } catch (Exception markEx) { e.addSuppressed(markEx); }
+                markRollbackOnly(e);
             }
             throw e;
+        } finally {
+            // An Error went through: it always marks, and is never caught (MANSART-054).
+            if (!handled) markRollbackOnly(null);
+        }
+    }
+
+    /** Marks the transaction; the caller gets its own failure, never the one of the marking (MANSART-053). */
+    private void markRollbackOnly(Exception failure) {
+        try {
+            tm.setRollbackOnly();
+        } catch (Exception markEx) {
+            if (failure != null) failure.addSuppressed(markEx);
         }
     }
 
     /** Owns the TX from begin to commit/rollback. */
     private Object executeWithOwnTx(InvocationContext ic, Transactional ann) throws Exception {
         tm.begin();
-        Object result;
+        boolean handled = false;
         try {
-            result = ic.proceed();
-        } catch (Throwable e) {
-            // Throwable, not Exception: an Error ends the transaction too, or it stays bound to the
-            // thread with its connections (MANSART-054).
-            endAfterFailure(e, ann);
-            throw e;
+            Object result;
+            try {
+                result = ic.proceed();
+            } catch (Exception e) {
+                handled = true;
+                endAfterFailure(e, ann);
+                throw e;
+            }
+            handled = true;
+            if (tm.getStatus() == Status.STATUS_MARKED_ROLLBACK) {
+                tm.rollback();
+            } else {
+                tm.commit();
+            }
+            return result;
+        } finally {
+            // An Error went through: it ends the transaction too, by a rollback, or the transaction
+            // stays bound to the thread with its connections (MANSART-054).
+            if (!handled) safeRollback();
         }
-        if (tm.getStatus() == Status.STATUS_MARKED_ROLLBACK) {
-            tm.rollback();
-        } else {
-            tm.commit();
-        }
-        return result;
     }
 
     /** Rolls back on a rollback trigger or a rollback-only mark; commits on any other exception. */
-    private void endAfterFailure(Throwable e, Transactional ann) {
+    private void endAfterFailure(Exception e, Transactional ann) {
         try {
             if (shouldRollback(e, ann) || tm.getStatus() == Status.STATUS_MARKED_ROLLBACK) {
                 safeRollback();

@@ -61,14 +61,18 @@ class TransactionalFailureTest {
 
     @Test
     void anExceptionCrossingTwoJoinedCallsReachesTheCallerUnchanged() {
-        assertThatThrownBy(() -> outer.callMiddle(new IllegalArgumentException("business")))
+        var business = new IllegalArgumentException("business");
+
+        assertThatThrownBy(() -> outer.callMiddle(business))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("business");
     }
 
     @Test
     void anErrorLeavesNoTransactionBoundToTheThread() throws Exception {
-        assertThatThrownBy(() -> inner.fail(new AssertionError("boom"))).isInstanceOf(AssertionError.class);
+        var error = new AssertionError("boom");
+
+        assertThatThrownBy(() -> inner.fail(error)).isInstanceOf(AssertionError.class);
 
         assertThat(tm.getStatus()).isEqualTo(Status.STATUS_NO_TRANSACTION);
     }

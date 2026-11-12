@@ -89,10 +89,10 @@ final class PooledConnection implements Connection {
     private static final String CLOSED_MESSAGE = "This connection was closed: it went back to the pool";
     /** SQLSTATE 08003, connection does not exist. */
     private static final String CLOSED_STATE   = "08003";
-    private static final VarHandle CLOSED;
+    private static final VarHandle CLOSE_ONCE;
     static {
         try {
-            CLOSED = MethodHandles.lookup().findVarHandle(PooledConnection.class, "closed", boolean.class);
+            CLOSE_ONCE = MethodHandles.lookup().findVarHandle(PooledConnection.class, "closed", boolean.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -113,7 +113,7 @@ final class PooledConnection implements Connection {
     @Override
     public void close() throws SQLException {
         // Compare-and-set: two threads closing one handle give the entry back once (MANSART-056).
-        if (!CLOSED.compareAndSet(this, false, true)) return;
+        if (!CLOSE_ONCE.compareAndSet(this, false, true)) return;
         pool.release(entry, untracked || workPending);
     }
 
