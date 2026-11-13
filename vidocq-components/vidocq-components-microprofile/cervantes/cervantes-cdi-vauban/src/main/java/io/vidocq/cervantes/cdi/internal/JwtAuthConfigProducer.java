@@ -59,9 +59,8 @@ import java.util.stream.Collectors;
  * token.</p>
  *
  * <p>Because the product is {@code @Dependent}, it is built lazily, at its first injection. To
- * fail fast instead, {@link io.vidocq.cervantes.cdi.CervantesClaimExtension} calls
- * {@link #createValidator(Config)} during its {@code @Validation} phase, so an invalid
- * configuration aborts the container start.</p>
+ * fail fast instead, {@link JwtConfigurationCheck} calls {@link #createValidator(Config)} when
+ * it observes {@code Startup}, so an invalid configuration aborts the container start.</p>
  */
 @Dependent
 public class JwtAuthConfigProducer {

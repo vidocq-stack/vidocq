@@ -27,6 +27,7 @@ import io.vidocq.cassini.spi.http.CassiniStack;
 import io.vidocq.cervantes.cdi.CervantesClaimExtension;
 import io.vidocq.cervantes.cdi.JsonWebTokenContext;
 import io.vidocq.cervantes.cdi.internal.JwtAuthConfigProducer;
+import io.vidocq.cervantes.cdi.internal.JwtConfigurationCheck;
 import io.vidocq.cervantes.cdi.internal.JsonWebTokenProducer;
 import io.vidocq.cervantes.cdi.internal.ClaimResolver;
 import io.vidocq.cervantes.cdi.ClaimSyntheticCreator;
@@ -156,8 +157,11 @@ public class CervantesJwtDeployableContainer implements DeployableContainer<Cerv
                 .addBeanClass(ConfigCdiExtension.class)
                 // Cervantes Build Compatible Extension for @Claim injection
                 .addBeanClass(CervantesClaimExtension.class)
-                // CDI beans: JwtValidator producer, JsonWebToken producer, JsonWebTokenContext
+                // CDI beans: JwtValidator producer, the check of its configuration at start
+                // (a Startup observer since cervantes#52, no longer a phase of the extension),
+                // JsonWebToken producer, JsonWebTokenContext
                 .addBeanClass(JwtAuthConfigProducer.class)
+                .addBeanClass(JwtConfigurationCheck.class)
                 .addBeanClass(JsonWebTokenProducer.class)
                 .addBeanClass(JsonWebTokenContext.class)
                 // Claim resolution support

@@ -19,8 +19,9 @@
  */
 /**
  * Internal CDI beans of Cervantes: producer of the {@code @RequestScoped JsonWebToken} principal
- * ({@link io.vidocq.cervantes.cdi.internal.JsonWebTokenProducer}) and production of the
+ * ({@link io.vidocq.cervantes.cdi.internal.JsonWebTokenProducer}), production of the
  * {@code JwtValidator} configured via MicroProfile Config
- * ({@link io.vidocq.cervantes.cdi.internal.JwtAuthConfigProducer}).
+ * ({@link io.vidocq.cervantes.cdi.internal.JwtAuthConfigProducer}) and check of that configuration
+ * when the container starts ({@link io.vidocq.cervantes.cdi.internal.JwtConfigurationCheck}).
  */
 package io.vidocq.cervantes.cdi.internal;

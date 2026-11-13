@@ -61,6 +61,19 @@ class ClassPathRegistrationTest {
         assertEquals(provided, listed);
     }
 
+    /**
+     * The check of the {@code mp.jwt.*} configuration is a bean of the archive, in the index Vauban
+     * reads at start: it is notified of {@code Startup} without any extension registering it, so
+     * also when the container does not run its extensions at start (cervantes#52).
+     */
+    @Test
+    void configurationCheckIsABeanOfTheArchive() throws IOException {
+        Path beanIndex = CLASSES.resolve("META-INF/vauban-beans.list");
+        assertTrue(Files.isRegularFile(beanIndex), () -> "missing " + beanIndex);
+        List<String> beans = Files.readAllLines(beanIndex).stream().map(String::strip).toList();
+        assertTrue(beans.contains("io.vidocq.cervantes.cdi.internal.JwtConfigurationCheck"), beans::toString);
+    }
+
     @Test
     void isAnAnnotatedBeanArchive() throws IOException {
         Path beansXml = CLASSES.resolve("META-INF/beans.xml");

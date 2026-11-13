@@ -23,29 +23,23 @@ import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo;
-import jakarta.enterprise.inject.build.compatible.spi.Messages;
 import jakarta.enterprise.inject.build.compatible.spi.Registration;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.inject.build.compatible.spi.Types;
-import jakarta.enterprise.inject.build.compatible.spi.Validation;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.types.ArrayType;
 import jakarta.enterprise.lang.model.types.ClassType;
 import jakarta.enterprise.lang.model.types.ParameterizedType;
 import jakarta.enterprise.lang.model.types.PrimitiveType;
 import jakarta.enterprise.lang.model.types.Type;
-import io.vidocq.cervantes.cdi.internal.JwtAuthConfigProducer;
-import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.eclipse.microprofile.jwt.Claim;
 
 import java.lang.reflect.Array;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.Set;
 
 /**
@@ -58,6 +52,11 @@ import java.util.Set;
  * <p> Implemented in {@code @Registration(types = Object.class)} (not {@code @Validation}) because
  * CDI Lite 4.1 prohibits {@code BeanInfo} as a parameter of {@code @Validation} methods. Modelled
  * on {@code io.vidocq.ravel.cdi.ConfigCdiExtension} (made possible by Vauban VAU-BCE-001).</p>
+ *
+ * <p>The extension reads nothing of the deployment's environment, so it does the same work
+ * whenever a container runs it, while the application builds or when it starts. The
+ * {@code mp.jwt.*} configuration is checked at each start by a {@code Startup} observer,
+ * {@link io.vidocq.cervantes.cdi.internal.JwtConfigurationCheck} (cervantes#52).</p>
  */
 public class CervantesClaimExtension implements BuildCompatibleExtension {
 
@@ -71,52 +70,6 @@ public class CervantesClaimExtension implements BuildCompatibleExtension {
                 Type type = injectionPoint.type();
                 claimTypes.putIfAbsent(type.toString(), type);
             }
-        }
-    }
-
-    /**
-     * Fails the container start on an invalid {@code mp.jwt.*} configuration (unrecognised
-     * {@code mp.jwt.verify.publickey.algorithm}, unreadable key, and so on) instead of at the first
-     * injection of the {@code @Dependent} validator. A runtime {@code Startup} observer cannot do
-     * this: Vauban swallows exceptions thrown from it.
-     *
-     * <p>Nothing happens when:</p>
-     * <ul>
-     * <li>the extension runs at build time (Vauban's annotation processor runs every phase while the
-     * application compiles, and the configuration found then is the build machine's, not the one the
-     * application will run with): the check is left to the container start;</li>
-     * <li>no verification key is configured (MP-JWT is off);</li>
-     * <li>no MicroProfile Config implementation is present, since nothing can then configure a
-     * key. Any other failure while the Config implementation boots is reported as an error.</li>
-     * </ul>
-     */
-    @Validation
-    public void validateJwtConfiguration(Messages messages) {
-        if (BuildPhase.isBuildTime() || !isConfigImplementationAvailable()) {
-            return;
-        }
-        try {
-            JwtAuthConfigProducer.createValidator(ConfigProvider.getConfig());
-        } catch (RuntimeException e) {
-            messages.error(e);
-        }
-    }
-
-    /**
-     * True unless there is no MicroProfile Config implementation at all: the API reports that with
-     * an {@link IllegalStateException}, which is only taken for "absent" when no
-     * {@link ConfigProviderResolver} service provider exists either.
-     */
-    private static boolean isConfigImplementationAvailable() {
-        try {
-            ConfigProviderResolver.instance();
-            return true;
-        } catch (IllegalStateException e) {
-            ClassLoader loader = Thread.currentThread().getContextClassLoader();
-            if (ServiceLoader.load(ConfigProviderResolver.class, loader).findFirst().isEmpty()) {
-                return false;
-            }
-            throw e;
         }
     }
 
