@@ -140,6 +140,9 @@ class CreateThenBuildIT {
 
         assertTheBuildFrozeItsExtensions(project, output);
         assertStartsOnTheFrozenExtensions(project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh"));
+        // The image is linked with --strip-debug, and its application module sits in the boot layer as well as in
+        // the layer Vauban defines: it starts on the same record all the same (Vidocq/vauban BUG-20261113-17).
+        assertStartsOnTheFrozenExtensions(project.resolve("target/dist/bin/demo-app"));
     }
 
     /** {@code vidocq create --with-parent}: the previous style still builds and tests itself under the parent. */

@@ -734,6 +734,8 @@ target/
 └── Dockerfile                      # if docker is enabled
 ----
 
+The image starts on the extensions frozen at build, as the ZIP distribution does (<<frozen-extensions,the record of `vidocq:generate`>>). `stripDebug` removes the source file, the line numbers, the local variables and the parameter names from the classes it links, and the fingerprint of the deployment leaves all of them out. The startup report says so: `cdi extensions  10 extensions frozen at build`.
+
 [#jlink-without-main-class]
 === Without an application main class
 
