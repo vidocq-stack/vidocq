@@ -20,7 +20,6 @@
 package io.vidocq.heisenberg.cdi.internal;
 
 import io.vidocq.heisenberg.internal.Companions;
-import io.vidocq.heisenberg.internal.ConfigResolver;
 import io.vidocq.heisenberg.internal.FallbackResolver;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -28,11 +27,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Future;
-import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
 import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
-import jakarta.enterprise.util.AnnotationLiteral;
 import org.eclipse.microprofile.faulttolerance.Asynchronous;
 import org.eclipse.microprofile.faulttolerance.Bulkhead;
 import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
@@ -50,9 +47,9 @@ import org.eclipse.microprofile.faulttolerance.exceptions.FaultToleranceDefiniti
  *   <li>{@code @Bulkhead} + {@code @Asynchronous}: {@code waitingTaskQueue} ≥ 0.</li>
  * </ul>
  *
- * <p>M8 §9: reads the MP Config property
- * {@code mp.fault.tolerance.interceptor.priority} <strong>exactly once at startup</strong> and applies it to the {@link FaultToleranceInterceptor}
- * via {@link Enhancement} (rewriting the {@link Priority} annotation).</p>
+ * <p>Everything it does depends on the classes of the deployment only, so a build may freeze its result. The
+ * priority of the interceptor depends on the configuration the application starts with: it is the work of
+ * {@link InterceptorPriorityExtension}, an extension of its own that runs when the container starts.</p>
  */
 public class HeisenbergExtension implements BuildCompatibleExtension {
 
@@ -63,22 +60,6 @@ public class HeisenbergExtension implements BuildCompatibleExtension {
 
 	private final FallbackResolver fallbackResolver = new FallbackResolver();
 	private final Set<String> bindingEnhancedClasses = ConcurrentHashMap.newKeySet();
-
-	/**
-	 * M8 §9: applies at startup the priority configured through MP Config
-	 * (key {@code mp.fault.tolerance.interceptor.priority}). The property is read
-	 * only once; if it is absent, the default priority
-	 * {@link ConfigResolver#DEFAULT_INTERCEPTOR_PRIORITY} (4010) remains in effect.
-	 */
-	@Enhancement(types = FaultToleranceInterceptor.class)
-	public void configureInterceptorPriority(ClassConfig classConfig) {
-		int priority = ConfigResolver.interceptorPriority();
-		if (priority == ConfigResolver.DEFAULT_INTERCEPTOR_PRIORITY) {
-			return; // default priority already declared statically
-		}
-		classConfig.removeAnnotation(a -> Priority.class.getName().equals(a.name()));
-		classConfig.addAnnotation(new PriorityLiteral(priority));
-	}
 
 	/**
 	 * Adds the marker binding {@link FaultToleranceBinding} to any class carrying
@@ -140,14 +121,6 @@ public class HeisenbergExtension implements BuildCompatibleExtension {
 		catch (ClassNotFoundException _) {
 			return null;
 		}
-	}
-
-	/** Portable implementation of {@link Priority} (CDI {@link AnnotationLiteral} pattern). */
-	private static final class PriorityLiteral extends AnnotationLiteral<Priority> implements Priority {
-		private static final long serialVersionUID = 1L;
-		private final int value;
-		PriorityLiteral(int value) { this.value = value; }
-		@Override public int value() { return value; }
 	}
 
 	/**

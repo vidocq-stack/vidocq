@@ -26,6 +26,8 @@
  *       (configurable via {@code mp.fault.tolerance.interceptor.priority}).</li>
  *   <li>{@code HeisenbergExtension} — Vauban BCE: validates FT configurations at container startup
  *       (fallback methods, async return types).</li>
+ *   <li>{@code InterceptorPriorityExtension} — BCE that applies
+ *       {@code mp.fault.tolerance.interceptor.priority} when the container starts, never at build time.</li>
  *   <li>{@code StateRegistryBean} — {@code @ApplicationScoped} bean carrying the global state
  *       of CircuitBreaker and Bulkhead (identified by {@code beanClass + method}).</li>
  * </ul>
@@ -43,16 +45,22 @@ module io.vidocq.heisenberg.cdi.vauban {
     // Required at runtime under any CDI container, not only Vauban: the build weaves a
     // `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans, so their
     // classes cannot be loaded without this module. It also supplies the VaubanComponentProvider
-    // service type.
+    // service type, and ExtensionPhase, which InterceptorPriorityExtension asks whether it runs at
+    // build time.
     requires io.vidocq.vauban.api;
     // Compile-only (optional at runtime): ModuleLookups, the bean module's lookup for fallback methods.
     requires static io.vidocq.vauban.core;
 
     exports io.vidocq.heisenberg.cdi.internal;
 
-    // Heisenberg BCE: validate FT configurations at container startup
+    // Heisenberg BCEs. HeisenbergExtension binds the interceptor to the guarded classes and validates their FT
+    // definitions: static work, which a build may freeze. InterceptorPriorityExtension applies
+    // mp.fault.tolerance.interceptor.priority: it depends on the configuration the application starts with, so it
+    // is an extension of its own, the only one that runs again at start with Vidocq/vauban#288.
+    // Both are listed in META-INF/services too, for the class path.
     provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
-            with io.vidocq.heisenberg.cdi.internal.HeisenbergExtension;
+            with io.vidocq.heisenberg.cdi.internal.HeisenbergExtension,
+                 io.vidocq.heisenberg.cdi.internal.InterceptorPriorityExtension;
 
     // In-module instantiation and field injection of the FT interceptors and recorder/state beans
     // (@Inject fields are package-private, assigned by an in-package putfield) through the generated
