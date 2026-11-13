@@ -12,8 +12,10 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 ## MANSART-066 — A repository and a persistence unit had a connection each in the same transaction
 
 - **Date**: 2026-11-13 (reported by the maintainer the same day)
-- **Status**: FIXED in Mansart on `feat/jta-shared-connection`; the Vidocq Noether extension still has to use
-  `JtaDataSource` in place of its `EnlistingDataSource` (vidocq#541, merged on 2026-11-13; a follow-up is planned).
+- **Status**: FIXED on 2026-11-13 — in Mansart by mansart#103 (`3589db59`), in the Vidocq Noether extension by
+  vidocq#544 (`51b80ca9`): a JTA unit gets a `JtaDataSource` over the pool bean, `EnlistingDataSource` is gone.
+  Across Mansart Data and Noether, the shared connection is tested by `SharedConnectionModulePathTest`
+  (`vidocq-runtime-it-noether-mansart-data`, Vidocq repository).
 - **Module**: `mansart-data-cdi` (`JtaTransactionBridge`), `mansart-transactions-jdbc`
 - **Symptom**: in one JTA transaction, a Jakarta Data repository and a Noether `EntityManager` on the same data source
   worked on two physical connections. Neither saw the other's uncommitted writes; two writes to the same row waited
