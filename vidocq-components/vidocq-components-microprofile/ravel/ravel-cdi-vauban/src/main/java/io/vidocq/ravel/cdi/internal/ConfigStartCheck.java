@@ -325,14 +325,23 @@ public final class ConfigStartCheck implements SyntheticObserver<Startup> {
 
     /** The thread context class loader first — it sees the application — then this class's own. */
     private static Class<?> loadClass(String name) {
+        Class<?> seen = loadClass(name, Thread.currentThread().getContextClassLoader());
+        return seen != null ? seen : loadClass(name, ConfigStartCheck.class.getClassLoader());
+    }
+
+    /**
+     * The class {@code name} names, through {@code loader}, not initialized; {@code null} when the loader does not
+     * find it. The names are the ones the extension recorded while the application built — classes of the
+     * application and of the JDK, never an array — not a value the application receives.
+     */
+    private static Class<?> loadClass(String name, ClassLoader loader) {
+        if (loader == null) {
+            return null;
+        }
         try {
-            return Class.forName(name, false, Thread.currentThread().getContextClassLoader());
+            return loader.loadClass(name);
         } catch (ClassNotFoundException _) {
-            try {
-                return Class.forName(name);
-            } catch (ClassNotFoundException _) {
-                return null;
-            }
+            return null;
         }
     }
 }
