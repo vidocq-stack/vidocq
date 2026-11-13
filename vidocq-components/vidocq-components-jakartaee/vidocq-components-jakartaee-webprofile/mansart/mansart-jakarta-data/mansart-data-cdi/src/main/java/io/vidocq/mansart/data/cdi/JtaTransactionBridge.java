@@ -21,16 +21,12 @@ package io.vidocq.mansart.data.cdi;
 
 import io.vidocq.mansart.data.core.MansartDataException;
 import io.vidocq.mansart.data.core.TransactionBridge;
-import io.vidocq.mansart.transactions.jdbc.ConnectionXAResource;
-import jakarta.transaction.Status;
-import jakarta.transaction.Synchronization;
-import jakarta.transaction.Transaction;
+import io.vidocq.mansart.transactions.jdbc.JtaConnections;
+import io.vidocq.mansart.transactions.jdbc.JtaDataSource;
 import jakarta.transaction.TransactionManager;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 
 import javax.sql.DataSource;
-import javax.sql.XAConnection;
-import javax.sql.XADataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -39,132 +35,27 @@ import java.sql.SQLException;
  * every datasource used by a repository gets ONE connection, enlisted in the transaction —
  * the transaction outcome then governs the writes; the connection is closed after completion.
  *
- * <p>Enlistment is XA-first: when the datasource is XA-capable ({@code instanceof XADataSource}
- * or unwrappable to one — H2's {@code JdbcDataSource} and pool wrappers that delegate
- * {@code unwrap}), an {@link XAConnection} is opened and the <b>driver's</b> {@code XAResource}
- * is enlisted — real prepare, recoverable in-doubt branches. On a Mansart pool that XAConnection
- * is a borrow, given back by its {@code close()} after completion (MANSART-065). Otherwise a plain connection is
- * wrapped in {@link ConnectionXAResource} (single-phase, LRCO): the coordinator commits it
- * first and rolls the prepared XA branches back if it fails. One plain resource per transaction
- * is therefore safe; a WARN is logged when a second one joins the same transaction.
- *
- * <p>State lives in the {@link TransactionSynchronizationRegistry} (already scoped to the
- * active transaction), keyed by datasource identity.
+ * <p>The connection is the one {@link JtaConnections} keeps for the transaction and the datasource
+ * (MANSART-066): a repository shares it with whatever else works on the same datasource in the
+ * same transaction through a {@link JtaDataSource} — a persistence unit, plain JDBC code. The
+ * enlistment rules (XA-first, a single-phase resource otherwise, a pooled XA connection given back
+ * after completion — MANSART-065) are documented there.
  */
 final class JtaTransactionBridge implements TransactionBridge {
 
-    private static final System.Logger LOG = System.getLogger(JtaTransactionBridge.class.getName());
-
-    /** TSR key counting plain (single-phase) enlistments in the current transaction. */
-    private static final Object LOCAL_COUNT_KEY = new Object() {
-        @Override public String toString() { return "JtaTransactionBridge.localCount"; }
-    };
-
-    private final TransactionManager tm;
-    private final TransactionSynchronizationRegistry tsr;
+    private final JtaConnections connections;
 
     JtaTransactionBridge(TransactionManager tm, TransactionSynchronizationRegistry tsr) {
-        this.tm = tm;
-        this.tsr = tsr;
+        this.connections = new JtaConnections(tm, tsr);
     }
-
-    /** Identity key: datasource beans are singletons, two keys match iff same instance. */
-    private record Key(DataSource dataSource) {
-        @Override public boolean equals(Object o) {
-            return o instanceof Key(var other) && other == dataSource;
-        }
-        @Override public int hashCode() {
-            return System.identityHashCode(dataSource);
-        }
-    }
-
-    private record Enlisted(Connection connection, AutoCloseable closer) {}
 
     @Override
     public Connection connectionFor(DataSource dataSource) {
-        Transaction tx = activeTransaction();
-        if (tx == null) return null;
-
-        Key key = new Key(dataSource);
-        Enlisted existing = (Enlisted) tsr.getResource(key);
-        if (existing != null) return existing.connection();
-
         try {
-            XADataSource xaDs = xaCapable(dataSource);
-            Enlisted enlisted = xaDs != null ? enlistXa(tx, xaDs) : enlistPlain(tx, dataSource);
-            tsr.putResource(key, enlisted);
-            tsr.registerInterposedSynchronization(new Synchronization() {
-                @Override public void beforeCompletion() { /* no-op */ }
-                @Override public void afterCompletion(int status) {
-                    try {
-                        enlisted.closer().close();
-                    } catch (Exception _) {
-                        // Best effort — the TM already committed/rolled back through the XAResource.
-                    }
-                }
-            });
-            return enlisted.connection();
-        } catch (SQLException | jakarta.transaction.RollbackException
-                 | jakarta.transaction.SystemException e) {
+            return connections.enlisted(dataSource);
+        } catch (SQLException e) {
             throw new MansartDataException(
                     "Failed to enlist a connection in the active transaction", e);
         }
-    }
-
-    private Transaction activeTransaction() {
-        try {
-            Transaction tx = tm.getTransaction();
-            if (tx == null) return null;
-            int status = tx.getStatus();
-            return (status == Status.STATUS_ACTIVE || status == Status.STATUS_MARKED_ROLLBACK)
-                    ? tx : null;
-        } catch (jakarta.transaction.SystemException e) {
-            throw new MansartDataException("Cannot read the transaction status", e);
-        }
-    }
-
-    private static XADataSource xaCapable(DataSource ds) {
-        if (ds instanceof XADataSource xa) return xa;
-        try {
-            if (ds.isWrapperFor(XADataSource.class)) return ds.unwrap(XADataSource.class);
-        } catch (SQLException _) {
-            // JDBC allows isWrapperFor/unwrap to throw — treat as not XA-capable.
-        }
-        return null;
-    }
-
-    private Enlisted enlistXa(Transaction tx, XADataSource xaDs)
-            throws SQLException, jakarta.transaction.RollbackException, jakarta.transaction.SystemException {
-        XAConnection xaConnection = xaDs.getXAConnection();
-        try {
-            tx.enlistResource(xaConnection.getXAResource());
-        } catch (RuntimeException | jakarta.transaction.RollbackException
-                 | jakarta.transaction.SystemException e) {
-            try { xaConnection.close(); } catch (SQLException _) { /* best effort */ }
-            throw e;
-        }
-        return new Enlisted(xaConnection.getConnection(), xaConnection::close);
-    }
-
-    private Enlisted enlistPlain(Transaction tx, DataSource ds)
-            throws SQLException, jakarta.transaction.RollbackException, jakarta.transaction.SystemException {
-        Connection connection = ds.getConnection();
-        try {
-            tx.enlistResource(new ConnectionXAResource(connection));
-        } catch (RuntimeException | jakarta.transaction.RollbackException
-                 | jakarta.transaction.SystemException e) {
-            try { connection.close(); } catch (SQLException _) { /* best effort */ }
-            throw e;
-        }
-        Integer count = (Integer) tsr.getResource(LOCAL_COUNT_KEY);
-        int localCount = count == null ? 1 : count + 1;
-        tsr.putResource(LOCAL_COUNT_KEY, localCount);
-        if (localCount == 2) {
-            LOG.log(System.Logger.Level.WARNING,
-                    "Two non-XA datasources enlisted in the same transaction — their commits are"
-                            + " last-resource best-effort (a failure between them cannot be rolled"
-                            + " back). Use XA-capable datasources for atomic multi-store commits.");
-        }
-        return new Enlisted(connection, connection::close);
     }
 }

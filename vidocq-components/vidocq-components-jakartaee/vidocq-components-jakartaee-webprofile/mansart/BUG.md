@@ -9,6 +9,28 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-066 — A repository and a persistence unit had a connection each in the same transaction
+
+- **Date**: 2026-11-13 (reported by the maintainer the same day)
+- **Status**: FIXED in Mansart on `feat/jta-shared-connection`; the Vidocq Noether extension still has to use
+  `JtaDataSource` (its `EnlistingDataSource`, on the unmerged `feat/noether-persistence-extension`).
+- **Module**: `mansart-data-cdi` (`JtaTransactionBridge`), `mansart-transactions-jdbc`
+- **Symptom**: in one JTA transaction, a Jakarta Data repository and a Noether `EntityManager` on the same data source
+  worked on two physical connections. Neither saw the other's uncommitted writes; two writes to the same row waited
+  on each other's lock inside one transaction; on a non-XA pool the commit was two single-phase resources, without
+  the warning, which counted the bridge's own only; two places of the pool per transaction.
+- **Reproduction**: by reading — `JtaTransactionBridge` kept its connection in the
+  `TransactionSynchronizationRegistry` under a key of its own, the Vidocq extension's `EnlistingDataSource` in a
+  private `Map<Transaction, Connection>`. Not reproduced by a run across Mansart Data and Noether. In Mansart:
+  `JtaDataSourceTest`, `EnlistedConnectionHandleTest` (`mansart-transactions-tests`) and the two
+  `aJtaDataSourceHandle…` / `aRepositorySees…` tests of `JtaTransactionBridgeTest` (`mansart-data-tests`).
+- **Cause**: "the connection of this transaction" was decided by each consumer, not by the data source.
+- **Fix**: `JtaConnections` (`mansart-transactions-jdbc`) keeps one connection per transaction and data source
+  instance in the registry; `JtaDataSource` hands out handles on it to code that only knows `DataSource`; the bridge
+  takes its connections from `JtaConnections`.
+
+---
+
 ## MANSART-065 — XA connections were opened outside the pool: no `maxSize`, no reuse, no metrics
 
 - **Date**: 2026-11-13 (found on 2026-11-12, pool and transactions audit)

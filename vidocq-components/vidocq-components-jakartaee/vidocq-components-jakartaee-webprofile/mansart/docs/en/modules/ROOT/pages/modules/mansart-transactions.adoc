@@ -32,7 +32,7 @@ Available open-source TMs (Atomikos, Narayana) are designed for classic Java EE:
 | `@Transactional` interceptor, `@TransactionScoped`, Vauban-compatible BCE.
 
 | `mansart-transactions-jdbc`
-| `ConnectionXAResource` — adapter from JDBC `Connection` to `XAResource`.
+| `ConnectionXAResource` — adapter from JDBC `Connection` to `XAResource`. `JtaConnections` and `JtaDataSource` — xref:#jta-datasource[one connection per transaction and data source].
 
 | `mansart-transactions-tck`
 | Official TCK runner (out of reactor, POM Model 4.0.0).
@@ -103,6 +103,27 @@ With a single resource, a commit the resource answers with an `XA_RB*` code is a
 == Interposed synchronizations [.tag-new]#NEW#
 
 A synchronization registered through `TransactionSynchronizationRegistry.registerInterposedSynchronization` runs after the application's in `beforeCompletion` and before them in `afterCompletion`, and may join a transaction marked rollback-only (MANSART-063). `@TransactionScoped` beans and the registry's resources are released that way, whatever the state the transaction was in when they were first used.
+
+[#jta-datasource]
+== One connection per transaction and data source [.tag-new]#NEW#
+
+Within a JTA transaction, everything that works on the same data source works on the same connection: a Jakarta Data repository, a persistence unit, plain JDBC code. They see each other's uncommitted work, they cannot wait on each other's locks, and the transaction has one resource for that data source (MANSART-066).
+
+`JtaConnections` (`mansart-transactions-jdbc`) keeps that connection. The first call in a transaction takes a connection from the data source and enlists it — the driver's `XAResource` when the data source is XA-capable, a single-phase `ConnectionXAResource` otherwise; every later call answers the same connection, and it goes back to its pool once the transaction has completed. It lives in the `TransactionSynchronizationRegistry`, keyed by the data source instance, so it follows the transaction: a suspended transaction (`REQUIRES_NEW`) keeps its connection and the new one takes another.
+
+`JtaDataSource` wraps a data source for code that only knows `javax.sql.DataSource`:
+
+[source,java]
+----
+DataSource shared = new JtaDataSource(pool, transactionManager, registry);
+----
+
+* Within a transaction, `getConnection()` answers a handle on the connection of the transaction. `close()` leaves the connection to the transaction. `commit()`, `rollback()` and a switch of the auto-commit mode throw `SQLException`: the transaction manager completes the connection. A handle that was closed, or kept after its transaction, throws `SQLException` (SQLSTATE `08003`).
+* Within a transaction, `getConnection(user, password)` throws `SQLFeatureNotSupportedException`: the connection is shared and was opened with the credentials of the data source.
+* Outside a transaction, both calls are the wrapped data source's own.
+* `unwrap` answers the wrapper for its own type and asks the wrapped data source for any other.
+
+The Jakarta Data bridge (`mansart-data-cdi`) takes its connections from `JtaConnections`, whether the repository's data source is the pool or a `JtaDataSource` over it. A container that gives a `JtaDataSource` over the same pool instance to a persistence unit therefore shares the connection with the repositories. The instance is what counts: two wrappers, or a CDI client proxy and the instance behind it, are two data sources.
 
 == Roadmap
 

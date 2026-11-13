@@ -23,9 +23,14 @@
  * transaction without requiring a {@code XADataSource} driver.
  *
  * <p>Limitation : 1PC only — multi-resource 2PC requires a real XA driver.
+ *
+ * <p>{@code JtaConnections} keeps one connection per transaction and data source, enlisted through the
+ * driver's {@code XAResource} when there is one and through that adapter otherwise; {@code JtaDataSource}
+ * hands out handles on it (MANSART-066).
  */
 module io.vidocq.mansart.transactions.jdbc {
     requires transitive io.vidocq.mansart.transactions.core;
+    requires jakarta.transaction;
     requires java.sql;
     requires java.transaction.xa;
 

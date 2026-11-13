@@ -275,6 +275,50 @@ class JtaTransactionBridgeTest {
                 .isZero();
     }
 
+    /** The data source a container would hand to a persistence unit or to plain JDBC code (MANSART-066). */
+    private static javax.sql.DataSource jtaDataSource() {
+        return new io.vidocq.mansart.transactions.jdbc.JtaDataSource(
+                container.select(javax.sql.DataSource.class), tm,
+                container.select(jakarta.transaction.TransactionSynchronizationRegistry.class));
+    }
+
+    @Test
+    void aJtaDataSourceHandleSeesTheUncommittedWritesOfARepository() throws Exception {
+        tm.begin();
+        authors.save(author("shared"));
+
+        try (Connection handle = jtaDataSource().getConnection();
+             Statement s = handle.createStatement();
+             ResultSet rs = s.executeQuery("SELECT COUNT(*) FROM \"authors\"")) {
+            rs.next();
+            assertThat(rs.getInt(1))
+                    .as("same transaction, same datasource: the handle is the repository's connection")
+                    .isEqualTo(1);
+        }
+        assertThat(countRows(BridgeDataSources.DEFAULT_URL, "authors")).isZero();
+        tm.commit();
+
+        assertThat(countRows(BridgeDataSources.DEFAULT_URL, "authors")).isEqualTo(1);
+    }
+
+    @Test
+    void aRepositorySeesTheUncommittedWritesOfAJtaDataSourceHandle() throws Exception {
+        tm.begin();
+        try (Connection handle = jtaDataSource().getConnection();
+             Statement s = handle.createStatement()) {
+            s.executeUpdate("INSERT INTO \"authors\" (\"name\") VALUES ('by hand')");
+        }
+
+        assertThat(authors.countByName("by hand"))
+                .as("the repository works on the connection the handle wrote through")
+                .isEqualTo(1);
+        tm.rollback();
+
+        assertThat(countRows(BridgeDataSources.DEFAULT_URL, "authors"))
+                .as("one connection, one outcome: the rollback undoes the handle's write")
+                .isZero();
+    }
+
     @Test
     void outsideTransactionBehaviourUnchanged() throws Exception {
         authors.save(author("immediate"));

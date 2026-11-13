@@ -116,13 +116,17 @@ final class ArchitectureRules {
                     "io.vidocq.mansart.transactions.core.."),
             CLAUDE_CONSTRAINTS + ", constraint 3; module-info.java of mansart-transactions-core");
 
-    /** mansart-transactions-jdbc: JDBC and XA on mansart-transactions-core (module-info.java). */
+    /**
+     * mansart-transactions-jdbc: JDBC and XA on mansart-transactions-core (module-info.java), and the
+     * Transactions API, whose current transaction {@code JtaConnections} enlists its connection in (MANSART-066).
+     */
     static final ArchRule TRANSACTIONS_JDBC_DEPENDENCIES = VidocqArchRules.dependOnlyOn(
             TX_JDBC,
             Packages.of(
                     Jdk.RUNTIME,
                     "javax.sql..",
                     "javax.transaction.xa..",
+                    "jakarta.transaction..",
                     "io.vidocq.mansart.transactions.core..",
                     "io.vidocq.mansart.transactions.jdbc.."),
             CLAUDE_CONSTRAINTS + ", constraint 3; module-info.java of mansart-transactions-jdbc");

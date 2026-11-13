@@ -24,6 +24,7 @@ New in the `{project-version}` development line — everything listed here lande
 * xref:modules/mansart-transactions.adoc#journal[The recovery journal is compacted] [.tag-new]#NEW# — it grew for ever, and a transaction rolled back after its prepare stayed in doubt in it (MANSART-062).
 * xref:modules/mansart-transactions.adoc#interposed[Interposed synchronizations have their order] [.tag-new]#NEW# — and join a rollback-only transaction: its `@TransactionScoped` beans were never destroyed (MANSART-063).
 * xref:modules/mansart-transactions.adoc#one-phase[A one-phase commit says what failed] [.tag-new]#NEW# — a commit the database rolled back is `RollbackException`, not `SystemException`, and the `XAException` is the cause (MANSART-064).
+* xref:modules/mansart-transactions.adoc#jta-datasource[One connection per transaction and data source] [.tag-new]#NEW# — a repository and a persistence unit on the same data source each enlisted a connection of their own in the same transaction: neither saw the other's uncommitted work. `JtaDataSource` and `JtaConnections` (`mansart-transactions-jdbc`) share one (MANSART-066).
 
 == Build
 
