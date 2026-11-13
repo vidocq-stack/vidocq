@@ -151,23 +151,71 @@ With `java -Dmp.config.profile=dev`:
 
 == Validation at deployment time
 
-Configuration values are validated when the container starts. If a required key is missing, `DeploymentException` is thrown:
+The configuration is checked against the injection points when the application starts. A required
+`@ConfigProperty` must have a value, or a `defaultValue`, that converts to the injected type; every member of a
+`@ConfigProperties` class must have a value, unless it has a `defaultValue`, an `Optional` type or a Java
+initializer. Otherwise the container does not start, and one `DeploymentException` lists every problem, each with
+the place where the value is injected:
 
 [source,java]
 ----
-@Inject
-@ConfigProperty(name = "app.secret.key") // Required, no default
-String secretKey;
+package com.acme;
+
+public class Secrets {
+    @Inject
+    @ConfigProperty(name = "app.secret.key") // Required, no default
+    String secretKey;
+
+    @Inject
+    @ConfigProperty(name = "app.secret.rounds") // app.secret.rounds=many
+    int rounds;
+}
 ----
 
-[source,bash]
+[source]
 ----
-$ java MyApplication
-Exception in thread "main" jakarta.enterprise.inject.spi.DeploymentException:
-  Configuration key 'app.secret.key' not found
+jakarta.enterprise.inject.spi.DeploymentException: Invalid MicroProfile Config deployment (2 problems):
+ - Missing required config property 'app.secret.key' for type java.lang.String [at com.acme.Secrets#secretKey]
+ - Invalid @ConfigProperty for key 'app.secret.rounds': Cannot convert 'many' to int [at com.acme.Secrets#rounds]
 ----
 
-Use `defaultValue` or `Optional<T>` to make injection optional.
+Use `defaultValue` or `Optional<T>` to make injection optional. `Provider<T>`, `Supplier<T>`, `ConfigValue`,
+`OptionalInt`/`OptionalLong`/`OptionalDouble`, collections and arrays are not checked at start: they are resolved
+when the value is read.
+
+[#start-check]
+=== Where the check runs
+
+The Build Compatible Extension reads no configuration. It records, as plain text, what the start must check — for
+each required `@ConfigProperty`, the key, the name of the injected type, the `defaultValue` and the injection
+site; for each `@ConfigProperties` class, its name and the prefix written where it is injected — and registers
+`ConfigStartCheck`, a synthetic observer of `jakarta.enterprise.event.Startup`, with that text as its parameters.
+The observer has priority `0` (`Interceptor.Priority.PLATFORM_BEFORE`): it runs before the `Startup` observers of
+the application, which may already read the configuration. It loads the types by name, reads
+`ConfigProvider.getConfig()`, and throws the `DeploymentException`.
+
+[cols="1,3"]
+|===
+| Container | When the check runs
+
+| Vauban
+| When the container fires `Startup`, whether the extension ran in that start or in the compiler
+  (<<extension-in-the-compiler,below>>): the observer and its parameters are part of what Vauban keeps from a
+  build. Vauban does not start, and throws its own `DeploymentException` (`Observer … of Startup threw …; the
+  container does not start`) whose cause is the one above.
+
+| A full CDI container (Weld, Open Liberty)
+| At `AfterDeploymentValidation`: Ravel's portable extension takes the observer over, runs it there, and reports
+  what it throws as a deployment problem; the container does not run it a second time at `Startup`. A container
+  that fires no `Startup` at all, such as the embedded Weld of Arquillian that runs the TCK, is covered the same way.
+
+| Weld SE with discovery disabled
+| Weld SE then loads the build compatible extensions but no portable extension: the check stays the `Startup`
+  observer, and `Weld.initialize()` throws an `ObserverException` whose cause is the `DeploymentException`.
+|===
+
+The errors that depend on the code alone — an injection type nothing can supply, `@ConfigProperties` on a type
+that is not a class — are still reported by the extension itself, when it runs.
 
 [#extension-in-the-compiler]
 === When the extension runs in the compiler
@@ -177,10 +225,13 @@ annotation processor path (on Vidocq, the `vidocq-runtime-ravel-config-extension
 The extension then registers the beans that satisfy each `@ConfigProperty` and `@ConfigProperties` point,
 so Vauban's build-time validation accepts them, and an unsupported injection type fails the build.
 
-It does not check the values there. They come from where the application runs — its configuration files,
-the environment, the system properties of its JVM — which the compiler does not see. A missing key still
-fails the container start, as above. The extension asks Vauban which of the two it is running in
-(`io.vidocq.vauban.api.ExtensionPhase`).
+It does not check the values, there or anywhere else. They come from where the application runs — its
+configuration files, the environment, the system properties of its JVM — which the compiler does not see. The
+extension registers the start check instead, and Vauban writes it, with its parameters, next to the beans: a
+missing key still fails the container start, as above, without the extension running again.
+
+The extension asks Vauban whether it runs in the compiler (`io.vidocq.vauban.api.ExtensionPhase`) for one thing
+only: there, it leaves out the fallback `Config` bean it adds when the deployment has no other `Config` bean.
 
 [#generated-code]
 === Generated code instead of reflection
@@ -312,7 +363,7 @@ Ravel does not need Vauban. The jars run unchanged under another CDI container, 
 | Module | What it runs
 
 | `ravel-it-weld`
-| Weld SE 6.0 (CDI 4.1), class path, no Vauban: `@ConfigProperty` with and without a default, `@ConfigProperties`, an injected `Config`, and `ConfigProvider.getConfig()` answering with Ravel.
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban: `@ConfigProperty` with and without a default, `@ConfigProperties`, an injected `Config`, and `ConfigProvider.getConfig()` answering with Ravel. A missing or unconvertible required value, and a missing `@ConfigProperties` member, keep the container from starting, with and without Ravel's portable extension (<<start-check>>).
 
 | `ravel-it-openliberty`
 | A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1), with Liberty's `mpConfig` feature off: the same checks, over HTTP.

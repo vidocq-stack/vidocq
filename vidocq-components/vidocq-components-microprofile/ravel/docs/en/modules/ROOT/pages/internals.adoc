@@ -36,7 +36,22 @@ side is in xref:cdi-integration.adoc#generated-code[CDI integration — Generate
   (xref:cdi-integration.adoc#extension-in-the-compiler[When the extension runs in the compiler])
 | Vauban, from the synthetic metadata the processor wrote
 | The extension runs at boot.
+
+| The check of the configuration at start: `ConfigStartCheck`, a synthetic observer of `Startup` whose parameters
+  list, as text, the injection points to check
+  (xref:cdi-integration.adoc#start-check[Where the check runs])
+| The same extension, in the same run
+| Vauban, which notifies the observer when the container starts; the observer reads the configuration of that start
+| The extension runs at boot and registers the same observer. On a full CDI container Ravel's portable extension
+  runs it at deployment validation.
 |===
+
+`ConfigStartCheck` is reflective, with or without the processor: the build records type names, because a class may
+not exist yet when the extension runs, and the start loads them by name — the thread context class loader first,
+then Ravel's own. For a `@ConfigProperties` class it reads the declared fields of the loaded class, and creates one
+instance to tell a field with a Java initializer from a field that needs a value. A type it cannot load is left to
+the injection itself. `ConfigCdiExtension` keeps one class lookup of its own: the run-time class of a
+`@ConfigProperty` injection type, to type its synthetic bean.
 
 === When the fallback runs
 
@@ -126,7 +141,7 @@ No external dependencies. Can be used standalone without CDI.
 
 * **`@ConfigProperty` annotation processing** — via xref:vauban::index.adoc[Vauban] Build-Compatible Extension
 * **Injection of configuration values** — including `Optional<T>` support
-* **Deployment-time validation** — thrown as `DeploymentException` if config is missing
+* **Validation when the application starts** — the extension registers a `Startup` observer that reads the configuration; a missing or unconvertible required value fails the start with a `DeploymentException` (xref:cdi-integration.adoc#start-check[Where the check runs])
 
 Depends on `ravel-core` + `jakarta.cdi`. Optional; if not on classpath, CDI injection simply won't work, but `ravel-core` continues to function.
 

@@ -1,3 +1,32 @@
+## BUG-20261113-01 — The check of the required configuration values depended on the extension running again at start (ravel#50)
+
+- **Date**: 2026-11-13
+- **Status**: FIXED on `fix/config-start-check`: `ConfigCdiExtension` reads no configuration any more. It records
+  what must be checked as text — for each required `@ConfigProperty` the key, the name of the injected type, the
+  `defaultValue` and the injection site; for each `@ConfigProperties` class its name and the prefix written where
+  it is injected — and registers `ConfigStartCheck`, a synthetic observer of `jakarta.enterprise.event.Startup`
+  (priority 0), with that text as `String[]` parameters. The observer loads the types by name, reads
+  `ConfigProvider.getConfig()` and throws one `DeploymentException` listing every problem, with the wording the
+  extension had. `ConfigStartCheckTest`, `ConfigCdiExtensionTest`, `ConfigCdiExtensionPhasesTest` and
+  `VaubanContainerIntegrationTest` (red, then green); `BuildTimeStartCheckTest` starts a Vauban container from the
+  metadata of a build, without the extension.
+- **Reported by**: Vidocq/ravel#50, while preparing Vidocq/vauban#288 (Vauban runs the build compatible extensions
+  at build only, and loads their results at start).
+- **Symptom**: once Vauban no longer runs the extension at start, a missing required property does not stop the
+  start; the first request that needs the value answers 500.
+- **Minimal reproduction**: an `@ApplicationScoped` bean with `@Inject @ConfigProperty(name = "shop.name") String`,
+  compiled with `ravel-cdi-vauban` on the processor path, started without `shop.name` by a container that loads the
+  build's synthetic metadata and does not run the extension.
+- **Cause**: since BUG-20261001-01 the value checks returned early at build time (`ExtensionPhase.isBuildTime()`),
+  and counted on the container running the extension a second time, at each start.
+- **Other containers**: a full CDI container runs the extension while it deploys, and not every one fires
+  `Startup`: the embedded Weld of Arquillian, which runs the TCK, does not (5 TCK classes failed with "Expected
+  exception of type DeploymentException … but no exception was thrown" with the observer alone). The portable
+  `ConfigPropertiesExclusionExtension` therefore takes the synthetic observer over
+  (`ProcessSyntheticObserverMethod`, vetoed) and runs it at `AfterDeploymentValidation`, as a deployment problem.
+  Weld SE with discovery disabled loads no portable extension: there the `Startup` observer does the check
+  (`WeldStartCheckTest`). TCK on Weld: 378 run, 0 failure, 0 error, 0 skipped, as before.
+
 ## BUG-20261102-01 — The configuration registry kept every stopped application layer reachable
 
 - **Date**: 2026-11-02

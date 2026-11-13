@@ -228,12 +228,14 @@ Optional<Integer> port = config.getOptionalValue("server.port", Integer.class);
 
 ## Deployment Validation
 
-`ravel-cdi-vauban` validates **required** properties (without `defaultValue`) at startup.
-If a required property is absent, Vauban refuses to start with a `DeploymentException`:
+`ravel-cdi-vauban` validates **required** properties (without `defaultValue`) at startup: its
+build compatible extension registers an observer of `Startup` that reads the configuration the
+application starts with. If a required property is absent, or does not convert to the injected
+type, Vauban refuses to start with a `DeploymentException` whose cause lists every problem:
 
 ```
-DeploymentException: Missing required config property 'db.host' for type String
-  at injection point @Inject @ConfigProperty private ServerConfig.dbHost
+DeploymentException: Invalid MicroProfile Config deployment (1 problem):
+ - Missing required config property 'db.host' for type java.lang.String [at com.acme.ServerConfig#dbHost]
 ```
 
 For optional properties, use `Optional<T>` or `defaultValue`:
