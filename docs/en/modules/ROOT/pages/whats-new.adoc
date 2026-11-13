@@ -7,7 +7,7 @@ New in the `{project-version}` development line — everything listed here lande
 == Jakarta EE web
 
 * xref:modules/vidocq-runtime-extensions.adoc#bodoni-jstl[Jakarta Standard Tag Library 3.0 (Bodoni)] [.tag-new]#NEW# — `vidocq-runtime-bodoni-jstl-extension` gives the pages Ibarra compiles the `c:`, `fmt:`, `fn:`, `x:` and `sql:` tags (official Tags TCK 541/541 on Bodoni + Ibarra + Foy + Peano, not a certification), with Ibarra, the Servlet extension and Peano; `vidocq extension add bodoni-jstl` wires it (Vidocq/vidocq#266).
-* xref:modules/vidocq-runtime-extensions.adoc#noether-persistence[Jakarta Persistence 3.2 (Noether)] [.tag-new]#NEW# — `vidocq-runtime-noether-persistence-extension` runs the units of `persistence.xml` on the application's Mansart pools, with `@PersistenceContext` and `@PersistenceUnit` injected and JTA units in `@Transactional`; `vidocq extension add noether-persistence` wires it with Mansart Pool and Mansart Transactions (Vidocq/noether#45).
+* xref:modules/vidocq-runtime-extensions.adoc#noether-persistence[Jakarta Persistence 3.2 (Noether)] [.tag-new]#NEW# — `vidocq-runtime-noether-persistence-extension` runs the units of `persistence.xml` on the application's Mansart pools, with `@PersistenceContext` and `@PersistenceUnit` injected and JTA units in `@Transactional`, which share the connection of a transaction with the Mansart Data repositories on the same pool (Vidocq/mansart#103); `vidocq extension add noether-persistence` wires it with Mansart Pool and Mansart Transactions (Vidocq/noether#45).
 
 == Build
 

@@ -14,8 +14,8 @@
     <name>Vidocq :: Core Extensions :: Noether Persistence</name>
     <description>Wires Jakarta Persistence 3.2 (Noether) into the Vidocq lifecycle. The noether-jpa-cdi
         BuildCompatibleExtension is auto-discovered by Vauban; this extension hands each persistence unit the
-        application's Mansart pool, enlisted in the Mansart transaction manager for a JTA unit, and creates the
-        factories on boot so that a broken unit fails the start.</description>
+        application's Mansart pool, through which a JTA unit shares the connection of a transaction with Mansart
+        Data, and creates the factories on boot so that a broken unit fails the start.</description>
 
     <dependencies>
         <dependency>
@@ -56,9 +56,9 @@
             <artifactId>noether-jpa-dialect-postgresql</artifactId>
             <version>${noether.version}</version>
         </dependency>
-        <!-- The JDBC adapter that enlists a pool connection in the Mansart transaction manager
-             (ConnectionXAResource). The manager itself, with the TransactionSynchronizationRegistry bean
-             noether-jpa-cdi needs, comes with the mansart-transactions extension (requires-extensions). -->
+        <!-- JtaDataSource: one connection per transaction and pool, enlisted in the Mansart transaction manager,
+             the one Mansart Data works on too. The manager itself, with the TransactionSynchronizationRegistry
+             bean, comes with the mansart-transactions extension (requires-extensions). -->
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-transactions-jdbc</artifactId>
@@ -75,12 +75,6 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <version>2.3.232</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
@@ -89,8 +83,8 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <!-- H2 is a test dependency without a module of the test's own: the class path keeps the
-                         unit tests free of module wiring. -->
+                    <!-- The unit tests need no module wiring of their own: the class path keeps them free of
+                         it. -->
                     <useModulePath>false</useModulePath>
                 </configuration>
             </plugin>

@@ -20,7 +20,8 @@
 
 /**
  * Jakarta Persistence 3.2 on the Vidocq runtime, with Noether: each persistence unit takes its connections from the
- * application's Mansart pool, enlisted in the Mansart transaction manager when the unit is JTA.
+ * application's Mansart pool. Within a transaction, a JTA unit works on the connection Mansart Transactions keeps for
+ * that transaction and that pool, which a Mansart Data repository on the same pool shares.
  */
 module io.vidocq.runtime.extensions.jakartaee.web.noether.persistence {
     requires transitive io.vidocq.runtime.spi;
@@ -34,7 +35,6 @@ module io.vidocq.runtime.extensions.jakartaee.web.noether.persistence {
     requires jakarta.inject;
     requires jakarta.transaction;
     requires java.sql;
-    requires java.transaction.xa;
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.NoetherPersistenceExtension;

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.2">
+    <!-- No jta-data-source: the unit takes the default Mansart pool, the data store of the repository too. The test
+         creates the table, which both sides map. -->
+    <persistence-unit name="workbench" transaction-type="JTA">
+        <class>io.vidocq.runtime.it.noether.data.Item</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+    </persistence-unit>
+</persistence>

@@ -31,8 +31,8 @@
         execution data make up the report; in test scope, only their execution data counts.
         vidocq-runtime-it-cassini-rest, -it-humboldt-cassini, -it-cervantes-jwt and
         -it-grimm-openapi only hold tests of the other modules, and -it-cyrano-jpms,
-        -it-foy-servlet, -it-ibarra-pages, -it-bodoni-jstl, -it-naming, -it-noether-persistence, -it-ravel-config and
-        -it-langchain4j-cdi-mcp
+        -it-foy-servlet, -it-ibarra-pages, -it-bodoni-jstl, -it-naming, -it-noether-persistence,
+        -it-noether-mansart-data, -it-ravel-config and -it-langchain4j-cdi-mcp
         only add the small application their tests run (SonarQube skips it): without this report, these
         tests would not count for the code they exercise (Vidocq/vidocq#284).
 
@@ -352,6 +352,12 @@
         <dependency>
             <groupId>io.vidocq.runtime</groupId>
             <artifactId>vidocq-runtime-it-noether-persistence</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-it-noether-mansart-data</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
