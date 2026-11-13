@@ -37,8 +37,9 @@ import java.lang.annotation.Target;
  * datasources exist) is fixed at build time so the beans can be generated AOT, while the
  * <em>values</em> stay fully runtime-dynamic via MicroProfile Config. Names already present in a
  * build-visible {@code vidocq.properties} / {@code application.properties} are picked up
- * automatically and need not be repeated here; names declared only through dynamic config sources
- * (env vars, system properties) are invisible to the build, so list them here to still get a bean.
+ * automatically and need not be repeated here, and a module whose names are all there needs no
+ * annotation at all; names declared only through dynamic config sources (env vars, system
+ * properties) are invisible to the build, so list them here to still get a bean.
  */
 @Retention(RetentionPolicy.SOURCE)
 @Target({ElementType.TYPE, ElementType.MODULE, ElementType.PACKAGE})

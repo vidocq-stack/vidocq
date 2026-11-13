@@ -68,8 +68,17 @@ import java.util.TreeSet;
  * no bytecode manipulation. Holders are emitted in the package of the {@code @VidocqDataSources}
  * anchor element, each carrying {@code @Named("X")} plus the {@code @ManagedDataSource} marker
  * qualifier (so a named datasource never pollutes the unqualified {@code @Default} resolution).
+ *
+ * <p>A module whose names are all in its properties needs no annotation: the compilation of its
+ * {@code module-info.java} anchors them, in the first package of the module. A compilation without a
+ * module declaration (the tests compiled into the module, a classpath build) takes the names of the
+ * properties only alongside the annotation, so the tests of a module never generate a second bean per
+ * name.
  */
-@SupportedAnnotationTypes("io.vidocq.runtime.extensions.jakartaee.web.mansart.pool.VidocqDataSources")
+// Every annotation, none included: javac runs a processor only when the sources carry an annotation it supports, and
+// a module whose pools are all in its vidocq.properties carries no @VidocqDataSources (BUG-20261113-01). The
+// processor claims nothing.
+@SupportedAnnotationTypes("*")
 @SupportedSourceVersion(SourceVersion.RELEASE_25)
 public final class VidocqDataSourcesProcessor extends AbstractProcessor {
 
@@ -107,40 +116,58 @@ public final class VidocqDataSourcesProcessor extends AbstractProcessor {
             return false;
         }
         Set<? extends Element> anchors = roundEnv.getElementsAnnotatedWith(annType);
-        if (anchors.isEmpty()) {
-            return false;
-        }
-
-        // Holders are emitted in the package of the first annotated type or package; a module
-        // declaration has no package of its own, so it only anchors when nothing else does.
-        Element anchor = anchors.iterator().next();
-        for (Element candidate : anchors) {
-            if (candidate.getKind() != ElementKind.MODULE) {
-                anchor = candidate;
-                break;
-            }
-        }
-        String targetPackage = packageFor(anchor);
-        if (targetPackage == null) {
-            messager.printMessage(Diagnostic.Kind.ERROR,
-                    "@VidocqDataSources on module " + anchor + " needs a package to hold the generated "
-                            + "datasource beans, and the module declares none: annotate a class or a package instead",
-                    anchor);
-            generated = true;
-            return false;
-        }
-
         Set<String> names = new TreeSet<>();
         for (Element e : anchors) {
             names.addAll(readAnnotationNames(e));
         }
         names.addAll(readConfigNames());
 
+        Element anchor = anchors.isEmpty() ? declaredModule(roundEnv) : anchorOf(anchors);
+        if (anchor == null || names.isEmpty() && anchors.isEmpty()) {
+            return false;
+        }
+        generated = true;
+        String targetPackage = packageFor(anchor);
+        if (targetPackage == null) {
+            if (!anchors.isEmpty()) {
+                messager.printMessage(Diagnostic.Kind.ERROR,
+                        "@VidocqDataSources on module " + anchor + " needs a package to hold the generated "
+                                + "datasource beans, and the module declares none: annotate a class or a package instead",
+                        anchor);
+            }
+            return false;
+        }
         for (String name : names) {
             generateHolder(targetPackage, name, anchor);
         }
-        generated = true;
         return false;
+    }
+
+    /**
+     * Holders are emitted in the package of the first annotated type or package; a module declaration has no package
+     * of its own, so it only anchors when nothing else does.
+     */
+    private static Element anchorOf(Set<? extends Element> anchors) {
+        for (Element candidate : anchors) {
+            if (candidate.getKind() != ElementKind.MODULE) {
+                return candidate;
+            }
+        }
+        return anchors.iterator().next();
+    }
+
+    /**
+     * Without the annotation, the module declaration this compilation compiles anchors the names of the properties.
+     * A compilation without one, the tests compiled into a module or a classpath build, generates nothing: its
+     * holders would be second beans of the names its module already serves.
+     */
+    private static Element declaredModule(RoundEnvironment roundEnv) {
+        for (Element root : roundEnv.getRootElements()) {
+            if (root instanceof ModuleElement module && !module.isUnnamed()) {
+                return module;
+            }
+        }
+        return null;
     }
 
     /**

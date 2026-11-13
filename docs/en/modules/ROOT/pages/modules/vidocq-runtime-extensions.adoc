@@ -880,11 +880,11 @@ Check the URL, the credentials and the JDBC driver of that pool.
 [#mansart-pool-002]
 === MANSART-POOL-002 — named pool without its bean
 
-A named pool is open, but no `@Named("<name>") DataSource` bean serves it: the bean is generated at compile time by `vidocq-runtime-mansart-pool-datasources-codegen`, which the application's annotation processor paths lack. An injection or a repository routed to that pool fails on its first use:
+A named pool is open, but no `@Named("<name>") DataSource` bean serves it: the bean is generated at compile time by `vidocq-runtime-mansart-pool-datasources-codegen`, which the application's annotation processor paths lack, or which never saw the name. The processor takes a name from a `vidocq.pool.<name>.url` of the `vidocq.properties` it compiles with, or from `@VidocqDataSources("<name>")`; a name set only in an environment variable or a system property is invisible to it. An injection or a repository routed to that pool fails on its first use:
 
 [source,text]
 ----
-[MANSART-POOL-002] Named pool 'ghost' is open, but no @Named("ghost") DataSource bean serves it: an injection or a repository routed to it fails on first use Add vidocq-runtime-mansart-pool-datasources-codegen to the annotationProcessorPaths of the application
+[MANSART-POOL-002] Named pool 'ghost' is open, but no @Named("ghost") DataSource bean serves it: an injection or a repository routed to it fails on first use Add vidocq-runtime-mansart-pool-datasources-codegen to the annotationProcessorPaths of the application, and declare 'ghost' where the build sees it: vidocq.pool.ghost.url in vidocq.properties, or @VidocqDataSources("ghost")
 ----
 
 When the container cannot say which beans it has, no pool is flagged: the report never guesses.

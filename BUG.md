@@ -5,6 +5,32 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261113-01 — A named pool declared only in `vidocq.properties` gets no `@Named` DataSource bean
+
+- **Date**: 2026-11-13
+- **Status**: FIXED on `fix/datasources-from-properties`
+- **Affected module**: vidocq-runtime-mansart-pool-datasources-codegen (`VidocqDataSourcesProcessor`)
+- **Symptom**: an application with `vidocq.pool.archive.url` in its `vidocq.properties` and the datasources codegen
+  on its processor path, but no `@VidocqDataSources`, has no `@Named("archive") DataSource` bean: the startup report
+  raises MANSART-POOL-002, and an injection or a repository routed to the pool fails. `DEV_SERVICES.md`, the
+  annotation's Javadoc and the processor's Javadoc all say the property alone declares the pool.
+- **Minimal reproduction**: `VidocqDataSourcesProcessorTest.theNamesOfTheBuildsPropertiesNeedNoAnnotation`, red on
+  `origin/main`:
+  ```sh
+  ./mvnw -ntp -pl vidocq-runtime-extensions/vidocq-runtime-extensions-jakartaee-web/vidocq-runtime-mansart-pool-datasources-codegen test
+  ```
+- **Confirmed cause**: the processor declared `@SupportedAnnotationTypes` for `@VidocqDataSources` only, and javac
+  runs a processor only for the annotations present in the sources; once run, it also returned early when no element
+  carried the annotation, which gave it the package of the holders.
+- **Fix**: the processor runs on every compilation (`*`, claiming nothing). Without the annotation, the module
+  declaration the compilation compiles anchors the names of the properties, in the first package of the module. A
+  compilation without one (the tests compiled into the module, a classpath build) still needs the annotation, so the
+  tests of a module never generate a second bean per name. MANSART-POOL-002 now also names the other cause: a name
+  the build cannot see.
+- **Investigations**:
+  - 2026-11-13: found while adding a unit on a named pool to the Noether persistence IT (Vidocq/vidocq#541): the
+    `archive` pool had no bean until a class carried `@VidocqDataSources("archive")`.
+
 ## BUG-20261111-01 — `vidocq-runtime-vaadin-extension` does not resolve with a Vaadin whose `flow-server` names its module
 
 - **Date**: 2026-11-11

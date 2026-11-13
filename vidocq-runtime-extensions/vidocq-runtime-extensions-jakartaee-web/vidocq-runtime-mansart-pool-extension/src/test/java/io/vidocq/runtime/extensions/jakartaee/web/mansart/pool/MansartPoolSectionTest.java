@@ -250,7 +250,8 @@ class MansartPoolSectionTest {
                 "Named pool 'audit' is open, but no @Named(\"audit\") DataSource bean serves it: an injection or"
                         + " a repository routed to it fails on first use",
                 "Add vidocq-runtime-mansart-pool-datasources-codegen to the annotationProcessorPaths of the"
-                        + " application")), anomalies);
+                        + " application, and declare 'audit' where the build sees it: vidocq.pool.audit.url in"
+                        + " vidocq.properties, or @VidocqDataSources(\"audit\")")), anomalies);
     }
 
     @Test

@@ -190,7 +190,9 @@ Names must be visible **at compile time** so the `@Named` beans can be generated
 no runtime reflection). Declare them either way — or both, they are merged and de-duplicated:
 
 - **Properties** — a `vidocq.pool.<name>.url` key in `vidocq.properties` (or
-  `application.properties`), the Vidocq config files the build can see:
+  `application.properties`), the Vidocq config files the build can see. A module whose names
+  are all there needs no annotation: the holders go to the first package of the module. A
+  build without a `module-info.java` takes these names only alongside the annotation:
 
   ```properties
   # src/main/resources/vidocq.properties

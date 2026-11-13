@@ -551,7 +551,9 @@ public final class MansartPoolExtension implements VidocqExtension, StartupRepor
                         "Named pool '" + label + "' is open, but no @Named(\"" + label + "\") DataSource bean serves"
                                 + " it: an injection or a repository routed to it fails on first use",
                         "Add vidocq-runtime-mansart-pool-datasources-codegen to the annotationProcessorPaths of the"
-                                + " application");
+                                + " application, and declare '" + label + "' where the build sees it: "
+                                + PREFIX + label + ".url in vidocq.properties, or @VidocqDataSources(\"" + label
+                                + "\")");
             }
         }
     }

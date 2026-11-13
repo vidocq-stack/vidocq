@@ -36,6 +36,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -134,6 +135,106 @@ class VidocqDataSourcesProcessorTest {
         assertTrue(messages.stream().anyMatch(m -> m.contains("@VidocqDataSources") && m.contains("package")),
                 "expected a diagnostic naming the annotation and the package: " + messages);
         assertFalse(messages.stream().anyMatch(m -> m.contains("NullPointerException")), messages.toString());
+    }
+
+    /**
+     * BUG-20261113-01: a {@code vidocq.pool.<name>.url} of the build's {@code vidocq.properties} declares the pool
+     * alone; javac never ran the processor of a module that carries no {@code @VidocqDataSources}.
+     */
+    @Test
+    void theNamesOfTheBuildsPropertiesNeedNoAnnotation() throws Exception {
+        Path classes = Files.createDirectories(tempDir.resolve("pclasses"));
+        Path gen = Files.createDirectories(tempDir.resolve("pgen"));
+        Files.writeString(classes.resolve("vidocq.properties"), """
+                vidocq.pool.url=jdbc:h2:mem:default
+                vidocq.pool.archive.url=jdbc:h2:mem:archive
+                vidocq.pool.archive.maxSize=2
+                """);
+        List<File> sources = plainModule("com.example.ledger");
+
+        List<String> messages = new ArrayList<>();
+        boolean ok = compileModule(sources, classes.toFile(), gen.toFile(), messages);
+        assertTrue(ok, "compilation of a module without the annotation failed: " + messages);
+
+        Path archive = gen.resolve("com/example/ledger/_archive$DataSource.java");
+        assertTrue(Files.exists(archive), "missing generated holder: " + archive);
+        try (var generated = Files.walk(gen)) {
+            assertEquals(List.of(archive), generated.filter(Files::isRegularFile).toList(),
+                    "one holder, for the named pool: the default pool has a bean of its own");
+        }
+    }
+
+    @Test
+    void aModuleWithoutTheAnnotationOrANamedPoolGetsNoHolder() throws Exception {
+        Path classes = Files.createDirectories(tempDir.resolve("nclasses"));
+        Path gen = Files.createDirectories(tempDir.resolve("ngen"));
+        Files.writeString(classes.resolve("vidocq.properties"), "vidocq.pool.url=jdbc:h2:mem:default\n");
+
+        List<String> messages = new ArrayList<>();
+        boolean ok = compileModule(plainModule("com.example.plain"), classes.toFile(), gen.toFile(), messages);
+
+        assertTrue(ok, messages.toString());
+        try (var generated = Files.walk(gen)) {
+            assertEquals(List.of(), generated.filter(Files::isRegularFile).toList());
+        }
+    }
+
+    /**
+     * Only the compilation of a module declaration takes the names of the properties alone: the tests of a module,
+     * compiled into it without its declaration, would otherwise generate a second bean per name.
+     */
+    @Test
+    void aCompilationWithoutAModuleDeclarationNeedsTheAnnotation() throws Exception {
+        Path classes = Files.createDirectories(tempDir.resolve("tclasses"));
+        Path gen = Files.createDirectories(tempDir.resolve("tgen"));
+        Files.writeString(classes.resolve("vidocq.properties"), "vidocq.pool.archive.url=jdbc:h2:mem:archive\n");
+        Path test = Files.createDirectories(tempDir.resolve("tsrc/com/example/ledger")).resolve("LedgerTest.java");
+        Files.writeString(test, """
+                package com.example.ledger;
+                class LedgerTest {}
+                """);
+
+        assertTrue(compileWithProcessor(test.toFile(), classes.toFile(), gen.toFile()));
+        try (var generated = Files.walk(gen)) {
+            assertEquals(List.of(), generated.filter(Files::isRegularFile).toList());
+        }
+    }
+
+    @Test
+    void aModuleWithoutAPackageAndWithoutTheAnnotationCompilesWithoutAHolder() throws Exception {
+        Path classes = Files.createDirectories(tempDir.resolve("xclasses"));
+        Path gen = Files.createDirectories(tempDir.resolve("xgen"));
+        Files.writeString(classes.resolve("vidocq.properties"), "vidocq.pool.archive.url=jdbc:h2:mem:archive\n");
+        Path moduleInfo = Files.createDirectories(tempDir.resolve("xsrc")).resolve("module-info.java");
+        Files.writeString(moduleInfo, "module com.example.nothing { }\n");
+
+        List<String> messages = new ArrayList<>();
+        boolean ok = compileModule(List.of(moduleInfo.toFile()), classes.toFile(), gen.toFile(), messages);
+
+        assertTrue(ok, "a module that declares no bean has no holder to receive, and no error: " + messages);
+        try (var generated = Files.walk(gen)) {
+            assertEquals(List.of(), generated.filter(Files::isRegularFile).toList());
+        }
+    }
+
+    /** A module declaration without the annotation, and one class in the package of the module's name. */
+    private List<File> plainModule(String name) throws Exception {
+        Path root = Files.createDirectories(tempDir.resolve(name));
+        Path moduleInfo = root.resolve("module-info.java");
+        Files.writeString(moduleInfo, """
+                module %s {
+                    requires io.vidocq.runtime.extensions.jakartaee.web.mansart.pool;
+                    requires java.sql;
+                    requires jakarta.cdi;
+                    requires jakarta.inject;
+                }
+                """.formatted(name));
+        Path app = Files.createDirectories(root.resolve(name.replace('.', '/'))).resolve("App.java");
+        Files.writeString(app, """
+                package %s;
+                public class App {}
+                """.formatted(name));
+        return List.of(moduleInfo.toFile(), app.toFile());
     }
 
     private boolean compileModule(List<File> sources, File classesOut, File genOut, List<String> messages)
