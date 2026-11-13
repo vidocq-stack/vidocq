@@ -62,8 +62,9 @@ final class EnlistedConnection implements Connection {
         return enlisted.connection();
     }
 
-    private static SQLException managed() {
-        return new SQLException("The connection takes part in a JTA transaction: the transaction manager completes it");
+    private static SQLException managed(String refused) {
+        return new SQLException(refused + " refused: the connection takes part in a JTA transaction,"
+                + " which the transaction manager completes");
     }
 
     @Override public void close() { closed = true; }
@@ -71,14 +72,14 @@ final class EnlistedConnection implements Connection {
     @Override public void abort(Executor executor) { closed = true; }
     @Override public boolean isValid(int timeout) throws SQLException { return !isClosed() && enlisted.connection().isValid(timeout); }
 
-    @Override public void commit() throws SQLException { open(); throw managed(); }
-    @Override public void rollback() throws SQLException { open(); throw managed(); }
+    @Override public void commit() throws SQLException { open(); throw managed("commit()"); }
+    @Override public void rollback() throws SQLException { open(); throw managed("rollback()"); }
     @Override public void rollback(Savepoint savepoint) throws SQLException { open().rollback(savepoint); }
 
     @Override
     public void setAutoCommit(boolean autoCommit) throws SQLException {
         if (autoCommit != open().getAutoCommit()) {
-            throw managed();
+            throw managed("setAutoCommit(" + autoCommit + ")");
         }
     }
 
