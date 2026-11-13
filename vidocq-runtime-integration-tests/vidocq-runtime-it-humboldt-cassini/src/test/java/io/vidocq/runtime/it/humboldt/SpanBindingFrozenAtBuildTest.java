@@ -65,6 +65,18 @@ class SpanBindingFrozenAtBuildTest {
                 + " frozen with @SpanBinding, in " + frozen);
     }
 
+    /**
+     * Vidocq/vauban BUG-20261113-13: the build also generates the subclass that intercepts those methods, so the
+     * container does not define it at start. The source carries no binding: the extension adds it.
+     */
+    @Test
+    void theServiceTheExtensionBindsGetsItsInterceptedSubclassAtBuild() throws URISyntaxException {
+        Path subclass = compiledOutput().resolve(TraceTestService.class.getName().replace('.', '/')
+                + "$$Intercepted.class");
+        assertTrue(Files.isRegularFile(subclass), "the build generated no " + subclass.getFileName()
+                + ": the container defines it at each start");
+    }
+
     /** The directory this module's classes are compiled into, where the processors write their resources. */
     private static Path compiledOutput() throws URISyntaxException {
         return Path.of(TraceTestService.class.getProtectionDomain().getCodeSource().getLocation().toURI());
