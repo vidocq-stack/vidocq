@@ -84,6 +84,8 @@ final class PooledConnection implements Connection {
     private final PooledEntry  entry;
     private final ConnectionPool pool;
     private final Connection   delegate;
+    /** The XA connection this handle belongs to, which gives the entry back; {@code null} for a plain borrow. */
+    private final PooledXAConnection lease;
     private volatile boolean   closed;
 
     private static final String CLOSED_MESSAGE = "This connection was closed: it went back to the pool";
@@ -103,9 +105,15 @@ final class PooledConnection implements Connection {
     private volatile boolean   untracked;
 
     PooledConnection(PooledEntry entry, ConnectionPool pool) {
+        this(entry, pool, null);
+    }
+
+    /** The logical handle of {@code lease}: closing it tells the lease, which keeps the entry (MANSART-065). */
+    PooledConnection(PooledEntry entry, ConnectionPool pool, PooledXAConnection lease) {
         this.entry    = entry;
         this.pool     = pool;
         this.delegate = entry.delegate;
+        this.lease    = lease;
     }
 
     /* ---- close() interception (the only reason this wrapper exists) ---- */
@@ -114,7 +122,16 @@ final class PooledConnection implements Connection {
     public void close() throws SQLException {
         // Compare-and-set: two threads closing one handle give the entry back once (MANSART-056).
         if (!CLOSE_ONCE.compareAndSet(this, false, true)) return;
-        pool.release(entry, untracked || workPending);
+        if (lease == null) {
+            pool.release(entry, untracked || workPending);
+        } else {
+            lease.handleClosed();
+        }
+    }
+
+    /** Called by the XA connection that owns this handle: the handle is dead, nobody is told. */
+    void invalidate() {
+        closed = true;
     }
 
     /**

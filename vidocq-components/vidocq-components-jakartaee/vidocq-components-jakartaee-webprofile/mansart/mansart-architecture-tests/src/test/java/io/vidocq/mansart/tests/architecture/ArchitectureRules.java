@@ -83,10 +83,15 @@ final class ArchitectureRules {
             Packages.of(Jdk.RUNTIME, "javax.sql..", "io.vidocq.mansart.pool"),
             CLAUDE_CONSTRAINTS + ", constraint 3, zero dependency; module-info.java of mansart-pool-api");
 
-    /** mansart-pool-core: the JDK and mansart-pool-api; the pool "only provides a javax.sql.DataSource". */
+    /**
+     * mansart-pool-core: the JDK and mansart-pool-api; the pool "only provides a javax.sql.DataSource". The JDK's
+     * XA package is the return type of {@code javax.sql.XAConnection.getXAResource()}, which the pool's XA
+     * connections implement (MANSART-065); {@code java.sql} requires its module transitively.
+     */
     static final ArchRule POOL_CORE_DEPENDENCIES = VidocqArchRules.dependOnlyOn(
             POOL_CORE,
-            Packages.of(Jdk.RUNTIME, "javax.sql..", "io.vidocq.mansart.pool", "io.vidocq.mansart.pool.core.."),
+            Packages.of(Jdk.RUNTIME, "javax.sql..", "javax.transaction.xa..", "io.vidocq.mansart.pool",
+                    "io.vidocq.mansart.pool.core.."),
             CLAUDE_CONSTRAINTS + ", constraint 3, zero dependency; module-info.java of mansart-pool-core");
 
     /** mansart-transactions-api: the Jakarta Transactions, CDI and Interceptors APIs (module-info.java). */
@@ -313,7 +318,7 @@ final class ArchitectureRules {
                     + " deployment without transactions keeps working (module-info.java of mansart-data-cdi)"),
             Map.entry("io.vidocq.mansart.pool.core.MansartDataSource", "builds the XADataSource that"
                     + " PoolConfig.xaDataSourceClassName names, a class known only by name from the configuration,"
-                    + " and sets its URL, user and password through the vendor's bean setters (reference.adoc,"
+                    + " and sets its URL, user, password and driver properties through the vendor's bean setters (reference.adoc,"
                     + " PoolConfig)"),
             Map.entry("io.vidocq.mansart.transactions.cdi.TransactionalInterceptor", "Jakarta Interceptors hands"
                     + " the intercepted member over as a java.lang.reflect.Method: the interceptor reads its"

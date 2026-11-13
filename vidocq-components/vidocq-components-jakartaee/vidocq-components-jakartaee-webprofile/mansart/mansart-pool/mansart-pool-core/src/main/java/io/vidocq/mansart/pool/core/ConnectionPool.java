@@ -24,6 +24,8 @@ import io.vidocq.mansart.pool.PoolException;
 import io.vidocq.mansart.pool.PoolMetrics;
 import io.vidocq.mansart.pool.ValidationMode;
 
+import javax.sql.XAConnection;
+import javax.sql.XADataSource;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.SQLException;
@@ -78,8 +80,22 @@ final class ConnectionPool implements AutoCloseable {
 
     private volatile boolean closed;
 
+    /** Where the pool gets the driver's {@code XADataSource}, built at its first use. */
+    @FunctionalInterface
+    interface XaSource {
+        XADataSource get() throws SQLException;
+    }
+
+    /** {@code null} for a pool of plain connections; else every connection is opened on it (MANSART-065). */
+    private final XaSource xaSource;
+
     ConnectionPool(PoolConfig config) {
+        this(config, null);
+    }
+
+    ConnectionPool(PoolConfig config, XaSource xaSource) {
         this.config       = config;
+        this.xaSource     = xaSource;
         this.permits      = new Semaphore(config.maxSize(), false);
         this.driverProps  = buildDriverProps(config);
         this.leakDetectionEnabled = !config.leakDetectionThreshold().isZero();
@@ -102,6 +118,18 @@ final class ConnectionPool implements AutoCloseable {
     /* ---- borrow / release ---- */
 
     PooledConnection acquire() throws SQLException {
+        return new PooledConnection(borrow(), this);
+    }
+
+    /**
+     * Borrows a connection for a transaction manager: the pool's {@code maxSize}, metrics, leak detection and
+     * reuse apply to it as to any borrow (MANSART-065).
+     */
+    PooledXAConnection acquireXa() throws SQLException {
+        return new PooledXAConnection(borrow(), this);
+    }
+
+    private PooledEntry borrow() throws SQLException {
         if (closed) {
             throw new PoolException(PoolException.Reason.POOL_CLOSED, "MansartDataSource is closed");
         }
@@ -136,13 +164,29 @@ final class ConnectionPool implements AutoCloseable {
     }
 
     void release(PooledEntry entry, boolean workPending) {
+        release(entry, workPending, false);
+    }
+
+    /**
+     * Gives back the connection of an XA lease. Out of auto-commit, it is still inside a transaction branch the
+     * transaction manager did not finish: the pool closes it, which rolls the branch back, rather than hand a
+     * connection in a branch to the next borrower.
+     */
+    void releaseXa(PooledEntry entry) {
+        release(entry, false, true);
+    }
+
+    private void release(PooledEntry entry, boolean workPending, boolean xaLease) {
         boolean keep;
         try {
-            entry.resetForReuse(workPending);
-            keep = !closed && !entry.expired(
-                    config.maxLifetime().toNanos(),
-                    config.idleTimeout().toNanos(),
-                    System.nanoTime());
+            keep = !(xaLease && !entry.delegate.getAutoCommit());
+            if (keep) {
+                entry.resetForReuse(workPending);
+                keep = !closed && !entry.expired(
+                        config.maxLifetime().toNanos(),
+                        config.idleTimeout().toNanos(),
+                        System.nanoTime());
+            }
         } catch (SQLException | RuntimeException _) {
             // Reset failed → discard. A driver's RuntimeException too: the permit below must be
             // given back whatever the driver throws, or the pool shrinks for good (MANSART-057).
@@ -160,13 +204,13 @@ final class ConnectionPool implements AutoCloseable {
 
     /* ---- helpers ---- */
 
-    private PooledConnection takeOut(PooledEntry entry, long startNanos) {
+    private PooledEntry takeOut(PooledEntry entry, long startNanos) {
         long now = System.nanoTime();
         inUse.add(entry);
         entry.markBorrowed(now, leakDetectionEnabled);
         totalBorrows.incrementAndGet();
         sumBorrowDurationNanos.addAndGet(now - startNanos);
-        return new PooledConnection(entry, this);
+        return entry;
     }
 
     /**
@@ -223,6 +267,9 @@ final class ConnectionPool implements AutoCloseable {
 
     private PooledEntry open() throws SQLException {
         try {
+            if (xaSource != null) {
+                return openXa();
+            }
             Driver used = driver();
             Connection raw = used.connect(config.jdbcUrl(), driverProps);
             if (raw == null) {
@@ -233,6 +280,20 @@ final class ConnectionPool implements AutoCloseable {
         } catch (SQLException e) {
             throw new PoolException(PoolException.Reason.CONNECT_FAILED,
                     "failed to open new connection: " + e.getMessage(), e);
+        }
+    }
+
+    private PooledEntry openXa() throws SQLException {
+        XAConnection xaConnection = xaSource.get().getXAConnection();
+        try {
+            return new PooledEntry(xaConnection);
+        } catch (SQLException | RuntimeException e) {
+            try {
+                xaConnection.close();
+            } catch (SQLException closing) {
+                e.addSuppressed(closing);
+            }
+            throw e;
         }
     }
 

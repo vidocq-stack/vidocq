@@ -107,8 +107,9 @@ public record PoolConfig(
          * {@link javax.sql.XADataSource} implementation (e.g. {@code org.h2.jdbcx.JdbcDataSource},
          * {@code org.postgresql.xa.PGXADataSource}). When set, the pool exposes that XADataSource
          * through {@code unwrap(XADataSource.class)} so a JTA bridge can enlist the driver's
-         * XAResource (real two-phase commit). Pooled connections themselves are unaffected;
-         * transactional XA connections are opened outside the pool, one per transaction.
+         * XAResource (real two-phase commit). The pool then opens every connection on that
+         * XADataSource: an XA connection is a borrow like any other, within {@code maxSize}, and
+         * goes back to the pool when it is closed (MANSART-065).
          */
         public Builder xaDataSourceClassName(String v) { this.xaDataSourceClassName = v; return this; }
 

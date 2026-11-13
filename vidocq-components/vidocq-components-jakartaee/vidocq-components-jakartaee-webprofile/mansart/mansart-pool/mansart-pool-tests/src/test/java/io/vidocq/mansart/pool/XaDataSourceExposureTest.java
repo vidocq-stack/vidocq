@@ -32,9 +32,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * MANSART-007 phase 2 — a pool configured with {@code xaDataSourceClassName} exposes the
- * underlying driver's {@link XADataSource} through {@code unwrap}, so the JTA bridge takes the
- * real-XA enlistment path THROUGH the pool bean. Pooled (outside-TX) connections are untouched.
+ * MANSART-007 phase 2 — a pool configured with {@code xaDataSourceClassName} exposes an
+ * {@link XADataSource} through {@code unwrap}, so the JTA bridge takes the real-XA enlistment
+ * path THROUGH the pool bean. Since MANSART-065 its XA connections are borrowed from the pool
+ * ({@code XaConnectionsThroughPoolTest}).
  */
 class XaDataSourceExposureTest {
 

@@ -144,6 +144,20 @@ A check runs the `validationQuery` when one is configured, with `validationTimeo
 
 The pool carries no transactional context itself: JTA enlistment is the job of `mansart-transactions` (its JDBC bridge enlists the connection with the transaction manager). See xref:modules/mansart-transactions.adoc[mansart-transactions].
 
+[[xa-connections]]
+=== XA connections are pooled [.tag-new]#NEW#
+
+With `xaDataSourceClassName` (`org.postgresql.xa.PGXADataSource`, `org.h2.jdbcx.JdbcDataSource`), the pool opens every connection on the driver's `XADataSource`, and `unwrap(XADataSource.class)` answers the pool's own XA data source (MANSART-065):
+
+* `getXAConnection()` is a borrow like `getConnection()`: it waits for one of the `maxSize` places, shows in `snapshot()`, is watched by leak detection, and takes an idle connection when there is one. Before, each transaction opened a physical connection outside the pool and closed it afterwards.
+* `getXAResource()` is the driver's: real prepare, branches the database can recover.
+* `XAConnection.close()` gives the connection back to the pool. Closing the logical connection of `getConnection()` only tells the registered `ConnectionEventListener`s.
+* A connection given back while still inside a transaction branch is closed, which rolls the branch back: the next borrower never gets a connection in someone else's branch.
+
+`getConnection()` on the same pool hands out the same connections, outside any branch. Size the pool for both uses: a transaction holds its connection until it completes.
+
+`driverProperties` reach the XA data source through its bean setters (`description` calls `setDescription(String)`), else through `setProperty(String, String)` when it has one (PostgreSQL). A property it can take neither way fails the borrow with the name of the property. `getXAConnection(user, password)` is not supported, as for `getConnection(user, password)`.
+
 == Metrics
 
 `PoolMetrics` (lock-free snapshot via `MansartDataSource.snapshot()`):

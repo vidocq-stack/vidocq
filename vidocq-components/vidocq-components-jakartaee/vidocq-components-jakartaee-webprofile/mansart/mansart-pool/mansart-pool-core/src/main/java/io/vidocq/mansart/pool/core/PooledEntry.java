@@ -19,6 +19,7 @@
  */
 package io.vidocq.mansart.pool.core;
 
+import javax.sql.XAConnection;
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -35,6 +36,12 @@ import java.sql.SQLException;
 final class PooledEntry {
 
     final Connection   delegate;
+    /**
+     * The driver's XA connection when the pool is built on an {@code XADataSource}, else {@code null}. It owns
+     * the physical connection; {@link #delegate} is then its one logical handle, taken at opening and never
+     * closed (MANSART-065).
+     */
+    final XAConnection xa;
     final long         createdAtNanos;
     /** The session attributes borrowers changed, put back on each release (MANSART-047). */
     final SessionState session = new SessionState();
@@ -51,7 +58,17 @@ final class PooledEntry {
     volatile boolean    leakWarned;
 
     PooledEntry(Connection delegate) {
+        this(delegate, null);
+    }
+
+    /** An entry on a driver's XA connection: the transaction manager drives it through its {@code XAResource}. */
+    PooledEntry(XAConnection xa) throws SQLException {
+        this(xa.getConnection(), xa);
+    }
+
+    private PooledEntry(Connection delegate, XAConnection xa) {
         this.delegate        = delegate;
+        this.xa              = xa;
         this.createdAtNanos  = System.nanoTime();
         this.lastUsedAtNanos = this.createdAtNanos;
     }
@@ -92,7 +109,15 @@ final class PooledEntry {
     }
 
     void closeUnderlying() {
-        try { delegate.close(); } catch (SQLException _) { /* best-effort */ }
+        try {
+            if (xa != null) {
+                xa.close();
+            } else {
+                delegate.close();
+            }
+        } catch (SQLException _) {
+            // best-effort
+        }
     }
 
     boolean pastLifetime(long maxLifetimeNanos, long nowNanos) {

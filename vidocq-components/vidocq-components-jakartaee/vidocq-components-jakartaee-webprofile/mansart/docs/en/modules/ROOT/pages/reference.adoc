@@ -239,7 +239,7 @@ An entity may be a static nested class [.tag-new]#NEW#. The metamodel of `shop.L
 | `leakDetectionThreshold` | `Duration` | Leak stack-trace if a connection is borrowed longer than the threshold.
 | `validationTimeout` | `Duration` | Bound on a validation probe (default 1 s).
 | `driverProperties` | `Map<String,String>` | Extra driver properties (`driverProperty(k, v)` on the builder).
-| `xaDataSourceClassName` | `String` | Explicit `XADataSource` class when auto-detection from the URL is not enough.
+| `xaDataSourceClassName` | `String` | The driver's `XADataSource` class. When set, the pool opens every connection on it and `unwrap(XADataSource.class)` hands out pooled XA connections (xref:modules/mansart-pool.adoc#xa-connections[XA connections are pooled]).
 |===
 
 == Pluggable dialects

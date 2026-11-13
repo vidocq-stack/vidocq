@@ -9,6 +9,26 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-065 — XA connections were opened outside the pool: no `maxSize`, no reuse, no metrics
+
+- **Date**: 2026-11-13 (found on 2026-11-12, pool and transactions audit)
+- **Status**: FIXED on `fix/pool-xa-connections`.
+- **Module**: `mansart-pool-core` (`MansartDataSource.unwrap`, `ConnectionPool`)
+- **Symptom**: with `xaDataSourceClassName`, `unwrap(XADataSource.class)` answered the driver's `XADataSource`. The
+  JTA bridge opened a physical connection on it for each transaction and closed it afterwards: as many
+  physical connections as concurrent transactions whatever `maxSize`, each paying its connection handshake;
+  `snapshot()`, leak detection, validation and `maxLifetime` saw none of them.
+- **Reproduction**: `XaConnectionsThroughPoolTest` (`mansart-pool-tests`), 7 of 10 red on `31aa8752`;
+  `PostgresqlXaPoolIntegrationTest` (`mansart-data-tests`, `-Ppg-it`) for a real two-phase commit on PostgreSQL.
+- **Cause**: by design of MANSART-007 phase 2 — "transactional XA connections are opened outside the pool".
+- **Fix**: a pool with `xaDataSourceClassName` opens **every** connection on the driver's `XADataSource`.
+  `unwrap(XADataSource.class)` answers the pool's own: `getXAConnection()` is a borrow (`PooledXAConnection`), its
+  `getXAResource()` the driver's, its `close()` a release. A connection given back inside a branch is closed, not
+  kept. `driverProperties` reach the XA data source through its bean setters or `setProperty(String, String)`; one
+  it cannot take fails the borrow.
+
+---
+
 ## MANSART-050 — A static nested entity did not compile: its metamodel went to a package named after the outer class
 
 - **Date**: 2026-11-12 (found on 2026-11-11 while writing the tests of MANSART-049)

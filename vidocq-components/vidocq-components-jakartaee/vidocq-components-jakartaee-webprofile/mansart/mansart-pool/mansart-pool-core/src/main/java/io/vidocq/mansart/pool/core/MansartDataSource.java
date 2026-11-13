@@ -44,11 +44,15 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
     private final ClassLoader    driverLoader;
     /** Built lazily from {@code config.xaDataSourceClassName()} — MANSART-007 phase 2. */
     private volatile javax.sql.XADataSource xaDataSource;
+    /** What {@code unwrap(XADataSource.class)} answers: XA connections borrowed from this pool (MANSART-065). */
+    private final javax.sql.XADataSource pooledXaDataSource = new PooledXADataSource();
 
     private MansartDataSource(PoolConfig config) {
         this.config = Objects.requireNonNull(config, "config");
         this.driverLoader = DriverLocator.applicationLoader(MansartDataSource.class);
-        this.pool   = new ConnectionPool(config);
+        this.pool   = config.xaDataSourceClassName() == null
+                ? new ConnectionPool(config)
+                : new ConnectionPool(config, this::xaDataSource);
     }
 
     public static MansartDataSource of(PoolConfig config) {
@@ -96,7 +100,8 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
     public <T> T unwrap(Class<T> iface) throws SQLException {
         if (iface.isInstance(this)) return (T) this;
         if (iface == javax.sql.XADataSource.class && config.xaDataSourceClassName() != null) {
-            return (T) xaDataSource();
+            xaDataSource(); // a class the pool cannot build is reported here, not at the first transaction
+            return (T) pooledXaDataSource;
         }
         throw new SQLException("Not a wrapper for " + iface.getName());
     }
@@ -108,11 +113,10 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
     }
 
     /**
-     * The driver's {@link javax.sql.XADataSource} configured with this pool's URL/credentials
-     * (MANSART-007 phase 2). Built once by reflection from {@code xaDataSourceClassName} —
-     * config-driven, so the pool stays free of driver dependencies. Transactional XA
-     * connections are opened on it OUTSIDE the pool, one per (transaction × datasource);
-     * pooled connections are unaffected.
+     * The driver's {@link javax.sql.XADataSource} configured with this pool's URL, credentials and driver
+     * properties (MANSART-007 phase 2). Built once by reflection from {@code xaDataSourceClassName} —
+     * config-driven, so the pool stays free of driver dependencies. The pool opens every one of its
+     * connections on it (MANSART-065): it never leaves this class but through the pool.
      */
     private javax.sql.XADataSource xaDataSource() throws SQLException {
         javax.sql.XADataSource existing = xaDataSource;
@@ -137,6 +141,9 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
             if (config.password() != null) {
                 setBeanProperty(type, instance, new String[]{"setPassword"}, config.password());
             }
+            for (var property : config.driverProperties().entrySet()) {
+                setDriverProperty(type, instance, property.getKey(), property.getValue());
+            }
             return (javax.sql.XADataSource) instance;
         } catch (ReflectiveOperationException | ClassCastException e) {
             throw new SQLException("Cannot build the XADataSource '" + className
@@ -152,6 +159,50 @@ public final class MansartDataSource implements DataSource, AutoCloseable {
     public static String driverClassFor(String jdbcUrl) throws SQLException {
         return DriverLocator.find(jdbcUrl, DriverLocator.applicationLoader(MansartDataSource.class))
                 .getClass().getName();
+    }
+
+    /**
+     * Hands one of {@code PoolConfig.driverProperties} to the XA data source: its bean setter
+     * ({@code setDescription} for {@code description}) when it has one taking a {@code String}, else its
+     * {@code setProperty(String, String)} (PostgreSQL). A property it can take neither way is an error: the
+     * pool does not drop configuration silently.
+     */
+    private static void setDriverProperty(Class<?> type, Object instance, String name, String value)
+            throws ReflectiveOperationException {
+        String setter = "set" + Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        try {
+            type.getMethod(setter, String.class).invoke(instance, value);
+            return;
+        } catch (NoSuchMethodException _) {
+            // no bean setter of that name — try the generic one below
+        }
+        try {
+            type.getMethod("setProperty", String.class, String.class).invoke(instance, name, value);
+        } catch (NoSuchMethodException _) {
+            throw new NoSuchMethodException(type.getName() + " takes the driver property '" + name
+                    + "' neither through " + setter + "(String) nor through setProperty(String, String)");
+        }
+    }
+
+    /** The XA face of the pool: each XA connection is a borrow, given back by its {@code close()}. */
+    private final class PooledXADataSource implements javax.sql.XADataSource {
+
+        @Override
+        public javax.sql.XAConnection getXAConnection() throws SQLException {
+            return pool.acquireXa();
+        }
+
+        @Override
+        public javax.sql.XAConnection getXAConnection(String user, String password) throws SQLException {
+            throw new SQLFeatureNotSupportedException(
+                    "Per-call credentials are not supported; use PoolConfig.username/password");
+        }
+
+        @Override public PrintWriter getLogWriter()                { return MansartDataSource.this.getLogWriter(); }
+        @Override public void        setLogWriter(PrintWriter out) { /* no-op */ }
+        @Override public void        setLoginTimeout(int seconds)  { /* no-op — see PoolConfig.acquireTimeout */ }
+        @Override public int         getLoginTimeout()             { return MansartDataSource.this.getLoginTimeout(); }
+        @Override public Logger      getParentLogger()             { return MansartDataSource.this.getParentLogger(); }
     }
 
     private static void setBeanProperty(Class<?> type, Object instance,

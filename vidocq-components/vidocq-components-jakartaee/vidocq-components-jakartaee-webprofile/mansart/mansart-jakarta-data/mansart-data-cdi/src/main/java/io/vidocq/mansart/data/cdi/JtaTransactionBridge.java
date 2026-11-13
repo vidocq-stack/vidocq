@@ -42,7 +42,8 @@ import java.sql.SQLException;
  * <p>Enlistment is XA-first: when the datasource is XA-capable ({@code instanceof XADataSource}
  * or unwrappable to one — H2's {@code JdbcDataSource} and pool wrappers that delegate
  * {@code unwrap}), an {@link XAConnection} is opened and the <b>driver's</b> {@code XAResource}
- * is enlisted — real prepare, recoverable in-doubt branches. Otherwise a plain connection is
+ * is enlisted — real prepare, recoverable in-doubt branches. On a Mansart pool that XAConnection
+ * is a borrow, given back by its {@code close()} after completion (MANSART-065). Otherwise a plain connection is
  * wrapped in {@link ConnectionXAResource} (single-phase, LRCO): the coordinator commits it
  * first and rolls the prepared XA branches back if it fails. One plain resource per transaction
  * is therefore safe; a WARN is logged when a second one joins the same transaction.
