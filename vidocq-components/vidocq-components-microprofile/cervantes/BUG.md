@@ -377,7 +377,8 @@ nothing to check.
 The observer has priority `Interceptor.Priority.PLATFORM_BEFORE + 1`, not `PLATFORM_BEFORE`: Vauban
 reads a priority of 0 on an observer as none declared and gives it the default priority
 (`ObserverDisposerDiscovery`, `if (priority == 0)`), so at 0 the check ran after the observers of
-the application. That is a Vauban bug, not fixed here: to report on Vidocq/vauban.
+the application. That is a Vauban bug, fixed there as its BUG-20261113-11; the check keeps 1 so that
+it runs first on a Vauban without that fix too.
 
 Verified: `FailFastStartupTest` and `JwtConfigurationCheckTest` (Vauban, with and without the
 extension), `WeldFailFastStartupTest` (Weld SE 6.0 throws the `DeploymentException` of the check),

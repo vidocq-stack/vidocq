@@ -51,9 +51,9 @@ public class JwtConfigurationCheck {
     /**
      * The priority of the observer: the start of the platform range, before every library
      * ({@code LIBRARY_BEFORE}) and application observer. One above
-     * {@code Interceptor.Priority.PLATFORM_BEFORE}, whose value is 0: Vauban reads a priority of 0
-     * on an observer as "none declared" and gives it the default priority, among the observers of
-     * the application.
+     * {@code Interceptor.Priority.PLATFORM_BEFORE}, whose value is 0: a Vauban that lacks the fix of
+     * its BUG-20261113-11 reads a priority of 0 on an observer as "none declared" and gives it the
+     * default priority, among the observers of the application.
      */
     static final int PRIORITY = Interceptor.Priority.PLATFORM_BEFORE + 1;
 

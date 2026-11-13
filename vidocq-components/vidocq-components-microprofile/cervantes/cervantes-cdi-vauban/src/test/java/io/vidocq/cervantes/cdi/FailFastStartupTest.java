@@ -116,8 +116,10 @@ class FailFastStartupTest {
         assertTrue(message.contains("mp.jwt.verify.publickey.algorithm"), message);
         assertTrue(message.contains("'rs256'"), message);
         assertTrue(message.contains("RS256") && message.contains("ES512"), message);
-        // Vauban names the observer that failed; the exception of the check is its cause.
-        DeploymentException thrownByTheCheck = assertInstanceOf(DeploymentException.class, ex.getCause());
+        // The exception of the check stops the start: as it is once Vauban lets a Startup observer refuse a
+        // deployment (Vidocq/vauban#288), as the cause of Vauban's own exception, which names the observer, before.
+        DeploymentException thrownByTheCheck = ex.getMessage().startsWith("invalid MicroProfile JWT configuration")
+                ? ex : assertInstanceOf(DeploymentException.class, ex.getCause());
         assertTrue(thrownByTheCheck.getMessage().startsWith("invalid MicroProfile JWT configuration"),
                 thrownByTheCheck.getMessage());
     }
