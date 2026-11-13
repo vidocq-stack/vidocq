@@ -25,8 +25,8 @@ import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.persistence.EntityManagerFactory;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Jakarta Persistence 3.2 on Vidocq, with Noether.
@@ -56,7 +56,9 @@ public final class NoetherPersistenceExtension implements VidocqExtension {
     @Override
     public void onStart(ExtensionContext context) {
         BeanManager beans = context.beanManager();
-        List<String> units = new ArrayList<>();
+        // Each unit once, by name: noether-jpa-cdi gives a unit two factory beans, the injectable one and the one
+        // its persistence contexts share, both on the unit's one factory.
+        Set<String> units = new TreeSet<>();
         for (Bean<?> bean : beans.getBeans(EntityManagerFactory.class, Any.Literal.INSTANCE)) {
             EntityManagerFactory factory = (EntityManagerFactory) beans.getReference(bean,
                     EntityManagerFactory.class, beans.createCreationalContext(bean));

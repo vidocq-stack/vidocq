@@ -1153,6 +1153,9 @@ EntityManager notes;
 EntityManagerFactory ledger;
 ----
 
+[#noether-persistence-per-module]
+*One `persistence.xml` per module.* A library module of the application, with its entities, may carry its own `META-INF/persistence.xml`, and the application module its own. Noether reads every one of them, and a unit's root is the module whose file declares it, so a unit without a class list manages the entities of its own module and not those of the others: the units need no `<exclude-unlisted-classes>` to stay apart. The library is built for Noether as any module of entities is, with Noether's processor and the `provides` of its accessor (xref:noether::getting-started.adoc[Noether's Getting started]). A unit name is unique in the application: two units of one name, in one file or in two, fail the start with a `PersistenceException` that names every file declaring it, and the build warns that it leaves the build compatible extensions to the start.
+
 [#noether-persistence-inject]
 *Injection with `@Inject`.* Every unit is also a set of CDI beans (Jakarta EE 11 Platform §13.12):
 

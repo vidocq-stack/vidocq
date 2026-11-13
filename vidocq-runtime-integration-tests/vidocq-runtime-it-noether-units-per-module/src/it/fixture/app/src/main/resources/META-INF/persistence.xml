@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.2">
+    <!-- The application's own unit, next to the library's ledger: no class list, so it takes the entities of its
+         root, the application module, and not the library's. -->
+    <persistence-unit name="archive" transaction-type="JTA">
+        <qualifier>acme.app.Archived</qualifier>
+        <properties>
+            <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
+        </properties>
+    </persistence-unit>
+</persistence>

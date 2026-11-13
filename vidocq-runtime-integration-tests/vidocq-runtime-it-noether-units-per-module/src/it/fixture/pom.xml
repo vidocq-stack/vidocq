@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>io.vidocq.it</groupId>
+    <artifactId>noether-units-per-module-fixture</artifactId>
+    <version>1.0</version>
+    <packaging>pom</packaging>
+    <!-- An application of two Maven modules, each with its own META-INF/persistence.xml. -->
+    <modules>
+        <module>lib</module>
+        <module>app</module>
+    </modules>
+    <!-- The outer build's version, as in lib/pom.xml: the fixture resolves plugins from the outer local repository
+         only (it-settings.xml). -->
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>@maven.install.plugin.version@</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

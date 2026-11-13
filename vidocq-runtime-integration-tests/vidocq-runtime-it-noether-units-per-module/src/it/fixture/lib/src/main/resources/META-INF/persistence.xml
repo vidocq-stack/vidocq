@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.2">
+    <!-- No class list: the unit takes the entities of its root, this jar. No jta-data-source: the application's
+         default Mansart pool. -->
+    <persistence-unit name="ledger" transaction-type="JTA">
+        <properties>
+            <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
+        </properties>
+    </persistence-unit>
+</persistence>

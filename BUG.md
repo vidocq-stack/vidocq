@@ -5,6 +5,19 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261113-04 — The Noether extension reports each persistence unit twice
+
+- **Date**: 2026-11-13
+- **Status**: FIXED on `fix/duplicate-unit-names`
+- **Affected module**: vidocq-runtime-noether-persistence-extension (`NoetherPersistenceExtension.onStart`)
+- **Symptom**: an application with the units `ledger` and `archive` starts with "Noether Persistence: persistence
+  units [ledger, archive, ledger, archive] started".
+- **Minimal repro**: `vidocq-runtime-it-noether-units-per-module`, `units-run.log`.
+- **Cause**: the report named the unit of every `EntityManagerFactory` bean, and `noether-jpa-cdi` gives each unit two:
+  the injectable `@ApplicationScoped` one and the internal one its persistence contexts share, both on the unit's one
+  factory. Only the report was wrong: one factory per unit is created.
+- **Fix**: the report names each unit once, sorted. `UnitsPerModuleIT` asserts the line.
+
 ## BUG-20261113-03 — The Arquillian adapter deploys the `$$Intercepted` subclass of a bean as a second bean
 
 - **Date**: 2026-11-13
