@@ -246,6 +246,8 @@ public final class ConfigStartCheck implements SyntheticObserver<Startup> {
         return !isOptionalLike(field.getType()) && !hasJavaInitializer(probe, field);
     }
 
+    @SuppressWarnings("java:S3011") // MicroProfile Config 3.1 §6.4: a member with a Java initializer is not required,
+    // which only an instance of the application's class tells; its constructor need not be public
     private static Object tryInstantiate(Class<?> beanClass) {
         try {
             var ctor = beanClass.getDeclaredConstructor();
@@ -256,6 +258,7 @@ public final class ConfigStartCheck implements SyntheticObserver<Startup> {
         }
     }
 
+    @SuppressWarnings("java:S3011") // MicroProfile Config 3.1 §6.4: the initializer of a private field is read here
     private static boolean hasJavaInitializer(Object probe, Field field) {
         if (probe == null) {
             return false;
