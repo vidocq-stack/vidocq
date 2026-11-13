@@ -5,6 +5,51 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261113-02 — The Telemetry extension has no codegen bundle: Humboldt's Build Compatible Extension never runs at build
+
+- **Date**: 2026-11-13
+- **Status**: FIXED on `fix/humboldt-codegen-bundle` (Vidocq/vidocq#546)
+- **Affected module**: vidocq-runtime-humboldt-telemetry-extension (its descriptor named no `codegen`), and the new
+  vidocq-runtime-humboldt-telemetry-extension-codegen
+- **Symptom**: an application with `humboldt-telemetry` compiles with one Build Compatible Extension less than it
+  starts with (_[Vauban] Discovered 9 Build Compatible Extension(s)_ at build, 10 at start, for the ten extensions
+  of the tutorial application). `humboldt-cdi`, which carries `HumboldtBuildCompatibleExtension`, is not on the
+  compiler's processor path, so the `@SpanBinding` that extension adds to each class and method annotated
+  `@WithSpan` is not frozen in `META-INF/vauban-enhancements.properties`: the binding exists only because the
+  container runs the extension again at each start. Once it no longer does (Vidocq/vauban#288), `@WithSpan` would
+  produce no span, without an error.
+- **Minimal reproduction**: `vidocq create -x cassini-rest -x humboldt-telemetry`, a bean with a `@WithSpan` method,
+  then `mvn -X compile`: no `humboldt-cdi` on the processor path, no `target/classes/META-INF/vauban-enhancements.properties`.
+  In this repository, red on `origin/main`:
+  ```sh
+  ./mvnw -ntp -pl vidocq-runtime-tooling,vidocq-runtime-maven-plugin test -Dtest='KnownExtensionsTest,CodegenPathsTest' -Dsurefire.failIfNoSpecifiedTests=false
+  ./mvnw -ntp -pl vidocq-runtime-integration-tests/vidocq-runtime-it-humboldt-cassini test -Dtest=SpanBindingFrozenAtBuildTest
+  ```
+- **Confirmed cause**: every other MicroProfile extension whose brick has a Build Compatible Extension ships a
+  `-codegen` bundle with the brick's `*-cdi` jar (BUG-20261030-23); Telemetry had none, so neither the plugin's
+  `CodegenPathsParticipant` nor `vidocq extension add` had anything to put on the processor path.
+- **Fix**: `vidocq-runtime-humboldt-telemetry-extension-codegen` carries `humboldt-cdi` and the CDI API that jar
+  leaves `provided` (it brings the Interceptor and Annotation APIs). The extension's descriptor names it
+  (`codegen = …`), so the catalog, the plugin and the CLI wire it; the BOM and the root `dependencyManagement`
+  manage it; `vidocq-runtime-it-humboldt-cassini` and `vidocq-runtime-tck-humboldt-telemetry`, which list their
+  bundles by hand, declare it. `checkpom` now asks for it in a pom that lists its bundles by hand.
+- **The lesson of BUG-20261030-27** (an extension run at build and again at start): `HumboldtBuildCompatibleExtension`
+  has an `@Enhancement` phase only and registers no synthetic bean, and Vauban applies the frozen patch in place of
+  the replay for the classes it names. `HumboldtIntegrationTest` now asserts one span per call of a `@WithSpan`
+  method.
+- **Investigations**:
+  - 2026-11-13: `CodegenPathsTest.theTelemetryExtensionGetsItsCodegenBundle`,
+    `KnownExtensionsTest.humboldtTelemetryShipsACodegenBundle` and `SpanBindingFrozenAtBuildTest` red before the
+    bundle, green with it; the IT's compilation goes from 2 to 3 discovered extensions and prints _Froze
+    enhancement patch for 2 target(s)_.
+  - 2026-11-13: checked by hand on an application written by `vidocq:create -Dextensions=cassini-rest,humboldt-telemetry`
+    with this branch's plugin: `mvn -X process-classes` shows `vidocq-runtime-humboldt-telemetry-extension-codegen`,
+    `humboldt-cdi` and `jakarta.enterprise.cdi-api` on the processor path, 3 discovered extensions, no warning, and
+    `vauban-enhancements.properties` names the `@WithSpan` method of the bean.
+  - 2026-11-13: not fixed here, Vauban's side: with the binding frozen, the processor still writes no
+    `$$Intercepted` subclass for the bean at build (`InterceptedArtefacts.isInterceptedTarget` reads the bindings
+    of the source, not those an `@Enhancement` adds), so the container generates it at start.
+
 ## BUG-20261113-01 — A named pool declared only in `vidocq.properties` gets no `@Named` DataSource bean
 
 - **Date**: 2026-11-13

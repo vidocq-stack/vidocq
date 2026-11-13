@@ -60,6 +60,7 @@ The bundles and the bricks they serve:
 | `vidocq-runtime-dirac-metrics-extension-codegen` | `dirac-processor`, the extension of `dirac-cdi-vauban` | xref:dirac::internals.adoc#generated-code[Dirac]
 | `vidocq-runtime-grimm-openapi-extension-codegen` | `grimm-processor`, the extension of `grimm-cdi-vauban` | xref:grimm::internals.adoc#generated-code[Grimm]
 | `vidocq-runtime-cervantes-jwt-extension-codegen` | the extension of `cervantes-cdi-vauban`, and Ravel's bundle | xref:cervantes::internals.adoc#generated-code[Cervantes]
+| `vidocq-runtime-humboldt-telemetry-extension-codegen` | the extension of `humboldt-cdi`, which binds the `@WithSpan` interceptor | xref:humboldt::internals.adoc#generated-code[Humboldt]
 | `vidocq-runtime-foy-servlet-extension-codegen` | `foy-processor`, the extension of `foy-cdi-vauban` | xref:foy::internals.adoc#generated-code[Foy]
 | `vidocq-runtime-mansart-data-extension-codegen` | `mansart-data-processor`, the extension of `mansart-data-cdi` | xref:mansart::internals.adoc#generated-code[Mansart]
 | `vidocq-runtime-mansart-transactions-extension-codegen` | the extension of `mansart-transactions-cdi` | xref:mansart::internals.adoc#generated-code[Mansart]

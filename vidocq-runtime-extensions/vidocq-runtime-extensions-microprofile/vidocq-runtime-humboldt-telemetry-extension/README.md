@@ -48,6 +48,9 @@ The extension automatically activates:
   `BuildCompatibleExtension` Humboldt — the
   `io.opentelemetry.instrumentation.annotations.WithSpan` annotation is intercepted
   without any code configuration; this is the MicroProfile Telemetry 2.2 standard).
+  The companion `vidocq-runtime-humboldt-telemetry-extension-codegen` bundle puts that
+  extension on the compiler's processor path, so the interceptor binding is written into
+  the build; `vidocq-runtime-maven-plugin`, loaded as a build extension, wires it.
 - **JAX-RS server filters** (via `humboldt-rest`) — a `ContainerRequestFilter`
   that extracts `traceparent` W3C, starts a SERVER span, sets
   `http.request.method`/`url.path`/`url.scheme`, and a `ContainerResponseFilter`

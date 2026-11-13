@@ -18,6 +18,7 @@ New in the `{project-version}` development line — everything listed here lande
 * xref:modules/vidocq-runtime-cli.adoc#pom-upgrade[`vidocq pom upgrade [--to <version>|--release|--snapshot] [--check]`] [.tag-new]#NEW# — moves an application to another Vidocq version in either pom style, or in a pom written before 0.4.0; the diff first, `--check` for CI, versions that disagree reported and never aligned.
 * xref:modules/vidocq-runtime-maven-plugin.adoc#build-info[`vidocq:build-info`] [.tag-new]#NEW# — the build identity the banner reads, written by the plugin itself from `.git` (plain repository, worktree, submodule, shallow clone), with no third-party plugin; without a repository the commit reads `unversionned` and the build goes on.
 * xref:modules/vidocq-runtime-maven-plugin.adoc#parentless[`vidocq:checkpom` and the Java release] [.tag-new]#NEW# — warns when `maven.compiler.release` came from the plugin: IntelliJ IDEA reads the language level from the pom alone.
+* xref:modules/vidocq-runtime-extensions.adoc#humboldt-telemetry-codegen[A codegen bundle for the Telemetry extension] [.tag-new]#NEW# — `vidocq-runtime-humboldt-telemetry-extension-codegen` puts Humboldt's Build Compatible Extension on the processor path, so the interceptor binding of each `@WithSpan` class and method is written into the build instead of being added again at each start; the plugin wires it, and a pom that lists its bundles by hand adds it, as xref:migration.adoc#metrics-openapi-codegen[the migration note] says (BUG-20261113-02, Vidocq/vidocq#546).
 
 == CLI
 

@@ -286,9 +286,9 @@ xref:modules/vidocq-runtime-extensions.adoc#ravel-config-codegen[the Config exte
 xref:modules/vidocq-runtime-extensions.adoc#cyrano-rest-client-codegen[the Rest Client extension].
 
 [#metrics-openapi-codegen]
-== Metrics, OpenAPI, Fault Tolerance and JWT need their codegen bundle
+== Metrics, OpenAPI, Fault Tolerance, JWT and Telemetry need their codegen bundle
 
-Four more extensions ship a `-codegen` bundle, so that their processor runs on the application's classes instead of
+Five more extensions ship a `-codegen` bundle, so that their processor runs on the application's classes instead of
 a scan by reflection when the application starts (Vidocq/vidocq-workspace#38). `vidocq:checkpom` fails the build of an
 application that declares the extension without it:
 
@@ -298,6 +298,9 @@ application that declares the extension without it:
  : Heisenberg's processor writes the Fault Tolerance annotations of each bean into a companion.
 * `vidocq-runtime-cervantes-jwt-extension` → `vidocq-runtime-cervantes-jwt-extension-codegen`: Vauban
   runs Cervantes' Build Compatible Extension when the application compiles.
+* `vidocq-runtime-humboldt-telemetry-extension` → `vidocq-runtime-humboldt-telemetry-extension-codegen`: Vauban
+  runs Humboldt's Build Compatible Extension when the application compiles, so the interceptor binding of each
+  `@WithSpan` class and method is written into the build (Vidocq/vidocq#546).
 
 The Metrics bundle now also brings its extension's Build Compatible Extension, `DiracExtension`:
 without it, Vauban warned at each build that the extension was on the module path only and would not run. The
@@ -307,8 +310,11 @@ Add each one to the compiler's `annotationProcessorPaths`, as in xref:#config-re
 section]; `checkpom` prints the `<path>` to paste, and `vidocq extension add` writes it. See
 xref:modules/vidocq-runtime-extensions.adoc#dirac-metrics-codegen[the Metrics extension] and
 xref:modules/vidocq-runtime-extensions.adoc#grimm-openapi-codegen[the OpenAPI extension],
-xref:modules/vidocq-runtime-extensions.adoc#heisenberg-fault-tolerance-codegen[the Fault Tolerance extension] and
-xref:modules/vidocq-runtime-extensions.adoc#cervantes-jwt-codegen[the JWT extension].
+xref:modules/vidocq-runtime-extensions.adoc#heisenberg-fault-tolerance-codegen[the Fault Tolerance extension],
+xref:modules/vidocq-runtime-extensions.adoc#cervantes-jwt-codegen[the JWT extension] and
+xref:modules/vidocq-runtime-extensions.adoc#humboldt-telemetry-codegen[the Telemetry extension]. An application
+whose pom loads `vidocq-runtime-maven-plugin` as a build extension, as `vidocq create` writes it from 0.4.0, has
+nothing to add: the plugin puts each bundle on the processor path.
 
 [#no-parent]
 == An application no longer needs `vidocq-runtime-parent`

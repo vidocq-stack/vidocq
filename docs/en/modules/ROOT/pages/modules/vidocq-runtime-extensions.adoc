@@ -120,7 +120,7 @@
 
 | `vidocq-runtime-humboldt-telemetry-extension`
 | `microprofile`
-| MicroProfile Telemetry via xref:humboldt::index.adoc[Humboldt] — traces, metrics, logs, OTLP/HTTP export. [[humboldt-telemetry-apis]]The extension brings the Jakarta REST API, which `humboldt-rest` leaves to the runtime, so an application with Telemetry and no REST endpoint starts. It also `requires transitive io.opentelemetry.api` and `io.opentelemetry.instrumentation_annotations`: an application that requires it uses `Span`, `Tracer` and `@WithSpan` without a `requires` of its own.
+| MicroProfile Telemetry via xref:humboldt::index.adoc[Humboldt] — traces, metrics, logs, OTLP/HTTP export. [[humboldt-telemetry-codegen]]Companion `-codegen` artefact [.tag-new]#NEW#: it puts Humboldt's Build Compatible Extension, from `humboldt-cdi`, on the processor path, so Vauban runs it when the application compiles and writes into the build (`META-INF/vauban-enhancements.properties`) the interceptor binding it adds to each class and method annotated `@WithSpan`; without it the binding existed only if the container ran the extension again at each start. `vidocq:checkpom` asks for it. [[humboldt-telemetry-apis]]The extension brings the Jakarta REST API, which `humboldt-rest` leaves to the runtime, so an application with Telemetry and no REST endpoint starts. It also `requires transitive io.opentelemetry.api` and `io.opentelemetry.instrumentation_annotations`: an application that requires it uses `Span`, `Tracer` and `@WithSpan` without a `requires` of its own.
 
 | `vidocq-runtime-heisenberg-fault-tolerance-extension`
 | `microprofile`
