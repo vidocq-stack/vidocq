@@ -167,3 +167,25 @@ Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.a
 ## Architecture rules
 
 - The architecture rules (SPI and core dependencies, layers, extensions on the runtime SPI only, no reflection outside the documented fallbacks, no platform thread but two documented ones, no `ThreadLocal`) are ArchUnit tests in `vidocq-runtime-architecture-tests`, built on the shared `vidocq-archrules` library of `vidocq-parent` (test scope; Vidocq/vidocq#289). A new reflective path or platform thread is documented and added to the rule's list with its reason, never silently.
+
+## Build compatible extensions work at build only
+
+A CDI build compatible extension works at build, and only there. `vidocq:generate` runs the extensions of an
+application once and records what they did; the packaged application loads that record instead of running them
+(Vidocq/vauban#288). An extension that breaks these rules loses work or checks in a packaged application:
+
+- compute from the deployment's classes only: no configuration value, environment variable, outside file or network
+  resource in a phase;
+- check the start environment in an observer of `jakarta.enterprise.event.Startup` that throws a
+  `DeploymentException`, fed with what the build collected (`withParam`); models: Ravel's `ConfigStartCheck`,
+  Cervantes' `JwtConfigurationCheck`;
+- add annotations, never remove them; carry data in parameters, never in fields of the extension;
+- ask `ExtensionPhase.isBuildTime()` only as a last resort, in a class of its own: an extension that asks runs again
+  at each start (Heisenberg's `InterceptorPriorityExtension`);
+- the brick's Vidocq runtime extension adds its own beans with `VaubanContainerBuilder.addHostBean`, never
+  `addBeanClass`, and its `-codegen` bundle brings the brick's CDI jar to the processor path;
+- test both ways: the extensions run at start (TCK, another container) and frozen (the startup report says
+  `cdi extensions  N extensions frozen at build`, and an invalid environment still stops the start).
+
+Guide: `docs/writing-a-build-compatible-extension.md` in `Vidocq/vidocq-workspace`, and Vauban's concepts page,
+"Writing an extension the build can freeze" (`docs/en/modules/ROOT/pages/concepts.adoc#writing-a-frozen-extension`).
