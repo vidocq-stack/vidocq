@@ -38,7 +38,7 @@ Ravel orchestrates all these voices into a single, unified configuration accessi
 | Java modules | `org.eclipse.microprofile.config` (repackaged), `io.vidocq.ravel.api`, `io.vidocq.ravel.core`, `io.vidocq.ravel.cdi.vauban`
 | Runtime dependencies | MicroProfile Config spec only. CDI optional via xref:vauban::index.adoc[Vauban].
 | jlink-ready | ✅ - all dependencies have explicit `module-info`, no `Automatic-Module-Name` fallback.
-| TCK | ✅ 100 % PASS — 349/349 tests (M5 achieved).
+| TCK | ✅ 100 % PASS — 378/378 tests (M5 achieved).
 |===
 
 == Position in the ecosystem

@@ -13,7 +13,7 @@
 | Script `run-official-tck-mp-config-3.1.sh` (smoke / all / `-Dtest=...`) | ✅ |
 | Arquillian bootstrap under JDK 25 | ✅ **resolved (bump to 1.10.1 + dep mgmt)** |
 | Official TCK discovery (`dependenciesToScan`) | ✅ |
-| Current TCK score | **349 PASS / 0 FAIL / 0 SKIP** out of 349 tests |
+| Current TCK score | **378 PASS / 0 FAIL / 0 SKIP** out of 378 tests (349 until the runner ran every TCK class, 2026-08-27) |
 | 100% PASS | ✅ **achieved** — see J2 below |
 
 ## J2 — Closing remaining failures → 100% PASS
