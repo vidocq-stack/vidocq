@@ -153,6 +153,23 @@ public final class CoreSections {
                 count + " (" + summaryOrigin(origin, originPaths, paths) + ")", lines, -1);
     }
 
+    /**
+     * The {@value #LAYER} section with a {@code cdi extensions} row after its last one, the weaving row when there
+     * is one; the section itself when there is nothing to say.
+     *
+     * @param section       the {@value #LAYER} section
+     * @param cdiExtensions what the container start did with the build compatible extensions
+     *                      ({@link #cdiExtensions}), or {@code null}
+     */
+    public static Section withCdiExtensions(Section section, String cdiExtensions) {
+        if (cdiExtensions == null) {
+            return section;
+        }
+        List<Line> lines = new ArrayList<>(section.lines());
+        lines.add(new Row("cdi extensions", cdiExtensions));
+        return new Section(section.id(), section.headline(), section.summary(), lines, section.nanos());
+    }
+
     /** {@code , 2 enriched (Foy 1, Mansart 2)}: the archives a brick enriched, per brick; empty when none. */
     private static String enriched(List<LayerModule> modules) {
         Map<String, Integer> perBrick = new java.util.TreeMap<>();
@@ -256,6 +273,40 @@ public final class CoreSections {
         }
         return (layerLoader ? "Vauban class loader" : "load-time weaving agent") + ", "
                 + count(names.size(), "planned bean", "planned beans") + ": "
+                + String.join(", ", StartupReportRenderer.capped(names));
+    }
+
+    /**
+     * What the container start did with the build compatible extensions of the deployment (Vidocq/vauban#288):
+     * {@code 8 extensions frozen at build}, the start having loaded what {@code vidocq:generate} recorded;
+     * {@code 8 extensions frozen at build, 2 run at start: ConfigCdiExtension, CervantesClaimExtension} when some
+     * left work for the start; {@code 10 extensions run at start} without a record, followed by
+     * {@code (the record of the build is not this deployment's)} when there is one for other classes, as under
+     * {@code vidocq:dev} or a test class path. {@code null} for a deployment without any.
+     *
+     * @param frozen        whether the start loaded the record of the build
+     * @param frozenAtBuild the class names of the extensions the start did not run
+     * @param ranAtStart    the class names of the extensions the start ran
+     * @param recordRefused whether a record exists that the start could not use
+     */
+    public static String cdiExtensions(boolean frozen, List<String> frozenAtBuild, List<String> ranAtStart,
+                                       boolean recordRefused) {
+        if (frozenAtBuild.isEmpty() && ranAtStart.isEmpty()) {
+            return null;
+        }
+        if (!frozen) {
+            return count(ranAtStart.size(), "extension", EXTENSIONS) + " run at start"
+                    + (recordRefused ? " (the record of the build is not this deployment's)" : "");
+        }
+        String text = count(frozenAtBuild.size(), "extension", EXTENSIONS) + " frozen at build";
+        if (ranAtStart.isEmpty()) {
+            return text;
+        }
+        List<String> names = new ArrayList<>();
+        for (String name : ranAtStart) {
+            names.add(name.substring(name.lastIndexOf('.') + 1));
+        }
+        return text + ", " + ranAtStart.size() + " run at start: "
                 + String.join(", ", StartupReportRenderer.capped(names));
     }
 

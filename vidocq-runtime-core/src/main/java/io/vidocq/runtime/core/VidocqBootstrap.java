@@ -370,6 +370,9 @@ public final class VidocqBootstrap {
 
         recorder.begin("build");
         this.container = builder.build();
+        var cdiExtensions = container.extensionsAtStart();
+        recorder.cdiExtensions(CoreSections.cdiExtensions(cdiExtensions.frozen(), cdiExtensions.frozenAtBuild(),
+                cdiExtensions.ranAtStart(), cdiExtensions.note() != null));
         recorder.end();
 
         // Notify extensions
@@ -409,8 +412,9 @@ public final class VidocqBootstrap {
                     Thread.currentThread().getContextClassLoader(), collected(), launchMode(), beanManager(),
                     recorder);
             reportContributors.set(contributed.contributors());
-            List<Section> sections = new ArrayList<>(StartupFacts.coreSections(recorder.weaving(), config, extensions,
-                    recorder.onStartNanos(), null, DisplayPaths.current(), enrichedReader()));
+            List<Section> sections = new ArrayList<>(StartupFacts.coreSections(recorder.weaving(),
+                    recorder.cdiExtensions(), config, extensions, recorder.onStartNanos(), null,
+                    DisplayPaths.current(), enrichedReader()));
             sections.addAll(contributed.sections());
             String runtime = runtime();
             recorder.end();
@@ -482,8 +486,8 @@ public final class VidocqBootstrap {
         }
         try {
             String failed = current.failing();
-            List<Section> sections = StartupFacts.coreSections(current.weaving(), config, extensions,
-                    current.onStartNanos(), failed, DisplayPaths.current(), enrichedReader());
+            List<Section> sections = StartupFacts.coreSections(current.weaving(), current.cdiExtensions(), config,
+                    extensions, current.onStartNanos(), failed, DisplayPaths.current(), enrichedReader());
             StartupReport partial = current.report(launchMode(), launchReason(), verbosity, runtime(), sections, failed);
             startupReport.set(partial);
             StartupRecorder.logFailure(partial, System.nanoTime() - startTime, failure);

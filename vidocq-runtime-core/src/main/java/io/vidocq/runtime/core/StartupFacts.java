@@ -65,7 +65,21 @@ final class StartupFacts {
     static List<Section> coreSections(String weaving, VidocqConfig config, List<VidocqExtension> extensions,
                                       List<Long> onStartNanos, String failed, DisplayPaths paths,
                                       Function<Path, List<String>> enriched) {
-        return List.of(layer(weaving, paths, enriched), configuration(config, extensions, paths),
+        return coreSections(weaving, null, config, extensions, onStartNanos, failed, paths, enriched);
+    }
+
+    /**
+     * The sections of {@link #coreSections(String, VidocqConfig, List, List, String, DisplayPaths, Function)}, the
+     * {@code layer} one also saying what the container start did with the build compatible extensions.
+     *
+     * @param cdiExtensions what it did ({@link CoreSections#cdiExtensions}), or {@code null} before the container
+     *                      was built
+     */
+    @SuppressWarnings("java:S107") // one parameter per fact of the boot, as the method it completes
+    static List<Section> coreSections(String weaving, String cdiExtensions, VidocqConfig config,
+                                      List<VidocqExtension> extensions, List<Long> onStartNanos, String failed,
+                                      DisplayPaths paths, Function<Path, List<String>> enriched) {
+        return List.of(layer(weaving, cdiExtensions, paths, enriched), configuration(config, extensions, paths),
                 extensions(extensions, onStartNanos, failed));
     }
 
@@ -86,15 +100,23 @@ final class StartupFacts {
      * of their archives, reading the bricks of each archive with {@code enriched} ({@link #enrichedReader}).
      */
     static Section layer(String weaving, DisplayPaths paths, Function<Path, List<String>> enriched) {
+        return layer(weaving, null, paths, enriched);
+    }
+
+    /** The layer section, with what the container start did with the build compatible extensions. */
+    static Section layer(String weaving, String cdiExtensions, DisplayPaths paths,
+                         Function<Path, List<String>> enriched) {
         VidocqAppLayer.Installation installation = VidocqAppLayer.installation();
         ModuleLayer layer = VidocqAppLayer.installedLayer();
         if (installation == null || layer == null) {
-            return CoreSections.layer(null, List.of(), List.of(), weaving, paths);
+            return CoreSections.withCdiExtensions(
+                    CoreSections.layer(null, List.of(), List.of(), 0, Map.of(), weaving, paths), cdiExtensions);
         }
         String application = applicationName();
         List<CoreSections.LayerModule> modules = modules(layer, installation.archives(), application, enriched);
-        return CoreSections.layer(installation.origin(), installation.listed() ? installation.archives() : List.of(),
-                modules, libraries(modules, application), installation.pinned(), weaving, paths);
+        return CoreSections.withCdiExtensions(CoreSections.layer(installation.origin(),
+                installation.listed() ? installation.archives() : List.of(), modules,
+                libraries(modules, application), installation.pinned(), weaving, paths), cdiExtensions);
     }
 
     /** The modules of the layer other than the application's; 0 when the application is unknown. */

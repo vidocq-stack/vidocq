@@ -54,6 +54,7 @@ public final class StartupRecorder {
     private long phaseStart;
     private String step;
     private String weaving;
+    private String cdiExtensions;
 
     /** Starts timing {@code phase}, which is also what a failure is reported in until {@link #step} says more. */
     public void begin(String phase) {
@@ -105,6 +106,16 @@ public final class StartupRecorder {
     /** What the load-time weaving did, or {@code null} before it ran. */
     public String weaving() {
         return weaving;
+    }
+
+    /** Keeps what the container start did with the build compatible extensions, as the {@code layer} section prints it. */
+    public void cdiExtensions(String cdiExtensions) {
+        this.cdiExtensions = cdiExtensions;
+    }
+
+    /** What the container start did with the build compatible extensions, or {@code null} before it was built. */
+    public String cdiExtensions() {
+        return cdiExtensions;
     }
 
     /** Logs a core anomaly at once and keeps it for the report. */

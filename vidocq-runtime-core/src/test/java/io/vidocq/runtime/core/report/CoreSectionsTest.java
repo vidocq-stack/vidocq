@@ -37,6 +37,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The sections the core writes, from facts already read. */
@@ -235,6 +236,39 @@ class CoreSectionsTest {
         assertEquals("vidocq.launch.mode", CoreSections.launchReason("vidocq.launch.mode", true));
         assertEquals("auto: IntelliJ agent", CoreSections.launchReason("IntelliJ agent", false));
         assertEquals("auto: launch not read", CoreSections.launchReason(null, false));
+    }
+
+    @Test
+    void theCdiExtensionsRowSaysWhatTheStartDidWithThem() {
+        List<String> eight = List.of("a.A", "a.B", "a.C", "a.D", "a.E", "a.F", "a.G", "a.H");
+
+        assertEquals("8 extensions frozen at build", CoreSections.cdiExtensions(true, eight, List.of(), false));
+        assertEquals("1 extension frozen at build, 2 run at start: ConfigCdiExtension, Outer$Check",
+                CoreSections.cdiExtensions(true, List.of("a.A"),
+                        List.of("io.vidocq.ravel.cdi.ConfigCdiExtension", "io.acme.Outer$Check"), false));
+        assertEquals("8 extensions run at start", CoreSections.cdiExtensions(false, List.of(), eight, false));
+        assertEquals("1 extension run at start (the record of the build is not this deployment's)",
+                CoreSections.cdiExtensions(false, List.of(), List.of("a.A"), true));
+        assertNull(CoreSections.cdiExtensions(false, List.of(), List.of(), false));
+    }
+
+    @Test
+    void theCdiExtensionsRowFollowsTheWeavingOne() {
+        Section layer = CoreSections.layer(null, List.of(), List.of(), 0, Map.of(), "none", PATHS);
+
+        Section withRow = CoreSections.withCdiExtensions(layer, "8 extensions frozen at build");
+
+        assertEquals(List.of(new Row("weaving", "none"), new Row("cdi extensions", "8 extensions frozen at build")),
+                withRow.lines());
+        assertEquals(layer.headline(), withRow.headline());
+        assertEquals(layer.summary(), withRow.summary());
+    }
+
+    @Test
+    void aDeploymentWithoutExtensionKeepsItsLayerSection() {
+        Section layer = CoreSections.layer(null, List.of(), List.of(), 0, Map.of(), "none", PATHS);
+
+        assertSame(layer, CoreSections.withCdiExtensions(layer, null));
     }
 
     @Test

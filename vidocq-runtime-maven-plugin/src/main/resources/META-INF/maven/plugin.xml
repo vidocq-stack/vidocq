@@ -267,6 +267,20 @@
                     <description>Skip the goal: no dependency is enriched and no stamp is written</description>
                 </parameter>
                 <parameter>
+                    <name>freezeExtensions</name>
+                    <type>boolean</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Freeze the build compatible extensions of the application, so that the container start loads what they did instead of running them (default: true)</description>
+                </parameter>
+                <parameter>
+                    <name>startExtensions</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Class names of build compatible extensions the container start runs again even when they are frozen</description>
+                </parameter>
+                <parameter>
                     <name>repoSession</name>
                     <type>org.eclipse.aether.RepositorySystemSession</type>
                     <required>true</required>
@@ -293,6 +307,8 @@
                                 default-value="${project.build.directory}"/>
                 <cacheDir implementation="java.lang.String">${vidocq.generate.cacheDir}</cacheDir>
                 <skip implementation="boolean" default-value="false">${vidocq.generate.skip}</skip>
+                <freezeExtensions implementation="boolean" default-value="true">${vidocq.freezeExtensions}</freezeExtensions>
+                <startExtensions implementation="java.util.List">${vidocq.startExtensions}</startExtensions>
                 <repoSession implementation="org.eclipse.aether.RepositorySystemSession"
                              default-value="${repositorySystemSession}"/>
                 <remoteRepos implementation="java.util.List"

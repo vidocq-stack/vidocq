@@ -131,6 +131,21 @@ public class VidocqGenerateMojo extends AbstractMojo {
     @Parameter(property = "vidocq.generate.skip", defaultValue = "false")
     private boolean skip;
 
+    /**
+     * Freezes the build compatible extensions of the application (Vidocq/vauban#288): once the dependencies are
+     * enriched, the goal runs the extensions on the path the application starts with and writes what they did in
+     * {@code target/classes}; the container start loads that instead of running them. An extension that left work
+     * for the start runs again at start, and so does every extension when the deployment is not the one frozen
+     * (the dev console added by {@code vidocq:dev}, a test class path). {@code false} leaves no record: every start
+     * runs the extensions.
+     */
+    @Parameter(property = "vidocq.freezeExtensions", defaultValue = "true")
+    private boolean freezeExtensions;
+
+    /** Class names of build compatible extensions the container start runs again even when they are frozen. */
+    @Parameter(property = "vidocq.startExtensions")
+    private List<String> startExtensions;
+
     @Parameter(defaultValue = "${repositorySystemSession}", readonly = true, required = true)
     private RepositorySystemSession repoSession;
 
@@ -153,6 +168,7 @@ public class VidocqGenerateMojo extends AbstractMojo {
         }
         project.setContextValue(DONE, Boolean.TRUE);
         generate();
+        freezeExtensions();
         // Last, once the index is final, on every path that did not fail: the stamp records that index, and the
         // boot reads a missing or stale stamp as "built without vidocq:generate" (Vidocq/vidocq#241).
         Path classesDir = outputDirectory.toPath();
@@ -161,6 +177,41 @@ public class VidocqGenerateMojo extends AbstractMojo {
                 writeStamp(classesDir);
             } catch (IOException e) {
                 throw new MojoExecutionException("Cannot write " + classesDir.resolve(GenerateStamp.PATH), e);
+            }
+        }
+    }
+
+    /**
+     * Freezes the extensions on the path the application starts with: its classes, then each dependency of the
+     * compile and runtime scopes that a launch ships, its enriched or modularized copy in place of the jar. Without
+     * the parameter, removes the record an earlier build left.
+     */
+    private void freezeExtensions() {
+        Path classesDir = outputDirectory.toPath();
+        if (!Files.isDirectory(classesDir)) {
+            return;
+        }
+        if (!freezeExtensions) {
+            io.vidocq.vauban.core.extensions.FrozenExtensions.delete(classesDir);
+            return;
+        }
+        List<Path> deployment = new ArrayList<>();
+        deployment.add(classesDir);
+        for (var artifact : project.getArtifacts()) {
+            boolean shipped = org.apache.maven.artifact.Artifact.SCOPE_COMPILE.equals(artifact.getScope())
+                    || org.apache.maven.artifact.Artifact.SCOPE_RUNTIME.equals(artifact.getScope());
+            if (shipped && artifact.getFile() != null && "jar".equals(artifact.getType())
+                    && !DevOnlyJars.isDevOnly(artifact.getFile().toPath())) {
+                deployment.add(EnrichedJars.resolve(buildDirectory.toPath(), artifact.getFile().toPath()));
+            }
+        }
+        var outcome = io.vidocq.vauban.maven.generate.ExtensionFreezer.freeze(deployment,
+                getClass().getClassLoader(), classesDir, orEmpty(startExtensions));
+        for (String line : io.vidocq.vauban.maven.generate.ExtensionFreezer.report(outcome)) {
+            if (outcome.frozen() || outcome.nothingToFreeze()) {
+                getLog().info(line);
+            } else {
+                getLog().warn(line);
             }
         }
     }

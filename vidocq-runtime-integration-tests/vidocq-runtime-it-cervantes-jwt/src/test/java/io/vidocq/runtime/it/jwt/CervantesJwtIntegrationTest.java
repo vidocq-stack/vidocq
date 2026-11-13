@@ -106,7 +106,9 @@ class CervantesJwtIntegrationTest {
                 .addClass(io.vidocq.cervantes.jaxrs.RolesAllowedDynamicFeature.class)
                 .addClass(io.vidocq.cervantes.cdi.JsonWebTokenContext.class)
                 .addClass(io.vidocq.cervantes.cdi.internal.JsonWebTokenProducer.class)
-                .addClass(io.vidocq.cervantes.cdi.internal.JwtAuthConfigProducer.class);
+                .addClass(io.vidocq.cervantes.cdi.internal.JwtAuthConfigProducer.class)
+                // The check of the mp.jwt.* configuration at start, a Startup observer since cervantes#52.
+                .addClass(io.vidocq.cervantes.cdi.internal.JwtConfigurationCheck.class);
     }
 
     // ============================================================

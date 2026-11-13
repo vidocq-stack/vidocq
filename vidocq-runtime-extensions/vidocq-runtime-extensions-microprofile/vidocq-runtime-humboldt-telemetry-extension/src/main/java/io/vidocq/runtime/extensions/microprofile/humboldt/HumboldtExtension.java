@@ -107,9 +107,9 @@ public final class HumboldtExtension implements VidocqExtension, Suspendable {
         // onStart — OTel SPI providers may resolve their collaborators through
         // CDI.current() (the MP Telemetry TCK's InMemorySpanExporterProvider
         // does), which requires the container to be up.
-        builder.addBeanClass(HumboldtHolder.class);
-        // Created by a plain constructor call, not through its constructor by reflection.
-        builder.addFactory(HumboldtHolder.class, HumboldtHolder::new);
+        // A bean of the runtime, created by a plain constructor call: the extensions the build froze stay frozen
+        // whether the SDK is enabled or not (Vidocq/vauban#288).
+        builder.addHostBean(HumboldtHolder.class, HumboldtHolder::new);
     }
 
     @Override
