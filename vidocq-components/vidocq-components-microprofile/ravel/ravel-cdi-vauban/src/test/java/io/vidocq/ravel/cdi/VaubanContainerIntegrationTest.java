@@ -37,7 +37,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -238,9 +237,10 @@ class VaubanContainerIntegrationTest {
 
     /**
      * The check is the {@code Startup} observer the extension registered, not the extension itself:
-     * Vauban reports the observer's exception as the cause, and that one exception lists every
-     * problem. This is what still runs once the container no longer runs the extension at start
-     * (Vidocq/vauban#288).
+     * the start stops with a {@code DeploymentException}, and one message lists every problem. Vauban
+     * stops the start with the observer's exception itself since Vidocq/vauban#288, and with an
+     * exception whose cause it is before: the messages of the whole chain are read, so both hold.
+     * This is what still runs once the container no longer runs the extension at start.
      */
     @Test
     void the_start_check_throws_one_exception_listing_every_problem() {
@@ -250,9 +250,7 @@ class VaubanContainerIntegrationTest {
 
         DeploymentException failure = assertThrows(DeploymentException.class, () -> startAndClose(initializer));
 
-        DeploymentException thrownByTheStartCheck =
-                assertInstanceOf(DeploymentException.class, failure.getCause(), messagesOf(failure));
-        String message = thrownByTheStartCheck.getMessage();
+        String message = messagesOf(failure);
         assertTrue(message.contains("3 problems"), message);
         assertTrue(message.contains("Missing required config property 'app.required'"), message);
         assertTrue(message.contains("Invalid @ConfigProperty for key 'app.port'"), message);
