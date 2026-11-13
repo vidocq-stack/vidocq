@@ -1136,7 +1136,8 @@ public class Ledger {
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
     </persistence-unit>
     <persistence-unit name="archive" transaction-type="JTA">
-        <jta-data-source>archive</jta-data-source>
+        <qualifier>com.acme.ledger.Archived</qualifier>
+        <jta-data-source>notes</jta-data-source>
         <class>com.acme.ledger.Note</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
     </persistence-unit>
@@ -1151,6 +1152,34 @@ EntityManager notes;
 @PersistenceUnit(unitName = "ledger")
 EntityManagerFactory ledger;
 ----
+
+[#noether-persistence-inject]
+*Injection with `@Inject`.* Every unit is also a set of CDI beans (Jakarta EE 11 Platform §13.12):
+
+* an `EntityManagerFactory`, application scoped and named after the unit;
+* for a JTA unit, an `EntityManager`, transaction scoped, or in the scope the unit's `<scope>` element names;
+* the factory's `CriteriaBuilder`, `PersistenceUnitUtil`, `Cache`, `SchemaManager` and `Metamodel`, dependent.
+
+They carry the qualifiers the unit's `<qualifier>` elements name (Jakarta Persistence 3.2 §8.2.1.5), or `@Default` when it names none. With the descriptor above, `@Inject EntityManager` reaches `ledger`, and `@Inject @Archived EntityManager` reaches `archive`, where `Archived` is a `@Qualifier` annotation of the application:
+
+[source,java]
+----
+@Inject
+@Archived
+EntityManager notes;
+
+@Inject
+@Archived
+EntityManagerFactory archive;
+----
+
+* *Same unit, same factory.* The beans run on the factory that `@PersistenceContext` and `@PersistenceUnit` inject, so an `@Inject` entity manager and a `@PersistenceContext` of the same unit share the persistence context of a transaction.
+* *No `EntityManager` bean for a RESOURCE_LOCAL unit.* A container-managed entity manager is a JTA one, so Vidocq gives that unit no `EntityManager` bean and logs its `<scope>` as ignored.
+* *Units without a qualifier.* Each of them gives `@Default` beans, so with two of them an `@Inject EntityManager` is ambiguous and fails the start. Give each unit a `<qualifier>`, or inject with `@PersistenceContext(unitName = ...)`.
+* *A pool and a unit of the same name.* The `EntityManagerFactory` bean takes the unit's name, and the `DataSource` bean of a named pool takes the pool's name, so CDI refuses the two and the start fails. Name them differently: the `archive` unit above runs on the pool `notes`.
+* *Errors.* A `<qualifier>` or `<scope>` class the application cannot load, or one that is not a qualifier or a scope, fails the start, naming the unit.
+
+See xref:dev@noether::usage.adoc#inject-units[Injecting a persistence unit with @Inject] in Noether's documentation.
 
 *Data sources.* A unit takes its connections from a Mansart pool, never from its own JDBC properties when a pool is there.
 

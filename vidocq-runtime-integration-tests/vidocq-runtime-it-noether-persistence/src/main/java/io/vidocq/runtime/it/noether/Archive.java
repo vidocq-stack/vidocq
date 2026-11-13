@@ -27,9 +27,9 @@ import jakarta.persistence.PersistenceUnit;
 import jakarta.transaction.Transactional;
 
 /**
- * The second unit, {@code archive}, on the named pool {@code archive}: its injection points name it. The
- * {@code @Named("archive")} DataSource the unit's {@code jta-data-source} names comes from
- * {@code vidocq.pool.archive.url} alone, with no {@code @VidocqDataSources} anywhere in the module.
+ * The second unit, {@code archive}, on the named pool {@code notes}: its injection points name it. The
+ * {@code @Named("notes")} DataSource the unit's {@code jta-data-source} names comes from
+ * {@code vidocq.pool.notes.url} alone, with no {@code @VidocqDataSources} anywhere in the module.
  */
 @ApplicationScoped
 public class Archive {
@@ -49,6 +49,11 @@ public class Archive {
         return notes.createQuery("select count(n) from Note n where n.id = :id", Long.class)
                 .setParameter("id", id)
                 .getSingleResult();
+    }
+
+    /** Whether the persistence context of this unit, in the current transaction, manages the entity. */
+    public boolean manages(Object entity) {
+        return notes.contains(entity);
     }
 
     public EntityManagerFactory factory() {

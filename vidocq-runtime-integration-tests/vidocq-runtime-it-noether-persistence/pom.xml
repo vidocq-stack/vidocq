@@ -73,7 +73,7 @@
                             <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
                             <version>${project.version}</version>
                         </path>
-                        <!-- The @Named("archive") DataSource of vidocq.pool.archive.url in vidocq.properties. -->
+                        <!-- The @Named("notes") DataSource of vidocq.pool.notes.url in vidocq.properties. -->
                         <path>
                             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                             <artifactId>vidocq-runtime-mansart-pool-datasources-codegen</artifactId>

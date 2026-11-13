@@ -20,9 +20,12 @@
 package io.vidocq.runtime.it.noether;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.vidocq.runtime.core.VidocqBootstrap;
 import jakarta.enterprise.inject.literal.NamedLiteral;
+import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.CDI;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.metamodel.Type;
@@ -36,7 +39,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Two units in one application module: {@code ledger} on the default pool, {@code archive} on the named pool
- * {@code archive}. Each lists its entity and excludes the unlisted ones, so neither takes the other's.
+ * {@code notes}. Each lists its entity and excludes the unlisted ones, so neither takes the other's. The
+ * {@code archive} unit names the qualifier {@link Archived}, so it is also injected with {@code @Inject}
+ * (Jakarta EE 11 Platform §13.12).
  */
 class NoetherPersistenceUnitsModulePathTest {
 
@@ -73,10 +78,37 @@ class NoetherPersistenceUnitsModulePathTest {
         archive().record("archived");
 
         assertEquals(1, archive().count("archived"));
-        assertEquals(1, tables(CDI.current().select(DataSource.class, NamedLiteral.of("archive")).get(), "NOTE"),
-                "the archive unit created its table in vidocq.pool.archive.url's database");
+        assertEquals(1, tables(CDI.current().select(DataSource.class, NamedLiteral.of("notes")).get(), "NOTE"),
+                "the archive unit created its table in vidocq.pool.notes.url's database");
         assertEquals(0, tables(CDI.current().select(DataSource.class).get(), "NOTE"),
                 "a unit of the default pool manages Note too and created its table there");
+    }
+
+    @Test
+    void the_unit_its_descriptor_qualifies_is_injected_with_inject() {
+        archivist().record("injected");
+
+        assertEquals(1, archive().count("injected"));
+        assertSame(archive().factory().getMetamodel(), archivist().factory().getMetamodel(),
+                "@Inject @Archived and @PersistenceUnit(unitName = \"archive\") reach one factory");
+    }
+
+    @Test
+    void the_injected_entity_manager_shares_the_persistence_context_of_its_transaction() {
+        assertTrue(archivist().sharesThePersistenceContextOfTheUnit("shared"),
+                "the @PersistenceContext of the unit manages what @Inject @Archived persisted");
+    }
+
+    @Test
+    void the_factory_bean_of_a_unit_is_named_after_it() {
+        Set<Bean<?>> beans = CDI.current().getBeanManager().getBeans("archive");
+
+        assertEquals(1, beans.size());
+        assertTrue(beans.iterator().next().getTypes().contains(EntityManagerFactory.class));
+    }
+
+    private static Archivist archivist() {
+        return CDI.current().select(Archivist.class).get();
     }
 
     private static Set<Class<?>> entities(EntityManagerFactory factory) {

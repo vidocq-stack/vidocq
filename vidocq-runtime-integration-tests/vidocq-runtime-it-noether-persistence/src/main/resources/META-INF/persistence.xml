@@ -13,9 +13,14 @@
             <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
         </properties>
     </persistence-unit>
-    <!-- The named pool `archive` (vidocq.pool.archive.url). -->
+    <!--
+        The named pool `notes` (vidocq.pool.notes.url). The pool and the unit do not share a name: the unit's
+        EntityManagerFactory bean is named after the unit (Jakarta EE 11 Platform §13.12.2) and the pool's DataSource
+        bean after the pool, and CDI refuses two beans of one name. @Inject @Archived reaches this unit.
+    -->
     <persistence-unit name="archive" transaction-type="JTA">
-        <jta-data-source>archive</jta-data-source>
+        <qualifier>io.vidocq.runtime.it.noether.Archived</qualifier>
+        <jta-data-source>notes</jta-data-source>
         <class>io.vidocq.runtime.it.noether.Note</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
         <properties>
