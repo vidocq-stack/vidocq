@@ -230,6 +230,16 @@ The `vidocq-runtime-core-codegen` bundle wires the Vauban indexer (`vauban-proce
 
 Extension discovery itself needs no index file: it is plain `ServiceLoader` over the `provides io.vidocq.runtime.spi.VidocqExtension with …` directives of the modules on the module path.
 
+[#frozen-bce]
+=== Build compatible extensions, frozen at build [.tag-new]#NEW#
+
+The CDI side of an extension is often a build compatible extension of its brick: Ravel's synthesises the `@ConfigProperty` beans, Cassini's gives a scope to the `@Path` classes, Dirac's lists the classes that carry metrics. Vauban used to run all of them again at each start; `vidocq:generate` now freezes what they did, and the start loads it (xref:modules/vidocq-runtime-maven-plugin.adoc#frozen-extensions[Build compatible extensions frozen at build]). For that to hold, a brick and its Vidocq extension follow four rules.
+
+. *The brick's extension computes from the deployment's classes only*, and checks the environment the application starts in — a required configuration value, a key that must parse — in an observer of `Startup` that throws a `DeploymentException`, not in a phase. Vauban's page says how: xref:vauban::concepts.adoc#writing-a-frozen-extension[Writing an extension the build can freeze]. Ravel (ravel#50) and Cervantes (cervantes#52) are the examples to copy.
+. *The Vidocq extension has a `-codegen` bundle that brings the brick's extension to the processor path* (xref:modules/vidocq-runtime-extensions.adoc#codegen-bundles[codegen bundles]). An extension the compilation does not see is still frozen by `vidocq:generate`, but nothing it adds reaches the code generated while compiling; that is how `@WithSpan` came to rely on the start alone (Vidocq/vidocq#546).
+. *A bean the Vidocq extension adds to the container in `beforeStart` goes through `VaubanContainerBuilder.addHostBean(type, factory)`*, not `addBeanClass`: a holder that exists or not with the configuration of the start (the default pool, the Telemetry SDK) must leave the build's record valid. The frozen extensions never see such a bean, so give it nothing an extension would have to act on.
+. *Test both starts.* The `layer` section of the startup report says `N extensions frozen at build` for an application built by `vidocq:generate`; the same application behaves the same with `-Dvidocq.freezeExtensions=false`, and still refuses to start on an invalid environment.
+
 === Static generation, no recording
 
 There is no bytecode-recording machinery in `vidocq-runtime-core`: nothing is "replayed" at startup. Everything that would otherwise require runtime reflection is generated at compile time by the bricks themselves — Vauban emits client proxies and interceptor plumbing via the Class-File API (JEP 484), Cassini generates its REST dispatch statically — and the runtime core merely runs the extension lifecycle over those pre-built artifacts.

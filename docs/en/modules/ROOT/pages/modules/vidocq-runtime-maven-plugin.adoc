@@ -379,7 +379,25 @@ The copy is a modified third-party jar: its signature files are dropped, and its
 | `scanExcludes` | none | Jars never scanned.
 | `autoScan` (`vidocq.generate.autoScan`) | `true` | Scan every CDI bean archive.
 | `cacheDir` (`vidocq.generate.cacheDir`)| `$XDG_CACHE_HOME/vidocq/depgen`, else `~/.cache/vidocq/depgen` | Where the output of the brick processors is cached. See <<depgen-cache>>.
+| `freezeExtensions` (`vidocq.freezeExtensions`) [.tag-new]#NEW# | `true` | Freeze the build compatible extensions of the application. See <<frozen-extensions>>.
+| `startExtensions` (`vidocq.startExtensions`) [.tag-new]#NEW# | none | Class names of build compatible extensions the start runs again whatever they asked.
 |===
+
+[#frozen-extensions]
+=== Build compatible extensions frozen at build [.tag-new]#NEW#
+
+Once the dependencies are enriched, `vidocq:generate` runs the build compatible extensions of the application — those of the bricks, such as Ravel's or Cassini's, and the application's own — on the path the application starts with: `target/classes`, then every dependency of the compile and runtime scopes a launch ships, its enriched or modularized copy in place of the jar. It writes what they did in `target/classes/META-INF/vauban-frozen-extensions.properties` and two companion files, and the container start loads that instead of running them (xref:vauban::concepts.adoc#frozen-extensions[Extensions frozen at build], Vidocq/vauban#288). On an application with eleven Vidocq extensions, ten of them with a build compatible extension, the start took 389 to 400 ms instead of 422 to 431 ms (Vauban's BENCH-20261113-01).
+
+The goal says what it did:
+
+[source,text]
+----
+[INFO] Vauban: froze 10 build compatible extension(s); the container start loads what they did.
+----
+
+and names the extensions that run again at each start because they left work for it, or why nothing was frozen: an extension that failed or reported an error, one that removes annotations in `@Enhancement`, a synthetic component the record cannot express. The start then runs the extensions, as it does with `-Dvidocq.freezeExtensions=false`.
+
+The record holds a fingerprint of the bean classes of that path, and a start uses it only for the same fingerprint. So the extensions run at start, as before, whenever the deployment is not the one frozen: under `vidocq:dev` (the dev console and the `-dev` modules join the path), on a test class path, after an IDE build that did not run the goal, in an embedded deployment. The `layer` section of the startup report says which happened (xref:modules/vidocq-runtime-core.adoc#startup-report[the startup report]): `cdi extensions  10 extensions frozen at build`, or `10 extensions run at start`.
 
 The dev console's CDI panel shows the result: a scanned jar's beans read `Class-File` or `partial` in its `codegen` column, no longer `reflection` (xref:dev-console.adoc#cdi-panel[the CDI panel]). A class that only a build-compatible extension makes a bean — a JAX-RS `@Provider` to which Cassini's extension gives `@Dependent`, say — is covered too: `generate` resolves the runtime-scope dependencies as well as the compile-scope ones, so it runs every extension the application runs.
 
