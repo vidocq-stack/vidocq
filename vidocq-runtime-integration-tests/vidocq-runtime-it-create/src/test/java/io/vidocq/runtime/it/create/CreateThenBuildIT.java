@@ -25,6 +25,7 @@ import io.vidocq.runtime.tooling.Reporter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -32,7 +33,12 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -58,6 +64,22 @@ class CreateThenBuildIT {
      * that Vauban is the one this build uses, two are still allowed.
      */
     private static final String LAST_ROUND = "created in the last round will not be subject to annotation processing";
+
+    /** How long a packaged application may take to print the last line of its boot. */
+    private static final Duration START_TIMEOUT = Duration.ofMinutes(1);
+
+    /** What {@code vidocq:generate} writes of the build compatible extensions it ran (Vidocq/vauban#288). */
+    private static final String FROZEN_RECORD = "META-INF/vauban-frozen-extensions.properties";
+
+    /** What {@code vidocq:generate} logs once it has frozen the build compatible extensions. */
+    private static final Pattern FROZE = Pattern.compile("Vauban: froze [1-9]\\d* build compatible extension\\(s\\)");
+
+    /** The {@code cdi extensions} row of the startup report of a start that loaded the record of the build. */
+    private static final Pattern FROZEN_AT_BUILD =
+            Pattern.compile("cdi extensions\\s+[1-9]\\d* extensions? frozen at build");
+
+    /** The last line of a boot. */
+    private static final String STARTED = "Vidocq - Started in";
 
     /** The IT checks what the scaffolder writes and what the build prints, not what the scaffolder says. */
     private static final Reporter SILENT = new Reporter() {
@@ -115,6 +137,9 @@ class CreateThenBuildIT {
         assertEquals(List.of(), warnings, "the created project builds with warnings:\n" + output);
         long lastRound = output.lines().filter(l -> l.contains(LAST_ROUND)).count();
         assertTrue(lastRound == 0 || lastRound == 2, () -> lastRound + " last-round warnings:\n" + output);
+
+        assertTheBuildFrozeItsExtensions(project, output);
+        assertStartsOnTheFrozenExtensions(project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh"));
     }
 
     /** {@code vidocq create --with-parent}: the previous style still builds and tests itself under the parent. */
@@ -145,6 +170,70 @@ class CreateThenBuildIT {
         assertTrue(output.contains("in com.acme.demo.app.HelloResourceTest"), "the first test did not run:\n" + output);
         assertTrue(Files.isRegularFile(project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh")),
                 "vidocq:package wrote no launcher:\n" + output);
+
+        assertTheBuildFrozeItsExtensions(project, output);
+        assertStartsOnTheFrozenExtensions(project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh"));
+    }
+
+    /**
+     * Vidocq/vauban#288, Vidocq/vidocq#548: {@code vidocq:generate}, which the created project runs at
+     * {@code process-classes}, ran the build compatible extensions once, said so, and wrote what they did.
+     */
+    private static void assertTheBuildFrozeItsExtensions(Path project, String output) {
+        assertTrue(Files.isRegularFile(project.resolve("target/classes/" + FROZEN_RECORD)),
+                "vidocq:generate wrote no record of the build compatible extensions:\n" + output);
+        assertTrue(FROZE.matcher(output).find(),
+                "vidocq:generate did not freeze the build compatible extensions:\n" + output);
+    }
+
+    /**
+     * Starts what the build packaged and reads its detailed startup report: the start loaded what the build recorded
+     * instead of running the build compatible extensions. The record is used only for the deployment it was written
+     * for, so this fails when the packaged path is not the one {@code vidocq:generate} froze.
+     *
+     * <p>The application listens on a port the system picks (port 0), never on 8080, which another process of the
+     * machine may hold, and only the process started here is stopped.
+     */
+    private static void assertStartsOnTheFrozenExtensions(Path launcher) throws Exception {
+        ProcessBuilder command = new ProcessBuilder(launcher.toString()).redirectErrorStream(true);
+        command.environment().put("JAVA_HOME", System.getProperty("java.home"));
+        // The java launcher reads it itself, whatever the launcher: the one of a jlink image passes no JAVA_OPTS.
+        command.environment().put("JDK_JAVA_OPTIONS", "-Dvidocq.http.port=0 -Dvidocq.startup.report=detailed");
+        Process application = command.start();
+        String boot;
+        try (ExecutorService reader = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<String> started = reader.submit(() -> untilStarted(application));
+            try {
+                boot = started.get(START_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                throw new AssertionError(launcher + " did not start within " + START_TIMEOUT, e);
+            } finally {
+                // Ends the read as well: the stream of a stopped process closes.
+                application.destroy();
+                if (!application.waitFor(30, TimeUnit.SECONDS)) {
+                    application.destroyForcibly();
+                }
+            }
+        }
+        assertTrue(boot.contains(STARTED), launcher + " did not start:\n" + boot);
+        assertFalse(boot.contains(":8080/"), launcher + " listened on the default port:\n" + boot);
+        assertTrue(FROZEN_AT_BUILD.matcher(boot).find(),
+                launcher + " did not start on the extensions frozen at build:\n" + boot);
+    }
+
+    /** What the application prints up to the last line of its boot, or up to its end when it does not start. */
+    private static String untilStarted(Process application) throws IOException {
+        StringBuilder boot = new StringBuilder();
+        try (BufferedReader lines = application.inputReader(StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = lines.readLine()) != null) {
+                boot.append(line).append('\n');
+                if (line.contains(STARTED)) {
+                    break;
+                }
+            }
+        }
+        return boot.toString();
     }
 
     /**
