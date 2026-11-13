@@ -338,3 +338,51 @@ test: `ParsedJwtTest`.
 - **Symptom**: the Vidocq reflection audit shows `FilterEntry` reading `@Priority`, `@PreMatching` and the name bindings of `JwtAuthenticationFilter` and `RolesAllowedDynamicFeature` by reflection at startup, because `cervantes-jaxrs` ships no Cassini provider descriptor.
 - **Fix**: `cervantes-jaxrs` runs `cassini-processor` (cassini-api in `provided` scope, `requires static io.vidocq.cassini.api`) and declares `provides io.vidocq.cassini.spi.gen.ProviderDescriptor` for both providers. A runtime without Cassini still resolves the module: a `provides` whose service module is only `requires static` and absent is not checked, and nothing loads the generated classes. `CassiniProviderDescriptorsTest` checks that `module-info` provides every descriptor the processor lists. Audit application: `FilterEntry` reflective calls 80 → 40 at startup; MP JWT TCK 208/208.
 
+## CERV-011 — The `mp.jwt.*` configuration is only checked when the container runs the extension again at start (cervantes#52)
+
+- **Opening date**: 2026-11-13
+- **Status**: ✅ FIXED 2026-11-13 (branch `fix/jwt-config-start-check`)
+
+### Symptom
+
+On a container that runs its build compatible extensions when the application builds and not again
+when it starts (Vauban with Vidocq/vauban#288), an invalid `mp.jwt.*` configuration no longer stops
+the start: the application starts, and every request answers 500. Measured in cervantes#52 with the
+extension cycle skipped at start and an invalid `mp.jwt.verify.publickey`.
+
+### Minimal repro
+
+`FailFastStartupTest`: build a `VaubanContainer` with the beans of `cervantes-cdi-vauban` and
+without `CervantesClaimExtension`, with `mp.jwt.verify.publickey.algorithm=rs256` (or an unreadable
+key). Before the fix the container starts; a `DeploymentException` is expected.
+
+### Cause
+
+The check lived in `CervantesClaimExtension.validateJwtConfiguration`, a `@Validation` method that
+returned early at build time (`ExtensionPhase.isBuildTime()`, through `BuildPhase`). It therefore ran
+only because Vauban ran every extension again at each start. Its Javadoc ruled out a `Startup`
+observer because Vauban swallowed the exceptions of lifecycle observers; that has not been true
+since vauban#97, which fails the boot.
+
+### Fix
+
+The check is `JwtConfigurationCheck`, a `@Dependent` bean of `cervantes-cdi-vauban` that observes
+`jakarta.enterprise.event.Startup` and throws a `DeploymentException` carrying the message of
+`JwtAuthConfigProducer.createValidator`. It is listed in `META-INF/vauban-beans.list` and found by
+any container that scans the bean archive, so it needs no extension. The extension has no
+`@Validation` method any more and no longer asks `ExtensionPhase.isBuildTime()`; `BuildPhase` is
+removed. The rules "no verification key" and "no MicroProfile Config implementation" still mean
+nothing to check.
+
+The observer has priority `Interceptor.Priority.PLATFORM_BEFORE + 1`, not `PLATFORM_BEFORE`: Vauban
+reads a priority of 0 on an observer as none declared and gives it the default priority
+(`ObserverDisposerDiscovery`, `if (priority == 0)`), so at 0 the check ran after the observers of
+the application. That is a Vauban bug, not fixed here: to report on Vidocq/vauban.
+
+Verified: `FailFastStartupTest` and `JwtConfigurationCheckTest` (Vauban, with and without the
+extension), `WeldFailFastStartupTest` (Weld SE 6.0 throws the `DeploymentException` of the check),
+and by hand on Open Liberty 26.0.0.10 with `MP_JWT_VERIFY_PUBLICKEY_ALGORITHM=rs256` in the
+environment of `cervantes-it-openliberty` (`SRVE0283E` with the message of the check, then
+`CWWKZ0012I`: the application is not started). The TCK harness adds the bean next to the producer.
+MP JWT TCK 208/208.
+

@@ -24,7 +24,7 @@ This page consolidates the public surface of Cervantes: artefacts to declare, ex
 
 | `io.vidocq.cervantes`
 | `cervantes-cdi-vauban`
-| `@RequestScoped JsonWebToken` producer, `CervantesClaimExtension` BCE for `@Claim`, `JwtAuthConfigProducer` producing the `JwtValidator`.
+| `@RequestScoped JsonWebToken` producer, `CervantesClaimExtension` BCE for `@Claim`, `JwtAuthConfigProducer` producing the `JwtValidator`, `JwtConfigurationCheck` checking the `mp.jwt.*` configuration at container start.
 
 | `io.vidocq.cervantes`
 | `cervantes-jaxrs`
@@ -62,7 +62,7 @@ All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.4.
 | No unqualified export — the only export is qualified: `exports io.vidocq.cervantes.internal to io.vidocq.cervantes.cdi.vauban`. The stable SPI reaches consumers through `requires transitive io.vidocq.cervantes.api`.
 
 | `io.vidocq.cervantes.cdi.vauban`
-| `exports io.vidocq.cervantes.cdi` (`JsonWebTokenContext`, `CervantesClaimExtension`) and `exports io.vidocq.cervantes.cdi.internal` (producers and generated `_VaubanComponents`). `provides BuildCompatibleExtension` and `VaubanComponentProvider`. `requires jakarta.json` — the `@Claim` resolver maps claims to JSON-P values — and `uses org.eclipse.microprofile.config.spi.ConfigProviderResolver`. `requires io.vidocq.vauban.api`: a runtime dependency under any container, see <<other-containers>>.
+| `exports io.vidocq.cervantes.cdi` (`JsonWebTokenContext`, `CervantesClaimExtension`) and `exports io.vidocq.cervantes.cdi.internal` (producers, the configuration check and generated `_VaubanComponents`). `provides BuildCompatibleExtension` and `VaubanComponentProvider`. `requires jakarta.json` — the `@Claim` resolver maps claims to JSON-P values — and `uses org.eclipse.microprofile.config.spi.ConfigProviderResolver`. `requires io.vidocq.vauban.api`: a runtime dependency under any container, see <<other-containers>>.
 
 | `io.vidocq.cervantes.jaxrs`
 | `io.vidocq.cervantes.jaxrs.*` — filters, `SecurityContext`, `DynamicFeature`. `requires io.vidocq.vauban.api`, see <<other-containers>>.
@@ -75,7 +75,7 @@ All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.4.
 
 On a class path, `provides` clauses are ignored. This is the case under Weld, in an application server, or in any WAR. So `cervantes-cdi-vauban` also lists `CervantesClaimExtension` in `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`. Without it, `@Claim` injection points stay unsatisfied (CERV-007).
 
-`cervantes-cdi-vauban` and `cervantes-jaxrs` are also explicit bean archives: each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A container that does not scan implicit archives, such as Weld SE by default, therefore still discovers the producers, the request context, the authentication filter and the `@RolesAllowed` feature.
+`cervantes-cdi-vauban` and `cervantes-jaxrs` are also explicit bean archives: each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A container that does not scan implicit archives, such as Weld SE by default, therefore still discovers the producers, the request context, the configuration check, the authentication filter and the `@RolesAllowed` feature.
 
 [#other-containers]
 === Other CDI containers
@@ -87,7 +87,7 @@ Cervantes does not need Vauban. The jars run unchanged under another CDI contain
 | Module | What it runs
 
 | `cervantes-it-weld`
-| Weld SE 6.0 (CDI 4.1), class path, no Vauban, Ravel for MicroProfile Config: the authentication filter bean validates a signed bearer token and sets the security context, an application bean reads the caller through `JsonWebToken`, `@Claim` and `ClaimValue`, a request without a token stays anonymous, and a token signed by another key is rejected.
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban, Ravel for MicroProfile Config: the authentication filter bean validates a signed bearer token and sets the security context, an application bean reads the caller through `JsonWebToken`, `@Claim` and `ClaimValue`, a request without a token stays anonymous, a token signed by another key is rejected, and an invalid `mp.jwt.*` configuration stops the start.
 
 | `cervantes-it-openliberty`
 | A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, JSON-P 2.1, MicroProfile Config 3.1), with Liberty's `mpJwt` and `appSecurity` features off: a signed token reaches a `@RolesAllowed` resource, a missing or forged token gets 401, a missing role 403, and `@PermitAll` needs no token.
@@ -220,7 +220,9 @@ The standard `mp.jwt.verify.clock.skew` key is **not read** by this release: the
 [#config-validated-at-start]
 [NOTE]
 ====
-The configuration is validated when the container starts, never during compilation. An unrecognised `mp.jwt.verify.publickey.algorithm`, an unrecognised `mp.jwt.decrypt.key.algorithm` (only the exact, case-sensitive names `RSA-OAEP` and `RSA-OAEP-256` are accepted), an unreadable inline verification key (`mp.jwt.verify.publickey`), an unreadable file or classpath verification key location (`mp.jwt.verify.publickey.location`) or an unreadable decryption key (`mp.jwt.decrypt.key` or `mp.jwt.decrypt.key.location`, always read eagerly) fails the application at container start with a `jakarta.enterprise.inject.spi.DeploymentException` whose message names the property, the offending value and, for an algorithm, the supported values. When no verification key is configured at all, MP JWT stays off and the application starts normally; the decryption settings are then not read. An `http://` or `https://` verification key location is fetched lazily, at the first validation (see xref:migration.adoc[Migration]). A valid value only rejects JWE tokens that announce another algorithm.
+The configuration is validated when the container starts, never during compilation: `JwtConfigurationCheck`, a bean of `cervantes-cdi-vauban`, observes the CDI `Startup` event and builds the validator once. The check is not a phase of the build compatible extension, so it runs at every start and on every container, also on one that runs its extensions while the application builds and not again when it starts (see xref:internals.adoc#configuration-check[Internals]). It runs before the `Startup` observers of libraries and applications, which are not notified when the configuration is invalid.
+
+An unrecognised `mp.jwt.verify.publickey.algorithm`, an unrecognised `mp.jwt.decrypt.key.algorithm` (only the exact, case-sensitive names `RSA-OAEP` and `RSA-OAEP-256` are accepted), an unreadable inline verification key (`mp.jwt.verify.publickey`), an unreadable file or classpath verification key location (`mp.jwt.verify.publickey.location`) or an unreadable decryption key (`mp.jwt.decrypt.key` or `mp.jwt.decrypt.key.location`, always read eagerly) fails the application at container start with a `jakarta.enterprise.inject.spi.DeploymentException` whose message names the property, the offending value and, for an algorithm, the supported values. Vauban throws a `DeploymentException` of its own that names the observer, with the exception of the check as its cause; Weld SE throws the exception of the check as it is; Open Liberty logs it (`SRVE0283E`) and does not start the application (`CWWKZ0012I`). When no verification key is configured at all, MP JWT stays off and the application starts normally; the decryption settings are then not read. An `http://` or `https://` verification key location is fetched lazily, at the first validation (see xref:migration.adoc[Migration]). A valid value only rejects JWE tokens that announce another algorithm.
 ====
 
 === Token transport

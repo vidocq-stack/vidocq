@@ -52,7 +52,7 @@ Cervantes does not log which path it took.
 
 `cervantes-core` is pure Java. It depends only on `cervantes-mp-jwt-api` (spec), `cervantes-api` (public SPI), `jakarta.json` (parsing through xref:champollion::index.adoc[Champollion]), and on the MicroProfile Config SPI as a method signature — _not_ on any runtime implementation. It can be used outside any container: a unit test can generate an RSA pair, forge a token, and validate the whole thing without starting Cassini or Vauban.
 
-`cervantes-cdi-vauban` wires the engine into CDI: `@RequestScoped JsonWebToken` producer, `@Claim` synthesis BCE, `JwtValidator` producer configured from MP-Config.
+`cervantes-cdi-vauban` wires the engine into CDI: `@RequestScoped JsonWebToken` producer, `@Claim` synthesis BCE, `JwtValidator` producer configured from MP-Config, and the check of that configuration when the container starts (<<configuration-check>>).
 
 `cervantes-jaxrs` wires the engine into JAX-RS: an auth `ContainerRequestFilter`, a `DynamicFeature` for `@RolesAllowed`, a `SecurityContext` backed by the validated token. **No Cassini modification was required** — Cervantes uses the standard JAX-RS API (`setSecurityContext`, `@PreMatching`, `@Priority(AUTHENTICATION)`, `DynamicFeature`).
 
@@ -166,6 +166,22 @@ public class JsonWebTokenContext {
 . **`ClaimSyntheticCreator`** — implements `SyntheticBeanCreator<T>`. On each resolution, it reads the `InjectionPoint`, extracts `@Claim` (`value()` or `standard().name()`), retrieves the current `JsonWebToken` through `JsonWebTokenContext`, and delegates to `ClaimResolver.resolve(jwt, claimName, type)` for typed conversion.
 
 The pattern mirrors Ravel's `ConfigCdiExtension`, which inspired the approach.
+
+The extension reads nothing of the deployment's environment: it does the same work whenever a container runs it, while the application builds or when it starts.
+
+[#configuration-check]
+== Configuration check at start: `JwtConfigurationCheck`
+
+The `JwtValidator` bean is `@Dependent`, so the container builds it at its first injection: left alone, an invalid `mp.jwt.*` configuration would only show at the first request. `JwtConfigurationCheck`, a `@Dependent` bean of `cervantes-cdi-vauban`, observes `jakarta.enterprise.event.Startup`, builds the validator once through `JwtAuthConfigProducer.createValidator` and throws a `jakarta.enterprise.inject.spi.DeploymentException` when that fails, which stops the start (xref:reference.adoc#config-validated-at-start[what is checked, and what the container reports]).
+
+The check is a bean, not a phase of `CervantesClaimExtension` (cervantes#52):
+
+* The configuration to check is the one the application starts with. An extension may run while the application compiles, where it would read the build machine's configuration.
+* CDI Lite lets a container run its extensions when the application builds and not again when it starts. A check in the extension would then never run at start; an observer of `Startup` is notified at every start, on Vauban, Weld and Open Liberty alike.
+
+The observer has priority `Interceptor.Priority.PLATFORM_BEFORE + 1`: it runs before the `Startup` observers of libraries and applications, and none of them is notified for an application that does not start. The priority is one above `PLATFORM_BEFORE`, whose value is 0, because Vauban reads a priority of 0 on an observer as none declared and falls back to the default priority.
+
+Nothing is checked when no verification key is configured (MP JWT is off), or when no MicroProfile Config implementation is present, since nothing can then configure a key.
 
 == Thread-safe JWKS cache (`JwksKeyResolver`)
 
