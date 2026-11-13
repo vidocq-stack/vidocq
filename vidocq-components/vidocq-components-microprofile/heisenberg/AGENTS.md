@@ -175,7 +175,7 @@ java -jar heisenberg-bench/target/benchmarks.jar
   `HeisenbergExtension` (CDI 4.1 BCE `BuildCompatibleExtension` under
   `io.vidocq.heisenberg.cdi.internal`, which validates annotations at container startup),
   `InterceptorPriorityExtension` (BCE that rewrites `@Priority` according to config when the
-  container starts; under Vauban only 3850 takes effect until BUG-019 is fixed upstream),
+  container starts; under Vauban it needs the fix of Vauban's BUG-20261113-12, see BUG-019),
   `StateRegistryBean` + `BulkheadStateRegistryBean` (`@ApplicationScoped`),
   `DiracFtMetricsRecorder` (§9 MP Metrics) and `OtelFtMetricsRecorder` (§10 OpenTelemetry)
   which coexist through fan-out (`CompositeFtMetricsRecorder`, `MetricsRecorderResolver`).

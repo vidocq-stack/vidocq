@@ -288,7 +288,7 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 |---|---|---|
 | Complete `ConfigResolver` | Precedence: `<class>/<method>/<Annotation>/<param>` > `<class>/<Annotation>/<param>` > `<Annotation>/<param>` — covers Retry (9 params), Timeout (2), CircuitBreaker (7), Bulkhead (2), Fallback (applyOn/skipOn) | ✅ |
 | Disabling through Config key | `Retry/enabled=false`, `<class>/CircuitBreaker/enabled=false`, etc. (already in M7) | ✅ |
-| `mp.fault.tolerance.interceptor.priority` | Read only once at container startup through an `@Enhancement` (CDI 4.1 BCE; `InterceptorPriorityExtension` since heisenberg#66) which rewrites `@Priority` on `FaultToleranceInterceptor`. Under Vauban the rewritten priority is not applied yet (BUG-019): only `3850`, served by `FaultTolerancePriority3850Interceptor`, takes effect | ⚠️ |
+| `mp.fault.tolerance.interceptor.priority` | Read only once at container startup through an `@Enhancement` (CDI 4.1 BCE; `InterceptorPriorityExtension` since heisenberg#66) which rewrites `@Priority` on `FaultToleranceInterceptor`. Under Vauban the rewritten priority is applied since the fix of its BUG-20261113-12 (BUG-019 here); `3850` is also served by `FaultTolerancePriority3850Interceptor` | ✅ |
 | `mp.fault.tolerance.metrics.enabled` | Flag exposed through `ConfigResolver.isMetricsEnabled()` ; no-op stub if MicroProfile Metrics absent (effective integration deferred — not required for TCK) | ✅ |
 | Resolution through Ravel | `ConfigProvider.getConfig()` → Ravel ; automatic loading of `META-INF/microprofile-config.properties` | ✅ |
 | `FallbackConfig` record | New immutable record + `shouldApplyFallback(Throwable)` ; `FallbackPolicy` wired on top of it | ✅ |
@@ -298,7 +298,7 @@ heisenberg-examples     io.vidocq.heisenberg.examples
 
 **M8 decisions:**
 - `@Fallback.value` (handler class) and `@Fallback.fallbackMethod` are **not** overridable: they require startup validation through the BCE and a runtime change would break the type-safety invariant.
-- `mp.fault.tolerance.interceptor.priority` is applied through the BCE `@Enhancement` hook — the value is read only once, the `@Priority` annotation is rewritten on `FaultToleranceInterceptor` (CDI 4.1 `AnnotationLiteral` pattern). Since heisenberg#66 (2026-11-13) the hook lives in an extension of its own, `InterceptorPriorityExtension`, which asks Vauban's `ExtensionPhase.isBuildTime()` and does nothing at build time: the value belongs to the configuration the application starts with, and, with Vidocq/vauban#288, Vauban runs again at start only the extensions that asked. BUG-019 records what Vauban does not apply yet.
+- `mp.fault.tolerance.interceptor.priority` is applied through the BCE `@Enhancement` hook — the value is read only once, the `@Priority` annotation is rewritten on `FaultToleranceInterceptor` (CDI 4.1 `AnnotationLiteral` pattern). Since heisenberg#66 (2026-11-13) the hook lives in an extension of its own, `InterceptorPriorityExtension`, which asks Vauban's `ExtensionPhase.isBuildTime()` and does nothing at build time: the value belongs to the configuration the application starts with, and, with Vidocq/vauban#288, Vauban runs again at start only the extensions that asked. BUG-019 records what Vauban did not apply before the fix of its BUG-20261113-12.
 - Environment variables: environment resolution is transparently handled by `ConfigProvider` (Ravel), with the MP Config convention (`MP_FAULT_TOLERANCE_*` → `mp.fault.tolerance.*`). No Heisenberg-specific logic.
 
 ---

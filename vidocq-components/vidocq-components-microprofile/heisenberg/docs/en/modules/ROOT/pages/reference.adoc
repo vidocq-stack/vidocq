@@ -262,7 +262,7 @@ All keys are read through `ConfigProvider.getConfig()`. Precedence: *method* > *
 | Boolean. `false` disables §9 and §10 recorders. Default `true`.
 
 | `mp.fault.tolerance.interceptor.priority`
-| Interceptor priority (`@Priority`). Default `4010` (`Platform.AFTER + 10`); `Integer.MAX_VALUE` disables the interceptor entirely. Read once, when the container starts, from the configuration the application starts with — never when the application builds. Under Vauban only `3850` moves the interceptor for now (BUG-019): see xref:internals.adoc#interceptor-priority[the interceptor's priority].
+| Interceptor priority (`@Priority`). Default `4010` (`Platform.AFTER + 10`); `Integer.MAX_VALUE` disables the interceptor entirely. Read once, when the container starts, from the configuration the application starts with — never when the application builds. Under Vauban this needs the fix of its BUG-20261113-12 (BUG-019 here): see xref:internals.adoc#interceptor-priority[the interceptor's priority].
 |===
 
 Examples with their parameters:

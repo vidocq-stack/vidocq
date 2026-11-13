@@ -88,8 +88,8 @@ build time, because Vauban freezes what extensions produce at build and, with Vi
 runs an extension again at start only if it asked (heisenberg#66). Work that depends on the configuration
 the application starts with stays out of `HeisenbergExtension`. Each extension is declared twice:
 `provides` in `module-info.java` (module path) and `META-INF/services` (class path) —
-`BeanArchiveTest` checks that both lists agree. Under Vauban only 3850 takes effect until BUG-019
-is fixed upstream.
+`BeanArchiveTest` checks that both lists agree. Under Vauban the priority is applied since the fix
+of Vauban's BUG-20261113-12 (BUG-019 here).
 
 **Policy composition order** (MP FT spec §2.5, from outermost to innermost):
 `@Fallback` → `@CircuitBreaker` → `@Bulkhead` → `@Timeout` → `@Retry` → actual method.

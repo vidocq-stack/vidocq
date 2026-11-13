@@ -41,7 +41,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.eclipse.microprofile.faulttolerance.Retry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -90,15 +89,11 @@ class InterceptorPriorityConfigTest {
     }
 
     /**
-     * Fails on its last assertion until Vauban applies the priority (BUG-019): {@code expected: <1> but was: <4>}.
-     * {@link InterceptorPriorityExtension} asks for it, as {@link InterceptorPriorityExtensionTest} shows, and Vauban
-     * drops a {@code @Priority} that an {@code @Enhancement} adds to an interceptor class with
-     * {@code ClassConfig.addAnnotation(Annotation)}. Remove {@code @Disabled} once the Vauban fix is published;
-     * nothing else has to change here.
+     * Failed on its last assertion, {@code expected: <1> but was: <4>}, until Vauban applied the priority
+     * (BUG-019): it dropped a {@code @Priority} that an {@code @Enhancement} adds to an interceptor class with
+     * {@code ClassConfig.addAnnotation(Annotation)}, fixed there as its BUG-20261113-12.
      */
     @Test
-    @Disabled("BUG-019 (heisenberg#66): Vauban drops a @Priority an @Enhancement adds to an interceptor class with"
-            + " ClassConfig.addAnnotation(Annotation), so the configured priority is not applied yet")
     void theConfiguredPriorityOrdersTheInterceptorAfterAnInterceptorOfLowerPriority() {
         // A system property, as a deployment sets it: every MicroProfile Config sees it, whichever the class loader
         System.setProperty(PRIORITY, String.valueOf(CONFIGURED));
