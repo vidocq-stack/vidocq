@@ -29,17 +29,20 @@ import jakarta.persistence.SynchronizationType;
 import jakarta.transaction.TransactionManager;
 import jakarta.transaction.Transactional;
 
-/** What an application does with the unit: container-managed persistence contexts in container transactions. */
+/**
+ * What an application does with the unit: container-managed persistence contexts in container transactions. The
+ * application has two units, so each injection point names its own.
+ */
 @ApplicationScoped
 public class Ledger {
 
-    @PersistenceContext
+    @PersistenceContext(unitName = "ledger")
     EntityManager entries;
 
-    @PersistenceContext(synchronization = SynchronizationType.UNSYNCHRONIZED)
+    @PersistenceContext(unitName = "ledger", synchronization = SynchronizationType.UNSYNCHRONIZED)
     EntityManager drafts;
 
-    @PersistenceUnit
+    @PersistenceUnit(unitName = "ledger")
     EntityManagerFactory factory;
 
     @Inject

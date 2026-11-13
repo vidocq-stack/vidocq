@@ -14,7 +14,7 @@
     <name>Vidocq :: IT :: Noether Persistence</name>
     <description>The assembled runtime with the Noether Persistence extension, on the module path: a JTA persistence
         unit takes the default Mansart pool, @Transactional commits and rolls back its persistence context, and the
-        container owns the factory</description>
+        container owns the factory; a second unit takes a named pool and its own entity only</description>
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
@@ -71,6 +71,12 @@
                         <path>
                             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                             <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                        <!-- The @Named("archive") DataSource of vidocq.pool.archive.url in vidocq.properties. -->
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                            <artifactId>vidocq-runtime-mansart-pool-datasources-codegen</artifactId>
                             <version>${project.version}</version>
                         </path>
                     </annotationProcessorPaths>

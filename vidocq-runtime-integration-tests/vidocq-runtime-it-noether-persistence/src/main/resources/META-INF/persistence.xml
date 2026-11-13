@@ -1,8 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.2">
+    <!--
+        Two units in one module: each lists its entity and excludes the unlisted ones. Without
+        exclude-unlisted-classes, a unit also takes every entity of its root, the application module, so `ledger`
+        would manage Note too and create its table in the default pool's database.
+    -->
     <!-- No jta-data-source: the unit takes the application's default Mansart pool (vidocq.pool.url). -->
     <persistence-unit name="ledger" transaction-type="JTA">
         <class>io.vidocq.runtime.it.noether.Entry</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+        <properties>
+            <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
+        </properties>
+    </persistence-unit>
+    <!-- The named pool `archive` (vidocq.pool.archive.url). -->
+    <persistence-unit name="archive" transaction-type="JTA">
+        <jta-data-source>archive</jta-data-source>
+        <class>io.vidocq.runtime.it.noether.Note</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
         <properties>
             <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
         </properties>
