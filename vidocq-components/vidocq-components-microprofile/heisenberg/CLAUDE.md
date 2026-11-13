@@ -55,7 +55,8 @@ libraries: only the specified Jakarta EE and MicroProfile APIs are used.
 heisenberg-api          ← Wrapping of the MP FT 4.1 spec + Vidocq SPI (StateRegistry, PolicyContext)
 heisenberg-core         ← Pure Java 25 policy engines, without CDI (RetryEngine, TimeoutEngine,
                           CircuitBreakerEngine, BulkheadEngine, FallbackResolver, PolicyComposer)
-heisenberg-cdi-vauban   ← CDI interceptor + Vauban BCE (HeisenbergExtension), delegates to the core
+heisenberg-cdi-vauban   ← CDI interceptor + Vauban BCEs (HeisenbergExtension, InterceptorPriorityExtension),
+                          delegates to the core
 heisenberg-bench        ← JMH benchmarks vs SmallRye Fault Tolerance
 heisenberg-tck          ← Official TCK runner (in-reactor, gated by the `tck` Maven profile)
 heisenberg-examples     ← Usage examples
@@ -78,6 +79,17 @@ Latest reproducible `all` run (2026-05-28T09:05:59Z, via
 `PolicyComposer` builds the policy chain in the order defined by the spec →
 each engine executes its logic (retry, timeout, circuit breaker, bulkhead, fallback) →
 result or exception propagated according to the composition rules.
+
+**Build Compatible Extensions:** `HeisenbergExtension` binds the interceptor to the guarded classes
+and validates their definitions — static work a build may freeze. `InterceptorPriorityExtension`
+rewrites the interceptor's `@Priority` from `mp.fault.tolerance.interceptor.priority` when the
+container starts: it asks `io.vidocq.vauban.api.ExtensionPhase.isBuildTime()` and does nothing at
+build time, because Vauban freezes what extensions produce at build and, with Vidocq/vauban#288,
+runs an extension again at start only if it asked (heisenberg#66). Work that depends on the configuration
+the application starts with stays out of `HeisenbergExtension`. Each extension is declared twice:
+`provides` in `module-info.java` (module path) and `META-INF/services` (class path) —
+`BeanArchiveTest` checks that both lists agree. Under Vauban only 3850 takes effect until BUG-019
+is fixed upstream.
 
 **Policy composition order** (MP FT spec §2.5, from outermost to innermost):
 `@Fallback` → `@CircuitBreaker` → `@Bulkhead` → `@Timeout` → `@Retry` → actual method.

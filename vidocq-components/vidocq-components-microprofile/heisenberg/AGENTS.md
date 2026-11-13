@@ -33,7 +33,10 @@
 - In `heisenberg-cdi-vauban` (interceptor + BCE):
   `FaultToleranceInterceptor` (priority 4010), `FaultTolerancePriority3850Interceptor`
   (TCK variant for priority 3850), `FaultToleranceBinding` (marker),
-  `HeisenbergExtension` (CDI 4.1 BCE — validations + `@Priority` rewriting),
+  `HeisenbergExtension` (CDI 4.1 BCE — validations + interceptor binding; static work a build
+  may freeze), `InterceptorPriorityExtension` (CDI 4.1 BCE — `@Priority` rewriting from
+  `mp.fault.tolerance.interceptor.priority`; does nothing when `ExtensionPhase.isBuildTime()`,
+  runs when the container starts — heisenberg#66),
   `StateRegistryBean` + `BulkheadStateRegistryBean` (`@ApplicationScoped`),
   `HeisenbergAutoDiscovery` (ServiceLoader bridge to Ravel),
   **§9 / §10 metrics recorders** (`DiracFtMetricsRecorder` + `OtelFtMetricsRecorder`,
@@ -44,11 +47,18 @@
   `exports io.vidocq.heisenberg.internal to io.vidocq.heisenberg.cdi.vauban;` — any
   new internal class remains invisible outside `cdi-vauban` without modifying
   `module-info.java`.
-- The BCE is a **CDI 4.1 Build Compatible Extension**
+- The BCEs are **CDI 4.1 Build Compatible Extensions**
   (`jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`) — not
-  the old portable `jakarta.enterprise.inject.spi.Extension`. Declared via
-  `provides … with io.vidocq.heisenberg.cdi.internal.HeisenbergExtension` in the
-  `cdi-vauban` module-info.
+  the old portable `jakarta.enterprise.inject.spi.Extension`. Each one is declared twice:
+  `provides … with io.vidocq.heisenberg.cdi.internal.HeisenbergExtension,
+  io.vidocq.heisenberg.cdi.internal.InterceptorPriorityExtension` in the `cdi-vauban`
+  module-info (module path) and in `META-INF/services` (class path); `BeanArchiveTest`
+  checks that both lists agree.
+- Work that depends on the configuration the application starts with goes in an extension
+  that asks `io.vidocq.vauban.api.ExtensionPhase.isBuildTime()` and does nothing at build
+  time: Vauban freezes what extensions produce at build and, with Vidocq/vauban#288, runs an
+  extension again at start only if it asked. Keep such work out of `HeisenbergExtension`,
+  whose result must stay freezable.
 - The effective flow in `heisenberg-cdi-vauban`:
   `@Retry @Timeout @CircuitBreaker @Bulkhead @Fallback` on a CDI method →
   `FaultToleranceInterceptor.around(InvocationContext)` →
@@ -163,8 +173,9 @@ java -jar heisenberg-bench/target/benchmarks.jar
   (base priority 4010, configurable via `mp.fault.tolerance.interceptor.priority`),
   `FaultTolerancePriority3850Interceptor` (TCK variant),
   `HeisenbergExtension` (CDI 4.1 BCE `BuildCompatibleExtension` under
-  `io.vidocq.heisenberg.cdi.internal`, which validates annotations at container startup
-  and rewrites `@Priority` according to config),
+  `io.vidocq.heisenberg.cdi.internal`, which validates annotations at container startup),
+  `InterceptorPriorityExtension` (BCE that rewrites `@Priority` according to config when the
+  container starts; under Vauban only 3850 takes effect until BUG-019 is fixed upstream),
   `StateRegistryBean` + `BulkheadStateRegistryBean` (`@ApplicationScoped`),
   `DiracFtMetricsRecorder` (§9 MP Metrics) and `OtelFtMetricsRecorder` (§10 OpenTelemetry)
   which coexist through fan-out (`CompositeFtMetricsRecorder`, `MetricsRecorderResolver`).

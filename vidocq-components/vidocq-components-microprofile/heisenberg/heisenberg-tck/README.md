@@ -44,7 +44,7 @@ on demand through the POM `tck-official` Maven profile.
   (protocol `Local`, in-VM mode, no remote container).
 - `VaubanTckBootstrap` — for each TCK deployment: extracts MP Config properties
   from the ShrinkWrap archive, starts a Vauban container with
-  `FaultToleranceInterceptor`, `HeisenbergExtension`, `StateRegistryBean`,
+  `FaultToleranceInterceptor`, `HeisenbergExtension`, `InterceptorPriorityExtension`, `StateRegistryBean`,
   `BulkheadStateRegistryBean`, and all archive classes ; activates the
   `RequestContext` for the duration of the test.
 - `HeisenbergTestEnricher` — injects `@Inject` (and `@Inject Instance<T>`)

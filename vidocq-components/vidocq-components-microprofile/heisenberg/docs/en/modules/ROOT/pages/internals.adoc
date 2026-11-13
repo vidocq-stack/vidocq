@@ -24,7 +24,7 @@ the fallback, unchanged.
   module layer, then its class loaders, then by name; cached per class
 | The annotations are read by reflection on the first call of each method, and announced once per class.
 
-| The `@FaultToleranceBinding` marker on each guarded class, and the interceptor's priority
+| The `@FaultToleranceBinding` marker on each guarded class
 | `HeisenbergExtension`, a Build Compatible Extension (`@Enhancement`) that Vauban runs in javac when
   `heisenberg-cdi-vauban` is on the processor path
 | Vauban applies the frozen enhancement at boot
@@ -39,6 +39,9 @@ the fallback, unchanged.
 
 The validation of the definitions is generated too, as compile errors: see <<definition-errors>>. A class without a
 companion is still validated by `HeisenbergExtension` at boot, by reflection.
+
+The priority of the interceptor is not generated: it comes from the configuration the application starts with, and
+is applied when the container starts (<<interceptor-priority>>).
 
 === When the fallback runs
 
@@ -56,7 +59,7 @@ companion is still validated by `HeisenbergExtension` at boot, by reflection.
 
 `heisenberg-core` is plain Java — no CDI, no `@Inject`. It is usable outside a container, which is how the project's own JUnit 5 tests verify a `RetryEngine`'s logic without deploying an application. Its `io.vidocq.heisenberg.internal` package is exported only to the CDI module — it is not application API.
 
-`heisenberg-cdi-vauban` is the integration layer: a single CDI `@Interceptor` (`FaultToleranceInterceptor`) orchestrates the engines, a Build Compatible Extension (`HeisenbergExtension`) declares it at startup, two `@ApplicationScoped` beans (`StateRegistryBean`, `BulkheadStateRegistryBean`) maintain the shared state.
+`heisenberg-cdi-vauban` is the integration layer: a single CDI `@Interceptor` (`FaultToleranceInterceptor`) orchestrates the engines, a Build Compatible Extension (`HeisenbergExtension`) declares it at startup, a second one (`InterceptorPriorityExtension`) gives it the configured priority, two `@ApplicationScoped` beans (`StateRegistryBean`, `BulkheadStateRegistryBean`) maintain the shared state.
 
 == Invocation pipeline
 
@@ -173,18 +176,13 @@ This discipline guarantees that virtual threads are never _pinned_ to their carr
 
 == Vauban BCE: `HeisenbergExtension`
 
-Startup orchestration is carried by `io.vidocq.heisenberg.cdi.internal.HeisenbergExtension`, a CDI 4.1 Build Compatible Extension that uses only the `@Enhancement` phase — two hooks:
+Startup orchestration is carried by two CDI 4.1 Build Compatible Extensions of `io.vidocq.heisenberg.cdi.internal`, `HeisenbergExtension` and `InterceptorPriorityExtension`. They use only the `@Enhancement` phase — one hook each:
 
 [source,java]
 ----
-// Simplified from the real extension — both hooks are @Enhancement.
+// Simplified from the real extensions — both hooks are @Enhancement.
 
-@Enhancement(types = FaultToleranceInterceptor.class)
-public void configureInterceptorPriority(ClassConfig classConfig) {
-    // Rewrites the interceptor's @Priority when
-    // mp.fault.tolerance.interceptor.priority differs from the default 4010.
-}
-
+// HeisenbergExtension
 @Enhancement(types = Object.class, withSubtypes = true,
         withAnnotations = { Retry.class, Timeout.class, CircuitBreaker.class,
                             Bulkhead.class, Asynchronous.class, Fallback.class })
@@ -193,9 +191,28 @@ public void addFaultToleranceBinding(ClassConfig classConfig) {
     // bounds, @Fallback method signature, ...) and adds the
     // @FaultToleranceBinding marker so CDI selects the interceptor.
 }
+
+// InterceptorPriorityExtension
+@Enhancement(types = FaultToleranceInterceptor.class)
+public void configureInterceptorPriority(ClassConfig classConfig) {
+    // Does nothing while the application builds. When the container starts,
+    // replaces the interceptor's @Priority if
+    // mp.fault.tolerance.interceptor.priority differs from the default 4010.
+}
 ----
 
 Startup validation stays the portable path: any malformed annotation (`@Asynchronous void m()`, `@Bulkhead(value=0)`, a `@Fallback` whose fallback method does not match the guarded signature) raises `FaultToleranceDefinitionException` and immediately aborts application startup — no late runtime surprise.
+
+Both extensions are declared twice, as every Build Compatible Extension must be: with `provides` in `module-info.java` for the module path, and in `META-INF/services` for the class path.
+
+[#interceptor-priority]
+=== The interceptor's priority
+
+`mp.fault.tolerance.interceptor.priority` belongs to the configuration the application starts with: a system property, an environment variable, a properties file of the deployment. A build reads the configuration of the build machine. So `InterceptorPriorityExtension` asks Vauban's `ExtensionPhase.isBuildTime()` first and does nothing at build time; when the container starts, it replaces the `@Priority` of `FaultToleranceInterceptor` by the configured value, read once.
+
+The priority has an extension of its own because of how Vauban treats extensions: it runs them while the application compiles and freezes what they produce, and, with Vidocq/vauban#288, runs an extension again when the container starts only if that extension asked `ExtensionPhase.isBuildTime()` during the build. `HeisenbergExtension` depends on the classes only, so its result stays frozen; `InterceptorPriorityExtension` alone runs again at start. Under another container, such as Weld or Open Liberty, both run when the application is deployed; `heisenberg-it-weld` checks that a configured priority moves the interceptor under Weld SE.
+
+WARNING: Under Vauban, the configured priority does not move the interceptor yet, except for `3850` (BUG-019, heisenberg#66). Vauban drops a `@Priority` that an `@Enhancement` adds to an interceptor class with `ClassConfig.addAnnotation(Annotation)`, so `FaultToleranceInterceptor` keeps its default priority `4010`. The value `3850`, the one the TCK checks, is served by a second interceptor, `FaultTolerancePriority3850Interceptor`, which declares that priority statically and applies the policies in place of the first one. `Integer.MAX_VALUE` still disables Fault Tolerance: the interceptor checks it on each call.
 
 [#definition-errors]
 == Definition errors at build time

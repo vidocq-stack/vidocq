@@ -20,7 +20,7 @@ This page consolidates Heisenberg's public surface: Maven artifacts, Java module
 
 | `io.vidocq.heisenberg`
 | `heisenberg-cdi-vauban`
-| Single CDI interceptor (`FaultToleranceInterceptor`) and Vauban BCE (`HeisenbergExtension`).
+| Single CDI interceptor (`FaultToleranceInterceptor`) and Build Compatible Extensions (`HeisenbergExtension`, `InterceptorPriorityExtension`).
 
 | `io.vidocq.heisenberg`
 | `heisenberg-mp-ft-api`
@@ -55,7 +55,7 @@ All versions at `{project-version}` (latest release on Maven Central: `{release-
 | Internal implementations: engines, `PolicyComposer`, the `CircuitBreakerStateRegistry` / `BulkheadStateRegistry` interfaces and the immutable `*Config` records. The `io.vidocq.heisenberg.internal` package is exported only to `io.vidocq.heisenberg.cdi.vauban`.
 
 | `io.vidocq.heisenberg.cdi.vauban`
-| CDI integration: `FaultToleranceInterceptor`, `HeisenbergExtension` (BCE), `StateRegistryBean`, `BulkheadStateRegistryBean`, `MetricsRecorderResolver`, `CompositeFtMetricsRecorder`.Declares `requires static io.vidocq.vauban.core` (Maven scope `provided`): it uses Vauban's `ModuleLookups` to reach fallback methods, and the container brings `vauban-core` at runtime.Declares `requires io.vidocq.vauban.api` (it was `requires static`): `vauban-api` is a runtime dependency under any container, see <<other-containers>>.
+| CDI integration: `FaultToleranceInterceptor`, `HeisenbergExtension` and `InterceptorPriorityExtension` (BCEs), `StateRegistryBean`, `BulkheadStateRegistryBean`, `MetricsRecorderResolver`, `CompositeFtMetricsRecorder`.Declares `requires static io.vidocq.vauban.core` (Maven scope `provided`): it uses Vauban's `ModuleLookups` to reach fallback methods, and the container brings `vauban-core` at runtime.Declares `requires io.vidocq.vauban.api` (it was `requires static`): `vauban-api` is a runtime dependency under any container, see <<other-containers>>.
 |===
 
 `io.vidocq.heisenberg.internal` is invisible to application modules (qualified export to `io.vidocq.heisenberg.cdi.vauban` only). Any application class depending on it indicates a regression to fix.
@@ -65,7 +65,7 @@ All versions at `{project-version}` (latest release on Maven Central: `{release-
 
 `heisenberg-cdi-vauban` is an explicit bean archive. It ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`, so the interceptors, the state registries and the metrics recorders are discovered even by a container that does not scan implicit archives, such as Weld SE by default. Without it, `@Retry`, `@Timeout` and the other annotations were silently ignored there (BUG-004).
 
-On a class path, `provides` clauses are ignored. `HeisenbergExtension` and `HeisenbergAutoDiscovery` are therefore also listed in `META-INF/services`.
+On a class path, `provides` clauses are ignored. `HeisenbergExtension`, `InterceptorPriorityExtension` and `HeisenbergAutoDiscovery` are therefore also listed in `META-INF/services`.
 
 [#other-containers]
 == Other CDI containers
@@ -77,7 +77,7 @@ Heisenberg does not need Vauban. The jars run unchanged under another CDI contai
 | Module | What it runs
 
 | `heisenberg-it-weld`
-| Weld SE 6.0 (CDI 4.1), class path, no Vauban, Ravel for MicroProfile Config: `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Fallback` (private fallback method) and `@Bulkhead` apply, a `<class>/<method>/Retry/maxRetries` key overrides the annotation, and metrics carry the bean class name.
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban, Ravel for MicroProfile Config: `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Fallback` (private fallback method) and `@Bulkhead` apply, a `<class>/<method>/Retry/maxRetries` key overrides the annotation, metrics carry the bean class name, and `mp.fault.tolerance.interceptor.priority` moves the interceptor.
 
 | `heisenberg-it-openliberty`
 | A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, MicroProfile Config 3.1), with Liberty's `mpFaultTolerance` feature off: the same scenarios, driven over HTTP.
@@ -262,7 +262,7 @@ All keys are read through `ConfigProvider.getConfig()`. Precedence: *method* > *
 | Boolean. `false` disables §9 and §10 recorders. Default `true`.
 
 | `mp.fault.tolerance.interceptor.priority`
-| Interceptor priority (`@Priority`). Default `4010` (`Platform.AFTER + 10`); `Integer.MAX_VALUE` disables the interceptor entirely.
+| Interceptor priority (`@Priority`). Default `4010` (`Platform.AFTER + 10`); `Integer.MAX_VALUE` disables the interceptor entirely. Read once, when the container starts, from the configuration the application starts with — never when the application builds. Under Vauban only `3850` moves the interceptor for now (BUG-019): see xref:internals.adoc#interceptor-priority[the interceptor's priority].
 |===
 
 Examples with their parameters:
