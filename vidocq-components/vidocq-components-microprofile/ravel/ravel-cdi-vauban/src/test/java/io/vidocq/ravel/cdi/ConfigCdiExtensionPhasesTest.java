@@ -20,6 +20,8 @@
 package io.vidocq.ravel.cdi;
 
 import io.vidocq.ravel.cdi.internal.ConfigPropertiesSyntheticCreator;
+import io.vidocq.ravel.cdi.internal.ConfigStartCheck;
+import jakarta.enterprise.event.Startup;
 import jakarta.enterprise.inject.Vetoed;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
@@ -28,6 +30,7 @@ import jakarta.enterprise.inject.build.compatible.spi.Messages;
 import jakarta.enterprise.inject.build.compatible.spi.ObserverInfo;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticObserverBuilder;
 import jakarta.enterprise.inject.build.compatible.spi.Types;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.AnnotationMember;
@@ -46,7 +49,6 @@ import org.eclipse.microprofile.config.inject.ConfigProperties;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.eclipse.microprofile.config.spi.ConfigSource;
-import org.eclipse.microprofile.config.spi.Converter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,11 +62,12 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@DisplayName("ConfigCdiExtension — enhancement, registration, validation and synthesis phases")
+@DisplayName("ConfigCdiExtension — enhancement, registration and synthesis phases")
 class ConfigCdiExtensionPhasesTest {
 
     private static final String KEY = "phases.key";
@@ -74,6 +77,8 @@ class ConfigCdiExtensionPhasesTest {
     private static final String LIST = "java.util.List";
     private static final String PREFIX = "prefix";
     private static final String ADD_BEAN = "addBean";
+    private static final String ADD_OBSERVER = "addObserver";
+    private static final String WITH_PARAM = "withParam";
     private static final String REQUIRED_PREFIX = "required";
     private static final String PORT = "port";
 
@@ -98,44 +103,39 @@ class ConfigCdiExtensionPhasesTest {
     }
 
     @Test
-    void validation_reports_missing_members_of_vetoed_classes() {
-        registerConfig(Map.of("required.host", "localhost"));
+    void vetoed_classes_are_handed_to_the_start_check_under_their_own_prefix() {
+        // MP Config 3.1 §6.4: a discovered class is checked even when nothing injects it. The class
+        // prefix is read at start, on the loaded class; no injection site.
         ConfigCdiExtension extension = new ConfigCdiExtension();
         extension.vetoConfigPropertiesClasses(classConfig(Required.class.getName(), true, new ArrayList<>()));
         extension.vetoConfigPropertiesClasses(classConfig(MISSING_CLASS, true, new ArrayList<>()));
-        CapturingMessages messages = new CapturingMessages();
+        extension.vetoConfigPropertiesClasses(classConfig(String.class.getName(), false, new ArrayList<>()));
 
-        extension.validateVetoedConfigPropertiesClasses(messages);
+        Map<String, Object> params = startCheckParams(extension);
 
-        assertEquals(1, messages.errors.size());
-        assertTrue(messages.errors.getFirst().contains("'required.port'"), messages.errors.getFirst());
+        assertArrayEquals(new String[]{Required.class.getName(), MISSING_CLASS},
+                (String[]) params.get(ConfigStartCheck.CLASS_NAMES));
+        assertArrayEquals(new String[]{ConfigProperties.UNCONFIGURED_PREFIX, ConfigProperties.UNCONFIGURED_PREFIX},
+                (String[]) params.get(ConfigStartCheck.CLASS_PREFIXES));
+        assertArrayEquals(new String[]{"", ""}, (String[]) params.get(ConfigStartCheck.CLASS_SITES));
     }
 
     @Test
-    void validation_skips_static_defaulted_optional_and_initialized_members() {
-        registerConfig(Map.of());
+    void injected_classes_come_before_the_vetoed_ones() {
+        // The start check skips a discovered class an injection point already covered: it reads the
+        // injection points first.
         ConfigCdiExtension extension = new ConfigCdiExtension();
-        extension.vetoConfigPropertiesClasses(classConfig(Lenient.class.getName(), true, new ArrayList<>()));
-        CapturingMessages messages = new CapturingMessages();
+        extension.vetoConfigPropertiesClasses(classConfig(Required.class.getName(), true, new ArrayList<>()));
+        extension.registerConfigPropertyInjectionPoints(bean(List.of(injectionPoint(
+                classType(Required.class.getName()), List.of(configPropertiesAnnotation(Map.of())),
+                fieldDeclaration(REQUIRED_PREFIX)))), new CapturingMessages());
 
-        extension.validateVetoedConfigPropertiesClasses(messages);
+        Map<String, Object> params = startCheckParams(extension);
 
-        assertEquals(List.of(), messages.errors);
-    }
-
-    @Test
-    void validation_requires_every_zero_valued_primitive() {
-        registerConfig(Map.of("prim.flag", ""));
-        ConfigCdiExtension extension = new ConfigCdiExtension();
-        extension.vetoConfigPropertiesClasses(classConfig(Primitives.class.getName(), true, new ArrayList<>()));
-        extension.vetoConfigPropertiesClasses(classConfig(NoDefaultConstructor.class.getName(), true, new ArrayList<>()));
-        CapturingMessages messages = new CapturingMessages();
-
-        extension.validateVetoedConfigPropertiesClasses(messages);
-
-        assertEquals(9, messages.errors.size());
-        assertTrue(messages.errors.stream().anyMatch(m -> m.contains("'prim.flag'")));
-        assertTrue(messages.errors.stream().anyMatch(m -> m.contains("'port'")));
+        assertArrayEquals(new String[]{Required.class.getName(), Required.class.getName()},
+                (String[]) params.get(ConfigStartCheck.CLASS_NAMES));
+        assertArrayEquals(new String[]{"com.example.Bean#required", ""},
+                (String[]) params.get(ConfigStartCheck.CLASS_SITES));
     }
 
     // -- @Registration: @ConfigProperties injection points ---------------------------------------
@@ -151,29 +151,36 @@ class ConfigCdiExtensionPhasesTest {
     }
 
     @Test
-    void ConfigProperties_injection_point_prefix_overrides_the_class_prefix() {
-        registerConfig(Map.of("override.host", "h", "override.port", "1"));
+    void ConfigProperties_injection_point_prefix_is_handed_over_as_written() {
+        ConfigCdiExtension extension = new ConfigCdiExtension();
+        CapturingMessages messages = new CapturingMessages();
+        extension.registerConfigPropertyInjectionPoints(bean(List.of(
+                injectionPoint(classType(Required.class.getName()),
+                        List.of(configPropertiesAnnotation(Map.of(PREFIX, stringMember("override")))),
+                        fieldDeclaration(REQUIRED_PREFIX)),
+                injectionPoint(classType(MISSING_CLASS),
+                        List.of(configPropertiesAnnotation(Map.of())), fieldDeclaration("missing")))), messages);
 
-        CapturingMessages messages = register(injectionPoint(classType(Required.class.getName()),
-                List.of(configPropertiesAnnotation(Map.of(PREFIX, stringMember("override")))),
-                fieldDeclaration(REQUIRED_PREFIX)));
-
-        assertEquals(List.of(), messages.errors);
-    }
-
-    @Test
-    void ConfigProperties_injection_point_of_an_unloadable_class_is_left_to_runtime() {
-        CapturingMessages messages = register(injectionPoint(classType(MISSING_CLASS),
-                List.of(configPropertiesAnnotation(Map.of())), fieldDeclaration("missing")));
+        Map<String, Object> params = startCheckParams(extension);
 
         assertEquals(List.of(), messages.errors);
+        assertArrayEquals(new String[]{Required.class.getName(), MISSING_CLASS},
+                (String[]) params.get(ConfigStartCheck.CLASS_NAMES));
+        assertArrayEquals(new String[]{"override", ConfigProperties.UNCONFIGURED_PREFIX},
+                (String[]) params.get(ConfigStartCheck.CLASS_PREFIXES));
+        assertArrayEquals(new String[]{"com.example.Bean#required", "com.example.Bean#missing"},
+                (String[]) params.get(ConfigStartCheck.CLASS_SITES));
     }
 
     @Test
     void injection_point_without_config_qualifier_is_ignored() {
-        CapturingMessages messages = register(injectionPoint(classType(STRING), List.of(), fieldDeclaration("plain")));
+        ConfigCdiExtension extension = new ConfigCdiExtension();
+        CapturingMessages messages = new CapturingMessages();
+        extension.registerConfigPropertyInjectionPoints(
+                bean(List.of(injectionPoint(classType(STRING), List.of(), fieldDeclaration("plain")))), messages);
 
         assertEquals(List.of(), messages.errors);
+        assertEquals(Map.of(), startCheckParams(extension));
     }
 
     // -- @Registration: @ConfigProperty injection points -----------------------------------------
@@ -188,108 +195,99 @@ class ConfigCdiExtensionPhasesTest {
     }
 
     @Test
-    void present_value_that_does_not_convert_is_reported() {
+    void registration_reads_no_configuration() {
+        // ravel#50: a value that does not convert, a default no converter takes — the start reports
+        // them (ConfigStartCheckTest), the extension only records the injection points.
         registerConfig(Map.of(KEY, "not-a-number"));
 
-        CapturingMessages messages = register(injectionPoint(classType(INTEGER),
-                List.of(configProperty(KEY, null)), fieldDeclaration("number")));
-
-        assertEquals(1, messages.errors.size());
-        assertTrue(messages.errors.getFirst().startsWith("Invalid @ConfigProperty for key '" + KEY + "'"));
-    }
-
-    @Test
-    void present_value_whose_converter_returns_null_is_reported() {
-        registerConfig(Map.of(KEY, "anything"));
-
-        CapturingMessages messages = register(injectionPoint(classType(NullConverted.class.getName()),
-                List.of(configProperty(KEY, null)), fieldDeclaration("nullConverted")));
-
-        assertEquals(1, messages.errors.size());
-        assertTrue(messages.errors.getFirst().contains("converter returned null"));
-    }
-
-    @Test
-    void empty_default_value_is_reported() {
-        registerConfig(Map.of());
-
-        CapturingMessages messages = register(injectionPoint(classType(STRING),
-                List.of(configProperty(KEY, "")), fieldDeclaration("emptyDefault")));
-
-        assertEquals(1, messages.errors.size());
-        assertTrue(messages.errors.getFirst().startsWith("Empty defaultValue"));
-    }
-
-    @Test
-    void default_value_converting_to_null_is_reported() {
-        registerConfig(Map.of());
-
-        CapturingMessages messages = register(injectionPoint(classType(NullConverted.class.getName()),
-                List.of(configProperty(KEY, "x")), fieldDeclaration("nullDefault")));
-
-        assertEquals(1, messages.errors.size());
-        assertTrue(messages.errors.getFirst().contains("converts to null"));
-    }
-
-    @Test
-    void default_value_of_a_type_without_converter_is_reported() {
-        registerConfig(Map.of());
-
-        CapturingMessages messages = register(injectionPoint(classType(NotConvertible.class.getName()),
-                List.of(configProperty(KEY, "x")), fieldDeclaration("notConvertible")));
-
-        assertEquals(1, messages.errors.size());
-        assertTrue(messages.errors.getFirst().contains("No converter"));
-    }
-
-    @Test
-    void valid_default_value_and_types_resolved_later_are_accepted() {
-        registerConfig(Map.of());
-
         CapturingMessages messages = register(
+                injectionPoint(classType(INTEGER), List.of(configProperty(KEY, null)), fieldDeclaration("number")),
+                injectionPoint(classType(STRING), List.of(configProperty("absent", "")), fieldDeclaration("empty")),
+                injectionPoint(classType(NotConvertible.class.getName()), List.of(configProperty("absent", "x")),
+                        fieldDeclaration("notConvertible")));
+
+        assertEquals(List.of(), messages.errors);
+    }
+
+    @Test
+    void only_scalar_injection_points_are_handed_to_the_start_check() {
+        ConfigCdiExtension extension = new ConfigCdiExtension();
+        CapturingMessages messages = new CapturingMessages();
+        extension.registerConfigPropertyInjectionPoints(bean(List.of(
                 injectionPoint(classType(INTEGER), List.of(configProperty(KEY, "5")), fieldDeclaration("a")),
                 injectionPoint(classType("org.eclipse.microprofile.config.ConfigValue"),
                         List.of(configProperty(KEY, null)), fieldDeclaration("b")),
                 injectionPoint(classType(OptionalInt.class.getName()), List.of(configProperty(KEY, null)),
                         fieldDeclaration("c")),
+                injectionPoint(classType("java.util.OptionalLong"), List.of(configProperty(KEY, null)),
+                        fieldDeclaration("c2")),
+                injectionPoint(classType("java.util.OptionalDouble"), List.of(configProperty(KEY, null)),
+                        fieldDeclaration("c3")),
                 injectionPoint(arrayType(classType(STRING)), List.of(configProperty(KEY, null)),
                         fieldDeclaration("d")),
                 injectionPoint(parameterizedType(LIST, classType(STRING)),
                         List.of(configProperty(KEY, null)), fieldDeclaration("e")),
-                injectionPoint(classType(MISSING_CLASS), List.of(configProperty(KEY, null)),
-                        fieldDeclaration("f")));
+                injectionPoint(parameterizedType("java.util.Optional", classType(STRING)),
+                        List.of(configProperty(KEY, null)), fieldDeclaration("e2")),
+                injectionPoint(classType(MISSING_CLASS), List.of(configProperty("other", null)),
+                        fieldDeclaration("f")))), messages);
+
+        Map<String, Object> params = startCheckParams(extension);
 
         assertEquals(List.of(), messages.errors);
+        assertArrayEquals(new String[]{KEY, "other"}, (String[]) params.get(ConfigStartCheck.PROPERTY_KEYS));
+        assertArrayEquals(new String[]{INTEGER, MISSING_CLASS},
+                (String[]) params.get(ConfigStartCheck.PROPERTY_TYPES));
+        assertArrayEquals(new String[]{"5", ConfigStartCheck.NO_DEFAULT},
+                (String[]) params.get(ConfigStartCheck.PROPERTY_DEFAULTS));
+        assertArrayEquals(new String[]{"com.example.Bean#a", "com.example.Bean#f"},
+                (String[]) params.get(ConfigStartCheck.PROPERTY_SITES));
     }
 
     @Test
-    void every_primitive_kind_is_validated_against_its_runtime_class() {
-        Map<PrimitiveKind, String> values = Map.of(
-                PrimitiveKind.BOOLEAN, "true", PrimitiveKind.BYTE, "1", PrimitiveKind.SHORT, "2",
-                PrimitiveKind.INT, "3", PrimitiveKind.LONG, "4", PrimitiveKind.FLOAT, "5.5",
-                PrimitiveKind.DOUBLE, "6.5", PrimitiveKind.CHAR, "c");
-        Map<String, String> config = new HashMap<>();
+    void every_primitive_kind_is_handed_over_by_its_name() {
+        ConfigCdiExtension extension = new ConfigCdiExtension();
         List<InjectionPointInfo> points = new ArrayList<>();
-        values.forEach((kind, value) -> {
-            config.put("prim." + kind, value);
+        for (PrimitiveKind kind : PrimitiveKind.values()) {
             points.add(injectionPoint(primitiveType(kind), List.of(configProperty("prim." + kind, null)),
                     fieldDeclaration(kind.name())));
-        });
-        registerConfig(config);
+        }
+        extension.registerConfigPropertyInjectionPoints(bean(points), new CapturingMessages());
 
-        CapturingMessages messages = register(points.toArray(InjectionPointInfo[]::new));
+        Map<String, Object> params = startCheckParams(extension);
 
-        assertEquals(List.of(), messages.errors);
+        assertArrayEquals(new String[]{"boolean", "byte", "short", "int", "long", "float", "double", "char"},
+                (String[]) params.get(ConfigStartCheck.PROPERTY_TYPES));
     }
 
     @Test
     void default_name_of_a_parameter_injection_point_is_its_canonical_member_name() {
-        registerConfig(Map.of("com.example.Outer.Inner.param", "ok"));
+        ConfigCdiExtension extension = new ConfigCdiExtension();
+        extension.registerConfigPropertyInjectionPoints(bean(List.of(
+                injectionPoint(classType(STRING), List.of(configProperty(null, null)),
+                        parameterDeclaration("com.example.Outer$Inner", "configure", false, "param")),
+                injectionPoint(classType(STRING), List.of(configProperty(null, null)),
+                        parameterDeclaration("com.example.Outer", "com.example.Outer", true, "value")))),
+                new CapturingMessages());
 
-        CapturingMessages messages = register(injectionPoint(classType(STRING),
-                List.of(configProperty(null, null)), parameterDeclaration("com.example.Outer$Inner", "param")));
+        Map<String, Object> params = startCheckParams(extension);
 
-        assertEquals(List.of(), messages.errors);
+        assertArrayEquals(new String[]{"com.example.Outer.Inner.param", "com.example.Outer.value"},
+                (String[]) params.get(ConfigStartCheck.PROPERTY_KEYS));
+        assertArrayEquals(new String[]{"com.example.Outer$Inner#configure(param)", "com.example.Outer#<init>(value)"},
+                (String[]) params.get(ConfigStartCheck.PROPERTY_SITES));
+    }
+
+    @Test
+    void injection_site_of_another_declaration_kind_is_its_text() {
+        ConfigCdiExtension extension = new ConfigCdiExtension();
+        extension.registerConfigPropertyInjectionPoints(bean(List.of(injectionPoint(classType(STRING),
+                List.of(configProperty(KEY, null)), declaration(DeclarationInfo.Kind.METHOD)))),
+                new CapturingMessages());
+
+        Map<String, Object> params = startCheckParams(extension);
+
+        assertArrayEquals(new String[]{"a method"}, (String[]) params.get(ConfigStartCheck.PROPERTY_SITES));
     }
 
     @Test
@@ -332,6 +330,39 @@ class ConfigCdiExtensionPhasesTest {
         assertTrue(calls.contains(List.of("createWith", ConfigPropertySyntheticCreator.class)));
     }
 
+    @Test
+    void synthesis_registers_one_early_start_check_observing_Startup() {
+        ConfigCdiExtension extension = new ConfigCdiExtension();
+        extension.registerConfigPropertyInjectionPoints(bean(List.of(
+                injectionPoint(classType(INTEGER), List.of(configProperty(KEY, null)), fieldDeclaration("boxed")),
+                injectionPoint(classType(Lenient.class.getName()),
+                        List.of(configPropertiesAnnotation(Map.of())), fieldDeclaration("lenient")))),
+                new CapturingMessages());
+        List<List<Object>> calls = new ArrayList<>();
+
+        extension.synthesizeConfigPropertyBeans(recordingComponents(calls), classTypes());
+
+        assertEquals(1, calls.stream().filter(c -> c.getFirst().equals(ADD_OBSERVER)).count());
+        assertTrue(calls.contains(List.of(ADD_OBSERVER, Startup.class)));
+        assertTrue(calls.contains(List.of("observeWith", ConfigStartCheck.class)));
+        // Before the application's own Startup observers, which may already read the configuration.
+        assertTrue(calls.contains(List.of("priority", ConfigStartCheck.PRIORITY)));
+        assertTrue(ConfigStartCheck.PRIORITY < jakarta.interceptor.Interceptor.Priority.LIBRARY_BEFORE);
+    }
+
+    @Test
+    void synthesis_registers_no_start_check_without_anything_to_check() {
+        ConfigCdiExtension extension = new ConfigCdiExtension();
+        extension.registerConfigPropertyInjectionPoints(bean(List.of(injectionPoint(
+                parameterizedType("java.util.Optional", classType(INTEGER)),
+                List.of(configProperty(KEY, null)), fieldDeclaration("optional")))), new CapturingMessages());
+        List<List<Object>> calls = new ArrayList<>();
+
+        extension.synthesizeConfigPropertyBeans(recordingComponents(calls), classTypes());
+
+        assertEquals(0, calls.stream().filter(c -> c.getFirst().equals(ADD_OBSERVER)).count());
+    }
+
     // -- Static helpers --------------------------------------------------------------------------
 
     @Test
@@ -372,42 +403,6 @@ class ConfigCdiExtensionPhasesTest {
                 parameterizedType("java.util.Optional", classType(STRING), classType(STRING))));
     }
 
-    @Test
-    void isDeferredOrOptionalWrapper_recognises_the_three_wrappers_only() {
-        assertTrue(ConfigCdiExtension.isDeferredOrOptionalWrapper(
-                parameterizedType("java.util.function.Supplier", classType(STRING))));
-        assertFalse(ConfigCdiExtension.isDeferredOrOptionalWrapper(
-                parameterizedType(LIST, classType(STRING))));
-        assertFalse(ConfigCdiExtension.isDeferredOrOptionalWrapper(classType(STRING)));
-    }
-
-    @Test
-    void fieldConfigPropertyName_prefixes_the_member_or_the_configured_name() throws NoSuchFieldException {
-        var host = Required.class.getDeclaredField("host");
-        var port = Required.class.getDeclaredField(PORT);
-        ConfigProperty portAnno = port.getAnnotation(ConfigProperty.class);
-
-        assertEquals("p.host", ConfigCdiExtension.fieldConfigPropertyName(host, null, "p"));
-        assertEquals("host", ConfigCdiExtension.fieldConfigPropertyName(host, null, ""));
-        assertEquals("p.port", ConfigCdiExtension.fieldConfigPropertyName(port, portAnno, "p"));
-        assertEquals(PORT, ConfigCdiExtension.fieldConfigPropertyName(port, portAnno, ""));
-    }
-
-    @Test
-    void resolveConfigPropertiesPrefix_prefers_the_injection_point_then_the_class() {
-        assertEquals("ip", ConfigCdiExtension.resolveConfigPropertiesPrefix(Required.class, "ip"));
-        assertEquals(REQUIRED_PREFIX,
-                ConfigCdiExtension.resolveConfigPropertiesPrefix(Required.class, ConfigProperties.UNCONFIGURED_PREFIX));
-        assertEquals("",
-                ConfigCdiExtension.resolveConfigPropertiesPrefix(String.class, ConfigProperties.UNCONFIGURED_PREFIX));
-    }
-
-    @Test
-    void isOptionalLikeRuntime_recognises_optional_types() {
-        assertTrue(ConfigCdiExtension.isOptionalLikeRuntime(Optional.class));
-        assertFalse(ConfigCdiExtension.isOptionalLikeRuntime(String.class));
-    }
-
     // -- Fixtures --------------------------------------------------------------------------------
 
     @ConfigProperties(prefix = REQUIRED_PREFIX)
@@ -427,36 +422,6 @@ class ConfigCdiExtensionPhasesTest {
         int initialized = 4;
     }
 
-    @SuppressWarnings("unused")
-    @ConfigProperties(prefix = "prim")
-    static class Primitives {
-        boolean flag;
-        byte b;
-        short s;
-        int i;
-        long l;
-        float f;
-        double d;
-        char c;
-    }
-
-    @SuppressWarnings("unused")
-    @ConfigProperties
-    static class NoDefaultConstructor {
-        int port = 1;
-
-        NoDefaultConstructor(int port) {
-            this.port = port;
-        }
-    }
-
-    public static final class NullConverted {
-    }
-
-    public static final class NullConverter implements Converter<NullConverted> {
-        @Override public NullConverted convert(String value) { return null; }
-    }
-
     public static final class NotConvertible {
         private NotConvertible() {
             // no public factory nor String constructor: nothing can convert to this type
@@ -471,11 +436,22 @@ class ConfigCdiExtensionPhasesTest {
         return messages;
     }
 
+    /**
+     * Runs {@code @Synthesis} and answers the parameters the extension gave the start check, by name;
+     * empty when it registered none.
+     */
+    private static Map<String, Object> startCheckParams(ConfigCdiExtension extension) {
+        List<List<Object>> calls = new ArrayList<>();
+        extension.synthesizeConfigPropertyBeans(recordingComponents(calls), classTypes());
+        Map<String, Object> params = new HashMap<>();
+        calls.stream().filter(c -> c.getFirst().equals(WITH_PARAM)).forEach(c -> params.put((String) c.get(1), c.get(2)));
+        return params;
+    }
+
     private void registerConfig(Map<String, String> values) {
         ConfigProviderResolver resolver = ConfigProviderResolver.instance();
         Config custom = resolver.getBuilder()
                 .withSources(new TestSource(values))
-                .withConverter(NullConverted.class, 100, new NullConverter())
                 .forClassLoader(getClass().getClassLoader())
                 .build();
         resolver.registerConfig(custom, getClass().getClassLoader());
@@ -541,10 +517,14 @@ class ConfigCdiExtensionPhasesTest {
         });
     }
 
-    private static DeclarationInfo parameterDeclaration(String ownerName, String name) {
+    /** A parameter of a method, or of a constructor, whose lang model name is its class name. */
+    private static DeclarationInfo parameterDeclaration(String ownerName, String methodName, boolean constructor,
+                                                        String name) {
         ClassInfo owner = classInfo(ownerName, List.of());
         var method = proxy(jakarta.enterprise.lang.model.declarations.MethodInfo.class, (_, m, _) -> switch (m.getName()) {
             case "declaringClass" -> owner;
+            case "name" -> methodName;
+            case "isConstructor" -> constructor;
             default -> throw unsupported(m);
         });
         return proxy(jakarta.enterprise.lang.model.declarations.ParameterInfo.class, (p, m, _) -> switch (m.getName()) {
@@ -559,6 +539,7 @@ class ConfigCdiExtensionPhasesTest {
     private static DeclarationInfo declaration(DeclarationInfo.Kind kind) {
         return proxy(DeclarationInfo.class, (_, m, _) -> switch (m.getName()) {
             case "kind" -> kind;
+            case "toString" -> "a " + kind.name().toLowerCase(java.util.Locale.ROOT);
             default -> throw unsupported(m);
         });
     }
@@ -650,16 +631,27 @@ class ConfigCdiExtensionPhasesTest {
         });
     }
 
-    /** Records every call as {@code [methodName, firstArgument]}. */
+    /**
+     * Records every call as {@code [methodName, firstArgument]}, and a parameter of the synthetic
+     * observer as {@code [withParam, name, value]}.
+     */
     private static SyntheticComponents recordingComponents(List<List<Object>> calls) {
         SyntheticBeanBuilder<?> builder = proxy(SyntheticBeanBuilder.class, (p, m, a) -> {
             calls.add(List.of(m.getName(), a[0]));
+            return p;
+        });
+        SyntheticObserverBuilder<?> observerBuilder = proxy(SyntheticObserverBuilder.class, (p, m, a) -> {
+            calls.add(m.getName().equals(WITH_PARAM) ? List.of(WITH_PARAM, a[0], a[1]) : List.of(m.getName(), a[0]));
             return p;
         });
         return proxy(SyntheticComponents.class, (_, m, a) -> switch (m.getName()) {
             case ADD_BEAN -> {
                 calls.add(List.of(ADD_BEAN, a[0]));
                 yield builder;
+            }
+            case ADD_OBSERVER -> {
+                calls.add(List.of(ADD_OBSERVER, a[0]));
+                yield observerBuilder;
             }
             default -> throw unsupported(m);
         });

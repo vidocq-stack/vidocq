@@ -20,8 +20,10 @@
 package io.vidocq.ravel.cdi;
 
 import io.vidocq.ravel.cdi.internal.ConfigPropertiesSyntheticCreator;
+import io.vidocq.ravel.cdi.internal.ConfigStartCheck;
 import io.vidocq.ravel.cdi.internal.ConfigSyntheticCreator;
 import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.event.Startup;
 import jakarta.enterprise.inject.Vetoed;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
@@ -34,35 +36,45 @@ import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.inject.build.compatible.spi.Types;
-import jakarta.enterprise.inject.build.compatible.spi.Validation;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.AnnotationMember;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.lang.model.declarations.DeclarationInfo;
+import jakarta.enterprise.lang.model.declarations.MethodInfo;
 import jakarta.enterprise.lang.model.types.ClassType;
 import jakarta.enterprise.lang.model.types.ParameterizedType;
 import jakarta.enterprise.lang.model.types.Type;
 import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.config.ConfigValue;
 import org.eclipse.microprofile.config.inject.ConfigProperties;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
-import java.util.OptionalDouble;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
+import java.util.Set;
+import java.util.function.Function;
 
 /**
- * CDI Build Compatible Extension that (1) validates {@code @ConfigProperty} injection
- * points at deployment time and (2) synthesises one bean per IP type encountered to
- * satisfy Weld typed resolutions (see MicroProfile Config 3.1 §6.1).
+ * CDI Build Compatible Extension that (1) records the {@code @ConfigProperty} and
+ * {@code @ConfigProperties} injection points whose value the application needs to start,
+ * and registers the check of the configuration against them as a {@code Startup} observer,
+ * and (2) synthesises one bean per IP type encountered to satisfy Weld typed resolutions
+ * (see MicroProfile Config 3.1 §6.1).
  *
- * <p>Implemented as {@code @Registration(types = Object.class)} (rather than
- * {@code @Validation}) because CDI Lite 4.1 (§Build Compatible Extensions) forbids
+ * <p>This extension reads no configuration. A container may run it where the application
+ * is built, and the values a deployment injects come from where it runs —
+ * {@code vidocq.properties}, the environment, the system properties of its JVM. What must
+ * be checked is recorded as plain text in the parameters of the synthetic observer
+ * {@link ConfigStartCheck}, which runs when the application starts, whether or not the
+ * container runs this extension again then (ravel#50). The errors that depend on the code
+ * alone — an injection type nothing can supply, {@code @ConfigProperties} on a type that
+ * is not a class — are reported here, through {@link Messages}.</p>
+ *
+ * <p>The injection points are read in {@code @Registration(types = Object.class)} (rather
+ * than {@code @Validation}) because CDI Lite 4.1 (§Build Compatible Extensions) forbids
  * {@code BeanInfo} as a parameter of {@code @Validation} methods:
  * {@code LITE-EXTENSION-TRANSLATOR-000002}. {@code @Registration(types=Object.class)}
  * is invoked once per {@link BeanInfo} (all beans extend {@code Object}) and accepts
@@ -76,6 +88,17 @@ import java.util.OptionalLong;
  * injection-site variants.</p>
  */
 public class ConfigCdiExtension implements BuildCompatibleExtension {
+
+    /**
+     * The class types that need no value at start: {@code ConfigValue} describes a missing
+     * property, and {@code OptionalInt/Long/Double} are empty when the property is missing
+     * (see {@code Optional<T>} in §6.1).
+     */
+    private static final Set<String> TYPES_WITHOUT_REQUIRED_VALUE = Set.of(
+            "org.eclipse.microprofile.config.ConfigValue",
+            "java.util.OptionalInt",
+            "java.util.OptionalLong",
+            "java.util.OptionalDouble");
 
     /**
      * Types collected during {@code @Registration} for synthesis in
@@ -115,9 +138,45 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
 
     /**
      * Binary names of type-level {@code @ConfigProperties} classes vetoed during
-     * {@code @Enhancement}, validated field-by-field in {@code @Validation}.
+     * {@code @Enhancement}, handed to the start check in {@code @Synthesis}.
      */
     private final java.util.Set<String> vetoedConfigPropertiesClassNames = new java.util.LinkedHashSet<>();
+
+    /**
+     * The {@code @ConfigProperty} injection points whose value the application needs to start,
+     * collected during {@code @Registration} for the start check.
+     */
+    private final List<RequiredProperty> requiredProperties = new ArrayList<>();
+
+    /**
+     * The {@code @ConfigProperties} injection points, collected during {@code @Registration} for
+     * the start check.
+     */
+    private final List<InjectedConfigProperties> injectedConfigProperties = new ArrayList<>();
+
+    /**
+     * A required {@code @ConfigProperty} injection point, as the start check reads it.
+     *
+     * @param key          the property key
+     * @param type         the name of the type the value converts to: a class name, or a primitive type name
+     * @param defaultValue the {@code defaultValue}, or {@link ConfigStartCheck#NO_DEFAULT}
+     * @param site         where the value is injected
+     */
+    private record RequiredProperty(String key, String type, String defaultValue, String site) {
+    }
+
+    /**
+     * A {@code @ConfigProperties} class, as the start check reads it.
+     *
+     * @param className the binary name of the class
+     * @param rawPrefix the prefix written at the injection point, or
+     *                  {@link ConfigProperties#UNCONFIGURED_PREFIX} when the class decides. The start
+     *                  resolves it on the loaded class: a class the container did not index has no
+     *                  annotation in the language model.
+     * @param site      where the class is injected; empty for a class that was only discovered
+     */
+    private record InjectedConfigProperties(String className, String rawPrefix, String site) {
+    }
 
     /**
      * MP Config 3.1 §6.4 — type-level {@code @ConfigProperties} classes must only
@@ -137,27 +196,6 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         }
         vetoedConfigPropertiesClassNames.add(classConfig.info().name());
         classConfig.addAnnotation(Vetoed.class);
-    }
-
-    /**
-     * §6.4 deployment validation for discovered type-level {@code @ConfigProperties}
-     * classes — runs even when nothing injects the class (the TCK's
-     * {@code ConfigPropertiesMissingPropertyInjectionTest} bundles such a bean and
-     * expects a {@code DeploymentException}). Mirrors what
-     * {@link ConfigPropertiesExclusionExtension} does at
-     * {@code AfterDeploymentValidation} on the Weld path.
-     */
-    @Validation
-    public void validateVetoedConfigPropertiesClasses(Messages messages) {
-        for (String className : vetoedConfigPropertiesClassNames) {
-            Class<?> beanClass = loadClass(className);
-            if (beanClass == null) {
-                continue;
-            }
-            validateConfigPropertiesFields(beanClass,
-                    resolveConfigPropertiesPrefix(beanClass, ConfigProperties.UNCONFIGURED_PREFIX),
-                    null, messages);
-        }
     }
 
     @Registration(types = Object.class)
@@ -184,7 +222,15 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
             messages.error("Unsupported @ConfigProperty injection type: " + ipType, declaration);
             return;
         }
-        validateDeploymentContract(configPropertyQual, declaration, ipType, messages);
+        String requiredType = requiredScalarTypeName(ipType);
+        if (requiredType != null) {
+            String defaultValue = configuredDefaultValue(configPropertyQual);
+            requiredProperties.add(new RequiredProperty(
+                    resolvePropertyName(configPropertyQual, declaration),
+                    requiredType,
+                    defaultValue != null ? defaultValue : ConfigStartCheck.NO_DEFAULT,
+                    injectionSite(declaration)));
+        }
         collectedTypes.putIfAbsent(ipType.toString(), ipType);
     }
 
@@ -200,7 +246,8 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         String fieldPrefix = extractRawPrefix(configPropertiesQual);
         configPropertiesTypes.putIfAbsent(ipType.toString(),
             new ConfigPropertiesEntry(ipType, fieldPrefix));
-        validateConfigPropertiesDeployment(ct, fieldPrefix, injectionPoint.declaration(), messages);
+        injectedConfigProperties.add(new InjectedConfigProperties(
+                ct.declaration().name(), fieldPrefix, injectionSite(injectionPoint.declaration())));
     }
 
     /**
@@ -288,6 +335,45 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
                     .scope(Dependent.class)
                     .createWith(ConfigPropertiesSyntheticCreator.class);
         }
+
+        registerStartCheck(components);
+    }
+
+    /**
+     * Registers {@link ConfigStartCheck} as an observer of {@link Startup}, with what
+     * {@code @Enhancement} and {@code @Registration} collected as its parameters: the required
+     * {@code @ConfigProperty} injection points (§6.1), then the {@code @ConfigProperties} classes
+     * (§6.4) — those injected first, then those that were only discovered, which the start checks
+     * even when nothing injects them (the TCK's {@code ConfigPropertiesMissingPropertyInjectionTest}
+     * bundles such a class and expects a {@code DeploymentException}). Nothing is registered when
+     * there is nothing to check.
+     *
+     * <p>The parameters are {@code String[]} arrays only, which a container that runs this
+     * extension at build time records with the observer and hands back at start.</p>
+     */
+    private void registerStartCheck(SyntheticComponents components) {
+        List<InjectedConfigProperties> classes = new ArrayList<>(injectedConfigProperties);
+        for (String className : vetoedConfigPropertiesClassNames) {
+            classes.add(new InjectedConfigProperties(className, ConfigProperties.UNCONFIGURED_PREFIX, ""));
+        }
+        if (requiredProperties.isEmpty() && classes.isEmpty()) {
+            return;
+        }
+        components.addObserver(Startup.class)
+                .priority(ConfigStartCheck.PRIORITY)
+                .withParam(ConfigStartCheck.PROPERTY_KEYS, column(requiredProperties, RequiredProperty::key))
+                .withParam(ConfigStartCheck.PROPERTY_TYPES, column(requiredProperties, RequiredProperty::type))
+                .withParam(ConfigStartCheck.PROPERTY_DEFAULTS,
+                        column(requiredProperties, RequiredProperty::defaultValue))
+                .withParam(ConfigStartCheck.PROPERTY_SITES, column(requiredProperties, RequiredProperty::site))
+                .withParam(ConfigStartCheck.CLASS_NAMES, column(classes, InjectedConfigProperties::className))
+                .withParam(ConfigStartCheck.CLASS_PREFIXES, column(classes, InjectedConfigProperties::rawPrefix))
+                .withParam(ConfigStartCheck.CLASS_SITES, column(classes, InjectedConfigProperties::site))
+                .observeWith(ConfigStartCheck.class);
+    }
+
+    private static <T> String[] column(List<T> rows, Function<T, String> value) {
+        return rows.stream().map(value).toArray(String[]::new);
     }
 
     /**
@@ -370,140 +456,6 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         return ConfigProperties.UNCONFIGURED_PREFIX;
     }
 
-    /**
-     * Deployment validation for {@code @ConfigProperties} (§6.4) — verifies that
-     * all required properties are present. A property is considered required if it
-     * has no fallback:
-     * <ul>
-     *   <li>no {@code @ConfigProperty(defaultValue=...)} on the field;</li>
-     *   <li>not an {@code Optional} / {@code OptionalInt/Long/Double} type;</li>
-     *   <li>no Java initializer (e.g. {@code int port = 9080;}) — detected by
-     *       instantiating the bean and comparing the value to the zero-value of
-     *       the type.</li>
-     * </ul>
-     * Targets {@link org.eclipse.microprofile.config.tck.broken.ConfigPropertiesMissingPropertyInjectionTest}.
-     */
-    private static void validateConfigPropertiesDeployment(
-            ClassType beanType, String fieldRawPrefix, DeclarationInfo declaration, Messages messages) {
-        Class<?> beanClass = loadClass(beanType.declaration().name());
-        if (beanClass == null) {
-        // Class not loadable at deployment time — let runtime validation handle it.
-            return;
-        }
-        validateConfigPropertiesFields(beanClass,
-                resolveConfigPropertiesPrefix(beanClass, fieldRawPrefix), declaration, messages);
-    }
-
-    /**
-     * Field-by-field §6.4 required-property check, shared by the injection-point
-     * path ({@code @Registration}) and the discovered-class path
-     * ({@code @Validation}, no declaration available).
-     */
-    private static void validateConfigPropertiesFields(
-            Class<?> beanClass, String resolvedPrefix, DeclarationInfo declaration, Messages messages) {
-        if (runsAtBuildTime()) {
-            return;
-        }
-        Object probe = tryInstantiate(beanClass);
-        Config config = ConfigProvider.getConfig();
-        for (java.lang.reflect.Field field : beanClass.getDeclaredFields()) {
-            ConfigProperty fieldAnno = field.getAnnotation(ConfigProperty.class);
-            if (isRequiredField(field, fieldAnno, probe)) {
-                String name = fieldConfigPropertyName(field, fieldAnno, resolvedPrefix);
-                ConfigValue cv = config.getConfigValue(name);
-                String resolved = cv != null ? cv.getValue() : null;
-                if (resolved == null || resolved.isEmpty()) {
-                    reportMissingField(beanClass, field, name, declaration, messages);
-                }
-            }
-        }
-    }
-
-    /**
-     * §6.4: a field is required unless it is static, has a configured
-     * {@code defaultValue}, has an {@code Optional}-like type, or carries a Java initializer.
-     */
-    private static boolean isRequiredField(java.lang.reflect.Field field, ConfigProperty fieldAnno, Object probe) {
-        if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
-            return false;
-        }
-        if (fieldAnno != null && !ConfigProperty.UNCONFIGURED_VALUE.equals(fieldAnno.defaultValue())) {
-            return false;
-        }
-        return !isOptionalLikeRuntime(field.getType()) && !hasJavaInitializer(probe, field);
-    }
-
-    private static void reportMissingField(Class<?> beanClass, java.lang.reflect.Field field, String name,
-            DeclarationInfo declaration, Messages messages) {
-        String message = "@ConfigProperties: missing required property '" + name
-                + "' for " + beanClass.getName() + "." + field.getName();
-        if (declaration != null) {
-            messages.error(message, declaration);
-        } else {
-            messages.error(message);
-        }
-    }
-
-    private static Object tryInstantiate(Class<?> beanClass) {
-        try {
-            var ctor = beanClass.getDeclaredConstructor();
-            ctor.setAccessible(true);
-            return ctor.newInstance();
-        } catch (Exception _) {
-            return null;
-        }
-    }
-
-    private static boolean hasJavaInitializer(Object probe, java.lang.reflect.Field field) {
-        if (probe == null) return false;
-        try {
-            field.setAccessible(true);
-            Object actual = field.get(probe);
-            Object zero = zeroValue(field.getType());
-            return !java.util.Objects.equals(actual, zero);
-        } catch (IllegalAccessException _) {
-            return false;
-        }
-    }
-
-    private static Object zeroValue(Class<?> type) {
-        if (!type.isPrimitive()) return null;
-        if (type == boolean.class) return false;
-        if (type == byte.class) return (byte) 0;
-        if (type == short.class) return (short) 0;
-        if (type == int.class) return 0;
-        if (type == long.class) return 0L;
-        if (type == float.class) return 0f;
-        if (type == double.class) return 0d;
-        if (type == char.class) return (char) 0;
-        return null;
-    }
-
-    static String resolveConfigPropertiesPrefix(Class<?> beanClass, String fieldRawPrefix) {
-        if (!ConfigProperties.UNCONFIGURED_PREFIX.equals(fieldRawPrefix)) {
-            return fieldRawPrefix;
-        }
-        ConfigProperties classAnno = beanClass.getAnnotation(ConfigProperties.class);
-        if (classAnno != null && !ConfigProperties.UNCONFIGURED_PREFIX.equals(classAnno.prefix())) {
-            return classAnno.prefix();
-        }
-        return "";
-    }
-
-    static String fieldConfigPropertyName(java.lang.reflect.Field field, ConfigProperty anno, String resolvedPrefix) {
-        if (anno != null && !ConfigProperty.UNCONFIGURED_VALUE.equals(anno.name()) && !anno.name().isEmpty()) {
-            return resolvedPrefix.isEmpty() ? anno.name() : resolvedPrefix + "." + anno.name();
-        }
-        return resolvedPrefix.isEmpty() ? field.getName() : resolvedPrefix + "." + field.getName();
-    }
-
-    static boolean isOptionalLikeRuntime(Class<?> rawType) {
-        return rawType == Optional.class
-                || rawType == OptionalInt.class
-                || rawType == OptionalLong.class
-                || rawType == OptionalDouble.class;
-    }
-
     static boolean isSupportedType(Type type) {
         // Primitives (int, long, boolean, ...) are valid §6.1 — Weld resolves them
         // via auto-boxing of the synthetic bean (primitive bean type).
@@ -531,16 +483,10 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
     }
 
     /**
-     * True when type is a wrapper making the underlying property non-required
-     * at deployment time: {@link java.util.Optional}, {@code jakarta.inject.Provider}
+     * True when the name is the one of a wrapper making the underlying property non-required
+     * when the application starts: {@link java.util.Optional}, {@code jakarta.inject.Provider}
      * (lazy lookup), and {@code java.util.function.Supplier} (lazy lookup).
      */
-    static boolean isDeferredOrOptionalWrapper(Type type) {
-        return type instanceof ParameterizedType pt
-                && pt.genericClass() instanceof ClassType classType
-                && isDeferredOrOptionalWrapperName(classType.declaration().name());
-    }
-
     private static boolean isDeferredOrOptionalWrapperName(String fqn) {
         return "java.util.Optional".equals(fqn)
                 || "jakarta.inject.Provider".equals(fqn)
@@ -592,91 +538,52 @@ public class ConfigCdiExtension implements BuildCompatibleExtension {
         return !ConfigProperty.UNCONFIGURED_VALUE.equals(member.asString());
     }
 
-    private static void validateDeploymentContract(
-            AnnotationInfo cfg,
-            DeclarationInfo declaration,
-            Type ipType,
-            Messages messages
-    ) {
-        if (runsAtBuildTime()) {
-            return;
-        }
-        Class<?> targetType = requiredScalarType(ipType);
-        if (targetType == null) {
-            return;
-        }
-
-        String key = resolvePropertyName(cfg, declaration);
-        String defaultValue = configuredDefaultValue(cfg);
-        Config config = ConfigProvider.getConfig();
-
-        ConfigValue configValue = config.getConfigValue(key);
-        String resolved = configValue != null ? configValue.getValue() : null;
-        boolean rawPresent = resolved != null && !resolved.isEmpty();
-
-        try {
-            if (rawPresent) {
-                Optional<?> converted = config.getOptionalValue(key, targetType);
-                if (converted.isEmpty()) {
-                    messages.error("Cannot convert required config property '" + key + "' to "
-                            + targetType.getName() + " (converter returned null)", declaration);
-                }
-                return;
-            }
-
-            if (defaultValue == null) {
-                messages.error("Missing required config property '" + key + "' for type "
-                        + targetType.getName(), declaration);
-                return;
-            }
-
-            if (defaultValue.isEmpty()) {
-                messages.error("Empty defaultValue is invalid for required config property '" + key + "'",
-                        declaration);
-                return;
-            }
-
-            Object convertedDefault = config.getConverter(targetType)
-                    .orElseThrow(() -> new IllegalStateException("No converter for " + targetType.getName()))
-                    .convert(defaultValue);
-            if (convertedDefault == null) {
-                messages.error("defaultValue for config property '" + key + "' converts to null", declaration);
-            }
-        } catch (RuntimeException e) {
-            messages.error("Invalid @ConfigProperty for key '" + key + "': " + e.getMessage(), declaration);
-        }
-    }
-
     /**
-     * The runtime class whose value must be present and convertible at deployment, or
-     * {@code null} when the injection point defers or tolerates a missing value: lazy and
-     * optional wrappers, parameterized and array types, {@code ConfigValue}, and
-     * {@code OptionalInt/Long/Double}, which are semantically "absent" when the property
-     * is missing (see {@code Optional<T>} in §6.1).
+     * The name of the type whose value must be present and convertible when the application
+     * starts — a class name, or a primitive type name — or {@code null} when the injection point
+     * defers or tolerates a missing value: lazy and optional wrappers, the other parameterized
+     * types and the array types, {@code ConfigValue}, and {@code OptionalInt/Long/Double}, which
+     * are semantically "absent" when the property is missing (see {@code Optional<T>} in §6.1).
+     *
+     * <p>A name, not a class: the build may run before the class exists. The start check loads it,
+     * and leaves a type it cannot load to the injection itself.</p>
      */
-    private static Class<?> requiredScalarType(Type ipType) {
-        if (isDeferredOrOptionalWrapper(ipType)
-                || ipType instanceof ParameterizedType
-                || ipType instanceof jakarta.enterprise.lang.model.types.ArrayType) {
-            return null;
+    private static String requiredScalarTypeName(Type ipType) {
+        if (ipType instanceof jakarta.enterprise.lang.model.types.PrimitiveType pt) {
+            return pt.primitiveKind().name().toLowerCase(Locale.ROOT);
         }
-        Class<?> targetType = toRuntimeClass(ipType);
-        if (targetType == null
-                || targetType == ConfigValue.class
-                || targetType.isArray()
-                || targetType == OptionalInt.class
-                || targetType == OptionalLong.class
-                || targetType == OptionalDouble.class) {
-            return null;
+        if (ipType instanceof ClassType ct) {
+            String name = ct.declaration().name();
+            return TYPES_WITHOUT_REQUIRED_VALUE.contains(name) ? null : name;
         }
-        return targetType;
+        return null;
     }
 
     /**
-     * Whether Vauban runs this extension while the application compiles (ravel#21). The values a
-     * deployment injects come from where it runs — {@code vidocq.properties}, the environment, the
-     * system properties of its JVM — so checking them is left to the container start, which runs
-     * this extension again; checking them here would read the build machine's.
+     * Where a value is injected, as the start check prints it after its message:
+     * {@code Class#field}, or {@code Class#method(parameter)} — {@code <init>} for a constructor.
+     */
+    private static String injectionSite(DeclarationInfo declaration) {
+        return switch (declaration.kind()) {
+            case FIELD -> {
+                var field = declaration.asField();
+                yield field.declaringClass().name() + "#" + field.name();
+            }
+            case PARAMETER -> {
+                var parameter = declaration.asParameter();
+                MethodInfo method = parameter.declaringMethod();
+                yield method.declaringClass().name() + "#" + (method.isConstructor() ? "<init>" : method.name())
+                        + "(" + parameter.name() + ")";
+            }
+            default -> String.valueOf(declaration);
+        };
+    }
+
+    /**
+     * Whether Vauban runs this extension while the application compiles (ravel#21): the fallback
+     * {@code Config} bean is not registered then, see {@link #synthesizeConfigPropertyBeans}.
+     * Nothing else depends on the phase: this extension reads no configuration, at build time or
+     * later (ravel#50).
      *
      * <p>{@code io.vidocq.vauban.api} is an optional module ({@code requires static}): without it,
      * another container runs this extension, at deployment.

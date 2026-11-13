@@ -19,9 +19,14 @@
  */
 package io.vidocq.ravel.cdi;
 
+import jakarta.enterprise.event.Startup;
 import jakarta.enterprise.inject.spi.AfterDeploymentValidation;
 import jakarta.enterprise.inject.spi.AnnotatedType;
+import jakarta.enterprise.inject.spi.DeploymentException;
+import jakarta.enterprise.inject.spi.EventContext;
+import jakarta.enterprise.inject.spi.ObserverMethod;
 import jakarta.enterprise.inject.spi.ProcessAnnotatedType;
+import jakarta.enterprise.inject.spi.ProcessSyntheticObserverMethod;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.inject.ConfigProperties;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -44,6 +49,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("ConfigPropertiesExclusionExtension — portable veto and §6.4 validation")
@@ -125,13 +131,87 @@ class ConfigPropertiesExclusionExtensionTest {
         assertTrue(problems.getFirst().getMessage().contains("'ctor.port'"), problems.getFirst().getMessage());
     }
 
+    // -- ravel#50: on a full CDI container the start check runs at deployment validation ----------
+
+    @Test
+    void the_start_check_of_the_build_compatible_extension_is_moved_to_deployment_validation() {
+        AtomicBoolean vetoed = new AtomicBoolean();
+        List<Object> notified = new ArrayList<>();
+        ConfigPropertiesExclusionExtension extension = new ConfigPropertiesExclusionExtension();
+
+        extension.moveStartCheckToDeploymentValidation(syntheticStartupObserver(
+                ConfigCdiExtension.class, vetoed, context -> notified.add(context.getEvent())));
+        List<Throwable> problems = new ArrayList<>();
+        extension.runStartChecks(afterDeploymentValidation(problems));
+
+        assertTrue(vetoed.get(), "the container does not run the check a second time at Startup");
+        assertEquals(1, notified.size());
+        assertInstanceOf(Startup.class, notified.getFirst());
+        assertEquals(List.of(), problems);
+    }
+
+    @Test
+    void a_configuration_the_start_check_rejects_is_a_deployment_problem() {
+        DeploymentException rejected = new DeploymentException("Invalid MicroProfile Config deployment (1 problem)");
+        ConfigPropertiesExclusionExtension extension = new ConfigPropertiesExclusionExtension();
+
+        extension.moveStartCheckToDeploymentValidation(syntheticStartupObserver(
+                ConfigCdiExtension.class, new AtomicBoolean(), _ -> {
+                    throw rejected;
+                }));
+        List<Throwable> problems = new ArrayList<>();
+        extension.runStartChecks(afterDeploymentValidation(problems));
+
+        assertEquals(List.of(rejected), problems);
+    }
+
+    @Test
+    void a_rejection_the_container_wrapped_is_reported_as_the_deployment_exception_it_carries() {
+        // Weld notifies a configurator-built observer through a callback, and wraps what it throws.
+        DeploymentException rejected = new DeploymentException("Invalid MicroProfile Config deployment (1 problem)");
+        IllegalStateException unrelated = new IllegalStateException("not a configuration problem");
+        ConfigPropertiesExclusionExtension extension = new ConfigPropertiesExclusionExtension();
+
+        extension.moveStartCheckToDeploymentValidation(syntheticStartupObserver(
+                ConfigCdiExtension.class, new AtomicBoolean(), _ -> {
+                    throw new jakarta.enterprise.event.ObserverException(rejected);
+                }));
+        extension.moveStartCheckToDeploymentValidation(syntheticStartupObserver(
+                ConfigCdiExtension.class, new AtomicBoolean(), _ -> {
+                    throw unrelated;
+                }));
+        List<Throwable> problems = new ArrayList<>();
+        extension.runStartChecks(afterDeploymentValidation(problems));
+
+        assertEquals(List.of(rejected, unrelated), problems);
+    }
+
+    @Test
+    void a_synthetic_Startup_observer_of_another_extension_is_left_alone() {
+        AtomicBoolean vetoed = new AtomicBoolean();
+        List<Object> notified = new ArrayList<>();
+        ConfigPropertiesExclusionExtension extension = new ConfigPropertiesExclusionExtension();
+
+        extension.moveStartCheckToDeploymentValidation(syntheticStartupObserver(
+                String.class, vetoed, context -> notified.add(context.getEvent())));
+        extension.runStartChecks(afterDeploymentValidation(new ArrayList<>()));
+
+        assertFalse(vetoed.get());
+        assertEquals(List.of(), notified);
+    }
+
     // -- Helpers -------------------------------------------------------------------------------
 
     private static List<Throwable> problemsFor(Class<?> beanClass) {
         ConfigPropertiesExclusionExtension extension = new ConfigPropertiesExclusionExtension();
         extension.vetoConfigPropertiesBeans(processAnnotatedType(beanClass, new AtomicBoolean()));
         List<Throwable> problems = new ArrayList<>();
-        extension.validateConfigProperties((AfterDeploymentValidation) Proxy.newProxyInstance(
+        extension.validateConfigProperties(afterDeploymentValidation(problems));
+        return problems;
+    }
+
+    private static AfterDeploymentValidation afterDeploymentValidation(List<Throwable> problems) {
+        return (AfterDeploymentValidation) Proxy.newProxyInstance(
                 AfterDeploymentValidation.class.getClassLoader(), new Class<?>[]{AfterDeploymentValidation.class},
                 (_, method, args) -> {
                     if ("addDeploymentProblem".equals(method.getName())) {
@@ -139,8 +219,37 @@ class ConfigPropertiesExclusionExtensionTest {
                         return null;
                     }
                     throw new UnsupportedOperationException(method.getName());
-                }));
-        return problems;
+                });
+    }
+
+    /**
+     * The event a full CDI container fires for the synthetic {@code Startup} observer a build
+     * compatible extension registered: the observer's bean class is the extension class.
+     */
+    @SuppressWarnings("unchecked")
+    private static <X> ProcessSyntheticObserverMethod<Startup, X> syntheticStartupObserver(
+            Class<X> extensionClass, AtomicBoolean vetoed, java.util.function.Consumer<EventContext<Startup>> onNotify) {
+        ObserverMethod<Startup> observer = (ObserverMethod<Startup>) Proxy.newProxyInstance(
+                ObserverMethod.class.getClassLoader(), new Class<?>[]{ObserverMethod.class},
+                (_, method, args) -> switch (method.getName()) {
+                    case "getBeanClass" -> extensionClass;
+                    case "notify" -> {
+                        onNotify.accept((EventContext<Startup>) args[0]);
+                        yield null;
+                    }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        return (ProcessSyntheticObserverMethod<Startup, X>) Proxy.newProxyInstance(
+                ProcessSyntheticObserverMethod.class.getClassLoader(),
+                new Class<?>[]{ProcessSyntheticObserverMethod.class},
+                (_, method, _) -> switch (method.getName()) {
+                    case "getObserverMethod" -> observer;
+                    case "veto" -> {
+                        vetoed.set(true);
+                        yield null;
+                    }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
     }
 
     @SuppressWarnings("unchecked")

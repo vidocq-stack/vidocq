@@ -20,10 +20,15 @@
 package io.vidocq.ravel.cdi;
 
 import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.event.Startup;
 import jakarta.enterprise.inject.spi.AfterDeploymentValidation;
 import jakarta.enterprise.inject.spi.DeploymentException;
+import jakarta.enterprise.inject.spi.EventContext;
+import jakarta.enterprise.inject.spi.EventMetadata;
 import jakarta.enterprise.inject.spi.Extension;
+import jakarta.enterprise.inject.spi.ObserverMethod;
 import jakarta.enterprise.inject.spi.ProcessAnnotatedType;
+import jakarta.enterprise.inject.spi.ProcessSyntheticObserverMethod;
 import jakarta.enterprise.inject.spi.WithAnnotations;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -45,12 +50,20 @@ import java.util.OptionalLong;
  * <ol>
  *   <li>vetoes type-level {@code @ConfigProperties} beans so BCE can synthesize them;</li>
  *   <li>collects those classes and validates at {@link AfterDeploymentValidation}
- *       that all required properties are available in current {@link Config}.</li>
+ *       that all required properties are available in current {@link Config};</li>
+ *   <li>runs at {@link AfterDeploymentValidation} the check of the configuration that
+ *       {@link ConfigCdiExtension} registered for the start of the application.</li>
  * </ol>
+ *
+ * <p>Only a full CDI container runs a portable extension, and it does so while it deploys the
+ * application: here "deployment" and "start" read the same configuration.</p>
  */
 public class ConfigPropertiesExclusionExtension implements Extension {
 
     private final List<Class<?>> configPropertiesClasses = new ArrayList<>();
+
+    /** The start checks of {@link ConfigCdiExtension}, taken over to run at deployment validation. */
+    private final List<ObserverMethod<Startup>> startChecks = new ArrayList<>();
 
     /**
      * Vetoes type-level {@code @ConfigProperties} classes to let BCE synthesize them.
@@ -73,6 +86,69 @@ public class ConfigPropertiesExclusionExtension implements Extension {
         Config config = ConfigProvider.getConfig();
         for (Class<?> beanClass : configPropertiesClasses) {
             validateConfigPropertiesClass(beanClass, config, event);
+        }
+    }
+
+    /**
+     * Takes over the start check {@link ConfigCdiExtension} registered as a synthetic observer of
+     * {@link Startup} — its bean class is the extension that registered it — so that
+     * {@link #runStartChecks} runs it at deployment validation, and the container does not run it
+     * again at {@code Startup}.
+     *
+     * <p>A full CDI container runs the build compatible extension while it deploys the application:
+     * the configuration it reads then is the one the application starts with, a problem with it is a
+     * deployment problem (MP Config 3.1 §6.1), and not every such container fires {@code Startup}
+     * (the embedded Weld of Arquillian, which runs the TCK, does not). On a CDI Lite container this
+     * extension never runs, and the check stays where the build compatible extension put it
+     * (ravel#50).</p>
+     */
+    public <X> void moveStartCheckToDeploymentValidation(
+            @Observes ProcessSyntheticObserverMethod<Startup, X> event) {
+        ObserverMethod<Startup> observer = event.getObserverMethod();
+        if (observer.getBeanClass() == ConfigCdiExtension.class) {
+            startChecks.add(observer);
+            event.veto();
+        }
+    }
+
+    /**
+     * Runs the start checks at deployment validation: the {@code DeploymentException} a check
+     * throws, which lists every problem of the configuration, is a deployment problem.
+     */
+    public void runStartChecks(@Observes AfterDeploymentValidation event) {
+        for (ObserverMethod<Startup> startCheck : startChecks) {
+            try {
+                startCheck.notify(new DeploymentValidation(new Startup()));
+            } catch (RuntimeException failure) {
+                event.addDeploymentProblem(deploymentProblemIn(failure));
+            }
+        }
+    }
+
+    /**
+     * The {@code DeploymentException} of the start check, which the container may have wrapped
+     * (Weld notifies a synthetic observer through a callback, and throws an
+     * {@code ObserverException}); the failure itself when it carries none.
+     */
+    private static Throwable deploymentProblemIn(RuntimeException failure) {
+        for (Throwable current = failure; current != null; current = current.getCause()) {
+            if (current instanceof DeploymentException) {
+                return current;
+            }
+        }
+        return failure;
+    }
+
+    /** The event a start check is notified with at deployment validation; it reads neither. */
+    private record DeploymentValidation(Startup startup) implements EventContext<Startup> {
+        @Override
+        public Startup getEvent() {
+            return startup;
+        }
+
+        @Override
+        public EventMetadata getMetadata() {
+            return null;
         }
     }
 

@@ -22,6 +22,7 @@ package io.vidocq.ravel.cdi;
 import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.inject.se.SeContainer;
 import jakarta.enterprise.inject.se.SeContainerInitializer;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -36,7 +37,9 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("Vauban container integration — @ConfigProperty + Config")
@@ -185,6 +188,91 @@ class VaubanContainerIntegrationTest {
                 "A discovered @ConfigProperties class with a missing required property must fail the deployment");
     }
 
+    // -- ravel#50: the configuration is checked when the container starts ---------------------------
+
+    /**
+     * MP Config 3.1 §6.1 — a required {@code @ConfigProperty} without value nor default fails the
+     * deployment. The extension ran in this container, as it does wherever no build ran it.
+     */
+    @Test
+    void missing_required_config_property_fails_the_container_start_spec_section6_1() {
+        registerConfig(Map.of("app.port", "8181"));
+        // app.required is NOT provided and has no defaultValue.
+        SeContainerInitializer initializer = SeContainerInitializer.newInstance()
+                .addBeanClasses(ConfigCdiExtension.class, RequiredPropertiesBean.class);
+
+        DeploymentException failure = assertThrows(DeploymentException.class, () -> startAndClose(initializer));
+
+        assertTrue(messagesOf(failure).contains("Missing required config property 'app.required' for type"
+                + " java.lang.String [at " + RequiredPropertiesBean.class.getName() + "#required]"),
+                messagesOf(failure));
+    }
+
+    @Test
+    void unconvertible_required_config_property_fails_the_container_start() {
+        registerConfig(Map.of("app.required", "here", "app.port", "not-a-number"));
+        SeContainerInitializer initializer = SeContainerInitializer.newInstance()
+                .addBeanClasses(ConfigCdiExtension.class, RequiredPropertiesBean.class);
+
+        DeploymentException failure = assertThrows(DeploymentException.class, () -> startAndClose(initializer));
+
+        assertTrue(messagesOf(failure).contains("Invalid @ConfigProperty for key 'app.port'"), messagesOf(failure));
+        assertTrue(messagesOf(failure).contains("[at " + RequiredPropertiesBean.class.getName() + "#port]"),
+                messagesOf(failure));
+    }
+
+    @Test
+    void present_and_defaulted_required_config_properties_let_the_container_start() {
+        registerConfig(Map.of("app.required", "here", "app.port", "8181"));
+        // app.timeout is absent and falls back to its defaultValue.
+        SeContainerInitializer initializer = SeContainerInitializer.newInstance()
+                .addBeanClasses(ConfigCdiExtension.class, RequiredPropertiesBean.class);
+
+        try (SeContainer container = initializer.initialize()) {
+            RequiredPropertiesBean bean = container.select(RequiredPropertiesBean.class).get();
+            assertEquals("here", bean.required);
+            assertEquals(8181, bean.port);
+            assertEquals(30, bean.timeout);
+        }
+    }
+
+    /**
+     * The check is the {@code Startup} observer the extension registered, not the extension itself:
+     * Vauban reports the observer's exception as the cause, and that one exception lists every
+     * problem. This is what still runs once the container no longer runs the extension at start
+     * (Vidocq/vauban#288).
+     */
+    @Test
+    void the_start_check_throws_one_exception_listing_every_problem() {
+        registerConfig(Map.of("app.port", "not-a-number", "srv.host", "example.org"));
+        SeContainerInitializer initializer = SeContainerInitializer.newInstance()
+                .addBeanClasses(ConfigCdiExtension.class, RequiredPropertiesBean.class, MissingProps.class);
+
+        DeploymentException failure = assertThrows(DeploymentException.class, () -> startAndClose(initializer));
+
+        DeploymentException thrownByTheStartCheck =
+                assertInstanceOf(DeploymentException.class, failure.getCause(), messagesOf(failure));
+        String message = thrownByTheStartCheck.getMessage();
+        assertTrue(message.contains("3 problems"), message);
+        assertTrue(message.contains("Missing required config property 'app.required'"), message);
+        assertTrue(message.contains("Invalid @ConfigProperty for key 'app.port'"), message);
+        assertTrue(message.contains("@ConfigProperties: missing required property 'srv.nationality' for "
+                + MissingProps.class.getName() + ".nationality"), message);
+    }
+
+    private static void startAndClose(SeContainerInitializer initializer) {
+        initializer.initialize().close();
+    }
+
+    /** The messages of an exception and of its causes, one per line. */
+    private static String messagesOf(Throwable failure) {
+        StringBuilder messages = new StringBuilder();
+        for (Throwable current = failure; current != null; current = current.getCause()) {
+            messages.append(current.getMessage()).append('\n');
+        }
+        return messages.toString();
+    }
+
     private void registerConfig(Map<String, String> values) {
         ConfigProviderResolver resolver = ConfigProviderResolver.instance();
         Config custom = resolver.getBuilder()
@@ -192,6 +280,21 @@ class VaubanContainerIntegrationTest {
                 .forClassLoader(getClass().getClassLoader())
                 .build();
         resolver.registerConfig(custom, getClass().getClassLoader());
+    }
+
+    @Dependent
+    public static class RequiredPropertiesBean {
+        @Inject
+        @ConfigProperty(name = "app.required")
+        public String required;
+
+        @Inject
+        @ConfigProperty(name = "app.port")
+        public Integer port;
+
+        @Inject
+        @ConfigProperty(name = "app.timeout", defaultValue = "30")
+        public int timeout;
     }
 
     @Dependent

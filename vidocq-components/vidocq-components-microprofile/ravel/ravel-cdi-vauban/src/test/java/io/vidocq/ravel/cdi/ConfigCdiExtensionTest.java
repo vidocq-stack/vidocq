@@ -19,10 +19,16 @@
  */
 package io.vidocq.ravel.cdi;
 
+import io.vidocq.ravel.cdi.internal.ConfigStartCheck;
 import io.vidocq.vauban.api.ExtensionPhase;
+import jakarta.enterprise.event.Startup;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
 import jakarta.enterprise.inject.build.compatible.spi.InjectionPointInfo;
 import jakarta.enterprise.inject.build.compatible.spi.Messages;
+import jakarta.enterprise.inject.build.compatible.spi.Parameters;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticObserverBuilder;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.AnnotationMember;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
@@ -33,18 +39,25 @@ import jakarta.enterprise.lang.model.types.ParameterizedType;
 import jakarta.enterprise.lang.model.types.Type;
 import org.eclipse.microprofile.config.inject.ConfigProperties;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
+import org.eclipse.microprofile.config.spi.ConfigSource;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisplayName("ConfigCdiExtension — validation BCE @ConfigProperty")
@@ -100,103 +113,233 @@ class ConfigCdiExtensionTest {
         assertTrue(ConfigCdiExtension.isSupportedType(optionalOfNested));
     }
 
+    // -- ravel#50: the extension reads no configuration; it hands what must be checked to the start --
+
     @Test
-    void register_validates_missing_required_property_at_deployment() {
+    void a_missing_required_property_is_handed_to_the_start_check_not_reported() {
         String key = "cdi.test.missing.required." + System.nanoTime();
-        AnnotationInfo cfg = configPropertyAnnotation(key, ConfigProperty.UNCONFIGURED_VALUE);
-
-        InjectionPointInfo ip = injectionPoint(classType("java.lang.String"), List.of(cfg), fieldDeclaration("requiredValue"));
-        BeanInfo bean = beanWithInjectionPoints(List.of(ip));
+        ConfigCdiExtension extension = new ConfigCdiExtension();
         CapturingMessages messages = new CapturingMessages();
+        Recorded recorded = new Recorded();
 
-        new ConfigCdiExtension().registerConfigPropertyInjectionPoints(bean, messages);
+        extension.registerConfigPropertyInjectionPoints(requiredStringBean(key), messages);
+        extension.synthesizeConfigPropertyBeans(recordingComponents(recorded), null);
 
-        assertFalse(messages.errors.isEmpty());
+        assertEquals(List.of(), messages.errors);
+        assertEquals(List.of(Startup.class), recorded.observedTypes);
+        assertEquals(List.of(ConfigStartCheck.class), recorded.observerClasses);
+        assertEquals(ConfigStartCheck.PRIORITY, recorded.priority);
+        assertArrayEquals(new String[]{key}, recorded.strings(ConfigStartCheck.PROPERTY_KEYS));
+        assertArrayEquals(new String[]{"java.lang.String"}, recorded.strings(ConfigStartCheck.PROPERTY_TYPES));
+        assertArrayEquals(new String[]{ConfigStartCheck.NO_DEFAULT},
+                recorded.strings(ConfigStartCheck.PROPERTY_DEFAULTS));
+        assertArrayEquals(new String[]{"com.example.MyBean#requiredValue"},
+                recorded.strings(ConfigStartCheck.PROPERTY_SITES));
+        assertArrayEquals(new String[0], recorded.strings(ConfigStartCheck.CLASS_NAMES));
     }
 
     @Test
-    void register_leaves_a_missing_required_property_to_the_container_start_at_build_time() {
-        // ravel#21: the value comes from the deployment (vidocq.properties, the environment), which the
-        // compiler does not see — the same point fails the container start instead.
+    void the_build_hands_the_same_required_property_to_the_start_check() {
+        // The configuration of the build machine is not the one the application starts with (ravel#21):
+        // the build only records what the start must check.
         String key = "cdi.test.missing.at.build." + System.nanoTime();
-        AnnotationInfo cfg = configPropertyAnnotation(key, ConfigProperty.UNCONFIGURED_VALUE);
-
-        InjectionPointInfo ip = injectionPoint(classType("java.lang.String"), List.of(cfg), fieldDeclaration("requiredValue"));
-        BeanInfo bean = beanWithInjectionPoints(List.of(ip));
+        ConfigCdiExtension extension = new ConfigCdiExtension();
         CapturingMessages messages = new CapturingMessages();
+        Recorded recorded = new Recorded();
 
         ExtensionPhase.atBuildTime(() -> {
-            new ConfigCdiExtension().registerConfigPropertyInjectionPoints(bean, messages);
+            extension.registerConfigPropertyInjectionPoints(requiredStringBean(key), messages);
+            extension.synthesizeConfigPropertyBeans(recordingComponents(recorded), null);
             return null;
         });
 
         assertEquals(List.of(), messages.errors);
+        assertEquals(List.of(Startup.class), recorded.observedTypes);
+        assertArrayEquals(new String[]{key}, recorded.strings(ConfigStartCheck.PROPERTY_KEYS));
+        assertArrayEquals(new String[]{"com.example.MyBean#requiredValue"},
+                recorded.strings(ConfigStartCheck.PROPERTY_SITES));
     }
 
     @Test
-    void register_validates_missing_ConfigProperties_members_at_deployment() {
-        InjectionPointInfo ip = injectionPoint(classType(MissingServer.class.getName()),
-                List.of(configPropertiesAnnotation(ConfigProperties.UNCONFIGURED_PREFIX)), fieldDeclaration("server"));
-        BeanInfo bean = beanWithInjectionPoints(List.of(ip));
-        CapturingMessages messages = new CapturingMessages();
+    void the_data_recorded_at_build_fails_the_start_on_a_missing_property_and_passes_once_it_is_there() {
+        // The path Vauban takes once extensions run at build only (Vidocq/vauban#288): the parameters
+        // the build recorded reach the observer at start, and the extension does not run again.
+        String key = "cdi.test.frozen." + System.nanoTime();
+        ConfigCdiExtension extension = new ConfigCdiExtension();
+        Recorded recorded = new Recorded();
+        ExtensionPhase.atBuildTime(() -> {
+            extension.registerConfigPropertyInjectionPoints(requiredStringBean(key), new CapturingMessages());
+            extension.synthesizeConfigPropertyBeans(recordingComponents(recorded), null);
+            return null;
+        });
+        Parameters frozen = recorded.parameters();
+        ConfigStartCheck startCheck = new ConfigStartCheck();
 
-        new ConfigCdiExtension().registerConfigPropertyInjectionPoints(bean, messages);
+        registerConfig(Map.of());
+        DeploymentException failure = assertThrows(DeploymentException.class, () -> startCheck.observe(null, frozen));
+        assertTrue(failure.getMessage().contains("Missing required config property '" + key
+                + "' for type java.lang.String [at com.example.MyBean#requiredValue]"), failure.getMessage());
 
-        assertFalse(messages.errors.isEmpty());
+        registerConfig(Map.of(key, "now-there"));
+        assertDoesNotThrow(() -> startCheck.observe(null, frozen));
     }
 
     @Test
-    void register_leaves_missing_ConfigProperties_members_to_the_container_start_at_build_time() {
+    void ConfigProperties_injection_points_are_handed_to_the_start_check_not_reported() {
         InjectionPointInfo ip = injectionPoint(classType(MissingServer.class.getName()),
                 List.of(configPropertiesAnnotation(ConfigProperties.UNCONFIGURED_PREFIX)), fieldDeclaration("server"));
-        BeanInfo bean = beanWithInjectionPoints(List.of(ip));
+        ConfigCdiExtension extension = new ConfigCdiExtension();
         CapturingMessages messages = new CapturingMessages();
+        Recorded recorded = new Recorded();
 
         ExtensionPhase.atBuildTime(() -> {
-            new ConfigCdiExtension().registerConfigPropertyInjectionPoints(bean, messages);
+            extension.registerConfigPropertyInjectionPoints(beanWithInjectionPoints(List.of(ip)), messages);
+            extension.synthesizeConfigPropertyBeans(recordingComponents(recorded), null);
             return null;
         });
 
         assertEquals(List.of(), messages.errors);
+        assertArrayEquals(new String[]{MissingServer.class.getName()},
+                recorded.strings(ConfigStartCheck.CLASS_NAMES));
+        assertArrayEquals(new String[]{ConfigProperties.UNCONFIGURED_PREFIX},
+                recorded.strings(ConfigStartCheck.CLASS_PREFIXES));
+        assertArrayEquals(new String[]{"com.example.MyBean#server"}, recorded.strings(ConfigStartCheck.CLASS_SITES));
+
+        Parameters frozen = recorded.parameters();
+        ConfigStartCheck startCheck = new ConfigStartCheck();
+        DeploymentException failure = assertThrows(DeploymentException.class, () -> startCheck.observe(null, frozen));
+        assertTrue(failure.getMessage().contains("@ConfigProperties: missing required property"
+                + " 'cdi.test.missing.server.host' for " + MissingServer.class.getName()
+                + ".host [at com.example.MyBean#server]"), failure.getMessage());
     }
 
     @Test
     void synthesis_adds_the_fallback_Config_bean_when_the_deployment_has_none() {
-        List<Object> added = new ArrayList<>();
+        Recorded recorded = new Recorded();
 
-        new ConfigCdiExtension().synthesizeConfigPropertyBeans(recordingComponents(added), null);
+        new ConfigCdiExtension().synthesizeConfigPropertyBeans(recordingComponents(recorded), null);
 
-        assertEquals(List.of(org.eclipse.microprofile.config.Config.class), added);
+        assertEquals(List.of(org.eclipse.microprofile.config.Config.class), recorded.beans);
     }
 
     @Test
     void synthesis_leaves_the_fallback_Config_bean_to_the_container_start_at_build_time() {
         // ravel#21: the compilation does not see RavelConfigProducer, which ships next to this
         // extension — a fallback frozen at build time made every @Inject Config ambiguous at start.
-        List<Object> added = new ArrayList<>();
+        Recorded recorded = new Recorded();
 
         ExtensionPhase.atBuildTime(() -> {
-            new ConfigCdiExtension().synthesizeConfigPropertyBeans(recordingComponents(added), null);
+            new ConfigCdiExtension().synthesizeConfigPropertyBeans(recordingComponents(recorded), null);
             return null;
         });
 
-        assertEquals(List.of(), added);
+        assertEquals(List.of(), recorded.beans);
     }
 
-    /** Records the class of every synthetic bean added; each builder call returns the builder. */
-    private static jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents recordingComponents(
-            List<Object> added) {
-        Object builder = Proxy.newProxyInstance(
+    @Test
+    void synthesis_registers_no_start_check_when_there_is_nothing_to_check() {
+        String key = "cdi.test.missing.optional." + System.nanoTime();
+        AnnotationInfo cfg = configPropertyAnnotation(key, ConfigProperty.UNCONFIGURED_VALUE);
+        InjectionPointInfo ip = injectionPoint(
+                parameterizedType("java.util.Optional", classType("java.lang.Integer")),
+                List.of(cfg),
+                fieldDeclaration("optionalValue"));
+        ConfigCdiExtension extension = new ConfigCdiExtension();
+        CapturingMessages messages = new CapturingMessages();
+        Recorded recorded = new Recorded();
+
+        extension.registerConfigPropertyInjectionPoints(beanWithInjectionPoints(List.of(ip)), messages);
+        extension.synthesizeConfigPropertyBeans(recordingComponents(recorded), null);
+
+        assertTrue(messages.errors.isEmpty());
+        assertEquals(List.of(), recorded.observedTypes);
+    }
+
+    /** Replaces the configuration of this class loader; {@link #releaseConfig()} drops it after the test. */
+    private void registerConfig(Map<String, String> values) {
+        releaseConfig();
+        ConfigProviderResolver resolver = ConfigProviderResolver.instance();
+        resolver.registerConfig(resolver.getBuilder()
+                .withSources(new TestSource(values))
+                .forClassLoader(getClass().getClassLoader())
+                .build(), getClass().getClassLoader());
+    }
+
+    @AfterEach
+    void releaseConfig() {
+        ConfigProviderResolver resolver = ConfigProviderResolver.instance();
+        resolver.releaseConfig(resolver.getConfig(getClass().getClassLoader()));
+    }
+
+    private record TestSource(Map<String, String> values) implements ConfigSource {
+        @Override public Map<String, String> getProperties() { return values; }
+        @Override public java.util.Set<String> getPropertyNames() { return values.keySet(); }
+        @Override public String getValue(String propertyName) { return values.get(propertyName); }
+        @Override public String getName() { return "extension-test-source"; }
+        @Override public int getOrdinal() { return 1000; }
+    }
+
+    private static BeanInfo requiredStringBean(String key) {
+        AnnotationInfo cfg = configPropertyAnnotation(key, ConfigProperty.UNCONFIGURED_VALUE);
+        InjectionPointInfo ip = injectionPoint(classType("java.lang.String"), List.of(cfg),
+                fieldDeclaration("requiredValue"));
+        return beanWithInjectionPoints(List.of(ip));
+    }
+
+    /** What a {@code @Synthesis} method registered: the beans, and the observers with their builder calls. */
+    private static final class Recorded {
+        private final List<Object> beans = new ArrayList<>();
+        private final List<Object> observedTypes = new ArrayList<>();
+        private final List<Object> observerClasses = new ArrayList<>();
+        private final Map<String, Object> params = new HashMap<>();
+        private Object priority;
+
+        String[] strings(String param) {
+            return (String[]) params.get(param);
+        }
+
+        /** The recorded parameters as the container hands them to the synthetic observer. */
+        Parameters parameters() {
+            return new Parameters() {
+                @Override public <T> T get(String key, Class<T> type) { return type.cast(params.get(key)); }
+
+                @Override public <T> T get(String key, Class<T> type, T defaultValue) {
+                    T value = get(key, type);
+                    return value != null ? value : defaultValue;
+                }
+            };
+        }
+    }
+
+    /** Records what is added; each builder call returns the builder. */
+    private static SyntheticComponents recordingComponents(Recorded recorded) {
+        Object beanBuilder = Proxy.newProxyInstance(
                 ConfigCdiExtensionTest.class.getClassLoader(),
                 new Class[]{jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder.class},
                 (proxy, method, args) -> proxy);
-        return (jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents) Proxy.newProxyInstance(
+        Object observerBuilder = Proxy.newProxyInstance(
                 ConfigCdiExtensionTest.class.getClassLoader(),
-                new Class[]{jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents.class},
+                new Class[]{SyntheticObserverBuilder.class},
+                (proxy, method, args) -> {
+                    switch (method.getName()) {
+                        case "withParam" -> recorded.params.put((String) args[0], args[1]);
+                        case "priority" -> recorded.priority = args[0];
+                        case "observeWith" -> recorded.observerClasses.add(args[0]);
+                        default -> throw new UnsupportedOperationException(method.getName());
+                    }
+                    return proxy;
+                });
+        return (SyntheticComponents) Proxy.newProxyInstance(
+                ConfigCdiExtensionTest.class.getClassLoader(),
+                new Class[]{SyntheticComponents.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "addBean" -> {
-                        added.add(args[0]);
-                        yield builder;
+                        recorded.beans.add(args[0]);
+                        yield beanBuilder;
+                    }
+                    case "addObserver" -> {
+                        recorded.observedTypes.add(args[0]);
+                        yield observerBuilder;
                     }
                     default -> throw new UnsupportedOperationException(method.getName());
                 });
@@ -206,24 +349,6 @@ class ConfigCdiExtensionTest {
     @ConfigProperties(prefix = "cdi.test.missing.server")
     static class MissingServer {
         String host;
-    }
-
-    @Test
-    void register_does_not_report_missing_property_for_optional_injection() {
-        String key = "cdi.test.missing.optional." + System.nanoTime();
-        AnnotationInfo cfg = configPropertyAnnotation(key, ConfigProperty.UNCONFIGURED_VALUE);
-
-        InjectionPointInfo ip = injectionPoint(
-                parameterizedType("java.util.Optional", classType("java.lang.Integer")),
-                List.of(cfg),
-                fieldDeclaration("optionalValue"));
-
-        BeanInfo bean = beanWithInjectionPoints(List.of(ip));
-        CapturingMessages messages = new CapturingMessages();
-
-        new ConfigCdiExtension().registerConfigPropertyInjectionPoints(bean, messages);
-
-        assertTrue(messages.errors.isEmpty());
     }
 
     @Test

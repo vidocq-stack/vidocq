@@ -122,8 +122,11 @@ final class ArchitectureRules {
             "io.vidocq.ravel.cdi.internal.RavelConfigPropertyResolver",
             "internals.adoc: the reflective path that resolves a @ConfigProperty injection point's type",
             "io.vidocq.ravel.cdi.ConfigCdiExtension",
-            "internals.adoc: the extension that runs at boot when the processor did not run: it reads the"
-                    + " @ConfigProperties fields reflectively for the deployment validation",
+            "internals.adoc: the extension loads the class of a @ConfigProperty injection type by name, to type"
+                    + " its synthetic bean with the run-time class",
+            "io.vidocq.ravel.cdi.internal.ConfigStartCheck",
+            "internals.adoc: the check of the configuration at start loads by name the types the build recorded,"
+                    + " and reads the @ConfigProperties fields reflectively",
             "io.vidocq.ravel.cdi.ConfigPropertiesExclusionExtension",
             "internals.adoc: the same boot-time extension path, reflective on the @ConfigProperties class");
 
