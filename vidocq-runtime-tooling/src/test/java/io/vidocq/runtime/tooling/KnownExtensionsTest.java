@@ -86,6 +86,17 @@ class KnownExtensionsTest {
     }
 
     @Test
+    void humboldtTelemetryShipsACodegenBundle() {
+        // BUG-20261113-02 (Vidocq/vidocq#546): without Humboldt's extension on the processor path, the @SpanBinding
+        // of a @WithSpan method is not frozen at build, and nothing binds the interceptor once the container no
+        // longer runs the extensions again at start.
+        assertEquals(java.util.Optional.of(new ExtensionCoordinate(
+                        "io.vidocq.runtime.extensions.microprofile",
+                        "vidocq-runtime-humboldt-telemetry-extension-codegen")),
+                KnownExtensions.codegenBundle("humboldt-telemetry"));
+    }
+
+    @Test
     void foyServletShipsACodegenBundle() {
         // Without Foy's extensions on the processor path, @WebServlet classes are no beans and the
         // session context is never registered (the runtime skips extensions the processor ran).

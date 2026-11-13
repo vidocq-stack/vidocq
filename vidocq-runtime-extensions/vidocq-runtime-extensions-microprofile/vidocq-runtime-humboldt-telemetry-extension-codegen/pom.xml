@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+        <artifactId>vidocq-runtime-extensions-microprofile</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-humboldt-telemetry-extension-codegen</artifactId>
+    <packaging>jar</packaging>
+    <name>Vidocq :: MicroProfile Extensions :: Telemetry (Humboldt) :: Codegen Bundle</name>
+    <description>
+        Companion codegen bundle for vidocq-runtime-humboldt-telemetry-extension.
+        Declare this artifact in &lt;annotationProcessorPaths&gt; whenever the
+        application depends on the Telemetry extension; Maven resolves the
+        transitive APT dependencies below automatically.
+        Puts HumboldtBuildCompatibleExtension on the processor path, so that vauban-processor runs it at build time:
+        the @SpanBinding it adds to each class and method annotated @WithSpan is frozen in
+        META-INF/vauban-enhancements.properties, which the container applies at start without running the
+        extension again (Vidocq/vidocq#546).
+    </description>
+
+    <dependencies>
+        <!-- HumboldtBuildCompatibleExtension, the Build Compatible Extension that binds the @WithSpan interceptor: on
+             the processor path, vauban-processor runs it at build time, as the Ravel bundle does with
+             ravel-cdi-vauban. Without it the binding is added only when the container runs the extension again at
+             start, and a container that no longer does so (Vidocq/vauban#288) would produce no span for @WithSpan.
+             It brings no annotation processor of its own, and the extension has an @Enhancement phase only: it
+             registers no synthetic bean, so running it at build and again at start gives nothing twice
+             (BUG-20261030-27). -->
+        <dependency>
+            <groupId>io.vidocq.humboldt</groupId>
+            <artifactId>humboldt-cdi</artifactId>
+            <version>${humboldt.version}</version>
+        </dependency>
+        <!-- humboldt-cdi leaves the Jakarta platform APIs to the runtime (provided, vidocq-workspace#17): on the
+             processor path nothing else brings them, and HumboldtBuildCompatibleExtension could not be loaded. The
+             CDI API brings the Interceptor and Annotation APIs, the other one humboldt-cdi leaves provided. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Only the empty module-info to compile: no processor, not even the
+                         inherited core-codegen path, which for core-codegen is this artifact. -->
+                    <proc>none</proc>
+                    <annotationProcessorPaths combine.self="override" />
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

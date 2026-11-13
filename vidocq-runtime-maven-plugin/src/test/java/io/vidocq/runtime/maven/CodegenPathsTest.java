@@ -42,6 +42,7 @@ class CodegenPathsTest {
 
     private static final String VERSION = "0.4.0";
     private static final String CASSINI_GROUP = "io.vidocq.runtime.extensions.jakartaee.core";
+    private static final String MICROPROFILE_GROUP = "io.vidocq.runtime.extensions.microprofile";
 
     @Test
     void anExtensionGetsItsCodegenBundleAndTheIndexerInTheConfigurationAndEveryExecution() {
@@ -58,6 +59,21 @@ class CodegenPathsTest {
             assertEquals(paths((Xpp3Dom) compiler.getConfiguration()), paths((Xpp3Dom) execution.getConfiguration()),
                     execution.getId());
         }
+    }
+
+    /**
+     * BUG-20261113-02 (Vidocq/vidocq#546): the Telemetry extension had no bundle, so {@code humboldt-cdi} and its
+     * Build Compatible Extension, which binds the {@code @WithSpan} interceptor, never reached the processor path.
+     */
+    @Test
+    void theTelemetryExtensionGetsItsCodegenBundle() {
+        Model model = application(dependency(MICROPROFILE_GROUP, "vidocq-runtime-humboldt-telemetry-extension", null));
+
+        assertEquals(List.of("vidocq-runtime-core-codegen", "vidocq-runtime-humboldt-telemetry-extension-codegen"),
+                CodegenPaths.wire(model));
+        assertEquals(List.of("io.vidocq.runtime:vidocq-runtime-core-codegen:" + VERSION,
+                MICROPROFILE_GROUP + ":vidocq-runtime-humboldt-telemetry-extension-codegen:" + VERSION),
+                paths((Xpp3Dom) compiler(model).getConfiguration()));
     }
 
     /** A pom written before 0.4.0, or by hand, keeps its paths: nothing is declared twice. */

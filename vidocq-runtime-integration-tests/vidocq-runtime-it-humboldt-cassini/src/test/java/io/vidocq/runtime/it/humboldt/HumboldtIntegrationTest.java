@@ -106,6 +106,10 @@ class HumboldtIntegrationTest {
         assertTrue(spans.contains("\"kind\":\"INTERNAL\""));
         assertTrue(spans.contains("\"name\":\"GET /trace/work\""),
                 "The humboldt-rest filter should have created a SERVER span");
+        // The build freezes @SpanBinding (the Telemetry codegen bundle) and the container may run the extension
+        // again at start: the interceptor is bound once, one call gives one span (the lesson of BUG-20261030-27).
+        assertEquals(1, spans.split(java.util.regex.Pattern.quote("\"name\":\"traced.work\""), -1).length - 1,
+                "One call of a @WithSpan method should give one span - spans: " + spans);
     }
 
     // ============================================================

@@ -117,6 +117,13 @@
                             <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
                             <version>${project.version}</version>
                         </path>
+                        <!-- HumboldtBuildCompatibleExtension runs when the module compiles: the @SpanBinding of
+                             each @WithSpan method is frozen at build (SpanBindingFrozenAtBuildTest, vidocq#546). -->
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                            <artifactId>vidocq-runtime-humboldt-telemetry-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>

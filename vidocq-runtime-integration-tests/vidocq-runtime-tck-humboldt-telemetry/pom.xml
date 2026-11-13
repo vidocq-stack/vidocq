@@ -223,6 +223,11 @@
                             <artifactId>vidocq-runtime-cyrano-rest-client-extension-codegen</artifactId>
                             <version>${project.version}</version>
                         </path>
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                            <artifactId>vidocq-runtime-humboldt-telemetry-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>
