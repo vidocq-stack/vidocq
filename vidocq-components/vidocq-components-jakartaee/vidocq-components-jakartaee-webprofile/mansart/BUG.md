@@ -13,7 +13,7 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 - **Date**: 2026-11-13 (reported by the maintainer the same day)
 - **Status**: FIXED in Mansart on `feat/jta-shared-connection`; the Vidocq Noether extension still has to use
-  `JtaDataSource` (its `EnlistingDataSource`, on the unmerged `feat/noether-persistence-extension`).
+  `JtaDataSource` in place of its `EnlistingDataSource` (vidocq#541, merged on 2026-11-13; a follow-up is planned).
 - **Module**: `mansart-data-cdi` (`JtaTransactionBridge`), `mansart-transactions-jdbc`
 - **Symptom**: in one JTA transaction, a Jakarta Data repository and a Noether `EntityManager` on the same data source
   worked on two physical connections. Neither saw the other's uncommitted writes; two writes to the same row waited
