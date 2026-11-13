@@ -5,6 +5,30 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261113-03 — The Arquillian adapter deploys the `$$Intercepted` subclass of a bean as a second bean
+
+- **Date**: 2026-11-13
+- **Status**: FIXED on `fix/arquillian-generated-classes`
+- **Affected module**: vidocq-runtime-arquillian (`MaterializedDeployment.beanClassNames`)
+- **Symptom**: an Arquillian deployment fails with _Ambiguous dependency: field TraceTestResource.service of type
+  TraceTestService. Matching beans: [TraceTestService, TraceTestService$$Intercepted]_ once the build generates the
+  intercepted subclass of a bean the archive adds with `addClass`. Surfaced by the Vauban fix of BUG-20261113-13
+  (Vidocq/vauban), which makes the build generate `TraceTestService$$Intercepted` for the `@SpanBinding` Humboldt's
+  extension adds: `HumboldtIntegrationTest` fails with that Vauban.
+- **Minimal reproduction**: `MaterializedDeploymentTest.theClassesVaubanGeneratesForABeanAreNoBeanClasses`, red on
+  `origin/main`: `beanClassNames()` lists `Service$$Intercepted` and `Service_ClientProxy`.
+  ```sh
+  ./mvnw -ntp -pl vidocq-runtime-integration-tests/vidocq-runtime-arquillian -am package -Dtest=MaterializedDeploymentTest -Dsurefire.failIfNoSpecifiedTests=false
+  ```
+- **Confirmed cause**: ShrinkWrap's `addClass(Bean.class)` also adds the classes whose name starts with `Bean$`, as
+  inner classes, so `Bean$$Intercepted` goes into the archive. The adapter lists every class of the archive as a bean
+  class, and the boot adds each one explicitly: the subclass inherits the bean's scope, and becomes a bean of the same
+  types. Vauban's own scan leaves `$$` and `_ClientProxy` names out; the adapter did not. Latent before: the build
+  generated the subclass only for a binding the source declares.
+- **Fix**: `beanClassNames()` leaves out the classes Vauban generates for a bean, by the same names as Vauban's scan.
+
+---
+
 ## BUG-20261113-02 — The Telemetry extension has no codegen bundle: Humboldt's Build Compatible Extension never runs at build
 
 - **Date**: 2026-11-13

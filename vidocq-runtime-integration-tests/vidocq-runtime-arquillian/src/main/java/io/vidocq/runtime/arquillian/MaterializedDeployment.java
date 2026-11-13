@@ -316,8 +316,21 @@ final class MaterializedDeployment implements AutoCloseable {
         if (resourcePath.contains("module-info")) {
             return;
         }
-        names.add(resourcePath.substring(0, resourcePath.length() - CLASS_SUFFIX.length())
-                .replace('/', '.'));
+        String className = resourcePath.substring(0, resourcePath.length() - CLASS_SUFFIX.length())
+                .replace('/', '.');
+        if (!generatedByVauban(className)) {
+            names.add(className);
+        }
+    }
+
+    /**
+     * A class Vauban generates for a bean: its {@code $$Intercepted} subclass, its client proxy. No bean class:
+     * ShrinkWrap's {@code addClass(Bean.class)} takes {@code Bean$$Intercepted} for an inner class of the bean, and
+     * listed, that subclass is a second bean of the bean's types, which makes each injection point of the bean
+     * ambiguous (BUG-20261113-03). Vauban's own scan leaves these names out the same way.
+     */
+    private static boolean generatedByVauban(String className) {
+        return className.contains("$$") || className.endsWith("_ClientProxy");
     }
 
     @Override

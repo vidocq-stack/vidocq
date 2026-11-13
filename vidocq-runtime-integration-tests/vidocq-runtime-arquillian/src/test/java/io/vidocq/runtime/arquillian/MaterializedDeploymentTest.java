@@ -142,6 +142,27 @@ class MaterializedDeploymentTest {
     }
 
     @Test
+    void theClassesVaubanGeneratesForABeanAreNoBeanClasses() throws Exception {
+        // ShrinkWrap's addClass(Bean.class) takes Bean$$Intercepted, the subclass the build generates
+        // for an intercepted bean, for an inner class of the bean: listed, it is a second bean of the
+        // bean's types, and every injection point of the bean is ambiguous (BUG-20261113-03).
+        JavaArchive library = ShrinkWrap.create(JavaArchive.class, "lib.jar")
+                .add(new StringAsset(""), "/org/example/Client.class")
+                .add(new StringAsset(""), "/org/example/Client$$Intercepted.class");
+        WebArchive archive = ShrinkWrap.create(WebArchive.class, "test.war")
+                .add(new StringAsset(""), "/WEB-INF/classes/com/example/Service.class")
+                .add(new StringAsset(""), "/WEB-INF/classes/com/example/Service$Nested.class")
+                .add(new StringAsset(""), "/WEB-INF/classes/com/example/Service$$Intercepted.class")
+                .add(new StringAsset(""), "/WEB-INF/classes/com/example/Service_ClientProxy.class")
+                .addAsLibrary(library);
+
+        try (MaterializedDeployment deployment = MaterializedDeployment.of(archive)) {
+            assertEquals(java.util.Set.of("com.example.Service", "com.example.Service$Nested", "org.example.Client"),
+                    java.util.Set.copyOf(deployment.beanClassNames()));
+        }
+    }
+
+    @Test
     void listsBeanClassesFromArchiveRootAndBundledLibraries() throws Exception {
         // CDI treats WEB-INF/lib jars as bean archives; several TCKs package their
         // client interfaces as libraries (ShrinkWrap addAsLibrary). The deployment
