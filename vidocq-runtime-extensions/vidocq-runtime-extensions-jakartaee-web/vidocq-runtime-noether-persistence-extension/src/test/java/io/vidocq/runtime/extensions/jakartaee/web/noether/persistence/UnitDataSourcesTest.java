@@ -75,8 +75,9 @@ class UnitDataSourcesTest {
 
     @Test
     void aJtaUnitWhoseNamedSourceIsMissingIsRefusedWithTheKeyToSet() {
+        UnitTransactions billing = jta("billing", null);
         PersistenceException refused = assertThrows(PersistenceException.class,
-                () -> UnitDataSources.properties("shop", jta("billing", null), BOTH_POOLS, ENLIST));
+                () -> UnitDataSources.properties("shop", billing, BOTH_POOLS, ENLIST));
 
         assertTrue(refused.getMessage().contains("Persistence unit shop"), refused.getMessage());
         assertTrue(refused.getMessage().contains("'billing'"), refused.getMessage());
@@ -85,8 +86,9 @@ class UnitDataSourcesTest {
 
     @Test
     void aJtaUnitWithoutADefaultPoolIsRefusedWithTheKeyToSet() {
+        UnitTransactions unnamed = jta(null, null);
         PersistenceException refused = assertThrows(PersistenceException.class,
-                () -> UnitDataSources.properties("shop", jta(null, null), NAMED_POOL_ONLY, ENLIST));
+                () -> UnitDataSources.properties("shop", unnamed, NAMED_POOL_ONLY, ENLIST));
 
         assertTrue(refused.getMessage().contains("Persistence unit shop"), refused.getMessage());
         assertTrue(refused.getMessage().contains("vidocq.pool.url"), refused.getMessage());
@@ -116,8 +118,9 @@ class UnitDataSourcesTest {
 
     @Test
     void aResourceLocalUnitWhoseNamedSourceIsMissingIsRefused() {
+        UnitTransactions billing = resourceLocal("billing");
         PersistenceException refused = assertThrows(PersistenceException.class,
-                () -> UnitDataSources.properties("shop", resourceLocal("billing"), BOTH_POOLS, ENLIST));
+                () -> UnitDataSources.properties("shop", billing, BOTH_POOLS, ENLIST));
 
         assertTrue(refused.getMessage().contains("vidocq.pool.billing.url"), refused.getMessage());
     }

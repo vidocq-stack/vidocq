@@ -46,12 +46,15 @@ import javax.sql.DataSource;
 @Dependent
 public class VidocqPersistenceUnitBootstrap implements PersistenceUnitBootstrap {
 
-    @Inject
-    @Any
-    Instance<DataSource> dataSources;
+    private final Instance<DataSource> dataSources;
+    private final Instance<TransactionManager> transactionManagers;
 
     @Inject
-    Instance<TransactionManager> transactionManagers;
+    public VidocqPersistenceUnitBootstrap(@Any Instance<DataSource> dataSources,
+            Instance<TransactionManager> transactionManagers) {
+        this.dataSources = dataSources;
+        this.transactionManagers = transactionManagers;
+    }
 
     @Override
     public EntityManagerFactory create(String unitName, TransactionIntegration transactions) {
