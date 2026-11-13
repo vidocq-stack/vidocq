@@ -63,6 +63,41 @@ class PomConverterTest {
         assertEquals(scaffolded(true, RUNTIME), result.pom());
     }
 
+    private static final List<ExtensionCoordinate> DEV_SERVICES = List.of(
+            new ExtensionCoordinate("io.vidocq.runtime", "vidocq-runtime-devservice-postgres"),
+            new ExtensionCoordinate("io.vidocq.runtime", "vidocq-runtime-devservice-keycloak"),
+            new ExtensionCoordinate("io.vidocq.runtime", "vidocq-runtime-devservice-otel"));
+
+    /** The pom with the dev services on the plugin, as {@code vidocq extension add} writes them in that style. */
+    private static String withDevServices(String pom, String version) {
+        String edited = pom;
+        for (ExtensionCoordinate service : DEV_SERVICES) {
+            edited = PomEditor.addPluginDependency(edited, DevServiceWiring.PLUGIN, service, version, null).pom();
+        }
+        return edited;
+    }
+
+    @Test
+    void theDevServicesOfThePluginFollowTheVersionTheStyleUses() {
+        String underParent = withDevServices(scaffolded(true, RUNTIME), "${project.parent.version}");
+        String parentless = withDevServices(scaffolded(false, RUNTIME), "${vidocq.version}");
+
+        PomConverter.Result toParentless = PomConverter.convert(underParent, Target.PARENTLESS);
+        PomConverter.Result toParent = PomConverter.convert(parentless, Target.PARENT);
+
+        assertEquals(parentless, toParentless.pom());
+        assertFalse(toParentless.pom().contains("project.parent.version"));
+        assertEquals(underParent, toParent.pom());
+    }
+
+    @Test
+    void aDevServicePinnedToALiteralVersionIsKept() {
+        String pinned = withDevServices(scaffolded(true, RUNTIME), "0.4.0");
+
+        assertEquals(withDevServices(scaffolded(false, RUNTIME), "0.4.0"),
+                PomConverter.convert(pinned, Target.PARENTLESS).pom());
+    }
+
     @Test
     void convertingToTheStyleAPomAlreadyHasChangesNothing() {
         for (Target target : Target.values()) {

@@ -347,7 +347,9 @@ A CLI installed from a SNAPSHOT (`VIDOCQ_VERSION=snapshot`, see xref:getting-sta
 Turns the pom of a Vidocq application from one style into the other (Vidocq/vidocq#380): `--to parentless` removes
 `vidocq-runtime-parent` and writes what replaces it, the `vidocq.version` property, `maven.compiler.release`, the
 imports of `vidocq-runtime-bom` and `junit-bom`, the plugin at `${vidocq.version}` with `<extensions>true</extensions>`;
-`--to parent` does the reverse, and takes away what the parent now carries. Everything else of the pom stays where it
+`--to parent` does the reverse, and takes away what the parent now carries. The dev services that `vidocq extension add`
+wired on the plugin follow: their `${project.parent.version}` becomes `${vidocq.version}` going parentless, and back
+(a literal version is kept). Everything else of the pom stays where it
 is: dependencies, properties, plugins, profiles, comments, indentation. A pom that already has the style is left as it
 is, so the command can run on every build.
 

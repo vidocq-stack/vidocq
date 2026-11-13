@@ -119,7 +119,11 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261108-01 — `vidocq pom convert --to parentless` keeps `${project.parent.version}` on the plugin's dev-service dependencies
 
 - **Date**: 2026-11-08
-- **Status**: OPEN
+- **Status**: FIXED on `fix/pom-convert-project-parent-version`: `PomConverter` rewrites `${project.parent.version}` to
+  `${vidocq.version}` on the dependencies of the Vidocq plugin going parentless, and back going to the parent (a literal
+  version is kept). `PomConverterTest.theDevServicesOfThePluginFollowTheVersionTheStyleUses` compares both ways, byte for
+  byte, with what `PomEditor.addPluginDependency` writes in each style. A pom already converted by an earlier CLI is
+  repaired by running `convert --to parentless` again, and `--check` reports it (exit 1) since it would change.
 - **Affected module**: vidocq-runtime-tooling (`PomConverter`), a #380 follow-up
 - **Symptom**: on a pom written under `vidocq-runtime-parent` whose dev services `extension add` wired on the plugin
   (`<dependencies>` of `vidocq-runtime-maven-plugin`, at `${project.parent.version}`), `vidocq pom convert --to parentless`

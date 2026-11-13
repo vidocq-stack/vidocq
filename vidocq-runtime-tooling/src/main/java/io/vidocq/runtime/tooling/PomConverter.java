@@ -66,6 +66,7 @@ public final class PomConverter {
     static final String BOM_ARTIFACT = "vidocq-runtime-bom";
     static final String VERSION_PROPERTY = "vidocq.version";
     private static final String VERSION_REFERENCE = "${" + VERSION_PROPERTY + "}";
+    private static final String PARENT_VERSION_REFERENCE = "${project.parent.version}";
     private static final String JUNIT_GROUP = "org.junit";
     private static final String JUNIT_BOM = "junit-bom";
     private static final String PARENT = "parent";
@@ -104,6 +105,7 @@ public final class PomConverter {
         edited = withProperties(edited, unit, version);
         edited = withManagedBoms(edited, unit);
         edited = withPluginAsExtension(edited, unit);
+        edited = withPluginDependencyVersions(edited, PARENT_VERSION_REFERENCE, VERSION_REFERENCE);
         return edited;
     }
 
@@ -221,6 +223,30 @@ public final class PomConverter {
         return edited;
     }
 
+    /**
+     * The versions of the Vidocq plugin's own dependencies (the dev services {@code vidocq extension add} wires) that
+     * read {@code from}, now read {@code to}: {@code ${project.parent.version}} names the parent that goes away or
+     * comes back, {@code ${vidocq.version}} the property of the parentless style. A literal version is kept.
+     */
+    private static String withPluginDependencyVersions(String pom, String from, String to) {
+        String edited = pom;
+        Optional<Element> dependencies = child(edited, plugin(edited), DEPENDENCIES);
+        while (dependencies.isPresent()) {
+            String current = edited;
+            Optional<Element> stale = children(current, dependencies.get()).stream()
+                    .map(dependency -> child(current, dependency, VERSION))
+                    .flatMap(Optional::stream)
+                    .filter(version -> from.equals(text(current, version)))
+                    .findFirst();
+            if (stale.isEmpty()) {
+                break;
+            }
+            edited = replace(edited, stale.get(), element(VERSION, to));
+            dependencies = child(edited, plugin(edited), DEPENDENCIES);
+        }
+        return edited;
+    }
+
     // ---- to the parent style ----
 
     private static String toParent(String pom) {
@@ -244,6 +270,7 @@ public final class PomConverter {
         }
         edited = withoutManagedBoms(edited);
         edited = withoutPluginExtension(edited);
+        edited = withPluginDependencyVersions(edited, VERSION_REFERENCE, PARENT_VERSION_REFERENCE);
         edited = withoutParentProperties(edited);
         return edited;
     }
