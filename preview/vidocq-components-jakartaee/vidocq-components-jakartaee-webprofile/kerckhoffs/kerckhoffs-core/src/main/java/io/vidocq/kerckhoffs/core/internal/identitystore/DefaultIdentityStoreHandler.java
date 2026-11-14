@@ -63,27 +63,16 @@ public final class DefaultIdentityStoreHandler implements IdentityStoreHandler {
         stores.forEach(available::add);
         available.sort(BY_PRIORITY);
 
-        boolean refused = false;
-        IdentityStore validatingStore = null;
-        CredentialValidationResult valid = null;
-        for (IdentityStore store : available) {
-            if (!store.validationTypes().contains(ValidationType.VALIDATE)) {
-                continue;
-            }
-            CredentialValidationResult result = store.validate(credential);
-            if (result.getStatus() == Status.VALID) {
-                validatingStore = store;
-                valid = result;
-                break;
-            }
-            refused |= result.getStatus() == Status.INVALID;
-        }
+        Validation validation = firstValid(available, credential);
+        CredentialValidationResult valid = validation.result();
         if (valid == null) {
-            return refused ? CredentialValidationResult.INVALID_RESULT : CredentialValidationResult.NOT_VALIDATED_RESULT;
+            return validation.refused()
+                    ? CredentialValidationResult.INVALID_RESULT
+                    : CredentialValidationResult.NOT_VALIDATED_RESULT;
         }
 
         Set<String> groups = new HashSet<>();
-        if (validatingStore.validationTypes().contains(ValidationType.PROVIDE_GROUPS)) {
+        if (validation.store().validationTypes().contains(ValidationType.PROVIDE_GROUPS)) {
             groups.addAll(valid.getCallerGroups());
         }
         for (IdentityStore store : available) {
@@ -93,5 +82,31 @@ public final class DefaultIdentityStoreHandler implements IdentityStoreHandler {
         }
         return new CredentialValidationResult(valid.getIdentityStoreId(), valid.getCallerPrincipal(),
                 valid.getCallerDn(), valid.getCallerUniqueId(), groups);
+    }
+
+    /**
+     * The outcome of the validating phase.
+     *
+     * @param store   the store that answered {@code VALID}, or {@code null}
+     * @param result  its answer, or {@code null} when no store said {@code VALID}
+     * @param refused whether a store answered {@code INVALID} before the end of the phase
+     */
+    private record Validation(IdentityStore store, CredentialValidationResult result, boolean refused) {
+    }
+
+    /** Calls the stores that validate, in order, until one answers {@code VALID}. */
+    private static Validation firstValid(List<IdentityStore> available, Credential credential) {
+        boolean refused = false;
+        for (IdentityStore store : available) {
+            if (!store.validationTypes().contains(ValidationType.VALIDATE)) {
+                continue;
+            }
+            CredentialValidationResult result = store.validate(credential);
+            if (result.getStatus() == Status.VALID) {
+                return new Validation(store, result, refused);
+            }
+            refused |= result.getStatus() == Status.INVALID;
+        }
+        return new Validation(null, null, refused);
     }
 }
