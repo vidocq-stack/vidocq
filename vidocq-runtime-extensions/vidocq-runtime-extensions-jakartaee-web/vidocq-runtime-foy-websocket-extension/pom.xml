@@ -18,8 +18,9 @@
     <properties>
         <!--
             checkpom asks for the companion codegen bundle of every vidocq-runtime-*-extension this pom declares.
-            The Servlet extension is aggregated here for the applications' run time only; this module has no
-            source for its processors to process.
+            This module compiles against the Servlet extension (AllowedOriginsParameter implements its
+            ServletInitParameters SPI) and so declares it, but has no servlet component for the Servlet
+            extension's processors to process: the bundle belongs to the applications that carry servlets, not here.
         -->
         <vidocq.checkpom.skip>true</vidocq.checkpom.skip>
     </properties>
