@@ -78,13 +78,14 @@ class FoyServletModulePathTest {
     }
 
     @Test
-    void theExtensionExportsOnlyItsLiveMountsToItsDevPanelAndItsDeploymentHookToThePagesExtension() {
+    void theExtensionExportsOnlyItsLiveMountsToItsDevPanelAndItsDeploymentHooksToThePagesAndWebSocketExtensions() {
         Module extension = ModuleLayer.boot().findModule("io.vidocq.runtime.extensions.jakartaee.web.foy").orElseThrow();
         var expected = java.util.Map.of(
                 "io.vidocq.runtime.extensions.jakartaee.web.foy.live",
                 java.util.Set.of("io.vidocq.runtime.extensions.jakartaee.web.foy.dev"),
                 "io.vidocq.runtime.extensions.jakartaee.web.foy.spi",
-                java.util.Set.of("io.vidocq.runtime.extensions.jakartaee.web.ibarra"));
+                java.util.Set.of("io.vidocq.runtime.extensions.jakartaee.web.ibarra",
+                        "io.vidocq.runtime.extensions.jakartaee.web.websocket"));
 
         var actual = new java.util.HashMap<String, java.util.Set<String>>();
         for (var export : extension.getDescriptor().exports()) actual.put(export.source(), export.targets());

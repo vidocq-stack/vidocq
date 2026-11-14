@@ -32,7 +32,8 @@ module io.vidocq.runtime.extensions.jakartaee.web.foy {
     exports io.vidocq.runtime.extensions.jakartaee.web.foy.live
             to io.vidocq.runtime.extensions.jakartaee.web.foy.dev;
 
-    // The extensions that complete a deployed application before its first request (the Pages extension).
+    // The extensions that complete a deployed application before its first request (the Pages extension) or
+    // contribute context init parameters to it (the WebSocket extension).
     exports io.vidocq.runtime.extensions.jakartaee.web.foy.spi
             to io.vidocq.runtime.extensions.jakartaee.web.ibarra,
                io.vidocq.runtime.extensions.jakartaee.web.websocket;
