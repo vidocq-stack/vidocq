@@ -28,7 +28,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,12 +50,11 @@ class ContinuousTestingDevGoalIT {
         Path project = Fixture.copy(dir);
         Path logs = Fixture.logs();
         Fixture.warmUp(project, logs.resolve("dev-warm-up.log"));
-        int appPort = Fixture.freePort(Set.of());
-        int consolePort = Fixture.freePort(Set.of(appPort));
         Path log = logs.resolve("vidocq-dev.log");
 
         Process mvn = Fixture.start(project, log, "vidocq:dev", "-Dvidocq.dev.debug=false",
-                "-Dvidocq.chappe.listener.default.port=" + appPort, "-Dvidocq.devconsole.port=" + consolePort);
+                // Both bind port 0, never 8080/8888, and the console's port is read from its log line.
+                "-Dvidocq.chappe.listener.default.port=0", "-Dvidocq.devconsole.port=0");
         try {
             Fixture.awaitLog(mvn, log, STARTED);
             // Vidocq/vidocq#143: the fixture no longer declares the console — this proves vidocq:dev added it by
@@ -71,7 +69,7 @@ class ContinuousTestingDevGoalIT {
             assertEquals(3, Fixture.count(first, "run"));
             assertEquals(1, Fixture.count(first, "failures"));
 
-            String console = "http://127.0.0.1:" + consolePort;
+            String console = Fixture.consoleUrl(log);
             Map<String, Object> snapshot = awaitPanelFailures(console, 1);
             Map<?, ?> panel = Fixture.panel(snapshot, "tests");
             List<?> rows = (List<?>) Fixture.value(panel, "failed-tests").get("rows");

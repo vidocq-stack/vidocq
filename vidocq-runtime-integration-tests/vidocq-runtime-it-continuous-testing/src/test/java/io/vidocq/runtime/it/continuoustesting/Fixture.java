@@ -26,9 +26,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -38,11 +35,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,12 +49,11 @@ import static org.junit.jupiter.api.Assertions.fail;
 /** The fixture project and the subprocesses of the continuous-testing ITs. */
 final class Fixture {
 
-    /** Never 8080/8888; 18093-18099, as the other dev-mode ITs. */
-    static final int FIRST_PORT = 18093;
-    static final int LAST_PORT = 18099;
     static final Duration TIMEOUT = Duration.ofMinutes(3);
 
     private static final Duration POLL_INTERVAL = Duration.ofMillis(250);
+    /** The line the dev console prints once it listens, with the port it bound. */
+    private static final Pattern CONSOLE = Pattern.compile("Vidocq dev console: (http://127\\.0\\.0\\.1:\\d+)/");
     static final String EXPECTATION = "src/test/java/io/vidocq/it/ct/ExpectationTest.java";
 
     private Fixture() {}
@@ -275,21 +272,18 @@ final class Fixture {
         }
     }
 
-    /** The first free port of {@value #FIRST_PORT}-{@value #LAST_PORT} not in {@code taken}. */
-    static int freePort(Set<Integer> taken) throws IOException {
-        for (int port = FIRST_PORT; port <= LAST_PORT; port++) {
-            if (taken.contains(port)) {
-                continue;
-            }
-            try (ServerSocket probe = new ServerSocket()) {
-                probe.setReuseAddress(false);
-                probe.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
-                return port;
-            } catch (IOException _) {
-                // try the next one
-            }
+    /**
+     * The URL the dev console printed in {@code log}, {@code http://127.0.0.1:<port>}: the application binds port
+     * {@code 0} and the IT reads the port it got, since a port picked beforehand, then closed and bound by the
+     * application, could be taken in between (BUG-20261114-09).
+     */
+    static String consoleUrl(Path log) throws Exception {
+        String printed = poll(Duration.ofSeconds(10), () -> read(log), text -> CONSOLE.matcher(text).find());
+        Matcher url = CONSOLE.matcher(printed);
+        if (!url.find()) {
+            fail("no URL of the dev console:\n" + printed);
         }
-        throw new IOException("no free port in " + FIRST_PORT + "-" + LAST_PORT);
+        return url.group(1);
     }
 
     /**

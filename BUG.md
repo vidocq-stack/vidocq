@@ -175,6 +175,66 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
     each host's own, above. Two JUnit runs at once on one project still share the `-test` pair, as they share
     `target/` itself, which Maven does not support either.
 
+## BUG-20261114-09 — `ChappeServerEndToEndTest` fails now and then on a port another process took
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/chappe-e2e-port` (`ChappeServerEndToEndTest`) and `fix/test-free-ports` (the other tests)
+- **Affected module**: vidocq-runtime-chappe-webserver-extension (test only: `ChappeServerEndToEndTest`); the same
+  pattern in another test of that module and in the tests of 12 other modules, listed under Fix
+- **Symptom**: a full `-Pquality install` of `fix/dev-test-dev-services`, run while other sessions built and ran on the
+  same machine, failed in `ChappeServerEndToEndTest.multiListenerEachServesItsOwnRouter`:
+  `ChappeException$ServerException: Failed to bind to 127.0.0.1:49335`, caused by
+  `java.net.BindException: Address already in use`, at `ChappeServer.start` from `ChappeServerBootstrap.onStart`
+  (line 134 of the test). The `default` listener had started; the `admin` one failed. The same build, resumed, passed.
+- **Minimal repro**: not deterministic. The window is between the test's `freePort()` and the server's bind: any
+  process that binds an ephemeral port in that window can get the same one.
+- **Cause**: `freePort()` opened a `ServerSocket(0)`, read its port, closed it, and the server bound that port later.
+  Once closed, the port is free for anyone: another JVM of the machine, or the second `freePort()` of the same test,
+  since `multiListenerEachServesItsOwnRouter` picked two ports one after the other, the first one already closed. The
+  log does not say which of the two took 49335. The same pattern Vidocq/cassini#144 removed from Cassini's tests.
+- **Fix**: every listener of the test binds port `0`, and the test reads the port each got from
+  `ChappeServerBootstrap.boundAddresses()`: the system picks the port as the server binds it, so nothing can take it
+  first. `multiListenerEachServesItsOwnRouter` also checks the two listeners got two ports, and
+  `httpPortAliasAloneBindsTheAdvertisedPort` sets the alias to `0` and checks the default listener did not bind its
+  default port, 8080, which only a listener that ignores the alias would.
+  `fix/test-free-ports` applies the same fix to the other tests: the server binds port `0`, and the test reads the
+  port it got from the server, or from the line the application logs once it listens.
+  - In the test's JVM: `ChappeServerSuspendTest` asks `ChappeServerBootstrap.boundAddresses()`. The module-path tests
+    of `it-foy-servlet`, `it-ibarra-pages` and `it-bodoni-jstl` read Chappe's start line,
+    `Chappe listener 'default' started on http://127.0.0.1:<port>/`, with a JUL handler (`BoundPort`, one per module).
+    The `TransactionalRollbackTest` of the Mansart H2 and Petstore examples and the Mansart H2 example's
+    `DevConsoleSnapshotTest` never used their port: they only set the key to `0`.
+  - In another JVM: the Servlet example's `BistroApplication`, `it-langchain4j-cdi-mcp`'s `LaunchedServer`,
+    `it-app-layer`'s `AppLayerJspIT`, `it-continuous-testing`'s `ContinuousTestingDevGoalIT` and `it-devservices`'s
+    `DevServicesDevGoalIT` read Chappe's start line or the console's, `Vidocq dev console: http://127.0.0.1:<port>/`,
+    from the application's output. `it-dependency-codegen`'s `ListenerFromADependencyRunsIT` and `it-devservices`'s
+    `DevServicesRunGoalIT` never talk to the application: they only pass `0`. The port ranges 18090-18099 these ITs
+    scanned are gone.
+  - A closed port: `McpClientTest` and `McpInspectorTest` (`langchain4j-cdi-mcp-extension-dev`) need a port nothing
+    listens on. They bound one, closed it, and connected to it, which any process could listen on meanwhile. They now
+    call port `0`, where no socket can listen: the connection fails at once. A socket bound to a port and never
+    listening is no substitute: macOS drops a connection to it (40 connects out of 40 timed out), and a full build
+    failed on `timed out after 5 s` while the test used one.
+  - `ChappeServerSuspendTest` keeps one probe, `new ServerSocket(port)` once the listener is suspended: binding the
+    port is the check that suspending released it, and once released, another process may take it before the probe or
+    the request after it. That race is inherent to checking a release, and the test says so.
+- **Investigations**:
+  - 2026-11-14: 14 other test files of the repository pick a port the same way (`new ServerSocket(0)`, closed, bound
+    later), among them `ChappeServerSuspendTest`, which needs a fixed port to check that a resume binds it again, and
+    tests that start the application in another JVM, which would have to read the port from its log. Not changed
+    here.
+  - 2026-11-14 (`fix/test-free-ports`): fixed as above. Kept as they are, since they bind a port on purpose:
+    `ChappeListenerBindingTest` and `DevConsoleExtensionTest` hold a port to show what a taken port does, and
+    `DevConsoleExtensionTest.aReloadKeepsAFreePortAndPrintsTheUrlOnlyWhenItChanges` holds the port the console bound,
+    once released, the same race as the suspend probe; `VidocqRunMojoTest` and `VidocqDevMojoTest` hold a port as a
+    running dev session; `ProjectDoctorTest.aBoundPortIsNotFree` holds the port the doctor must report as taken.
+    `JdwpAgentTest.aFreePortIsKeptSilently` needs a fixed port free when `JdwpAgent.withFreePort` probes it: a held
+    port would read as busy, so the pick-and-close race is the test's own subject.
+  - 2026-11-14: open, main code: `VidocqApplication.freePort()` of `vidocq-runtime-junit` does the same for every
+    `@VidocqTest` (`VidocqTestExtension` passes the port to the application, then waits until something listens on
+    it), and `VidocqApplicationTest` with it. A fix would pass `0` and read the port from the application's output.
+    Not changed here: it changes what the published extension waits for.
+
 ## BUG-20261114-07 — Under `@VidocqTest` the application module is loaded twice: each of its `provides` is found twice, and Vaadin does not start
 
 - **Date**: 2026-11-14

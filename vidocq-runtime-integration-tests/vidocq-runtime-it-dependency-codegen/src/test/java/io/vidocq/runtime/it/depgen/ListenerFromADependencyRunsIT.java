@@ -40,6 +40,12 @@ class ListenerFromADependencyRunsIT {
 
     private static final String NO_CHECKPOM = "-Dvidocq.checkpom.failOnMissing=false";
 
+    /**
+     * The application's HTTP listener binds a port the system picks, never 8080: no IT here talks to it. A port
+     * picked beforehand, then closed and bound by the forked JVM, could be taken in between (BUG-20261114-09).
+     */
+    private static final String ANY_PORT = "-Dvidocq.chappe.listener.default.port=0";
+
     @Test
     void theListenerRunsAndTheReportCountsTheEnrichedJar(@TempDir Path dir) throws Exception {
         Path project = Fixture.copy(dir);
@@ -54,7 +60,7 @@ class ListenerFromADependencyRunsIT {
 
         Path log = Fixture.logs().resolve("runs-run.log");
         Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:run", LAYER, cache,
-                "-Dvidocq.chappe.listener.default.port=" + Fixture.freePort());
+                ANY_PORT);
         try {
             // Foy starts the listeners before Vidocq reports it started.
             Fixture.awaitLog(mvn, log, "Vidocq - Started in");
@@ -68,7 +74,7 @@ class ListenerFromADependencyRunsIT {
         // library is in the parent layer, which the report does not count.
         Path classes = Fixture.logs().resolve("runs-run-classes.log");
         Process defaultLayer = Fixture.start(project.resolve("app"), classes, "vidocq:run", "-Dvidocq.app.layer=classes", cache,
-                "-Dvidocq.chappe.listener.default.port=" + Fixture.freePort());
+                ANY_PORT);
         try {
             Fixture.awaitLog(defaultLayer, classes, "Vidocq - Started in");
             assertTrue(Fixture.read(classes).contains("LISTENER-RAN"), Fixture.read(classes));
@@ -105,7 +111,7 @@ class ListenerFromADependencyRunsIT {
 
         Path log = Fixture.logs().resolve("control-run.log");
         Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:run", LAYER, cache, NO_CHECKPOM,
-                "-Dvidocq.chappe.listener.default.port=" + Fixture.freePort());
+                ANY_PORT);
         try {
             Fixture.awaitLog(mvn, log, "Vidocq - Started in");
             assertFalse(Fixture.read(log).contains("LISTENER-RAN"), Fixture.read(log));

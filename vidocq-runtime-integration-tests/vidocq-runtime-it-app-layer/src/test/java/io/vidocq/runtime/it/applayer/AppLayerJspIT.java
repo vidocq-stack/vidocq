@@ -22,16 +22,18 @@ package io.vidocq.runtime.it.applayer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * vidocq#232: an application made of JSP pages only, run by {@code vidocq:run} with its module in the
@@ -40,24 +42,33 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class AppLayerJspIT {
 
+    /** The line Chappe logs once the default listener listens, with the port it bound. */
+    private static final Pattern STARTED = Pattern.compile("Chappe listener 'default' started on http://[^/\\s]+:(\\d+)/");
+
+    /**
+     * The application's listener binds port {@code 0}, and the test reads the port it got from Chappe's start line: a
+     * port picked beforehand, then closed and bound by the forked JVM, could be taken in between (BUG-20261114-09).
+     */
     @Test
     void aJspOnlyApplicationServesItsPagesFromTheApplicationLayer(@TempDir Path dir) throws Exception {
         Path project = Fixture.copy(dir);
-        int port;
-        try (ServerSocket socket = new ServerSocket(0)) {
-            port = socket.getLocalPort();
-        }
         Files.writeString(project.resolve("jsp/src/main/resources/vidocq.properties"),
-                "vidocq.chappe.listener.default.host=127.0.0.1\nvidocq.chappe.listener.default.port=" + port + "\n");
+                "vidocq.chappe.listener.default.host=127.0.0.1\nvidocq.chappe.listener.default.port=0\n");
         Fixture.install(project, Fixture.logs().resolve("jsp-install.log"));
         Path log = Fixture.logs().resolve("jsp-run.log");
 
         Process mvn = Fixture.start(project.resolve("jsp"), log, "vidocq:run");
         try (HttpClient client = HttpClient.newHttpClient()) {
             Fixture.awaitLog(mvn, log, "Vidocq - Started in");
-            assertTrue(Fixture.read(log).contains("JSP pages compiled by Ibarra: 1"), Fixture.read(log));
+            String printed = Fixture.read(log);
+            assertTrue(printed.contains("JSP pages compiled by Ibarra: 1"), printed);
+            Matcher started = STARTED.matcher(printed);
+            if (!started.find()) {
+                fail("no start line of the default listener:\n" + printed);
+            }
             HttpResponse<String> response = client.send(
-                    HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/hello.jsp?x=Ada")).build(),
+                    HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + started.group(1) + "/hello.jsp?x=Ada"))
+                            .build(),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, response.statusCode(), response.body() + "\n" + Fixture.read(log));
             assertEquals("Hello Ada!", response.body().strip());

@@ -23,9 +23,6 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -61,9 +58,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Order(2)
 class DevServicesRunGoalIT {
 
-    /** Never 18090-18092 (the langchain4j-cdi MCP IT's own range) and never 8080/8888. */
-    private static final int FIRST_PORT = 18093;
-    private static final int LAST_PORT = 18099;
     private static final long BOOT_TIMEOUT_MS = 120_000;
 
     @Test
@@ -73,7 +67,6 @@ class DevServicesRunGoalIT {
         Files.createDirectories(logsDir);
         Path log = logsDir.resolve("vidocq-run.log");
 
-        int port = freePort();
         // A password distinctive enough that a match in the log means a real leak, never the default
         // "vidocq" — which, being also this project's own name, is a substring of ordinary Maven output
         // (artifact ids, module names, "vidocq:run" itself) and would make the leak check meaningless.
@@ -81,7 +74,9 @@ class DevServicesRunGoalIT {
         List<String> command = List.of("mvn", "-ntp", "-o", "vidocq:run",
                 "-Dvidocq.dev.devServices=true",
                 "-Dvidocq.dev.postgres.password=" + password,
-                "-Dvidocq.chappe.listener.default.port=" + port);
+                // Never 8080: a port the system picks as the listener binds it, since a port picked beforehand, then
+                // closed and bound by the child, could be taken in between (BUG-20261114-09). Nothing talks to it.
+                "-Dvidocq.chappe.listener.default.port=0");
         Process process = new ProcessBuilder(command)
                 .directory(basedir.toFile())
                 .redirectErrorStream(true)
@@ -161,19 +156,5 @@ class DevServicesRunGoalIT {
         if (!process.waitFor(30, TimeUnit.SECONDS)) {
             process.destroyForcibly().waitFor(10, TimeUnit.SECONDS);
         }
-    }
-
-    /** The first free port of {@value #FIRST_PORT}-{@value #LAST_PORT}; never 8080 or 8888. */
-    private static int freePort() throws IOException {
-        for (int port = FIRST_PORT; port <= LAST_PORT; port++) {
-            try (ServerSocket probe = new ServerSocket()) {
-                probe.setReuseAddress(false);
-                probe.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
-                return port;
-            } catch (IOException taken) {
-                // try the next one
-            }
-        }
-        throw new IOException("no free port in " + FIRST_PORT + "-" + LAST_PORT);
     }
 }

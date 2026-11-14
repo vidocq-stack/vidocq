@@ -20,9 +20,6 @@
 package io.vidocq.runtime.it.depgen;
 
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -159,15 +156,6 @@ final class Fixture {
     /** The lines of {@code log} that contain every one of {@code parts}. */
     static List<String> lines(Path log, String... parts) {
         return read(log).lines().filter(line -> Stream.of(parts).allMatch(line::contains)).toList();
-    }
-
-    /** A loopback port nothing listens on now, for the application's HTTP listener. */
-    static int freePort() throws IOException {
-        try (ServerSocket probe = new ServerSocket()) {
-            probe.setReuseAddress(false);
-            probe.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
-            return probe.getLocalPort();
-        }
     }
 
     /** Stops a subprocess and everything it started. */

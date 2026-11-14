@@ -21,20 +21,21 @@ package io.vidocq.runtime.it.lc4jcdimcp;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * The MCP application of this module in a JVM of its own, in one launch shape, bound to two free loopback ports of
- * 18090-18099: one for the MCP endpoint, one for the dev console, which is forced on so that a test can read its
- * {@code /api/snapshot}. Its output goes to a log file under {@code target/it-logs}.
+ * The MCP application of this module in a JVM of its own, in one launch shape, on two loopback listeners: one for the
+ * MCP endpoint, one for the dev console, which is forced on so that a test can read its {@code /api/snapshot}. Both
+ * bind port {@code 0}, and the ports they got are read from the lines the application logs once they listen: ports
+ * picked beforehand, then closed and bound by the child JVM, could be taken in between (BUG-20261114-09). Its output
+ * goes to a log file under {@code target/it-logs}.
  */
 final class LaunchedServer implements AutoCloseable {
 
@@ -50,33 +51,30 @@ final class LaunchedServer implements AutoCloseable {
 
     static final String APP_MODULE = "io.vidocq.runtime.it.lc4jcdimcp";
     private static final String APP_MAIN = APP_MODULE + "/" + APP_MODULE + ".McpItApp";
-    private static final int FIRST_PORT = 18090;
-    private static final int LAST_PORT = 18099;
     private static final long BOOT_TIMEOUT_MS = 60_000;
+    /** The line Chappe logs once the MCP endpoint's listener listens, with the port it bound. */
+    private static final Pattern STARTED = Pattern.compile("Chappe listener 'default' started on http://[^/\\s]+:(\\d+)/");
+    /** The line the dev console logs once it listens, with the port it bound. */
+    private static final Pattern CONSOLE = Pattern.compile("Vidocq dev console: http://[^/\\s]+:(\\d+)/");
 
     private final Process process;
     private final Path log;
-    private final int port;
-    private final int consolePort;
+    private int port;
+    private int consolePort;
 
-    private LaunchedServer(Process process, Path log, int port, int consolePort) {
+    private LaunchedServer(Process process, Path log) {
         this.process = process;
         this.log = log;
-        this.port = port;
-        this.consolePort = consolePort;
     }
 
     /**
-     * Starts the application and waits until it logged {@code Vidocq - Started in}.
+     * Starts the application and waits until it logged {@code Vidocq - Started in} and the ports its listeners bound.
      *
      * @param shape      the launch shape
      * @param name       the name of the log file, without extension
      * @param properties extra {@code -D} options, such as {@code -Dvidocq.mcp.serverName=it-server}
      */
     static LaunchedServer start(Shape shape, String name, String... properties) throws Exception {
-        int[] ports = freePorts(2);
-        int port = ports[0];
-        int consolePort = ports[1];
         String lib = System.getProperty("it.lib");
         String app = System.getProperty("it.app");
         Path logs = Path.of(System.getProperty("it.logs"));
@@ -93,12 +91,12 @@ final class LaunchedServer implements AutoCloseable {
             case IDE -> command.addAll(List.of("--module-path", lib + File.pathSeparator + app));
         }
         command.add("-Dvidocq.chappe.listener.default.host=127.0.0.1");
-        command.add("-Dvidocq.chappe.listener.default.port=" + port);
+        command.add("-Dvidocq.chappe.listener.default.port=0");
         command.add("-Dvidocq.startup.report=detailed");
         // The dev console, on its own loopback port: an IT reads its /api/snapshot. Never 8888, its default.
         command.add("-Dvidocq.devconsole.enabled=true");
         command.add("-Dvidocq.devconsole.host=127.0.0.1");
-        command.add("-Dvidocq.devconsole.port=" + consolePort);
+        command.add("-Dvidocq.devconsole.port=0");
         command.addAll(List.of(properties));
         if (shape == Shape.APP_PATH) {
             command.addAll(List.of("-m", "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq"));
@@ -110,7 +108,7 @@ final class LaunchedServer implements AutoCloseable {
                 .redirectErrorStream(true)
                 .redirectOutput(log.toFile())
                 .start();
-        LaunchedServer server = new LaunchedServer(process, log, port, consolePort);
+        LaunchedServer server = new LaunchedServer(process, log);
         server.awaitStarted();
         return server;
     }
@@ -141,7 +139,12 @@ final class LaunchedServer implements AutoCloseable {
     private void awaitStarted() throws Exception {
         long deadline = System.currentTimeMillis() + BOOT_TIMEOUT_MS;
         while (System.currentTimeMillis() < deadline) {
-            if (log().contains("Vidocq - Started in")) {
+            String printed = log();
+            Matcher started = STARTED.matcher(printed);
+            Matcher console = CONSOLE.matcher(printed);
+            if (printed.contains("Vidocq - Started in") && started.find() && console.find()) {
+                port = Integer.parseInt(started.group(1));
+                consolePort = Integer.parseInt(console.group(1));
                 return;
             }
             if (!process.isAlive()) {
@@ -152,37 +155,5 @@ final class LaunchedServer implements AutoCloseable {
         }
         close();
         throw new AssertionError("The server did not start within " + BOOT_TIMEOUT_MS + " ms:\n" + log());
-    }
-
-    /**
-     * The first {@code count} ports of 18090-18099 nothing listens on; never another one. Every probe is held open
-     * until they are all found, so that two calls of one launch never get the same port.
-     *
-     * @param count how many distinct ports are needed
-     */
-    private static int[] freePorts(int count) throws IOException {
-        int[] found = new int[count];
-        List<ServerSocket> probes = new ArrayList<>();
-        try {
-            for (int port = FIRST_PORT; port <= LAST_PORT && probes.size() < count; port++) {
-                ServerSocket probe = new ServerSocket();
-                try {
-                    probe.setReuseAddress(false);
-                    probe.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
-                    found[probes.size()] = port;
-                    probes.add(probe);
-                } catch (IOException taken) {
-                    probe.close();
-                }
-            }
-            if (probes.size() < count) {
-                throw new IOException("Fewer than " + count + " free ports in " + FIRST_PORT + "-" + LAST_PORT);
-            }
-        } finally {
-            for (ServerSocket probe : probes) {
-                probe.close();
-            }
-        }
-        return found;
     }
 }

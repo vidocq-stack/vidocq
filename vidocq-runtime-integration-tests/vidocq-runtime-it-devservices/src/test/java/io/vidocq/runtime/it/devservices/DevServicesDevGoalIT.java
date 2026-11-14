@@ -27,17 +27,15 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -58,11 +56,10 @@ import static org.junit.jupiter.api.Assertions.fail;
 @Order(3)
 class DevServicesDevGoalIT {
 
-    /** Never 18090-18092 (the langchain4j-cdi MCP IT's own range) and never 8080/8888. */
-    private static final int FIRST_PORT = 18093;
-    private static final int LAST_PORT = 18099;
     private static final long BOOT_TIMEOUT_MS = 180_000;
     private static final String STARTED = "Vidocq - Started in";
+    /** The line the dev console prints once it listens, with the port it bound. */
+    private static final Pattern CONSOLE = Pattern.compile("Vidocq dev console: (http://127\\.0\\.0\\.1:\\d+)/");
 
     @Test
     void theDevConsoleShowsTheDevservicesPanelAndStoppingMarksTheStateFileStopped() throws Exception {
@@ -72,14 +69,15 @@ class DevServicesDevGoalIT {
         Path log = logsDir.resolve("vidocq-dev.log");
         Path stateFile = basedir.resolve("target/vidocq-dev-services.json");
 
-        int appPort = freePort(Set.of());
-        int consolePort = freePort(Set.of(appPort));
         // Distinctive, so that a match in the snapshot is a real leak (see DevServicesRunGoalIT).
         String password = "devservices-dev-it-9Rw3Lm8v";
         List<String> command = List.of("mvn", "-ntp", "-o", "vidocq:dev",
                 "-Dvidocq.dev.postgres.password=" + password,
-                "-Dvidocq.chappe.listener.default.port=" + appPort,
-                "-Dvidocq.devconsole.port=" + consolePort);
+                // Never 8080/8888: both bind a port the system picks, and the console's is read from its log line.
+                // A port picked beforehand, then closed and bound by the child, could be taken in between
+                // (BUG-20261114-09).
+                "-Dvidocq.chappe.listener.default.port=0",
+                "-Dvidocq.devconsole.port=0");
         Process process = new ProcessBuilder(command)
                 .directory(basedir.toFile())
                 .redirectErrorStream(true)
@@ -87,8 +85,8 @@ class DevServicesDevGoalIT {
                 .redirectInput(ProcessBuilder.Redirect.PIPE)
                 .start();
         try {
-            awaitStarted(process, log);
-            String body = get("http://127.0.0.1:" + consolePort + "/api/snapshot");
+            String console = awaitStarted(process, log);
+            String body = get(console + "/api/snapshot");
 
             assertFalse(body.contains(password), "the password leaked into the dev console snapshot");
             Map<?, ?> panel = devservicesPanel(body);
@@ -121,12 +119,17 @@ class DevServicesDevGoalIT {
         }
     }
 
-    /** Polls the log for the boot's last line; fails fast if the subprocess dies first. */
-    private static void awaitStarted(Process process, Path log) throws Exception {
+    /**
+     * Polls the log for the boot's last line and the console's URL, {@code http://127.0.0.1:<port>}, which it
+     * returns; fails fast if the subprocess dies first.
+     */
+    private static String awaitStarted(Process process, Path log) throws Exception {
         long deadline = System.currentTimeMillis() + BOOT_TIMEOUT_MS;
         while (System.currentTimeMillis() < deadline) {
-            if (Files.exists(log) && Files.readString(log, StandardCharsets.UTF_8).contains(STARTED)) {
-                return;
+            String printed = Files.exists(log) ? Files.readString(log, StandardCharsets.UTF_8) : "";
+            Matcher console = CONSOLE.matcher(printed);
+            if (printed.contains(STARTED) && console.find()) {
+                return console.group(1);
             }
             if (!process.isAlive()) {
                 fail("mvn vidocq:dev exited with " + process.exitValue() + " before the application started:\n"
@@ -134,7 +137,7 @@ class DevServicesDevGoalIT {
             }
             Thread.sleep(200);
         }
-        fail("the application did not start within " + BOOT_TIMEOUT_MS + " ms:\n"
+        return fail("the application did not start within " + BOOT_TIMEOUT_MS + " ms:\n"
                 + Files.readString(log, StandardCharsets.UTF_8));
     }
 
@@ -168,22 +171,5 @@ class DevServicesDevGoalIT {
                 descendant.destroyForcibly();
             }
         }
-    }
-
-    /** The first free port of {@value #FIRST_PORT}-{@value #LAST_PORT} not in {@code taken}. */
-    private static int freePort(Set<Integer> taken) throws IOException {
-        for (int port = FIRST_PORT; port <= LAST_PORT; port++) {
-            if (taken.contains(port)) {
-                continue;
-            }
-            try (ServerSocket probe = new ServerSocket()) {
-                probe.setReuseAddress(false);
-                probe.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
-                return port;
-            } catch (IOException inUse) {
-                // try the next one
-            }
-        }
-        throw new IOException("no free port in " + FIRST_PORT + "-" + LAST_PORT);
     }
 }
