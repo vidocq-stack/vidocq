@@ -755,7 +755,10 @@ modules, but the JVM resolves only its roots and what they `requires`, so a modu
 resource-only module such as Vaadin's `flow.push`, `vaadin.lumo.theme` or `vaadin.aura.theme`, whose
 `META-INF/resources` the servlet container serves) would sit in the image and in no layer, and its files would answer
 404. `vidocq:run` and `vidocq:package` (`--add-modules ALL-MODULE-PATH`) resolve them all, and so does the image
-(BUG-20261114-05). The goal also adds `-Dvidocq.app.layer=<mode>` (`all` by default, `classes` when the build sets it),
+(BUG-20261114-05). A staged module that was linked but unused, such as a second JSON provider or JDBC driver, is now
+resolved too, as under `vidocq:run` and `vidocq:package`: exclude its dependency to keep it out of the image. The
+application layer of the Vaadin example goes from 16 to 61 modules, and the image still starts in about 360 ms. The
+goal also adds `-Dvidocq.app.layer=<mode>` (`all` by default, `classes` when the build sets it),
 so that the image keeps the mode it was built under.
 
 The application boots in the same Vauban layer either way: the startup report reads
@@ -772,7 +775,7 @@ Reuses the `jlink` image. Default type: `app-image` (cross-platform). On macOS, 
 Like `vidocq:jlink`, it needs `vidocq.mainModule` only. Without an application main class, the
 application starts with `--module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and the goal passes the
 options of <<jlink-without-main-class>> again as `--java-options`, with `--add-modules` naming the application
-module and the modules of the image that are not the JDK's (read from the `MODULES` of its `release` file): an image
+module and the modules of the image that are not the JDK's (read from the `MODULES` of its `release` file, minus the modules of the JDK that runs the build): an image
 built by `vidocq:jlink` already holds them, one given through `runtimeImage` may not.
 
 See `vidocq/JLINK.md` §3 for the exhaustive parameter list.

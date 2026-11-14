@@ -33,6 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.spi.ToolProvider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -72,15 +73,61 @@ class ImageLaunchMojosTest {
     }
 
     @Test
-    void jlinkLogsTheRuntimeMainLaunchThenReportsAFailedStaging() throws Exception {
-        var log = new Infos();
-        VidocqJlinkMojo mojo = jlink("acme.app", null, log);
+    void jlinkReportsAFailedStaging() throws Exception {
+        VidocqJlinkMojo mojo = jlink("acme.app", null, new Infos());
 
         var failure = assertThrows(MojoExecutionException.class, mojo::execute);
 
         assertEquals("Failed to create jlink image", failure.getMessage());
+    }
+
+    /** What the image starts with is what the stage holds: logged, in the order of the stage's names (BUG-20261114-05). */
+    @Test
+    void theBakedLaunchRootsEveryStagedModuleAndIsLogged() throws Exception {
+        var log = new Infos();
+        VidocqJlinkMojo mojo = jlink("acme.app", null, log);
+        stage("flow.push", "acme.app", "aura.theme");
+
+        ImageLaunch launch = mojo.bakedLaunch();
+
+        assertEquals(List.of("--add-modules=acme.app,aura.theme,flow.push", "-Dvidocq.app.module=acme.app",
+                "-Dvidocq.app.layer=all"), launch.vmOptions());
         assertEquals("Vidocq jlink — main: " + RUNTIME_MAIN
-                + " --add-modules=acme.app -Dvidocq.app.module=acme.app -Dvidocq.app.layer=all", log.lines.getFirst());
+                + " --add-modules=acme.app,aura.theme,flow.push -Dvidocq.app.module=acme.app -Dvidocq.app.layer=all",
+                log.lines.getFirst());
+    }
+
+    /** The jlink run, the recipe of vidocq:docker and the image launched with a main class carry every staged module. */
+    @Test
+    void theJlinkRunAndTheDockerRecipeCarryEveryStagedModule() throws Exception {
+        stage("acme.app", "flow.push");
+        for (String mainClass : new String[] {null, "acme.app.App"}) {
+            VidocqJlinkMojo mojo = jlink("acme.app", mainClass, new Infos());
+            ImageLaunch launch = mojo.bakedLaunch();
+            String options = mainClass == null
+                    ? "--add-options=--add-modules=acme.app,flow.push -Dvidocq.app.module=acme.app -Dvidocq.app.layer=all"
+                    : "--add-options=--add-modules=acme.app,flow.push -Dvidocq.app.layer=all";
+
+            assertTrue(mojo.jlinkArgs("acme.app,flow.push,java.base", launch).contains(options), "jlink: " + mainClass);
+            List<String> recipe = mojo.portableJlinkArgs("acme.app,flow.push,java.base", launch);
+            assertTrue(recipe.contains(options), "recipe: " + mainClass);
+            PortableImage.write(dir.resolve("build-" + mainClass), recipe, launch.entryPoint(), List.of());
+            String file = Files.readString(dir.resolve("build-" + mainClass).resolve(PortableImage.DIRECTORY)
+                    .resolve(PortableImage.ARGUMENTS));
+            // One argument per line, in double quotes when it holds a space.
+            assertTrue(file.lines().anyMatch(("\"" + options + "\"")::equals), "argument file: " + file);
+        }
+    }
+
+    /** Compiles an empty module of each name into the stage of {@code vidocq:jlink}. */
+    private void stage(String... modules) throws Exception {
+        var javac = ToolProvider.findFirst("javac").orElseThrow();
+        for (String module : modules) {
+            Path source = Files.createDirectories(dir.resolve("src-" + module)).resolve("module-info.java");
+            Files.writeString(source, "module " + module + " {}\n");
+            Path out = Files.createDirectories(dir.resolve("jlink-mods").resolve(module));
+            assertEquals(0, javac.run(System.out, System.err, "-d", out.toString(), source.toString()), module);
+        }
     }
 
     @Test
@@ -187,13 +234,27 @@ class ImageLaunchMojosTest {
     }
 
     @Test
-    void jpackageRootsTheNonJdkModulesOfAnImageJlinkDidNotBuild() throws Exception {
+    void jpackageRootsTheModulesOfTheJdkThatTheBuildDoesNotShipOnly() throws Exception {
         Path image = Files.createDirectories(dir.resolve("foreign"));
         Files.writeString(image.resolve("release"),
-                "JAVA_VERSION=\"25\"\nMODULES=\"java.base jdk.crac flow.push acme.app\"\n");
+                "JAVA_VERSION=\"25\"\nMODULES=\"java.base jdk.jfr jdk.acme.custom flow.push acme.app\"\n");
 
-        assertEquals(List.of("flow.push", "acme.app"), VidocqJpackageMojo.nonJdkModulesOf(image));
+        // A module named like the JDK's but not in it is the application's.
+        assertEquals(List.of("jdk.acme.custom", "flow.push", "acme.app"), VidocqJpackageMojo.nonJdkModulesOf(image));
         assertEquals(List.of(), VidocqJpackageMojo.nonJdkModulesOf(dir.resolve("no-image")));
+    }
+
+    /** The wiring: the goal roots the modules of the image it packages, in the arguments it gives jpackage. */
+    @Test
+    void jpackageArgumentsRootTheModulesOfTheImage() throws Exception {
+        VidocqJpackageMojo mojo = jpackage("acme.app", new Infos());
+        Files.writeString(dir.resolve("image").resolve("release"), "MODULES=\"java.base flow.push acme.app\"\n");
+
+        ImageLaunch launch = mojo.launchOf();
+
+        assertEquals("--add-modules=acme.app,flow.push", launch.vmOptions().getFirst());
+        assertTrue(VidocqJpackageMojo.entryArgs(launch).containsAll(List.of("--java-options",
+                "--add-modules=acme.app,flow.push")), VidocqJpackageMojo.entryArgs(launch).toString());
     }
 
     private VidocqJpackageMojo jpackage(String mainModule, Infos log) throws Exception {

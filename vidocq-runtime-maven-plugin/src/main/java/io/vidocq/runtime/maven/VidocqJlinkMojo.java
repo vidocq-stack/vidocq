@@ -48,6 +48,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -187,19 +188,16 @@ public class VidocqJlinkMojo extends AbstractMojo {
             getLog().info("Vidocq jlink — skip (vidocq.jlink.skip=true).");
             return;
         }
-        ImageLaunch launch;
         try {
-            launch = ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer));
+            // Validation only, before anything is staged: the launch that is baked needs the stage (bakedLaunch).
+            ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer));
         } catch (IllegalArgumentException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         }
-        getLog().info("Vidocq jlink — main: " + launch.entryPoint()
-                + (launch.vmOptions().isEmpty() ? "" : " " + String.join(" ", launch.vmOptions())));
         try {
             stageModules();
             String rootModules = resolveAddModules();
-            // The stage is known only now: root every staged module at start, not the application's alone.
-            launch = ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer), stagedModuleNames());
+            ImageLaunch launch = bakedLaunch();
             runJlink(rootModules, launch);
             List<Path> conf = copyResources();
             DistributionSbom.write(sbomFile(), new DistributionSbom.Subject(project.getGroupId(),
@@ -444,12 +442,25 @@ public class VidocqJlinkMojo extends AbstractMojo {
         return slash < 0 ? location : location.substring(slash + 1);
     }
 
+    /**
+     * The launch baked into the image: the application module and every module staged in {@link #modsDir} are
+     * rooted at start, so that a module nothing requires is resolved (BUG-20261114-05). Logged, since this line is
+     * what to read when a module is missing at start.
+     */
+    ImageLaunch bakedLaunch() {
+        ImageLaunch launch = ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer), stagedModuleNames());
+        getLog().info("Vidocq jlink — main: " + launch.entryPoint() + " " + String.join(" ", launch.vmOptions()));
+        return launch;
+    }
+
     /** The names of the modules staged in {@link #modsDir}: every one of them is linked into the image. */
     private List<String> stagedModuleNames() {
         List<String> names = new ArrayList<>();
         for (var ref : ModuleFinder.of(modsDir.toPath()).findAll()) {
             names.add(ref.descriptor().name());
         }
+        // The stage is a set: sorted, so that two builds bake the same option.
+        Collections.sort(names);
         return names;
     }
 
@@ -523,8 +534,8 @@ public class VidocqJlinkMojo extends AbstractMojo {
     }
 
     /**
-     * The {@code --launcher} of the image and the {@code --add-options} that bake the JVM options of {@code launch} into the image: every way of starting it then gets them — the
-     * launcher script, {@code bin/java -m …}, the jpackage application and the Docker image built on it.
+     * The {@code --launcher} of the image and the {@code --add-options} that bake the JVM options of {@code launch}
+     * into the image: every way of starting it then gets them — the launcher script, {@code bin/java -m …}, the jpackage application and the Docker image built on it.
      */
     static List<String> launcherArgs(String launcher, ImageLaunch launch) {
         List<String> args = new ArrayList<>();

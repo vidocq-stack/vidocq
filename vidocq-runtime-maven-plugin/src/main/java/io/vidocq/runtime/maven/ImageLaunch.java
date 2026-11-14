@@ -22,7 +22,6 @@ package io.vidocq.runtime.maven;
 import io.vidocq.runtime.core.LayerSplit;
 import io.vidocq.runtime.core.VidocqAppLayer;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -32,10 +31,13 @@ import java.util.List;
  * {@code <module>/<class>} its launcher runs, and the JVM options the image needs for it.
  *
  * <p>With an application main class, the launcher runs it as it is: the {@code @VidocqMain} trampoline
- * re-layers the application. Without one, the launcher runs the runtime's own main, and two options do what
- * the trampoline did: {@code --add-modules} resolves the application module, which no module of the runtime
- * reads, into the boot layer, and {@value VidocqAppLayer#APP_MODULE_PROPERTY} tells {@code Vidocq.main} to
- * re-layer it. The application then boots in the same layer as with a trampoline.
+ * re-layers the application. Without one, the launcher runs the runtime's own main, and
+ * {@value VidocqAppLayer#APP_MODULE_PROPERTY} tells {@code Vidocq.main} to re-layer the application module, as the
+ * trampoline did. The application then boots in the same layer as with a trampoline.
+ *
+ * <p>Both ways bake {@code --add-modules} with the application module and every other module staged in the image:
+ * no module of the runtime reads the application module, and a staged module that nothing requires (a resource-only
+ * module) would be linked but in no layer (BUG-20261114-05).
  *
  * <p>Both ways bake {@code -Dvidocq.app.layer=} with the mode of the build ({@code all} unless the build asked for
  * {@code classes}): the image re-layers at start, so it must carry the mode it was built under, and never leave it
@@ -104,7 +106,7 @@ record ImageLaunch(String entryPoint, List<String> vmOptions) {
         var roots = new LinkedHashSet<String>();
         roots.add(mainModule);
         roots.addAll(stagedModules);
-        return "--add-modules=" + String.join(",", new ArrayList<>(roots));
+        return "--add-modules=" + String.join(",", roots);
     }
 
     private static String layerOption(LayerSplit.Mode layerMode) {

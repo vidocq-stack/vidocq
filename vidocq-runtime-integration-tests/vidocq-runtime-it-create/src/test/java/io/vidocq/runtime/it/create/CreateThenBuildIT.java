@@ -39,7 +39,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
 import java.util.regex.Pattern;
+import java.util.spi.ToolProvider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -185,14 +188,14 @@ class CreateThenBuildIT {
         Path sources = Files.createDirectories(project.resolveSibling("resource-only-src"));
         Path classes = Files.createDirectories(project.resolveSibling("resource-only-classes"));
         Files.writeString(sources.resolve("module-info.java"), "module " + RESOURCE_MODULE + " {}\n");
-        var javac = java.util.spi.ToolProvider.findFirst("javac").orElseThrow();
+        var javac = ToolProvider.findFirst("javac").orElseThrow();
         assertEquals(0, javac.run(System.out, System.err, "-d", classes.toString(),
                 sources.resolve("module-info.java").toString()), "javac failed on the fixture module");
-        try (var jar = new java.util.jar.JarOutputStream(Files.newOutputStream(directory.resolve("resource-only-1.0.jar")))) {
-            jar.putNextEntry(new java.util.jar.JarEntry("module-info.class"));
+        try (var jar = new JarOutputStream(Files.newOutputStream(directory.resolve("resource-only-1.0.jar")))) {
+            jar.putNextEntry(new JarEntry("module-info.class"));
             jar.write(Files.readAllBytes(classes.resolve("module-info.class")));
             jar.closeEntry();
-            jar.putNextEntry(new java.util.jar.JarEntry("META-INF/resources/x.css"));
+            jar.putNextEntry(new JarEntry("META-INF/resources/x.css"));
             jar.write("body {}\n".getBytes(StandardCharsets.UTF_8));
             jar.closeEntry();
         }

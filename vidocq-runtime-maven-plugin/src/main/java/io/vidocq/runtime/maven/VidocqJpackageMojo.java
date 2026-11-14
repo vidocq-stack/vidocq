@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.lang.module.ModuleFinder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -130,13 +131,7 @@ public class VidocqJpackageMojo extends AbstractMojo {
         }
 
         String version = sanitizeVersion(appVersion);
-        ImageLaunch launch;
-        try {
-            launch = ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer),
-                    nonJdkModulesOf(runtimeImage.toPath()));
-        } catch (IllegalArgumentException e) {
-            throw new MojoExecutionException(e.getMessage(), e);
-        }
+        ImageLaunch launch = launchOf();
 
         try {
             deleteRecursive(installerDir.toPath());
@@ -170,6 +165,25 @@ public class VidocqJpackageMojo extends AbstractMojo {
     }
 
     /**
+     * The launch of the image to package: the application module and every module of the image that is not the JDK's
+     * are rooted at start, as {@code vidocq:jlink} bakes them (BUG-20261114-05).
+     */
+    ImageLaunch launchOf() throws MojoExecutionException {
+        try {
+            List<String> modules = nonJdkModulesOf(runtimeImage.toPath());
+            if (modules.isEmpty() && Files.isRegularFile(runtimeImage.toPath().resolve(RELEASE))) {
+                getLog().warn("The release file of " + runtimeImage + " lists no " + MODULES_KEY
+                        + ": only the application module is rooted at start.");
+            }
+            return ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer), modules);
+        } catch (IllegalArgumentException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
+        } catch (IOException e) {
+            throw new MojoExecutionException("Cannot read the release file of " + runtimeImage, e);
+        }
+    }
+
+    /**
      * The {@code --module} the application starts with and, without an application main class, its JVM options
      * as {@code --java-options}. vidocq:jlink already baked them into its image; passing them again keeps an
      * image built otherwise ({@code runtimeImage}) startable, and the JVM accepts them twice.
@@ -183,27 +197,26 @@ public class VidocqJpackageMojo extends AbstractMojo {
         return args;
     }
 
+    private static final String RELEASE = "release";
+    private static final String MODULES_KEY = "MODULES=";
+
     /**
-     * The modules of an image that are not the JDK's ({@code java.*}, {@code jdk.*}), read from the
-     * {@code MODULES} of its {@code release} file: the application's staged modules, which the image must resolve
-     * at start (BUG-20261114-05). Empty when the image has no readable {@code release}.
+     * The modules of an image that the JDK that runs the build does not ship, read from the {@code MODULES} of its
+     * {@code release} file: the application's staged modules, which the image must resolve at start
+     * (BUG-20261114-05). Empty when the image has no {@code release}, or none lists modules.
      */
-    static List<String> nonJdkModulesOf(Path image) {
-        Path release = image.resolve("release");
+    static List<String> nonJdkModulesOf(Path image) throws IOException {
+        Path release = image.resolve(RELEASE);
         if (!Files.isRegularFile(release)) {
             return List.of();
         }
-        try {
-            for (String line : Files.readAllLines(release)) {
-                if (line.startsWith("MODULES=")) {
-                    String value = line.substring("MODULES=".length()).replace("\"", "").strip();
-                    return Arrays.stream(value.split("\\s+"))
-                            .filter(m -> !m.isEmpty() && !m.startsWith("java.") && !m.startsWith("jdk."))
-                            .toList();
-                }
+        for (String line : Files.readAllLines(release)) {
+            if (line.startsWith(MODULES_KEY)) {
+                String value = line.substring(MODULES_KEY.length()).replace("\"", "").strip();
+                return Arrays.stream(value.split("\\s+"))
+                        .filter(m -> !m.isEmpty() && ModuleFinder.ofSystem().find(m).isEmpty())
+                        .toList();
             }
-        } catch (IOException e) {
-            throw new UncheckedIOException("Cannot read " + release, e);
         }
         return List.of();
     }
