@@ -26,22 +26,27 @@ import io.vidocq.runtime.spi.config.VidocqConfig;
 import java.util.Map;
 
 /**
- * Gives Foy the allowed origins of {@value FoyWebSocketExtension#ORIGINS_KEY}. The Servlet extension starts before
- * the Chappe web server extension, so Foy would be the first to refuse a malformed value, naming its own init
- * parameter: the key's syntax is checked here, with the parser the Chappe extension applies to the native WebSocket
- * upgrade, and the failure names the key.
+ * Gives Foy the allowed origins of {@value FoyWebSocketExtension#ORIGINS_KEY}, only when the key is set, and always
+ * the name of that key, so that a refused handshake logs the setting the Vidocq user writes rather than Foy's init
+ * parameter. The Servlet extension starts before the Chappe web server extension, so Foy would be the first to refuse
+ * a malformed value, naming its own init parameter: the key's syntax is checked here, with the parser the Chappe
+ * extension applies to the native WebSocket upgrade, and the failure names the key.
  */
 public final class AllowedOriginsParameter implements ServletInitParameters {
 
     /** The init parameter of {@code foy-websocket}, with the syntax of the key. */
     static final String FOY_PARAMETER = "io.vidocq.foy.websocket.allowed-origins";
 
+    /** The init parameter of {@code foy-websocket} that names the setting its refusals and errors point to. */
+    static final String FOY_SETTING_NAME_PARAMETER = FOY_PARAMETER + ".setting-name";
+
     @Override
     public Map<String, String> initParameters(VidocqConfig config) {
         return config.getValue(FoyWebSocketExtension.ORIGINS_KEY, String.class)
                 .map(AllowedOriginsParameter::checked)
-                .map(origins -> Map.of(FOY_PARAMETER, origins))
-                .orElse(Map.of());
+                .map(origins -> Map.of(FOY_PARAMETER, origins,
+                        FOY_SETTING_NAME_PARAMETER, FoyWebSocketExtension.ORIGINS_KEY))
+                .orElse(Map.of(FOY_SETTING_NAME_PARAMETER, FoyWebSocketExtension.ORIGINS_KEY));
     }
 
     private static String checked(String origins) {

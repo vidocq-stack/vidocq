@@ -302,7 +302,7 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
     private static WebSocketOrigins webSocketOrigins(VidocqConfig config) {
         String value = config.getValue(WEBSOCKET_ORIGINS_KEY, String.class).orElse(null);
         try {
-            return WebSocketOrigins.parse(value);
+            return WebSocketOrigins.parse(value).configuredBy(WEBSOCKET_ORIGINS_KEY);
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException(WEBSOCKET_ORIGINS_KEY + " is invalid: " + e.getMessage(), e);
         }

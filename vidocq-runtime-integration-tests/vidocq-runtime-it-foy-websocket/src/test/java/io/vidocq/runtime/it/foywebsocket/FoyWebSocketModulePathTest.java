@@ -37,7 +37,13 @@ import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -95,6 +101,50 @@ class FoyWebSocketModulePathTest {
         boot(EVIL);
         assertEquals(101, handshakeStatus(FOY_PATH, EVIL));
         assertEquals(101, handshakeStatus(NATIVE_PATH, EVIL));
+    }
+
+    @Test
+    void theRefusalsNameTheKeyTheUserSets() throws Exception {
+        List<String> warnings = new CopyOnWriteArrayList<>();
+        SimpleFormatter formatter = new SimpleFormatter();
+        Handler handler = new Handler() {
+            @Override
+            public void publish(LogRecord logRecord) {
+                if (logRecord.getLevel() == Level.WARNING) {
+                    warnings.add(formatter.formatMessage(logRecord));
+                }
+            }
+
+            @Override
+            public void flush() {
+                // nothing buffered
+            }
+
+            @Override
+            public void close() {
+                // nothing to release
+            }
+        };
+        Logger logger = Logger.getLogger("io.vidocq");
+        Level previousLevel = logger.getLevel();
+        logger.setLevel(Level.ALL);
+        logger.addHandler(handler);
+        try {
+            boot(null);
+            assertEquals(403, handshakeStatus(FOY_PATH, EVIL));
+            assertEquals(403, handshakeStatus(NATIVE_PATH, EVIL));
+        } finally {
+            logger.removeHandler(handler);
+            logger.setLevel(previousLevel);
+        }
+
+        List<String> refusals = warnings.stream().filter(w -> w.contains(EVIL)).toList();
+        assertEquals(2, refusals.size(), warnings.toString());
+        for (String refusal : refusals) {
+            assertTrue(refusal.contains(KEY), refusal);
+            assertFalse(refusal.contains("io.vidocq.foy.websocket.allowed-origins"), refusal);
+            assertFalse(refusal.contains("Router.Builder.webSocketOrigins"), refusal);
+        }
     }
 
     @Test

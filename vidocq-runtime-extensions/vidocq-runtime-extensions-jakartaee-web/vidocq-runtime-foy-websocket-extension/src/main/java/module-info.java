@@ -19,7 +19,8 @@
  */
 /**
  * Jakarta WebSocket 2.2 through Foy: the {@code foy-websocket} module is part of the application, and the
- * {@code vidocq.websocket.allowed-origins} key reaches it as its servlet context init parameter. The application
+ * {@code vidocq.websocket.allowed-origins} key reaches it as its servlet context init parameter, together with the
+ * name of that key, which Foy's refusals and errors then print. The application
  * module requires {@code jakarta.websocket}.
  */
 module io.vidocq.runtime.extensions.jakartaee.web.websocket {

@@ -36,6 +36,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -208,6 +209,38 @@ class ChappeServerEndToEndTest {
         start(ANY_PORT);
 
         assertEquals(403, handshakeStatus("http://evil.example"));
+    }
+
+    @Test
+    void theRefusalNamesTheKeyWhenItIsAbsent() throws Exception {
+        mountEchoSocket();
+        try (LogRecords logs = new LogRecords("io.vidocq.chappe")) {
+            start(ANY_PORT);
+
+            assertEquals(403, handshakeStatus("http://evil.example"));
+            assertRefusalNamesTheKey(logs);
+        }
+    }
+
+    @Test
+    void theRefusalNamesTheKeyWhenItDoesNotListTheOrigin() throws Exception {
+        mountEchoSocket();
+        try (LogRecords logs = new LogRecords("io.vidocq.chappe")) {
+            start(Map.of(
+                    "vidocq.chappe.listener.default.port", "0",
+                    "vidocq.websocket.allowed-origins", "http://good.example"));
+
+            assertEquals(403, handshakeStatus("http://evil.example"));
+            assertRefusalNamesTheKey(logs);
+        }
+    }
+
+    private static void assertRefusalNamesTheKey(LogRecords logs) {
+        var warnings = logs.messages(Level.WARNING);
+        assertTrue(warnings.stream().anyMatch(m -> m.contains("not allowed by vidocq.websocket.allowed-origins")),
+                warnings.toString());
+        assertTrue(warnings.stream().noneMatch(m -> m.contains("Router.Builder.webSocketOrigins")),
+                warnings.toString());
     }
 
     @Test

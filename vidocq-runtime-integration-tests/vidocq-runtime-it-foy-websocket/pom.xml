@@ -78,9 +78,9 @@
                         <configuration>
                             <compilerArgs combine.children="append">
                                 <arg>--add-modules</arg>
-                                <arg>java.net.http</arg>
+                                <arg>java.net.http,java.logging</arg>
                                 <arg>--add-reads</arg>
-                                <arg>io.vidocq.runtime.it.foywebsocket=java.net.http</arg>
+                                <arg>io.vidocq.runtime.it.foywebsocket=java.net.http,java.logging</arg>
                             </compilerArgs>
                         </configuration>
                     </execution>
@@ -93,8 +93,8 @@
                     <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
                     <argLine>
                         @{argLine}
-                        --add-modules java.net.http
-                        --add-reads io.vidocq.runtime.it.foywebsocket=java.net.http
+                        --add-modules java.net.http,java.logging
+                        --add-reads io.vidocq.runtime.it.foywebsocket=java.net.http,java.logging
                     </argLine>
                 </configuration>
             </plugin>

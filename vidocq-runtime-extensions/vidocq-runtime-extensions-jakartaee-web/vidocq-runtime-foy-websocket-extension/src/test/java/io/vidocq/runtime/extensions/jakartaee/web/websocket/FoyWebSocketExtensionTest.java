@@ -43,6 +43,7 @@ class FoyWebSocketExtensionTest {
 
     private static final String KEY = "vidocq.websocket.allowed-origins";
     private static final String FOY_PARAMETER = "io.vidocq.foy.websocket.allowed-origins";
+    private static final String FOY_SETTING_NAME = "io.vidocq.foy.websocket.allowed-origins.setting-name";
 
     /** A configuration over a map. */
     private record MapConfig(Map<String, String> values) implements VidocqConfig {
@@ -99,7 +100,8 @@ class FoyWebSocketExtensionTest {
         var parameters = new AllowedOriginsParameter()
                 .initParameters(new MapConfig(Map.of(KEY, "https://a.example, https://b.example")));
 
-        assertEquals(Map.of(FOY_PARAMETER, "https://a.example, https://b.example"), parameters);
+        assertEquals(Map.of(FOY_PARAMETER, "https://a.example, https://b.example", FOY_SETTING_NAME, KEY),
+                parameters);
     }
 
     @Test
@@ -113,8 +115,9 @@ class FoyWebSocketExtensionTest {
     }
 
     @Test
-    void forwardsNothingWhenTheKeyIsAbsent() {
-        assertEquals(Map.of(), new AllowedOriginsParameter().initParameters(new MapConfig(Map.of())));
+    void onlyNamesTheSettingWhenTheKeyIsAbsent() {
+        assertEquals(Map.of(FOY_SETTING_NAME, KEY),
+                new AllowedOriginsParameter().initParameters(new MapConfig(Map.of())));
     }
 
     @Test

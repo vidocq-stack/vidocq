@@ -157,7 +157,7 @@ none +
 
 | `vidocq.websocket.allowed-origins`
 | _none_
-| Origins allowed to open a WebSocket besides the server's own: comma-separated (`https://admin.example.com, http://localhost:5173`), or `*` for any, which turns the protection against cross-site WebSocket hijacking off. Applies to Jakarta WebSocket endpoints and to native Chappe WebSocket mounts. A malformed entry stops the start. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[Jakarta WebSocket (Foy)].
+| Origins allowed to open a WebSocket besides the server's own: comma-separated (`https://admin.example.com, http://localhost:5173`), or `*` for any, which turns the protection against cross-site WebSocket hijacking off. Applies to Jakarta WebSocket endpoints and to native Chappe WebSocket mounts. A refused handshake answers 403 and logs a WARNING that names this key, for native routes and Jakarta WebSocket endpoints alike. A malformed entry stops the start. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[Jakarta WebSocket (Foy)].
 
 | `vidocq.pool.url` +
 `vidocq.pool.username` / `vidocq.pool.password`

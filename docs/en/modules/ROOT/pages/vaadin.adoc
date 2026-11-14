@@ -503,8 +503,8 @@ with code 1006.
 | One of two causes. The application has no Jakarta WebSocket (neither `vidocq-runtime-vaadin-extension` nor
 `vidocq-runtime-foy-websocket-extension`, for instance an application that replaces the extension's setup): Atmosphere
 answers 501 with `X-Atmosphere-error: Websocket protocol not supported`. Or the handshake is refused with 403 and a
-WARNING naming the origin: the page is served from another origin than the server, or a reverse proxy rewrites `Host`,
-so the `Origin` of the page no longer matches.
+WARNING naming the origin and the key `vidocq.websocket.allowed-origins`: the page is served from another origin than
+the server, or a reverse proxy rewrites `Host`, so the `Origin` of the page no longer matches.
 | For the 501, add `vidocq-runtime-vaadin-extension`, or `vidocq-runtime-foy-websocket-extension` when the application
 ships its own `LookupInitializer`. For the 403, add the origin of the page to `vidocq.websocket.allowed-origins`, make
 the proxy forward the original `Host`, or use `@Push(transport = Transport.LONG_POLLING)`. See <<push>>.

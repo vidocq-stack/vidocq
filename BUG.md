@@ -5,6 +5,26 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261114-13 — A refused WebSocket origin names a setting the Vidocq user never wrote
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/websocket-origin-setting-name`
+- **Affected modules**: vidocq-runtime-chappe-webserver-extension (`ChappeServerBootstrap`),
+  vidocq-runtime-foy-websocket-extension (`AllowedOriginsParameter`)
+- **Symptom**: a handshake from a foreign origin answers 403, and the WARNING names Chappe's Java API for a native
+  route (_... not allowed by Router.Builder.webSocketOrigins_) or Foy's init parameter for a Jakarta WebSocket
+  endpoint (_... the origins listed in the context init parameter io.vidocq.foy.websocket.allowed-origins_). The
+  Vidocq user sets `vidocq.websocket.allowed-origins`, which neither message mentions.
+- **Minimal repro**: boot with `vidocq.websocket.allowed-origins` absent, send a WebSocket upgrade with
+  `Origin: http://evil.example` to a native route and to a Foy endpoint, read the WARNING. Tests:
+  `ChappeServerEndToEndTest.theRefusalNamesTheKeyWhenItIsAbsent` and `...WhenItDoesNotListTheOrigin`,
+  `FoyWebSocketModulePathTest.theRefusalsNameTheKeyTheUserSets`, `FoyWebSocketExtensionTest`.
+- **Cause**: upstream, CHAPPE-059 in Vidocq/chappe (`WebSocketOrigins.configuredBy`) and BUG-20261114-04 in
+  Vidocq/foy (init parameter `io.vidocq.foy.websocket.allowed-origins.setting-name`). This repository only had to pass
+  the key's name to both bricks.
+- **Fix**: `ChappeServerBootstrap` builds the policy with `.configuredBy("vidocq.websocket.allowed-origins")`, also
+  when the key is absent; `AllowedOriginsParameter` always forwards the setting-name parameter to Foy.
+
 ## BUG-20261114-12 — A malformed `vidocq.websocket.allowed-origins` fails the start with Foy's parameter name
 
 - **Date**: 2026-11-14
