@@ -41,8 +41,9 @@ extensions and beans are discovered from the module path (`ServiceLoader` + the 
 
 * `-Dvidocq.app.path=<archives>`: the archives resolve into the Vauban application layer. `vidocq:run` and the
   `vidocq:package` launchers pass it; `vidocq:dev`'s hot-reload loop re-creates that layer at each reload;
-* `-Dvidocq.app.module=<module>`: the module already sits in the boot layer and is re-layered (<<app-module-property>>).
-  A `vidocq:jlink` image passes it;
+* `-Dvidocq.app.module=<module>`: in a `vidocq:jlink` image, the application layer is defined from the modules
+  `-Dvidocq.app.modules` lists, read from the image; on a module path, the module already sits in the boot layer and
+  is re-layered (<<app-module-property>>);
 * neither: the runtime boots in place, without an application layer.
 
 An application main class is optional: a `@VidocqMain` trampoline that calls `Vidocq.run(App.class, args)`, for a
@@ -53,7 +54,9 @@ boot layer too, and the start warns with <<vidocq-lay-001>>. A launcher without 
 runs the application where the JVM resolved it, without a layer.
 
 [#app-module-property]
-The runtime's own main does the trampoline's work when the application module sits in the boot layer and `-Dvidocq.app.module=<module>` names it: `Vidocq.main` re-layers that module, and what it reads, exactly as `Vidocq.run` does from a trampoline. This is how a jlink image without an application main class starts (`java --add-modules=<module> -Dvidocq.app.module=<module> -m io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`): `vidocq:jlink` bakes both options into the image, see xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[the `vidocq:jlink` goal]. A module the property names but the boot layer does not hold fails the start with the `--add-modules` that fixes it.
+`-Dvidocq.app.module=<module>` names the application module to the runtime's own main. A jlink image links the application's modules but keeps them out of the boot layer, and lists them in `-Dvidocq.app.modules=<module,module>`: `Vidocq.main` defines the application layer from them, read from the image (`jrt:/modules/<name>`), every one a root, so that a module nothing requires is resolved too. The startup report names that origin `jlink image`. With `-Dvidocq.app.main`, the application's main, a `@VidocqMain` trampoline, then runs inside that layer. This is how every jlink image starts (`java --add-modules=<the parent layer> -Dvidocq.app.module=<module> -Dvidocq.app.modules=<the application layer> -m io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`): `vidocq:jlink` bakes these options into the image, see xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[the `vidocq:jlink` goal]. A listed module the image does not link fails the start.
+
+On a module path, when the launch resolved the module into the boot layer (`--add-modules <module>`), `Vidocq.main` re-layers that module, and what it reads, exactly as `Vidocq.run` does from a trampoline. A module that is neither in the boot layer nor in the image fails the start with the `--add-modules` that fixes it.
 
 [#main-shapes]
 === Which main methods are accepted

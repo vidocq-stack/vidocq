@@ -165,17 +165,21 @@ public class VidocqJpackageMojo extends AbstractMojo {
     }
 
     /**
-     * The launch of the image to package: the application module and every module of the image that is not the JDK's
-     * are rooted at start, as {@code vidocq:jlink} bakes them (BUG-20261114-05).
+     * The launch of the image to package, as {@code vidocq:jlink} baked it: the modules of the application layer
+     * read from the key it wrote in the image's {@code release} file ({@link ImageLaunch#RELEASE_KEY}), every other
+     * module of the image that is not the JDK's rooted at start (BUG-20261114-05, BUG-20261114-11). An image without
+     * the key layers the application module alone.
      */
     ImageLaunch launchOf() throws MojoExecutionException {
         try {
-            List<String> modules = nonJdkModulesOf(runtimeImage.toPath());
-            if (modules.isEmpty() && Files.isRegularFile(runtimeImage.toPath().resolve(RELEASE))) {
+            Path image = runtimeImage.toPath();
+            List<String> modules = nonJdkModulesOf(image);
+            if (modules.isEmpty() && Files.isRegularFile(image.resolve(RELEASE))) {
                 getLog().warn("The release file of " + runtimeImage + " lists no " + MODULES_KEY
-                        + ": only the application module is rooted at start.");
+                        + ": nothing but the application module is started.");
             }
-            return ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer), modules);
+            return ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer), modules,
+                    layerModulesOf(image));
         } catch (IllegalArgumentException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         } catch (IOException e) {
@@ -206,19 +210,34 @@ public class VidocqJpackageMojo extends AbstractMojo {
      * (BUG-20261114-05). Empty when the image has no {@code release}, or none lists modules.
      */
     static List<String> nonJdkModulesOf(Path image) throws IOException {
+        return Arrays.stream(releaseValue(image, MODULES_KEY).split("\\s+"))
+                .filter(m -> !m.isEmpty() && ModuleFinder.ofSystem().find(m).isEmpty())
+                .toList();
+    }
+
+    /**
+     * The modules of the application layer that {@code vidocq:jlink} listed in the image's {@code release} file
+     * ({@link ImageLaunch#RELEASE_KEY}); empty when the image has no such key.
+     */
+    static List<String> layerModulesOf(Path image) throws IOException {
+        return Arrays.stream(releaseValue(image, ImageLaunch.RELEASE_KEY + "=").split(","))
+                .map(String::strip)
+                .filter(m -> !m.isEmpty())
+                .toList();
+    }
+
+    /** The value of {@code key} in the image's {@code release} file, unquoted; empty without the file or the key. */
+    private static String releaseValue(Path image, String key) throws IOException {
         Path release = image.resolve(RELEASE);
         if (!Files.isRegularFile(release)) {
-            return List.of();
+            return "";
         }
         for (String line : Files.readAllLines(release)) {
-            if (line.startsWith(MODULES_KEY)) {
-                String value = line.substring(MODULES_KEY.length()).replace("\"", "").strip();
-                return Arrays.stream(value.split("\\s+"))
-                        .filter(m -> !m.isEmpty() && ModuleFinder.ofSystem().find(m).isEmpty())
-                        .toList();
+            if (line.startsWith(key)) {
+                return line.substring(key.length()).replace("\"", "").strip();
             }
         }
-        return List.of();
+        return "";
     }
 
     /** jpackage requires a version without qualifiers ({@code 1.2.3}). We strip {@code -SNAPSHOT} and others. */

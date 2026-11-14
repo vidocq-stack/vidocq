@@ -130,7 +130,8 @@ flowchart TB
         APP["application modules<br/>woven at definition"]
     end
     MAIN -- "-Dvidocq.app.path<br/>(dev, run, package)" --> child
-    MAIN -- "-Dvidocq.app.module<br/>(jlink image)" --> DET["boot-layer detection<br/>(Vauban re-layer policy)"]
+    MAIN -- "-Dvidocq.app.modules<br/>(jlink image, read from jrt:)" --> child
+    MAIN -- "-Dvidocq.app.module<br/>(module path)" --> DET["boot-layer detection<br/>(Vauban re-layer policy)"]
     TRAMP -- "Vidocq.run()<br/>(IDE right-click)" --> DET
     DET -- "same archives,<br/>re-resolved" --> child
     APP -- requires --> RT

@@ -59,11 +59,20 @@ public final class VidocqAppLayer {
     /** Binary name of an application main class to run once the layer is installed. */
     public static final String APP_MAIN_PROPERTY = "vidocq.app.main";
     /**
-     * Name of the application's module when it was resolved into the boot layer and the runtime's own main was
-     * launched: a jlink image without an application main class. {@link Vidocq#main} then re-layers it as a
-     * {@code @VidocqMain} trampoline would.
+     * Name of the application's module when the runtime's own main was launched. {@link Vidocq#main} then builds the
+     * application layer around it: from the modules a jlink image lists in {@value #APP_MODULES_PROPERTY}, which the
+     * image links but leaves out of the boot layer; else, when the launch resolved it into the boot layer, by
+     * re-layering it as a {@code @VidocqMain} trampoline would.
      */
     public static final String APP_MODULE_PROPERTY = "vidocq.app.module";
+    /**
+     * The modules of the application layer, comma separated. A jlink image lists those the build gave the layer, read
+     * from the image ({@code jrt:}); for a launch from the module path, the modules to re-layer instead of the
+     * detection.
+     */
+    public static final String APP_MODULES_PROPERTY = "vidocq.app.modules";
+    /** The origin of an application layer read from the modules a jlink image links, as the startup report names it. */
+    static final String IMAGE_ORIGIN = "jlink image";
 
     private static final System.Logger LOG = System.getLogger(VidocqAppLayer.class.getName());
 
@@ -212,23 +221,63 @@ public final class VidocqAppLayer {
     }
 
     /**
-     * The trampoline path without a trampoline: {@value #APP_MODULE_PROPERTY} names the application's module, which
-     * the launch resolved into the boot layer ({@code --add-modules}), and the runtime's own main re-layers it as
-     * {@link #installFromBootLayer(Class)} does from the trampoline's module. Returns {@code false} when the property
-     * is absent or the layer is already in place.
+     * The runtime's own main, with {@value #APP_MODULE_PROPERTY} naming the application's module. In a jlink image,
+     * the module is linked but not in the boot layer: the layer is defined from the modules
+     * {@value #APP_MODULES_PROPERTY} lists, read from the image, so that the boot layer holds no second copy of them
+     * (BUG-20261114-11). When the launch resolved the module into the boot layer ({@code --add-modules}), the
+     * runtime's main re-layers it as {@link #installFromBootLayer(Class)} does from the trampoline's module. Returns
+     * {@code false} when the property is absent or the layer is already in place.
      *
-     * @throws IllegalStateException when the named module is not in the boot layer
+     * @throws IllegalStateException when the named module is neither in the boot layer nor in the image
      */
     static boolean installFromModuleIfConfigured() {
         var name = System.getProperty(APP_MODULE_PROPERTY, "").strip();
         if (name.isEmpty() || alreadyInLayer()) {
             return false;
         }
-        var module = ModuleLayer.boot().findModule(name).orElseThrow(() -> new IllegalStateException(
-                "Cannot create the application layer: the module " + name + " named by " + APP_MODULE_PROPERTY
-                        + " is not in the boot layer. Resolve it with --add-modules " + name
-                        + " on the java command (vidocq:jlink adds it to the image)"));
-        return installFromBootLayer(module);
+        var booted = ModuleLayer.boot().findModule(name);
+        if (booted.isPresent()) {
+            return installFromBootLayer(booted.get());
+        }
+        var system = java.lang.module.ModuleFinder.ofSystem();
+        if (system.find(name).isEmpty()) {
+            throw new IllegalStateException("Cannot create the application layer: the module " + name + " named by "
+                    + APP_MODULE_PROPERTY + " is not in the boot layer. Resolve it with --add-modules " + name
+                    + " on the java command (vidocq:jlink links it into the image)");
+        }
+        var modules = layerModules(name, System.getProperty(APP_MODULES_PROPERTY));
+        return installLayer(systemModulePaths(modules, system), ModuleLayer.boot(), IMAGE_ORIGIN,
+                new Installation(IMAGE_ORIGIN, modules, false,
+                        LayerSplit.decodePinned(System.getProperty(LayerSplit.PINNED_PROPERTY))));
+    }
+
+    /** The modules of an image's application layer: {@code module} first, then the others {@code listed} names. */
+    static List<String> layerModules(String module, String listed) {
+        var modules = new java.util.LinkedHashSet<String>();
+        modules.add(module);
+        modules.addAll(commaSeparated(listed == null ? "" : listed));
+        modules.remove("");
+        return List.copyOf(modules);
+    }
+
+    /**
+     * Where the modules {@code names} lie in the runtime image: {@code /modules/<name>} of its {@code jrt} file
+     * system, which Vauban's layer reads as an exploded module.
+     *
+     * @throws IllegalStateException when the image does not link one of them
+     */
+    static List<Path> systemModulePaths(List<String> names, java.lang.module.ModuleFinder system) {
+        var image = java.nio.file.FileSystems.getFileSystem(java.net.URI.create("jrt:/"));
+        var paths = new java.util.ArrayList<Path>();
+        for (String name : names) {
+            if (system.find(name).isEmpty()) {
+                throw new IllegalStateException("Cannot create the application layer: the module " + name + " named by "
+                        + APP_MODULES_PROPERTY + " is not linked into this image. Build the image again with"
+                        + " vidocq:jlink");
+            }
+            paths.add(image.getPath("/modules/" + name));
+        }
+        return List.copyOf(paths);
     }
 
     private static boolean installFromBootLayer(Module callerModule) {
@@ -239,7 +288,7 @@ public final class VidocqAppLayer {
         if (!callerModule.isNamed() || callerLayer == null) {
             return false; // class-path launch — nothing to re-layer, agent net applies
         }
-        var explicit = System.getProperty("vidocq.app.modules", "").strip();
+        var explicit = System.getProperty(APP_MODULES_PROPERTY, "").strip();
         var configuration = callerLayer.configuration();
         var pinned = new java.util.LinkedHashMap<String, String>();
         var paths = explicit.isEmpty()

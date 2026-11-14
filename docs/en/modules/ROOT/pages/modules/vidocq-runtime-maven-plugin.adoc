@@ -642,11 +642,12 @@ application as `-Dvidocq.app.layer`, `classes` included.
 
 The build logs `application layer: <n> libraries, <m> kept in the parent layer by a pin`.
 
-*Jlink, jpackage and Docker.* `vidocq:jlink` links one boot layer, and the runtime re-layers the application at start,
-as it does for an IDE launch (Vidocq/vidocq#247): the application and its libraries go into the application layer,
-the runtime and the bricks stay. The goal bakes `-Dvidocq.app.layer=` with its mode into the launcher
-(`--add-options`; `vidocq:jpackage` passes it with `--java-options`), `classes` included, so the image keeps the mode it
-was built under. `vidocq:docker` wraps the jlink image. To opt out, build the image with `-Dvidocq.app.layer=classes`.
+*Jlink, jpackage and Docker.* `vidocq:jlink` makes the same split at build and links every module (Vidocq/vidocq#247):
+the boot layer holds the runtime and the bricks, and at start the runtime defines the application layer from the
+application and its libraries, read from the image, never a second copy of them (<<jlink-one-copy>>). The goal bakes
+the split and `-Dvidocq.app.layer=` with its mode into the launcher (`--add-options`; `vidocq:jpackage` passes them
+with `--java-options`), `classes` included, so the image keeps the mode it was built under. `vidocq:docker` wraps the
+jlink image. To opt out, build the image with `-Dvidocq.app.layer=classes`.
 *Native code and threads.* A library with native code (JNI) cannot be loaded twice by the JVM, so the dev reload cannot reload it: pin it
 with `vidocq.app.layer.keep`. A thread that a library leaves running keeps the previous layer in memory; the reload
 warns. The `layer` section of the startup report lists the libraries.
@@ -754,43 +755,67 @@ The image starts on the extensions frozen at build, as the ZIP distribution does
 === Without an application main class
 
 `vidocq.mainModule` is the only setting the image needs. `vidocq.mainClass` is optional, as it is for
-`vidocq:dev`, `vidocq:run` and `vidocq:package`:
+`vidocq:dev`, `vidocq:run` and `vidocq:package`. Either way the launcher runs the runtime's main,
+`io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and the goal bakes into the image, with jlink's
+`--add-options`:
 
-* **with an application main class** (a `@VidocqMain` trampoline), the launcher runs
-  `<mainModule>/<mainClass>`, and the trampoline re-layers the application, as before;
-* **without one** (or with the runtime's own `io.vidocq.runtime.core.Vidocq`), the launcher runs the runtime's
-  main, `io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and the goal bakes
-  `-Dvidocq.app.module=<mainModule>` into the image with jlink's `--add-options`, which tells `Vidocq.main` to
-  re-layer that module the way the trampoline does.
+* `-Dvidocq.app.module=<mainModule>` and `-Dvidocq.app.modules=<the modules of the application layer>`, which
+  `Vidocq.main` reads from the image to define the application layer;
+* `-Dvidocq.app.main=<mainClass>` **with an application main class** (a `@VidocqMain` trampoline), which then runs
+  inside that layer. Without one, or with the runtime's own `io.vidocq.runtime.core.Vidocq`, the runtime's main boots
+  the application;
+* `-Dvidocq.app.layer=<mode>` (`all` by default, `classes` when the build sets it), so that the image keeps the mode
+  it was built under;
+* `--add-modules` with the parent layer and the JDK modules the image needs.
 
 [#jlink-every-module]
-Either way the goal bakes `--add-modules=<mainModule>,<every other staged module>`: jlink links all the staged
-modules, but the JVM resolves only its roots and what they `requires`, so a module that nothing requires (a
-resource-only module such as Vaadin's `flow.push`, `vaadin.lumo.theme` or `vaadin.aura.theme`, whose
-`META-INF/resources` the servlet container serves) would sit in the image and in no layer, and its files would answer
-404. `vidocq:run` and `vidocq:package` (`--add-modules ALL-MODULE-PATH`) resolve them all, and so does the image
-(BUG-20261114-05). A staged module that was linked but unused, such as a second JSON provider or JDBC driver, is now
-resolved too, as under `vidocq:run` and `vidocq:package`: exclude its dependency to keep it out of the image. The
-application layer of the Vaadin example goes from 16 to 61 modules, and the image still starts in about 360 ms. The
-goal also adds `-Dvidocq.app.layer=<mode>` (`all` by default, `classes` when the build sets it),
-so that the image keeps the mode it was built under.
+The goal splits the staged modules as `vidocq:package` splits its jars (`vidocq.app.layer`,
+`vidocq.app.layer.keep`, a pin kept in the parent layer is logged), and jlink links them all. The application module
+and, under `all`, the libraries the split gives it form the application layer. The image lists them all, a module
+that nothing requires too: a resource-only module such as Vaadin's `flow.push`, `vaadin.lumo.theme` or
+`vaadin.aura.theme`, whose `META-INF/resources` the servlet container serves, is resolved by the layer, and its files
+are served from their `jrt:/` location (BUG-20261114-05). A staged module that was linked but unused, such as a second
+JSON provider or JDBC driver, is resolved too, as under `vidocq:run` and `vidocq:package`: exclude its dependency to
+keep it out of the image.
 
-The application boots in the same Vauban layer either way: the startup report reads
-`layer … (boot-layer detection from <mainModule>)` in both. Being in the image, the options apply to every way of
-starting it — `bin/<launcher>`, `bin/java -m …`, the `vidocq:jpackage` application and the `vidocq:docker` image.
+[#jlink-one-copy]
+No module of the application layer is in the boot layer: `--add-modules` never names one, and, before linking, the
+goal moves the `provides` of the staged copies of those modules into their `META-INF/services` files, which Vauban's
+layer reads back into `provides` (the build logs `<module>: provides moved to META-INF/services [...]`). Otherwise the
+JVM would bind into the boot layer every module that provides a service a resolved module uses (`java.base` uses
+`ToolProvider`, Vauban uses `VaubanComponentProvider`), the application would be loaded twice, and a `ServiceLoader`
+would find each of its providers twice (BUG-20261114-11). The image keeps what the JVM offers a jlink image: CDS and
+the AOT cache (`-XX:AOTCacheOutput`, `-XX:AOTCache`), a flight recording, `jcmd`; `bin/java --list-modules` lists
+every module.
+
+The image links only the JDK modules the application needs, and `jdk.jfr` is not one of them: for
+`-XX:StartFlightRecording` or `jcmd <pid> JFR.start`, add it with `-Dvidocq.jlink.addModules=jdk.jfr`.
+
+Inside the image, `bin/java --describe-module <module>` shows no `provides` for a module of the application layer.
+`--describe-module` reads the descriptor jlink stored in the image, and the build stored it without its `provides`,
+which moved to the module's `META-INF/services` files: declared in the image, they would bind the module into the boot
+layer. Vauban reads those files back when it defines the application layer, so the running application's module
+provides its services as before, and `ServiceLoader` finds each provider once. `jar --describe-module` on the original
+jar, or on the copy in `vidocq:package`'s `app/`, still shows them.
+
+The startup report reads `layer … (jlink image)`. Being in the image, the options apply to every way of starting
+it — `bin/<launcher>`, `bin/java -m …`, the `vidocq:jpackage` application and the `vidocq:docker` image. jlink also
+writes `VIDOCQ_APP_MODULES=<the application layer>` into the image's `release` file, which `vidocq:jpackage` reads.
 
 A missing `vidocq.mainModule` fails the goal with a message naming the property, and so does
-`vidocq.mainModule` set to the runtime's module `io.vidocq.runtime.core` without an application main class.
+`vidocq.mainModule` set to the runtime's module `io.vidocq.runtime.core`.
 
 == `vidocq:jpackage` goal
 
 Reuses the `jlink` image. Default type: `app-image` (cross-platform). On macOS, `.app`. On Windows, `.exe` or `.msi`. On Linux, `.deb` or `.rpm`.
 
-Like `vidocq:jlink`, it needs `vidocq.mainModule` only. Without an application main class, the
-application starts with `--module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and the goal passes the
-options of <<jlink-without-main-class>> again as `--java-options`, with `--add-modules` naming the application
-module and the modules of the image that are not the JDK's (read from the `MODULES` of its `release` file, minus the modules of the JDK that runs the build): an image
-built by `vidocq:jlink` already holds them, one given through `runtimeImage` may not.
+Like `vidocq:jlink`, it needs `vidocq.mainModule` only. The application starts with
+`--module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and the goal passes the options of
+<<jlink-without-main-class>> again as `--java-options`: the modules of the application layer read from the
+`VIDOCQ_APP_MODULES` key that `vidocq:jlink` wrote in the image's `release` file, and `--add-modules` naming the other
+modules of the image that are not the JDK's (the `MODULES` of the same file, minus the modules of the JDK that runs
+the build). An image built by `vidocq:jlink` already holds them; one given through `runtimeImage` may not, and
+without the key the application module alone goes to the application layer.
 
 See `vidocq/JLINK.md` §3 for the exhaustive parameter list.
 
@@ -830,8 +855,11 @@ copies.
 * `-Dvidocq.docker.jdkImage=…` names another Linux JDK image for the first stage. A JDK with `jmods/` and one linked
   without them (JEP 493, as Temurin 25) both work.
 
-The entry point runs the image's `bin/java -m <module>/<class>`, not the launcher script of `bin/`: the distroless base
-has no shell to run it. The JVM options the application needs are already in the image (`jlink --add-options`).
+The entry point runs the image's `bin/java -m io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, not the launcher
+script of `bin/`: the distroless base has no shell to run it. The JVM options the application needs are already in the
+image (`jlink --add-options`). An image linked again in the container is the same as `target/dist`: it links the
+staged modules, whose `provides` the goal already moved (<<jlink-one-copy>>), with the recipe's `--add-options` and
+`VIDOCQ_APP_MODULES` key, so the application is in its layer once there too.
 
 [#run]
 == `vidocq:run` goal
