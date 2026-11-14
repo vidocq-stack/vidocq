@@ -70,7 +70,7 @@ session id on login, fail closed, write the negative test before the positive on
 ```bash
 ./mvnw -ntp install -DskipTests        # full build
 ./mvnw test                            # unit tests
-./run-official-tck-security-4.0.sh     # official TCK — scaffold: refuses with exit 2 until K0
+./run-official-tck-security-4.0.sh     # official TCK, from its sources, on the Kerckhoffs container (baseline: kerckhoffs-tck/BASELINE.md)
 ```
 
 A build outside CI may need a scratch `settings.xml` for `maven.vidocq.dev` (the SNAPSHOT
@@ -96,8 +96,8 @@ spec section in commit messages / PR descriptions (e.g. "Security 4.0 §3.4.3 in
 ## TCK — Technology Compatibility Kit
 
 Target: the Jakarta Security 4.0 TCK (`jakartaee/security`, tag `4.0.0-RELEASE`, directory
-`tck/`). The runner (`kerckhoffs-tck`, `-Ptck`) is an empty scaffold; K0 builds it and records a
-first baseline in `kerckhoffs-tck/BASELINE.md`. A result is a compatibility measurement:
+`tck/`). The runner (`kerckhoffs-tck`, `-Ptck`) holds the Arquillian container on Foy; the baseline is in
+`kerckhoffs-tck/BASELINE.md` (first run: `app-mem` refused, nothing implemented yet). A result is a compatibility measurement:
 **never claim certification** from it, nor from a partial or local run. Declare `ci.tck.command`
 in the root POM only when the smoke set is green. Do not use the 5.0.0-M* tags: they are
 Jakarta EE 12 work.
