@@ -594,8 +594,8 @@ module com.example.app {
 ```
 
 Without this directive, in a launch that leaves the application module in the JVM's boot layer
-(`-Dvidocq.dev.layer=false` or `vidocq.package.layer=false` for an application without a `@VidocqMain`
-trampoline; a trampoline re-layers the application in `Vidocq.run()`), Flyway/Liquibase cannot discover
+(`-Dvidocq.dev.layer=false` or `vidocq.package.layer=false`, with or without a `@VidocqMain` trampoline:
+they set `vidocq.app.layer.off`, BUG-20261114-10), Flyway/Liquibase cannot discover
 the scripts and the migration appears to apply zero changes, silently leaving your schema empty. Flyway
 also needs it to instantiate Java migrations, in every launch.
 

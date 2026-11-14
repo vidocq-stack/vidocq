@@ -42,6 +42,12 @@ public final class LayerSplit {
     public static final String KEEP_PROPERTY = "vidocq.app.layer.keep";
     /** The pinned modules and their reasons, as the build computed them, for the startup report. */
     public static final String PINNED_PROPERTY = "vidocq.app.layer.pinned";
+    /**
+     * {@code true}: no application layer. The launchers of {@code vidocq.dev.layer=false} and
+     * {@code vidocq.package.layer=false} set it, so that a {@code Vidocq.run} trampoline runs the application from the
+     * boot layer, where they put it, instead of loading it a second time into a layer (BUG-20261114-10).
+     */
+    public static final String OFF_PROPERTY = "vidocq.app.layer.off";
     /** Manifest attribute by which a jar pins modules to the parent layer: comma-separated patterns. */
     public static final String PARENT_LAYER_ATTRIBUTE = "Vidocq-Parent-Layer";
     /**

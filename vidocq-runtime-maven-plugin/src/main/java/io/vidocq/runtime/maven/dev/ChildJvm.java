@@ -109,6 +109,10 @@ public final class ChildJvm {
             if (mainClass != null && !mainClass.isBlank()) {
                 command.add("-Dvidocq.app.main=" + mainClass);
             }
+        } else {
+            // The legacy launch has no application layer: a trampoline main must not load the application a second
+            // time into one (BUG-20261114-10).
+            command.add("-D" + io.vidocq.runtime.core.LayerSplit.OFF_PROPERTY + "=true");
         }
 
         if (extraJvmArgs != null) {

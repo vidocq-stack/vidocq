@@ -139,5 +139,16 @@ class ChildJvmTest {
         assertEquals("com.example.app/com.example.app.Main", command.get(command.size() - 1));
         assertTrue(command.stream().noneMatch(a -> a.startsWith("-Dvidocq.app.path=")),
                 "no layer hand-over in legacy mode: " + command);
+        // A trampoline main must not load the application a second time into a layer (BUG-20261114-10).
+        assertTrue(command.contains("-Dvidocq.app.layer.off=true"), command.toString());
+    }
+
+    @Test
+    void layer_mode_leaves_the_layer_on(@TempDir Path tmp) {
+        ChildJvm jvm = ChildJvm.of(List.of(tmp.resolve("libs")), List.of(tmp.resolve("classes")), "com.example.app",
+                "com.example.app.Main", List.of(), Map.of(), tmp);
+
+        assertTrue(jvm.command().stream().noneMatch(a -> a.startsWith("-Dvidocq.app.layer.off")),
+                jvm.command().toString());
     }
 }

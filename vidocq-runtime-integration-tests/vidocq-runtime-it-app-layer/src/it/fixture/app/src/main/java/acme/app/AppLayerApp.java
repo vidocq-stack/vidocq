@@ -3,8 +3,9 @@ package acme.app;
 import io.vidocq.runtime.core.Vidocq;
 
 /**
- * Deliberately without {@code @VidocqMain}: with it, vidocq:package writes the trampoline script, which keeps
- * automatic modules in the boot layer, so the packaged run would not exercise {@code vidocq.app.layer=all}.
+ * A trampoline main, which the fixture names as {@code vidocq.mainClass}: the packaged launchers hand it to the
+ * runtime as {@code vidocq.app.main}, and the launches without a layer ({@code vidocq.package.layer=false},
+ * {@code vidocq.dev.layer=false}) run it from the module path.
  */
 public final class AppLayerApp {
 
