@@ -99,10 +99,11 @@ class DefaultPbkdf2PasswordHashTest {
     @Test
     void a_null_argument_is_refused() {
         var hash = new DefaultPbkdf2PasswordHash();
+        char[] password = "secret1".toCharArray();
 
         assertThrows(NullPointerException.class, () -> hash.generate(null));
         assertThrows(NullPointerException.class, () -> hash.verify(null, SHA256_2048));
-        assertThrows(NullPointerException.class, () -> hash.verify("secret1".toCharArray(), null));
+        assertThrows(NullPointerException.class, () -> hash.verify(password, null));
     }
 
     // ---- what must verify

@@ -43,10 +43,10 @@ import java.util.TreeSet;
  */
 public final class DefaultPbkdf2PasswordHash implements Pbkdf2PasswordHash {
 
-    static final String ALGORITHM = "Pbkdf2PasswordHash.Algorithm";
-    static final String ITERATIONS = "Pbkdf2PasswordHash.Iterations";
-    static final String SALT_SIZE_BYTES = "Pbkdf2PasswordHash.SaltSizeBytes";
-    static final String KEY_SIZE_BYTES = "Pbkdf2PasswordHash.KeySizeBytes";
+    static final String PARAMETER_ALGORITHM = "Pbkdf2PasswordHash.Algorithm";
+    static final String PARAMETER_ITERATIONS = "Pbkdf2PasswordHash.Iterations";
+    static final String PARAMETER_SALT_SIZE_BYTES = "Pbkdf2PasswordHash.SaltSizeBytes";
+    static final String PARAMETER_KEY_SIZE_BYTES = "Pbkdf2PasswordHash.KeySizeBytes";
 
     private static final Set<String> ALGORITHMS = Set.of("PBKDF2WithHmacSHA224", "PBKDF2WithHmacSHA256",
             "PBKDF2WithHmacSHA384", "PBKDF2WithHmacSHA512");
@@ -63,14 +63,14 @@ public final class DefaultPbkdf2PasswordHash implements Pbkdf2PasswordHash {
     @Override
     public void initialize(Map<String, String> parameters) {
         Objects.requireNonNull(parameters, "parameters");
-        String requested = parameters.getOrDefault(ALGORITHM, algorithm);
+        String requested = parameters.getOrDefault(PARAMETER_ALGORITHM, algorithm);
         if (!ALGORITHMS.contains(requested)) {
-            throw new IllegalArgumentException(ALGORITHM + " must be one of " + new TreeSet<>(ALGORITHMS)
+            throw new IllegalArgumentException(PARAMETER_ALGORITHM + " must be one of " + new TreeSet<>(ALGORITHMS)
                     + ", not " + requested);
         }
-        int newIterations = atLeast(parameters, ITERATIONS, iterations, MIN_ITERATIONS);
-        int newSaltSize = atLeast(parameters, SALT_SIZE_BYTES, saltSizeBytes, MIN_SALT_SIZE_BYTES);
-        int newKeySize = atLeast(parameters, KEY_SIZE_BYTES, keySizeBytes, MIN_KEY_SIZE_BYTES);
+        int newIterations = atLeast(parameters, PARAMETER_ITERATIONS, iterations, MIN_ITERATIONS);
+        int newSaltSize = atLeast(parameters, PARAMETER_SALT_SIZE_BYTES, saltSizeBytes, MIN_SALT_SIZE_BYTES);
+        int newKeySize = atLeast(parameters, PARAMETER_KEY_SIZE_BYTES, keySizeBytes, MIN_KEY_SIZE_BYTES);
         this.algorithm = requested;
         this.iterations = newIterations;
         this.saltSizeBytes = newSaltSize;
@@ -98,7 +98,7 @@ public final class DefaultPbkdf2PasswordHash implements Pbkdf2PasswordHash {
         Stored stored;
         try {
             stored = Stored.parse(hashedPassword);
-        } catch (IllegalArgumentException cannotBeVerified) {
+        } catch (IllegalArgumentException _) {
             return false;
         }
         byte[] actual = derive(stored.algorithm(), password, stored.salt(), stored.iterations(), stored.hash().length);
@@ -110,7 +110,34 @@ public final class DefaultPbkdf2PasswordHash implements Pbkdf2PasswordHash {
     }
 
     /** A stored hash, read back: what it was made with and the derived key. */
-    private record Stored(String algorithm, int iterations, byte[] salt, byte[] hash) {
+    private static final class Stored {
+        private final String algorithm;
+        private final int iterations;
+        private final byte[] salt;
+        private final byte[] hash;
+
+        private Stored(String algorithm, int iterations, byte[] salt, byte[] hash) {
+            this.algorithm = algorithm;
+            this.iterations = iterations;
+            this.salt = salt;
+            this.hash = hash;
+        }
+
+        String algorithm() {
+            return algorithm;
+        }
+
+        int iterations() {
+            return iterations;
+        }
+
+        byte[] salt() {
+            return salt;
+        }
+
+        byte[] hash() {
+            return hash;
+        }
 
         /**
          * @throws IllegalArgumentException when the text is not a hash this implementation can verify:
