@@ -409,7 +409,12 @@ Vaadin application declares nothing more, and `@Push` takes the WebSocket transp
 
 [source,java]
 ----
-@Push(transport = Transport.WEBSOCKET_XHR)
+import com.vaadin.flow.component.page.AppShellConfigurator;
+import com.vaadin.flow.component.page.Push;
+import com.vaadin.flow.shared.communication.PushMode;
+import com.vaadin.flow.shared.ui.Transport;
+
+@Push(value = PushMode.AUTOMATIC, transport = Transport.WEBSOCKET_XHR)
 public class AppShell implements AppShellConfigurator {
 }
 ----
@@ -428,11 +433,12 @@ other. Name the others in `vidocq.websocket.allowed-origins`, in `vidocq.propert
 vidocq.websocket.allowed-origins=https://admin.example.com, http://localhost:5173
 ----
 
-`*` allows any origin. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[the extension] for the key.
+`*` allows any origin and turns the protection off. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[the extension] for the key.
 
 The module-path integration test of the extension (`vidocq-runtime-it-foy-websocket`) checks the Jakarta WebSocket
-server API on the module path. The Vaadin push itself over the WebSocket transports was not run end to end yet: the
-checks below were made with long polling.
+server API on the module path. The Vaadin push itself was run end to end over `WEBSOCKET_XHR`, under `vidocq:run`, with a
+minimal Vaadin 25.3 application: `/VAADIN/push` answered 101, the page stayed connected for over five minutes without
+traffic and then received a server push over the same WebSocket, and a page from another origin got a 403.
 
 Long polling was checked with Vaadin 25.3.2 under `vidocq:run`, and with Vaadin's Java module snapshots in a
 `vidocq:package` distribution and a jlink image (Vidocq/vidocq#256): a virtual thread updates the UI through
@@ -552,7 +558,7 @@ xref:modules/vidocq-runtime-extensions.adoc#vaadin[the extension].
 * Only production mode was checked: on one view with a button and push, where the bootstrap page and the frontend
   bundles are served, a click reaches the server and push works in long polling, and in VidocqTools/forge-dashboard,
   which runs in production with push in long polling.
-* Push over the WebSocket transports comes from the Foy WebSocket extension, whose Jakarta WebSocket support is the programmatic server API (Vidocq/vidocq#65); long polling is the transport checked end to end. See <<push>>.
+* Push over the WebSocket transports comes from the Foy WebSocket extension, whose Jakarta WebSocket support is the programmatic server API (Vidocq/vidocq#65); WebSocket push (`WEBSOCKET_XHR`) and long polling were both run end to end under `vidocq:run`. See <<push>>.
 * `vidocq.app.layer=classes`, the opt-out, does not work for Vaadin: see <<app-layer>>.
 * In a jlink image, Collaboration Engine and LitTemplate are not available while `forceExplicit` is needed.
 *In a jlink image, an `AppShellConfigurator` needs `vidocq-runtime-vaadin-extension`: see

@@ -345,7 +345,7 @@ See `vidocq-runtime-it-foy-websocket` for a complete module.
 | Origins allowed to open a WebSocket besides the server's own: comma-separated (`https://admin.example.com, http://localhost:5173`), or `*` for any. Applies to Jakarta WebSocket endpoints and to every WebSocket route of the server, native `type=websocket` mounts included. `*` turns the protection against cross-site WebSocket hijacking off. A malformed entry stops the start.
 |===
 
-With no value, or a blank one, only the same origin is allowed. The extension checks the syntax of the key at start and a malformed value stops the start with a message naming `vidocq.websocket.allowed-origins`; it then hands the value to Foy as a servlet context init parameter. Its `websocket` section of the startup report gives the accepted origins: `same origin only`, `any`, or the list.
+With no value, or a blank one, only the same origin is allowed. The extension checks the syntax of the key at start and a malformed value stops the start with a message naming `vidocq.websocket.allowed-origins`; it then hands the value to Foy as a servlet context init parameter. Its `websocket` section of the startup report has the summary `Jakarta WebSocket 2.2`; the accepted origins are the `allowed origins` row, shown by the detailed report (`-Dvidocq.startup.report=detailed`): `same origin only`, `any`, or the list.
 
 Annotated `@ServerEndpoint` endpoints, the client API and the official Jakarta WebSocket TCK come later (Vidocq/vidocq#65).
 
