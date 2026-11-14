@@ -5,6 +5,32 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261114-03 — A second `vidocq dev` dies at start on the debug port, and nothing says so
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/dev-debug-port-busy`
+- **Affected module**: vidocq-runtime-maven-plugin (`VidocqDevMojo`, `VidocqRunMojo`, `JdwpAgent`)
+- **Symptom**: a second `vidocq dev` on the machine, its HTTP and dev console ports moved (`VIDOCQ_HTTP_PORT`,
+  `VIDOCQ_DEVCONSOLE_PORT=0`) but not its debug port. The child JVM dies at start with _ERROR: transport error 202:
+  bind failed: Address already in use_ and _JDWP exit error AGENT_ERROR_TRANSPORT_INIT(197)_; dev mode then prints
+  _Tests: the application stopped before its reload completed; running the tests anyway_ and runs the tests. Nothing
+  says the debug port was the cause. `-Dvidocq.dev.debugPort=25080` works around it.
+- **Minimal repro**: a `vidocq dev` running, then a second one on another application with
+  `-Dvidocq.chappe.listener.default.port=0 -Dvidocq.devconsole.port=0`; or, in a unit test, a `ServerSocket` holding
+  the agent's port.
+- **Cause**: both goals handed `-agentlib:jdwp=…,address=127.0.0.1:5005` to the JVM without checking the port, and the
+  port had a default value, so the goal could not tell a port the user chose from the default one.
+- **Fix**: `JdwpAgent.withFreePort` binds the agent's address before the fork, as the agent will. `vidocq.dev.debugPort`
+  and `vidocq.run.debug.port` have no default value any more (5005 when unset). Unset and busy, the agent moves to a
+  free port of the same host, with a warning that names both ports and the property; the announcement, the JVM
+  argument and so the startup report carry it. Set and busy, the goal fails before the application starts, naming the
+  port and the property. `0` (the JVM chooses) is not checked. `JdwpAgentTest`, `VidocqDevMojoTest`, `VidocqRunMojoTest`,
+  `PluginDescriptorDevDebugTest`, `PluginDescriptorRunTest`.
+- **Investigations**:
+  - 2026-11-14: reported by the tutorial-verification session on 0.4.0-SNAPSHOT. A bind probe and the JDWP agent were
+    compared on macOS for a loopback or wildcard holder and a loopback, wildcard or `localhost` agent: they agree in
+    all five cases.
+
 ## BUG-20261114-02 — `CreateThenBuildIT` leaves the JVM of the jlink image running
 
 - **Date**: 2026-11-14

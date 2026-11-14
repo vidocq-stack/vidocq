@@ -136,9 +136,17 @@ public class VidocqRunMojo extends AbstractMojo {
     @Parameter(property = "vidocq.run.debug", defaultValue = "false")
     private boolean debug;
 
-    /** JDWP listen port for the debug agent. */
-    @Parameter(property = "vidocq.run.debug.port", defaultValue = "5005")
-    private int debugPort;
+    /** The debug port property, named by the warning of a busy default port and by the failure of a busy set one. */
+    static final String DEBUG_PORT_KEY = "vidocq.run.debug.port";
+
+    /**
+     * JDWP listen port for the debug agent. Unset by default: the agent then listens on
+     * {@link JdwpAgent#DEFAULT_PORT}, or on a free port with a warning when another process holds it. A port set
+     * here, in the pom or with {@code -D} is never replaced: the goal fails when it is busy. {@code 0} lets the JVM
+     * choose one.
+     */
+    @Parameter(property = DEBUG_PORT_KEY)
+    private Integer debugPort;
 
     /**
      * The interface the debug agent listens on. The loopback interface by default: whoever reaches the agent
@@ -209,12 +217,19 @@ public class VidocqRunMojo extends AbstractMojo {
      */
     private final AtomicReference<DevServicesSession> devServicesSession = new AtomicReference<>();
 
+    /** The port of an unset {@link #debugPort}: {@link JdwpAgent#DEFAULT_PORT}, another one in the unit tests only. */
+    private int defaultDebugPort = JdwpAgent.DEFAULT_PORT;
+
+    /** The agent {@link #checkDebugPort} settled on, {@code null} before it ran or without an agent. */
+    private JdwpAgent checkedAgent;
+
     @Override
     public void execute() throws MojoExecutionException {
         if (skip) {
             getLog().info(PREFIX + "skipped (vidocq.run.skip=true)");
             return;
         }
+        checkDebugPort();
         LayerSplit.Mode mode = ApplicationLaunch.effectiveMode(appLayer, true, "", message -> getLog().warn(PREFIX + message));
         Path projectDir = baseDir.toPath();
         Path build = buildDirPath();
@@ -476,7 +491,20 @@ public class VidocqRunMojo extends AbstractMojo {
     }
 
     private JdwpAgent debugAgent() {
-        return new JdwpAgent(debugHost, debugPort, debugSuspend);
+        return checkedAgent != null ? checkedAgent : JdwpAgent.of(debugHost, debugPort, defaultDebugPort, debugSuspend);
+    }
+
+    /**
+     * Checks the debug port before the application JVM is forked, when {@link #debug} is on: a busy default port
+     * moves the agent to a free one with a warning, a busy port the user set fails the goal
+     * ({@link JdwpAgent#withFreePort}, BUG-20261114-03).
+     */
+    // package-private for the unit test.
+    void checkDebugPort() throws MojoExecutionException {
+        if (debug) {
+            checkedAgent = debugAgent().withFreePort(debugPort != null, DEBUG_PORT_KEY,
+                    warning -> getLog().warn(PREFIX + warning));
+        }
     }
 
     /**
@@ -519,12 +547,13 @@ public class VidocqRunMojo extends AbstractMojo {
     void setExtraSystemProperties(String extraSystemProperties) { this.extraSystemProperties = extraSystemProperties; }
     void setSkip(boolean skip) { this.skip = skip; }
     void setGracePeriodMillis(long gracePeriodMillis) { this.gracePeriodMillis = gracePeriodMillis; }
-    void setDebugOptions(boolean debug, int port, boolean suspend) {
+    void setDebugOptions(boolean debug, Integer port, boolean suspend) {
         this.debug = debug;
         this.debugPort = port;
         this.debugSuspend = suspend;
     }
     void setDebugHost(String debugHost) { this.debugHost = debugHost; }
+    void setDefaultDebugPort(int defaultDebugPort) { this.defaultDebugPort = defaultDebugPort; }
     List<String> debugJvmArgs() { return buildJvmArgs(); }
     Map<String, String> debugSystemProperties() { return buildSystemProperties(); }
     List<String> debugAppArgs() { return splitArgs(appArgs); }

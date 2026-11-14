@@ -40,6 +40,7 @@ New in the `{project-version}` development line — everything listed here lande
 
 == Dev mode
 
+* xref:modules/vidocq-runtime-maven-plugin.adoc#debugger-port-busy[A second `vidocq dev` on the machine starts] [.tag-new]#NEW# — the debug port is checked before the application JVM is forked: left at its default and held by another session, it moves to a free port with a warning that names both; set with `vidocq.dev.debugPort`, busy, it fails the goal at once, naming the port and the property. The JVM died at start with `transport error 202: bind failed`, and nothing said the debug port was the cause (BUG-20261114-03). `vidocq:run -Dvidocq.run.debug=true` does the same with `vidocq.run.debug.port`.
 * xref:continuous-testing.adoc#terminal[The line of a failed test, at last] [.tag-new]#NEW# — `vidocq dev` and `vidocq:test` print where a test failed, `(OrderServiceTest.java:31)`, for the tests of a Vidocq application too: they run in a named module, whose frames the JDK prints as `com.acme@1.0.0/com.acme.OrderServiceTest…`, and the line was never found (BUG-20261106-02).
 * xref:continuous-testing.adoc#limits[The first test run under `vidocq dev` downloads what the tests need] [.tag-new]#NEW# — a continuous-testing run that misses a test-scope jar or Surefire's JUnit provider offline runs again once online, so `vidocq dev` on a new project no longer reports a failed run, with `Cannot access central in offline mode` in its log, before any test ran (BUG-20261106-01).
 

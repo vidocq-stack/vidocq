@@ -96,6 +96,21 @@ class PluginDescriptorDevDebugTest {
         assertEquals("", entry.getAttribute("default-value"), "no default: the application's files must be read");
     }
 
+    /**
+     * {@code debugPort} has no default, so that the goal tells a port the user set, which a busy one fails, from the
+     * default one, which a busy one moves to a free port (BUG-20261114-03).
+     */
+    @Test
+    void theDebugPortIsAnUnsetIntegerReadingItsProperty() throws Exception {
+        assertEquals("java.lang.Integer", text(parameter("debugPort"), "type"));
+        assertEquals(Integer.class, VidocqDevMojo.class.getDeclaredField("debugPort").getType());
+        Element entry = child(child(dev, "configuration"), "debugPort");
+        assertNotNull(entry, "<configuration> has no debugPort entry");
+        assertEquals("${vidocq.dev.debugPort}", entry.getTextContent().strip());
+        assertEquals("java.lang.Integer", entry.getAttribute("implementation"));
+        assertEquals("", entry.getAttribute("default-value"), "no default: a port the user set must be told apart");
+    }
+
     private static Element parameter(String name) {
         for (Element element : children(child(dev, "parameters"))) {
             if (name.equals(text(element, "name"))) {

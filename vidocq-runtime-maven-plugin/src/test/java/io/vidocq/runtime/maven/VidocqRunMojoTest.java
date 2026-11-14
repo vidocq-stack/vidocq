@@ -32,6 +32,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -48,6 +50,7 @@ import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -137,6 +140,62 @@ class VidocqRunMojoTest {
                 "WARN Vidocq run: vidocq.run.debug.host=0.0.0.0 makes the debugger reachable from the network"),
                 warning);
         assertTrue(warning.contains("whoever connects to it can run any code in the application JVM"), warning);
+    }
+
+    /** {@code vidocq:run -Dvidocq.run.debug=true} beside a {@code vidocq:dev} that holds the default port. */
+    @Test
+    void aBusyDefaultDebugPortMovesTheAgentToAFreeOne() throws Exception {
+        try (ServerSocket devSession = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            int busy = devSession.getLocalPort();
+            VidocqRunMojo mojo = new VidocqRunMojo();
+            CapturingLog log = new CapturingLog();
+            mojo.setLog(log);
+            mojo.setExtraJvmArgs("");
+            mojo.setDebugOptions(true, null, false);
+            mojo.setDefaultDebugPort(busy);
+
+            mojo.checkDebugPort();
+            List<String> args = mojo.debugJvmArgs();
+            mojo.logDebugAgent();
+
+            String prefix = "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:";
+            assertEquals(1, args.size(), args.toString());
+            assertTrue(args.get(0).startsWith(prefix), args.toString());
+            int moved = Integer.parseInt(args.get(0).substring(prefix.length()));
+            assertNotEquals(busy, moved);
+            assertEquals(List.of("WARN Vidocq run: The debug port " + busy + " is already in use on 127.0.0.1: the"
+                            + " debug agent listens on 127.0.0.1:" + moved + " instead, attach the debugger there."
+                            + " Choose its port with -Dvidocq.run.debug.port=<port>.",
+                    "INFO Vidocq run: debug agent (JDWP) on port " + moved + ", host 127.0.0.1 — attach any time"),
+                    log.lines);
+        }
+    }
+
+    @Test
+    void aBusyDebugPortTheUserSetFailsTheGoal() throws Exception {
+        try (ServerSocket devSession = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            int busy = devSession.getLocalPort();
+            VidocqRunMojo mojo = new VidocqRunMojo();
+            mojo.setDebugOptions(true, busy, false);
+
+            MojoExecutionException failure = assertThrows(MojoExecutionException.class, mojo::checkDebugPort);
+
+            assertTrue(failure.getMessage().startsWith("The debug port " + busy + " is already in use on 127.0.0.1,"
+                    + " and vidocq.run.debug.port sets it"), failure.getMessage());
+        }
+    }
+
+    /** {@code vidocq:run} has no agent by default: a busy port is then nobody's concern. */
+    @Test
+    void noPortCheckWithoutAnAgent() throws Exception {
+        try (ServerSocket devSession = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            VidocqRunMojo mojo = new VidocqRunMojo();
+            mojo.setExtraJvmArgs("");
+            mojo.setDebugOptions(false, devSession.getLocalPort(), false);
+
+            assertDoesNotThrow(mojo::checkDebugPort);
+            assertEquals(List.of(), mojo.debugJvmArgs());
+        }
     }
 
     /** Keeps the INFO and WARN lines, as {@code "LEVEL message"}. */

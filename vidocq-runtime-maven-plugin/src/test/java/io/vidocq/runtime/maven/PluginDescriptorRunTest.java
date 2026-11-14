@@ -132,7 +132,10 @@ class PluginDescriptorRunTest {
         assertProperty(entries.get("appArgs"), "${vidocq.run.args}", "");
         assertProperty(entries.get("extraSystemProperties"), "${vidocq.run.systemProperties}", "");
         assertProperty(entries.get("debug"), "${vidocq.run.debug}", "false");
-        assertProperty(entries.get("debugPort"), "${vidocq.run.debug.port}", "5005");
+        // No default: unset, the agent takes 5005 or, when it is busy, a free port; set, a busy port fails the goal
+        // (BUG-20261114-03).
+        assertProperty(entries.get("debugPort"), "${vidocq.run.debug.port}", "");
+        assertEquals("java.lang.Integer", entries.get("debugPort").getAttribute("implementation"));
         assertProperty(entries.get("debugHost"), "${vidocq.run.debug.host}", "127.0.0.1");
         assertProperty(entries.get("debugSuspend"), "${vidocq.run.debug.suspend}", "false");
         assertProperty(entries.get("gracePeriodMillis"), "${vidocq.run.gracePeriodMillis}", "5000");

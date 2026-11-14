@@ -1046,7 +1046,7 @@ the same machine attaches to `localhost:5005` as before, and no other machine ca
 | `vidocq.dev.debugPort`
 | `vidocq.run.debug.port`
 | `5005`
-| The port the agent listens on.
+| The port the agent listens on; `0` lets the JVM choose one. When it is busy, see <<debugger-port-busy,below>>.
 
 | `vidocq.dev.debugHost`
 | `vidocq.run.debug.host`
@@ -1083,6 +1083,42 @@ vidocq.dev.debugHost at its default, 127.0.0.1, unless every machine that can re
 Open it only when the debugger really runs elsewhere — a container, a VM, another machine — and only on a network
 you trust: `mvn vidocq:dev -Dvidocq.dev.debugHost='*'` (quote the `*` for the shell). An empty host is the default
 one, never every interface.
+
+[#debugger-port-busy]
+=== When the debug port is busy [.tag-new]#NEW#
+
+Before it forks the JVM, the goal checks that the agent can listen on its host and port: a JVM whose agent cannot
+dies at start with `ERROR: transport error 202: bind failed: Address already in use`, and nothing said the debug
+port was the cause (BUG-20261114-03). A second `vidocq:dev` on the same machine is the usual case: the first one
+holds `5005`.
+
+* **The port was left at its default.** The agent moves to a free port of the same host, and the goal says so:
++
+[source]
+----
+[WARNING] The debug port 5005 is already in use on 127.0.0.1: the debug agent listens on 127.0.0.1:52341 instead,
+attach the debugger there. Choose its port with -Dvidocq.dev.debugPort=<port>.
+----
++
+The `Debug agent (JDWP) on port 52341` line and the startup report of the application show the same port. A debug
+configuration written by <<idea,`vidocq:idea`>>, <<vscode,`vidocq:vscode`>> or <<eclipse,`vidocq:eclipse`>> still
+attaches to `5005`: give the second application a port of its own in its pom's `<properties>`,
+`<vidocq.dev.debugPort>5006</vidocq.dev.debugPort>`, which both the agent and those configurations read.
+* **The port was set** — on the command line, in the pom's `<properties>` or in the goal's configuration. The goal
+  fails before the application starts, since the debugger attaches to that port and another one would be a silent
+  switch:
++
+[source]
+----
+[ERROR] The debug port 5006 is already in use on 127.0.0.1, and vidocq.dev.debugPort sets it: the debug agent does
+not move to another port, since the debugger attaches to this one. Stop what listens on 5006, or set
+vidocq.dev.debugPort to a free port.
+----
+
+`vidocq:run -Dvidocq.run.debug=true` does the same with `vidocq.run.debug.port`. `0` is not checked: the JVM chooses
+the port, and prints it in its own `Listening for transport dt_socket at address: …` line. The port is checked a
+moment before the JVM binds it, so something else may still take it in between: the check gives a clear message,
+not a guarantee.
 
 [#dev-tools]
 == Dev tools and binaries

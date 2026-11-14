@@ -19,14 +19,23 @@
  */
 package io.vidocq.runtime.maven;
 
+import org.apache.maven.plugin.MojoExecutionException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The JDWP agent {@code vidocq:dev} and {@code vidocq:run} fork their JVM with. */
@@ -108,5 +117,109 @@ class JdwpAgentTest {
         assertTrue(warning.startsWith("vidocq.run.debug.host=" + host
                 + " makes the debugger reachable from the network: the JDWP agent listens on that interface,"
                 + " port 18099"), warning);
+    }
+
+    /**
+     * A second {@code vidocq:dev} on the machine: the default port is held by the first one. The JVM died at start
+     * with {@code transport error 202: bind failed}; the agent now moves to a free port and says so (BUG-20261114-03).
+     */
+    @Test
+    void aBusyDefaultPortMovesTheAgentToAFreeOneWithAWarning() throws Exception {
+        List<String> warnings = new ArrayList<>();
+        try (ServerSocket holder = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            int busy = holder.getLocalPort();
+
+            JdwpAgent agent = new JdwpAgent("127.0.0.1", busy, true)
+                    .withFreePort(false, "vidocq.dev.debugPort", warnings::add);
+
+            assertNotEquals(busy, agent.port());
+            assertTrue(agent.port() > 0, agent.toString());
+            assertEquals("127.0.0.1", agent.host());
+            assertTrue(agent.suspend());
+            assertBindable(agent.port());
+            assertEquals(List.of("The debug port " + busy + " is already in use on 127.0.0.1: the debug agent listens"
+                    + " on 127.0.0.1:" + agent.port() + " instead, attach the debugger there. Choose its port with"
+                    + " -Dvidocq.dev.debugPort=<port>."), warnings);
+        }
+    }
+
+    /** A port the user set is the one the IDE attaches to: never replaced, the goal fails at once. */
+    @Test
+    void aBusyPortSetByTheUserFailsNamingThePortAndTheProperty() throws Exception {
+        List<String> warnings = new ArrayList<>();
+        try (ServerSocket holder = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            int busy = holder.getLocalPort();
+            JdwpAgent agent = new JdwpAgent(null, busy, false);
+
+            MojoExecutionException failure = assertThrows(MojoExecutionException.class,
+                    () -> agent.withFreePort(true, "vidocq.run.debug.port", warnings::add));
+
+            assertEquals("The debug port " + busy + " is already in use on 127.0.0.1, and vidocq.run.debug.port sets"
+                    + " it: the debug agent does not move to another port, since the debugger attaches to this one."
+                    + " Stop what listens on " + busy + ", or set vidocq.run.debug.port to a free port.",
+                    failure.getMessage());
+            assertEquals(List.of(), warnings);
+        }
+    }
+
+    @Test
+    void everyInterfaceIsBusyWhenAnotherProcessListensOnIt() throws Exception {
+        List<String> warnings = new ArrayList<>();
+        try (ServerSocket holder = new ServerSocket(0)) {
+            JdwpAgent agent = new JdwpAgent("*", holder.getLocalPort(), false);
+
+            assertThrows(MojoExecutionException.class,
+                    () -> agent.withFreePort(true, "vidocq.dev.debugPort", warnings::add));
+            JdwpAgent moved = agent.withFreePort(false, "vidocq.dev.debugPort", warnings::add);
+
+            assertNotEquals(agent.port(), moved.port());
+            assertEquals("*", moved.host());
+            assertEquals(1, warnings.size(), warnings.toString());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void aFreePortIsKeptSilently(boolean portSet) throws Exception {
+        List<String> warnings = new ArrayList<>();
+        int free;
+        try (ServerSocket probe = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            free = probe.getLocalPort();
+        }
+        JdwpAgent agent = new JdwpAgent("localhost", free, false);
+
+        assertSame(agent, agent.withFreePort(portSet, "vidocq.dev.debugPort", warnings::add));
+        assertEquals(List.of(), warnings);
+    }
+
+    /** {@code 0} lets the JVM choose a free port itself, and print it: nothing to check. */
+    @Test
+    void portZeroIsLeftToTheJvm() throws Exception {
+        List<String> warnings = new ArrayList<>();
+        JdwpAgent agent = new JdwpAgent(null, 0, false);
+
+        assertSame(agent, agent.withFreePort(true, "vidocq.dev.debugPort", warnings::add));
+        assertEquals(List.of(), warnings);
+    }
+
+    /**
+     * A host this machine cannot listen on is not a busy port: the JVM's own error says what is wrong with it.
+     * {@code 192.0.2.1} is TEST-NET-1 (RFC 5737), never the address of a local interface; {@code -1} and
+     * {@code 65536} are no port.
+     */
+    @Test
+    void whatCannotBeCheckedIsLeftToTheJvm() throws Exception {
+        List<String> warnings = new ArrayList<>();
+        for (JdwpAgent agent : List.of(new JdwpAgent("192.0.2.1", 18099, false), new JdwpAgent(null, -1, false),
+                new JdwpAgent(null, 65536, false))) {
+            assertSame(agent, agent.withFreePort(true, "vidocq.dev.debugPort", warnings::add), agent.toString());
+        }
+        assertEquals(List.of(), warnings);
+    }
+
+    private static void assertBindable(int port) throws IOException {
+        try (ServerSocket socket = new ServerSocket(port, 1, InetAddress.getLoopbackAddress())) {
+            assertEquals(port, socket.getLocalPort());
+        }
     }
 }
