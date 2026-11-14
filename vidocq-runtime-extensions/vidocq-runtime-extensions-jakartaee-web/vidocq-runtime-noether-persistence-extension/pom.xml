@@ -43,6 +43,12 @@
             <artifactId>noether-jpa-cdi</artifactId>
             <version>${noether.version}</version>
         </dependency>
+        <!-- The units of the vidocq.persistence.* keys, which this extension hands the application's keys at
+             start. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-noether-persistence-units</artifactId>
+        </dependency>
         <!-- Both SQL dialects Noether ships, as Mansart Data does: each leaves its JDBC driver provided, so an
              application gets the dialect of its database without declaring it, and never a driver it did not ask
              for. -->

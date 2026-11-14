@@ -33,7 +33,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * One {@code persistence.xml} per Maven module, so per Java module, under {@code vidocq:run}: the library declares the
  * unit {@code ledger} next to its entity, the application declares {@code archive} next to its own, and each unit
- * manages the entities of its own module only. Two units of one name fail (Noether BUG-20261113-06).
+ * manages the entities of its own module only. Two units of one name fail (Noether BUG-20261113-06). The
+ * {@code vidocq.persistence.*} keys declare units too, read at build from the application's {@code vidocq.properties}
+ * for the beans the build freezes, and at start from the whole configuration (Vidocq/vidocq#551).
  */
 class UnitsPerModuleIT {
 
@@ -62,6 +64,54 @@ class UnitsPerModuleIT {
             // The EntityManager and EntityManagerFactory synthetic beans are proxied by classes the build generated,
             // not by java.lang.reflect.Proxy (Vauban BUG-20261113-19).
             assertEquals(List.of(), Fixture.lines(log, "RUNTIME CODE GENERATION FALLBACK"), Fixture.read(log));
+        } finally {
+            Fixture.stop(mvn);
+        }
+    }
+
+    /** The keys of {@code vidocq.properties} reach the build: the frozen beans are those of the unit they declare. */
+    @Test
+    void aUnitTheKeysDeclareIsFrozenWithTheOthers(@TempDir Path dir) throws Exception {
+        Path project = Fixture.copy(dir);
+        Fixture.addApplicationKeys(project, "vidocq.persistence.journal.module=acme.ledger");
+        String cache = Fixture.cacheDir("keys");
+        Path install = Fixture.logs().resolve("keys-install.log");
+        Fixture.install(project, install, cache);
+        assertEquals(1, Fixture.lines(install, "Vauban: froze 2 build compatible extension(s)").size(),
+                Fixture.read(install));
+
+        Path log = Fixture.logs().resolve("keys-run.log");
+        Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:run", cache);
+        try {
+            Fixture.awaitLog(mvn, log, "Vidocq - Started in");
+            assertEquals(1, Fixture.lines(log,
+                    "Noether Persistence: persistence units [archive, journal, ledger] started").size(),
+                    Fixture.read(log));
+        } finally {
+            Fixture.stop(mvn);
+        }
+    }
+
+    /**
+     * Decision 3 of Vidocq/vidocq#551: a key the build did not see that would change the beans fails the start, and
+     * asks for a rebuild. A {@code -Dvidocq.*} of {@code vidocq:run} reaches the application, not the build.
+     */
+    @Test
+    void aUnitDeclaredAtStartOnlyFailsTheStart(@TempDir Path dir) throws Exception {
+        Path project = Fixture.copy(dir);
+        String cache = Fixture.cacheDir("start-only");
+        Fixture.install(project, Fixture.logs().resolve("start-only-install.log"), cache);
+
+        Path log = Fixture.logs().resolve("start-only-run.log");
+        Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:run", cache,
+                "-Dvidocq.persistence.extra.classes=acme.app.Note");
+        try {
+            assertTrue(mvn.waitFor(Fixture.TIMEOUT.toMillis(), TimeUnit.MILLISECONDS), Fixture.read(log));
+            assertNotEquals(0, mvn.exitValue(), Fixture.read(log));
+            String run = Fixture.read(log);
+            assertTrue(run.contains("persistence unit extra is declared at start, not when the beans were built"),
+                    run);
+            assertTrue(run.contains("rebuild the application"), run);
         } finally {
             Fixture.stop(mvn);
         }

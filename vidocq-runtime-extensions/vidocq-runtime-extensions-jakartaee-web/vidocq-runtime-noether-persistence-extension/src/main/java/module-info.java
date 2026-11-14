@@ -30,6 +30,7 @@ module io.vidocq.runtime.extensions.jakartaee.web.noether.persistence {
     requires io.vidocq.vauban.core;
     requires io.vidocq.noether.jpa.core;
     requires io.vidocq.noether.jpa.cdi;
+    requires io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.units;
     requires io.vidocq.mansart.transactions.jdbc;
     requires jakarta.cdi;
     requires jakarta.inject;

@@ -19,7 +19,9 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.noether.persistence;
 
+import io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.units.VidocqPersistenceUnits;
 import io.vidocq.runtime.spi.ExtensionContext;
+import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.vauban.api.ClientProxies;
 import jakarta.enterprise.inject.Any;
@@ -27,6 +29,8 @@ import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -39,6 +43,10 @@ import java.util.TreeSet;
  * factory, so that a unit that cannot be created fails the start instead of the first request. The container closes
  * the factories when it stops.
  *
+ * <p>Before the container boots, it hands Noether the {@code vidocq.persistence.*} keys of the application, as its
+ * configuration resolves them: the units they declare, and the data sources and the properties they set on a unit a
+ * {@code persistence.xml} declares (Vidocq/vidocq#551).
+ *
  * <p>The {@code @Inject} beans of a unit, its {@code @ApplicationScoped} factory and its {@code @TransactionScoped}
  * entity manager, are synthetic beans of normal scopes: {@link ClientProxies} has their client proxies generated
  * with this module, in this package, as {@code noether-jpa-cdi} stays free of Vauban (Vauban BUG-20261113-19).
@@ -49,6 +57,7 @@ import java.util.TreeSet;
 public final class NoetherPersistenceExtension implements VidocqExtension {
 
     private static final System.Logger LOG = System.getLogger(NoetherPersistenceExtension.class.getName());
+    private static final String KEYS = "vidocq.persistence.";
 
     @Override
     public String name() {
@@ -58,6 +67,27 @@ public final class NoetherPersistenceExtension implements VidocqExtension {
     @Override
     public int priority() {
         return 350;
+    }
+
+    @Override
+    public void configure(VidocqConfiguration configuration) {
+        Map<String, String> keys = new HashMap<>();
+        for (String name : configuration.propertyNames()) {
+            if (name.startsWith(KEYS)) {
+                configuration.property(name).ifPresent(value -> keys.put(name, value));
+            }
+        }
+        VidocqPersistenceUnits.start(keys, new ApplicationModules());
+    }
+
+    @Override
+    public void onStop() {
+        VidocqPersistenceUnits.stop();
+    }
+
+    @Override
+    public Set<String> configKeys() {
+        return Set.of(KEYS + "*");
     }
 
     @Override

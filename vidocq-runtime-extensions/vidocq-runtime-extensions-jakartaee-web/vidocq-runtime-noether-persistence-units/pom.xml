@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-noether-persistence-units</artifactId>
+    <name>Vidocq :: Core Extensions :: Noether Persistence :: Units</name>
+    <description>The persistence units of the vidocq.persistence.* keys, as a Noether PersistenceUnitSource. The
+        Noether Persistence extension hands it the keys of the running application; vidocq:generate finds it
+        among the application's dependencies, as the extension brings it, and it reads the keys from the
+        application's vidocq.properties, so that the beans the build freezes are those of the same units.</description>
+
+    <dependencies>
+        <!-- The PersistenceUnitSource SPI, and the Jakarta Persistence API it is written with. -->
+        <dependency>
+            <groupId>io.vidocq.noether</groupId>
+            <artifactId>noether-jpa-core</artifactId>
+            <version>${noether.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- No CDI bean: nothing for the Vauban indexer to process. -->
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- On the class path, as vidocq:generate finds the source: through
+                         META-INF/services. The module-path IT of the extension covers the `provides`. -->
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -69,6 +69,12 @@ final class Fixture {
         Files.writeString(xml, after);
     }
 
+    /** Adds keys to the application's {@code vidocq.properties}, which the build reads too. */
+    static void addApplicationKeys(Path project, String keys) throws IOException {
+        Path properties = project.resolve("app/src/main/resources/vidocq.properties");
+        Files.writeString(properties, Files.readString(properties) + "\n" + keys + "\n");
+    }
+
     /**
      * Writes the settings the fixture's builds use ({@code .mvn/maven.config}): the outer local repository as a
      * {@code file:} repository, for everything target/it-repo lacks.

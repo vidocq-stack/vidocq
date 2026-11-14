@@ -1089,7 +1089,7 @@ Mansart Data's JDBC-to-JTA bridge (`io.vidocq.mansart.transactions.jdbc.Connecti
 [#noether-persistence]
 == Jakarta Persistence (Noether) [.tag-new]#NEW#
 
-`vidocq-runtime-noether-persistence-extension` runs the persistence units of the application's `META-INF/persistence.xml` on xref:noether::index.adoc[Noether], its Jakarta Persistence 3.2 provider. `vidocq extension add noether-persistence` adds it with the two extensions it runs on, Mansart Pool and Mansart Transactions; the Vidocq Maven plugin puts its `-codegen` bundle, which carries Noether's annotation processor, on the compiler's processor path.
+`vidocq-runtime-noether-persistence-extension` runs the persistence units of the application's `META-INF/persistence.xml` and of its xref:#noether-persistence-keys[`vidocq.persistence.*` keys] on xref:noether::index.adoc[Noether], its Jakarta Persistence 3.2 provider. `vidocq extension add noether-persistence` adds it with the two extensions it runs on, Mansart Pool and Mansart Transactions; the Vidocq Maven plugin puts its `-codegen` bundle, which carries Noether's annotation processor, on the compiler's processor path.
 
 [source,xml,subs=attributes+]
 ----
@@ -1155,6 +1155,37 @@ EntityManagerFactory ledger;
 
 [#noether-persistence-per-module]
 *One `persistence.xml` per module.* A library module of the application, with its entities, may carry its own `META-INF/persistence.xml`, and the application module its own. Noether reads every one of them, and a unit's root is the module whose file declares it, so a unit without a class list manages the entities of its own module and not those of the others: the units need no `<exclude-unlisted-classes>` to stay apart. The library is built for Noether as any module of entities is, with Noether's processor and the `provides` of its accessor (xref:noether::getting-started.adoc[Noether's Getting started]). A unit name is unique in the application: two units of one name, in one file or in two, fail the start with a `PersistenceException` that names every file declaring it, and the build warns that it leaves the build compatible extensions to the start.
+
+[#noether-persistence-keys]
+*Units declared with keys* [.tag-new]#NEW#. The `vidocq.persistence.<unit>.*` keys declare a unit without a `persistence.xml`, or point a unit a `persistence.xml` declares at another pool, per deployment. A unit name with a dot is quoted: `vidocq.persistence."com.acme.ledger".datasource`.
+
+[cols="2,4,2",options="header"]
+|===
+| Key | Meaning | Default
+| `vidocq.persistence.<unit>.module` | The Java module whose entities the unit manages: its root | The application module
+| `vidocq.persistence.<unit>.packages` | Keeps the unit to these packages of its module, and their sub-packages, comma-separated | Every package
+| `vidocq.persistence.<unit>.classes` | The classes the unit manages, alone, comma-separated, as `<class>` with `<exclude-unlisted-classes>` | None
+| `vidocq.persistence.<unit>.transaction-type` | `JTA` or `RESOURCE_LOCAL` | `JTA`
+| `vidocq.persistence.<unit>.qualifier` | The qualifier annotations of the unit's beans, fully qualified, comma-separated | None: `@Default`
+| `vidocq.persistence.<unit>.scope` | The scope annotation of the unit's `EntityManager` bean, fully qualified | Transaction scoped
+| `vidocq.persistence.<unit>.datasource` | The Mansart pool of the unit: the `jta-data-source` of a JTA unit, the `non-jta-data-source` of a RESOURCE_LOCAL one | The default pool
+| `vidocq.persistence.<unit>.non-jta-datasource` | The pool a JTA unit allocates TABLE identifiers in | The unit's pool
+| `vidocq.persistence.<unit>.properties.<name>` | A property of the unit, such as `jakarta.persistence.schema-generation.database.action` | None
+|===
+
+[source,properties]
+----
+vidocq.persistence.journal.classes=com.acme.journal.Memo
+vidocq.persistence.journal.properties.jakarta.persistence.schema-generation.database.action=create
+----
+
+* *Declaring or overriding.* `module`, `packages`, `classes`, `transaction-type`, `qualifier` and `scope` declare the unit, so a unit of that name in a `persistence.xml` is a duplicate and fails the start. `datasource`, `non-jta-datasource` and `properties.<name>` alone override the unit a `persistence.xml` declares, its properties winning over the file's, and declare it otherwise, on the entities of the application module, as a JTA unit.
+* *The default unit.* Without any `vidocq.persistence.*` key, the application has a unit named `default`, JTA on the default pool, of the entities of the application module: it exists only when no `persistence.xml` declares a unit and the module has an entity, so a `@PersistenceContext` without a unit name reaches it. An application that is not a named Java module has none.
+* *Build and start.* `vidocq:generate` freezes the beans of each unit at build (xref:dev@vauban::concepts.adoc#writing-a-frozen-extension[a frozen extension]), so the build reads the keys of the application's `vidocq.properties` and `application.properties`, and the start reads them from the whole configuration, `-D` and the environment included. The data sources and the properties of a unit may differ at start. A unit declared or gone, or a transaction type, a qualifier or a scope that differs from the build's, would need other beans: the start fails with a `DeploymentException` that names each difference and asks for a rebuild.
+* *Environment variables.* The units are found by the names of their keys, which a `vidocq.properties` file or a `-D` gives: an environment variable, such as `VIDOCQ_PERSISTENCE_LEDGER_DATASOURCE`, changes the value of a key one of them names, and does not declare one alone.
+* *Errors.* A key that sets nothing a unit has, a module the application does not have, or a transaction type other than `JTA` and `RESOURCE_LOCAL` fails the start, naming the key.
+
+See xref:dev@noether::usage.adoc#unit-sources[Units declared by a runtime] in Noether's documentation.
 
 [#noether-persistence-inject]
 *Injection with `@Inject`.* Every unit is also a set of CDI beans (Jakarta EE 11 Platform §13.12):

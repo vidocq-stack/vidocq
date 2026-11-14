@@ -157,6 +157,10 @@ none +
 | —
 | JDBC coordinates of the default Mansart datasource. A named datasource uses `vidocq.pool.<name>.url`.
 
+| `vidocq.persistence.<unit>.*`
+| —
+| Declares a Jakarta Persistence unit without a `persistence.xml` (`module`, `packages`, `classes`, `transaction-type`, `qualifier`, `scope`), or sets the pool and the properties of one (`datasource`, `non-jta-datasource`, `properties.<name>`). Without any such key, the application module's entities make a unit named `default` when no `persistence.xml` declares one. See xref:modules/vidocq-runtime-extensions.adoc#noether-persistence-keys[Units declared with keys].
+
 | `vidocq.naming.<name without java:>`
 | —
 | Declares a JNDI `java:` name: `vidocq.naming.comp/env/jdbc/orders = javax.sql.DataSource @Named("orders")` binds a bean, a value starting with `java:` links to another name. A key outside `comp/`, `module/`, `app/` and `global/` fails the start. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
@@ -393,7 +397,7 @@ Source: `vidocq-runtime-spi/src/main/java/io/vidocq/runtime/spi/`.
 | Annotation for the optional trampoline `main` — a right-click Run in the IDE, or a `VidocqApp` after boot; boots the runtime in the Vauban layer. An application needs none: the runtime's own main boots `vidocq.mainModule`.
 
 | `ApplicationLayer`
-| The module layer Vidocq boots the application in, when it has one of its own — `current()` — and the files of a directory of its modules — `list(layer, directory)`: what a library that scans the application reads, since the layer's class loader lists no directory. See xref:modules/vidocq-runtime-spi.adoc#application-layer[Listing the application's files].
+| The module layer Vidocq boots the application in, when it has one of its own — `current()` — the application module the startup banner names — `applicationModule()` — and the files of a directory of its modules — `list(layer, directory)`: what a library that scans the application reads, since the layer's class loader lists no directory. See xref:modules/vidocq-runtime-spi.adoc#application-layer[Listing the application's files].
 
 | `report.StartupReportContributor`
 | Adds a section to the startup report. Implemented by an extension, or declared as a service with `provides … with …` in `module-info.java` and `META-INF/services`. See xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report].

@@ -42,8 +42,9 @@ import javax.sql.DataSource;
 
 /**
  * How {@code noether-jpa-cdi} creates the factory of a persistence unit on Vidocq: the unit, as its
- * {@code META-INF/persistence.xml} declares it, with the data sources {@link UnitDataSources} picks among the
- * application's Mansart pools, and, for a JTA unit, the transaction bridge {@code noether-jpa-cdi} hands over.
+ * {@code META-INF/persistence.xml} or the {@code vidocq.persistence.*} keys declare it, with the data sources
+ * {@link UnitDataSources} picks among the application's Mansart pools, and, for a JTA unit, the transaction bridge
+ * {@code noether-jpa-cdi} hands over.
  *
  * <p>A JTA unit takes its pool through Mansart's {@link JtaDataSource}: within a transaction, the unit works on the
  * connection Mansart keeps for that transaction and that pool, the one a Mansart Data repository on the same pool
@@ -71,8 +72,8 @@ public class VidocqPersistenceUnitBootstrap implements PersistenceUnitBootstrap 
         String name = unitName == null || unitName.isBlank() ? PersistenceDescriptors.defaultUnitName(loader)
                 : unitName;
         UnitTransactions declared = PersistenceDescriptors.transactions(name, loader)
-                .orElseThrow(() -> new PersistenceException("No META-INF/persistence.xml declares the persistence"
-                        + " unit " + name));
+                .orElseThrow(() -> new PersistenceException("No META-INF/persistence.xml and no vidocq.persistence."
+                        + name + ".* key declares the persistence unit " + name));
         Map<String, Object> properties = new HashMap<>(UnitDataSources.properties(name, declared, new Pools(),
                 pool -> new JtaDataSource(pool, transactionBean(transactionManagers, TransactionManager.class, name),
                         transactionBean(registries, TransactionSynchronizationRegistry.class, name))));
