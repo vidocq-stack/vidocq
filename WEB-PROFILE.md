@@ -15,7 +15,7 @@ once the gaps below are closed).
 Web Profile 11 is a superset of Core Profile 11 (all seven Core Profile specs,
 already tracked in `CERTIFICATION.md`) plus:
 
-| Specification | Version | Vidocq brick | Status (2026-10-19) | Target |
+| Specification | Version | Vidocq brick | Status (2026-11-14) | Target |
 |---|---|---|---|---|
 | Jakarta Servlet | 6.1 | `foy` | ✅ official TCK 1707/1714, 7 skipped (HTTP/2 push), 0 errors (`foy/TCK.md`); 1704/1714 on the assembled runtime (`vidocq-runtime-integration-tests/TCK.md`); extension `vidocq-runtime-foy-servlet-extension` | done |
 | Jakarta Server Pages | 4.0 | `ibarra` | ✅ official TCK 682/682, pages precompiled at build time; extension `vidocq-runtime-ibarra-pages-extension` | done |
@@ -169,7 +169,7 @@ solves the *operations* half of the "application server" problem; the *semantics
 
 ## 6. Status
 
-Updated on 2026-10-22.
+Updated on 2026-11-14.
 
 - **Delivered:** Servlet 6.1 (Foy), Server Pages 4.0 (Ibarra, precompiled at build time),
   Expression Language 6.0 (Peano), Data 1.0 (Mansart), each with its runtime extension and

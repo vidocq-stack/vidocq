@@ -76,7 +76,7 @@
 
 | `vidocq-runtime-vaadin-extension`
 | `jakartaee-web`
-| What a Vaadin Flow application needs from Vidocq: a Vaadin lookup that loads services from a module of its own, so an `AppShellConfigurator` works in a jlink image. See <<vaadin>>.
+| What a Vaadin Flow application needs from Vidocq: Jakarta WebSocket for push, under every goal, and a Vaadin lookup that loads services from a module of its own, so an `AppShellConfigurator` works in a jlink image. See <<vaadin>>.
 
 | `vidocq-runtime-mansart-pool-extension`
 | `jakartaee-web`
@@ -310,9 +310,9 @@ The `servlet` section gives the number of servlets and filters and the prefixes 
 Under `vidocq:dev`, `vidocq-runtime-foy-servlet-extension-dev` makes the section live in the dev console: it plots the active sessions of each servlet deployment. Only `vidocq:dev` adds the module; no binary contains it.
 
 [[foy-websocket]]
-== Jakarta WebSocket (Foy)
+== Jakarta WebSocket (Foy) [.tag-new]#NEW#
 
-`vidocq-runtime-foy-websocket-extension` (Java module `io.vidocq.runtime.extensions.jakartaee.web.websocket`) brings Foy's `foy-websocket` module into the application: Jakarta WebSocket 2.2, programmatic server API. Foy puts the `ServerContainer` in the `jakarta.websocket.server.ServerContainer` servlet context attribute; an application adds its endpoints to it, from a `ServletContextListener` (`@WebListener`) for instance, with `ServerContainer.addEndpoint(ServerEndpointConfig)`. `vidocq-runtime-vaadin-extension` depends on this extension, so a Vaadin application needs no dependency of its own (xref:vaadin.adoc#push[Push]). Declare it for any other application:
+`vidocq-runtime-foy-websocket-extension` (Java module `io.vidocq.runtime.extensions.jakartaee.web.websocket`) brings Foy's `foy-websocket` module into the application: Jakarta WebSocket 2.2, programmatic server API. Foy puts the `ServerContainer` in the `jakarta.websocket.server.ServerContainer` servlet context attribute; an application adds its endpoints to it, from a `ServletContextListener` (`@WebListener`) for instance, with `ServerContainer.addEndpoint(ServerEndpointConfig)`. `vidocq-runtime-vaadin-extension` depends on this extension, so a Vaadin application needs no dependency of its own (xref:vaadin.adoc#push[Push]). `vidocq extension add foy-websocket` adds it to any other application, or declare it:
 
 [source,xml]
 ----
@@ -326,7 +326,7 @@ It runs on the Servlet extension, so the application is mounted as described in 
 
 [WARNING]
 ====
-On the module path, Foy's component factory creates a programmatic `Endpoint` subclass by reflection. The application module must open the endpoint's package to Foy, or the handshake fails:
+On the module path, Foy creates a programmatic `Endpoint` subclass through its Class-File tier, a hidden class defined in the endpoint's package. The application module must open that package to `io.vidocq.foy.core`, or the handshake fails (reflection is only Foy's last resort):
 
 [source,java]
 ----
@@ -342,7 +342,7 @@ See `vidocq-runtime-it-foy-websocket` for a complete module.
 
 | `vidocq.websocket.allowed-origins`
 | _none_
-| Origins allowed to open a WebSocket besides the server's own: comma-separated (`https://admin.example.com, http://localhost:5173`), or `*` for any. Applies to Jakarta WebSocket endpoints and to native Chappe WebSocket mounts. A malformed entry stops the start.
+| Origins allowed to open a WebSocket besides the server's own: comma-separated (`https://admin.example.com, http://localhost:5173`), or `*` for any. Applies to Jakarta WebSocket endpoints and to every WebSocket route of the server, native `type=websocket` mounts included. `*` turns the protection against cross-site WebSocket hijacking off. A malformed entry stops the start.
 |===
 
 With no value, or a blank one, only the same origin is allowed. The extension checks the syntax of the key at start and a malformed value stops the start with a message naming `vidocq.websocket.allowed-origins`; it then hands the value to Foy as a servlet context init parameter. Its `websocket` section of the startup report gives the accepted origins: `same origin only`, `any`, or the list.
@@ -494,7 +494,7 @@ Not covered yet: literal values (`env-entry`), `@Resource` injection, `resource-
 [[vaadin]]
 == Vaadin
 
-A Vaadin Flow application runs on the Servlet extension (xref:vaadin.adoc[the Vaadin guide]). `vidocq-runtime-vaadin-extension` is the part Vaadin needs from Vidocq itself: today, a Vaadin lookup that lets an `AppShellConfigurator` work in a jlink image (BUG-20261023-06).
+A Vaadin Flow application runs on the Servlet extension (xref:vaadin.adoc[the Vaadin guide]). `vidocq-runtime-vaadin-extension` is the part Vaadin needs from Vidocq itself: Jakarta WebSocket for push, under every goal (it depends on <<foy-websocket>>), and a Vaadin lookup that lets an `AppShellConfigurator` work in a jlink image (BUG-20261023-06).
 
 [source,xml]
 ----
@@ -506,9 +506,9 @@ A Vaadin Flow application runs on the Servlet extension (xref:vaadin.adoc[the Va
 
 The application's module requires `io.vidocq.runtime.extensions.jakartaee.web.vaadin`, which resolves the extension in its layer; `vidocq extension add vaadin` adds the dependency and that directive. No codegen bundle.
 
-*What it does.* Vaadin creates the app shell, among others, with `Lookup.lookup(type)`, and its own lookup calls `ServiceLoader.load(type)` from `flow.server` for a type it registered no service for, the application's `AppShellConfigurator` included. `ServiceLoader` accepts only the types the calling module declares with `uses`, and the descriptor `vauban:modularize` writes for `flow.server` in a jlink image cannot name an application class without a dependency cycle. The extension's `ModuleLookupInitializer` replaces Vaadin's lookup: the services Vaadin registered come first, and any other type is loaded by `ServiceLoader` from the extension's module, which first declares the use with `Module.addUses` (a module may add a use to itself). On an automatic `flow.server`, under `vidocq:dev`, `vidocq:run` and `vidocq:package`, it changes nothing.
+*What it does.* Vaadin creates the app shell, among others, with `Lookup.lookup(type)`, and its own lookup calls `ServiceLoader.load(type)` from `flow.server` for a type it registered no service for, the application's `AppShellConfigurator` included. `ServiceLoader` accepts only the types the calling module declares with `uses`, and the descriptor `vauban:modularize` writes for `flow.server` in a jlink image cannot name an application class without a dependency cycle. The extension's `ModuleLookupInitializer` replaces Vaadin's lookup: the services Vaadin registered come first, and any other type is loaded by `ServiceLoader` from the extension's module, which first declares the use with `Module.addUses` (a module may add a use to itself). On an automatic `flow.server`, under `vidocq:dev`, `vidocq:run` and `vidocq:package`, the lookup changes nothing; the WebSocket push does not depend on it.
 
-*How Vaadin finds it.* Vaadin uses the one `AbstractLookupInitializer` its `@HandlesTypes` finds besides its own. The extension is compiled with Foy's processor, so its jar ships `META-INF/foy/class-index.list`, and Foy hands the class to Vaadin as it does the application's classes. An application that ships a `LookupInitializer` of its own cannot add the extension: Vaadin refuses two.
+*How Vaadin finds it.* Vaadin uses the one `AbstractLookupInitializer` its `@HandlesTypes` finds besides its own. The extension is compiled with Foy's processor, so its jar ships `META-INF/foy/class-index.list`, and Foy hands the class to Vaadin as it does the application's classes. An application that ships a `LookupInitializer` of its own cannot add the extension: Vaadin refuses two. It declares `vidocq-runtime-foy-websocket-extension` directly instead, to keep WebSocket push.
 
 *Its layer.* Vaadin must be in the application layer, which is the default (`vidocq.app.layer=all` since 0.4.0, nothing to set; see xref:vaadin.adoc#app-layer[the guide]). A module named `io.vidocq.…` stays in the runtime's layer, with what it requires, so the extension's jar carries the `Vidocq-Application-Layer: true` manifest attribute: it goes to the application layer with Vaadin instead of keeping `flow.server` out of it (xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer]).
 
@@ -567,7 +567,7 @@ rest          REST (Cassini) | 1 ms
 A listener an extension declares for itself is left to that extension's section: the dev console's is in the `devconsole` section. An extension reads the URL a listener really listens on with `ChappeMountPoint.instance().boundUrl(name)`, from its `contribute` onwards.
 
 [#chappe-websocket-origins]
-A native Chappe WebSocket mount (`vidocq.http.mount.<name>.type=websocket`) takes the same origin rule as the Jakarta WebSocket endpoints of Foy: `vidocq.websocket.allowed-origins` lists the origins allowed besides the server's own, `*` allows any, and a malformed entry stops the start. See <<foy-websocket>>.
+A native Chappe WebSocket mount (`vidocq.http.mount.<name>.type=websocket`), and any other WebSocket route of the mount point (`ChappeMountPoint.webSocket(...)` or a router an extension adds), takes the same origin rule as the Jakarta WebSocket endpoints of Foy: `vidocq.websocket.allowed-origins` lists the origins allowed besides the server's own, `*` allows any, and a malformed entry stops the start. See <<foy-websocket>>.
 
 [#extension-listeners]
 === A listener of an extension's own

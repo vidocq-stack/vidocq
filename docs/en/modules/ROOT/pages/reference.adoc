@@ -46,6 +46,9 @@ Operational reference for Vidocq Runtime — Maven coordinates, MicroProfile Con
 | `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-bodoni-jstl-extension:{project-version}`
 | Jakarta Standard Tag Library 3.0 through Bodoni: the `c:`, `fmt:`, `fn:`, `x:` and `sql:` tags in the pages Ibarra compiles, with Ibarra, the Servlet extension and Peano (and `bodoni-peano`, for `peano.reflection=deny`), and the `jstl` startup report. See xref:modules/vidocq-runtime-extensions.adoc#bodoni-jstl[Jakarta Standard Tag Library (Bodoni)].
 
+| `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-foy-websocket-extension:{project-version}`
+| Jakarta WebSocket 2.2 through Foy, programmatic server API, and the allowed origins of `vidocq.websocket.allowed-origins`. `vidocq extension add foy-websocket` adds it; `vidocq-runtime-vaadin-extension` brings it to a Vaadin application. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[Jakarta WebSocket (Foy)].
+
 | `io.vidocq.runtime.extensions.jakartaee.web:vidocq-runtime-naming-extension:{project-version}`
 | JNDI `java:` names answered by the running container through Vauban Naming, each declared by a `vidocq.naming.<name without java:>` key: a bean (`javax.sql.DataSource @Named("orders")`) or a link to another name. Sets `java.naming.factory.initial` only when the application chose no factory. See xref:modules/vidocq-runtime-extensions.adoc#naming[JNDI java: names].
 
@@ -142,10 +145,6 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 `UTF-8`
 | The Servlet extension: context path (the `web.xml` `<default-context-path>` when unset), listener, session timeout in seconds, and the default response encoding when no descriptor declares a `<response-character-encoding>` (`ISO-8859-1` restores the Servlet default). See xref:modules/vidocq-runtime-extensions.adoc#servlet[Servlet (Foy)].
 
-| `vidocq.websocket.allowed-origins`
-| _none_
-| Origins allowed to open a WebSocket besides the server's own: comma-separated (`https://admin.example.com, http://localhost:5173`), or `*` for any. Applies to Jakarta WebSocket endpoints and to native Chappe WebSocket mounts. A malformed entry stops the start. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[Jakarta WebSocket (Foy)].
-
 | `vidocq.servlet.users.<name>.password`+
 `vidocq.servlet.users.<name>.roles` +
 `vidocq.servlet.confidential-port` +
@@ -155,6 +154,10 @@ none +
 none +
 `true`
 | Servlet security: development users of the in-memory identity store (an `IdentityStore` bean replaces them), the HTTPS port of `CONFIDENTIAL` constraints, and session id rotation on login. See xref:modules/vidocq-runtime-extensions.adoc#servlet[Servlet (Foy)].
+
+| `vidocq.websocket.allowed-origins`
+| _none_
+| Origins allowed to open a WebSocket besides the server's own: comma-separated (`https://admin.example.com, http://localhost:5173`), or `*` for any, which turns the protection against cross-site WebSocket hijacking off. Applies to Jakarta WebSocket endpoints and to native Chappe WebSocket mounts. A malformed entry stops the start. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[Jakarta WebSocket (Foy)].
 
 | `vidocq.pool.url` +
 `vidocq.pool.username` / `vidocq.pool.password`

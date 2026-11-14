@@ -29,8 +29,9 @@ module io.vidocq.runtime.it.foywebsocket {
     requires io.vidocq.foy.api;
     requires io.vidocq.vauban.api;
 
-    // Foy instantiates the programmatic endpoint (EchoEndpoint extends Endpoint) by reflection, the documented
-    // fallback for a class no processor generates a factory for: the package is open to Foy's core, and to it alone.
+    // Foy creates the programmatic endpoint (EchoEndpoint extends Endpoint), a class no processor generates a
+    // factory for, through its Class-File tier: a hidden class defined in this package. The package is open to Foy's
+    // core, and to it alone; reflection is only Foy's last resort.
     opens io.vidocq.runtime.it.foywebsocket to io.vidocq.foy.core;
 
     // No exports. The test boots the runtime without the application layer that

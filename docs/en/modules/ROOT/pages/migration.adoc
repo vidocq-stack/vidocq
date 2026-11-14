@@ -341,6 +341,27 @@ parent].
 * **Without a git repository** (a source archive, a build server without the history), the build no longer fails
   on the build identity: `vidocq:build-info` writes `unversionned` as the commit, and the banner shows it.
 
+[#websocket-origins]
+== Native WebSocket mounts refuse another origin
+
+A `vidocq.http.mount.<name>.type=websocket` mount (available since 0.3.0) used to open for a page served from any
+origin. From 0.4.0 the handshake of a page whose `Origin` is neither the server's own nor listed gets a **403**, and the
+server logs a WARNING naming the origin (protection against cross-site WebSocket hijacking). The same rule covers every
+WebSocket route of the server and the Jakarta WebSocket endpoints of Foy. A request without an `Origin` header, which a
+browser never sends, is accepted.
+
+An application with a front end on another origin that talks to a native mount (a Vite dev server, a single-page
+application on its own host) lists the origins in `vidocq.websocket.allowed-origins`, in `vidocq.properties`:
+
+[source,properties]
+----
+vidocq.websocket.allowed-origins=https://app.example.com, http://localhost:5173
+----
+
+`*` allows any origin and turns the protection off. A malformed entry stops the start, with a message naming the key.
+Behind a reverse proxy the proxy must forward the original `Host`. See
+xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[Jakarta WebSocket (Foy)].
+
 [#application-parent]
 == `vidocq-runtime-parent` is an application parent, with a BOM
 

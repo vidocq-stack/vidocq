@@ -59,9 +59,10 @@ Four parts of this pom are easy to leave out, and each one fails in its own way 
 * The `jvmArgs` properties, which start Vaadin in production mode under every goal. Without them, every request
   answers 500.
 * An SLF4J provider. Vaadin logs through SLF4J, and without a provider it logs nothing at all.
-*`vidocq-runtime-vaadin-extension`, as soon as the application has an `AppShellConfigurator` (a
-  theme, stylesheets, PWA settings). Without it, the first request of a `vidocq:jlink` image never answers. It changes
-  nothing under the other goals. See <<jlink-app-shell>>.
+*`vidocq-runtime-vaadin-extension`. It brings Jakarta WebSocket, so `@Push` can take the WebSocket transports, under
+  every goal (see <<push>>). As soon as the application has an `AppShellConfigurator` (a theme, stylesheets, PWA
+  settings), it also lets the first request of a `vidocq:jlink` image answer; without it, that request never answers.
+  See <<jlink-app-shell>>.
 
 [#snapshot-repositories]
 === Building against a SNAPSHOT
@@ -414,8 +415,9 @@ public class AppShell implements AppShellConfigurator {
 ----
 
 `WEBSOCKET_XHR` and `WEBSOCKET` both open the WebSocket on `/VAADIN/push`; `LONG_POLLING` stays available and needs no
-WebSocket. `@Push` goes on the app shell, so a jlink image also needs `vidocq-runtime-vaadin-extension`: see
-<<jlink-app-shell>>.
+WebSocket. The extension brings WebSocket under every goal, not only in a jlink image, and an `@Push` on the app shell
+also needs it there: see <<jlink-app-shell>>. An application that ships its own `LookupInitializer` cannot add
+`vidocq-runtime-vaadin-extension`; it declares `vidocq-runtime-foy-websocket-extension` directly.
 
 A page served from another origin than the server (a Vite dev server on `http://localhost:5173` in front of the
 application, say) is refused by default: Foy accepts a WebSocket handshake whose `Origin` is the server's own, and no
@@ -490,8 +492,14 @@ the descriptor of a jlink image cannot let use an application class.
 
 | Push never reaches the page, and the browser opens a WebSocket to `/VAADIN/push` every five seconds, which closes
 with code 1006.
-| The page is served from another origin than the server, and the WebSocket handshake is refused.
-| Add the origin of the page to `vidocq.websocket.allowed-origins`, or use `@Push(transport = Transport.LONG_POLLING)`. See <<push>>.
+| One of two causes. The application has no Jakarta WebSocket (neither `vidocq-runtime-vaadin-extension` nor
+`vidocq-runtime-foy-websocket-extension`, for instance an application that replaces the extension's setup): Atmosphere
+answers 501 with `X-Atmosphere-error: Websocket protocol not supported`. Or the handshake is refused with 403 and a
+WARNING naming the origin: the page is served from another origin than the server, or a reverse proxy rewrites `Host`,
+so the `Origin` of the page no longer matches.
+| For the 501, add `vidocq-runtime-vaadin-extension`, or `vidocq-runtime-foy-websocket-extension` when the application
+ships its own `LookupInitializer`. For the 403, add the origin of the page to `vidocq.websocket.allowed-origins`, make
+the proxy forward the original `Host`, or use `@Push(transport = Transport.LONG_POLLING)`. See <<push>>.
 
 | Every five seconds, a request to `/VAADIN/push` answers 503.
 | A filter that runs on `/VAADIN/push` does not support asynchronous requests, so long polling cannot suspend them.
@@ -532,7 +540,7 @@ module com.example.app {
 }
 ----
 
-The extension changes nothing under `vidocq:dev`, `vidocq:run` or `vidocq:package`. It was checked with one
+The app shell lookup changes nothing under `vidocq:dev`, `vidocq:run` or `vidocq:package` (the extension's WebSocket push applies under every goal). It was checked with one
 `AppShellConfigurator`, in a jlink image and in a `vidocq:package` distribution: its stylesheet links reach the page.
 Whether it also lifts the Collaboration Engine and LitTemplate limit below was not checked. Vaadin accepts one
 `LookupInitializer` besides its own: an application that ships its own cannot add the extension. See
