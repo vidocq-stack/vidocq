@@ -5,6 +5,25 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261114-04 — `vidocq dev` speaks of a reload when the application dies at its first start, and never says it is down
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/dev-dead-app-message`
+- **Affected module**: vidocq-runtime-maven-plugin (`ReloadAck.gate`)
+- **Symptom**: the application dies before it is ready (BUG-20261114-03: a busy debug port; or a failing start). Dev mode
+  prints _Tests: the application stopped before its reload completed; running the tests anyway_, even at the first
+  start, where nothing was reloaded. Nothing says that the application stays down until the next source change, which
+  starts it again.
+- **Minimal repro**: `vidocq dev` on an application whose start throws; or, in a unit test,
+  `ReloadAck.gate(file, 42, Duration.ofSeconds(5), () -> false, warnings::add).await(() -> false)`.
+- **Cause**: the same gate guards the first start and each reload, and its wording was written for the reload only.
+- **Fix**: the warning now reads _Tests: the application stopped before it was ready (its output above says why); it
+  starts again on the next change. Running the tests anyway_. The child JVM inherits the console, so its own output
+  above gives the reason. `ReloadAckTest`.
+- **Investigations**:
+  - 2026-11-14: found while fixing BUG-20261114-03. `recompileAndReload` replaces a dead child on the next change
+    (`child.stop`, then `newChild`), so the application does start again then.
+
 ## BUG-20261114-03 — A second `vidocq dev` dies at start on the debug port, and nothing says so
 
 - **Date**: 2026-11-14

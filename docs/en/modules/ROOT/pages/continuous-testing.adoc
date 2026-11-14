@@ -86,8 +86,10 @@ Both goals watch the main directories, `src/main/java` and `src/main/resources`,
 |===
 
 In `vidocq:dev`, a run never overlaps a reload: after a hot reload, the tests wait until the new application layer
-has booted — two minutes at most, then they run anyway, with a warning. A recompile that fails runs no test: its
-errors are already on screen.
+has booted — two minutes at most, then they run anyway, with a warning. An application that stops before it is ready,
+at its first start or at a reload, lets them run at once, with a warning: its own output, above, says why it stopped,
+and it stays down until the next change starts it again. A recompile that fails runs no test: its errors are already
+on screen.
 
 One run at a time:
 

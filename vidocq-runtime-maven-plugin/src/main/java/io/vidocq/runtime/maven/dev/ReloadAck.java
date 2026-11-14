@@ -73,8 +73,10 @@ final class ReloadAck {
                     return true;
                 }
                 if (!childAlive.getAsBoolean()) {
-                    warn.accept("Tests: the application stopped before its reload completed; running the tests"
-                            + " anyway");
+                    // Guards the first start as well as each reload: the application's own output, above,
+                    // says why it stopped, and the next source change starts it again.
+                    warn.accept("Tests: the application stopped before it was ready (its output above says"
+                            + " why); it starts again on the next change. Running the tests anyway");
                     return true;
                 }
                 Thread.sleep(POLL_MILLIS);

@@ -79,6 +79,19 @@ class ReloadAckTest {
     void aChildThatDiedRunsTheTestsAnywayWithAWarning(@TempDir Path dir) throws Exception {
         assertTrue(ReloadAck.gate(dir.resolve(".vidocq-dev-reload"), 42, Duration.ofSeconds(5), () -> false,
                 warnings::add).await(() -> false));
+        assertEquals(1, warnings.size());
         assertTrue(warnings.getFirst().contains("stopped"), warnings.toString());
+    }
+
+    @Test
+    void aChildThatDiedIsReportedDownUntilTheNextChangeWithoutSpeakingOfAReload(@TempDir Path dir)
+            throws Exception {
+        // The same gate guards the first start: "reload" would be wrong there, and the developer must
+        // learn that the application is down until the next change starts it again.
+        ReloadAck.gate(dir.resolve(".vidocq-dev-reload"), 42, Duration.ofSeconds(5), () -> false, warnings::add)
+                .await(() -> false);
+        String warning = warnings.getFirst();
+        assertFalse(warning.contains("reload"), warning);
+        assertTrue(warning.contains("next change"), warning);
     }
 }
