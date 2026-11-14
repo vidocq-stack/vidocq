@@ -53,14 +53,16 @@ public class InterceptorPriorityExtension implements BuildCompatibleExtension {
 
     /**
      * Replaces the {@code @Priority} of the Fault Tolerance interceptor by the configured one. The default priority
-     * is the one the class declares: nothing is asked then.
+     * is the one the class declares: nothing is asked then. The value is read from the configuration now, not from
+     * what {@link ConfigResolver} keeps for the invocations, which may belong to a previous deployment in the same
+     * JVM (BUG-020).
      */
     @Enhancement(types = FaultToleranceInterceptor.class)
     public void configureInterceptorPriority(ClassConfig classConfig) {
         if (runsAtBuildTime()) {
             return; // the configuration of the build machine is not the one the application starts with
         }
-        int priority = ConfigResolver.interceptorPriority();
+        int priority = ConfigResolver.readInterceptorPriority();
         if (priority == ConfigResolver.DEFAULT_INTERCEPTOR_PRIORITY) {
             return; // default priority already declared statically
         }

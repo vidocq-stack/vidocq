@@ -260,6 +260,17 @@ public final class ConfigResolver {
     }
 
     /**
+     * The interceptor priority the configuration sets now, read past the settings {@link #interceptorPriority()}
+     * keeps for the invocations. {@code InterceptorPriorityExtension} reads it once, when a container starts: the
+     * settings kept may still be those a previous deployment of the same JVM read under the same {@link Config}
+     * instance, since a deployment says it started ({@link #configurationChanged()}) only after its extensions ran
+     * (BUG-020).
+     */
+    public static int readInterceptorPriority() {
+        return interceptorPriority(loadConfig());
+    }
+
+    /**
      * The interceptor priority and global switch under one configuration: both interceptors read them on every
      * invocation, and the priority falls back to reading every {@code META-INF/microprofile-config.properties} of
      * the class path when the configuration does not set it, the common case. They are kept for the configuration

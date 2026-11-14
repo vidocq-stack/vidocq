@@ -110,6 +110,30 @@ class InterceptorPriorityConfigTest {
                         + CONFIGURED + "; " + ATTEMPTS + " means the latter kept its default priority 4010");
     }
 
+    /**
+     * BUG-020: two deployments in the same JVM, under the same {@code Config}, the way the TCK runs its archives.
+     * Nothing tells {@code ConfigResolver} that the second one starts before its extensions run: the priority must
+     * still be the one the second deployment configures, not the one the calls of the first left behind.
+     */
+    @Test
+    void aDeploymentReadsItsOwnPriorityAfterAnotherDeployment() {
+        FailingBean first = start();
+        assertThrows(IllegalStateException.class, first::call);
+        container.close();
+        Between.CALLS.set(0);
+        FailingBean.CALLS.set(0);
+
+        System.setProperty(PRIORITY, String.valueOf(CONFIGURED));
+        FailingBean second = start();
+
+        assertThrows(IllegalStateException.class, second::call);
+
+        assertEquals(ATTEMPTS, FailingBean.CALLS.get(), "the method is retried: Fault Tolerance applies");
+        assertEquals(1, Between.CALLS.get(),
+                "an interceptor of priority 4500 runs once, before the Fault Tolerance interceptor configured at "
+                        + CONFIGURED + "; " + ATTEMPTS + " means the latter kept the priority of the first deployment");
+    }
+
     /** A container with what a deployment has: both extensions, both interceptors, the state registries. */
     private FailingBean start() {
         container = VaubanContainer.builder()
@@ -132,7 +156,7 @@ class InterceptorPriorityConfigTest {
 
         @Enhancement(types = FaultToleranceInterceptor.class)
         public void read(ClassConfig interceptor) {
-            SEEN.set(ConfigResolver.interceptorPriority());
+            SEEN.set(ConfigResolver.readInterceptorPriority());
         }
     }
 
