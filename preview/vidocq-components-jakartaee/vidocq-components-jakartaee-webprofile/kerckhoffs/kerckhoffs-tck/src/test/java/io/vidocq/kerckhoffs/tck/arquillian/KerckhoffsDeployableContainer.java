@@ -20,6 +20,8 @@
 package io.vidocq.kerckhoffs.tck.arquillian;
 
 import io.vidocq.foy.cdi.vauban.FoyWebExtension;
+import io.vidocq.kerckhoffs.cdi.IdentityStoreStartCheck;
+import io.vidocq.kerckhoffs.cdi.KerckhoffsExtension;
 import io.vidocq.foy.internal.boot.ApplicationSources;
 import io.vidocq.foy.internal.boot.ComponentFactory;
 import io.vidocq.foy.internal.boot.DescriptorMerger;
@@ -237,7 +239,9 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
     private static VaubanContainer startCdi(List<Class<?>> warClasses, String archiveName) throws DeploymentException {
         try {
             // Makes the @WebServlet, @WebFilter and @WebListener classes of the war beans, as Foy does.
-            var builder = VaubanContainer.builder().addBeanClass(FoyWebExtension.class);
+            // What the Vidocq runtime extension of Kerckhoffs adds: the extension and its start check.
+            var builder = VaubanContainer.builder().addBeanClass(FoyWebExtension.class)
+                    .addBeanClass(KerckhoffsExtension.class).addBeanClass(IdentityStoreStartCheck.class);
             for (Class<?> type : warClasses) builder.addBeanClass(type);
             return builder.build();
         } catch (RuntimeException e) {

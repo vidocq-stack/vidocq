@@ -32,10 +32,24 @@ What this run proves, and what it does not:
   Arquillian, started with its own CDI container, and its beans are validated.
 - It does not measure any Security behaviour: nothing is implemented. The first honest result is a red one.
 
+## Run of 2026-11-15
+
+Kerckhoffs: K1 (`IdentityStoreHandler`, in-memory identity stores, `kerckhoffs-cdi`); the container adds the
+extension and its start check to the CDI container of the war, as the Vidocq runtime extension will. No HTTP
+authentication mechanism support yet.
+
+| Application | Result | First cause |
+|---|---|---|
+| `app-mem` | deployment accepted, **3 of 4 tests ran green, 1 red** | `testAuthenticated`: `web username: null`, the authentication mechanism of the war is never called |
+
+What this run proves, and what it does not:
+
+- The CDI validation error of the previous run is gone: `IdentityStoreHandler` is provided.
+- The three green tests expect a caller that is *not* authenticated, so they do not yet measure the identity
+  stores: no mechanism runs at all. Only `testAuthenticated` exercises the stores, and it needs K2.
+
 ## Next
 
-- K1 (identity stores, `kerckhoffs-cdi`) provides `IdentityStoreHandler`: the `app-mem` deployment is the first
-  scenario to turn.
 - Hosting the authentication mechanism needs the installation through Jakarta Authentication (spec section 2.5),
   which Foy does not offer yet (PLAN.md section 3).
 - The other applications are not run yet: they need an EJB, a `DataSource`, an embedded directory or an

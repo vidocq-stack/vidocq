@@ -41,6 +41,12 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-cdi</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>io.vidocq.foy</groupId>
             <artifactId>foy-api</artifactId>
             <version>${foy.version}</version>
