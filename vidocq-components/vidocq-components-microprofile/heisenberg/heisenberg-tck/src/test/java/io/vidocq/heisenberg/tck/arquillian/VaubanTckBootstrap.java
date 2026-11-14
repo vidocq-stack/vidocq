@@ -28,7 +28,6 @@ import io.vidocq.humboldt.cdi.WithSpanInterceptor;
 import io.vidocq.heisenberg.cdi.internal.BulkheadStateRegistryBean;
 import io.vidocq.heisenberg.cdi.internal.DiracFtMetricsRecorder;
 import io.vidocq.heisenberg.cdi.internal.FaultToleranceInterceptor;
-import io.vidocq.heisenberg.cdi.internal.FaultTolerancePriority3850Interceptor;
 import io.vidocq.heisenberg.cdi.internal.HeisenbergExtension;
 import io.vidocq.heisenberg.cdi.internal.InterceptorPriorityExtension;
 import io.vidocq.heisenberg.cdi.internal.OtelFtMetricsRecorder;
@@ -60,8 +59,8 @@ import java.util.Properties;
  *   <li>starts a new {@link VaubanContainer} with:
  *     <ul>
  *       <li>the BCE extensions {@link HeisenbergExtension} and {@link InterceptorPriorityExtension};</li>
- *       <li>the interceptors {@link FaultToleranceInterceptor} and
- *           {@link FaultTolerancePriority3850Interceptor};</li>
+ *       <li>the interceptor {@link FaultToleranceInterceptor}, whose priority
+ *           {@link InterceptorPriorityExtension} takes from the archive's configuration;</li>
  *       <li>the state beans {@link StateRegistryBean} and {@link BulkheadStateRegistryBean};</li>
  *       <li>all classes from the archive.</li>
  *     </ul>
@@ -91,7 +90,6 @@ final class VaubanTckBootstrap {
                 .addBeanClass(HeisenbergExtension.class)
                 .addBeanClass(InterceptorPriorityExtension.class)
                 .addBeanClass(FaultToleranceInterceptor.class)
-                .addBeanClass(FaultTolerancePriority3850Interceptor.class)
                 .addBeanClass(StateRegistryBean.class)
                 .addBeanClass(BulkheadStateRegistryBean.class)
                 .addBeanClass(MetricRegistryProducerBean.class)

@@ -46,6 +46,10 @@ import jakarta.interceptor.InvocationContext;
  * We therefore use a single marker binding ({@code @FaultToleranceBinding})
  * that {@link HeisenbergExtension} adds via BCE on every FT class/method.</p>
  *
+ * <p>It is the only Fault Tolerance interceptor. Its priority is {@link #BASE_PRIORITY} unless
+ * {@code mp.fault.tolerance.interceptor.priority} sets another one, which
+ * {@link InterceptorPriorityExtension} gives it when the container starts.</p>
+ *
  * <p>M7 §9: if {@code mp.fault.tolerance.interceptor.priority >= Integer.MAX_VALUE},
  * the interceptor is completely short-circuited (the method executes without policies).
  * The logic is delegated to {@link ConfigResolver#isInterceptorGloballyDisabled()}
@@ -62,7 +66,6 @@ public class FaultToleranceInterceptor {
     }
 
     public static final int BASE_PRIORITY = 4010;
-    static final int TCK_PRIORITY_3850 = 3850;
 
     // Package-private (not private): the APT-generated _VaubanComponents.injectField writes these
     // with an in-package putfield, so the container needs no `opens … to io.vidocq.vauban.core` on
@@ -83,12 +86,6 @@ public class FaultToleranceInterceptor {
 
     @AroundInvoke
     public Object around(InvocationContext context) throws Exception {
-        // TCK MP FT 4.1: when a custom 3850 priority is configured,
-        // a dedicated interceptor (priority 3850) becomes the active FT interceptor.
-        if (ConfigResolver.interceptorPriority() == TCK_PRIORITY_3850) {
-            return context.proceed();
-        }
-
         // M7 §9: short-circuit if globally disabled via config
         if (ConfigResolver.isInterceptorGloballyDisabled()) {
             return context.proceed();

@@ -31,8 +31,8 @@
   immutable configs (`RetryConfig`, `TimeoutConfig`, `CircuitBreakerConfig`,
   `BulkheadConfig`, `FallbackConfig`).
 - In `heisenberg-cdi-vauban` (interceptor + BCE):
-  `FaultToleranceInterceptor` (priority 4010), `FaultTolerancePriority3850Interceptor`
-  (TCK variant for priority 3850), `FaultToleranceBinding` (marker),
+  `FaultToleranceInterceptor` (the only Fault Tolerance interceptor: priority 4010, which
+  `mp.fault.tolerance.interceptor.priority` moves), `FaultToleranceBinding` (marker),
   `HeisenbergExtension` (CDI 4.1 BCE — validations + interceptor binding; static work a build
   may freeze), `InterceptorPriorityExtension` (CDI 4.1 BCE — `@Priority` rewriting from
   `mp.fault.tolerance.interceptor.priority`; does nothing when `ExtensionPhase.isBuildTime()`,
@@ -170,8 +170,8 @@ java -jar heisenberg-bench/target/benchmarks.jar
   `ConfigResolver`. **All exist and are tested** (108 green unit tests).
   None imports CDI classes.
 - `heisenberg-cdi-vauban` is the CDI entry point: `FaultToleranceInterceptor`
-  (base priority 4010, configurable via `mp.fault.tolerance.interceptor.priority`),
-  `FaultTolerancePriority3850Interceptor` (TCK variant),
+  (the only Fault Tolerance interceptor; base priority 4010, moved by
+  `mp.fault.tolerance.interceptor.priority`, the TCK's 3850 included),
   `HeisenbergExtension` (CDI 4.1 BCE `BuildCompatibleExtension` under
   `io.vidocq.heisenberg.cdi.internal`, which validates annotations at container startup),
   `InterceptorPriorityExtension` (BCE that rewrites `@Priority` according to config when the

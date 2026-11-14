@@ -98,7 +98,7 @@ class ConfigResolverIntegrationTest {
     @Test
     void interceptorPriorityReadFromPropertiesFile() {
         // mp.fault.tolerance.interceptor.priority=4500
-        assertEquals(4500, ConfigResolver.interceptorPriority());
+        assertEquals(4500, ConfigResolver.readInterceptorPriority());
     }
 
     @Test

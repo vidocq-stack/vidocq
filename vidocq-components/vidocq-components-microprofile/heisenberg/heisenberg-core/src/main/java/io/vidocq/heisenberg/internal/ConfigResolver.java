@@ -253,31 +253,21 @@ public final class ConfigResolver {
     }
 
     /**
-     * M8 §9: Fault Tolerance interceptor priority value.
-     */
-    public static int interceptorPriority() {
-        return interceptorSettings().priority();
-    }
-
-    /**
-     * The interceptor priority the configuration sets now, read past the settings {@link #interceptorPriority()}
-     * keeps for the invocations. {@code InterceptorPriorityExtension} reads it once, when a container starts: the
-     * settings kept may still be those a previous deployment of the same JVM read under the same {@link Config}
-     * instance, since a deployment says it started ({@link #configurationChanged()}) only after its extensions ran
-     * (BUG-020).
+     * M8 §9: the Fault Tolerance interceptor priority the configuration sets now. {@code InterceptorPriorityExtension}
+     * reads it once, when a container starts. Nothing keeps it: a value kept for the invocations could still be the one
+     * a previous deployment of the same JVM read under the same {@link Config} instance, since a deployment says it
+     * started ({@link #configurationChanged()}) only after its extensions ran (BUG-020).
      */
     public static int readInterceptorPriority() {
         return interceptorPriority(loadConfig());
     }
 
     /**
-     * The interceptor priority and global switch under one configuration: both interceptors read them on every
-     * invocation, and the priority falls back to reading every {@code META-INF/microprofile-config.properties} of
-     * the class path when the configuration does not set it, the common case. They are kept for the configuration
-     * instance and {@link #configurationChanged() generation} they were read from, and read again otherwise. Without a configuration implementation
-     * nothing is kept, the class path being the only source then.
+     * The global switch under one configuration: the interceptor reads it on every invocation. It is kept for the
+     * configuration instance and {@link #configurationChanged() generation} it was read from, and read again
+     * otherwise. Without a configuration implementation nothing is kept.
      */
-    private record InterceptorSettings(Config config, int generation, int priority, boolean globallyDisabled) {}
+    private record InterceptorSettings(Config config, int generation, boolean globallyDisabled) {}
 
     private static final java.util.concurrent.atomic.AtomicReference<InterceptorSettings> INTERCEPTOR_SETTINGS =
             new java.util.concurrent.atomic.AtomicReference<>();
@@ -287,8 +277,7 @@ public final class ConfigResolver {
         int generation = GENERATION.get();
         InterceptorSettings settings = INTERCEPTOR_SETTINGS.get();
         if (settings == null || settings.config() != config || settings.generation() != generation || config == null) {
-            settings = new InterceptorSettings(config, generation, interceptorPriority(config),
-                    isInterceptorGloballyDisabled(config));
+            settings = new InterceptorSettings(config, generation, isInterceptorGloballyDisabled(config));
             if (config != null) INTERCEPTOR_SETTINGS.set(settings);
         }
         return settings;

@@ -29,16 +29,28 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import jakarta.interceptor.InvocationContext;
+import org.eclipse.microprofile.faulttolerance.Retry;
 import org.junit.jupiter.api.Test;
 
 class FaultToleranceInterceptorTest {
 
+    private static final String PRIORITY = "mp.fault.tolerance.interceptor.priority";
+    private static final String RECOVERED = "recovered";
+
     private final FaultToleranceInterceptor interceptor = new FaultToleranceInterceptor();
+
+    /** A guarded bean: retried up to twice, without delay. */
+    public static class FlakyService {
+        @Retry(maxRetries = 2, delay = 0, jitter = 0)
+        public String call() {
+            return RECOVERED;
+        }
+    }
 
     @Test
     void delegatesToInvocationContextProceed() throws Exception {
         // MP FT 4.1 §2.5: with no active policy, the interceptor invokes the target directly.
-        FakeInvocationContext context = new FakeInvocationContext(() -> "ok");
+        FakeInvocationContext context = new FakeInvocationContext(_ -> "ok");
 
         Object result = interceptor.around(context);
 
@@ -48,7 +60,7 @@ class FaultToleranceInterceptorTest {
 
     @Test
     void propagatesExceptionFromInvocationContextProceed() {
-        FakeInvocationContext context = new FakeInvocationContext(() -> {
+        FakeInvocationContext context = new FakeInvocationContext(_ -> {
             throw new IllegalStateException("boom");
         });
 
@@ -58,24 +70,61 @@ class FaultToleranceInterceptorTest {
         assertEquals(1, context.proceedCalls);
     }
 
+    /**
+     * MP Fault Tolerance 4.1, "Fault Tolerance Interceptor(s)": {@code mp.fault.tolerance.interceptor.priority} only
+     * moves the interceptor, which applies the policies whatever the value, short of {@code Integer.MAX_VALUE}. 3850
+     * is the value the TCK configures.
+     */
+    @Test
+    void appliesThePoliciesUnderTheConfiguredPriority() throws Exception {
+        FlakyService target = new FlakyService();
+        FakeInvocationContext context = new FakeInvocationContext(target, FlakyService.class.getMethod("call"),
+                attempt -> {
+                    if (attempt == 1) {
+                        throw new IllegalStateException("first attempt fails");
+                    }
+                    return target.call();
+                });
+        interceptor.stateRegistry = new StateRegistryBean();
+        interceptor.bulkheadRegistry = new BulkheadStateRegistryBean();
+
+        Object result;
+        try (var _ = TestConfigs.install(Map.of(PRIORITY, "3850"))) {
+            result = interceptor.around(context);
+        }
+
+        assertEquals(RECOVERED, result);
+        assertEquals(2, context.proceedCalls, "the failed first attempt is retried");
+    }
+
     @FunctionalInterface
     private interface ProceedBehavior {
-        Object proceed() throws Exception;
+        /** @param attempt the number of this call of {@code proceed()}, from 1 */
+        Object proceed(int attempt) throws Exception;
     }
 
     private static final class FakeInvocationContext implements InvocationContext {
+        private final Object target;
+        private final Method method;
         private final ProceedBehavior behavior;
         private Object[] parameters = new Object[0];
         private final Map<String, Object> contextData = new HashMap<>();
         private int proceedCalls;
 
+        /** An invocation with no method: no policy applies. */
         private FakeInvocationContext(ProceedBehavior behavior) {
+            this(null, null, behavior);
+        }
+
+        private FakeInvocationContext(Object target, Method method, ProceedBehavior behavior) {
+            this.target = target;
+            this.method = method;
             this.behavior = behavior;
         }
 
         @Override
         public Object getTarget() {
-            return this;
+            return target != null ? target : this;
         }
 
         @Override
@@ -85,7 +134,7 @@ class FaultToleranceInterceptorTest {
 
         @Override
         public Method getMethod() {
-            return null;
+            return method;
         }
 
         @Override
@@ -111,7 +160,7 @@ class FaultToleranceInterceptorTest {
         @Override
         public Object proceed() throws Exception {
             proceedCalls++;
-            return behavior.proceed();
+            return behavior.proceed(proceedCalls);
         }
 
         @Override
