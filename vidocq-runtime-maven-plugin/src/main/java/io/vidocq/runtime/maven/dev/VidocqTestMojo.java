@@ -171,7 +171,8 @@ public class VidocqTestMojo extends AbstractMojo {
     // package-private for the unit test.
     ContinuousTesting continuousTesting(Path projectDir, Map<String, String> testProps,
             Consumer<TestResults> onResult) {
-        return ContinuousTesting.forProject(projectDir, buildDir.toPath(), testProps, onResult, getLog()::warn);
+        return ContinuousTesting.forProject(projectDir, buildDir.toPath(), TestServices.fixed(testProps), onResult,
+                getLog()::warn);
     }
 
     /** The dev services session of the tests, or {@code null} when they are off. */

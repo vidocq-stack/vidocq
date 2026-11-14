@@ -30,6 +30,9 @@ import java.util.Map;
  * {@code ServiceLoader} path {@code VidocqDevMojo#execute()} uses — {@code DevServiceManager}'s
  * package-private {@code start(List, ...)} overload is not reachable from this package any more, now that
  * {@code DevServiceManager} lives in {@code vidocq-runtime-devservices-host}.
+ *
+ * <p>As a real provider, it does not apply when {@code vidocq.pool.audit.url} is set explicitly, which
+ * {@code VidocqDevMojoTest#theTestsSessionStartsFromTheDevSessionsExplicitValues} relies on.</p>
  */
 public final class FixtureAuditDevService implements DevService {
 
@@ -40,7 +43,7 @@ public final class FixtureAuditDevService implements DevService {
 
     @Override
     public boolean appliesWhen(DevServiceContext ctx) {
-        return true;
+        return ctx.property("vidocq.pool.audit.url").isEmpty();
     }
 
     @Override

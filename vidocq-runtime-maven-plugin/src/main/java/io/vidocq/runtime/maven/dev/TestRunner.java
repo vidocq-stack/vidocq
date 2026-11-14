@@ -28,7 +28,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -55,26 +54,26 @@ final class TestRunner implements ContinuousTesting.Launcher {
 
     private final Path projectDir;
     private final String maven;
-    private final Map<String, String> properties;
+    private final TestServices services;
     private final Path logFile;
     private final Path reportsDir;
 
     /**
-     * @param maven      the Maven executable, as {@link RecompileRunner#detectMavenExecutable} finds it
-     * @param properties the dev session's keys, passed as {@code -D} in this order
+     * @param maven    the Maven executable, as {@link RecompileRunner#detectMavenExecutable} finds it
+     * @param services the dev services of the runs, whose keys each run gets as {@code -D}, in their order
      */
-    TestRunner(Path projectDir, String maven, Map<String, String> properties, Path logFile, Path reportsDir) {
+    TestRunner(Path projectDir, String maven, TestServices services, Path logFile, Path reportsDir) {
         this.projectDir = projectDir;
         this.maven = maven;
-        this.properties = new LinkedHashMap<>(properties);
+        this.services = services;
         this.logFile = logFile;
         this.reportsDir = reportsDir;
     }
 
     /**
      * The command (spec §2.3), offline ({@code -o}) unless it runs again after an offline miss. {@code
-     * vidocq.dev.devServices=false} comes last and a key of that name in {@code properties} is dropped: the tests use
-     * the dev session's containers, and never start their own.
+     * vidocq.dev.devServices=false} comes last and a key of that name in {@code properties} is dropped: the test JVM
+     * never starts containers of its own, since the plugin JVM hosts them, once for every run (BUG-20261114-08).
      */
     static List<String> command(String maven, List<String> tests, Map<String, String> properties, boolean offline) {
         List<String> cmd = new ArrayList<>(List.of(maven, "-ntp"));
@@ -95,12 +94,26 @@ final class TestRunner implements ContinuousTesting.Launcher {
         return cmd;
     }
 
+    /** Readies the dev services of the run: under {@code vidocq:dev}, the tests' own, at the first run. */
+    @Override
+    public void prepare() {
+        services.prepare();
+    }
+
+    /** The run gets the keys of its dev services as they are when it starts. */
     @Override
     public ContinuousTesting.Launched launch(List<String> tests) throws IOException {
         deleteReports(reportsDir);
         Files.createDirectories(logFile.toAbsolutePath().getParent());
-        Process offline = start(command(maven, tests, properties, true));
-        return new Running(offline, logFile, () -> start(command(maven, tests, properties, false)));
+        Map<String, String> keys = services.keys();
+        Process offline = start(command(maven, tests, keys, true));
+        return new Running(offline, logFile, () -> start(command(maven, tests, keys, false)));
+    }
+
+    /** Stops the dev services of the runs, once the last run ended. */
+    @Override
+    public void close() {
+        services.close();
     }
 
     /** Starts {@code command} in the project, its output overwriting the log. */

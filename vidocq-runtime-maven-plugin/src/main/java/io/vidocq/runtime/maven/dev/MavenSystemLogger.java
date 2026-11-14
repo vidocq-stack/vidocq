@@ -33,9 +33,19 @@ import java.util.ResourceBundle;
 public final class MavenSystemLogger implements System.Logger {
 
     private final Log log;
+    private final String prefix;
 
     public MavenSystemLogger(Log log) {
+        this(log, "");
+    }
+
+    /**
+     * Every line starting with {@code prefix}, such as {@code Tests: } for the dev services of the tests of
+     * {@code vidocq:dev}, which start beside the application's (BUG-20261114-08).
+     */
+    MavenSystemLogger(Log log, String prefix) {
         this.log = log;
+        this.prefix = prefix;
     }
 
     @Override
@@ -65,10 +75,11 @@ public final class MavenSystemLogger implements System.Logger {
                 : new MessageFormat(format, Locale.ROOT).format(params), null);
     }
 
-    private void write(Level level, String message, Throwable thrown) {
+    private void write(Level level, String text, Throwable thrown) {
         if (!isLoggable(level)) {
             return;
         }
+        String message = prefix + text;
         switch (level) {
             case ERROR -> {
                 if (thrown == null) log.error(message); else log.error(message, thrown);

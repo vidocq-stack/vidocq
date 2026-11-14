@@ -22,6 +22,7 @@ package io.vidocq.runtime.maven.dev;
 import io.vidocq.runtime.devservices.host.DefaultDevServiceContext;
 import io.vidocq.runtime.devservices.host.DevServiceManager;
 import io.vidocq.runtime.devservices.host.DevServicesSession;
+import io.vidocq.runtime.devservices.host.StateFile;
 import io.vidocq.runtime.devservices.spi.DevService;
 import io.vidocq.runtime.devservices.spi.DevServiceContext;
 import io.vidocq.runtime.maven.ConsoleColors;
@@ -209,6 +210,95 @@ class VidocqDevMojoTest {
                 "the second caller returned before the provider's stop() had actually finished");
         assertTrue(stopCompleted.get());
         assertEquals(1, stopCalls.get(), "stop() must run exactly once");
+    }
+
+    private static final System.Logger LOG = System.getLogger("VidocqDevMojoTest");
+
+    /** A PostgreSQL-like provider whose container listens on {@code port}. */
+    private static DevService postgres(int port) {
+        return new DevService() {
+            @Override public String id() { return "postgres"; }
+            @Override public boolean appliesWhen(DevServiceContext ctx) { return true; }
+            @Override public Map<String, String> start(DevServiceContext ctx) {
+                return Map.of("vidocq.pool.url", "jdbc:postgresql://localhost:" + port + "/vidocq");
+            }
+            @Override public void stop() { /* starts no container */ }
+        };
+    }
+
+    /**
+     * BUG-20261114-08: the tests of {@code vidocq:dev} ran against the application's containers, and a test's
+     * {@code TRUNCATE} wiped the data the application had just collected. They get dev services of their own, opened
+     * at their first run: every run gets their keys, never the dev session's, whose containers keep running.
+     */
+    @Test
+    void theTestsGetDevServicesOfTheirOwnAtTheirFirstRun(@TempDir Path tmp) throws Exception {
+        try (DevServicesSession dev = DevServicesSession.forTesting("vidocq:dev", tmp, List.of(postgres(32783)), LOG)) {
+            AtomicInteger opens = new AtomicInteger();
+            List<String> infos = new ArrayList<>();
+            TestServices services = VidocqDevMojo.testServices(dev, () -> {
+                opens.incrementAndGet();
+                return DevServicesSession.forTesting(DevServicesSession.DEV_TESTS_HOST, tmp,
+                        List.of(postgres(32790)), LOG);
+            }, infos::add, infos::add);
+
+            assertEquals(0, opens.get(), "no container before the first run");
+            services.prepare();
+            Map<String, String> keys = services.keys();
+            services.close();
+
+            assertEquals(1, opens.get());
+            assertEquals("jdbc:postgresql://localhost:32790/vidocq", keys.get("vidocq.pool.url"));
+            assertEquals(List.of(DevTestServices.STARTING), infos);
+            assertTrue(Files.readString(dev.stateFile()).contains("\"state\":\"running\""),
+                    "the application's containers keep running");
+        }
+    }
+
+    /** Dev services off, or none started for the application: the tests start none either, as before. */
+    @Test
+    void theTestsStartNoDevServiceWhenTheApplicationHasNone(@TempDir Path tmp) throws Exception {
+        DevTestServices.Opener never = () -> {
+            throw new AssertionError("the tests' session opened");
+        };
+        List<String> lines = new ArrayList<>();
+        TestServices off = VidocqDevMojo.testServices(null, never, lines::add, lines::add);
+        off.prepare();
+        assertEquals(Map.of(), off.keys());
+
+        try (DevServicesSession none = DevServicesSession.forTesting("vidocq:dev", tmp, List.of(), LOG)) {
+            TestServices nothing = VidocqDevMojo.testServices(none, never, lines::add, lines::add);
+            nothing.prepare();
+            assertEquals(Map.of(), nothing.keys());
+        }
+        assertEquals(List.of(), lines);
+    }
+
+    /**
+     * BUG-20261114-08: the tests' session is the {@code vidocq:dev-tests} host's, with the test files, and starts from
+     * the explicit values the dev session started from, taken before the dev session's own keys joined them: a
+     * datasource URL the user set opts the tests' container out too, and the tests keep what they had for it.
+     */
+    @Test
+    void theTestsSessionStartsFromTheDevSessionsExplicitValues(@TempDir Path tmp) throws Exception {
+        Map<String, String> explicit = new LinkedHashMap<>(Map.of("vidocq.profile", "dev"));
+        DevTestServices.Opener opener = VidocqDevMojo.testSessionOpener(tmp, explicit, key -> Optional.empty(),
+                key -> Optional.empty(), className -> false, LOG);
+        // What the dev session hands its application afterwards does not reach the tests' session.
+        explicit.put("vidocq.pool.audit.url", "jdbc:postgresql://localhost:54219/audit");
+        try (DevServicesSession tests = opener.open()) {
+            assertEquals(tmp.resolve("target").resolve(StateFile.TEST_FILE_NAME), tests.stateFile());
+            assertEquals("postgres", tests.providers().get("vidocq.pool.audit.url"));
+        }
+
+        DevTestServices.Opener userSet = VidocqDevMojo.testSessionOpener(tmp,
+                Map.of("vidocq.pool.audit.url", "jdbc:postgresql://db.example/audit"), key -> Optional.empty(),
+                key -> Optional.empty(), className -> false, LOG);
+        try (DevServicesSession tests = userSet.open()) {
+            assertEquals(Map.of(), tests.injected(), "a URL the user set is no dev service's");
+        }
+        assertFalse(Files.exists(tmp.resolve("target").resolve(StateFile.FILE_NAME)),
+                "the dev session's file is not the tests'");
     }
 
     /** Whoever reaches a JDWP agent can run any code in the child: by default only this machine can. */

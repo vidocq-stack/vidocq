@@ -322,7 +322,8 @@ listener, rewrites the file cleanly.
 === A test run has files of its own [.tag-new]#NEW#
 
 `vidocq:dev` and `vidocq:run` write `target/vidocq-dev-services.json` and
-`target/vidocq-dev-services.properties`. A test run's hosts, `vidocq:test` and the JUnit listener, write
+`target/vidocq-dev-services.properties`. A test run's hosts, `vidocq:test`, the JUnit listener and the tests of
+`vidocq:dev` (host `vidocq:dev-tests`, <<continuous-testing>>), write
 `target/vidocq-dev-services-test.json` and `target/vidocq-dev-services-test.properties`. So `vidocq test` or
 `mvn test` beside a running `vidocq:dev` starts its own containers and leaves the dev session's files alone: a
 reload of the application, which reads its state file again, still reports the dev containers. Until
@@ -338,12 +339,16 @@ xref:dev-console.adoc#panels[The dev console's panels].
 [#continuous-testing]
 == Continuous testing
 
-xref:continuous-testing.adoc[Continuous testing] reuses the dev containers: under `vidocq:dev` every test run
-gets the session's connection keys, and `vidocq:test` opens a session of its own, host `vidocq:test`, with files of
-its own (<<test-run-files>>). Each run
-gets `-Dvidocq.dev.devServices=false`, so the tests never start a second set of containers.
+xref:continuous-testing.adoc[Continuous testing] never uses the application's containers [.tag-new]#NEW#. Under
+`vidocq:dev`, the tests get a session of their own, host `vidocq:dev-tests`, opened at their first run and stopped
+with `vidocq:dev`; `vidocq:test` opens one too, host `vidocq:test`. Both write the files of a test run
+(<<test-run-files>>). The session of the tests of `vidocq:dev` runs beside the application's, so it reuses no
+container and pins no host port: `vidocq.dev.reuse` reads `false` there, and every `vidocq.dev.<service>.port` (a
+datasource's `vidocq.dev.postgres.<name>.port` too) reads unset, whatever source sets them. Each run gets
+`-Dvidocq.dev.devServices=false`, so the test JVM never starts containers on every run. Until BUG-20261114-08, the
+tests of `vidocq:dev` used the application's containers, and a test's `TRUNCATE` wiped the application's data.
 
-WARNING: The tests then share the dev database: a test that deletes rows deletes your dev data.
+WARNING: The runs of one session share the tests' database: a test that deletes rows deletes them for the next run.
 
 [#no-secrets]
 == No secret leaves the application

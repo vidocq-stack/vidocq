@@ -50,11 +50,19 @@ public final class DevServicesSession implements AutoCloseable {
     public static final String PROVIDED_PREFIX = "vidocq.dev.provided.";
 
     /**
-     * The hosts of a test run — {@code vidocq:test}'s {@code HOST} and the JUnit listener's — which write {@link
-     * StateFile#TEST_FILE_NAME} and its {@code .properties} rather than the files of the application's session
-     * (BUG-20261106-03).
+     * The host of the tests of a {@code vidocq:dev} session (BUG-20261114-08): the plugin opens it at their first run,
+     * beside the dev session, and closes it when the dev session ends. It writes the files of a test run, and its
+     * providers see an {@linkplain DefaultDevServiceContext#isolated() isolated} context: they reuse no container and
+     * pin no host port, which the dev session's containers hold.
      */
-    private static final Set<String> TEST_HOSTS = Set.of("vidocq:test", "test");
+    public static final String DEV_TESTS_HOST = "vidocq:dev-tests";
+
+    /**
+     * The hosts of a test run — {@code vidocq:test}'s {@code HOST}, the JUnit listener's and {@link #DEV_TESTS_HOST}
+     * — which write {@link StateFile#TEST_FILE_NAME} and its {@code .properties} rather than the files of the
+     * application's session (BUG-20261106-03).
+     */
+    private static final Set<String> TEST_HOSTS = Set.of("vidocq:test", "test", DEV_TESTS_HOST);
 
     private final DevServiceManager mgr;
     private final Path stateFile;
@@ -92,15 +100,21 @@ public final class DevServicesSession implements AutoCloseable {
         DefaultDevServiceContext ctx =
                 new DefaultDevServiceContext(basedir, seed, applicationFiles, applicationValues, applicationClasspath,
                         log);
-        DevServiceManager mgr = DevServiceManager.start(ctx, log);
+        DevServiceManager mgr = DevServiceManager.start(contextOf(host, ctx), log);
         return open(host, basedir, mgr, log, Clock.systemUTC());
     }
 
     /** Core path, exposed package-private so tests can inject providers without a {@code META-INF/services}. */
     static DevServicesSession open(String host, Path basedir, List<DevService> providers,
             DefaultDevServiceContext ctx, System.Logger log, Clock clock) throws DevServicesException {
-        DevServiceManager mgr = DevServiceManager.start(providers, ctx, log);
+        DevServiceManager mgr = DevServiceManager.start(providers, contextOf(host, ctx), log);
         return open(host, basedir, mgr, log, clock);
+    }
+
+    /** What {@code host}'s providers see: {@code ctx}, {@linkplain DefaultDevServiceContext#isolated() isolated} for
+     *  {@link #DEV_TESTS_HOST}. */
+    private static DefaultDevServiceContext contextOf(String host, DefaultDevServiceContext ctx) {
+        return DEV_TESTS_HOST.equals(host) ? ctx.isolated() : ctx;
     }
 
     /**

@@ -27,7 +27,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -50,7 +49,22 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
 
     /** Starts one run of the tests: all of them, or the listed {@code Class#method}s. */
     interface Launcher {
+
+        /**
+         * Readies what a run needs before it starts, such as the tests' own dev services at the first run of
+         * {@code vidocq:dev} (BUG-20261114-08): on the worker, the run already shown {@code running}, and outside
+         * the lock, so that a change or a close is never held back while containers start. Nothing by default.
+         */
+        default void prepare() {
+            // nothing to ready
+        }
+
         Launched launch(List<String> tests) throws IOException;
+
+        /** Stops what {@link #prepare} started, once {@link ContinuousTesting#close} ended the runs. */
+        default void close() {
+            // nothing started
+        }
     }
 
     /** A run in flight. */
@@ -129,14 +143,14 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
      * its reports read from {@code <buildDir>/surefire-reports}, the results in {@code <buildDir>/}{@value
      * TestResultsFile#FILE_NAME} and the log in {@code <buildDir>/}{@value TestResultsFile#LOG_NAME}.
      *
-     * @param testProperties the dev session's keys, handed to every run as {@code -D}
+     * @param services the dev services of the runs, whose keys every run gets as {@code -D}; closed with this
      */
-    static ContinuousTesting forProject(Path projectDir, Path buildDir, Map<String, String> testProperties,
+    static ContinuousTesting forProject(Path projectDir, Path buildDir, TestServices services,
             Consumer<TestResults> onResult, Consumer<String> warn) {
         Path logFile = buildDir.resolve(TestResultsFile.LOG_NAME);
         Path reportsDir = buildDir.resolve("surefire-reports");
         TestRunner runner = new TestRunner(projectDir, RecompileRunner.detectMavenExecutable(projectDir),
-                testProperties, logFile, reportsDir);
+                services, logFile, reportsDir);
         return new ContinuousTesting(runner, since -> SurefireReports.read(reportsDir, since),
                 () -> TestRunner.compilationFailed(logFile),
                 new Results(buildDir.resolve(TestResultsFile.FILE_NAME), shown(projectDir, logFile)), onResult, warn,
@@ -235,7 +249,10 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
         }
     }
 
-    /** Cancels the run in flight, which is written {@code cancelled}, and stops the worker; idempotent. */
+    /**
+     * Cancels the run in flight, which is written {@code cancelled}, stops the worker, then {@linkplain Launcher#close
+     * closes} the launcher: the tests' own dev services stop after the last run; idempotent.
+     */
     @Override
     public void close() {
         Launched running;
@@ -261,6 +278,7 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         }
+        launcher.close();
     }
 
     /**
@@ -356,6 +374,7 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
         Instant startedAt = clock.instant();
         long t0 = System.nanoTime();
         write(TestResults.running(trigger, startedAt, log, previous));
+        launcher.prepare();
         Launched launched = null;
         boolean abandonedBeforeLaunch;
         synchronized (lock) {

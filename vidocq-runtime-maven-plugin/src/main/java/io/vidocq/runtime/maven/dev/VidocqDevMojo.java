@@ -76,6 +76,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Vidocq dev mode — implementation of milestone <b>M1</b> from
@@ -117,6 +118,9 @@ public class VidocqDevMojo extends AbstractMojo {
 
     /** The continuous-testing switch, in every source. */
     static final String CONTINUOUS_TESTING_KEY = "vidocq.dev.continuousTesting";
+
+    /** What starts each line about the tests, those of their own dev services included (BUG-20261114-08). */
+    private static final String TESTS_PREFIX = "Tests: ";
 
     private static final String RUNTIME_SCOPE = "runtime";
 
@@ -345,9 +349,9 @@ public class VidocqDevMojo extends AbstractMojo {
         // console both need the SPI).
         Set<String> devToolsOnPath = new HashSet<>();
         Function<String, Optional<String>> applicationFiles = ApplicationFiles.of(classesDir.toPath());
-        DevServicesSession devs = devServicesEnabled(applicationFiles)
+        DevServices devs = devServicesEnabled(applicationFiles)
                 ? openDevServices(projectDir, sysProps, applicationFiles, layered, devToolsOnPath)
-                : null;
+                : DevServices.OFF;
 
         // Dev tools (Vidocq/vidocq#143): the console, then each extension's -dev companion, on the child's module
         // path only. No binary ever contains them.
@@ -362,7 +366,7 @@ public class VidocqDevMojo extends AbstractMojo {
         ChildLaunch launch = new ChildLaunch(modulePath, layered.appPath(), jvmArgs, sysProps, projectDir);
         try (var _ = OpensRequestFile.poll(opensFile, moduleInfoSource(), getLog()::info,
                 getLog()::warn)) {
-            runSession(launch, watch, testing, devs, reloadFile, inJvmReload);
+            runSession(launch, watch, testing, devs.session(), reloadFile, inJvmReload);
         } catch (IOException e) {
             throw new MojoExecutionException("Cannot watch " + opensFile, e);
         }
@@ -455,12 +459,22 @@ public class VidocqDevMojo extends AbstractMojo {
     }
 
     /**
+     * The dev services of a session: the application's, and how the tests open their own at their first run
+     * (BUG-20261114-08). Both {@code null} when dev services are off.
+     */
+    private record DevServices(DevServicesSession session, DevTestServices.Opener tests) {
+
+        static final DevServices OFF = new DevServices(null, null);
+    }
+
+    /**
      * Provisions dev-mode services (Postgres, Keycloak, …) ONCE, before the first fork. Their connection coordinates
      * are folded into the child's system properties; an explicit -D or a vidocq.dev.systemProperties entry always wins
      * (putIfAbsent), and each key the child does get from a provider is marked vidocq.dev.provided.<key>=<id>. The
-     * containers live for the whole session — source reloads respawn the child but never touch them.
+     * containers live for the whole session — source reloads respawn the child but never touch them. The tests' own
+     * session opens later, from the same explicit values and the same application ({@link #testSessionOpener}).
      */
-    private DevServicesSession openDevServices(Path projectDir, Map<String, String> sysProps,
+    private DevServices openDevServices(Path projectDir, Map<String, String> sysProps,
             Function<String, Optional<String>> applicationFiles, ApplicationLaunch.Layered layered,
             Set<String> devToolsOnPath) throws MojoExecutionException {
         // Resolved before open(): a missing extension/devconsole-spi jar must abort before any
@@ -474,19 +488,37 @@ public class VidocqDevMojo extends AbstractMojo {
                         java.util.stream.Stream.concat(layered.modulePath().stream(), layered.appPath().stream())
                                 .toList(),
                         classesDir.toPath()));
+        Function<String, Optional<String>> applicationValues =
+                ApplicationFiles.allOf(classesDir.toPath(), projectDir.resolve("src/main/resources"));
+        // Taken before the dev session's keys join sysProps: they are the application's, never the tests'.
+        DevTestServices.Opener tests = testSessionOpener(projectDir, sysProps, applicationFiles, applicationValues,
+                classpath::contains, new MavenSystemLogger(getLog(), TESTS_PREFIX));
         DevServicesSession devs;
         try {
-            devs = DevServicesSession.open("vidocq:dev", projectDir, sysProps, applicationFiles,
-                    ApplicationFiles.allOf(classesDir.toPath(), projectDir.resolve("src/main/resources")),
-                    classpath::contains,
-                    new MavenSystemLogger(getLog()));
+            devs = DevServicesSession.open("vidocq:dev", projectDir, sysProps, applicationFiles, applicationValues,
+                    classpath::contains, new MavenSystemLogger(getLog()));
         } catch (DevServicesException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         }
         foldDevServiceProperties(sysProps, devs.injected(), devs.providers());
         sysProps.putIfAbsent(StateFile.PROPERTY, devs.stateFile().toAbsolutePath().toString());
         layered.modulePath().addAll(extensionJars);
-        return devs;
+        return new DevServices(devs, tests);
+    }
+
+    /**
+     * How the tests open their own dev services (BUG-20261114-08): host {@link DevServicesSession#DEV_TESTS_HOST},
+     * whose providers reuse no container and pin no host port, from what the dev session starts from — a copy of the
+     * explicit values taken now, so that a datasource URL the user set opts the tests' container out too, and the same
+     * application files and class path.
+     */
+    // package-private for the unit test.
+    static DevTestServices.Opener testSessionOpener(Path projectDir, Map<String, String> explicit,
+            Function<String, Optional<String>> applicationFiles, Function<String, Optional<String>> applicationValues,
+            Predicate<String> classpath, System.Logger log) {
+        Map<String, String> seed = new LinkedHashMap<>(explicit);
+        return () -> DevServicesSession.open(DevServicesSession.DEV_TESTS_HOST, projectDir, seed, applicationFiles,
+                applicationValues, classpath, log);
     }
 
     /**
@@ -497,10 +529,10 @@ public class VidocqDevMojo extends AbstractMojo {
 
     /**
      * Continuous testing (#122): the test directories are watched too, the child's dev console learns where the
-     * results are, and every run gets the dev session's keys, so the tests use its containers.
+     * results are, and the runs get dev services of their own ({@link #testServices}).
      */
     private Testing startContinuousTesting(Path projectDir, Map<String, String> sysProps,
-            Function<String, Optional<String>> applicationFiles, DevServicesSession devs)
+            Function<String, Optional<String>> applicationFiles, DevServices devs)
             throws MojoExecutionException {
         if (!continuousTestingEnabled(projectDir, applicationFiles)) {
             return new Testing(null, null, List.of());
@@ -508,27 +540,41 @@ public class VidocqDevMojo extends AbstractMojo {
         List<Path> testWatch = parseDirs(projectDir, testWatchDirs);
         Path results = buildDirPath().resolve(TestResultsFile.FILE_NAME);
         sysProps.put(TestResultsFile.PROPERTY, results.toAbsolutePath().toString());
-        Map<String, String> testProps = new LinkedHashMap<>();
-        if (devs != null) {
-            devs.foldInto(testProps);
-        }
-        ContinuousTesting started = ContinuousTesting.forProject(projectDir, buildDirPath(), testProps,
+        ContinuousTesting started = ContinuousTesting.forProject(projectDir, buildDirPath(),
+                testServices(devs.session(), devs.tests(), getLog()::info, getLog()::warn),
                 result -> TestSummaryPrinter.lines(result, false, false).forEach(getLog()::info), getLog()::warn);
         TestRequestFile requests;
         try {
             requests = TestRequestFile.poll(results.resolveSibling(TestRequestFile.FILE_NAME), trigger -> {
                 String outcome = started.request(trigger);
                 if (!ContinuousTesting.QUEUED.equals(outcome)) {
-                    getLog().info("Tests: " + outcome);
+                    getLog().info(TESTS_PREFIX + outcome);
                 }
             }, getLog()::warn);
         } catch (IOException e) {
-            closeDevServices(devs);
+            started.close();
+            closeDevServices(devs.session());
             throw new MojoExecutionException("Cannot watch the test request file", e);
         }
         getLog().info("Continuous testing: on, watching " + testWatch
                 + " (-D" + CONTINUOUS_TESTING_KEY + "=false to turn it off)");
         return new Testing(started, requests, testWatch);
+    }
+
+    /**
+     * The dev services of the test runs (BUG-20261114-08). A test that empties a table must not empty the
+     * application's: when the dev session handed its application keys, the tests get a session of their own, opened
+     * by {@code opener} at their first run, kept for every later one, and closed with continuous testing. Otherwise
+     * — dev services off, or none started — they get none, as the application: every run then gets {@code
+     * vidocq.dev.devServices=false} alone.
+     */
+    // package-private for the unit test.
+    static TestServices testServices(DevServicesSession devs, DevTestServices.Opener opener, Consumer<String> info,
+            Consumer<String> warn) {
+        if (devs == null || devs.injected().isEmpty()) {
+            return TestServices.fixed(Map.of());
+        }
+        return new DevTestServices(opener, info, warn);
     }
 
     /** Starts the child, then reloads it on every source change until the watcher closes or Ctrl+C. */
@@ -567,7 +613,7 @@ public class VidocqDevMojo extends AbstractMojo {
         }
     }
 
-    /** What Ctrl+C runs: stops the source loop, the tests, the child, then the dev services. */
+    /** What Ctrl+C runs: stops the source loop, the tests and their dev services, the child, then the dev services. */
     private Thread shutdownHook(Thread mainThread, Testing testing, AtomicReference<ChildJvm> currentChild,
             DevServicesSession devs) {
         return new Thread(() -> {
@@ -1035,8 +1081,9 @@ public class VidocqDevMojo extends AbstractMojo {
     }
 
     /**
-     * Stops continuous testing: the request polling, then the run in flight, cancelled. Both are idempotent; the
-     * lock makes the shutdown hook and {@code finally} wait for each other, as {@link #closeDevServices} does.
+     * Stops continuous testing: the request polling, then the run in flight, cancelled, then the tests' own dev
+     * services (BUG-20261114-08). All are idempotent; the lock makes the shutdown hook and {@code finally} wait for each
+     * other, as {@link #closeDevServices} does, so that neither returns while the tests' containers still stop.
      */
     synchronized void closeTesting(ContinuousTesting testing, TestRequestFile requests) {
         if (requests != null) {

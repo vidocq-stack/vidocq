@@ -52,12 +52,20 @@ import java.util.function.Predicate;
  */
 public final class DefaultDevServiceContext implements DevServiceContext {
 
+    /** The prefix of the tuning keys. */
+    private static final String TUNING_PREFIX = "vidocq.dev.";
+
+    /** The tuning key that asks a provider to reuse its container from one session to the next. */
+    private static final String REUSE_KEY = TUNING_PREFIX + "reuse";
+
     private final Path basedir;
     private final Map<String, String> resolved;
     private final System.Logger logger;
     private final Function<String, Optional<String>> applicationFiles;
     private final Function<String, Optional<String>> applicationValues;
     private final Predicate<String> applicationClasspath;
+    /** Whether this context is {@link #isolated()}. */
+    private final boolean isolated;
 
     public DefaultDevServiceContext(Path basedir, Map<String, String> seed) {
         this(basedir, seed, key -> Optional.empty());
@@ -91,12 +99,31 @@ public final class DefaultDevServiceContext implements DevServiceContext {
     public DefaultDevServiceContext(Path basedir, Map<String, String> seed,
             Function<String, Optional<String>> applicationFiles, Function<String, Optional<String>> applicationValues,
             Predicate<String> applicationClasspath, System.Logger logger) {
+        this(basedir, seed, applicationFiles, applicationValues, applicationClasspath, logger, false);
+    }
+
+    private DefaultDevServiceContext(Path basedir, Map<String, String> seed,
+            Function<String, Optional<String>> applicationFiles, Function<String, Optional<String>> applicationValues,
+            Predicate<String> applicationClasspath, System.Logger logger, boolean isolated) {
         this.basedir = basedir;
         this.resolved = new LinkedHashMap<>(seed);
         this.logger = logger;
         this.applicationFiles = applicationFiles;
         this.applicationValues = applicationValues;
         this.applicationClasspath = applicationClasspath;
+        this.isolated = isolated;
+    }
+
+    /**
+     * This context for a session that runs beside another session of the same project and must share no container
+     * with it: the tests of a {@code vidocq:dev} session (BUG-20261114-08). Whatever source sets them,
+     * {@code vidocq.dev.reuse} reads {@code false}, since a reused container is found again by a name its
+     * configuration alone decides, and a {@code vidocq.dev.<service>[.<name>].port} key reads unset, since the other
+     * session's container holds that host port. Every other key reads as here.
+     */
+    DefaultDevServiceContext isolated() {
+        return new DefaultDevServiceContext(basedir, resolved, applicationFiles, applicationValues,
+                applicationClasspath, logger, true);
     }
 
     /** Fold the outputs of a provider so later providers can read them. */
@@ -108,6 +135,12 @@ public final class DefaultDevServiceContext implements DevServiceContext {
 
     @Override
     public Optional<String> property(String key) {
+        if (isolated && REUSE_KEY.equals(key)) {
+            return Optional.of(Boolean.FALSE.toString());
+        }
+        if (isolated && key.startsWith(TUNING_PREFIX) && key.endsWith(".port")) {
+            return Optional.empty();
+        }
         String v = resolved.get(key);
         if (isPresent(v)) {
             return Optional.of(v);
@@ -120,7 +153,7 @@ public final class DefaultDevServiceContext implements DevServiceContext {
         if (isPresent(v)) {
             return Optional.of(v);
         }
-        if (key.startsWith("vidocq.dev.")) {
+        if (key.startsWith(TUNING_PREFIX)) {
             return applicationFiles.apply(key).filter(DefaultDevServiceContext::isPresent);
         }
         return Optional.empty();

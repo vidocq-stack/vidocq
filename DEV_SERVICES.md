@@ -502,7 +502,8 @@ starts the test run's own containers and writes `vidocq-dev-services-test.json` 
 whose application reads its state file again on every reload. Before BUG-20261106-03, every host
 of a project shared one pair of files, and the reload after a test run reported the test run's
 container, `stopped`. `vidocq:dev` and `vidocq:run` still share the application's pair: both run
-the application, and one at a time.
+the application, and one at a time. The tests of `vidocq:dev` write the test pair too: they get a session of
+their own, host `vidocq:dev-tests`, which reuses no container and pins no host port (BUG-20261114-08).
 
 **`target/vidocq-dev-services.properties` is a different file, on purpose.** It is the one
 described in [Connection information](#connection-information) above: local to the machine,
@@ -635,7 +636,8 @@ applies `V1__products.sql` before the Mansart pool opens.
 ## Continuous testing (#122)
 
 `vidocq:dev` (with `vidocq.dev.continuousTesting`, on when `src/test/java` exists) and `vidocq:test` run the
-application's tests on every change. The tests reuse the dev containers: `vidocq:dev` hands every run its
-session's keys, `vidocq:test` opens its own session (host `vidocq:test`), and every run gets
-`-Dvidocq.dev.devServices=false`, so the JUnit host starts nothing. The tests share the dev database. See
+application's tests on every change. The tests never use the application's containers (BUG-20261114-08):
+`vidocq:dev` opens a session for them at their first run (host `vidocq:dev-tests`, no reused container, no pinned
+host port) and stops it with the goal, `vidocq:test` opens its own session (host `vidocq:test`), and every run gets
+`-Dvidocq.dev.devServices=false`, so the JUnit host starts nothing. See
 `docs/en/modules/ROOT/pages/continuous-testing.adoc`.

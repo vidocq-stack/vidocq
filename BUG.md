@@ -5,6 +5,38 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261114-08 — The tests of `vidocq dev` wipe the data of the running application
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/dev-test-dev-services`
+- **Affected modules**: vidocq-runtime-maven-plugin (`VidocqDevMojo`, `ContinuousTesting`, `TestRunner`), vidocq-runtime-devservices-host
+  (`DevServicesSession`, `DefaultDevServiceContext`)
+- **Symptom**: under `vidocq:dev`, continuous testing ran the tests against the dev session's own containers. A test's
+  `TRUNCATE … RESTART IDENTITY` wiped the data the developer's running application had just collected in the same
+  PostgreSQL. Reported by the FORGE-DASHBOARD session.
+- **Minimal repro**: `vidocq dev` on an application with the PostgreSQL dev service and a test that truncates a table;
+  store a row through the application, save a test file: the row is gone. In a unit test, the keys `TestRunner` handed
+  each run were `DevServicesSession.foldInto` of the dev session.
+- **Cause**: the design (continuous-testing spec §2.5, "Shared data"). `VidocqDevMojo.startContinuousTesting` folded
+  the dev session's keys into every run, with `-Dvidocq.dev.devServices=false` so that the test JVM started none.
+  `vidocq:test` and `mvn test` beside `vidocq:dev` already had containers of their own (BUG-20261106-03).
+- **Fix**: the maintainer's decision of 2026-11-14, the Quarkus model. The plugin JVM opens a second session for the
+  tests, host `vidocq:dev-tests` (`DevTestServices`, through `DevServicesSession.open` as `openDevServices` does). It
+  opens at the first run (`ContinuousTesting.Launcher.prepare`, outside the worker's lock, the run shown `running`),
+  every later run reuses it, and `ContinuousTesting.close` stops it after the run in flight on every path that ends
+  the goal, waiting for a session still opening. It starts from a copy of the explicit values the dev session started
+  from, so a URL the user set opts the tests' container out too. Its providers see `DefaultDevServiceContext.isolated()`:
+  `vidocq.dev.reuse` reads `false` and `vidocq.dev.<service>[.<name>].port` unset, since a reused container is the dev
+  one, found again by its name, and a pinned port is the dev container's. It writes the `-test` files; its lines start
+  with `Tests: `. Dev services off, or none started for the application: no test session, as before. A session that
+  cannot open is a warning, and the next run tries again. `DevTestServicesTest`, `ContinuousTestingTest`,
+  `TestRunnerTest`, `VidocqDevMojoTest`, `MavenSystemLoggerTest`, `DefaultDevServiceContextTest`,
+  `DevServicesSessionTest`.
+- **Investigations**:
+  - 2026-11-14: the reuse and port keys came up while reading the providers: with `vidocq.dev.reuse=true` and
+    `vidocq.dev.postgres.port=55432`, the example of `dev-services.adoc`, a second session gets the dev container back
+    by name, or fails to bind the port. Not run against Docker.
+
 ## BUG-20261114-07 — Under `@VidocqTest` the application module is loaded twice: each of its `provides` is found twice, and Vaadin does not start
 
 - **Date**: 2026-11-14

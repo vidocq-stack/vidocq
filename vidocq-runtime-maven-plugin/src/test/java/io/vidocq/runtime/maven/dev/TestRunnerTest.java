@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +43,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestRunnerTest {
 
     private static final Duration PID_TIMEOUT = Duration.ofSeconds(20);
+
+    /** The runs of a session without dev services. */
+    private static final TestServices NO_KEYS = TestServices.fixed(Map.of());
 
     @Test
     void allTestsRunWithoutDevServicesOfTheirOwn() {
@@ -74,7 +78,63 @@ class TestRunnerTest {
                         "-Dvidocq.dev.provided.vidocq.pool.url=postgres",
                         "-Dvidocq.dev.devServices=false"),
                 TestRunner.command("/w/mvnw", List.of("com.acme.ATest#x", "com.acme.BTest#y"), keys, true),
-                "the dev session's own switch never reaches the tests: they use its containers");
+                "a switch among the keys never reaches the tests: the plugin hosts their containers");
+    }
+
+    /** {@code vidocq:test}'s keys, or none: there is nothing to ready, nothing to close, and they keep their order. */
+    @Test
+    void aFixedSetOfKeysNeedsNoReadying() {
+        Map<String, String> keys = new LinkedHashMap<>();
+        keys.put("vidocq.pool.url", "jdbc:postgresql://localhost:32790/vidocq");
+        keys.put("vidocq.dev.provided.vidocq.pool.url", "postgres");
+        TestServices services = TestServices.fixed(keys);
+        keys.clear();
+
+        services.prepare();
+        services.close();
+
+        assertEquals(List.of("vidocq.pool.url", "vidocq.dev.provided.vidocq.pool.url"),
+                List.copyOf(services.keys().keySet()));
+    }
+
+    /**
+     * BUG-20261114-08: under {@code vidocq:dev}, the tests' own dev services are readied before a run, and the run gets
+     * their keys as they are when it starts; closing the runner closes them.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    @Timeout(30)
+    void aRunGetsTheKeysOfTheServicesReadiedForIt(@TempDir Path dir) throws Exception {
+        List<String> calls = new ArrayList<>();
+        Map<String, String> keys = new LinkedHashMap<>();
+        TestServices services = new TestServices() {
+            @Override
+            public void prepare() {
+                calls.add("prepare");
+                keys.put("vidocq.pool.url", "jdbc:postgresql://localhost:32790/vidocq");
+            }
+
+            @Override
+            public Map<String, String> keys() {
+                return Map.copyOf(keys);
+            }
+
+            @Override
+            public void close() {
+                calls.add("close");
+            }
+        };
+        Path log = dir.resolve("target/vidocq-dev-tests.log");
+        TestRunner runner = new TestRunner(dir, script(dir, "echo \"args: $*\"\n").toString(), services, log,
+                dir.resolve("target/surefire-reports"));
+
+        runner.prepare();
+        assertEquals(0, runner.launch(List.of()).waitFor());
+        runner.close();
+
+        assertTrue(Files.readString(log).contains(" -Dvidocq.pool.url=jdbc:postgresql://localhost:32790/vidocq"
+                + " -Dvidocq.dev.devServices=false"), Files.readString(log));
+        assertEquals(List.of("prepare", "close"), calls);
     }
 
     private static Path script(Path dir, String body) throws Exception {
@@ -92,7 +152,7 @@ class TestRunnerTest {
         Files.writeString(reports.resolve("TEST-com.acme.Old.xml"), "<testsuite/>");
         Files.writeString(reports.resolve("notes.txt"), "kept");
         Path log = dir.resolve("target/vidocq-dev-tests.log");
-        TestRunner runner = new TestRunner(dir, script(dir, "echo \"args: $*\"\n").toString(), Map.of(), log,
+        TestRunner runner = new TestRunner(dir, script(dir, "echo \"args: $*\"\n").toString(), NO_KEYS, log,
                 reports);
 
         assertEquals(0, runner.launch(List.of()).waitFor());
@@ -133,7 +193,7 @@ class TestRunnerTest {
     @Timeout(30)
     void aRunThatMissesAnArtifactOfflineRunsAgainOnline(@TempDir Path dir) throws Exception {
         Path log = dir.resolve("target/vidocq-dev-tests.log");
-        TestRunner runner = new TestRunner(dir, missingOffline(dir).toString(), Map.of(), log,
+        TestRunner runner = new TestRunner(dir, missingOffline(dir).toString(), NO_KEYS, log,
                 dir.resolve("target/surefire-reports"));
 
         ContinuousTesting.Launched launched = runner.launch(List.of("com.acme.ATest#x"));
@@ -153,7 +213,7 @@ class TestRunnerTest {
     @Timeout(30)
     void aFailureThatIsNotAnOfflineMissDoesNotRunAgain(@TempDir Path dir) throws Exception {
         Path maven = script(dir, "echo \"args: $*\" >> calls.txt\necho '[ERROR] COMPILATION ERROR : '\nexit 1\n");
-        TestRunner runner = new TestRunner(dir, maven.toString(), Map.of(), dir.resolve("target/t.log"),
+        TestRunner runner = new TestRunner(dir, maven.toString(), NO_KEYS, dir.resolve("target/t.log"),
                 dir.resolve("target/surefire-reports"));
 
         assertEquals(1, runner.launch(List.of()).waitFor());
@@ -169,7 +229,7 @@ class TestRunnerTest {
     @DisabledOnOs(OS.WINDOWS)
     @Timeout(30)
     void aCancelBetweenTheOfflineMissAndTheOnlineRunStopsTheRun(@TempDir Path dir) throws Exception {
-        TestRunner runner = new TestRunner(dir, missingOffline(dir).toString(), Map.of(),
+        TestRunner runner = new TestRunner(dir, missingOffline(dir).toString(), NO_KEYS,
                 dir.resolve("target/t.log"), dir.resolve("target/surefire-reports"));
         ContinuousTesting.Launched launched = runner.launch(List.of());
         long offline = writtenPid(dir.resolve("offline.pid"));
@@ -187,7 +247,7 @@ class TestRunnerTest {
     @Timeout(30)
     void cancellingKillsTheWholeProcessTree(@TempDir Path dir) throws Exception {
         Path maven = script(dir, "sleep 60 &\necho $! > child.pid\nwait\n");
-        TestRunner runner = new TestRunner(dir, maven.toString(), Map.of(), dir.resolve("target/t.log"),
+        TestRunner runner = new TestRunner(dir, maven.toString(), NO_KEYS, dir.resolve("target/t.log"),
                 dir.resolve("target/surefire-reports"));
         ContinuousTesting.Launched launched = runner.launch(List.of());
         long child = writtenPid(dir.resolve("child.pid"));
@@ -209,7 +269,7 @@ class TestRunnerTest {
     void aDescendantThatIgnoresTheTermSignalDoesNotDelayTheCancel(@TempDir Path dir) throws Exception {
         // The child writes its own pid once its trap is set: the cancel below always meets a child ignoring TERM.
         Path maven = script(dir, "sh -c 'trap \"\" TERM; echo $$ > child.pid; while :; do sleep 0.1; done' &\nwait\n");
-        TestRunner runner = new TestRunner(dir, maven.toString(), Map.of(), dir.resolve("target/t.log"),
+        TestRunner runner = new TestRunner(dir, maven.toString(), NO_KEYS, dir.resolve("target/t.log"),
                 dir.resolve("target/surefire-reports"));
         ContinuousTesting.Launched launched = runner.launch(List.of());
         long child = writtenPid(dir.resolve("child.pid"));

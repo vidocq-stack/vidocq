@@ -42,6 +42,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -349,6 +350,91 @@ class ContinuousTestingTest {
         assertEquals(finished, testing.lastComplete());
         nextLaunch().finish(0);
         assertEquals(Trigger.TEST_CHANGE, nextResult().trigger());
+    }
+
+    /**
+     * A launcher that readies something slow before a run: the first run of {@code vidocq:dev} starts the tests' own
+     * dev services (BUG-20261114-08). It counts what it readied, and records whether the run it closed was cancelled.
+     */
+    private final class ReadyingLauncher implements ContinuousTesting.Launcher {
+        final CountDownLatch readying = new CountDownLatch(1);
+        final CountDownLatch ready = new CountDownLatch(1);
+        final AtomicInteger prepared = new AtomicInteger();
+        final AtomicReference<FakeRun> last = new AtomicReference<>();
+        final List<String> closed = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void prepare() {
+            prepared.incrementAndGet();
+            readying.countDown();
+            try {
+                assertTrue(ready.await(10, TimeUnit.SECONDS), "never ready");
+            } catch (InterruptedException _) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        @Override
+        public ContinuousTesting.Launched launch(List<String> tests) {
+            FakeRun run = new FakeRun(tests);
+            last.set(run);
+            launches.add(run);
+            return run;
+        }
+
+        @Override
+        public void close() {
+            FakeRun run = last.get();
+            closed.add(run == null ? "no run" : "run cancelled: " + run.cancelled);
+        }
+    }
+
+    /** Replaces {@link #testing} with one on a {@link ReadyingLauncher}, started. */
+    private ReadyingLauncher testingWithAReadyingLauncher(Path dir) {
+        testing.close();
+        ReadyingLauncher launcher = new ReadyingLauncher();
+        testing = new ContinuousTesting(launcher, since -> reports.get(), () -> true,
+                new ContinuousTesting.Results(dir.resolve("r.json"), "log"), results::add, warnings::add,
+                Clock.systemUTC());
+        testing.start();
+        return launcher;
+    }
+
+    /**
+     * BUG-20261114-08: a run readies its launcher first, the run shown {@code running} meanwhile, and outside the lock:
+     * a change while the tests' containers start is never held back, and replaces the run they started for.
+     */
+    @Test
+    void aRunReadiesItsLauncherWithoutHoldingTheChangesBack(@TempDir Path dir) throws Exception {
+        ReadyingLauncher launcher = testingWithAReadyingLauncher(dir);
+
+        testing.changed(Trigger.RUN_ALL, TestControl.ReadyGate.NOW);
+        assertTrue(launcher.readying.await(5, TimeUnit.SECONDS), "the run readies the launcher first");
+        assertTrue(Files.readString(dir.resolve("r.json")).startsWith("{\"state\":\"running\""));
+
+        CompletableFuture.runAsync(() -> testing.changed(Trigger.TEST_CHANGE, TestControl.ReadyGate.NOW))
+                .get(2, TimeUnit.SECONDS);
+        assertNull(launches.poll(200, TimeUnit.MILLISECONDS), "no run before the launcher is ready");
+        launcher.ready.countDown();
+
+        nextLaunch().finish(0);
+        assertEquals(Trigger.TEST_CHANGE, nextResult().trigger(), "the change replaced the first run");
+        assertNull(launches.poll(200, TimeUnit.MILLISECONDS), "the first run never started");
+        assertEquals(2, launcher.prepared.get(), "every run readies the launcher, which keeps what it readied");
+    }
+
+    /** BUG-20261114-08: closing cancels the run in flight, then closes the launcher, once: the tests' containers. */
+    @Test
+    void closingClosesTheLauncherOnceAfterTheRunInFlight(@TempDir Path dir) throws Exception {
+        ReadyingLauncher launcher = testingWithAReadyingLauncher(dir);
+        launcher.ready.countDown();
+        testing.changed(Trigger.RUN_ALL, TestControl.ReadyGate.NOW);
+        nextLaunch();
+
+        testing.close();
+        testing.close();
+
+        assertEquals(List.of("run cancelled: true"), launcher.closed);
     }
 
     /** #138: a rerun whose names -Dtest matched to no test runs every test, rather than losing the failures. */

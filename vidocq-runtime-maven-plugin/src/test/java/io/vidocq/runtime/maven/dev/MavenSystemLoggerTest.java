@@ -62,6 +62,24 @@ class MavenSystemLoggerTest {
         assertEquals(List.of("info Postgres dev service 'default' ready", "warn slow", "error down | boom"), log.lines);
     }
 
+    /**
+     * BUG-20261114-08: the dev services of the tests of {@code vidocq:dev} start beside the application's, and their
+     * lines say whose they are.
+     */
+    @Test
+    void aPrefixStartsEveryLine() {
+        CapturingLog log = new CapturingLog();
+        System.Logger logger = new MavenSystemLogger(log, "Tests: ");
+
+        logger.log(System.Logger.Level.INFO, "DevService 'postgres' started");
+        logger.log(System.Logger.Level.WARNING, "slow");
+        logger.log(System.Logger.Level.ERROR, "down", new IllegalStateException("boom"));
+        logger.log(System.Logger.Level.INFO, "{0} ready", "default");
+
+        assertEquals(List.of("info Tests: DevService 'postgres' started", "warn Tests: slow",
+                "error Tests: down | boom", "info Tests: default ready"), log.lines);
+    }
+
     @Test
     void parametersAreFormattedTheSameWhateverTheLocale() {
         Locale before = Locale.getDefault();

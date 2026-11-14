@@ -28,7 +28,9 @@ The maintainer's decisions (brainstorming):
   - running tests in the application's JVM, which conflicts with the running app: ports, static state, module
     layers.
 - **Dev services:** tests reuse the dev session's running containers. A test that empties tables empties the dev
-  database; this is documented.
+  database; this is documented. **Superseded on 2026-11-14 (BUG-20261114-08):** a test's `TRUNCATE … RESTART
+  IDENTITY` wiped the data the developer's application had just collected. The maintainer chose the Quarkus model:
+  the tests of `vidocq:dev` get dev services of their own (§2.5).
 - **Two goals:**
   - `vidocq:dev` gains background testing and a `tests` dev console panel;
   - a new `vidocq:test` goal runs the same loop **without the application**, with a terminal interface. Quarkus has
@@ -65,9 +67,10 @@ A test run never overlaps an app reload in `vidocq:dev`: it starts after the rel
 - **Command.** One subprocess: `<maven> -ntp -o -q test-compile surefire:test`, with:
   - `-Dtest=<Class#method,…>` for a rerun of the failures;
   - `-DfailIfNoTests=false` and `-Dsurefire.failIfNoSpecifiedTests=false`;
-  - the dev session's injected keys as `-D` values;
-  - `-Dvidocq.dev.devServices=false`, so that the test JVM uses the dev containers instead of starting new ones
-    (§2.5).
+  - the injected keys of the tests' own dev services session as `-D` values (§2.5), each marked
+    `vidocq.dev.provided.<key>` as the application's are;
+  - `-Dvidocq.dev.devServices=false`, so that the test JVM does not start containers of its own on every run: the
+    plugin JVM hosts them, once for every run (§2.5).
 
   The Maven executable is resolved as `RecompileRunner` resolves it.
 - **Output.** stdout and stderr go to `target/vidocq-dev-tests.log`, overwritten per run. The terminal gets one
@@ -117,14 +120,33 @@ The fields take these values:
 
 ### 2.5 Dev services
 
-- **`vidocq:dev`** hosts the dev services session, as today. The test subprocess receives the session's injected
-  keys and `vidocq.dev.devServices=false`, so the tests use the running containers.
+- **`vidocq:dev`** hosts the application's dev services session, as before, and a second one for the tests
+  (BUG-20261114-08, the Quarkus model), host `vidocq:dev-tests`, in the plugin JVM:
+  - **Lazy.** It opens at the first test run (`ContinuousTesting.Launcher.prepare`, on the worker, the run already
+    written `running`, outside the worker's lock: a change or a close is never held back while containers start).
+    With continuous testing off, or a session without a test run, no test container ever starts.
+  - **Once.** Every later run reuses it and gets its keys. A session that cannot open is a warning; that run goes on
+    without its keys, and the next run tries again.
+  - **Closed with the session.** `ContinuousTesting.close` cancels the run in flight, then closes it: through
+    `closeTesting`, from the shutdown hook (Ctrl+C) and from `endSession`, which every end of the source loop and every
+    failure of `runSession` reach. A close waits for a session still opening, so no container outlives the goal; and
+    since it reuses none, Ryuk removes them if the JVM dies.
+  - **Apart.** It starts from the explicit values the dev session started from (a copy taken before the dev
+    session's keys join them), with the same application files and class path. So a datasource URL the user set opts
+    the tests' container out too, and the tests keep what they had for it. Its providers see an isolated context:
+    `vidocq.dev.reuse` reads `false` and every `vidocq.dev.<service>[.<name>].port` reads unset, whatever their
+    source, since a reused container would be the dev one, found again by its name, and a pinned port is the dev
+    container's. It writes `target/vidocq-dev-services-test.json` and `-test.properties`, never the dev session's
+    files. Its lines in the terminal start with `Tests: `; the dev console shows nothing more.
+  - **Switches.** Dev services off for the dev session, or none started for the application: no test session, the
+    runs get `vidocq.dev.devServices=false` alone, as before.
+
+  The cost, accepted by the maintainer: a second set of containers while the session runs, and a slower first run.
 - **`vidocq:test`** opens a `DevServicesSession` itself, host `vidocq:test`, once for its whole life. It closes it on
   exit (`q`, Ctrl+C, the end of the goal), with the synchronized close pattern of #123. Every run reuses it the same
   way.
-- **Shared data.** The tests share the database with the running application (`vidocq:dev`) or with the other runs
-  (`vidocq:test`). A test that deletes rows deletes the dev data. This is documented, and it is the maintainer's
-  decision.
+- **Shared data.** The tests of `vidocq:dev` never share a database with the running application. The runs of one
+  session share their own (`vidocq:dev` or `vidocq:test`): a test that deletes rows deletes them for the next run.
 
 ## 3. `vidocq:dev`: the dev console
 

@@ -192,6 +192,47 @@ class DevServicesSessionTest {
         }
     }
 
+    /**
+     * BUG-20261114-08: the tests of a {@code vidocq:dev} session get a session of their own, beside the dev one. It
+     * writes the files of a test run, and its providers reuse no container and pin no host port: the dev session's
+     * containers hold those. The dev session itself keeps them.
+     */
+    @Test
+    void theTestsOfADevSessionShareNoContainerWithIt(@TempDir Path basedir) throws Exception {
+        Map<String, String> configured = Map.of("vidocq.dev.reuse", "true", "vidocq.dev.postgres.port", "55432");
+        Map<String, String> devSaw = new LinkedHashMap<>();
+        Map<String, String> testsSaw = new LinkedHashMap<>();
+
+        try (DevServicesSession dev = DevServicesSession.open("vidocq:dev", basedir, List.of(recording(devSaw)),
+                new DefaultDevServiceContext(basedir, configured), LOG, CLOCK);
+             DevServicesSession tests = DevServicesSession.open(DevServicesSession.DEV_TESTS_HOST, basedir,
+                     List.of(recording(testsSaw)), new DefaultDevServiceContext(basedir, configured), LOG, CLOCK)) {
+            assertEquals(basedir.resolve("target").resolve(StateFile.FILE_NAME), dev.stateFile());
+            assertEquals(basedir.resolve("target").resolve(StateFile.TEST_FILE_NAME), tests.stateFile());
+            assertTrue(Files.readString(tests.stateFile()).contains("\"host\":\"vidocq:dev-tests\""),
+                    Files.readString(tests.stateFile()));
+            assertTrue(Files.isRegularFile(basedir.resolve("target").resolve("vidocq-dev-services-test.properties")));
+        }
+
+        assertEquals(Map.of("vidocq.dev.reuse", "true", "vidocq.dev.postgres.port", "55432"), devSaw);
+        assertEquals(Map.of("vidocq.dev.reuse", "false", "vidocq.dev.postgres.port", "unset"), testsSaw);
+    }
+
+    /** A PostgreSQL-like provider that records the reuse and port keys its context gives it. */
+    private static DevService recording(Map<String, String> saw) {
+        return new DevService() {
+            @Override public String id() { return "postgres"; }
+            @Override public boolean appliesWhen(DevServiceContext ctx) { return true; }
+            @Override public Map<String, String> start(DevServiceContext ctx) {
+                for (String key : List.of("vidocq.dev.reuse", "vidocq.dev.postgres.port")) {
+                    saw.put(key, ctx.property(key).orElse("unset"));
+                }
+                return Map.of("vidocq.pool.url", "jdbc:postgresql://localhost:32790/vidocq");
+            }
+            @Override public void stop() { /* nothing started */ }
+        };
+    }
+
     @Test
     void theApplicationsHostsKeepTheProjectsFiles(@TempDir Path basedir) throws Exception {
         for (String host : List.of("vidocq:dev", "vidocq:run")) {

@@ -38,7 +38,7 @@ xref:dev-services.adoc#in-tests[dev services host] included. Integration tests r
 | `r`, `f`, `q`, Enter, when a console is attached
 
 | Dev services
-| The session of `vidocq:dev`
+| A session of their own, apart from the application's, host `vidocq:dev-tests`
 | A session of its own, host `vidocq:test`
 |===
 
@@ -223,13 +223,29 @@ failures and a chart of the failures over time, with two buttons: *Run all tests
 [#dev-services]
 == Dev services
 
-The tests use the same containers as the application: `vidocq:dev` hands every run its session's connection keys,
-and `vidocq:test` opens a session of its own, host `vidocq:test`, once for its whole life. Every run gets
-`-Dvidocq.dev.devServices=false`, so the tests never start containers of their own.
+The tests never use the application's containers [.tag-new]#NEW#. Under `vidocq:dev`, they get a dev services session
+of their own, host `vidocq:dev-tests`, apart from the application's:
 
-WARNING: The tests share the database with the running application (`vidocq:dev`) or with the other runs
-(`vidocq:test`). A test that empties a table empties it in your dev database. Keep such tests on data they create
-themselves, or turn continuous testing off for that project.
+* It opens at the first test run, which is slower for it: the `tests` panel shows the run `running` while the
+  containers start. With continuous testing off, or without a test run, no container starts for the tests.
+* Every later run reuses it, and it stops when `vidocq:dev` ends, on Ctrl+C or a failure of the goal, after the run in
+  flight was cancelled.
+* It reuses no container and pins no host port: `vidocq.dev.reuse` and the `vidocq.dev.<service>.port` keys stay the
+  application's, whose containers hold them. A value you set yourself, such as `-Dvidocq.pool.url`, keeps the tests'
+  container from starting, as it keeps the application's.
+* It writes `target/vidocq-dev-services-test.json` and `target/vidocq-dev-services-test.properties`, the
+  xref:dev-services.adoc#test-run-files[files of a test run], and its lines in the terminal start with `Tests:`.
+* When it cannot start, a warning says why, the run goes on without it, and the next run tries again.
+
+`vidocq:test` opens a session of its own, host `vidocq:test`, once for its whole life. Every run, under either goal,
+gets `-Dvidocq.dev.devServices=false`, so the test JVM never starts containers on each run. With dev services off for
+`vidocq:dev`, `-Dvidocq.dev.devServices=false` or in the application's files, the tests get none either.
+
+Running `vidocq:dev` with its tests costs a second set of containers while it runs. Until BUG-20261114-08, the tests
+used the application's containers, and a test that emptied a table emptied it in your dev database.
+
+WARNING: The runs of one session share their database, which lives as long as the session: a test that empties a
+table empties it for the next run too. Keep such tests on data they create themselves.
 
 [#limits]
 == Limits
@@ -243,8 +259,8 @@ themselves, or turn continuous testing off for that project.
   [.tag-new]#NEW#. That is the first run of a new project under `vidocq dev`, which resolves the application's
   dependencies only, or the first run after a test dependency was added to the pom.
 * The keys need a real console: an IDE's run window may not deliver them.
-* The dev session's keys, a password included, are on the command line of the test run: other users of the machine
-  can see it in the process list, as they can the application's.
+* The keys of the tests' dev services, a password included, are on the command line of the test run: other users of
+  the machine can see it in the process list, as they can the application's.
 
 [#turning-it-off]
 == Turning it off

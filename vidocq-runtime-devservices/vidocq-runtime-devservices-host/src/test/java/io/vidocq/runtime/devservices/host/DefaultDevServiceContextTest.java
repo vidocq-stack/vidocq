@@ -48,6 +48,40 @@ class DefaultDevServiceContextTest {
         assertSame(host, ctx.log());
     }
 
+    /**
+     * BUG-20261114-08: the tests of a {@code vidocq:dev} session have a session of their own, beside the dev one. A
+     * reused container is found again by its name, which the configuration alone decides, and a pinned host port is
+     * the dev container's already: the isolated context reuses nothing and pins no port, whatever source sets them.
+     */
+    @Test
+    void anIsolatedContextReusesNoContainerAndPinsNoHostPort() {
+        Map<String, String> files = Map.of("vidocq.dev.keycloak.port", "18180");
+        System.Logger log = System.getLogger("isolated.under.test");
+        Path basedir = Path.of("/tmp/project");
+        DefaultDevServiceContext ctx = new DefaultDevServiceContext(basedir,
+                Map.of("vidocq.dev.reuse", "true", "vidocq.dev.postgres.port", "55432",
+                        "vidocq.dev.postgres.audit.port", "55433", "vidocq.dev.postgres.image", "postgres:17",
+                        "vidocq.pool.url", "jdbc:postgresql://db/app"),
+                key -> Optional.ofNullable(files.get(key)), key -> Optional.of("from the files"),
+                "org.postgresql.Driver"::equals, log);
+
+        DefaultDevServiceContext isolated = ctx.isolated();
+
+        assertEquals(Optional.of("false"), isolated.property("vidocq.dev.reuse"));
+        assertEquals(Optional.empty(), isolated.property("vidocq.dev.postgres.port"));
+        assertEquals(Optional.empty(), isolated.property("vidocq.dev.postgres.audit.port"));
+        assertEquals(Optional.empty(), isolated.property("vidocq.dev.keycloak.port"));
+        assertEquals(Optional.of("postgres:17"), isolated.property("vidocq.dev.postgres.image"), "another tuning key");
+        assertEquals(Optional.of("jdbc:postgresql://db/app"), isolated.property("vidocq.pool.url"), "an opt-out key");
+        assertEquals(Optional.of("from the files"), isolated.applicationProperty("vidocq.pool.url"));
+        assertTrue(isolated.onApplicationClasspath("org.postgresql.Driver"));
+        assertEquals(basedir, isolated.basedir());
+        assertSame(log, isolated.log());
+        assertEquals(Optional.of("true"), ctx.property("vidocq.dev.reuse"), "the context it came from is unchanged");
+        assertEquals(Optional.of("55432"), ctx.property("vidocq.dev.postgres.port"));
+        assertEquals(Optional.of("18180"), ctx.property("vidocq.dev.keycloak.port"));
+    }
+
     @Test
     void seededOverrideBeatsSystemProperty() {
         DefaultDevServiceContext ctx = new DefaultDevServiceContext(Path.of("."), Map.of("k", "fromSeed"));
