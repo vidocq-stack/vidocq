@@ -126,6 +126,7 @@ class FoyWebSocketExtensionTest {
     @Test
     void reportsAnyForTheWildcardAndTheListOtherwise() {
         assertEquals("any", originsRow("*"));
+        assertEquals("any", originsRow("*, https://a.example"));
         assertEquals("https://a.example, https://b.example", originsRow("https://a.example, https://b.example"));
     }
 

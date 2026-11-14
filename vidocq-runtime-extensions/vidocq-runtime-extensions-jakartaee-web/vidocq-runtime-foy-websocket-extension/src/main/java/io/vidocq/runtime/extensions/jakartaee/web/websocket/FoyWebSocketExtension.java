@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.websocket;
 
+import io.vidocq.chappe.api.WebSocketOrigins;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.report.StartupReportContext;
@@ -31,8 +32,9 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Jakarta WebSocket 2.2 through Foy. Foy's {@code ServletContainerInitializer} registers the endpoints of the
  * application; this extension puts the module in the application and reports the origins it accepts. The origins
- * come from {@value #ORIGINS_KEY}, read and checked at start by the Chappe web server extension, and reach Foy
- * through {@link AllowedOriginsParameter}. The startup report reads a snapshot taken at start.
+ * come from {@value #ORIGINS_KEY}. {@link AllowedOriginsParameter} checks the key first, at start, with the parser
+ * of the native WebSocket upgrade, and gives it to Foy; the Chappe web server extension then applies it to the native
+ * routes. The startup report reads a snapshot taken at start.
  */
 public final class FoyWebSocketExtension implements VidocqExtension, StartupReportContributor {
 
@@ -74,6 +76,6 @@ public final class FoyWebSocketExtension implements VidocqExtension, StartupRepo
         if (origins.isEmpty()) {
             return "same origin only";
         }
-        return "*".equals(origins) ? "any" : origins;
+        return WebSocketOrigins.parse(origins).allowsAny() ? "any" : origins;
     }
 }
