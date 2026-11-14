@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.essentials.chappe;
 
 import io.vidocq.chappe.api.Router;
 import io.vidocq.chappe.api.Server;
+import io.vidocq.chappe.api.WebSocketOrigins;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.Suspendable;
 import io.vidocq.runtime.spi.VidocqExtension;
@@ -74,6 +75,9 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
      */
     static final String HTTP_HOST_ALIAS = "vidocq.http.host";
     static final String HTTP_PORT_ALIAS = "vidocq.http.port";
+
+    /** The origins a native WebSocket handshake may come from, besides its own (Chappe {@code WebSocketOrigins}). */
+    static final String WEBSOCKET_ORIGINS_KEY = "vidocq.websocket.allowed-origins";
 
     private final List<Server> servers = new ArrayList<>();
     /** The address each listener bound, by name, read once after its start: a stopped server forgets it. */
@@ -139,12 +143,14 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
                 HTTP_PORT_ALIAS,
                 // Claimed by ChappeMountConfigExtension, declared here so the shared vidocq.http.
                 // namespace is audited as a whole rather than half-claimed.
-                "vidocq.http.mount.*");
+                "vidocq.http.mount.*",
+                WEBSOCKET_ORIGINS_KEY);
     }
 
     @Override
     public void onStart(ExtensionContext context) {
         this.mountPoint = ChappeMountPoint.instance();
+        mountPoint.webSocketOrigins(webSocketOrigins(context.config()));
 
         // after the extensions' own listeners: a name the configuration shares with one of them fails here
         for (ChappeListener l : resolveListeners(context.config())) {
@@ -249,6 +255,15 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
             }
         }
         ChappeMountPoint.uninstall();
+    }
+
+    private static WebSocketOrigins webSocketOrigins(VidocqConfig config) {
+        String value = config.getValue(WEBSOCKET_ORIGINS_KEY, String.class).orElse(null);
+        try {
+            return WebSocketOrigins.parse(value);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(WEBSOCKET_ORIGINS_KEY + " is invalid: " + e.getMessage(), e);
+        }
     }
 
     List<ChappeListener> resolveListeners(VidocqConfig config) {

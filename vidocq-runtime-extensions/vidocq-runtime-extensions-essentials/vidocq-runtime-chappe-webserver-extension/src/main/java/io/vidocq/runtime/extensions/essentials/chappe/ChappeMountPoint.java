@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.essentials.chappe;
 import io.vidocq.chappe.api.Handler;
 import io.vidocq.chappe.api.Router;
 import io.vidocq.chappe.api.WebSocketHandler;
+import io.vidocq.chappe.api.WebSocketOrigins;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -63,6 +64,7 @@ public final class ChappeMountPoint {
     private static final String LISTENER_NAME = "listenerName";
 
     private final Map<String, Router.Builder> routers = new LinkedHashMap<>();
+    private WebSocketOrigins webSocketOrigins = WebSocketOrigins.sameOrigin();
     /** Mounts by listener, applied to the router longest prefix first when the server starts. */
     private final Map<String, List<PendingMount>> mounts = new LinkedHashMap<>();
     private final Map<String, Declaration> listeners = new LinkedHashMap<>();
@@ -382,6 +384,14 @@ public final class ChappeMountPoint {
         return List.copyOf(listeners.values());
     }
 
+    /**
+     * The origins the native WebSocket routes accept, applied to every router {@link #buildRouter} builds;
+     * same-origin only until set.
+     */
+    void webSocketOrigins(WebSocketOrigins origins) {
+        this.webSocketOrigins = Objects.requireNonNull(origins, "origins");
+    }
+
     Router buildRouter(String listenerName) {
         Router.Builder b = routers.computeIfAbsent(listenerName, n -> Router.builder());
         // Applied once: the pending mounts move into the router.
@@ -390,6 +400,7 @@ public final class ChappeMountPoint {
         for (PendingMount m : pending) {
             b.mount(m.prefix(), m.handler(), m.stripPrefix());
         }
+        b.webSocketOrigins(webSocketOrigins);
         return b.build();
     }
 

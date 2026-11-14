@@ -191,6 +191,61 @@ class ChappeServerEndToEndTest {
         assertEquals("hello from core", resp.body());
     }
 
+    @Test
+    void allowedOriginsMustParse() {
+        var ctx = new FakeExtensionContext(TestConfig.of(Map.of(
+                "vidocq.chappe.listener.default.port", Integer.toString(port),
+                "vidocq.websocket.allowed-origins", "ftp://x")));
+
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> bootstrap.onStart(ctx));
+
+        assertTrue(failure.getMessage().startsWith("vidocq.websocket.allowed-origins"), failure.getMessage());
+    }
+
+    @Test
+    void nativeRoutesRefuseAnotherOriginByDefault() throws Exception {
+        mountEchoSocket();
+        bootstrap.onStart(new FakeExtensionContext(TestConfig.of(Map.of(
+                "vidocq.chappe.listener.default.port", Integer.toString(port)))));
+
+        assertEquals(403, handshakeStatus("http://evil.example"));
+    }
+
+    @Test
+    void nativeRoutesAcceptAnOriginTheKeyAllows() throws Exception {
+        mountEchoSocket();
+        bootstrap.onStart(new FakeExtensionContext(TestConfig.of(Map.of(
+                "vidocq.chappe.listener.default.port", Integer.toString(port),
+                "vidocq.websocket.allowed-origins", "http://evil.example"))));
+
+        assertEquals(101, handshakeStatus("http://evil.example"));
+    }
+
+    private static void mountEchoSocket() {
+        ChappeMountPoint.instance().webSocket(ChappeListener.DEFAULT, "/echo", new WebSocketHandler() { });
+    }
+
+    /** A hand-written HTTP/1.1 upgrade request; the status code of the first response line. */
+    private int handshakeStatus(String origin) throws Exception {
+        try (java.net.Socket socket = new java.net.Socket("127.0.0.1", port)) {
+            socket.setSoTimeout(5000);
+            String key = java.util.Base64.getEncoder().encodeToString(new byte[16]);
+            String request = "GET /echo HTTP/1.1\r\n"
+                    + "Host: 127.0.0.1:" + port + "\r\n"
+                    + "Upgrade: websocket\r\n"
+                    + "Connection: Upgrade\r\n"
+                    + "Sec-WebSocket-Key: " + key + "\r\n"
+                    + "Sec-WebSocket-Version: 13\r\n"
+                    + "Origin: " + origin + "\r\n\r\n";
+            socket.getOutputStream().write(request.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+            socket.getOutputStream().flush();
+            var in = new java.io.BufferedReader(new java.io.InputStreamReader(
+                    socket.getInputStream(), java.nio.charset.StandardCharsets.US_ASCII));
+            return Integer.parseInt(in.readLine().split(" ")[1]);
+        }
+    }
+
     private static int freePort() throws Exception {
         try (ServerSocket s = new ServerSocket(0)) {
             return s.getLocalPort();
