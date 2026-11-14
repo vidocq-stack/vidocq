@@ -464,6 +464,9 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 | xref:modules/vidocq-runtime-core.adoc#vidocq-gen-002[`VIDOCQ-GEN-002`]
 | The application module has bean classes and no Vauban index: it was compiled without the annotation processor.
 
+| xref:modules/vidocq-runtime-core.adoc#vidocq-lay-001[`VIDOCQ-LAY-001`]
+| A trampoline launched with the application on the module path, as an IDE runs it: the application's modules are in the boot layer and in the application layer.
+
 | xref:modules/vidocq-runtime-core.adoc#vidocq-gen-003[`VIDOCQ-GEN-003`]
 | A production start ran the build compatible extensions: the record `vidocq:generate` wrote of them is not this deployment's, and the message names the classes that differ.
 

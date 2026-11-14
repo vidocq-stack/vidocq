@@ -1384,6 +1384,12 @@ in the JVM IntelliJ starts directly, never under `vidocq:dev`, so it never has t
 module(<<dev-tools,Dev tools and binaries>>), and there is no `(debug)` file to attach a
 separate debugger to — attach IntelliJ's own debugger to this configuration instead.
 
+IntelliJ puts the application on the module path, so in the JVM's boot layer, and the trampoline loads it again into
+the application layer: its classes exist twice, and the start warns with
+xref:modules/vidocq-runtime-core.adoc#vidocq-lay-001[`VIDOCQ-LAY-001`], naming the modules. A library that looks its
+services up itself can find them twice (BUG-20261114-10). The Maven kind runs `vidocq:dev` and `vidocq:run`, which
+load the application once: prefer it.
+
 [source,xml]
 ----
 <component name="ProjectRunConfigurationManager">

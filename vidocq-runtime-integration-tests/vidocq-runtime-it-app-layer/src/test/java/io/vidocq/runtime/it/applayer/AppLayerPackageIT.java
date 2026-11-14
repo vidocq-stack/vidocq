@@ -43,6 +43,8 @@ class AppLayerPackageIT {
     private static final String LAYER_LOADER = "vauban-app-layer";
     /** What the fixture's probe prints when the launch loaded the application module once (BUG-20261114-10). */
     static final String ONE_COPY = "TOOL-PROVIDERS 1";
+    /** The anomaly of an application loaded twice, which only an IDE run of a trampoline may log. */
+    static final String TWICE_WARNING = "[VIDOCQ-LAY-001]";
 
     @Test
     void allShipsTheLibraryInAppAndLaunchesItInTheApplicationLayer(@TempDir Path dir) throws Exception {
@@ -100,6 +102,7 @@ class AppLayerPackageIT {
                 "the application alone in the layer, the libraries outside:\n" + out);
         assertTrue(out.contains("SQL-OK"), out);
         assertTrue(out.contains(ONE_COPY), "one copy of the application module:\n" + out);
+        assertFalse(out.contains(TWICE_WARNING), out);
     }
 
     /**
@@ -125,6 +128,7 @@ class AppLayerPackageIT {
         assertTrue(out.contains("no application layer"), out);
         assertTrue(out.contains("SQL-OK"), out);
         assertTrue(out.contains(ONE_COPY), "one copy of the application module:\n" + out);
+        assertFalse(out.contains(TWICE_WARNING), "no layer, so nothing twice:\n" + out);
     }
 
     /** Launches the distribution's script until the runtime has started; returns what it printed. */

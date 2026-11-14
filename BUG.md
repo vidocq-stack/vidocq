@@ -34,10 +34,20 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
      `-Dvidocq.app.layer.off=true` (`LayerSplit.OFF_PROPERTY`), and `Vidocq.run` then keeps the application where the
      JVM resolved it: no second copy, the boot module is the application, the startup report says
      `no application layer`.
+  3. the one launch left with the duplicate, a trampoline run from the IDE with the application on the module path,
+     warns: `Vidocq.run` records the modules the boot layer holds too (`VidocqAppLayer.Installation.twice`), and the
+     start logs the anomaly `VIDOCQ-LAY-001`, recalled by the report's `anomalies` section, which names them and
+     points to `vidocq:dev` / `vidocq:run` (the default configurations of `vidocq:idea`). The maintainer chose the
+     warning over a relaunch, which would take the IDE debugger away.
+- **Behaviour change**: without a layer, nothing promotes the `META-INF/services` files of the processors, so an
+  application that ran the legacy layout through the second copy must now declare its `_VaubanComponents` provider or
+  open its bean packages to `io.vidocq.vauban.core`, as one without a trampoline always had to; the start says so
+  (the fixture of `AppLayerPackageIT` needed the `opens`).
 - **Validation**: `TrampolineLaunchProcessTest` (a real trampoline launch from the module path: one provider, the
-  application loader, with the switch); `VidocqPackageMojoTest` and `ChildJvmTest` (the launchers);
-  `AppLayerPackageIT` (`classes`, and the legacy layout) and `AppLayerDevIT` (`vidocq.dev.layer=false`) count one
-  provider in a real launch (`-Pit`). All red before the fix.
+  application loader, no `VIDOCQ-LAY-001` with the switch; two providers and `VIDOCQ-LAY-001` naming the module
+  without it); `ModulesTwiceTest`; `VidocqPackageMojoTest` and `ChildJvmTest` (the launchers); `AppLayerPackageIT`
+  (`classes`, and the legacy layout) and `AppLayerDevIT` (`vidocq.dev.layer=false`) count one provider and no
+  `VIDOCQ-LAY-001` in a real launch (`-Pit`). All red before the fix.
 
 ## BUG-20261114-07 — Under `@VidocqTest` the application module is loaded twice: each of its `provides` is found twice, and Vaadin does not start
 
