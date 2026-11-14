@@ -189,7 +189,7 @@ public final class Vidocq {
         return null;
     }
 
-    private static void ensureLayer(Class<?> caller) {
+    static void ensureLayer(Class<?> caller) {
         if (VidocqAppLayer.alreadyInLayer()) {
             return;
         }
