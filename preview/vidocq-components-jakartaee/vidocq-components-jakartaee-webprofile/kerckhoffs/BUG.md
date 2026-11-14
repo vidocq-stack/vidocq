@@ -1,0 +1,6 @@
+# BUG.md — Kerckhoffs
+
+Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
+Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
+
+No entry yet.
