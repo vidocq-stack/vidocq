@@ -219,8 +219,9 @@ public class CervantesJwtDeployableContainer implements DeployableContainer<Cerv
         // IMPORTANT: JwtAuthenticationFilter has @Provider @PreMatching on the *real* class.
         // CassiniStackBuilderImpl.build() creates a CDI proxy for it and registers it
         // via FilterEntry.of(proxy) — which checks proxy.getClass() for @PreMatching and
-        // finds nothing (CDI proxies don't carry annotations). Result: filter registers as
-        // post-matching, and setSecurityContext() throws IllegalStateException (§6.6).
+        // finds nothing (CDI proxies don't carry annotations). Result: the filter registers as
+        // post-matching and loses its place ahead of the post-matching filters (before Cassini's
+        // CASSINI-056, setSecurityContext() also threw IllegalStateException there).
         //
         // Fix: use a wrapping BeanProvider that excludes JwtAuthenticationFilter from
         // getResourceClasses(), then pass PreMatchingJwtAuthDelegate explicitly.

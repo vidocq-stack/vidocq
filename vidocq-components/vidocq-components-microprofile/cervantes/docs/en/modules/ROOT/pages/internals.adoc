@@ -118,7 +118,7 @@ try {
 }
 ----
 
-`@PreMatching` is required so that `setSecurityContext` can be called (JAX-RS §6.6). The `AUTHENTICATION` priority guarantees execution _before_ authorisation filters.
+`@PreMatching` checks the token and sets the security context before the request is matched, so the filter runs ahead of every post-matching filter, whatever its priority. Among the pre-matching filters, the `AUTHENTICATION` priority runs it _before_ authorisation filters. `setSecurityContext` itself does not need `@PreMatching`: `ContainerRequestContext` allows it in any request filter and forbids it only in a response filter.
 
 `JwtSecurityContext` adapts `SecurityContext`:
 

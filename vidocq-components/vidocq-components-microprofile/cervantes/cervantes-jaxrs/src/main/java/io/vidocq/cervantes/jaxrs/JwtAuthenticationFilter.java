@@ -46,8 +46,11 @@ import java.util.Map;
  *   <li>a cookie named by {@code mp.jwt.token.cookie} when {@code mp.jwt.token.header=Cookie}.</li>
  * </ol>
  *
- * <p>{@code @PreMatching} (required to call {@code setSecurityContext}, JAX-RS §6.6) and
- * priority {@link Priorities#AUTHENTICATION} (runs before authorization). A validation failure
+ * <p>{@code @PreMatching}, so that the token is checked and the security context set before the
+ * request is matched, ahead of every post-matching filter whatever its priority, and priority
+ * {@link Priorities#AUTHENTICATION} among the pre-matching filters. ({@code setSecurityContext}
+ * itself may be called from any request filter: {@code ContainerRequestContext} only forbids it
+ * in a response filter.) A validation failure
  * aborts the request with {@code 401}. When no token is present the request remains anonymous
  * — authorization ({@code @RolesAllowed}, etc.) will decide.</p>
  *
