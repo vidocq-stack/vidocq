@@ -19,27 +19,61 @@
  */
 package io.vidocq.runtime.junit;
 
+import io.vidocq.runtime.core.LayerSplit;
+import io.vidocq.runtime.core.VidocqAppLayer;
+
 import java.io.File;
+import java.io.IOException;
+import java.lang.module.ModuleDescriptor;
+import java.lang.module.ModuleFinder;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * The command that starts the application under test, and where its parts come from. The runtime's own main boots
- * the application module from the module path of the tests, as {@code vidocq:run} does: under Surefire it holds
+ * the application from the module path of the tests, as {@code vidocq:run} does: under Surefire it holds
  * {@code target/classes} and the main dependencies the application module requires, while JUnit and the other test
  * dependencies stay on the class path, out of the application's sight. Surefire also leaves there the runtime
  * dependencies no module requires, a JDBC driver for one: {@code vidocq:test-path} names them in
- * {@value #RUNTIME_PATH_PROPERTY}, and they join the application's module path.
+ * {@value #RUNTIME_PATH_PROPERTY}, and they join the application's path.
+ *
+ * <p>That path is then split as {@code vidocq:run} splits it ({@link #layout}): the application module and the
+ * libraries {@link LayerSplit} gives it go to the application layer through {@code -Dvidocq.app.path}, the runtime and
+ * the rest stay on the module path. A module must not be on both: the JVM would resolve it into the boot layer, and a
+ * {@link java.util.ServiceLoader} of the application layer would find each of its providers twice (BUG-20261114-07).
  */
 final class ApplicationLaunch {
 
-    /** The runtime's own main, which boots {@code vidocq.app.module}. */
+    /** The runtime's own main, which boots the application of {@code vidocq.app.path}. */
     static final String RUNTIME_MAIN = "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq";
+
+    /** What {@code --add-modules} always holds: every module of the module path is resolved. */
+    private static final String ALL_MODULE_PATH = "ALL-MODULE-PATH";
+
+    /**
+     * Where the modules of the launch go.
+     *
+     * @param modulePath the module path: the runtime, the bricks and what they read
+     * @param appPath    {@code vidocq.app.path}: the application module and its libraries
+     * @param properties the {@code key=value} system properties that tell the runtime how the layer was split
+     * @param addModules the value of {@code --add-modules}
+     */
+    record Layout(List<Path> modulePath, List<Path> appPath, List<String> properties, String addModules) {
+        Layout {
+            modulePath = List.copyOf(modulePath);
+            appPath = List.copyOf(appPath);
+            properties = List.copyOf(properties);
+        }
+    }
 
     /**
      * The runtime dependencies of the application, as {@code vidocq:test-path} hands them to the tests through
@@ -95,15 +129,17 @@ final class ApplicationLaunch {
     }
 
     /**
-     * {@code java} with the {@code default} Chappe listener on {@code 127.0.0.1:port}, then {@code properties}
-     * ({@code key=value}, as {@code -D}), then the application module on {@code modulePath}. Every module of the
-     * path is resolved, as in {@code vidocq:dev} and the packaged application, so that a driver or a provider no
-     * module requires is still found through {@link java.util.ServiceLoader}.
+     * {@code java} with the {@code default} Chappe listener on {@code 127.0.0.1:port}, then the properties of the
+     * layout and {@code properties} ({@code key=value}, as {@code -D}), then the application {@code module} on the
+     * paths of {@code layout}. Every module of the module path is resolved, as in {@code vidocq:dev} and the packaged
+     * application, so that a driver or a provider no module requires is still found through
+     * {@link java.util.ServiceLoader}.
      */
-    static List<String> command(String java, String modulePath, String module, int port, List<String> properties) {
+    static List<String> command(String java, Layout layout, String module, int port, List<String> properties) {
         List<String> command = new ArrayList<>(List.of(java,
                 "-Dvidocq.chappe.listener.default.host=127.0.0.1",
                 "-Dvidocq.chappe.listener.default.port=" + port));
+        layout.properties().forEach(property -> command.add("-D" + property));
         for (String property : properties) {
             if (property.indexOf('=') <= 0) {
                 throw new IllegalArgumentException(
@@ -111,11 +147,112 @@ final class ApplicationLaunch {
             }
             command.add("-D" + property);
         }
-        command.addAll(List.of("-Dvidocq.app.module=" + module,
-                "-p", modulePath,
-                "--add-modules", "ALL-MODULE-PATH",
+        command.addAll(List.of("-D" + VidocqAppLayer.APP_MODULE_PROPERTY + "=" + module,
+                "-D" + VidocqAppLayer.APP_PATH_PROPERTY + "=" + join(layout.appPath()),
+                "-p", join(layout.modulePath()),
+                "--add-modules", layout.addModules(),
                 "-m", RUNTIME_MAIN));
         return command;
+    }
+
+    /**
+     * Splits {@code modulePath} as {@code vidocq:run} splits the application's dependencies, under the
+     * {@code vidocq.app.layer} and {@code vidocq.app.layer.keep} of {@code properties} (the last one wins, as on the
+     * command line). Under {@code all}, the default, {@link LayerSplit} gives the application layer the application
+     * {@code module} and its libraries; under {@code classes}, the module alone. A default {@code all} that cannot be
+     * honoured falls back to {@code classes} and says why through {@code warn}; an {@code all} asked for fails. An
+     * entry that holds no module the split can read stays on the module path, where the JVM reports it.
+     *
+     * @throws IllegalStateException when no entry of {@code modulePath} holds {@code module}, or when an {@code all}
+     *                               asked for cannot be honoured
+     */
+    static Layout layout(String modulePath, String module, List<String> properties, Consumer<String> warn) {
+        List<LayerSplit.Candidate> candidates = new ArrayList<>();
+        List<Path> unreadable = new ArrayList<>();
+        for (String entry : modulePath.split(File.pathSeparator)) {
+            if (!entry.isBlank()) {
+                try {
+                    candidates.add(LayerSplit.candidate(Path.of(entry), null));
+                } catch (IOException _) {
+                    unreadable.add(Path.of(entry));
+                }
+            }
+        }
+        if (candidates.stream().noneMatch(candidate -> isModule(candidate, module))) {
+            throw new IllegalStateException("@VidocqTest starts the module " + module
+                    + ", which no entry of the module path of the tests holds: " + modulePath);
+        }
+        Optional<LayerSplit.Result> all = all(candidates, module, properties, warn);
+        LayerSplit.Result split = all.orElseGet(() -> new LayerSplit.Result(
+                candidates.stream().filter(c -> !isModule(c, module)).toList(),
+                candidates.stream().filter(c -> isModule(c, module)).toList(), Map.of()));
+        List<String> layerProperties = new ArrayList<>();
+        layerProperties.add(LayerSplit.MODE_PROPERTY + "=" + (all.isPresent() ? "all" : "classes"));
+        if (!split.pinned().isEmpty()) {
+            layerProperties.add(LayerSplit.PINNED_PROPERTY + "=" + LayerSplit.encodePinned(split.pinned()));
+        }
+        List<Path> parent = new ArrayList<>(split.parentPaths());
+        parent.addAll(unreadable);
+        return new Layout(parent, split.applicationPaths(), layerProperties, addModules(split.application()));
+    }
+
+    /**
+     * The split of {@code all}; empty under {@code classes}, and when a default {@code all} cannot be honoured, which
+     * {@code warn} is told.
+     */
+    private static Optional<LayerSplit.Result> all(List<LayerSplit.Candidate> candidates, String module,
+                                                   List<String> properties, Consumer<String> warn) {
+        String mode = lastValue(properties, LayerSplit.MODE_PROPERTY);
+        if (LayerSplit.Mode.of(mode) != LayerSplit.Mode.ALL) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(LayerSplit.split(candidates, Set.of(module),
+                    LayerSplit.patterns(lastValue(properties, LayerSplit.KEEP_PROPERTY)), Map.of()));
+        } catch (IllegalStateException e) {
+            if (LayerSplit.requested(mode)) {
+                throw e;
+            }
+            warn.accept("vidocq.app.layer=all, the default, cannot split this launch: " + e.getMessage()
+                    + " Falling back to vidocq.app.layer=classes. Fix the cause, or set vidocq.app.layer=classes"
+                    + " in @VidocqTest(properties) to silence this.");
+            return Optional.empty();
+        }
+    }
+
+    private static boolean isModule(LayerSplit.Candidate candidate, String module) {
+        return candidate.descriptor().name().equals(module);
+    }
+
+    /** The value of the last {@code key=value} entry of {@code properties} for {@code key}, or {@code null}. */
+    private static String lastValue(List<String> properties, String key) {
+        String value = null;
+        for (String property : properties) {
+            if (property.startsWith(key + "=")) {
+                value = property.substring(key.length() + 1);
+            }
+        }
+        return value;
+    }
+
+    /**
+     * {@value #ALL_MODULE_PATH}, then the JDK modules the explicit modules of the application layer require, sorted:
+     * the application layer is a child of the boot layer, and a JDK module can be defined in the boot layer only. A
+     * {@code requires static} resolves nothing and is left out.
+     */
+    private static String addModules(List<LayerSplit.Candidate> application) {
+        ModuleFinder system = ModuleFinder.ofSystem();
+        Set<String> jdk = application.stream()
+                .flatMap(candidate -> candidate.descriptor().requires().stream())
+                .filter(requires -> !requires.modifiers().contains(ModuleDescriptor.Requires.Modifier.STATIC))
+                .map(ModuleDescriptor.Requires::name)
+                .filter(name -> !"java.base".equals(name) && system.find(name).isPresent())
+                .collect(Collectors.toCollection(TreeSet::new));
+        return jdk.isEmpty() ? ALL_MODULE_PATH : ALL_MODULE_PATH + "," + String.join(",", jdk);
+    }
+
+    private static String join(List<Path> entries) {
+        return entries.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator));
     }
 
     /**

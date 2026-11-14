@@ -29,6 +29,7 @@ import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 
 /**
  * Starts the application of a {@link VidocqTest} class once, keeps it in the class's store, which closes it after
@@ -39,6 +40,8 @@ public final class VidocqTestExtension implements BeforeAllCallback, ParameterRe
 
     private static final ExtensionContext.Namespace NAMESPACE =
             ExtensionContext.Namespace.create(VidocqTestExtension.class);
+
+    private static final System.Logger LOG = System.getLogger(VidocqTestExtension.class.getName());
 
     @Override
     public void beforeAll(ExtensionContext context) {
@@ -86,13 +89,15 @@ public final class VidocqTestExtension implements BeforeAllCallback, ParameterRe
                 System.getProperty("vidocq.mainModule"));
         String modulePath = ApplicationLaunch.modulePath(System.getProperty("jdk.module.path"),
                 System.getProperty(ApplicationLaunch.RUNTIME_PATH_PROPERTY));
+        List<String> properties = ApplicationLaunch.properties(
+                ApplicationLaunch.devServiceProperties(System.getProperties()), settings.properties());
+        ApplicationLaunch.Layout layout = ApplicationLaunch.layout(modulePath, module, properties,
+                warning -> LOG.log(System.Logger.Level.WARNING, warning));
         String java = ProcessHandle.current().info().command()
                 .orElse(Path.of(System.getProperty("java.home"), "bin", "java").toString());
         try {
             int port = VidocqApplication.freePort();
-            return VidocqApplication.start(
-                    ApplicationLaunch.command(java, modulePath, module, port, ApplicationLaunch.properties(
-                            ApplicationLaunch.devServiceProperties(System.getProperties()), settings.properties())),
+            return VidocqApplication.start(ApplicationLaunch.command(java, layout, module, port, properties),
                     port, Duration.ofSeconds(settings.startupTimeoutSeconds()));
         } catch (IOException e) {
             throw new UncheckedIOException("Could not start the application module " + module, e);

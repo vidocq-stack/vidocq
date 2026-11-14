@@ -5,6 +5,56 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261114-07 — Under `@VidocqTest` the application module is loaded twice: each of its `provides` is found twice, and Vaadin does not start
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/vidocq-test-boot-twin`
+- **Affected module**: vidocq-runtime-junit (`ApplicationLaunch`, `VidocqTestExtension`), vidocq-runtime-core
+  (`Vidocq.applicationModule`)
+- **Symptom**: under `@VidocqTest`, a Vaadin 25.3 application whose module declares
+  `provides com.vaadin.flow.di.InstantiatorFactory with …VaubanInstantiatorFactory` answers 500 to its first Vaadin
+  request (`/?v-r=uidl&v-uiId=0`): `VaadinService.loadInstantiators` throws _Cannot init VaadinService because there
+  are multiple eligible instantiator implementations: [VaubanInstantiator@7e18ced7, VaubanInstantiator@305b43ca]_. The
+  same application started from its packaged distribution (`bin/`, `lib/`, `app/`) works. Reported by the
+  forge-dashboard session on 0.4.0-SNAPSHOT.
+- **Minimal repro** (no Vaadin): a module `demo.dup` with Foy, `uses` and `provides java.util.spi.ToolProvider with
+  demo.dup.DemoTool`, and a servlet that lists the `DemoTool` instances of `ServiceLoader.load(ToolProvider.class)`
+  (the context class loader, as Vaadin's `Lookup` does). Under `@VidocqTest` it lists two, of two `Class` objects:
+  one defined by the `VaubanClassLoader` (application layer), one by the JDK's `AppClassLoader` (boot layer). Launched
+  as `vidocq:run` launches it (`-Dvidocq.app.path=target/classes`, `target/classes` off `-p`) it lists one.
+- **Cause**: `@VidocqTest` started the runtime's main with `target/classes` on the module path,
+  `--add-modules ALL-MODULE-PATH` and `-Dvidocq.app.module`: the JVM resolved the application module into the boot
+  layer, then `VidocqAppLayer.installFromModuleIfConfigured` re-layered it, and under `vidocq.app.layer=all` its
+  libraries, into the application layer, leaving the boot copies in place. A `ServiceLoader` through the layer's loader
+  walks the layer, then the parent loader, the `AppClassLoader`, whose boot-layer modules declare the same `provides`:
+  every provider of a re-layered module comes twice. Vaadin's `LookupImpl.lookupAll`, and Vidocq's `ModuleLookup`,
+  drop a `ServiceLoader` result whose class is already registered, but the two classes differ, so both factories stay,
+  each makes an instantiator, and `loadInstantiators` refuses two. Neither hypothesis of the report: Foy's
+  `@HandlesTypes` scan loads the factory through the layer's loader, the same class `ServiceLoader` finds first, and
+  Vaadin drops that duplicate; the second instance is the boot copy. `vidocq:run`, `vidocq:dev` and the packaged
+  scripts hand the application through `vidocq.app.path` and keep it off the module path ("a module must not be on
+  both paths", `ApplicationLaunch` of the plugin): no boot copy.
+- **Fix**: `ApplicationLaunch.layout` divides the path of the tests with `LayerSplit`, the rule of `vidocq:run`: the
+  application module and, under `all`, the libraries the split gives it go to `-Dvidocq.app.path`; the runtime, the
+  bricks and what they read stay on `-p`; the JDK modules the application layer requires join `--add-modules`.
+  `vidocq.app.layer` and `vidocq.app.layer.keep` come from `@VidocqTest(properties)`; a default `all` that cannot be
+  honoured falls back to `classes` with a warning, as in `vidocq:run`. `-Dvidocq.app.module` is still passed, and
+  `Vidocq.applicationModule()` now looks for it in the application layer first, so the banner, the stale-index scan and
+  `ApplicationLayer.applicationModule()` keep the application module. `vidocq-runtime-junit` depends on
+  `vidocq-runtime-core` (`provided`) for `LayerSplit`.
+- **Validation**: `VidocqTestExtensionTest` (the application module of the fixture is now a module of its own: the
+  child JVM gets it in `vidocq.app.path` and not in `jdk.module.path`; red before the fix), `ApplicationLaunchTest`
+  (split under `all`, `classes`, a pin, the fallback, an unreadable entry, a missing module, the JDK modules),
+  `InstalledApplicationLayerTest.theNamedModuleIsTheOneOfTheApplicationLayer` (red before: `null`), and the repro
+  above with the fixed jar: one provider, from the application layer.
+- **Also exposed, not changed here**: the other launches that re-layer a module the boot layer resolved keep its boot
+  copy too: a jlink image without an application main class (`ImageLaunch`: `--add-modules=<module>
+  -Dvidocq.app.module=<module>`) and a `@VidocqMain` trampoline run from an IDE. The scratch launch
+  `-p target/classes:… -Dvidocq.app.module=demo.dup`, the image's shape, lists two providers; not checked on an image.
+- **Workaround before the fix**: test the Vaadin UI on the packaged distribution, or let the boot copy of the factory
+  decline: `createInstantitor` returns `null` when `getClass().getModule().getLayer() == ModuleLayer.boot()` and
+  `ApplicationLayer.current().isPresent()`; Vaadin skips a `null` instantiator.
+
 ## BUG-20261114-05 — A jlink image resolves only the application's module graph: resource-only modules are linked but never served
 
 - **Date**: 2026-11-14

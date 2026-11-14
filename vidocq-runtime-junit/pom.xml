@@ -23,6 +23,14 @@
             <artifactId>junit-jupiter-api</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- Provided: the application has the runtime, whose main @VidocqTest starts. Its LayerSplit divides the
+             module path of the tests between the module path and the application layer as vidocq:run does
+             (BUG-20261114-07). -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

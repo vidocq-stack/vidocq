@@ -26,6 +26,8 @@
 module io.vidocq.runtime.junit {
     requires org.junit.jupiter.api;
     requires java.net.http;
+    // LayerSplit: the application's modules go to the application layer as under vidocq:run (BUG-20261114-07).
+    requires io.vidocq.runtime.core;
 
     exports io.vidocq.runtime.junit;
 }

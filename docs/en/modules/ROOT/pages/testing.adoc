@@ -61,8 +61,17 @@ class HelloResourceTest {
   that path holds `target/classes` and the main dependencies; JUnit and the other test dependencies stay on the
   class path, so the application never sees them. A `@Nested` class shares the application of the class that
   carries `@VidocqTest`.
-* [[runtime-dependencies]]**Every runtime dependency**is on the application's module path, and
-  every module of that path is resolved, as under `vidocq:dev` and in the packaged application: a JDBC driver in
+* [[application-layer]]**The application layer is the one of `vidocq:run`** [.tag-new]#NEW#. That path is divided
+  as `vidocq:run` divides it: the application module and, under `vidocq.app.layer=all`, the default, its libraries
+  go to the application layer through `vidocq.app.path`, and the runtime, the bricks and what they read stay on the
+  module path (see xref:usage.adoc#app-layer-dependencies[the application layer]). `vidocq.app.layer` and
+  `vidocq.app.layer.keep` are read from `properties` below, and a default `all` that cannot be honoured falls back
+  to `classes` with a warning, as in `vidocq:run`. The application module used to stay on the module path as well:
+  the JVM loaded it twice, once in the boot layer, and a `ServiceLoader` found each `provides` of its
+  `module-info.java` twice, so Vaadin refused to start with _multiple eligible instantiator implementations_
+  (BUG-20261114-07).
+* [[runtime-dependencies]]**Every runtime dependency**reaches the application, on its module path or in its
+  application layer, and every module is resolved, as under `vidocq:dev` and in the packaged application: a JDBC driver in
   `runtime` scope, which no module requires, is found without `requires org.postgresql.jdbc`. Surefire leaves such a
   jar on the class path of the tests; `vidocq:test-path`, which `vidocq-runtime-parent` binds to
   `process-test-classes`, names the runtime dependencies in `vidocq.test.runtimePath`, and the parent hands that

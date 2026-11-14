@@ -39,6 +39,10 @@ New in the `{project-version}` development line — everything listed here lande
 
 * xref:dev-services.adoc#test-run-files[A test run has files of its own] [.tag-new]#NEW# — `vidocq test` and the JUnit listener write `target/vidocq-dev-services-test.json` and `-test.properties`, so a test run beside `vidocq dev` no longer overwrites the dev session's files, and the next reload no longer reports the test run's container as the application's, `stopped` (BUG-20261106-03).
 
+== Testing
+
+* xref:testing.adoc#application-layer[`@VidocqTest` starts the application layer of `vidocq:run`] [.tag-new]#NEW# — the application module and, under `vidocq.app.layer=all`, its libraries reach the runtime through `vidocq.app.path` and leave the module path. The application module was on both: the JVM loaded it twice, a `ServiceLoader` found each `provides` of its `module-info.java` twice, and a Vaadin application whose module provides an `InstantiatorFactory` answered 500, _multiple eligible instantiator implementations_, while its packaged distribution started (BUG-20261114-07). `vidocq.app.layer` and `vidocq.app.layer.keep` are read from `@VidocqTest(properties)`.
+
 == Dev mode
 
 * xref:modules/vidocq-runtime-maven-plugin.adoc#debugger-port-busy[A second `vidocq dev` on the machine starts] [.tag-new]#NEW# — the debug port is checked before the application JVM is forked: left at its default and held by another session, it moves to a free port with a warning that names both; set with `vidocq.dev.debugPort`, busy, it fails the goal at once, naming the port and the property. The JVM died at start with `transport error 202: bind failed`, and nothing said the debug port was the cause (BUG-20261114-03). `vidocq:run -Dvidocq.run.debug=true` does the same with `vidocq.run.debug.port`.

@@ -139,8 +139,9 @@ public final class Vidocq {
 
     /**
      * The application module, or {@code null}: the module of the class that called {@link #run}, else
-     * the module of {@code -Dvidocq.app.main}, else the module {@code -Dvidocq.app.module} names, else the
-     * {@code -m} module unless it is the runtime's. Never guessed among the application archives.
+     * the module of {@code -Dvidocq.app.main}, else the module {@code -Dvidocq.app.module} names (in the application
+     * layer, else in the boot layer), else the {@code -m} module unless it is the runtime's. Never guessed among the
+     * application archives.
      */
     static Module applicationModule() {
         Module caller = APPLICATION_MODULE.get();
@@ -153,7 +154,10 @@ public final class Vidocq {
         }
         String named = System.getProperty(VidocqAppLayer.APP_MODULE_PROPERTY, "").strip();
         if (!named.isEmpty()) {
-            Module module = ModuleLayer.boot().findModule(named).orElse(null);
+            // The application layer first, which looks in the boot layer after its own modules: @VidocqTest names the
+            // module and hands its classes through vidocq.app.path, off the boot layer (BUG-20261114-07).
+            ModuleLayer installed = VidocqAppLayer.installedLayer();
+            Module module = (installed == null ? ModuleLayer.boot() : installed).findModule(named).orElse(null);
             if (module != null) {
                 return module;
             }

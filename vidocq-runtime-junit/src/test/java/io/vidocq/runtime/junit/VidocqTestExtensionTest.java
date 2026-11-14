@@ -29,7 +29,12 @@ import org.junit.platform.launcher.core.LauncherFactory;
 import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
 import org.junit.platform.launcher.listeners.TestExecutionSummary;
 
+import java.io.File;
 import java.io.IOException;
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.attribute.ModuleAttribute;
+import java.lang.classfile.attribute.ModuleRequireInfo;
+import java.lang.constant.ModuleDesc;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -46,7 +51,8 @@ import static org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder.r
 /**
  * {@link VidocqTest} classes run by the JUnit Platform, against a module named {@code io.vidocq.runtime.core} that
  * this test compiles: its {@code Vidocq} main class answers {@code GET /hello} on the port the extension gives it,
- * with the properties it was launched with (Vidocq/vidocq#350).
+ * with the properties it was launched with (Vidocq/vidocq#350). The application, {@code com.acme.demo}, is a module
+ * of its own.
  */
 class VidocqTestExtensionTest {
 
@@ -67,7 +73,9 @@ class VidocqTestExtensionTest {
                             Integer.getInteger("vidocq.chappe.listener.default.port")), 0);
                     server.createContext("/hello", exchange -> {
                         byte[] body = (System.getProperty("greeting") + " from "
-                                + System.getProperty("vidocq.app.module")).getBytes();
+                                + System.getProperty("vidocq.app.module") + " in "
+                                + System.getProperty("vidocq.app.path") + " beside "
+                                + System.getProperty("jdk.module.path")).getBytes();
                         exchange.sendResponseHeaders(200, body.length);
                         exchange.getResponseBody().write(body);
                         exchange.close();
@@ -80,12 +88,21 @@ class VidocqTestExtensionTest {
     /** The application the fixtures saw, to check it is shared, then stopped. */
     static final AtomicReference<VidocqApplication> SEEN = new AtomicReference<>();
 
+    /** The fake runtime's classes and the application module, as Surefire puts them on the module path. */
+    static Path runtimeClasses;
+    static Path applicationClasses;
+
     private static String previousModulePath;
 
     @BeforeAll
     static void compileTheRuntime(@TempDir Path dir) throws IOException, InterruptedException {
         Path src = dir.resolve("src");
         Path classes = dir.resolve("classes");
+        runtimeClasses = classes;
+        applicationClasses = Files.createDirectories(dir.resolve("app-classes"));
+        Files.write(applicationClasses.resolve("module-info.class"), ClassFile.of().buildModule(
+                ModuleAttribute.of(ModuleDesc.of("com.acme.demo"), module -> module.requires(
+                        ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null)))));
         Files.createDirectories(src.resolve("io/vidocq/runtime/core"));
         Path moduleInfo = Files.writeString(src.resolve("module-info.java"), MODULE_INFO);
         Path main = Files.writeString(src.resolve("io/vidocq/runtime/core/Vidocq.java"), MAIN);
@@ -95,7 +112,8 @@ class VidocqTestExtensionTest {
                 main.toString()).inheritIO().start();
         assertEquals(0, compile.waitFor(), "the fake runtime does not compile");
         // What Surefire sets when it runs an application's tests on the module path.
-        previousModulePath = System.setProperty("jdk.module.path", classes.toString());
+        previousModulePath = System.setProperty("jdk.module.path",
+                classes + File.pathSeparator + applicationClasses);
     }
 
     @AfterAll
@@ -149,14 +167,19 @@ class VidocqTestExtensionTest {
 
     // Fixtures: static nested classes, which neither Surefire nor JUnit's discovery of this class runs on their own.
 
-    @VidocqTest(module = "io.vidocq.runtime.core", properties = "greeting=hi")
+    @VidocqTest(module = "com.acme.demo", properties = "greeting=hi")
     static class Fixture {
 
+        /**
+         * The application module reaches the runtime through {@code vidocq.app.path}, and is not on the module path
+         * too, where the JVM would resolve it into the boot layer beside the application layer (BUG-20261114-07).
+         */
         @Test
         void theApplicationAnswers(VidocqApplication application) {
             SEEN.compareAndSet(null, application);
             assertSame(SEEN.get(), application);
-            assertEquals("hi from io.vidocq.runtime.core", application.get("/hello").body());
+            assertEquals("hi from com.acme.demo in " + applicationClasses + " beside " + runtimeClasses,
+                    application.get("/hello").body());
         }
 
         @Test
@@ -181,7 +204,7 @@ class VidocqTestExtensionTest {
         }
     }
 
-    @VidocqTest(module = "io.vidocq.runtime.core")
+    @VidocqTest(module = "com.acme.demo")
     static class WrongUrlType {
         @Test
         void port(@VidocqUrl int port) {

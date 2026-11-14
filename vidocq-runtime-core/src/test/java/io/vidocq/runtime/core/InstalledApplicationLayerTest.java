@@ -66,12 +66,33 @@ class InstalledApplicationLayerTest {
         }
     }
 
+    /**
+     * {@code @VidocqTest} names the application module and hands its classes through {@value
+     * VidocqAppLayer#APP_PATH_PROPERTY}, as {@code vidocq:run} does: the module is in the application layer, and in no
+     * other (BUG-20261114-07).
+     */
+    @Test
+    void theNamedModuleIsTheOneOfTheApplicationLayer() throws Exception {
+        Path app = application();
+        String previousPath = System.getProperty(VidocqAppLayer.APP_PATH_PROPERTY);
+        String previousModule = System.setProperty(VidocqAppLayer.APP_MODULE_PROPERTY, "acme.app");
+        System.setProperty(VidocqAppLayer.APP_PATH_PROPERTY, app.toString());
+        try {
+            assertTrue(VidocqAppLayer.installIfConfigured());
+
+            Module module = ApplicationLayer.current().orElseThrow().findModule("acme.app").orElseThrow();
+            assertEquals(module, Vidocq.applicationModule());
+            assertEquals(module, ApplicationLayer.applicationModule().orElseThrow());
+        } finally {
+            VidocqAppLayer.resetForReload();
+            restore(VidocqAppLayer.APP_PATH_PROPERTY, previousPath);
+            restore(VidocqAppLayer.APP_MODULE_PROPERTY, previousModule);
+        }
+    }
+
     @Test
     void theInstalledLayerIsPublishedUntilADevReloadTearsItDown() throws Exception {
-        Path app = Files.createDirectories(dir.resolve("acme.app"));
-        Files.write(app.resolve("module-info.class"), ClassFile.of().buildModule(
-                ModuleAttribute.of(ModuleDesc.of("acme.app"), module -> module.requires(
-                        ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null)))));
+        Path app = application();
         Path script = app.resolve("db/migration/V1__create.sql");
         Files.createDirectories(script.getParent());
         Files.writeString(script, "CREATE TABLE a (id INT);");
@@ -90,6 +111,15 @@ class InstalledApplicationLayerTest {
             restore(VidocqAppLayer.APP_PATH_PROPERTY, previous);
         }
         assertTrue(ApplicationLayer.current().isEmpty(), "a reload withdraws the layer it tears down");
+    }
+
+    /** An exploded named module {@code acme.app}, its descriptor alone. */
+    private Path application() throws java.io.IOException {
+        Path app = Files.createDirectories(dir.resolve("acme.app"));
+        Files.write(app.resolve("module-info.class"), ClassFile.of().buildModule(
+                ModuleAttribute.of(ModuleDesc.of("acme.app"), module -> module.requires(
+                        ModuleRequireInfo.of(ModuleDesc.of("java.base"), ClassFile.ACC_MANDATED, null)))));
+        return app;
     }
 
     private static void restore(String property, String previous) {
