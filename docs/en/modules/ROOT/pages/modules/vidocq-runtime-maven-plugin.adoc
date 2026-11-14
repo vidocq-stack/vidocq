@@ -745,13 +745,18 @@ The image starts on the extensions frozen at build, as the ZIP distribution does
 * **with an application main class** (a `@VidocqMain` trampoline), the launcher runs
   `<mainModule>/<mainClass>`, and the trampoline re-layers the application, as before;
 * **without one** (or with the runtime's own `io.vidocq.runtime.core.Vidocq`), the launcher runs the runtime's
-  main, `io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and the goal bakes two JVM options into the image
-  with jlink's `--add-options`: `--add-modules=<mainModule>`, because no module of the runtime reads the
-  application module and the JVM would leave it out of the boot layer, and `-Dvidocq.app.module=<mainModule>`,
-  which tells `Vidocq.main` to re-layer that module the way the trampoline does.
+  main, `io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and the goal bakes
+  `-Dvidocq.app.module=<mainModule>` into the image with jlink's `--add-options`, which tells `Vidocq.main` to
+  re-layer that module the way the trampoline does.
 
-Either way the goal adds `-Dvidocq.app.layer=<mode>` (`all` by default, `classes` when the build sets it), so that the
-image keeps the mode it was built under.
+[#jlink-every-module]
+Either way the goal bakes `--add-modules=<mainModule>,<every other staged module>`: jlink links all the staged
+modules, but the JVM resolves only its roots and what they `requires`, so a module that nothing requires (a
+resource-only module such as Vaadin's `flow.push`, `vaadin.lumo.theme` or `vaadin.aura.theme`, whose
+`META-INF/resources` the servlet container serves) would sit in the image and in no layer, and its files would answer
+404. `vidocq:run` and `vidocq:package` (`--add-modules ALL-MODULE-PATH`) resolve them all, and so does the image
+(BUG-20261114-05). The goal also adds `-Dvidocq.app.layer=<mode>` (`all` by default, `classes` when the build sets it),
+so that the image keeps the mode it was built under.
 
 The application boots in the same Vauban layer either way: the startup report reads
 `layer … (boot-layer detection from <mainModule>)` in both. Being in the image, the options apply to every way of
@@ -766,8 +771,9 @@ Reuses the `jlink` image. Default type: `app-image` (cross-platform). On macOS, 
 
 Like `vidocq:jlink`, it needs `vidocq.mainModule` only. Without an application main class, the
 application starts with `--module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and the goal passes the
-two options of <<jlink-without-main-class>> again as `--java-options`: an image built by `vidocq:jlink` already
-holds them, one given through `runtimeImage` may not.
+options of <<jlink-without-main-class>> again as `--java-options`, with `--add-modules` naming the application
+module and the modules of the image that are not the JDK's (read from the `MODULES` of its `release` file): an image
+built by `vidocq:jlink` already holds them, one given through `runtimeImage` may not.
 
 See `vidocq/JLINK.md` §3 for the exhaustive parameter list.
 

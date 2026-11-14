@@ -5,6 +5,35 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261114-05 — A jlink image resolves only the application's module graph: resource-only modules are linked but never served
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/jlink-root-every-module`
+- **Affected module**: vidocq-runtime-maven-plugin (`ImageLaunch`, `VidocqJlinkMojo`, `VidocqJpackageMojo`)
+- **Symptom**: in the jlink image of a Vaadin application, `GET /VAADIN/static/push/vaadinPush-min.js`, `/aura/aura.css`
+  and `/lumo/lumo.css` answer Vaadin's 404 page, while `vidocq:run` and `vidocq:package` serve them. With `@Push` the
+  view never renders (`window.vaadinPush` is undefined). `jimage list` shows the files in the image (`flow.push`,
+  `vaadin.aura.theme`, `vaadin.lumo.theme`).
+- **Minimal repro**: modules `app` and `res` (`res` holds only `META-INF/resources/x.css`, `app` does not require it),
+  `jlink --add-modules app,res --launcher app=app/app.Main`: in the image, `ModuleLayer.boot().findModule("res")` is
+  empty and `getResources("META-INF/resources/x.css")` returns nothing; `--add-modules=res` finds it. With Vidocq:
+  `bin/java --show-module-resolution --dry-run -m io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq` does not list
+  the module; 45 of the 112 modules of the Vaadin e2e image were never resolved.
+- **Cause**: `vidocq:jlink` links every staged module (`resolveAddModules`), but the image's launch rooted only the
+  application module (`ImageLaunch.of`: `--add-modules=<mainModule>` without a main class, nothing beyond `-m` with
+  one). A module nothing `requires` and that provides no bound service is in the image but in no layer:
+  `VidocqAppLayer.installFromBootLayer` re-layers only what the boot configuration resolved. No loader sees it, so
+  Foy's `ServletContext.getResource` returns `null` (Foy BUG-20261111-01 serves an image module only when the
+  application's loader sees it). The jar launches root every module: `vidocq.app.path` and `ALL-MODULE-PATH`
+  (`vidocq:package`). Predates `feat/websocket`; also explains Vaadin's finding 7 (`aura.css` 404 in a jlink image).
+- **Fix**: `ImageLaunch.of(…, stagedModules)` bakes `--add-modules=<mainModule>,<every other staged module>` into the
+  image's options for both launch shapes; `launcherArgs` always adds `--add-options`; `vidocq:jpackage` passes the
+  non-JDK modules read from the `release` file of the image it packages.
+- **Validation**: `ImageLaunchTest.everyStagedModuleIsResolvedAtStart` (both shapes), `ImageLaunchMojosTest`
+  (jlink and jpackage arguments), and `CreateThenBuildIT`: the created application gets a resource-only module it does
+  not require, and the image's own start resolves it (red before the fix, green after).
+- **Workaround before the fix**: `JDK_JAVA_OPTIONS=--add-modules=flow.push,vaadin.lumo.theme,vaadin.aura.theme`.
+
 ## BUG-20261114-04 — `vidocq dev` speaks of a reload when the application dies at its first start, and never says it is down
 
 - **Date**: 2026-11-14

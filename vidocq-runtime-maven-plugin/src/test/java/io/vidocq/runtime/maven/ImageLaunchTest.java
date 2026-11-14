@@ -37,7 +37,7 @@ class ImageLaunchTest {
     void anApplicationMainClassIsLaunchedAsItIs() {
         var launch = ImageLaunch.of("com.acme.shop", "com.acme.shop.App", LayerSplit.Mode.ALL);
         assertEquals("com.acme.shop/com.acme.shop.App", launch.entryPoint());
-        assertEquals(List.of("-Dvidocq.app.layer=all"), launch.vmOptions(), "only the mode of the layer");
+        assertEquals(List.of("--add-modules=com.acme.shop", "-Dvidocq.app.layer=all"), launch.vmOptions());
     }
 
     @Test
@@ -61,11 +61,31 @@ class ImageLaunchTest {
     }
 
     @Test
+    @DisplayName("every staged module is resolved at start, in both launch shapes (BUG-20261114-05)")
+    void everyStagedModuleIsResolvedAtStart() {
+        var staged = List.of("com.acme.shop", "flow.push", "vaadin.lumo.theme");
+        var withoutMain = ImageLaunch.of("com.acme.shop", null, LayerSplit.Mode.ALL, staged);
+        assertEquals(List.of("--add-modules=com.acme.shop,flow.push,vaadin.lumo.theme",
+                "-Dvidocq.app.module=com.acme.shop", "-Dvidocq.app.layer=all"), withoutMain.vmOptions());
+        var withMain = ImageLaunch.of("com.acme.shop", "com.acme.shop.App", LayerSplit.Mode.ALL, staged);
+        assertEquals(List.of("--add-modules=com.acme.shop,flow.push,vaadin.lumo.theme", "-Dvidocq.app.layer=all"),
+                withMain.vmOptions());
+    }
+
+    @Test
+    @DisplayName("the application module is the first root, listed once, wherever the stage lists it")
+    void theApplicationModuleIsTheFirstRootListedOnce() {
+        var launch = ImageLaunch.of("com.acme.shop", "com.acme.shop.App", LayerSplit.Mode.ALL,
+                List.of("flow.push", "com.acme.shop", "flow.push"));
+        assertEquals("--add-modules=com.acme.shop,flow.push", launch.vmOptions().getFirst());
+    }
+
+    @Test
     @DisplayName("the image carries the mode it was built under, classes too")
     void theImageCarriesItsMode() {
         assertEquals("-Dvidocq.app.layer=classes",
                 ImageLaunch.of("com.acme.shop", null, LayerSplit.Mode.CLASSES).vmOptions().getLast());
-        assertEquals(List.of("-Dvidocq.app.layer=classes"),
+        assertEquals(List.of("--add-modules=com.acme.shop", "-Dvidocq.app.layer=classes"),
                 ImageLaunch.of("com.acme.shop", "com.acme.shop.App", LayerSplit.Mode.CLASSES).vmOptions());
     }
 
@@ -93,7 +113,7 @@ class ImageLaunchTest {
                                 + " -Dvidocq.app.layer=all"),
                 VidocqJlinkMojo.launcherArgs("shop", ImageLaunch.of("com.acme.shop", null, LayerSplit.Mode.ALL)));
         assertEquals(List.of("--launcher", "shop=com.acme.shop/com.acme.shop.App",
-                        "--add-options=-Dvidocq.app.layer=all"),
+                        "--add-options=--add-modules=com.acme.shop -Dvidocq.app.layer=all"),
                 VidocqJlinkMojo.launcherArgs("shop", ImageLaunch.of("com.acme.shop", "com.acme.shop.App", LayerSplit.Mode.ALL)));
     }
 
@@ -106,6 +126,7 @@ class ImageLaunchTest {
                         "--java-options", "-Dvidocq.app.layer=all"),
                 VidocqJpackageMojo.entryArgs(ImageLaunch.of("com.acme.shop", null, LayerSplit.Mode.ALL)));
         assertEquals(List.of("--module", "com.acme.shop/com.acme.shop.App",
+                        "--java-options", "--add-modules=com.acme.shop",
                         "--java-options", "-Dvidocq.app.layer=all"),
                 VidocqJpackageMojo.entryArgs(ImageLaunch.of("com.acme.shop", "com.acme.shop.App", LayerSplit.Mode.ALL)));
     }

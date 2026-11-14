@@ -131,16 +131,16 @@ class ImageLaunchMojosTest {
     }
 
     @Test
-    void theJlinkRunOfATrampolineAddsOnlyTheLayerMode() throws Exception {
+    void theJlinkRunOfATrampolineRootsTheModulesAndTheLayerMode() throws Exception {
         VidocqJlinkMojo mojo = jlink("acme.app", "acme.app.App", new Infos());
         set(VidocqJlinkMojo.class, mojo, "compress", " ");
 
         List<String> args = mojo.jlinkArgs("acme.app", ImageLaunch.of("acme.app", "acme.app.App", io.vidocq.runtime.core.LayerSplit.Mode.ALL));
 
         assertEquals("app=acme.app/acme.app.App", args.get(args.indexOf("--launcher") + 1));
-        assertEquals("--add-options=-Dvidocq.app.layer=all", args.get(args.indexOf("--add-options=-Dvidocq.app.layer=all")));
-        assertTrue(args.stream().noneMatch(a -> a.contains("--add-modules") && a.startsWith("--add-options")
-                || a.startsWith("--compress") || a.equals("--strip-debug")), args.toString());
+        assertTrue(args.contains("--add-options=--add-modules=acme.app -Dvidocq.app.layer=all"), args.toString());
+        assertTrue(args.stream().noneMatch(a -> a.startsWith("--compress") || a.equals("--strip-debug")),
+                args.toString());
     }
 
     private VidocqJlinkMojo jlink(String mainModule, String mainClass, Infos log) throws Exception {
@@ -184,6 +184,16 @@ class ImageLaunchMojosTest {
 
         assertEquals("Vidocq jpackage — type=no-such-type name=app version=1.0.0 main=" + RUNTIME_MAIN,
                 log.lines.getFirst());
+    }
+
+    @Test
+    void jpackageRootsTheNonJdkModulesOfAnImageJlinkDidNotBuild() throws Exception {
+        Path image = Files.createDirectories(dir.resolve("foreign"));
+        Files.writeString(image.resolve("release"),
+                "JAVA_VERSION=\"25\"\nMODULES=\"java.base jdk.crac flow.push acme.app\"\n");
+
+        assertEquals(List.of("flow.push", "acme.app"), VidocqJpackageMojo.nonJdkModulesOf(image));
+        assertEquals(List.of(), VidocqJpackageMojo.nonJdkModulesOf(dir.resolve("no-image")));
     }
 
     private VidocqJpackageMojo jpackage(String mainModule, Infos log) throws Exception {

@@ -34,6 +34,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -131,7 +132,8 @@ public class VidocqJpackageMojo extends AbstractMojo {
         String version = sanitizeVersion(appVersion);
         ImageLaunch launch;
         try {
-            launch = ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer));
+            launch = ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer),
+                    nonJdkModulesOf(runtimeImage.toPath()));
         } catch (IllegalArgumentException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         }
@@ -179,6 +181,31 @@ public class VidocqJpackageMojo extends AbstractMojo {
             args.add("--java-options"); args.add(option);
         }
         return args;
+    }
+
+    /**
+     * The modules of an image that are not the JDK's ({@code java.*}, {@code jdk.*}), read from the
+     * {@code MODULES} of its {@code release} file: the application's staged modules, which the image must resolve
+     * at start (BUG-20261114-05). Empty when the image has no readable {@code release}.
+     */
+    static List<String> nonJdkModulesOf(Path image) {
+        Path release = image.resolve("release");
+        if (!Files.isRegularFile(release)) {
+            return List.of();
+        }
+        try {
+            for (String line : Files.readAllLines(release)) {
+                if (line.startsWith("MODULES=")) {
+                    String value = line.substring("MODULES=".length()).replace("\"", "").strip();
+                    return Arrays.stream(value.split("\\s+"))
+                            .filter(m -> !m.isEmpty() && !m.startsWith("java.") && !m.startsWith("jdk."))
+                            .toList();
+                }
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Cannot read " + release, e);
+        }
+        return List.of();
     }
 
     /** jpackage requires a version without qualifiers ({@code 1.2.3}). We strip {@code -SNAPSHOT} and others. */

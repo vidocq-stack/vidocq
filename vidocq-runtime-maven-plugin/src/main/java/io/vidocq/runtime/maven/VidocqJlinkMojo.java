@@ -198,6 +198,8 @@ public class VidocqJlinkMojo extends AbstractMojo {
         try {
             stageModules();
             String rootModules = resolveAddModules();
+            // The stage is known only now: root every staged module at start, not the application's alone.
+            launch = ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer), stagedModuleNames());
             runJlink(rootModules, launch);
             List<Path> conf = copyResources();
             DistributionSbom.write(sbomFile(), new DistributionSbom.Subject(project.getGroupId(),
@@ -442,6 +444,15 @@ public class VidocqJlinkMojo extends AbstractMojo {
         return slash < 0 ? location : location.substring(slash + 1);
     }
 
+    /** The names of the modules staged in {@link #modsDir}: every one of them is linked into the image. */
+    private List<String> stagedModuleNames() {
+        List<String> names = new ArrayList<>();
+        for (var ref : ModuleFinder.of(modsDir.toPath()).findAll()) {
+            names.add(ref.descriptor().name());
+        }
+        return names;
+    }
+
     /** Resolves the full set of modules to include: user modules + transitive JDK (via jdeps). */
     private String resolveAddModules() throws IOException {
         Path stage = modsDir.toPath();
@@ -512,17 +523,14 @@ public class VidocqJlinkMojo extends AbstractMojo {
     }
 
     /**
-     * The {@code --launcher} of the image and, without an application main class, the {@code --add-options} that
-     * bake the JVM options of {@code launch} into the image: every way of starting it then gets them — the
+     * The {@code --launcher} of the image and the {@code --add-options} that bake the JVM options of {@code launch} into the image: every way of starting it then gets them — the
      * launcher script, {@code bin/java -m …}, the jpackage application and the Docker image built on it.
      */
     static List<String> launcherArgs(String launcher, ImageLaunch launch) {
         List<String> args = new ArrayList<>();
         args.add("--launcher"); args.add(launcher + "=" + launch.entryPoint());
-        if (!launch.vmOptions().isEmpty()) {
-            // One argument: jlink refuses a separate value that starts with "--" (the --add-modules option).
-            args.add("--add-options=" + String.join(" ", launch.vmOptions()));
-        }
+        // One argument: jlink refuses a separate value that starts with "--" (the --add-modules option).
+        args.add("--add-options=" + String.join(" ", launch.vmOptions()));
         return args;
     }
 

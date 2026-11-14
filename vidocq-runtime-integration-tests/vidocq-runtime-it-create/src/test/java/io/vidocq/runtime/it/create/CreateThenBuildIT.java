@@ -59,6 +59,9 @@ class CreateThenBuildIT {
 
     private static final Duration TIMEOUT = Duration.ofMinutes(5);
 
+    /** The fixture module that holds only {@code META-INF/resources/x.css} and that the application does not require. */
+    private static final String RESOURCE_MODULE = "acme.resources";
+
     /**
      * The javac warnings the created project is allowed: one per class Vauban writes in javac's last round (#337,
      * documented). From Vidocq/vauban#251 on, Vauban writes them earlier and there are none (BUG-20261030-26); until
@@ -97,6 +100,7 @@ class CreateThenBuildIT {
                 Set.of("cassini-rest"), null, false), dir, version, SILENT);
         Path project = dir.resolve("demo-app");
         useThisBuildsArtifacts(project);
+        addAResourceOnlyDependency(project);
 
         Path log = Files.createDirectories(Path.of(System.getProperty("it.logs"))).resolve("create-then-build.log");
         Process build = new ProcessBuilder("mvn", "-ntp", "-B", "verify", "vidocq:jlink")
@@ -144,6 +148,62 @@ class CreateThenBuildIT {
         // The image is linked with --strip-debug, and its application module sits in the boot layer as well as in
         // the layer Vauban defines: it starts on the same record all the same (Vidocq/vauban BUG-20261113-17).
         assertStartsOnTheFrozenExtensions(project.resolve("target/dist/bin/demo-app"));
+        assertTheResourceOnlyModuleIsResolvedAtStart(project.resolve("target/dist/bin/java"), output);
+    }
+
+    /**
+     * A module that nothing {@code requires} (Vaadin's resource-only {@code flow.push}) is linked into the image, and
+     * is served only if the image resolves it at start: the options baked into the image root every staged module
+     * (BUG-20261114-05). The resolution the JVM prints for the image's own launch names the fixture module.
+     */
+    private static void assertTheResourceOnlyModuleIsResolvedAtStart(Path java, String output) throws Exception {
+        assertTrue(modules(java).contains(RESOURCE_MODULE), "the image does not link " + RESOURCE_MODULE + ":\n" + output);
+        Process dry = new ProcessBuilder(java.toString(), "--show-module-resolution", "--dry-run",
+                "-m", "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq")
+                .redirectErrorStream(true).start();
+        String resolution = new String(dry.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertTrue(dry.waitFor(1, TimeUnit.MINUTES), "the dry run did not end");
+        assertTrue(resolution.lines().anyMatch(l -> (" " + l + " ").contains(" " + RESOURCE_MODULE + " ")),
+                "linked in the image, resolved by no start:\n" + resolution);
+    }
+
+    /**
+     * Installs, in the repository the created project builds from, a module that holds only
+     * {@code META-INF/resources/x.css} and that nothing requires, and adds it to the project's dependencies.
+     */
+    private static void addAResourceOnlyDependency(Path project) throws Exception {
+        Path directory = Files.createDirectories(Path.of(System.getProperty("it.repo"))
+                .resolve("com/acme/resource-only/1.0"));
+        Files.writeString(directory.resolve("resource-only-1.0.pom"), """
+                <project xmlns="http://maven.apache.org/POM/4.0.0">
+                    <modelVersion>4.0.0</modelVersion>
+                    <groupId>com.acme</groupId>
+                    <artifactId>resource-only</artifactId>
+                    <version>1.0</version>
+                </project>
+                """);
+        Path sources = Files.createDirectories(project.resolveSibling("resource-only-src"));
+        Path classes = Files.createDirectories(project.resolveSibling("resource-only-classes"));
+        Files.writeString(sources.resolve("module-info.java"), "module " + RESOURCE_MODULE + " {}\n");
+        var javac = java.util.spi.ToolProvider.findFirst("javac").orElseThrow();
+        assertEquals(0, javac.run(System.out, System.err, "-d", classes.toString(),
+                sources.resolve("module-info.java").toString()), "javac failed on the fixture module");
+        try (var jar = new java.util.jar.JarOutputStream(Files.newOutputStream(directory.resolve("resource-only-1.0.jar")))) {
+            jar.putNextEntry(new java.util.jar.JarEntry("module-info.class"));
+            jar.write(Files.readAllBytes(classes.resolve("module-info.class")));
+            jar.closeEntry();
+            jar.putNextEntry(new java.util.jar.JarEntry("META-INF/resources/x.css"));
+            jar.write("body {}\n".getBytes(StandardCharsets.UTF_8));
+            jar.closeEntry();
+        }
+        Path pom = project.resolve("pom.xml");
+        String text = Files.readString(pom);
+        // The project's own dependencies follow the dependencyManagement, which the created pom may start with.
+        int end = text.indexOf("</dependencies>", Math.max(0, text.indexOf("</dependencyManagement>")));
+        assertTrue(end > 0, "the created pom has no dependencies:\n" + text);
+        Files.writeString(pom, text.substring(0, end)
+                + "<dependency><groupId>com.acme</groupId><artifactId>resource-only</artifactId><version>1.0</version></dependency>\n"
+                + text.substring(end));
     }
 
     /** {@code vidocq create --with-parent}: the previous style still builds and tests itself under the parent. */
