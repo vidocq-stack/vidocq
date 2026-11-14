@@ -420,8 +420,9 @@ seconds, for as long as the page stays open.
 
 Long polling was checked with Vaadin 25.3.2 under `vidocq:run`, and with Vaadin's Java module snapshots in a
 `vidocq:package` distribution and a jlink image (Vidocq/vidocq#256): a virtual thread updates the UI through
-`ui.access` a second after a click, and the text reaches the page. With Vaadin 25.3.3, a view updated every 15 seconds
-stayed connected for ten minutes without a reload. Longer idle periods between two pushes were not checked yet.
+`ui.access` a second after a click, and the text reaches the page. With Vaadin 25.3.3, a page stayed connected for ten
+minutes without a single push: each long poll ended after five seconds with a 200 and the next one started, the
+heartbeat answered 200, and nothing reconnected or reloaded. VidocqTools/forge-dashboard runs in production this way.
 
 A filter that runs on `/VAADIN/push`, such as an authentication filter mapped to `/*`, must support asynchronous
 requests: `@WebFilter(asyncSupported = true)`, or `setAsyncSupported(true)` on its registration. Long polling suspends
@@ -526,9 +527,9 @@ xref:modules/vidocq-runtime-extensions.adoc#vaadin[the extension].
 [#limits]
 == Known limits
 
-* Only production mode was checked, on one view with a button and push: the bootstrap page and the frontend bundles
-  are served, a click reaches the server, and push works in long polling. The routes of a real application were not
-  exercised in this setup.
+* Only production mode was checked: on one view with a button and push, where the bootstrap page and the frontend
+  bundles are served, a click reaches the server and push works in long polling, and in VidocqTools/forge-dashboard,
+  which runs in production with push in long polling.
 * Push needs long polling: Foy implements no Jakarta WebSocket (Vidocq/vidocq#65). See <<push>>.
 * `vidocq.app.layer=classes`, the opt-out, does not work for Vaadin: see <<app-layer>>.
 * In a jlink image, Collaboration Engine and LitTemplate are not available while `forceExplicit` is needed.
