@@ -676,13 +676,21 @@
                     <type>java.lang.String</type>
                     <required>false</required>
                     <editable>true</editable>
-                    <description>The mode of the application layer the image starts under, baked into its launcher as -Dvidocq.app.layer: all (default since 0.4.0) or classes.</description>
+                    <description>The mode of the application layer the image starts under: all (default since 0.4.0) or classes. The build splits the staged modules under it, as vidocq:package splits its jars, and bakes it into the launcher as -Dvidocq.app.layer.</description>
+                </parameter>
+                <parameter>
+                    <name>appLayerKeep</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Under vidocq.app.layer=all, comma-separated patterns (module name, or groupId:artifactId) kept in the parent layer, as vidocq:package reads them. The split is made at build: the image starts with it.</description>
                 </parameter>
             </parameters>
             <configuration>
                 <project implementation="org.apache.maven.project.MavenProject"
                          default-value="${project}"/>
                 <appLayer implementation="java.lang.String">${vidocq.app.layer}</appLayer>
+                <appLayerKeep implementation="java.lang.String">${vidocq.app.layer.keep}</appLayerKeep>
                 <mainModule implementation="java.lang.String">${vidocq.mainModule}</mainModule>
                 <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
                 <launcher implementation="java.lang.String"

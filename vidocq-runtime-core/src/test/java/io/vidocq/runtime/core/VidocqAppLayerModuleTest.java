@@ -83,6 +83,36 @@ class VidocqAppLayerModuleTest {
     }
 
     @Test
+    @DisplayName("a jlink image lists the modules of the application layer, which the layer reads from the image")
+    void anImageListsTheModulesOfTheApplicationLayer() {
+        // java.sql and java.logging stand for the application's modules: linked into the image, so read from jrt:.
+        var paths = VidocqAppLayer.systemModulePaths(List.of("java.sql", "java.logging"),
+                java.lang.module.ModuleFinder.ofSystem());
+        assertEquals(List.of("/modules/java.sql", "/modules/java.logging"),
+                paths.stream().map(Path::toString).toList());
+        assertEquals("jrt", paths.getFirst().getFileSystem().provider().getScheme());
+    }
+
+    @Test
+    @DisplayName("a listed module the image does not link fails, naming it and the goal that links it")
+    void aListedModuleTheImageDoesNotLinkFails() {
+        var names = List.of("java.sql", "acme.absent");
+        var system = java.lang.module.ModuleFinder.ofSystem();
+        var failure = assertThrows(IllegalStateException.class, () -> VidocqAppLayer.systemModulePaths(names, system));
+        assertTrue(failure.getMessage().contains("acme.absent"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("vidocq:jlink"), failure.getMessage());
+    }
+
+    @Test
+    @DisplayName("the image lists the application module first, once, and the others in their order")
+    void theApplicationModuleIsListedFirstOnce() {
+        assertEquals(List.of("acme.app", "acme.pages", "flow.push"),
+                VidocqAppLayer.layerModules("acme.app", "acme.pages, acme.app,flow.push"));
+        assertEquals(List.of("acme.app"), VidocqAppLayer.layerModules("acme.app", ""));
+        assertEquals(List.of("acme.app"), VidocqAppLayer.layerModules("acme.app", null));
+    }
+
+    @Test
     @DisplayName("a named boot-layer module without an application archive is left in place")
     void aModuleWithoutApplicationArchiveIsLeftInPlace() {
         // java.logging lives in the runtime image (jrt:): there is no archive to re-layer.

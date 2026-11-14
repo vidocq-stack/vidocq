@@ -193,11 +193,11 @@ boot layer.
 * A plain IDE run of `main` (the `Vidocq.run` trampoline) keeps the automatic libraries in the boot layer, and
   loads the application and its other libraries twice: the start warns with `VIDOCQ-LAY-001`, see
   <<ide-run-twice,above>>. The `(dev)` configuration that `vidocq:idea` writes has no such limit.
-* `vidocq:jlink`, `vidocq:jpackage` and the Docker image built on the jlink image follow the same default. The image is
-  linked as one boot layer, and at start the runtime re-layers the application from it (`vidocq.app.module`, or the
-  `@VidocqMain` trampoline), the way it does for an IDE launch: the application and its libraries go into the
-  application layer, and the runtime and the bricks stay. The build bakes `-Dvidocq.app.layer=` with its mode into
-  the launcher (`--add-options`, and `--java-options` for jpackage), so the image keeps the mode it was built under:
+* `vidocq:jlink`, `vidocq:jpackage` and the Docker image built on the jlink image follow the same default. The build
+  splits the modules as `vidocq:package` does, links them all into the image, and bakes the split into the launcher
+  (`--add-options`, and `--java-options` for jpackage): the boot layer holds the runtime and the bricks, and at start
+  the runtime defines the application layer from the application and its libraries, read from the image
+  (`vidocq.app.modules`). No module is in both layers (BUG-20261114-11). The image keeps the mode it was built under:
   build it with `-Dvidocq.app.layer=classes` to opt out.
 * A library with native code (JNI) cannot be loaded twice by the JVM, and the dev reload loads the application
   layer again: pin it with `vidocq.app.layer.keep`.

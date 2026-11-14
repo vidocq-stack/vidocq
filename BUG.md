@@ -5,6 +5,62 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261114-11 — A jlink image loads the application module twice: in the boot layer and in the application layer
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/jlink-boot-twin` (stacked on `fix/trampoline-boot-twin`)
+- **Affected module**: vidocq-runtime-maven-plugin (`ImageLaunch`, `VidocqJlinkMojo`, `VidocqJpackageMojo`, new
+  `LayerServiceFiles`), vidocq-runtime-core (`VidocqAppLayer.installFromModuleIfConfigured`, `ExtensionLoader`)
+- **Symptom**: in the image of `vidocq:jlink`, and in the `vidocq:jpackage` application and the `vidocq:docker` image
+  built on it, `ServiceLoader.load` through the context loader returns each provider of the application twice, two
+  `Class` objects of one name, as in BUG-20261114-07; Vaadin 25 stops with "multiple eligible instantiator
+  implementations". With a `@VidocqMain` trampoline, the image also logged `[VIDOCQ-LAY-001]`, the warning meant for
+  an IDE run. Vidocq/vidocq#574.
+- **Minimal repro**: the `it-app-layer` fixture, whose module `provides java.util.spi.ToolProvider`, built with
+  `mvn package vidocq:jlink` and started from `target/dist/bin/app-layer-app`: `TOOL-PROVIDERS 2`, with or without
+  `vidocq.mainClass`.
+- **Cause**: the image rooted the application module in the boot layer (`--add-modules=<mainModule>,<every staged
+  module>`, BUG-20261114-05, and the launcher `<mainModule>/<mainClass>` of a trampoline), then `Vidocq.run` or the
+  runtime's main re-layered it from there and left the boot copies in place. Dropping the module from
+  `--add-modules` is not enough: the JVM binds into the boot layer every module that provides a service a resolved
+  module uses (`java.base` uses `ToolProvider`, Vauban uses `VaubanComponentProvider`), so `--show-module-resolution`
+  printed `java.base binds acme.app` with no root.
+- **Fix**:
+  1. `vidocq:jlink` splits the staged modules at build with `LayerSplit`, as `vidocq:package` splits its jars
+     (`vidocq.app.layer`, `vidocq.app.layer.keep`). Every staged module is still linked.
+  2. The launcher always runs the runtime's main. The image bakes `-Dvidocq.app.module`, `-Dvidocq.app.modules=<the
+     application layer>`, `-Dvidocq.app.main` for a trampoline, `-Dvidocq.app.layer`, and an `--add-modules` that
+     roots the parent layer and the JDK modules the image needs, never a module of the application layer.
+  3. Before jlink, the `provides` of the application layer's staged modules move into their `META-INF/services` files
+     (`LayerServiceFiles`, Class-File API, every `module-info.class` of a multi-release jar): nothing binds them into
+     the boot layer any more, and Vauban's layer turns the files back into `provides` when it defines the module.
+  4. `VidocqAppLayer.installFromModuleIfConfigured` defines the application layer from the listed modules, read from
+     the image (`jrt:/modules/<name>`), all of them roots, so a resource-only module is still resolved
+     (BUG-20261114-05). The startup report names the origin `jlink image`.
+  5. jlink writes `VIDOCQ_APP_MODULES=<the application layer>` into the image's `release` file; `vidocq:jpackage`
+     reads it and starts the image as `vidocq:jlink` baked it.
+  6. The extension list at start (`ExtensionLoader`) reads the descriptors of the application layer too. The Vaadin
+     extension reads `flow.server`, so it sits in that layer, and the line `vaadin (CDI only)` had left the list, under
+     `vidocq:package` as in the fixed image; the old image listed it only because of its boot copy. The descriptors
+     are read through each module's `ModuleReader`: `Module.getResourceAsStream` asks Vauban's loader, whose
+     `findResource(moduleName, name)` ignores the module name, so every module of the layer answered with the
+     Vaadin extension's file (71 `vaadin (CDI only)` lines in the first try).
+- **Rejected**: baking `--limit-modules` (option (c) of Vidocq/vidocq#574). It keeps the application out of the boot
+  layer too, but the JVM then turns CDS off ("CDS is disabled when the --limit-modules option is specified") and
+  refuses to record an AOT cache ("Cannot use the following option when dumping the shared archive:
+  --limit-modules"), on JDK 25, and `java --list-modules` hides the application modules.
+- **Validation**: `AppLayerImageIT` (`-Pit`): both launch shapes count `TOOL-PROVIDERS 1`, the layer is `3 modules,
+  2 libraries (jlink image)`, the library's loader is the layer's and reads the application's resource from a
+  `jrt:/` URL (Foy#96), `SQL-OK` (a JDK module only the layer requires, vidocq#254), no `VIDOCQ-LAY-001`; a flight
+  recording, `jcmd <pid> VM.version`, and an AOT cache recorded then opened (`Opened AOT cache`). Red before the
+  fix. `CreateThenBuildIT`: the created project's image puts `acme.resources` in its `jlink image` layer, and the
+  resolution of its own launch names neither that module nor the application's. `ImageLaunchTest`,
+  `ImageLaunchMojosTest`, `LayerServiceFilesTest`, `VidocqAppLayerModuleTest`. By hand, the image of a Vaadin 25.3.2
+  application (`vauban:modularize` all-automatic, an app shell with `@StyleSheet("aura/aura.css")`,
+  `@Push(transport = LONG_POLLING)` and `provides AppShellConfigurator`): `GET /` and the stylesheet answer 200, the
+  layer's loader returns `jrt:/vaadin.aura.theme/META-INF/resources/aura/aura.css`, Vaadin's `Lookup` and
+  `ServiceLoader` each find the app shell once, and a click's update reaches the page over long polling.
+
 ## BUG-20261114-10 — Two launchers put a trampoline application in the boot layer and in a Vauban layer
 
 - **Date**: 2026-11-14

@@ -66,15 +66,19 @@ runtime **into a self-contained directory** (`target/dist/`). The binary
 1. Stages all `compile`+`runtime` jars into `target/jlink-mods/`.
 2. Verifies that none is an automatic module (otherwise a clear error is raised).
 3. `jdeps --print-module-deps` (ToolProvider) resolves transitive JDK modules.
-4. `jlink --module-path stage:$JAVA_HOME/jmods --add-modules <set>
-   --launcher <name>=<module>/<mainClass> --strip-debug --compress=zip-6
-   --no-header-files --no-man-pages --output target/dist`.
-   Without an application main class, the launcher is
-   `<name>=io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, and
-   `--add-options=--add-modules=<module> -Dvidocq.app.module=<module>` bakes into the image what
-   resolves the application module and has `Vidocq.main` re-layer it as a `@VidocqMain`
-   trampoline would.
-5. Copies `vidocq.properties` + `logging.properties` (and any configured
+4. Splits the staged modules as `vidocq:package` does (`vidocq.app.layer`,
+   `vidocq.app.layer.keep`), and moves the `provides` of the staged copies of the application
+   layer's modules into their `META-INF/services` files, so that no service binds them into the
+   boot layer (BUG-20261114-11).
+5. `jlink --module-path stage:$JAVA_HOME/jmods --add-modules <set>
+   --launcher <name>=io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq
+   --add-options=<options> --release-info add:VIDOCQ_APP_MODULES=<layer>
+   --strip-debug --compress=zip-6 --no-header-files --no-man-pages --output target/dist`.
+   The options are `--add-modules=<parent layer and JDK modules> -Dvidocq.app.module=<module>
+   -Dvidocq.app.modules=<application layer> [-Dvidocq.app.main=<mainClass>]
+   -Dvidocq.app.layer=<mode>`: `Vidocq.main` defines the application layer from the listed
+   modules, read from the image, and runs a `@VidocqMain` trampoline inside it.
+6. Copies `vidocq.properties` + `logging.properties` (and any configured
    resource) into `dist/conf/`.
 
 ### Configuration
@@ -99,11 +103,16 @@ runtime **into a self-contained directory** (`target/dist/`). The binary
                     <param>logging.properties</param>
                     <param>my-custom-config.yaml</param>
                 </includeResources>
+                <appLayer>all</appLayer>                             <!-- vidocq.app.layer: all (default) or classes -->
+                <appLayerKeep>com.acme:shared</appLayerKeep>         <!-- vidocq.app.layer.keep: kept in the parent layer -->
             </configuration>
         </execution>
     </executions>
 </plugin>
 ```
+
+A flight recording needs `jdk.jfr`, which the image links only when asked:
+`-Dvidocq.jlink.addModules=jdk.jfr`.
 
 ### Launch
 

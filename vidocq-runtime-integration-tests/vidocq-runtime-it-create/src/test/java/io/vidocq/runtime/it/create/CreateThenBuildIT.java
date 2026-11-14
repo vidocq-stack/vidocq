@@ -148,26 +148,33 @@ class CreateThenBuildIT {
 
         assertTheBuildFrozeItsExtensions(project, output);
         assertStartsOnTheFrozenExtensions(project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh"));
-        // The image is linked with --strip-debug, and its application module sits in the boot layer as well as in
-        // the layer Vauban defines: it starts on the same record all the same (Vidocq/vauban BUG-20261113-17).
-        assertStartsOnTheFrozenExtensions(project.resolve("target/dist/bin/demo-app"));
-        assertTheResourceOnlyModuleIsResolvedAtStart(project.resolve("target/dist/bin/java"), output);
+        // The image is linked with --strip-debug: it starts on the same record all the same (Vidocq/vauban
+        // BUG-20261113-17).
+        String imageBoot = assertStartsOnTheFrozenExtensions(project.resolve("target/dist/bin/demo-app"));
+        assertTheImageLayersTheApplicationOnce(project.resolve("target/dist/bin/java"), imageBoot, output);
     }
 
     /**
-     * A module that nothing {@code requires} (Vaadin's resource-only {@code flow.push}) is linked into the image, and
-     * is served only if the image resolves it at start: the options baked into the image root every staged module
-     * (BUG-20261114-05). The resolution the JVM prints for the image's own launch names the fixture module.
+     * The image reads its application layer from the modules it links, and its boot layer holds none of them
+     * (BUG-20261114-11). A module that nothing {@code requires} (Vaadin's resource-only {@code flow.push}) is
+     * served only if a layer resolves it: the build lists every module of the application layer, so the layer
+     * resolves it (BUG-20261114-05). The resolution the JVM prints for the image's own launch names neither the
+     * application module, which its {@code provides} would bind there, nor the fixture module.
      */
-    private static void assertTheResourceOnlyModuleIsResolvedAtStart(Path java, String output) throws Exception {
+    private static void assertTheImageLayersTheApplicationOnce(Path java, String boot, String output) throws Exception {
         assertTrue(modules(java).contains(RESOURCE_MODULE), "the image does not link " + RESOURCE_MODULE + ":\n" + output);
+        String layer = boot.lines().filter(l -> l.contains("Application layer ready")).findFirst().orElse("");
+        assertTrue(layer.contains(RESOURCE_MODULE) && layer.contains("com.acme.demo.app")
+                && layer.contains("(jlink image)"), "the application layer of the image:\n" + boot);
         Process dry = new ProcessBuilder(java.toString(), "--show-module-resolution", "--dry-run",
                 "-m", "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq")
                 .redirectErrorStream(true).start();
         String resolution = new String(dry.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertTrue(dry.waitFor(1, TimeUnit.MINUTES), "the dry run did not end");
-        assertTrue(resolution.lines().anyMatch(l -> (" " + l + " ").contains(" " + RESOURCE_MODULE + " ")),
-                "linked in the image, resolved by no start:\n" + resolution);
+        for (String module : List.of(RESOURCE_MODULE, "com.acme.demo.app")) {
+            assertTrue(resolution.lines().noneMatch(l -> (" " + l + " ").contains(" " + module + " ")),
+                    module + " is in the boot layer of the image:\n" + resolution);
+        }
     }
 
     /**
@@ -260,8 +267,10 @@ class CreateThenBuildIT {
      *
      * <p>The application listens on a port the system picks (port 0), never on 8080, which another process of the
      * machine may hold, and only the process started here is stopped.
+     *
+     * @return what the application printed until it started
      */
-    private static void assertStartsOnTheFrozenExtensions(Path launcher) throws Exception {
+    private static String assertStartsOnTheFrozenExtensions(Path launcher) throws Exception {
         ProcessBuilder command = new ProcessBuilder(launcher.toString()).redirectErrorStream(true);
         command.environment().put("JAVA_HOME", System.getProperty("java.home"));
         // The java launcher reads it itself, whatever the launcher: the one of a jlink image passes no JAVA_OPTS. A
@@ -285,6 +294,7 @@ class CreateThenBuildIT {
         assertFalse(boot.contains(":8080/"), launcher + " listened on the default port:\n" + boot);
         assertTrue(FROZEN_AT_BUILD.matcher(boot).find(),
                 launcher + " did not start on the extensions frozen at build:\n" + boot);
+        return boot;
     }
 
     /**

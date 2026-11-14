@@ -25,88 +25,101 @@ import io.vidocq.runtime.core.VidocqAppLayer;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.TreeSet;
 
 /**
  * How a jlink image, or the jpackage application built on it, starts the application: the
  * {@code <module>/<class>} its launcher runs, and the JVM options the image needs for it.
  *
- * <p>With an application main class, the launcher runs it as it is: the {@code @VidocqMain} trampoline
- * re-layers the application. Without one, the launcher runs the runtime's own main, and
- * {@value VidocqAppLayer#APP_MODULE_PROPERTY} tells {@code Vidocq.main} to re-layer the application module, as the
- * trampoline did. The application then boots in the same layer as with a trampoline.
+ * <p>The launcher always runs the runtime's own main. {@value VidocqAppLayer#APP_MODULE_PROPERTY} names the
+ * application module and {@value VidocqAppLayer#APP_MODULES_PROPERTY} the modules of the application layer, which
+ * {@code Vidocq.main} reads from the image ({@code jrt:}); an application main class, a {@code @VidocqMain}
+ * trampoline, is named by {@value VidocqAppLayer#APP_MAIN_PROPERTY} and runs inside that layer. A launcher running
+ * the trampoline itself would resolve the application module into the boot layer, and the layer would hold a second
+ * copy of it (BUG-20261114-11).
  *
- * <p>Both ways bake {@code --add-modules} with the application module and every other module staged in the image:
- * no module of the runtime reads the application module, and a staged module that nothing requires (a resource-only
- * module) would be linked but in no layer (BUG-20261114-05).
+ * <p>The build splits the staged modules as {@code vidocq:package} splits its jars. {@code --add-modules} roots the
+ * parent layer and the JDK modules the image needs, never a module of the application layer. Every module of the
+ * application layer is listed, so that one that nothing requires (a resource-only module) is resolved by the layer
+ * (BUG-20261114-05).
  *
- * <p>Both ways bake {@code -Dvidocq.app.layer=} with the mode of the build ({@code all} unless the build asked for
- * {@code classes}): the image re-layers at start, so it must carry the mode it was built under, and never leave it
- * to a default that a later runtime could change (Vidocq/vidocq#247).
+ * <p>The image bakes {@code -Dvidocq.app.layer=} with the mode of the build ({@code all} unless the build asked for
+ * {@code classes}), so that it carries the mode its split was made under, and never leaves it to a default that a
+ * later runtime could change (Vidocq/vidocq#247).
  *
- * @param entryPoint the {@code <module>/<class>} the launcher runs
- * @param vmOptions  the JVM options the image needs: the modules to resolve at start, the mode of the application
- *                   layer, and, without an application main class, the application module
+ * @param entryPoint   the {@code <module>/<class>} the launcher runs: the runtime's main
+ * @param vmOptions    the JVM options the image needs: the modules to resolve at start, the application module and
+ *                     the modules of its layer, the application main class, and the mode of the application layer
+ * @param layerModules the modules of the application layer, the application module first
  */
-record ImageLaunch(String entryPoint, List<String> vmOptions) {
+record ImageLaunch(String entryPoint, List<String> vmOptions, List<String> layerModules) {
 
     /** The runtime's own module, which holds {@link ApplicationMainClass#RUNTIME_MAIN_CLASS}. */
     static final String RUNTIME_MODULE = "io.vidocq.runtime.core";
+    /**
+     * The key of the image's {@code release} file that lists the modules of the application layer, comma separated:
+     * {@code vidocq:jpackage} reads it to start the image as {@code vidocq:jlink} baked it.
+     */
+    static final String RELEASE_KEY = "VIDOCQ_APP_MODULES";
 
     ImageLaunch {
         vmOptions = List.copyOf(vmOptions);
+        layerModules = List.copyOf(layerModules);
     }
 
     /**
-     * The launch of the application whose module is {@code mainModule}.
+     * The launch of the application whose module is {@code mainModule}, alone in the application layer, with nothing
+     * else rooted.
      *
      * @param mainModule the application's own module ({@code vidocq.mainModule})
      * @param mainClass  its main class ({@code vidocq.mainClass}), or {@code null}, blank or the runtime's main
      *                   when it has none
      * @param layerMode  the mode of the application layer the image starts under ({@code vidocq.app.layer})
-     * @throws IllegalArgumentException when {@code mainModule} is missing, or names the runtime without a main
-     *                                  class of the application
+     * @throws IllegalArgumentException when {@code mainModule} is missing, or names the runtime
      */
     static ImageLaunch of(String mainModule, String mainClass, LayerSplit.Mode layerMode) {
-        return of(mainModule, mainClass, layerMode, List.of());
+        return of(mainModule, mainClass, layerMode, List.of(), List.of());
     }
 
     /**
-     * The launch of the application whose module is {@code mainModule}, with every module of the image resolved
-     * at start. jlink links all the staged modules, but the JVM resolves only the roots and what they
-     * {@code requires}: a module that nothing requires (a resource-only module such as Vaadin's {@code flow.push})
-     * would be in the image and in no layer, its {@code META-INF/resources} unreachable (BUG-20261114-05). Both
-     * launch shapes therefore bake {@code --add-modules=<mainModule>,<the other staged modules>}, as
-     * {@code vidocq:package} does with {@code ALL-MODULE-PATH}.
+     * The launch of the application whose module is {@code mainModule}.
      *
-     * @param stagedModules the names of the modules staged in the image (the application's own is rooted first,
-     *                      once, wherever the list holds it)
+     * @param bootRoots    the modules the boot layer roots: the parent layer and the JDK modules the image needs; a
+     *                     module of {@code layerModules} among them, and {@code java.base}, are left out
+     * @param layerModules the modules of the application layer, which the image reads from {@code jrt:} at start; the
+     *                     application module is added first when the list lacks it
+     * @throws IllegalArgumentException when {@code mainModule} is missing, or names the runtime
      */
     static ImageLaunch of(String mainModule, String mainClass, LayerSplit.Mode layerMode,
-                          Collection<String> stagedModules) {
+                          Collection<String> bootRoots, Collection<String> layerModules) {
         if (mainModule == null || mainModule.isBlank()) {
             throw new IllegalArgumentException("The image needs the application's module: set vidocq.mainModule"
                     + " (or <mainModule>) to the name its module-info.java declares.");
         }
         String module = mainModule.strip();
-        String application = ApplicationMainClass.normalize(mainClass == null ? null : mainClass.strip());
-        String roots = rootOption(module, stagedModules);
-        if (application != null) {
-            return new ImageLaunch(module + "/" + application, List.of(roots, layerOption(layerMode)));
-        }
         if (RUNTIME_MODULE.equals(module)) {
             throw new IllegalArgumentException("vidocq.mainModule is the runtime's module " + RUNTIME_MODULE
                     + ": set it to the application's own module, the runtime's main then starts it.");
         }
-        return new ImageLaunch(RUNTIME_MODULE + "/" + ApplicationMainClass.RUNTIME_MAIN_CLASS,
-                List.of(roots, "-D" + VidocqAppLayer.APP_MODULE_PROPERTY + "=" + module,
-                        layerOption(layerMode)));
-    }
-
-    private static String rootOption(String mainModule, Collection<String> stagedModules) {
-        var roots = new LinkedHashSet<String>();
-        roots.add(mainModule);
-        roots.addAll(stagedModules);
-        return "--add-modules=" + String.join(",", roots);
+        String application = ApplicationMainClass.normalize(mainClass == null ? null : mainClass.strip());
+        var layer = new LinkedHashSet<String>();
+        layer.add(module);
+        layer.addAll(new TreeSet<>(layerModules));
+        var roots = new TreeSet<>(bootRoots);
+        roots.removeAll(layer);
+        roots.remove("java.base");
+        List<String> options = new java.util.ArrayList<>();
+        if (!roots.isEmpty()) {
+            options.add("--add-modules=" + String.join(",", roots));
+        }
+        options.add("-D" + VidocqAppLayer.APP_MODULE_PROPERTY + "=" + module);
+        options.add("-D" + VidocqAppLayer.APP_MODULES_PROPERTY + "=" + String.join(",", layer));
+        if (application != null) {
+            options.add("-D" + VidocqAppLayer.APP_MAIN_PROPERTY + "=" + application);
+        }
+        options.add(layerOption(layerMode));
+        return new ImageLaunch(RUNTIME_MODULE + "/" + ApplicationMainClass.RUNTIME_MAIN_CLASS, options,
+                List.copyOf(layer));
     }
 
     private static String layerOption(LayerSplit.Mode layerMode) {

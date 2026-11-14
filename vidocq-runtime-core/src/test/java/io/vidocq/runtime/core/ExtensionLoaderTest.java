@@ -20,14 +20,21 @@
 package io.vidocq.runtime.core;
 
 import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.vauban.classloader.VaubanLayerFactory;
+import io.vidocq.vauban.classloader.spi.PluginContext;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.spi.ToolProvider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * The start-up list of extensions names every Vidocq extension on the module path: the JWT, Rest Client, Fault
@@ -77,5 +84,38 @@ class ExtensionLoaderTest {
     @Test
     void noExtensionAtAll() {
         assertEquals(List.of("No Vidocq extensions discovered"), ExtensionLoader.report(List.of(), Map.of()));
+    }
+
+    /**
+     * An extension module the application layer holds is listed too: an extension that reads an application library
+     * (the Vaadin extension reads {@code flow.server}) goes to that layer with it, and has no lifecycle that would
+     * bring its layer to the list (BUG-20261114-11).
+     */
+    @Test
+    void theExtensionModulesOfTheApplicationLayerAreListedToo(@TempDir Path dir) throws Exception {
+        Path extension = module(dir, "acme.vaadin");
+        Path descriptor = Files.createDirectories(extension.resolve("META-INF/vidocq")).resolve("extension.properties");
+        Files.writeString(descriptor, "id=vaadin\n");
+        // Vauban's loader serves the whole layer: asked for a module's file outside any package, it answers with the
+        // first archive that has one, so a library would pass for the extension.
+        var layer = VaubanLayerFactory.createAppLayer(List.of(extension, module(dir, "acme.library")),
+                ModuleLayer.boot(), ClassLoader.getSystemClassLoader(), PluginContext.empty());
+        try {
+            assertEquals(Map.of("acme.vaadin", "vaadin"), ExtensionLoader.descriptors(layer.layer()));
+            assertEquals("vaadin", ExtensionLoader.descriptors(List.of(), layer.layer()).get("acme.vaadin"));
+            assertFalse(ExtensionLoader.descriptors(List.of(), null).containsKey("acme.vaadin"));
+        } finally {
+            layer.loader().close();
+        }
+    }
+
+    /** Compiles an empty module named {@code name}. */
+    private static Path module(Path dir, String name) throws Exception {
+        Path module = Files.createDirectories(dir.resolve(name));
+        Path source = Files.writeString(Files.createDirectories(dir.resolve("src-" + name)).resolve("module-info.java"),
+                "module " + name + " {}\n");
+        var javac = ToolProvider.findFirst("javac").orElseThrow();
+        assertEquals(0, javac.run(System.out, System.err, "-d", module.toString(), source.toString()));
+        return module;
     }
 }
