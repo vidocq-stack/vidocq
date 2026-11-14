@@ -19,8 +19,9 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Cause**: the launcher jlink writes (`bin/<launcher>`) runs `$DIR/java ... "$@"` without `exec`, so the JVM is a
   child of the shell. `Process.destroy()` stopped the shell only. The launcher of `vidocq:package` uses `exec` and was
   not affected.
-- **Fix**: the IT stops the descendants of the launcher with it, and fails when one of them is still running 30 s
-  later.
+- **Fix**: the IT stops the descendants of the launcher first, waits for them while the launcher still runs (it reaps
+  them: orphaned, they stay zombies in a CI container whose first process is `tail -f /dev/null`, which a first
+  version of the fix met), fails when one of them is still running 30 s later, and stops the launcher.
 
 ## BUG-20261114-01 — The Vidocq configuration does not expand `${...}` property expressions
 

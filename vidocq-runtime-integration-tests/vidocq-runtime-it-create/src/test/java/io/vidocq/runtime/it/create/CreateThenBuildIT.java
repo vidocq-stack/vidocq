@@ -215,21 +215,33 @@ class CreateThenBuildIT {
                 throw new AssertionError(launcher + " did not start within " + START_TIMEOUT, e);
             } finally {
                 // Ends the read as well: the stream of a stopped process closes.
-                // The launcher of a jlink image runs java without exec: its JVM is a child of the script, and
-                // stopping the script alone leaves the JVM running after the test (BUG-20261114-02).
-                List<ProcessHandle> children = application.descendants().toList();
-                children.forEach(ProcessHandle::destroy);
-                application.destroy();
-                if (!application.waitFor(30, TimeUnit.SECONDS)) {
-                    application.destroyForcibly();
-                }
-                assertStopped(launcher, children);
+                stop(launcher, application);
             }
         }
         assertTrue(boot.contains(STARTED), launcher + " did not start:\n" + boot);
         assertFalse(boot.contains(":8080/"), launcher + " listened on the default port:\n" + boot);
         assertTrue(FROZEN_AT_BUILD.matcher(boot).find(),
                 launcher + " did not start on the extensions frozen at build:\n" + boot);
+    }
+
+    /**
+     * Stops the application, the processes its launcher started first. The launcher of a jlink image runs java
+     * without exec: its JVM is a child of the script, and stopping the script alone leaves the JVM running after the
+     * test (BUG-20261114-02). The JVM is waited for while the script still runs, so that the script reaps it: once
+     * orphaned, it would stay a zombie in a container whose first process reaps nothing ({@code tail -f /dev/null}
+     * in the CI), and the check would fail on it.
+     */
+    private static void stop(Path launcher, Process application) throws InterruptedException {
+        List<ProcessHandle> children = application.descendants().toList();
+        try {
+            children.forEach(ProcessHandle::destroy);
+            assertStopped(launcher, children);
+        } finally {
+            application.destroy();
+            if (!application.waitFor(30, TimeUnit.SECONDS)) {
+                application.destroyForcibly();
+            }
+        }
     }
 
     /** Every process the launcher started has ended: none outlives the test, holding its port (BUG-20261114-02). */
