@@ -19,6 +19,8 @@
  */
 package io.vidocq.kerckhoffs.tck.arquillian;
 
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -54,6 +56,27 @@ class KerckhoffsDeployableContainerTest {
         }
     }
 
+    /** A CDI bean of the war: stage 2 injects it into a servlet. */
+    @ApplicationScoped
+    public static class Greeter {
+        public String greet(String name) {
+            return "hello " + name + " from CDI";
+        }
+    }
+
+    /** A servlet whose collaborator comes from the CDI container of the war. */
+    @WebServlet("/cdi")
+    public static class InjectedServlet extends HttpServlet {
+        @Inject
+        Greeter greeter;
+
+        @Override
+        protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+            response.setContentType("text/plain");
+            response.getWriter().print(greeter.greet("kerckhoffs"));
+        }
+    }
+
     private static KerckhoffsDeployableContainer started() throws Exception {
         var container = new KerckhoffsDeployableContainer();
         container.setup(new KerckhoffsContainerConfiguration());
@@ -75,6 +98,25 @@ class KerckhoffsDeployableContainerTest {
 
             assertEquals(200, response.statusCode());
             assertEquals("hello /trivial", response.body());
+            container.undeploy(war);
+        } finally {
+            container.stop();
+        }
+    }
+
+    @Test
+    void a_servlet_gets_its_cdi_bean_injected() throws Exception {
+        var container = started();
+        try {
+            WebArchive war = ShrinkWrap.create(WebArchive.class, "cdi.war")
+                    .addClasses(Greeter.class, InjectedServlet.class);
+            HTTPContext context = container.deploy(war).getContext(HTTPContext.class);
+            URI uri = URI.create("http://" + context.getHost() + ":" + context.getPort() + "/cdi/cdi");
+            HttpResponse<String> response = HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder(uri).GET().build(), HttpResponse.BodyHandlers.ofString());
+
+            assertEquals(200, response.statusCode());
+            assertEquals("hello kerckhoffs from CDI", response.body());
             container.undeploy(war);
         } finally {
             container.stop();

@@ -19,6 +19,7 @@
  */
 package io.vidocq.kerckhoffs.tck.arquillian;
 
+import io.vidocq.foy.cdi.vauban.FoyWebExtension;
 import io.vidocq.foy.internal.boot.ApplicationSources;
 import io.vidocq.foy.internal.boot.ComponentFactory;
 import io.vidocq.foy.internal.boot.DescriptorMerger;
@@ -36,6 +37,7 @@ import io.vidocq.foy.internal.webxml.FragmentOrderer;
 import io.vidocq.foy.internal.webxml.WebAppDescriptor;
 import io.vidocq.kerckhoffs.tck.ServletTestHarness;
 import io.vidocq.kerckhoffs.tck.ServletTestHost;
+import io.vidocq.vauban.core.container.VaubanContainer;
 import jakarta.servlet.ServletContainerInitializer;
 import jakarta.servlet.ServletException;
 import org.jboss.arquillian.container.spi.client.container.DeployableContainer;
@@ -89,6 +91,8 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
     private final java.util.LinkedHashMap<String, ServletTestHarness> harnessesByArchive = new java.util.LinkedHashMap<>();
     /** The component registry of each deployed archive, for the undeploy tier statistics. */
     private final java.util.Map<String, WebComponentRegistry> registriesByArchive = new java.util.HashMap<>();
+    /** The CDI container of each deployed archive, closed with it. */
+    private final java.util.Map<String, VaubanContainer> cdiByArchive = new java.util.HashMap<>();
 
     @Override
     public Class<KerckhoffsContainerConfiguration> getConfigurationClass() {
@@ -119,6 +123,8 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
         registriesByArchive.forEach((name, registry) ->
                 System.err.println("[KerckhoffsTCK] undeploy archive=" + name + " tiers=" + registry.stats()));
         registriesByArchive.clear();
+        cdiByArchive.values().forEach(KerckhoffsDeployableContainer::closeCdi);
+        cdiByArchive.clear();
         synchronized (this) {
             if (host != null) { host.close(); host = null; }
         }
@@ -146,7 +152,11 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
         // those of WEB-INF/classes and of every WEB-INF/lib jar, are loaded from the test class
         // loader (the TCK jar is on the test classpath), but a by-name registration of a class
         // outside the war is refused.
-        var factory = new RegistryComponentFactory(registry, cl, Set.copyOf(content.sources().keySet()));
+        VaubanContainer cdi = startCdi(content.loadable(cl), archiveName);
+        cdiByArchive.put(archive.getName(), cdi);
+        var factory = new CdiComponentFactory(
+                new RegistryComponentFactory(registry, cl, Set.copyOf(content.sources().keySet())),
+                cdi.getBeanManager());
 
         WebAppModel.Builder model = WebAppModel.builder(contextPath);
         WebAppDescriptor effective;
@@ -165,6 +175,7 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
             initializers = initializers(content, ApplicationSources.ordering(webXml.absoluteOrdering(), ordered,
                     fragmentJars, Set.of(content.classesRoot())), factory);
         } catch (ServletException | RuntimeException e) {
+            closeCdi(cdiByArchive.remove(archive.getName()));
             throw new DeploymentException("[KerckhoffsTCK] cannot deploy " + archiveName + ": " + e.getMessage(), e);
         }
         initializers.forEach(model::initializer);
@@ -195,6 +206,7 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
                 .resourceProvider(new WarResourceProvider(war, content.jarResources()))
                 .start();
         } catch (RuntimeException e) {
+            closeCdi(cdiByArchive.remove(archive.getName()));
             throw new DeploymentException("[KerckhoffsTCK] cannot deploy " + archiveName + ": " + e.getMessage(), e);
         }
         harnessesByArchive.put(archive.getName(), harness);
@@ -216,6 +228,31 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
                 registered.isEmpty() ? "_vidocq" : registered.get(0), tckContextRoot));
         pmd.addContext(ctx);
         return pmd;
+    }
+
+    /**
+     * Starts the CDI container of one war: every class of the war is a bean class, so the servlets,
+     * filters and listeners it holds can have their injection points satisfied.
+     */
+    private static VaubanContainer startCdi(List<Class<?>> warClasses, String archiveName) throws DeploymentException {
+        try {
+            // Makes the @WebServlet, @WebFilter and @WebListener classes of the war beans, as Foy does.
+            var builder = VaubanContainer.builder().addBeanClass(FoyWebExtension.class);
+            for (Class<?> type : warClasses) builder.addBeanClass(type);
+            return builder.build();
+        } catch (RuntimeException e) {
+            throw new DeploymentException("[KerckhoffsTCK] cannot start the CDI container of " + archiveName
+                    + ": " + e.getMessage(), e);
+        }
+    }
+
+    private static void closeCdi(VaubanContainer cdi) {
+        if (cdi == null) return;
+        try {
+            cdi.close();
+        } catch (RuntimeException ignored) {
+            // The container is going away anyway.
+        }
     }
 
     /**
@@ -282,6 +319,7 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
     public void undeploy(Archive<?> archive) {
         ServletTestHarness h = harnessesByArchive.remove(archive.getName());
         if (h != null) h.close();
+        closeCdi(cdiByArchive.remove(archive.getName()));
         WebComponentRegistry registry = registriesByArchive.remove(archive.getName());
         if (registry != null) {
             System.err.println("[KerckhoffsTCK] undeploy archive=" + archive.getName() + " tiers=" + registry.stats());
