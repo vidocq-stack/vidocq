@@ -30,7 +30,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -51,18 +50,22 @@ public final class DevServicesSession implements AutoCloseable {
 
     /**
      * The host of the tests of a {@code vidocq:dev} session (BUG-20261114-08): the plugin opens it at their first run,
-     * beside the dev session, and closes it when the dev session ends. It writes the files of a test run, and its
-     * providers see an {@linkplain DefaultDevServiceContext#isolated() isolated} context: they reuse no container and
-     * pin no host port, which the dev session's containers hold.
+     * beside the dev session, and closes it when the dev session ends. It is one of the hosts of a test run.
      */
     public static final String DEV_TESTS_HOST = "vidocq:dev-tests";
 
     /**
-     * The hosts of a test run — {@code vidocq:test}'s {@code HOST}, the JUnit listener's and {@link #DEV_TESTS_HOST}
-     * — which write {@link StateFile#TEST_FILE_NAME} and its {@code .properties} rather than the files of the
-     * application's session (BUG-20261106-03).
+     * The hosts of a test run — the JUnit listener's, {@code vidocq:test}'s {@code HOST} and {@link #DEV_TESTS_HOST} —
+     * with the state file each writes, and its {@code .properties}, rather than the files of the application's session
+     * (BUG-20261106-03). Each host has files of its own: the sessions of {@code vidocq:test} and of the tests of
+     * {@code vidocq:dev} last as long as their goal, and a {@code mvn test} beside them must not rewrite them. Their
+     * providers see an {@linkplain DefaultDevServiceContext#isolated() isolated} context: they reuse no container and
+     * pin no host port, which the containers of an application's session hold (BUG-20261114-08).
      */
-    private static final Set<String> TEST_HOSTS = Set.of("vidocq:test", "test", DEV_TESTS_HOST);
+    private static final Map<String, String> TEST_HOSTS = Map.of(
+            "test", StateFile.TEST_FILE_NAME,
+            "vidocq:test", StateFile.VIDOCQ_TEST_FILE_NAME,
+            DEV_TESTS_HOST, StateFile.DEV_TESTS_FILE_NAME);
 
     private final DevServiceManager mgr;
     private final Path stateFile;
@@ -111,10 +114,13 @@ public final class DevServicesSession implements AutoCloseable {
         return open(host, basedir, mgr, log, clock);
     }
 
-    /** What {@code host}'s providers see: {@code ctx}, {@linkplain DefaultDevServiceContext#isolated() isolated} for
-     *  {@link #DEV_TESTS_HOST}. */
+    /**
+     * What {@code host}'s providers see: {@code ctx}, {@linkplain DefaultDevServiceContext#isolated() isolated} for a
+     * test run's host. A test run may start beside a {@code vidocq:dev} or {@code vidocq:run} session, whose
+     * containers hold the reused names and the pinned ports (BUG-20261114-08).
+     */
     private static DefaultDevServiceContext contextOf(String host, DefaultDevServiceContext ctx) {
-        return DEV_TESTS_HOST.equals(host) ? ctx.isolated() : ctx;
+        return TEST_HOSTS.containsKey(host) ? ctx.isolated() : ctx;
     }
 
     /**
@@ -184,8 +190,9 @@ public final class DevServicesSession implements AutoCloseable {
     }
 
     /**
-     * {@code <basedir>/target/vidocq-dev-services.json}, or {@code vidocq-dev-services-test.json} for a test run's
-     * host.
+     * {@code <basedir>/target/vidocq-dev-services.json}, or, for a test run's host, the file of its own:
+     * {@link StateFile#TEST_FILE_NAME}, {@link StateFile#VIDOCQ_TEST_FILE_NAME} or
+     * {@link StateFile#DEV_TESTS_FILE_NAME}.
      */
     public Path stateFile() {
         return stateFile;
@@ -221,11 +228,10 @@ public final class DevServicesSession implements AutoCloseable {
     /**
      * The host's state file: a test run's host has its own, so that it never overwrites the file of the {@code
      * vidocq:dev} or {@code vidocq:run} session running beside it, which the application reads again on every reload
-     * (BUG-20261106-03).
+     * (BUG-20261106-03), nor that of another test run's host (BUG-20261114-08).
      */
     private static Path stateFileOf(String host, Path basedir) {
-        String name = TEST_HOSTS.contains(host) ? StateFile.TEST_FILE_NAME : StateFile.FILE_NAME;
-        return basedir.resolve("target").resolve(name);
+        return basedir.resolve("target").resolve(TEST_HOSTS.getOrDefault(host, StateFile.FILE_NAME));
     }
 
     /** The connection properties beside {@code stateFile}: its name, with {@code .properties} for {@code .json}. */
@@ -236,8 +242,8 @@ public final class DevServicesSession implements AutoCloseable {
 
     /**
      * Logs the {@code Connection information} block for every dev-provisioned datasource and writes the
-     * coordinates to {@code file} — {@code target/vidocq-dev-services.properties}, or {@code
-     * vidocq-dev-services-test.properties} for a test run — so an external SQL client can reach the dev
+     * coordinates to {@code file} — {@code target/vidocq-dev-services.properties}, or the {@code .properties} beside
+     * a test run's own state file — so an external SQL client can reach the dev
      * databases (moved here from {@code VidocqDevMojo} — spec §6, "same code"). No-op when no datasource was
      * provisioned (e.g. only Keycloak ran). A failure to write the properties file is logged, not fatal: the
      * state file already carries what the application needs.

@@ -275,7 +275,7 @@ class VidocqDevMojoTest {
     }
 
     /**
-     * BUG-20261114-08: the tests' session is the {@code vidocq:dev-tests} host's, with the test files, and starts from
+     * BUG-20261114-08: the tests' session is the {@code vidocq:dev-tests} host's, with files of its own, and starts from
      * the explicit values the dev session started from, taken before the dev session's own keys joined them: a
      * datasource URL the user set opts the tests' container out too, and the tests keep what they had for it.
      */
@@ -287,7 +287,7 @@ class VidocqDevMojoTest {
         // What the dev session hands its application afterwards does not reach the tests' session.
         explicit.put("vidocq.pool.audit.url", "jdbc:postgresql://localhost:54219/audit");
         try (DevServicesSession tests = opener.open()) {
-            assertEquals(tmp.resolve("target").resolve(StateFile.TEST_FILE_NAME), tests.stateFile());
+            assertEquals(tmp.resolve("target").resolve(StateFile.DEV_TESTS_FILE_NAME), tests.stateFile());
             assertEquals("postgres", tests.providers().get("vidocq.pool.audit.url"));
         }
 

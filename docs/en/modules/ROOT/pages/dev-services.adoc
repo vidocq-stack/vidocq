@@ -112,6 +112,9 @@ vidocq.dev.reuse=true
 `vidocq.pool.url` in that same file is still no opt-out: a PostgreSQL URL there never disables the
 PostgreSQL dev service. What the file tells the provider is which database the application uses.
 
+The port and the reuse serve the application's session, `vidocq:dev` and `vidocq:run`, only. A test run reuses no
+container and pins no host port, whatever source sets these keys (<<test-run-files>>).
+
 [#postgres-only-for-postgres]
 === A PostgreSQL container only for a PostgreSQL application
 
@@ -181,7 +184,8 @@ datasources, or `vidocq:dev` and the tests of the same project apart. It is rand
 container that is not reused. For a reused one (`vidocq.dev.reuse=true`), it is a digest of the
 application's path and the container's configuration: the name stays the same from one session to
 the next while the configuration does, and changes with it. Testcontainers finds a reused container
-by a hash that covers its name.
+by a hash that covers its name. A test run never reuses one, so it never finds the application's container again
+by that name.
 
 `vidocq.dev.container-prefix` replaces `vidocq-dev-`, as any tuning key, from a `-D` or from
 `vidocq.properties`. It must start a valid Docker name, letters, digits, `_`, `.` and `-`, and
@@ -272,7 +276,7 @@ in a consuming project's `pom.xml`.
 
 The application reads the state file of the host that started them,
 `<basedir>/target/vidocq-dev-services.json` under `vidocq:dev` and `vidocq:run`, `vidocq-dev-services-test.json`
-under a test run's host (<<test-run-files>>) — `<basedir>` is always the project's own `pom.xml`
+under the JUnit listener (<<test-run-files>>) — `<basedir>` is always the project's own `pom.xml`
 directory, unaffected by a custom `project.build.directory` — through
 `vidocq-runtime-devservices-extension`, which the host adds to the child's module path (the
 Maven-plugin hosts) or which arrives on the class path (the JUnit host, transitively with
@@ -322,13 +326,36 @@ listener, rewrites the file cleanly.
 === A test run has files of its own [.tag-new]#NEW#
 
 `vidocq:dev` and `vidocq:run` write `target/vidocq-dev-services.json` and
-`target/vidocq-dev-services.properties`. A test run's hosts, `vidocq:test`, the JUnit listener and the tests of
-`vidocq:dev` (host `vidocq:dev-tests`, <<continuous-testing>>), write
-`target/vidocq-dev-services-test.json` and `target/vidocq-dev-services-test.properties`. So `vidocq test` or
-`mvn test` beside a running `vidocq:dev` starts its own containers and leaves the dev session's files alone: a
-reload of the application, which reads its state file again, still reports the dev containers. Until
-BUG-20261106-03, every host of a project shared one pair of files, and the reload after a test run reported the
-test run's container, `stopped`.
+`target/vidocq-dev-services.properties`. Each host of a test run writes a pair of its own, in `target/`:
+
+[cols="2,3"]
+|===
+| Host | Files
+
+| The JUnit listener: `mvn test`, a test run of the IDE
+| `vidocq-dev-services-test.json`, `vidocq-dev-services-test.properties`
+
+| `vidocq:test`
+| `vidocq-dev-services-vidocq-test.json`, `vidocq-dev-services-vidocq-test.properties`
+
+| The tests of `vidocq:dev`, host `vidocq:dev-tests` (<<continuous-testing>>)
+| `vidocq-dev-services-vidocq-dev-tests.json`, `vidocq-dev-services-vidocq-dev-tests.properties`
+|===
+
+So `vidocq test` or `mvn test` beside a running `vidocq:dev` starts its own containers and leaves the dev
+session's files alone: a reload of the application, which reads its state file again, still reports the dev
+containers. And a `mvn test` that starts and ends while `vidocq:test` or the tests of `vidocq:dev` run leaves
+their files alone too: their `.properties` keeps the coordinates of their own database, and their state file does
+not turn `stopped` under them. Until BUG-20261106-03, every host of a project shared one pair of files, and the
+reload after a test run reported the test run's container, `stopped`. Until BUG-20261114-08, the three hosts of a
+test run shared the `-test` pair.
+
+A test run reuses no container and pins no host port: `vidocq.dev.reuse` reads `false` there, and every
+`vidocq.dev.<service>.port` (a datasource's `vidocq.dev.postgres.<name>.port` too) reads unset, whatever source
+sets them. A reused container is found again by a name its configuration alone decides, so a test run would get
+the application's container back, its data with it; a pinned port is the application's container's. Until
+BUG-20261114-08, a test run with `vidocq.dev.reuse=true` in `vidocq.properties` landed on the container of a
+`vidocq:dev` running beside it.
 
 The dev console panel of the same name shows the same boot facts, live: which service, its image
 and endpoints, and the keys it injected, a secret always as `configured`. The application cannot
@@ -341,10 +368,8 @@ xref:dev-console.adoc#panels[The dev console's panels].
 
 xref:continuous-testing.adoc[Continuous testing] never uses the application's containers [.tag-new]#NEW#. Under
 `vidocq:dev`, the tests get a session of their own, host `vidocq:dev-tests`, opened at their first run and stopped
-with `vidocq:dev`; `vidocq:test` opens one too, host `vidocq:test`. Both write the files of a test run
-(<<test-run-files>>). The session of the tests of `vidocq:dev` runs beside the application's, so it reuses no
-container and pins no host port: `vidocq.dev.reuse` reads `false` there, and every `vidocq.dev.<service>.port` (a
-datasource's `vidocq.dev.postgres.<name>.port` too) reads unset, whatever source sets them. Each run gets
+with `vidocq:dev`; `vidocq:test` opens one too, host `vidocq:test`. Each writes files of its own, and, as every
+test run, reuses no container and pins no host port (<<test-run-files>>). Each run gets
 `-Dvidocq.dev.devServices=false`, so the test JVM never starts containers on every run. Until BUG-20261114-08, the
 tests of `vidocq:dev` used the application's containers, and a test's `TRUNCATE` wiped the application's data.
 
@@ -357,7 +382,7 @@ A key whose last dot-separated segment names a secret — `password`, `passwd`, 
 `token`, `key`, `credential(s)`, `apikey`, `api-key`, `private-key`, in any case — is written to
 the state file as `"configured": true`, never with its value; a URL loses its `user:password@`
 part and any secret query parameter is masked as `***` before anything is written. Only
-`target/vidocq-dev-services.properties` (`-test.properties` for a test run), documented in `DEV_SERVICES.md`'s
+`target/vidocq-dev-services.properties` (a test run's own `.properties`, <<test-run-files>>), documented in `DEV_SERVICES.md`'s
 "Connection information", keeps a password in clear text, on purpose: it is the local, machine-only file an
 external tool — `psql`, DataGrip, a migration runner — reads to connect to the dev database
 without a JDBC URL copied by hand.

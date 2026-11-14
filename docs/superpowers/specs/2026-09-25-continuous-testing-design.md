@@ -136,15 +136,19 @@ The fields take these values:
     the tests' container out too, and the tests keep what they had for it. Its providers see an isolated context:
     `vidocq.dev.reuse` reads `false` and every `vidocq.dev.<service>[.<name>].port` reads unset, whatever their
     source, since a reused container would be the dev one, found again by its name, and a pinned port is the dev
-    container's. It writes `target/vidocq-dev-services-test.json` and `-test.properties`, never the dev session's
-    files. Its lines in the terminal start with `Tests: `; the dev console shows nothing more.
+    container's; every test run's host sees the same isolated context, `vidocq:test` and the JUnit listener of
+    `mvn test` included. It writes `target/vidocq-dev-services-vidocq-dev-tests.json` and `.properties`, a pair of
+    its own: never the dev session's files, nor the `-test` pair a `mvn test` or an IDE's test run beside it writes
+    and marks `stopped` when it ends. Its lines in the terminal start with `Tests: `; the dev console shows nothing
+    more.
   - **Switches.** Dev services off for the dev session, or none started for the application: no test session, the
     runs get `vidocq.dev.devServices=false` alone, as before.
 
   The cost, accepted by the maintainer: a second set of containers while the session runs, and a slower first run.
 - **`vidocq:test`** opens a `DevServicesSession` itself, host `vidocq:test`, once for its whole life. It closes it on
   exit (`q`, Ctrl+C, the end of the goal), with the synchronized close pattern of #123. Every run reuses it the same
-  way.
+  way. It writes `target/vidocq-dev-services-vidocq-test.json` and `.properties`, a pair of its own, and reuses no
+  container and pins no host port (BUG-20261114-08).
 - **Shared data.** The tests of `vidocq:dev` never share a database with the running application. The runs of one
   session share their own (`vidocq:dev` or `vidocq:test`): a test that deletes rows deletes them for the next run.
 

@@ -116,7 +116,7 @@ class DevTestServicesTest {
                 "vidocq.dev.provided.vidocq.pool.url", "postgres"), keys, "marked as the application's keys are");
         assertEquals(keys, services.keys());
         assertEquals(List.of(DevTestServices.STARTING), infos);
-        Path state = basedir.resolve("target").resolve(StateFile.TEST_FILE_NAME);
+        Path state = basedir.resolve("target").resolve(StateFile.DEV_TESTS_FILE_NAME);
         assertTrue(Files.readString(state).contains("\"state\":\"running\""), Files.readString(state));
         assertFalse(Files.exists(basedir.resolve("target").resolve(StateFile.FILE_NAME)),
                 "the dev session's file is not the tests'");

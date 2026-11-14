@@ -43,11 +43,24 @@ public final class StateFile {
     public static final String FILE_NAME = "vidocq-dev-services.json";
 
     /**
-     * The state file's name, under {@code <basedir>/target}, for a test run's hosts, {@code vidocq:test} and the JUnit
-     * listener's {@code test}: a file of their own, so a test run beside {@code vidocq:dev} never overwrites the dev
-     * session's file (BUG-20261106-03).
+     * The state file's name, under {@code <basedir>/target}, for the JUnit listener's host {@code test}, that of
+     * {@code mvn test} and of an IDE's test run: a file of its own, so a test run beside {@code vidocq:dev} never
+     * overwrites the dev session's file (BUG-20261106-03).
      */
     public static final String TEST_FILE_NAME = "vidocq-dev-services-test.json";
+
+    /**
+     * The state file's name, under {@code <basedir>/target}, for {@code vidocq:test}'s session, which lives as long as
+     * the goal: a {@code mvn test} or an IDE's test run beside it never rewrites it (BUG-20261114-08).
+     */
+    public static final String VIDOCQ_TEST_FILE_NAME = "vidocq-dev-services-vidocq-test.json";
+
+    /**
+     * The state file's name, under {@code <basedir>/target}, for the session of the tests of {@code vidocq:dev}, which
+     * lives as long as the goal: a {@code mvn test} or an IDE's test run beside it never rewrites it
+     * (BUG-20261114-08).
+     */
+    public static final String DEV_TESTS_FILE_NAME = "vidocq-dev-services-vidocq-dev-tests.json";
 
     /** The system property the host sets so the application can find the state file. */
     public static final String PROPERTY = "vidocq.devservices.state";

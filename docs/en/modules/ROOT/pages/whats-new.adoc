@@ -37,7 +37,8 @@ New in the `{project-version}` development line — everything listed here lande
 
 == Dev services
 
-* xref:dev-services.adoc#test-run-files[A test run has files of its own] [.tag-new]#NEW# — `vidocq test` and the JUnit listener write `target/vidocq-dev-services-test.json` and `-test.properties`, so a test run beside `vidocq dev` no longer overwrites the dev session's files, and the next reload no longer reports the test run's container as the application's, `stopped` (BUG-20261106-03).
+* xref:dev-services.adoc#test-run-files[A test run has files of its own] [.tag-new]#NEW# — the JUnit listener writes `target/vidocq-dev-services-test.json` and `-test.properties`, `vidocq test` and the tests of `vidocq dev` a pair each of their own, so a test run beside `vidocq dev` no longer overwrites the dev session's files, and the next reload no longer reports the test run's container as the application's, `stopped` (BUG-20261106-03). A `mvn test` beside `vidocq test` or `vidocq dev` no longer rewrites their tests' files either (BUG-20261114-08).
+* xref:dev-services.adoc#test-run-files[A test run never lands on the application's container] [.tag-new]#NEW# — `mvn test`, `vidocq test` and the tests of `vidocq dev` reuse no container and pin no host port, whatever `vidocq.dev.reuse` and the `vidocq.dev.<service>.port` keys say. With `vidocq.dev.reuse=true`, a test run beside `vidocq dev` got the application's container back by its name, and a test that empties a table emptied the application's (BUG-20261114-08).
 
 == Testing
 

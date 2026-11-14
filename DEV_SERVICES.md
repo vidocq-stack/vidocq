@@ -288,7 +288,7 @@ Connection information:
 ```
 
 The same coordinates land in **`target/vidocq-dev-services.properties`** (rewritten on each
-`vidocq:dev` start; a test run writes its own, `target/vidocq-dev-services-test.properties`, see
+`vidocq:dev` start; a test run writes its own, `target/vidocq-dev-services-test.properties` for `mvn test`, see
 [The state file](#the-state-file)):
 
 ```properties
@@ -336,6 +336,11 @@ vidocq.dev.reuse=true                          # keep the container between sess
 Container reuse also requires `testcontainers.reuse.enable=true` in your
 `~/.testcontainers.properties`. A fixed port that is already taken fails the start with a clear
 Docker bind error.
+
+These keys serve the application's session, `vidocq:dev` and `vidocq:run`. A test run (`mvn test`, `vidocq:test`,
+the tests of `vidocq:dev`) reads `vidocq.dev.reuse` as `false` and every `vidocq.dev.<service>[.<name>].port` as
+unset, whatever source sets them: a reused container is found again by its name, and a test run beside `vidocq:dev`
+would get the application's container, its data with it (BUG-20261114-08).
 
 ## Container names
 
@@ -481,8 +486,9 @@ of timing out on the first query.
 
 The host that started them writes a state file once the providers are up, and rewrites it with
 `"state": "stopped"` once they stop: `<basedir>/target/vidocq-dev-services.json` for the
-application's hosts, `vidocq:dev` and `vidocq:run`, and `<basedir>/target/vidocq-dev-services-test.json`
-for a test run's, `vidocq:test` and the JUnit listener above. **A custom `<project.build.directory>`
+application's hosts, `vidocq:dev` and `vidocq:run`, and, for a test run's, a file of each host's own:
+`vidocq-dev-services-test.json` for the JUnit listener above, `vidocq-dev-services-vidocq-test.json` for
+`vidocq:test`, `vidocq-dev-services-vidocq-dev-tests.json` for the tests of `vidocq:dev`. **A custom `<project.build.directory>`
 does not move it**: the path is always under `<basedir>/target`, `<basedir>` meaning the project's
 own `pom.xml` directory, never `${project.build.directory}`.
 
@@ -497,13 +503,16 @@ that points to it), the section simply reads "no dev service" — the extension 
 stray file on its own.
 
 **A test run has files of its own.** `vidocq test` or `mvn test` beside a running `vidocq:dev`
-starts the test run's own containers and writes `vidocq-dev-services-test.json` and
-`vidocq-dev-services-test.properties`: the dev session's two files keep describing `vidocq:dev`,
+starts the test run's own containers and writes its own pair, `vidocq-dev-services-test.json` and
+`vidocq-dev-services-test.properties` for `mvn test`: the dev session's two files keep describing `vidocq:dev`,
 whose application reads its state file again on every reload. Before BUG-20261106-03, every host
 of a project shared one pair of files, and the reload after a test run reported the test run's
 container, `stopped`. `vidocq:dev` and `vidocq:run` still share the application's pair: both run
-the application, and one at a time. The tests of `vidocq:dev` write the test pair too: they get a session of
-their own, host `vidocq:dev-tests`, which reuses no container and pins no host port (BUG-20261114-08).
+the application, and one at a time. The sessions of `vidocq:test` and of the tests of `vidocq:dev` (host
+`vidocq:dev-tests`) last as long as their goal, so each has a pair of its own, `vidocq-dev-services-vidocq-test.*`
+and `vidocq-dev-services-vidocq-dev-tests.*`: a `mvn test` or an IDE's test run that starts and ends beside them
+neither points their `.properties` at its own database nor marks their state file `stopped` while their containers
+run. Every test run's session reuses no container and pins no host port (BUG-20261114-08).
 
 **`target/vidocq-dev-services.properties` is a different file, on purpose.** It is the one
 described in [Connection information](#connection-information) above: local to the machine,
@@ -637,7 +646,8 @@ applies `V1__products.sql` before the Mansart pool opens.
 
 `vidocq:dev` (with `vidocq.dev.continuousTesting`, on when `src/test/java` exists) and `vidocq:test` run the
 application's tests on every change. The tests never use the application's containers (BUG-20261114-08):
-`vidocq:dev` opens a session for them at their first run (host `vidocq:dev-tests`, no reused container, no pinned
-host port) and stops it with the goal, `vidocq:test` opens its own session (host `vidocq:test`), and every run gets
+`vidocq:dev` opens a session for them at their first run (host `vidocq:dev-tests`) and stops it with the goal,
+`vidocq:test` opens its own session (host `vidocq:test`), neither reuses a container or pins a host port, each
+writes files of its own, and every run gets
 `-Dvidocq.dev.devServices=false`, so the JUnit host starts nothing. See
 `docs/en/modules/ROOT/pages/continuous-testing.adoc`.

@@ -177,12 +177,11 @@ class DevServicesSessionTest {
                 DevServicesSession tests = DevServicesSession.open(host, basedir, List.of(postgres(32785)),
                         ctx(basedir), LOG, CLOCK);
                 String testState = Files.readString(tests.stateFile());
-                String testProperties = Files.readString(
-                        basedir.resolve("target").resolve("vidocq-dev-services-test.properties"));
+                String testProperties = Files.readString(propertiesOf(tests.stateFile()));
                 tests.close();
 
-                assertEquals(basedir.resolve("target").resolve("vidocq-dev-services-test.json"), tests.stateFile(),
-                        host);
+                assertTrue(tests.stateFile().getFileName().toString().startsWith("vidocq-dev-services-")
+                        && !tests.stateFile().equals(dev.stateFile()), host + ": " + tests.stateFile());
                 assertTrue(testState.contains("\"host\":\"" + host + "\"") && testState.contains("32785"),
                         testState);
                 assertTrue(testProperties.contains("32785"), testProperties);
@@ -194,7 +193,7 @@ class DevServicesSessionTest {
 
     /**
      * BUG-20261114-08: the tests of a {@code vidocq:dev} session get a session of their own, beside the dev one. It
-     * writes the files of a test run, and its providers reuse no container and pin no host port: the dev session's
+     * writes files of its own, and its providers reuse no container and pin no host port: the dev session's
      * containers hold those. The dev session itself keeps them.
      */
     @Test
@@ -208,14 +207,62 @@ class DevServicesSessionTest {
              DevServicesSession tests = DevServicesSession.open(DevServicesSession.DEV_TESTS_HOST, basedir,
                      List.of(recording(testsSaw)), new DefaultDevServiceContext(basedir, configured), LOG, CLOCK)) {
             assertEquals(basedir.resolve("target").resolve(StateFile.FILE_NAME), dev.stateFile());
-            assertEquals(basedir.resolve("target").resolve(StateFile.TEST_FILE_NAME), tests.stateFile());
             assertTrue(Files.readString(tests.stateFile()).contains("\"host\":\"vidocq:dev-tests\""),
                     Files.readString(tests.stateFile()));
-            assertTrue(Files.isRegularFile(basedir.resolve("target").resolve("vidocq-dev-services-test.properties")));
         }
 
         assertEquals(Map.of("vidocq.dev.reuse", "true", "vidocq.dev.postgres.port", "55432"), devSaw);
         assertEquals(Map.of("vidocq.dev.reuse", "false", "vidocq.dev.postgres.port", "unset"), testsSaw);
+    }
+
+    /**
+     * BUG-20261114-08, its second path: {@code vidocq:test} and the JUnit listener of {@code mvn test} run beside a
+     * {@code vidocq:dev} too. Their providers reuse no container and pin no host port either, or a reused container
+     * found again by its name, or the dev session's port, would hand the tests the application's database.
+     */
+    @Test
+    void noTestRunSharesAContainerWithTheApplication(@TempDir Path basedir) throws Exception {
+        Map<String, String> configured = Map.of("vidocq.dev.reuse", "true", "vidocq.dev.postgres.port", "55432");
+        for (String host : List.of("vidocq:test", "test")) {
+            Map<String, String> saw = new LinkedHashMap<>();
+            DevServicesSession.open(host, basedir, List.of(recording(saw)),
+                    new DefaultDevServiceContext(basedir, configured), LOG, CLOCK).close();
+            assertEquals(Map.of("vidocq.dev.reuse", "false", "vidocq.dev.postgres.port", "unset"), saw, host);
+        }
+    }
+
+    /**
+     * BUG-20261114-08: the sessions of {@code vidocq:test} and of the tests of {@code vidocq:dev} live as long as their
+     * goal, and a {@code mvn test} or an IDE's test run may start and end beside them. Each host keeps files of its
+     * own: the run that ends marks only its own file stopped, and each connection file keeps its own database's
+     * coordinates, which a reader connects an SQL client with.
+     */
+    @Test
+    void eachTestHostKeepsFilesOfItsOwn(@TempDir Path basedir) throws Exception {
+        Path target = basedir.resolve("target");
+        try (DevServicesSession devTests = DevServicesSession.open(DevServicesSession.DEV_TESTS_HOST, basedir,
+                List.of(postgres(32791)), ctx(basedir), LOG, CLOCK);
+             DevServicesSession vidocqTest = DevServicesSession.open("vidocq:test", basedir,
+                     List.of(postgres(32792)), ctx(basedir), LOG, CLOCK)) {
+            DevServicesSession.open("test", basedir, List.of(postgres(32793)), ctx(basedir), LOG, CLOCK).close();
+
+            assertEquals(target.resolve(StateFile.DEV_TESTS_FILE_NAME), devTests.stateFile());
+            assertEquals(target.resolve(StateFile.VIDOCQ_TEST_FILE_NAME), vidocqTest.stateFile());
+            for (DevServicesSession running : List.of(devTests, vidocqTest)) {
+                String state = Files.readString(running.stateFile());
+                assertTrue(state.contains("\"state\":\"running\""), state);
+            }
+            assertTrue(Files.readString(propertiesOf(devTests.stateFile())).contains("32791"));
+            assertTrue(Files.readString(propertiesOf(vidocqTest.stateFile())).contains("32792"));
+            String junit = Files.readString(target.resolve(StateFile.TEST_FILE_NAME));
+            assertTrue(junit.contains("\"host\":\"test\"") && junit.contains("\"state\":\"stopped\""), junit);
+        }
+    }
+
+    /** The connection properties written beside {@code stateFile}. */
+    private static Path propertiesOf(Path stateFile) {
+        String name = stateFile.getFileName().toString();
+        return stateFile.resolveSibling(name.replace(".json", ".properties"));
     }
 
     /** A PostgreSQL-like provider that records the reuse and port keys its context gives it. */

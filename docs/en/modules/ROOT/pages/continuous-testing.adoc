@@ -233,11 +233,13 @@ of their own, host `vidocq:dev-tests`, apart from the application's:
 * It reuses no container and pins no host port: `vidocq.dev.reuse` and the `vidocq.dev.<service>.port` keys stay the
   application's, whose containers hold them. A value you set yourself, such as `-Dvidocq.pool.url`, keeps the tests'
   container from starting, as it keeps the application's.
-* It writes `target/vidocq-dev-services-test.json` and `target/vidocq-dev-services-test.properties`, the
-  xref:dev-services.adoc#test-run-files[files of a test run], and its lines in the terminal start with `Tests:`.
+* It writes `target/vidocq-dev-services-vidocq-dev-tests.json` and
+  `target/vidocq-dev-services-vidocq-dev-tests.properties`, xref:dev-services.adoc#test-run-files[files of its own]
+  that a `mvn test` beside it never rewrites, and its lines in the terminal start with `Tests:`.
 * When it cannot start, a warning says why, the run goes on without it, and the next run tries again.
 
-`vidocq:test` opens a session of its own, host `vidocq:test`, once for its whole life. Every run, under either goal,
+`vidocq:test` opens a session of its own, host `vidocq:test`, once for its whole life, with files of its own too and,
+as every test run, no reused container and no pinned port. Every run, under either goal,
 gets `-Dvidocq.dev.devServices=false`, so the test JVM never starts containers on each run. With dev services off for
 `vidocq:dev`, `-Dvidocq.dev.devServices=false` or in the application's files, the tests get none either.
 

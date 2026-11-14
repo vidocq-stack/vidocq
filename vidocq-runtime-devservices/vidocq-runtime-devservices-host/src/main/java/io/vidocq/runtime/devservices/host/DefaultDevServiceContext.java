@@ -116,7 +116,8 @@ public final class DefaultDevServiceContext implements DevServiceContext {
 
     /**
      * This context for a session that runs beside another session of the same project and must share no container
-     * with it: the tests of a {@code vidocq:dev} session (BUG-20261114-08). Whatever source sets them,
+     * with it: a test run, the tests of a {@code vidocq:dev} session as well as {@code vidocq:test} or
+     * {@code mvn test} beside a {@code vidocq:dev} (BUG-20261114-08). Whatever source sets them,
      * {@code vidocq.dev.reuse} reads {@code false}, since a reused container is found again by a name its
      * configuration alone decides, and a {@code vidocq.dev.<service>[.<name>].port} key reads unset, since the other
      * session's container holds that host port. Every other key reads as here.
