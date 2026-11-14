@@ -21,6 +21,11 @@
     </properties>
 
     <dependencies>
+        <!-- A Vaadin application gets WebSocket push without declaring anything. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-foy-websocket-extension</artifactId>
+        </dependency>
         <!-- provided: the application brings Vaadin, at the version of its own BOM. -->
         <dependency>
             <groupId>com.vaadin</groupId>

@@ -32,6 +32,7 @@
         <module>vidocq-runtime-foy-servlet-extension</module>
         <module>vidocq-runtime-foy-servlet-extension-codegen</module>
         <module>vidocq-runtime-foy-servlet-extension-dev</module>
+        <module>vidocq-runtime-foy-websocket-extension</module>
         <module>vidocq-runtime-ibarra-pages-extension</module>
         <module>vidocq-runtime-bodoni-jstl-extension</module>
         <module>vidocq-runtime-naming-extension</module>

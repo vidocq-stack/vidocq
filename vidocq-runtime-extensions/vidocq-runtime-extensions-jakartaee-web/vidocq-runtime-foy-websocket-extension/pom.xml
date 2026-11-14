@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-foy-websocket-extension</artifactId>
+    <name>Vidocq :: Web Extensions :: Jakarta WebSocket (Foy)</name>
+    <description>Vidocq Runtime extension that puts Foy's Jakarta WebSocket 2.2 module in the application and gives it
+        the allowed origins of the runtime configuration</description>
+
+    <properties>
+        <!--
+            checkpom asks for the companion codegen bundle of every vidocq-runtime-*-extension this pom declares.
+            The Servlet extension is aggregated here for the applications' run time only; this module has no
+            source for its processors to process.
+        -->
+        <vidocq.checkpom.skip>true</vidocq.checkpom.skip>
+    </properties>
+
+    <dependencies>
+        <!-- Foy is a brick: it depends on APIs only. This extension brings it, with Jakarta WebSocket. -->
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-websocket</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
