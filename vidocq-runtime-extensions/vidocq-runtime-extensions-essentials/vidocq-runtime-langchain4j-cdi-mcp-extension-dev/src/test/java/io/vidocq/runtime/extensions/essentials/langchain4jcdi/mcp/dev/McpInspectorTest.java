@@ -28,7 +28,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.StringReader;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -127,13 +126,10 @@ class McpInspectorTest {
                 tool.call().apply(paris).summary());
     }
 
+    /** Port {@code 0}, where no socket can listen: see {@code McpClientTest.aClosedPortIsUnreachable}. */
     @Test
-    void anUnreachableMcpIsATransportLineWithTheRequestInTheDetails() throws Exception {
-        int port;
-        try (ServerSocket probe = new ServerSocket(0)) {
-            port = probe.getLocalPort();
-        }
-        URI closed = URI.create("http://127.0.0.1:" + port + "/mcp");
+    void anUnreachableMcpIsATransportLineWithTheRequestInTheDetails() {
+        URI closed = URI.create("http://127.0.0.1:0/mcp");
         McpInspector nowhere = McpInspector.of(McpCatalogue.of(List.of(InspectorFixtures.tool("currentTime")),
                 List.of(), List.of(), List.of()), closed, Duration.ofSeconds(5));
 

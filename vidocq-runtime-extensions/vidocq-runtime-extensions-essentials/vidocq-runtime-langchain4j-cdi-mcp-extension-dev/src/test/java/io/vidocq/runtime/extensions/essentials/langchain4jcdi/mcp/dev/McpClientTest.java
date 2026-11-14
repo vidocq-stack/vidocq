@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import java.io.StringReader;
 import java.lang.reflect.Field;
 import java.net.ProxySelector;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
@@ -156,13 +155,14 @@ class McpClientTest {
         assertEquals("HTTP 502", failure.getMessage());
     }
 
+    /**
+     * Port {@code 0}: no socket can listen on it, so the connection fails at once, and there is no port to pick
+     * that another process could listen on before the call (BUG-20261114-09). A socket bound to a port and never
+     * listening does not do: macOS drops the connection, which then times out.
+     */
     @Test
     void aClosedPortIsUnreachable() throws Exception {
-        int port;
-        try (ServerSocket probe = new ServerSocket(0)) {
-            port = probe.getLocalPort();
-        }
-        URI closed = URI.create("http://127.0.0.1:" + port + "/mcp");
+        URI closed = URI.create("http://127.0.0.1:0/mcp");
         try (McpClient nowhere = new McpClient(closed, Duration.ofSeconds(5))) {
             JsonObject request = nowhere.request("tools/call", Json.createObjectBuilder().add("name", "t")
                     .add("arguments", Json.createObjectBuilder()).build());
