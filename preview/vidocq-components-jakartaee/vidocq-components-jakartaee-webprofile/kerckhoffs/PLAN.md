@@ -186,8 +186,10 @@ SHA-256 `e21a3d8251bf954c99a3f9a5f71911696509a1ed40c23673760785a3b88e4172`, 14 M
   `payara`, `tomee`, `liberty`). Kerckhoffs' container is injected without patching the TCK:
   deactivate the default profile and add the classpath of `kerckhoffs-tck` (container, Foy,
   Vauban, Kerckhoffs) to failsafe through its `additionalClasspathElements` user property.
-  **(to verify)** that failsafe honours `maven.test.additionalClasspath`; if not, the script
-  applies a documented one-profile patch to the extracted TCK parent and every result states it.
+  **Verified 2026-11-14**: failsafe 3.2.5 honours `maven.test.additionalClasspath`, so no patch of
+  the TCK is needed; the script also passes `arquillian.launch` / `arquillian.xml` through `argLine`
+  and sets `sigtest.api.*` (read by a module the run does not build). Every result states these
+  command-line deviations (`kerckhoffs-tck/BASELINE.md`).
 - The adapter is a copy of the container of `foy-tck` (decision of 2026-11-14), placed in
   `kerckhoffs-tck`, adding the start of Vauban for the CDI beans of the fixtures. It is Arquillian
   1.8.0.Final + ShrinkWrap, JUnit 4 on the TCK side.
@@ -197,9 +199,10 @@ Runner shape (copy `foy-tck` and `bodoni-tck`, not a new design):
 1. `kerckhoffs-tck` in the reactor behind `-Ptck`, never published (`maven.deploy.skip`,
    `skipPublishing`), `tck-official` profile for the official dependency.
 2. An Arquillian container adapter that deploys the TCK WARs on Foy + Vauban + Kerckhoffs
-   (stages: a trivial WAR deployed and fetched; then a CDI bean in the WAR; then `app-mem`).
-3. `run-official-tck-security-4.0.sh` (today it **refuses with exit 2** so that a green exit never
-   means "nothing ran").
+   (done: a trivial WAR deployed and fetched; a CDI bean in the WAR; `app-mem` run from the TCK
+   sources).
+3. `run-official-tck-security-4.0.sh`, which exits non-zero whenever a selected application fails,
+   so that a green exit never means "nothing ran". First baseline: `kerckhoffs-tck/BASELINE.md`.
 4. `kerckhoffs-tck/BASELINE.md` with pass/fail per test class; a first honest baseline before any
    implementation is a legitimate K0 deliverable.
 5. Declare `ci.tck.command` in the root POM only once the baseline is green on the smoke set;
