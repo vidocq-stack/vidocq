@@ -34,8 +34,9 @@
         <!--
             Heisenberg — MicroProfile Fault Tolerance 4.1 implementation.
             heisenberg-cdi-vauban ships the BuildCompatibleExtension (HeisenbergExtension) that
-            discovers the fault-tolerance annotations and registers FaultToleranceInterceptor +
-            FaultTolerancePriority3850Interceptor + the state registries. It brings heisenberg-core,
+            discovers the fault-tolerance annotations and registers FaultToleranceInterceptor (the one
+            Fault Tolerance interceptor, at the priority mp.fault.tolerance.interceptor.priority sets) +
+            the state registries. It brings heisenberg-core,
             heisenberg-api and the repackaged microprofile-fault-tolerance-api spec module
             transitively.
         -->
