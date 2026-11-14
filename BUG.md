@@ -110,6 +110,22 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   decline: `createInstantitor` returns `null` when `getClass().getModule().getLayer() == ModuleLayer.boot()` and
   `ApplicationLayer.current().isPresent()`; Vaadin skips a `null` instantiator.
 
+## BUG-20261114-06 — A failure of a test class itself is printed with an empty method name
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/class-failure-name`
+- **Affected module**: vidocq-runtime-maven-plugin (`SurefireReports`)
+- **Symptom**: when a test class fails as a whole (an `@BeforeAll`, or the extension that starts the application),
+  `vidocq dev` and `vidocq:test` print `FAILED com.example.library.HelloResourceTest# — IllegalStateException: The
+  application stopped with exit code 1 …`: a `#` followed by nothing. The `tests` panel of the dev console shows the
+  same name. Reported by the tutorial-verification session on 0.4.0-SNAPSHOT (ee4b1110).
+- **Minimal repro**: `SurefireReportsTest.aClassLevelFailureIsNamedByItsClassAlone`, a Surefire report whose
+  `<testcase name="">` holds an `<error>`.
+- **Cause**: Surefire writes a class-level failure as a testcase with an empty `name`, and `SurefireReports` named every
+  failure `<classname>#<name>`.
+- **Fix**: a testcase with no name is named by its class alone. `TestResults.rerunList` already reruns the whole class
+  for such a name, and still accepts the `<class>#` form. `SurefireReportsTest`, `TestResultsTest`.
+
 ## BUG-20261114-05 — A jlink image resolves only the application's module graph: resource-only modules are linked but never served
 
 - **Date**: 2026-11-14

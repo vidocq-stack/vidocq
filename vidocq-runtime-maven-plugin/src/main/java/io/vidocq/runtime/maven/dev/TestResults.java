@@ -169,7 +169,8 @@ record TestResults(State state, Trigger trigger, Instant startedAt, long duratio
     /**
      * The tests to run again, as Surefire's {@code -Dtest} takes them: {@code <class>#<method>}, each once, a
      * parameterised or repeated name such as {@code adds(int)[1]} cut to its method, which is what {@code -Dtest}
-     * matches; a failure of the class itself, {@code <class>#}, reruns the whole class.
+     * matches; a failure of the class itself, named by its class alone (or {@code <class>#}, as a result recorded
+     * before BUG-20261114-06 named it), reruns the whole class.
      */
     List<String> rerunList() {
         LinkedHashSet<String> tests = new LinkedHashSet<>();

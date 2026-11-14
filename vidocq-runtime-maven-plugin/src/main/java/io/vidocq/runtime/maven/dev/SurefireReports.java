@@ -146,7 +146,9 @@ final class SurefireReports {
                     errors++;
                 }
                 String testClass = testcase.getAttribute("classname");
-                failures.add(new TestResults.Failure(testClass + "#" + testcase.getAttribute("name"),
+                String method = testcase.getAttribute("name");
+                // a failure of the class itself (@BeforeAll, an extension) has no method: the class alone names it
+                failures.add(new TestResults.Failure(method.isEmpty() ? testClass : testClass + "#" + method,
                         problem.getAttribute("type"), message(problem),
                         location(testClass, problem.getTextContent())));
             } else if (child(testcase, "skipped") != null) {

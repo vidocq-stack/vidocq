@@ -92,6 +92,27 @@ class SurefireReportsTest {
     }
 
     /**
+     * A failure of the class itself (an {@code @BeforeAll}, an extension that starts the application) has a testcase
+     * with no name: it is reported by its class alone, not as {@code <class>#} (BUG-20261114-06).
+     */
+    @Test
+    void aClassLevelFailureIsNamedByItsClassAlone(@TempDir Path dir) throws Exception {
+        report(dir, "TEST-com.acme.HelloResourceTest.xml", """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <testsuite name="com.acme.HelloResourceTest" tests="1" errors="1" skipped="0" failures="0">
+                  <testcase name="" classname="com.acme.HelloResourceTest" time="0">
+                    <error message="The application stopped" type="java.lang.IllegalStateException"/>
+                  </testcase>
+                </testsuite>
+                """, SINCE.plusSeconds(3));
+
+        SurefireReports.Reports reports = SurefireReports.read(dir, SINCE);
+
+        assertEquals(List.of("com.acme.HelloResourceTest"),
+                reports.failures().stream().map(TestResults.Failure::test).toList());
+    }
+
+    /**
      * A failure shows where the test failed, the first frame of its own class in the stack (BUG-20261030-08); the
      * frames of JUnit or of the code under test do not name the test's line.
      */
