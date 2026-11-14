@@ -115,7 +115,7 @@ final class Deployment implements ModuleRoots {
         try (InputStream in = descriptor.openStream()) {
             return ClassFile.of().parse(in.readAllBytes()).findAttribute(Attributes.module())
                     .map(attribute -> attribute.moduleName().name().stringValue());
-        } catch (IOException | IllegalArgumentException e) {
+        } catch (IOException | IllegalArgumentException _) {
             // not a descriptor that can be read: no module there
             return Optional.empty();
         }
@@ -124,7 +124,7 @@ final class Deployment implements ModuleRoots {
     private static Optional<URL> root(URL descriptor) {
         try {
             return Optional.of(URI.create(DESCRIPTOR.matcher(descriptor.toExternalForm()).replaceFirst("")).toURL());
-        } catch (MalformedURLException | IllegalArgumentException e) {
+        } catch (MalformedURLException | IllegalArgumentException _) {
             return Optional.empty();
         }
     }

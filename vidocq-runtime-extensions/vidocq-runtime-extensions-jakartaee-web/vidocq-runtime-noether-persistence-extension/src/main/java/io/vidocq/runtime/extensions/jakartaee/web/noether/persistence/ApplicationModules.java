@@ -55,7 +55,7 @@ final class ApplicationModules implements ModuleRoots {
     private static Optional<URL> url(URI location) {
         try {
             return Optional.of(location.toURL());
-        } catch (MalformedURLException | IllegalArgumentException e) {
+        } catch (MalformedURLException | IllegalArgumentException _) {
             // a location no URL stands for: no root to scan
             return Optional.empty();
         }
