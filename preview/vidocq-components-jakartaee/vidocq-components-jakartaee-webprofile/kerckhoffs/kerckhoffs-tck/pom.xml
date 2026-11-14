@@ -12,17 +12,105 @@
 
     <artifactId>kerckhoffs-tck</artifactId>
     <name>Kerckhoffs :: TCK runner</name>
-    <description>Runner of the official Jakarta Security 4.0 TCK on Kerckhoffs — never published, only built under the tck profile. Scaffold: no test yet (PLAN.md, milestone K0).</description>
+    <description>Arquillian container adapter and runner of the official Jakarta Security 4.0 TCK
+        on Foy + Vauban + Kerckhoffs. Behind the tck profile, never published.</description>
 
     <properties>
         <!-- Never published: a TCK runner is not an artifact of the brick. -->
         <maven.deploy.skip>true</maven.deploy.skip>
         <skipPublishing>true</skipPublishing>
+        <foy.version>0.4.0-SNAPSHOT</foy.version>
+        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
+        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <arquillian.version>1.8.0.Final</arquillian.version>
+        <shrinkwrap.version>1.2.6</shrinkwrap.version>
+        <junit.version>5.10.2</junit.version>
     </properties>
 
     <!--
-        K0 fills this module (PLAN.md "TCK plan"): the Arquillian container adapter, the
-        official TCK dependency (jakartaee/security tag 4.0.0-RELEASE, module tck) behind a
-        tck-official profile, and a baseline file. Nothing is declared before the adapter exists.
+        Test code only: the container is a copy of the one in foy-tck (decision of 2026-11-14,
+        PLAN.md section 9), and like it reaches into Foy's internal packages, so everything runs on
+        the class path and nothing here is exported. The Foy engine, Chappe and Vauban are test
+        dependencies of this runner alone; Kerckhoffs itself depends on none of them.
     -->
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-core</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-api</artifactId>
+            <version>${foy.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-core</artifactId>
+            <version>${foy.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-chappe</artifactId>
+            <version>${foy.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-cdi-vauban</artifactId>
+            <version>${foy.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+            <version>${chappe.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+            <version>${chappe.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>6.1.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.container</groupId>
+            <artifactId>arquillian-container-spi</artifactId>
+            <version>${arquillian.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <version>${shrinkwrap.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-impl-base</artifactId>
+            <version>${shrinkwrap.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>
