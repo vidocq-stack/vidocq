@@ -24,7 +24,7 @@ import org.apache.maven.plugin.MojoExecutionException;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
+import java.nio.channels.ServerSocketChannel;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -177,9 +177,11 @@ public record JdwpAgent(String host, int port, boolean suspend) {
                     ? new InetSocketAddress(literal, candidate)
                     : new InetSocketAddress(host, candidate);
         }
-        try (ServerSocket socket = new ServerSocket()) {
-            socket.bind(address);
-            return socket.getLocalPort();
+        // A channel opens its socket as a ServerSocket does, SO_REUSEADDR included; it only binds and closes, and no
+        // byte ever goes through it.
+        try (ServerSocketChannel probe = ServerSocketChannel.open()) {
+            probe.bind(address);
+            return ((InetSocketAddress) probe.getLocalAddress()).getPort();
         } catch (IOException _) {
             return -1;
         }
