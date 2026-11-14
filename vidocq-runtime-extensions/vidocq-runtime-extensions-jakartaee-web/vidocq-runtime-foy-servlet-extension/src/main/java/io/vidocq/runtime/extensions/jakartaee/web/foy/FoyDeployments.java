@@ -25,13 +25,16 @@ import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMounts;
 import io.vidocq.runtime.spi.ApplicationLayer;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletDeploymentListener;
+import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletInitParameters;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.servlet.ServletException;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -87,6 +90,15 @@ final class FoyDeployments {
     static Optional<FoyChappeBoot.Mounted> deploy(BeanManager beanManager, ClassLoader loader,
                                                   String contextPath, int sessionTimeoutSeconds,
                                                   String responseCharacterEncoding, VidocqConfig config) {
+        return deploy(beanManager, loader, contextPath, sessionTimeoutSeconds, responseCharacterEncoding, config,
+                java.util.ServiceLoader.load(ServletInitParameters.class));
+    }
+
+    /** As above, with the {@link ServletInitParameters} given instead of found among the runtime extensions. */
+    static Optional<FoyChappeBoot.Mounted> deploy(BeanManager beanManager, ClassLoader loader,
+                                                  String contextPath, int sessionTimeoutSeconds,
+                                                  String responseCharacterEncoding, VidocqConfig config,
+                                                  Iterable<ServletInitParameters> initParameters) {
         FoyChappeBoot.Builder builder = FoyChappeBoot.builder()
                 .beanManager(beanManager)
                 .classLoader(loader)
@@ -99,6 +111,7 @@ final class FoyDeployments {
                 .defaultResponseCharacterEncoding(responseCharacterEncoding);
         if (contextPath != null) builder.contextPath(contextPath);
         ServletSecurity.from(config).applyTo(builder, ServletSecurity.identityStoreBean(beanManager));
+        initParameters(initParameters, config).forEach(builder::initParameter);
         try {
             Optional<FoyChappeBoot.Mounted> mounted = builder.build();
             mounted.ifPresent(m -> deployed(m.servletContext(), beanManager));
@@ -106,6 +119,23 @@ final class FoyDeployments {
         } catch (ServletException e) {
             throw new IllegalStateException(e.getMessage(), e);
         }
+    }
+
+    /** The init parameters of every provider; a name two providers give fails. */
+    static Map<String, String> initParameters(Iterable<ServletInitParameters> providers, VidocqConfig config) {
+        Map<String, String> merged = new LinkedHashMap<>();
+        for (ServletInitParameters provider : providers) {
+            Map<String, String> given = Objects.requireNonNull(provider.initParameters(config),
+                    () -> provider.getClass().getName() + " returned no init parameters");
+            given.forEach((name, value) -> {
+                Objects.requireNonNull(name, "init parameter name");
+                Objects.requireNonNull(value, () -> "init parameter " + name);
+                if (merged.putIfAbsent(name, value) != null) {
+                    throw new IllegalStateException("Two extensions give the servlet init parameter " + name);
+                }
+            });
+        }
+        return merged;
     }
 
     /** Tells the {@link ServletDeploymentListener}s of the runtime extensions that an application is deployed. */

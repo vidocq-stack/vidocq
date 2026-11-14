@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.jakartaee.web.foy;
 import io.vidocq.chappe.api.Handler;
 import io.vidocq.foy.chappe.FoyChappeBoot;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMount;
+import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletInitParameters;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMounts;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.fixture.LifecycleListener;
 import io.vidocq.runtime.spi.config.ConfigSource;
@@ -163,6 +164,47 @@ class FoyExtensionTest {
         deployments.closeAll();
         FoyDeployments.forget(boot);
         assertTrue(ServletMounts.of(boot).isEmpty());
+    }
+
+    @Test
+    void contributedInitParametersReachTheContext(@TempDir Path root) throws Exception {
+        ServletInitParameters provider = config -> Map.of("x", "1");
+
+        FoyChappeBoot.Mounted mounted = FoyDeployments.deploy(null, loaderWith(root, WEB_XML), null,
+                1800, "UTF-8", config(Map.of()), List.of(provider)).orElseThrow();
+
+        try {
+            assertEquals("1", mounted.servletContext().getInitParameter("x"));
+        } finally {
+            mounted.close();
+        }
+    }
+
+    @Test
+    void aProviderReadsTheConfiguration() {
+        ServletInitParameters provider = config -> Map.of("origins", config.getValue("k").orElse("none"));
+
+        assertEquals(Map.of("origins", "v"),
+                FoyDeployments.initParameters(List.of(provider), config(Map.of("k", "v"))));
+    }
+
+    @Test
+    void twoProvidersGivingTheSameNameFail() {
+        List<ServletInitParameters> providers = List.of(config -> Map.of("dup", "1"), config -> Map.of("dup", "2"));
+        VidocqConfig config = config(Map.of());
+
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                () -> FoyDeployments.initParameters(providers, config));
+
+        assertTrue(e.getMessage().contains("dup"), e.getMessage());
+    }
+
+    @Test
+    void aProviderGivingNullFails() {
+        List<ServletInitParameters> noMap = List.of(config -> null);
+        VidocqConfig config = config(Map.of());
+
+        assertThrows(NullPointerException.class, () -> FoyDeployments.initParameters(noMap, config));
     }
 
     @Test
