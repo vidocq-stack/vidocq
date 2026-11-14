@@ -21,6 +21,7 @@ package io.vidocq.knock.internal;
 
 import io.vidocq.knock.spi.ProbeType;
 import org.eclipse.microprofile.health.HealthCheckResponse;
+import org.eclipse.microprofile.health.HealthCheckResponseBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -205,6 +206,33 @@ class KnockJsonSerializerTest {
 
         assertTrue(json.contains("42"), "JSON must contain the numeric value, got: " + json);
         assertTrue(json.contains("true"), "JSON must contain the boolean value, got: " + json);
+    }
+
+    // -----------------------------------------------------------------------
+    // §3.1 — data rendered in the order of the withData calls (BUG-20261114-01)
+    // -----------------------------------------------------------------------
+
+    /**
+     * A check built through the MicroProfile Health builder renders its {@code data} keys in the order of
+     * its {@code withData} calls, the same at every start (BUG-20261114-01: they came out in an order salted
+     * per JVM).
+     */
+    @Test
+    void serialize_renders_data_in_the_order_of_the_withData_calls_spec_section3_1() {
+        List<String> keys = KnockHealthCheckResponseBuilderTest.shuffledKeys();
+        HealthCheckResponseBuilder builder = HealthCheckResponse.named("heap").up();
+        keys.forEach(key -> builder.withData(key, key.length()));
+        HealthSnapshot snapshot = new HealthSnapshot(ProbeType.ALL, HealthCheckResponse.Status.UP,
+                List.of(builder.build()));
+
+        String json = serializer.serialize(snapshot);
+
+        int previous = -1;
+        for (String key : keys) {
+            int at = json.indexOf("\"" + key + "\"");
+            assertTrue(at > previous, key + " must come after the key before it, got: " + json);
+            previous = at;
+        }
     }
 
     // -----------------------------------------------------------------------

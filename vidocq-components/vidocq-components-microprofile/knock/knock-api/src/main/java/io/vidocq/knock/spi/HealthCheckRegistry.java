@@ -21,6 +21,7 @@ package io.vidocq.knock.spi;
 
 import org.eclipse.microprofile.health.HealthCheck;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -77,8 +78,9 @@ public interface HealthCheckRegistry {
     /**
      * Returns the checks registered for a concrete probe type, keyed by their registration name.
      *
-     * <p>The default implementation derives the name from {@code check.getClass().getName()},
-     * the naming used by the CDI integration.</p>
+     * <p>The aggregated response lists the checks in the order of this map. The default
+     * implementation derives the name from {@code check.getClass().getName()}, the naming used by
+     * the CDI integration, and keeps the order of {@link #getChecks(ProbeType)}.</p>
      *
      * @param type the probe type ({@link ProbeType#LIVENESS}, {@link ProbeType#READINESS} or
      *             {@link ProbeType#STARTUP})
@@ -94,27 +96,32 @@ public interface HealthCheckRegistry {
         for (HealthCheck check : getChecks(type)) {
             named.putIfAbsent(check.getClass().getName(), check);
         }
-        return Map.copyOf(named);
+        // not Map.copyOf: its order is salted per JVM (BUG-20261114-01)
+        return Collections.unmodifiableMap(named);
     }
 
     /**
      * Returns the names of the checks registered for the given probe type, without calling them.
      *
-     * <p>For {@link ProbeType#ALL}, returns the union of LIVENESS, READINESS and STARTUP names.</p>
+     * <p>For {@link ProbeType#ALL}, returns the union of LIVENESS, READINESS and STARTUP names.
+     * The default implementation keeps the order of {@link #getNamedChecks(ProbeType)}, probe by
+     * probe.</p>
      *
      * @param type the probe type
      * @return immutable set of registration names
      * @since 0.4.0
      */
     default Set<String> getCheckNames(ProbeType type) {
-        if (type != ProbeType.ALL) {
-            return Set.copyOf(getNamedChecks(type).keySet());
-        }
         Set<String> names = new LinkedHashSet<>();
-        names.addAll(getNamedChecks(ProbeType.LIVENESS).keySet());
-        names.addAll(getNamedChecks(ProbeType.READINESS).keySet());
-        names.addAll(getNamedChecks(ProbeType.STARTUP).keySet());
-        return Set.copyOf(names);
+        if (type == ProbeType.ALL) {
+            names.addAll(getNamedChecks(ProbeType.LIVENESS).keySet());
+            names.addAll(getNamedChecks(ProbeType.READINESS).keySet());
+            names.addAll(getNamedChecks(ProbeType.STARTUP).keySet());
+        } else {
+            names.addAll(getNamedChecks(type).keySet());
+        }
+        // not Set.copyOf: its order is salted per JVM (BUG-20261114-01)
+        return Collections.unmodifiableSet(names);
     }
 
     /**

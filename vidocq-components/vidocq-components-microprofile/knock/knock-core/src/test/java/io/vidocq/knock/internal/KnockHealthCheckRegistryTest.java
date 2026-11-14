@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -83,6 +84,37 @@ class KnockHealthCheckRegistryTest {
 
         assertEquals(Map.of("com.acme.Live", live), registry.getNamedChecks(ProbeType.LIVENESS));
         assertThrows(IllegalArgumentException.class, () -> registry.getNamedChecks(ProbeType.ALL));
+    }
+
+    /**
+     * Checks, names and last results are listed probe by probe, each probe in the order of the registration
+     * names, whatever the order of the registrations: the same at every start (BUG-20261114-01).
+     */
+    @Test
+    void checks_names_and_results_come_in_the_order_of_the_names() {
+        List<String> names = KnockHealthCheckResponseBuilderTest.shuffledKeys();
+        List<HealthCheck> registered = new ArrayList<>();
+        for (String name : names) {
+            HealthCheck check = counting(name);
+            registered.add(check);
+            registry.register(ProbeType.STARTUP, name, check);
+            registry.register(ProbeType.LIVENESS, name, check);
+        }
+        names.forEach(name -> registry.recordResult(result(ProbeType.STARTUP, name, HealthCheckResponse.Status.UP, T1)));
+        names.forEach(name -> registry.recordResult(result(ProbeType.LIVENESS, name, HealthCheckResponse.Status.UP, T1)));
+        List<String> sorted = names.stream().sorted().toList();
+        List<HealthCheck> checksByName = sorted.stream().map(name -> registered.get(names.indexOf(name))).toList();
+
+        assertEquals(sorted, List.copyOf(registry.getNamedChecks(ProbeType.LIVENESS).keySet()));
+        assertEquals(checksByName, registry.getChecks(ProbeType.LIVENESS));
+        assertEquals(sorted, List.copyOf(registry.getCheckNames(ProbeType.LIVENESS)));
+        List<String> probeThenName = registry.getLastResults().stream()
+                .map(r -> r.probe() + "/" + r.name()).toList();
+        List<String> expected = new ArrayList<>();
+        sorted.forEach(name -> expected.add(ProbeType.LIVENESS + "/" + name));
+        sorted.forEach(name -> expected.add(ProbeType.STARTUP + "/" + name));
+        assertEquals(expected, probeThenName);
+        assertEquals(0, calls.get(), "listing must never call a check");
     }
 
     @Test

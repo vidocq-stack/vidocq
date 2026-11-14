@@ -22,8 +22,10 @@ package io.vidocq.knock.internal;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.HealthCheckResponseBuilder;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -87,10 +89,13 @@ public final class KnockHealthCheckResponseBuilder extends HealthCheckResponseBu
      * Builds the response.
      *
      * <p>Spec §3.1: {@code data} is {@link Optional#empty()} if no {@code withData}
-     * call was made; otherwise it is wrapped in a non-empty {@link Optional}.</p>
+     * call was made; otherwise it is wrapped in a non-empty {@link Optional}. The data keeps
+     * the order of the {@code withData} calls, so {@code /health} renders the same document
+     * at every start (BUG-20261114-01: {@code Map.copyOf} iterated in an order salted per JVM).</p>
      *
      * @return a new immutable {@link HealthCheckResponse}
      * @throws IllegalStateException if {@code name} or {@code status} is missing
+     * @throws NullPointerException  if a data key or value is {@code null}
      */
     @Override
     public HealthCheckResponse build() {
@@ -101,7 +106,18 @@ public final class KnockHealthCheckResponseBuilder extends HealthCheckResponseBu
             throw new IllegalStateException("HealthCheckResponse status must be set (up() or down())");
         }
         return new HealthCheckResponse(name, status,
-                data == null ? Optional.empty() : Optional.of(Map.copyOf(data)));
+                data == null ? Optional.empty() : Optional.of(orderedCopy(data)));
+    }
+
+    /**
+     * An unmodifiable copy of the data in the order of the {@code withData} calls; like the
+     * {@code Map.copyOf} it replaces, it rejects a {@code null} key or value.
+     */
+    private static Map<String, Object> orderedCopy(Map<String, Object> data) {
+        Map<String, Object> copy = LinkedHashMap.newLinkedHashMap(data.size());
+        data.forEach((key, value) ->
+                copy.put(Objects.requireNonNull(key, "data key"), Objects.requireNonNull(value, "data value")));
+        return Collections.unmodifiableMap(copy);
     }
 
     private Map<String, Object> ensureData() {

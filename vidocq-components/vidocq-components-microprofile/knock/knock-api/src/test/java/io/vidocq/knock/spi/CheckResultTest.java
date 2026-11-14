@@ -24,7 +24,10 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -47,6 +50,35 @@ class CheckResultTest {
         Map<String, String> copy = result.data();
         assertEquals(Map.of("pool", "8"), copy);
         assertThrows(UnsupportedOperationException.class, () -> copy.put("x", "y"));
+    }
+
+    /**
+     * The recorded data keeps the order the check answered it in, so that a dev console lists it the same
+     * at every start ({@code Map.copyOf} iterated in an order salted per JVM, BUG-20261114-01).
+     */
+    @Test
+    void data_keeps_its_order() {
+        List<String> keys = IntStream.range(0, 20).mapToObj(i -> "key-" + (i * 7 % 20)).toList();
+        Map<String, String> data = new LinkedHashMap<>();
+        keys.forEach(key -> data.put(key, key));
+
+        CheckResult result = new CheckResult(ProbeType.LIVENESS, "com.acme.HeapCheck", "heap",
+                HealthCheckResponse.Status.UP, AT, data);
+
+        assertEquals(keys, List.copyOf(result.data().keySet()));
+    }
+
+    @Test
+    void a_null_data_key_or_value_is_still_rejected() {
+        Map<String, String> nullValue = new HashMap<>();
+        nullValue.put("key", null);
+        Map<String, String> nullKey = new HashMap<>();
+        nullKey.put(null, "value");
+
+        assertThrows(NullPointerException.class, () -> new CheckResult(ProbeType.LIVENESS, "c", "c",
+                HealthCheckResponse.Status.UP, AT, nullValue));
+        assertThrows(NullPointerException.class, () -> new CheckResult(ProbeType.LIVENESS, "c", "c",
+                HealthCheckResponse.Status.UP, AT, nullKey));
     }
 
     @Test

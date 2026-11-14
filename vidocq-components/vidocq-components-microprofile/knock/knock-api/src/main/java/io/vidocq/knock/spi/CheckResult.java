@@ -22,6 +22,8 @@ package io.vidocq.knock.spi;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -40,7 +42,8 @@ import java.util.Objects;
  *                     may be {@code null} if the check answered without one
  * @param status       the status the check answered
  * @param observedAt   when the answer was received
- * @param data         the response data, values as strings (empty when the response had none)
+ * @param data         the response data, values as strings, in the order of the response (empty when
+ *                     the response had none)
  */
 public record CheckResult(
         ProbeType probe,
@@ -58,6 +61,18 @@ public record CheckResult(
         if (probe == ProbeType.ALL) {
             throw new IllegalArgumentException("A check answers for LIVENESS, READINESS or STARTUP, not ALL");
         }
-        data = data == null ? Map.of() : Map.copyOf(data);
+        data = data == null ? Map.of() : orderedCopy(data);
+    }
+
+    /**
+     * An unmodifiable copy of {@code data} in its own order: {@code Map.copyOf} iterates in an order salted
+     * per JVM, so the same answer listed its data differently at each start (BUG-20261114-01). Like
+     * {@code Map.copyOf}, it rejects a {@code null} key or value.
+     */
+    private static Map<String, String> orderedCopy(Map<String, String> data) {
+        Map<String, String> copy = LinkedHashMap.newLinkedHashMap(data.size());
+        data.forEach((key, value) ->
+                copy.put(Objects.requireNonNull(key, "data key"), Objects.requireNonNull(value, "data value")));
+        return Collections.unmodifiableMap(copy);
     }
 }

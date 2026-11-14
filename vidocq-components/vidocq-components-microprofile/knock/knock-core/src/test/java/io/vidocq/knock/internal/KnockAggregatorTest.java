@@ -30,6 +30,8 @@ import org.junit.jupiter.api.Test;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -140,6 +142,32 @@ class KnockAggregatorTest {
         HealthSnapshot snapshot = aggregator.aggregate(registry, ProbeType.ALL);
 
         assertEquals(HealthCheckResponse.Status.DOWN, snapshot.status());
+    }
+
+    // -----------------------------------------------------------------------
+    // Stable order of the checks in the response (BUG-20261114-01)
+    // -----------------------------------------------------------------------
+
+    /**
+     * The checks come out probe by probe (liveness, readiness, startup), each probe in the order of the
+     * registration names, whatever the order they were registered in: the CDI integration registers them
+     * in the order its {@code Instance} lists them, which CDI does not specify. They came out in an order
+     * salted per JVM ({@code Map.copyOf}, BUG-20261114-01).
+     */
+    @Test
+    void aggregate_reports_the_checks_probe_by_probe_in_the_order_of_their_names() {
+        List<String> names = KnockHealthCheckResponseBuilderTest.shuffledKeys();
+        names.forEach(name -> registry.register(ProbeType.READINESS, "ready-" + name,
+                () -> HealthCheckResponse.up("ready-" + name)));
+        names.forEach(name -> registry.register(ProbeType.LIVENESS, "live-" + name,
+                () -> HealthCheckResponse.up("live-" + name)));
+
+        HealthSnapshot snapshot = aggregator.aggregate(registry, ProbeType.ALL);
+
+        List<String> expected = new ArrayList<>();
+        names.stream().map(name -> "live-" + name).sorted().forEach(expected::add);
+        names.stream().map(name -> "ready-" + name).sorted().forEach(expected::add);
+        assertEquals(expected, snapshot.checks().stream().map(HealthCheckResponse::getName).toList());
     }
 
     // -----------------------------------------------------------------------

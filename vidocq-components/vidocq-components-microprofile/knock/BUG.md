@@ -243,3 +243,38 @@ back with compiler plugin 3.13 either). Workaround removed; the shared execution
     `KnockJsonSerializerTest.serialize_builds_through_the_factory_resolved_once`,
     `serializers_share_the_factory_resolved_once`. Traced on a multi-extension app: 9 provider lookups per
     3 `/health` calls before, 1 for the JVM after.
+
+## BUG-20261114-01 — `/health` lists the `data` keys and the checks in an order that changes at every start
+
+- **Date**: 2026-11-14
+- **Status**: FIXED (branch `fix/health-data-order`)
+- **Modules**: knock-core (`KnockHealthCheckResponseBuilder`, `KnockHealthCheckRegistry`), knock-api
+  (`CheckResult`, `HealthCheckRegistry` default methods)
+- **Symptom**: reported by the tutorial-verification session on 0.4.0-SNAPSHOT. A check built with
+  `.withData("heap-used-mb", …).withData("heap-max-mb", …)` renders its `data` keys in an order that differs
+  between the packaged application and the jlink image, and between two runs of the same mode. Nothing breaks,
+  but two `/health` outputs cannot be compared.
+- **Minimal repro**: build a response with twenty `withData` calls and serialize it twice, in two JVMs: the key
+  order differs, and matches neither the calls nor the alphabet
+  (`KnockJsonSerializerTest.serialize_renders_data_in_the_order_of_the_withData_calls_spec_section3_1`).
+- **Cause**: `Map.copyOf` / `Set.copyOf` on the data and check paths. Their iteration order depends on
+  `ImmutableCollections.SALT`, drawn at random per JVM. The builder copied its `LinkedHashMap` of data with
+  `Map.copyOf` at `build()`; `CheckResult` did the same for the recorded data; `KnockHealthCheckRegistry` kept the
+  checks in a `ConcurrentHashMap` and handed `Map.copyOf` of it to the aggregator, which lists the checks in that
+  map's order; the `HealthCheckRegistry` defaults (`getNamedChecks`, `getCheckNames`) also ended in
+  `Map.copyOf` / `Set.copyOf`.
+- **Fix**: the data copies keep their order (an unmodifiable `LinkedHashMap`) and still reject a `null` key or
+  value, as `Map.copyOf` did. The registry keeps each probe's checks and results in a `ConcurrentSkipListMap`, so
+  `/health` lists them probe by probe (liveness, readiness, startup), each probe in the order of the registration
+  names. Name order rather than registration order: the CDI integration registers the checks in the order its
+  `Instance` lists them, which CDI does not specify, while the name (the bean class) is the same at every start.
+  The `HealthCheckRegistry` defaults keep the order of `getChecks`.
+- **Tests (each failed before the fix)**: `KnockHealthCheckResponseBuilderTest.withData_keeps_the_order_of_the_calls_spec_section3_1`,
+  `KnockJsonSerializerTest.serialize_renders_data_in_the_order_of_the_withData_calls_spec_section3_1`,
+  `CheckResultTest.data_keeps_its_order`,
+  `KnockAggregatorTest.aggregate_reports_the_checks_probe_by_probe_in_the_order_of_their_names`,
+  `KnockHealthCheckRegistryTest.checks_names_and_results_come_in_the_order_of_the_names`,
+  `HealthCheckRegistryTest.named_checks_keep_the_order_of_the_checks`,
+  `HealthCheckRegistryTest.check_names_keep_the_order_of_the_checks`. The `null` rejection is pinned by
+  `KnockHealthCheckResponseBuilderTest.build_still_rejects_a_null_data_key_or_value` and
+  `CheckResultTest.a_null_data_key_or_value_is_still_rejected`, green before and after.

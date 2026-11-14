@@ -20,10 +20,13 @@
 package io.vidocq.knock.internal;
 
 import org.eclipse.microprofile.health.HealthCheckResponse;
+import org.eclipse.microprofile.health.HealthCheckResponseBuilder;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -180,6 +183,46 @@ class KnockHealthCheckResponseBuilderTest {
 
         Map<String, Object> data = response.getData().orElseThrow();
         assertEquals("second", data.get("key"));
+    }
+
+    // -----------------------------------------------------------------------
+    // §3.1 — data keeps the order of the withData calls (BUG-20261114-01)
+    // -----------------------------------------------------------------------
+
+    /**
+     * The data map keeps the order of the {@code withData} calls, so that {@code /health} renders the
+     * same document at every start. {@code Map.copyOf} iterated in an order salted per JVM
+     * (BUG-20261114-01). Twenty keys, in neither alphabetical nor reverse order, leave no room for
+     * an accidental match.
+     */
+    @Test
+    void withData_keeps_the_order_of_the_calls_spec_section3_1() {
+        List<String> keys = shuffledKeys();
+        KnockHealthCheckResponseBuilder builder = new KnockHealthCheckResponseBuilder();
+        builder.name("heap").up();
+        for (int i = 0; i < keys.size(); i++) {
+            builder.withData(keys.get(i), i);
+        }
+
+        Map<String, Object> data = builder.build().getData().orElseThrow();
+
+        assertEquals(keys, List.copyOf(data.keySet()));
+    }
+
+    @Test
+    void build_still_rejects_a_null_data_key_or_value() {
+        HealthCheckResponseBuilder nullValue = new KnockHealthCheckResponseBuilder()
+                .name("nulls").up().withData("key", (String) null);
+        HealthCheckResponseBuilder nullKey = new KnockHealthCheckResponseBuilder()
+                .name("nulls").up().withData(null, "value");
+
+        assertThrows(NullPointerException.class, nullValue::build);
+        assertThrows(NullPointerException.class, nullKey::build);
+    }
+
+    /** {@code key-0} to {@code key-19}, stepping by 7 modulo 20: neither sorted nor reverse-sorted. */
+    static List<String> shuffledKeys() {
+        return IntStream.range(0, 20).mapToObj(i -> "key-" + (i * 7 % 20)).toList();
     }
 
     // -----------------------------------------------------------------------
