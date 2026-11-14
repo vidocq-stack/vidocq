@@ -72,6 +72,8 @@
         <jakarta.authorization.version>3.0.0</jakarta.authorization.version>
         <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
+        <jakarta.inject.version>2.0.1</jakarta.inject.version>
+        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
         <jakarta.interceptor.version>2.2.0</jakarta.interceptor.version>
         <jakarta.el.version>6.0.1</jakarta.el.version>
 
@@ -87,6 +89,7 @@
     -->
     <modules>
         <module>kerckhoffs-core</module>
+        <module>kerckhoffs-cdi</module>
     </modules>
 
     <dependencyManagement>
@@ -137,6 +140,25 @@
             </dependency>
 
             <!-- Internal Kerckhoffs modules -->
+            <dependency>
+                <groupId>jakarta.inject</groupId>
+                <artifactId>jakarta.inject-api</artifactId>
+                <version>${jakarta.inject.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <!-- Test only: the embedded CDI container of the integration tests. -->
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-core</artifactId>
+                <version>${vauban.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-classloader-spi</artifactId>
+                <version>${vauban.version}</version>
+                <scope>test</scope>
+            </dependency>
             <dependency>
                 <groupId>io.vidocq.kerckhoffs</groupId>
                 <artifactId>kerckhoffs-core</artifactId>

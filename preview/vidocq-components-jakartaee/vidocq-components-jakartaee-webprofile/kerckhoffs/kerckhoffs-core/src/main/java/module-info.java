@@ -21,8 +21,8 @@
 /**
  * Kerckhoffs — Jakarta Security 4.0 implementation.
  *
- * <p>Scaffold: no package yet, hence no {@code exports}. The first exports arrive with
- * milestone K1 (see PLAN.md). The Authentication, Servlet and CDI APIs are {@code provided} at
+ * <p>The implementations live in internal packages, exported only to the modules that instantiate them
+ * (milestone K1, see PLAN.md). The Authentication, Servlet and CDI APIs are {@code provided} at
  * the Maven level: the container supplies them, and Kerckhoffs never depends on an
  * implementation of them.
  */
@@ -31,4 +31,7 @@ module io.vidocq.kerckhoffs.core {
     // transitive jakarta.security.auth.message, jakarta.servlet and jakarta.json, and
     // requires jakarta.cdi and jakarta.el.
     requires transitive jakarta.security;
+
+    // The implementations the CDI integration instantiates; nothing else reaches them.
+    exports io.vidocq.kerckhoffs.core.internal.identitystore to io.vidocq.kerckhoffs.cdi;
 }
