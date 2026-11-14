@@ -11,7 +11,7 @@ coding agent). `CLAUDE.md` only imports this file (`@AGENTS.md`): edit the rules
 
 **Status: scaffold (K0 in progress) — nothing implemented, no TCK run yet.** Read
 [PLAN.md](PLAN.md) before any change: it is the design of record (spec scope, the
-Authentication/Authorization question of §3, Java Modules layout, security rules, TCK plan,
+Authentication/Authorization modules of §3 (dependencies one-way, Kerckhoffs → Foy, never the reverse), Java Modules layout, security rules, TCK plan,
 milestones K0–K7, open questions). Structural decisions marked "to validate" there need the
 maintainer's sign-off first.
 
@@ -82,7 +82,7 @@ repository of the ecosystem).
   parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`). The version property in consumers is
   `kerckhoffs.version`.
 - **Java modules**: `io.vidocq.kerckhoffs.core` (artifact `kerckhoffs-core`); planned
-  `io.vidocq.kerckhoffs.cdi` (artifact `kerckhoffs-cdi`). See PLAN.md §4.
+  `…cdi`, `…authentication`, `…authorization`, `…foy` (artifacts `kerckhoffs-<name>`). See PLAN.md §4.
 - **Packages** (to fix in K1): exported API-facing packages under `io.vidocq.kerckhoffs.core.*`;
   `io.vidocq.kerckhoffs.core.internal` = implementation, not exported.
 - Licence header from `etc/license-header.txt` on every `.java` file.

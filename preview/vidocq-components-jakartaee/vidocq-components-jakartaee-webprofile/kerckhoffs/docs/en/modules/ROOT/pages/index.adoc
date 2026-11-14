@@ -16,6 +16,8 @@ even if everything about it, except the key, is public. The brick applies that r
 platform: the security machinery is open, inspectable and generated at build time; only the
 credentials stay secret.
 
+NOTE: "Kerckhoffs" names the repository. Besides Jakarta Security 4.0 it is planned to carry Jakarta Authentication 3.1 and Authorization 3.0 as separate modules.
+
 == At a glance
 
 [cols="1,3"]

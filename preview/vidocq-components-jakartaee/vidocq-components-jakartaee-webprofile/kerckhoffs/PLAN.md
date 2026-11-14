@@ -54,14 +54,23 @@ and the Authorization 3.0 policy**:
 
 | Option | What | For | Against |
 |---|---|---|---|
-| **A. Two new bricks** | `Authentication 3.1` and `Authorization 3.0` as their own repositories (own TCKs), Foy calls them, Kerckhoffs builds on them | Faithful to the spec layering and to "one brick per spec"; each gets its official TCK | Two more repositories before Kerckhoffs can pass anything; Foy must grow a SAM/Policy integration |
-| **B. Foy hook first** | Foy exposes a small container-neutral SPI (`AuthenticationHook`: validate / secure / clean around the constraint check, plus a policy `implies`); Kerckhoffs implements its side on the API types only; Authentication/Authorization stay API-only `provided` types | Fastest path to a working mechanism; no new repository | Not a Jakarta Authentication implementation: `AuthConfigFactory` and SAM registration by third parties do not work; TCK cases that go through them stay red |
-| **C. Kerckhoffs embeds a minimal profile** | The Servlet Container Profile inside Kerckhoffs | Self-contained | Wrong layer: other Servlet containers and the next bricks cannot reuse it |
+| **A. Two new repositories** | `Authentication 3.1` and `Authorization 3.0` as their own bricks (own CI, own TCKs) | Faithful to "one brick per spec" | Two more repositories (CI, protection, dep-graph, docs) before Kerckhoffs passes anything |
+| **A'. Two modules of this repository** | `kerckhoffs-authentication` and `kerckhoffs-authorization`, each with its own `module-info`, API `provided`, own TCK runner. Precedent: Champollion carries JSON-P 2.1 and JSON-B 3.0 in one repository | No new repository; each spec keeps its own artifact, exports and TCK; real implementations, so third-party SAMs and `AuthConfigFactory` work | One release line for three specs; "Kerckhoffs" then names a repository, not only Security (said in the README and the index page) |
+| **B. Foy hook only** | Foy exposes a small container-neutral SPI (validate / secure / clean around the constraint check, plus a policy `implies`); Authentication/Authorization stay API-only `provided` types | Fastest path to a working mechanism | Not a Jakarta Authentication implementation: `AuthConfigFactory` and SAM registration by third parties do not work; the TCK cases that go through them stay red |
+| **C. Profile inside `kerckhoffs-core`** | The Servlet Container Profile in the Security module | Self-contained | Wrong layer: other Servlet containers cannot reuse it |
 
-**Recommendation: B for K1–K4, decide A at the end of K2** with the TCK baseline in hand. B is a
-strict subset of A, so nothing written under B is thrown away: the Foy hook becomes the thin
-adapter on top of an Authentication brick if A is chosen. The Foy change goes on the **same branch
-name in Foy and Kerckhoffs** (companion branches; `docs/changes-across-repositories.md`).
+**Direction of dependencies (hard constraint).** The dep-graph counts every scope, test included. If
+Foy depended on a Kerckhoffs artifact while Kerckhoffs' TCK runner and integration tests run on
+Foy, the two repositories would form a cycle and `pr-validate` would break. So the arrow goes one
+way only: **Foy defines the neutral hook and knows nothing of Kerckhoffs; a Kerckhoffs module
+(`kerckhoffs-foy`) adapts the hook to the Authentication and Authorization modules; the Vidocq
+runtime extension assembles.** Foy never takes `kerckhoffs-*` as a dependency, at any scope.
+
+**Recommendation: A' on top of B's hook.** In K2, Foy grows the hook (B, a small companion PR) and
+`kerckhoffs-foy` bridges it to a minimal `kerckhoffs-authentication` (the Servlet Container Profile
+slice Security needs). K3 and later grow both modules towards their full specs, without touching
+Foy again. B is the first step of A', so nothing is thrown away. The Foy change goes on the **same
+branch name in Foy and Kerckhoffs** (companion branches; `docs/changes-across-repositories.md`).
 
 ## 4. Java Modules layout
 
@@ -69,7 +78,9 @@ name in Foy and Kerckhoffs** (companion branches; `docs/changes-across-repositor
 |---|---|---|---|
 | `io.vidocq.kerckhoffs.core` | `kerckhoffs-core` | Identity store handler, built-in stores, mechanism logic, `SecurityContext`, hashing. `requires transitive jakarta.security`. No dependency on any container. | yes, empty |
 | `io.vidocq.kerckhoffs.cdi` | `kerckhoffs-cdi` | The CDI wiring as a **build compatible extension**: finds `*Definition` annotations and registers the built-in beans, interceptors and `Principal` bean; carries data as parameters (never as fields) | K1 |
-| `io.vidocq.kerckhoffs.foy` | `kerckhoffs-foy` (name to validate) | Adapter on the Foy hook of §3, if option B | K2 |
+| `io.vidocq.kerckhoffs.authentication` | `kerckhoffs-authentication` | Jakarta Authentication 3.1: Servlet Container Profile first (`ServerAuthContext` driving an `HttpAuthenticationMechanism`), then `AuthConfigFactory` and the rest of the spec. `requires transitive jakarta.security.auth.message`, API `provided`. No dependency on Servlet containers beyond the API | K2 (minimal), K3+ |
+| `io.vidocq.kerckhoffs.authorization` | `kerckhoffs-authorization` | Jakarta Authorization 3.0: `Policy`, `PolicyConfiguration`, `PolicyFactory`, web permissions; `hasAccessToWebResource` ends in `Policy.implies`. API `provided` | K3 |
+| `io.vidocq.kerckhoffs.foy` | `kerckhoffs-foy` (name to validate) | Adapter from the neutral Foy hook (§3) to the two modules above. Depends on Foy, never the reverse | K2 |
 | (tests) | `kerckhoffs-it-other-containers` | Open Liberty WAR with the exact exclusions of the Reference "Deploying on an application server" block | K6 |
 | (tests) | `kerckhoffs-tck` | Runner of the official TCK, `tck` profile, unpublished | scaffolded empty |
 
@@ -124,6 +135,7 @@ Facts established on 2026-11-14:
   ...). **(to verify)** which of them need a JDBC `DataSource`, an embedded LDAP server, EJB, or
   `@DataSourceDefinition`; those decide how much of the platform Kerckhoffs' test container must
   fake.
+- **Authentication 3.1 and Authorization 3.0 have their own TCKs** (separate suites from Security's). **(to verify)** where they live, how they are distributed, and whether they run without a full platform; each module gets its own runner (`kerckhoffs-authentication-tck`, `kerckhoffs-authorization-tck`) behind `-Ptck`, added in the milestone that grows the module.
 - Maven Central carries only the API (`jakarta.security.enterprise-api`); the TCK artifact
   coordinates are **to verify** (Maven Central listing under `jakarta/security/enterprise/` shows
   the API only). If none exists, follow Bodoni: pin the zip URL and its SHA-256 in the script and
@@ -147,8 +159,8 @@ Runner shape (copy `foy-tck` and `bodoni-tck`, not a new design):
 |---|---|---|
 | **K0** | Bootstrap: repository, CI, dep-graph entry, docs component, branch protection (done at scaffold, see §10). TCK discovery: the **to verify** items of §7, Arquillian adapter, first baseline. | `./run-official-tck-security-4.0.sh` runs and reports; `BASELINE.md` committed |
 | **K1** | Identity stores: `IdentityStore` validation chain and `IdentityStoreHandler` (priorities, `ValidationType`), credentials, `@InMemoryIdentityStoreDefinition`, `PasswordHash`/`Pbkdf2PasswordHash`; `kerckhoffs-cdi` extension. Pure Java, no container yet. | Spec §3 unit tests green; extension tested at start and frozen |
-| **K2** | HTTP mechanisms on the Foy hook: `HttpAuthenticationMechanism`/`HttpMessageContext` contract, BASIC, FORM, custom FORM, `@LoginToContinue`, `@AutoApplySession`; built-in `Principal` bean; `SecurityContext` core methods. **Decision gate on §3 option A.** | Smoke set of the TCK green; Foy companion PR merged |
-| **K3** | `@RememberMe` + `RememberMeIdentityStore`; `hasAccessToWebResource`; `authenticate()` programmatic path; group-to-role mapping; `*Expression` attributes via EL. | Corresponding TCK classes green |
+| **K2** | Foy hook (companion PR, Foy side only) + `kerckhoffs-foy` + minimal `kerckhoffs-authentication` (Servlet Container Profile slice). HTTP mechanisms on that path: `HttpAuthenticationMechanism`/`HttpMessageContext` contract, BASIC, FORM, custom FORM, `@LoginToContinue`, `@AutoApplySession`; built-in `Principal` bean; `SecurityContext` core methods. Authentication 3.1 TCK baseline taken here (§7). | Smoke set of the TCK green; Foy companion PR merged |
+| **K3** | `kerckhoffs-authorization` (Policy, web permissions); `@RememberMe` + `RememberMeIdentityStore`; `hasAccessToWebResource` through `Policy.implies`; `kerckhoffs-authentication` grown towards the full spec; `authenticate()` programmatic path; group-to-role mapping; `*Expression` attributes via EL. | Corresponding TCK classes green |
 | **K4** | `@DatabaseIdentityStoreDefinition` (JNDI `DataSource`, hashed passwords) and `@LdapIdentityStoreDefinition` (`java.naming` only, no library). | TCK `app-db-*` and LDAP fixtures green or each remaining failure filed in `BUG.md` |
 | **K5** | OpenID Connect: provider discovery, authorization-code flow, ID-token validation, `OpenIdContext`, refresh. Uses `java.net.http` on virtual threads. | Negative tests of §6 green; TCK OpenID fixtures green |
 | **K6** | Vidocq runtime extension (PR in `Vidocq/vidocq`); `kerckhoffs-it-other-containers` Open Liberty WAR; Reference page "Deploying on an application server" tested by that WAR. | Same unchanged jar runs under Vidocq and in the WAR |
@@ -156,13 +168,13 @@ Runner shape (copy `foy-tck` and `bodoni-tck`, not a new design):
 
 ## 9. Open questions (maintainer)
 
-1. §3: B first then decide A at the end of K2: confirm?
+1. §3: option A' (two modules of this repository, dependencies one-way Kerckhoffs → Foy) on top of the Foy hook of B: confirm?
 2. Extension aggregator: `*-jakartaee-web` or `*-jakartaee-core`?
-3. Module name of the Foy adapter (`kerckhoffs-foy`, or the hook lives in `foy-*` and Kerckhoffs ships none)?
+3. Module name of the Foy adapter (`kerckhoffs-foy`)? It is an engine adapter, the documented exception to "a brick depends on APIs" (like `cassini-chappe`).
 4. Is Jakarta Security 5.0 (Jakarta EE 12, milestones M1/M2 exist) the follow-up line, planned as `0.5.x`?
 5. Logo: none yet (tracked in `tasks/todo.md`, like Bodoni).
-6. Authorization 3.0 `Policy`: acceptable to leave `hasAccessToWebResource` on Foy's constraint table
-   (option B) while the spec says SHOULD go through `Policy.implies`?
+6. Release line: one version for Security, Authentication and Authorization, or independent versions per module? (Default: one line, `0.x`.)
+7. Does the Authentication/Authorization TCK need a full platform? Answer in K0 (§7).
 
 ## 10. Bootstrap checklist (state at scaffold, 2026-11-14)
 

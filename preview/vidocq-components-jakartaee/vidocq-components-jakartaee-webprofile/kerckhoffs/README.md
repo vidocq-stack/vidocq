@@ -7,6 +7,8 @@ application — zero third-party dependency, strict Java Modules, build-time gen
 > Named after Auguste Kerckhoffs (1835–1903): a system must stay secure even if everything about
 > it except the key is public.
 
+**Kerckhoffs names this repository, not only Security:** it is planned to carry Jakarta Security 4.0 and, as separate modules, the Jakarta Authentication 3.1 and Authorization 3.0 it stands on (PLAN.md §3).
+
 **Status: scaffold.** Nothing is implemented and no TCK has run. The design, the open
 decisions and the milestones are in [PLAN.md](PLAN.md).
 
@@ -15,6 +17,8 @@ decisions and the milestones are in [PLAN.md](PLAN.md).
 | Module | Role | State |
 |---|---|---|
 | `kerckhoffs-core` | Identity stores, mechanisms, `SecurityContext` | empty module descriptor |
+| `kerckhoffs-authentication` | Jakarta Authentication 3.1 (planned, K2) | not created |
+| `kerckhoffs-authorization` | Jakarta Authorization 3.0 (planned, K3) | not created |
 | `kerckhoffs-tck` | Runner of the official Jakarta Security 4.0 TCK (`-Ptck`, never published) | empty |
 
 ## Prerequisites
