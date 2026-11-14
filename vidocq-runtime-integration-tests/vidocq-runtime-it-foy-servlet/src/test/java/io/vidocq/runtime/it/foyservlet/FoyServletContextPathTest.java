@@ -23,7 +23,6 @@ import io.vidocq.runtime.core.VidocqBootstrap;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -70,16 +69,14 @@ class FoyServletContextPathTest {
         assertEquals(200, get("/web/cart").statusCode());
     }
 
-    private void boot(String key, String value) throws Exception {
-        int port;
-        try (ServerSocket s = new ServerSocket(0)) {
-            port = s.getLocalPort();
-        }
+    private void boot(String key, String value) {
         System.setProperty("vidocq.chappe.listener.default.host", "127.0.0.1");
-        System.setProperty("vidocq.chappe.listener.default.port", Integer.toString(port));
+        System.setProperty("vidocq.chappe.listener.default.port", "0");
         System.setProperty(key, value);
-        base = "http://127.0.0.1:" + port;
-        bootstrap = VidocqBootstrap.create().configure().start();
+        try (BoundPort port = BoundPort.watch()) {
+            bootstrap = VidocqBootstrap.create().configure().start();
+            base = "http://127.0.0.1:" + port.port();
+        }
     }
 
     private HttpResponse<String> get(String path) throws Exception {

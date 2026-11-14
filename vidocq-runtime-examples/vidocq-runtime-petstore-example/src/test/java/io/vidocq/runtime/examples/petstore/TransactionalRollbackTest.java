@@ -23,9 +23,6 @@ import io.vidocq.runtime.core.VidocqBootstrap;
 import jakarta.enterprise.inject.spi.CDI;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.net.ServerSocket;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -66,15 +63,16 @@ class TransactionalRollbackTest {
 
     /**
      * The example pins 8080 in its own {@code vidocq.properties}, which makes the build fail wherever
-     * something else already listens there -- and this test needs no HTTP at all. It therefore picks a
-     * free port; a system property wins over the packaged file (ordinal 400 against 100).
+     * something else already listens there -- and this test needs no HTTP at all. It therefore asks for
+     * port 0, which the system resolves as the listener binds it, so no other process can take the port
+     * first (BUG-20261114-09); a system property wins over the packaged file (ordinal 400 against 100).
      */
     private static final String PORT_KEY = "vidocq.chappe.listener.default.port";
 
     @Test
-    void aWriteInsideAFailedTransactionIsRolledBack() throws IOException {
+    void aWriteInsideAFailedTransactionIsRolledBack() {
         String previousPort = System.getProperty(PORT_KEY);
-        System.setProperty(PORT_KEY, String.valueOf(freePort()));
+        System.setProperty(PORT_KEY, "0");
         VidocqBootstrap bootstrap;
         try {
             bootstrap = VidocqBootstrap.create().configure().start();
@@ -96,13 +94,6 @@ class TransactionalRollbackTest {
                             + "transaction rollback (Vidocq/vidocq#97)");
         } finally {
             bootstrap.shutdown();
-        }
-    }
-
-    /** A port free at this instant: the only portable way, and what the runtime's own ITs rely on. */
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         }
     }
 

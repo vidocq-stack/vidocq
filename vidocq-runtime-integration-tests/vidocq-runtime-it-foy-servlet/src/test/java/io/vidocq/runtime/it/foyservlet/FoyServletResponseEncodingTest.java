@@ -26,7 +26,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -114,14 +113,12 @@ class FoyServletResponseEncodingTest {
         Thread.currentThread().setContextClassLoader(descriptorLoader);
     }
 
-    private String boot() throws Exception {
-        int port;
-        try (ServerSocket s = new ServerSocket(0)) {
-            port = s.getLocalPort();
-        }
+    private String boot() {
         System.setProperty("vidocq.chappe.listener.default.host", "127.0.0.1");
-        System.setProperty("vidocq.chappe.listener.default.port", Integer.toString(port));
-        bootstrap = VidocqBootstrap.create().configure().start();
-        return "http://127.0.0.1:" + port;
+        System.setProperty("vidocq.chappe.listener.default.port", "0");
+        try (BoundPort port = BoundPort.watch()) {
+            bootstrap = VidocqBootstrap.create().configure().start();
+            return "http://127.0.0.1:" + port.port();
+        }
     }
 }

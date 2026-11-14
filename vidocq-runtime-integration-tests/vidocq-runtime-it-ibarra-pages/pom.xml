@@ -76,7 +76,7 @@
                     </annotationProcessorPaths>
                 </configuration>
                 <executions>
-                    <!-- The test talks HTTP with the JDK client. -->
+                    <!-- The test talks HTTP with the JDK client, and reads the port Chappe bound from its log. -->
                     <execution>
                         <id>default-testCompile</id>
                         <configuration>
@@ -84,7 +84,7 @@
                                 <arg>--add-modules</arg>
                                 <arg>java.net.http</arg>
                                 <arg>--add-reads</arg>
-                                <arg>io.vidocq.runtime.it.ibarrapages=java.net.http</arg>
+                                <arg>io.vidocq.runtime.it.ibarrapages=java.net.http,java.logging</arg>
                             </compilerArgs>
                         </configuration>
                     </execution>
@@ -111,7 +111,7 @@
                     <argLine>
                         @{argLine}
                         --add-modules java.net.http
-                        --add-reads io.vidocq.runtime.it.ibarrapages=java.net.http
+                        --add-reads io.vidocq.runtime.it.ibarrapages=java.net.http,java.logging
                     </argLine>
                 </configuration>
             </plugin>

@@ -24,7 +24,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -43,15 +42,13 @@ class IbarraPagesModulePathTest {
     private static String base;
 
     @BeforeAll
-    static void boot() throws Exception {
-        int port;
-        try (ServerSocket s = new ServerSocket(0)) {
-            port = s.getLocalPort();
-        }
+    static void boot() {
         System.setProperty("vidocq.chappe.listener.default.host", "127.0.0.1");
-        System.setProperty("vidocq.chappe.listener.default.port", Integer.toString(port));
-        base = "http://127.0.0.1:" + port;
-        bootstrap = VidocqBootstrap.create().configure().start();
+        System.setProperty("vidocq.chappe.listener.default.port", "0");
+        try (BoundPort port = BoundPort.watch()) {
+            bootstrap = VidocqBootstrap.create().configure().start();
+            base = "http://127.0.0.1:" + port.port();
+        }
     }
 
     @AfterAll

@@ -45,16 +45,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class ChappeServerSuspendTest {
 
     private ChappeServerBootstrap bootstrap;
-    private int port;
 
+    /**
+     * The listener binds port {@code 0}, so the system picks its port as it binds it: a port picked beforehand, then
+     * closed and bound by the server, could be taken in between by another process (BUG-20261114-09).
+     */
     @BeforeEach
-    void setUp() throws Exception {
-        port = freePort();
+    void setUp() {
         new ChappeEngineExtension().configure(null);
         bootstrap = new ChappeServerBootstrap();
         ChappeMountPoint.instance().router(ChappeListener.DEFAULT).get("/hello", _ -> Response.ok("hi"));
         bootstrap.onStart(new FakeExtensionContext(TestConfig.of(Map.of(
-                "vidocq.chappe.listener.default.port", Integer.toString(port)))));
+                "vidocq.chappe.listener.default.port", "0"))));
     }
 
     @AfterEach
@@ -68,9 +70,16 @@ class ChappeServerSuspendTest {
         assertInstanceOf(Suspendable.class, bootstrap);
     }
 
+    /**
+     * The probe binds the port the listener got: that is the check that suspending released it. Once released, the
+     * port is anyone's, so another process may take it before the probe, or before the request that follows: that
+     * race is inherent to checking a release. A listener on port {@code 0} gets another port on resume, so the test
+     * asks the bootstrap where it listens again.
+     */
     @Test
     void suspendReleasesThePort_resumeServesAgain() throws Exception {
         Suspendable suspendable = (Suspendable) bootstrap;
+        int port = port();
 
         suspendable.suspend();
         try (ServerSocket probe = new ServerSocket(port)) {
@@ -94,16 +103,16 @@ class ChappeServerSuspendTest {
         assertEquals("hi", get().body());
     }
 
+    /** {@code GET /hello} on the port the listener bound last. */
     private HttpResponse<String> get() throws Exception {
         return HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build().send(
-                HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/hello"))
+                HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port() + "/hello"))
                         .timeout(Duration.ofSeconds(2)).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
     }
 
-    private static int freePort() throws IOException {
-        try (ServerSocket s = new ServerSocket(0)) {
-            return s.getLocalPort();
-        }
+    /** The port the default listener bound last, recorded by the bootstrap at its start and at every resume. */
+    private int port() {
+        return bootstrap.boundAddresses().get(ChappeListener.DEFAULT).getPort();
     }
 }
