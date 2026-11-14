@@ -41,6 +41,8 @@ class AppLayerPackageIT {
     private static final String STARTED = "Vidocq - Started in";
     /** The name of the loader Vauban defines the application layer's modules with. */
     private static final String LAYER_LOADER = "vauban-app-layer";
+    /** What the fixture's probe prints when the launch loaded the application module once (BUG-20261114-10). */
+    static final String ONE_COPY = "TOOL-PROVIDERS 1";
 
     @Test
     void allShipsTheLibraryInAppAndLaunchesItInTheApplicationLayer(@TempDir Path dir) throws Exception {
@@ -65,8 +67,14 @@ class AppLayerPackageIT {
         assertTrue(out.contains("LOOKUP-FOUND "), "it sees the application's resource:\n" + out);
         assertTrue(out.contains("3 modules, 2 libraries"), "the report counts the libraries in the layer:\n" + out);
         assertTrue(out.contains("SQL-OK"), "a JDK module only an app/ module requires is resolved (vidocq#254):\n" + out);
+        assertTrue(out.contains(ONE_COPY), "one copy of the application module:\n" + out);
     }
 
+    /**
+     * classes, with the fixture's trampoline main: the launchers hand app/ to the runtime as under all, never the
+     * module path, which put the application module in the boot layer and in the application layer
+     * (BUG-20261114-10).
+     */
     @Test
     void classesIsTheControl(@TempDir Path dir) throws Exception {
         Path project = Fixture.copy(dir);
@@ -80,14 +88,43 @@ class AppLayerPackageIT {
         Path dist = script.getParent().getParent();
         assertTrue(Files.exists(dist.resolve("lib/app-layer-pages-1.0.jar")), "the library stays in lib/");
         assertTrue(Files.notExists(dist.resolve("app/app-layer-pages-1.0.jar")));
-        assertTrue(Files.readString(script).contains("-Dvidocq.app.layer=classes"), Files.readString(script));
+        String launcher = Files.readString(script);
+        assertTrue(launcher.contains("-Dvidocq.app.layer=classes"), launcher);
+        assertTrue(launcher.contains("-Dvidocq.app.path="), launcher);
+        assertTrue(launcher.contains("-Dvidocq.app.main=acme.app.AppLayerApp"), launcher);
 
         Path runLog = Fixture.logs().resolve("package-classes-run.log");
         String out = run(script, runLog);
         assertFalse(out.contains("LOOKUP-LOADER " + LAYER_LOADER), out);
-        // acme.sql, an explicit module the application reads, moves with it; the automatic library stays out.
-        assertTrue(out.contains("2 modules, 1 library (boot-layer"), "the automatic library is outside the layer:\n" + out);
+        assertTrue(out.contains("Application layer ready: modules [acme.app] (vidocq.app.path="),
+                "the application alone in the layer, the libraries outside:\n" + out);
         assertTrue(out.contains("SQL-OK"), out);
+        assertTrue(out.contains(ONE_COPY), "one copy of the application module:\n" + out);
+    }
+
+    /**
+     * The legacy layout runs the fixture's trampoline main from the module path: no application layer, as
+     * vidocq.package.layer=false promises, so the application module is loaded once (BUG-20261114-10).
+     */
+    @Test
+    void theLegacyLayoutRunsTheTrampolineWithoutALayer(@TempDir Path dir) throws Exception {
+        Path project = Fixture.copy(dir);
+        Fixture.install(project, Fixture.logs().resolve("package-legacy-install.log"));
+        Path log = Fixture.logs().resolve("package-legacy.log");
+
+        Fixture.awaitSuccess(Fixture.start(project.resolve("app"), log, "package", "vidocq:package",
+                "-Dvidocq.package.layer=false", "-DskipTests"), log, "vidocq:package");
+
+        Path script = script(project.resolve("app/target"));
+        String launcher = Files.readString(script);
+        assertTrue(launcher.contains("--module acme.app/acme.app.AppLayerApp"), launcher);
+
+        Path runLog = Fixture.logs().resolve("package-legacy-run.log");
+        String out = run(script, runLog);
+        assertFalse(out.contains("Application layer ready"), out);
+        assertTrue(out.contains("no application layer"), out);
+        assertTrue(out.contains("SQL-OK"), out);
+        assertTrue(out.contains(ONE_COPY), "one copy of the application module:\n" + out);
     }
 
     /** Launches the distribution's script until the runtime has started; returns what it printed. */

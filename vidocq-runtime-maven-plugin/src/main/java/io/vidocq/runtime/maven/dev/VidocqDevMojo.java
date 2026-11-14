@@ -245,7 +245,8 @@ public class VidocqDevMojo extends AbstractMojo {
      * Universal-loader mode (default): the application's classes stay off the module
      * path and boot inside a child module layer defined by the Vauban class loader —
      * classes are woven at definition, no instrumentation agent. Set to {@code false}
-     * to restore the legacy everything-on-the-module-path launch.
+     * to restore the legacy everything-on-the-module-path launch, without an application layer: the child gets
+     * {@code -Dvidocq.app.layer.off=true}, which a {@code Vidocq.run} trampoline honours.
      */
     @Parameter(defaultValue = "true", property = "vidocq.dev.layer")
     private boolean layerMode;

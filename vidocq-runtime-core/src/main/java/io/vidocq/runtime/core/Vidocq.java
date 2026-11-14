@@ -196,6 +196,13 @@ public final class Vidocq {
         if (VidocqAppLayer.installIfConfigured()) {          // explicit -Dvidocq.app.path wins
             return;
         }
+        if (Boolean.getBoolean(LayerSplit.OFF_PROPERTY)) {
+            // A launch without a layer (vidocq.dev.layer=false, vidocq.package.layer=false): the application is the
+            // module the JVM resolved, never a second copy of it in a layer (BUG-20261114-10).
+            LOG.log(System.Logger.Level.INFO, () -> LayerSplit.OFF_PROPERTY + "=true: no application layer, "
+                    + caller.getModule() + " runs from the boot layer");
+            return;
+        }
         if (VidocqAppLayer.installFromBootLayer(caller)) {   // the IDE right-click path
             return;
         }

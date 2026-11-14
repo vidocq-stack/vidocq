@@ -70,12 +70,10 @@ public class VidocqPackageMojo extends AbstractMojo {
     private String mainClass;
 
     /**
-     * Java module of the application's {@code @VidocqMain} trampoline. When set together
-     * with a non-default {@link #mainClass} under {@code vidocq.app.layer=classes}, the
-     * layer-mode scripts launch the trampoline directly ({@code --module <mainModule>/<mainClass>}
-     * with {@code app/} on the module path) — {@code Vidocq.run()} then re-layers the
-     * application through the Vauban class loader; otherwise (and always under {@code all}) the
-     * scripts boot the runtime with {@code -Dvidocq.app.path} and {@code -Dvidocq.app.main}.
+     * Java module of the application's main class: the legacy layout ({@code vidocq.package.layer=false}) launches
+     * {@code <mainModule>/<mainClass>}. The layer-mode scripts always boot the runtime with
+     * {@code -Dvidocq.app.path} and {@code -Dvidocq.app.main}: a trampoline launched with {@code app/} on the module
+     * path loaded the application twice, in the boot layer and in the application layer (BUG-20261114-10).
      */
     @Parameter(property = "vidocq.mainModule")
     private String mainModule;
@@ -86,7 +84,8 @@ public class VidocqPackageMojo extends AbstractMojo {
      * {@code -Dvidocq.app.path="$BASEDIR/app"} — the application resolves into a child
      * module layer defined by the Vauban class loader (classes woven at definition, no
      * instrumentation agent). Set to {@code false} to restore the legacy
-     * everything-in-lib layout.
+     * everything-in-lib layout, without an application layer: its launchers pass
+     * {@code -Dvidocq.app.layer.off=true}, which a {@code Vidocq.run} trampoline honours.
      */
     @Parameter(defaultValue = "true", property = "vidocq.package.layer")
     private boolean layerMode;
@@ -322,11 +321,18 @@ public class VidocqPackageMojo extends AbstractMojo {
         return toApp;
     }
 
-    /** The JVM options the {@code all} mode adds to a launcher, each followed by the line continuation. */
+    /**
+     * The JVM options of the application layer in a launcher, each followed by the line continuation. The legacy
+     * layout has no layer, and says so: a trampoline main would otherwise load the application a second time into
+     * one (BUG-20261114-10).
+     */
     private String appLayerOptions(String continuation) {
         // The mode is always written, classes too: a runtime that finds it unset takes the default, all.
         String options = "\n  -Dvidocq.app.layer=" + effectiveMode().name().toLowerCase(java.util.Locale.ROOT)
                 + " " + continuation;
+        if (!layerMode) {
+            options += "\n  -D" + LayerSplit.OFF_PROPERTY + "=true " + continuation;
+        }
         if (!pinned.isEmpty()) {
             options += "\n  \"-D" + LayerSplit.PINNED_PROPERTY + "=" + LayerSplit.encodePinned(pinned) + "\" "
                     + continuation;
@@ -356,20 +362,7 @@ public class VidocqPackageMojo extends AbstractMojo {
     void generateShScript(Path binDir) throws IOException, MojoExecutionException {
         String jvmArgsLine = jvmArgsLine();
         String script;
-        if (trampolineLaunch()) {
-            // @VidocqMain trampoline launch: the app rides the module path; Vidocq.run()
-            // re-layers it through the Vauban class loader — one launch shape for the
-            // IDE, the dev mode and the distribution.
-            script = """
-                    #!/bin/sh
-                    BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
-                    exec "$JAVA"%s $JAVA_OPTS \\
-                      --module-path "$BASEDIR/lib:$BASEDIR/app" \\
-                      --add-modules ALL-MODULE-PATH \\%s
-                      --module %s \\
-                      "$@"
-                    """.formatted(jvmArgsLine, appLayerOptions("\\"), trampolineRef());
-        } else if (layerMode) {
+        if (layerMode) {
             String appMain = appMainProperty();
             script = """
                     #!/bin/sh
@@ -440,17 +433,7 @@ public class VidocqPackageMojo extends AbstractMojo {
     void generateCmdScript(Path binDir) throws IOException, MojoExecutionException {
         String jvmArgsLine = jvmArgsLine();
         String script;
-        if (trampolineLaunch()) {
-            script = """
-                    @echo off
-                    set BASEDIR=%%~dp0..
-                    "%%JAVA%%"%s %%JAVA_OPTS%% ^
-                      --module-path "%%BASEDIR%%\\lib;%%BASEDIR%%\\app" ^
-                      --add-modules ALL-MODULE-PATH ^%s
-                      --module %s ^
-                      %%*
-                    """.formatted(jvmArgsLine, appLayerOptions("^"), trampolineRef());
-        } else if (layerMode) {
+        if (layerMode) {
             String appMain = appMainProperty();
             script = """
                     @echo off
@@ -500,15 +483,6 @@ public class VidocqPackageMojo extends AbstractMojo {
     }
 
     /**
-     * Whether the layer scripts launch the application trampoline: a trampoline main is known and the mode is
-     * {@code classes}. Under {@code all} the scripts always pass {@code app/} through {@code -Dvidocq.app.path}: the
-     * trampoline's module path would keep the automatic libraries in the boot layer (Vidocq/vidocq#247).
-     */
-    private boolean trampolineLaunch() {
-        return layerMode && trampolineRef() != null && effectiveMode() != LayerSplit.Mode.ALL;
-    }
-
-    /**
      * The mode of the launchers: the one {@link #execute()} settled on, or, for a script written on its own, the
      * configured one ({@code classes} when the layer mode is off).
      */
@@ -517,16 +491,6 @@ public class VidocqPackageMojo extends AbstractMojo {
             return mode;
         }
         return layerMode ? LayerSplit.Mode.of(appLayer) : LayerSplit.Mode.CLASSES;
-    }
-
-    /**
-     * The {@code module/class} reference of the application trampoline, or {@code null}
-     * when {@link #mainModule} is absent or {@link #mainClass} is the runtime default.
-     */
-    private String trampolineRef() {
-        if (mainModule == null || mainModule.isBlank()) return null;
-        String appMain = appMainProperty();
-        return appMain == null ? null : mainModule + "/" + appMain;
     }
 
     /**
