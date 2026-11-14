@@ -291,7 +291,7 @@ public final class VidocqBootstrap {
      * {@link StartupAnomalies#MODULES_TWICE} when the application layer holds modules the boot layer holds too: a
      * trampoline launched from the module path (BUG-20261114-10).
      */
-    private static void reportModulesTwice(StartupRecorder recorder) {
+    static void reportModulesTwice(StartupRecorder recorder) {
         VidocqAppLayer.Installation installation = VidocqAppLayer.installation();
         if (installation != null && !installation.twice().isEmpty()) {
             recorder.anomaly(StartupAnomalies.MODULES_TWICE, StartupAnomalies.modulesTwice(installation.twice()),
