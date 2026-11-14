@@ -101,42 +101,31 @@ public final class DefaultPbkdf2PasswordHash implements Pbkdf2PasswordHash {
         } catch (IllegalArgumentException _) {
             return false;
         }
-        byte[] actual = derive(stored.algorithm(), password, stored.salt(), stored.iterations(), stored.hash().length);
-        try {
-            return MessageDigest.isEqual(stored.hash(), actual);
-        } finally {
-            Arrays.fill(actual, (byte) 0);
-        }
+        return stored.matches(password);
     }
 
     /** A stored hash, read back: what it was made with and the derived key. */
     private static final class Stored {
-        private final String algorithm;
-        private final int iterations;
+        private final String hashAlgorithm;
+        private final int cost;
         private final byte[] salt;
-        private final byte[] hash;
+        private final byte[] key;
 
-        private Stored(String algorithm, int iterations, byte[] salt, byte[] hash) {
-            this.algorithm = algorithm;
-            this.iterations = iterations;
+        private Stored(String hashAlgorithm, int cost, byte[] salt, byte[] key) {
+            this.hashAlgorithm = hashAlgorithm;
+            this.cost = cost;
             this.salt = salt;
-            this.hash = hash;
+            this.key = key;
         }
 
-        String algorithm() {
-            return algorithm;
-        }
-
-        int iterations() {
-            return iterations;
-        }
-
-        byte[] salt() {
-            return salt;
-        }
-
-        byte[] hash() {
-            return hash;
+        /** Derives the key of the password with the stored parameters and compares it, in constant time. */
+        boolean matches(char[] password) {
+            byte[] actual = derive(hashAlgorithm, password, salt, cost, key.length);
+            try {
+                return MessageDigest.isEqual(key, actual);
+            } finally {
+                Arrays.fill(actual, (byte) 0);
+            }
         }
 
         /**
