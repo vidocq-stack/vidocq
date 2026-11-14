@@ -420,8 +420,17 @@ seconds, for as long as the page stays open.
 
 Long polling was checked with Vaadin 25.3.2 under `vidocq:run`, and with Vaadin's Java module snapshots in a
 `vidocq:package` distribution and a jlink image (Vidocq/vidocq#256): a virtual thread updates the UI through
-`ui.access` a second after a click, and the text reaches the page. Long idle periods between two pushes were not
-checked yet.
+`ui.access` a second after a click, and the text reaches the page. With Vaadin 25.3.3, a view updated every 15 seconds
+stayed connected for ten minutes without a reload. Longer idle periods between two pushes were not checked yet.
+
+A filter that runs on `/VAADIN/push`, such as an authentication filter mapped to `/*`, must support asynchronous
+requests: `@WebFilter(asyncSupported = true)`, or `setAsyncSupported(true)` on its registration. Long polling suspends
+each request. Behind a filter without it, Foy refuses `startAsync` (_async not supported on this servlet/filter chain_),
+as the Servlet specification requires, and each poll answers 503.
+
+Such a filter should also let Vaadin's own requests through once the session is gone: the requests whose `v-r`
+parameter is `uidl`, `heartbeat` or `push`. Vaadin then answers that the session expired, and the page reloads. If the
+filter answers 401 instead, the page stays on _Connection lost_.
 
 [#troubleshooting]
 == Troubleshooting
@@ -468,6 +477,14 @@ the descriptor of a jlink image cannot let use an application class.
 with code 1006.
 | `@Push` uses the WebSocket transport, its default, and Foy implements no Jakarta WebSocket.
 | Use `@Push(transport = Transport.LONG_POLLING)`. See <<push>>.
+
+| Every five seconds, a request to `/VAADIN/push` answers 503.
+| A filter that runs on `/VAADIN/push` does not support asynchronous requests, so long polling cannot suspend them.
+| Mark the filter `asyncSupported`. See <<push>>.
+
+| After a restart or a lost session, the page stays on _Connection lost_ for good.
+| A filter answers Vaadin's own requests (`v-r=uidl`, `heartbeat`, `push`) with 401.
+| Let those requests through: Vaadin answers that the session expired, and the page reloads. See <<push>>.
 |===
 
 [#jlink-app-shell]
