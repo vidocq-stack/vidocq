@@ -39,4 +39,9 @@ public final class InstalledApplicationLayer implements ApplicationLayer {
     public Optional<ModuleLayer> layer() {
         return Optional.ofNullable(VidocqAppLayer.installedLayer());
     }
+
+    @Override
+    public Optional<Module> module() {
+        return Optional.ofNullable(Vidocq.applicationModule());
+    }
 }

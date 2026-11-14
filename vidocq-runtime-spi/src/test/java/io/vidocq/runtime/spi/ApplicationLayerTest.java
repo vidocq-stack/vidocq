@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -65,6 +66,14 @@ class ApplicationLayerTest {
     @Test
     void thereIsNoApplicationLayerWithoutARuntime() {
         assertTrue(ApplicationLayer.current().isEmpty(), "no runtime on the path implements ApplicationLayer");
+        assertTrue(ApplicationLayer.applicationModule().isEmpty(), "no runtime names the application module");
+    }
+
+    @Test
+    void anImplementationThatKnowsNoApplicationModuleNamesNone() {
+        ApplicationLayer withoutModule = Optional::empty;
+
+        assertTrue(withoutModule.module().isEmpty());
     }
 
     // ---------------------------------------------------------------- fixtures

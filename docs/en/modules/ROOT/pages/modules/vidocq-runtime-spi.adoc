@@ -49,7 +49,7 @@ List indexed from the existing sources:
 | Application-side entry points — the class run inside the Vauban application layer by `Vidocq.run(Class, args)`, and the annotation of the optional trampoline `main` (an application needs none, see xref:usage.adoc#entry-point[The application entry point]).
 
 | `ApplicationLayer`
-| The application's module layer, when Vidocq boots it in one of its own — `current()` — and the files of a directory of its modules — `list(layer, directory)` (<<application-layer>>).
+| The application's module layer, when Vidocq boots it in one of its own — `current()` — the application module — `applicationModule()` — and the files of a directory of its modules — `list(layer, directory)` (<<application-layer>>).
 
 | `report.StartupReportContributor`
 | Adds a section to the startup report — `id()`, `title()`, `order()`, `contribute(context, section)`. Implemented by an extension, or declared as a service (<<startup-report-contributors>>).
@@ -170,6 +170,9 @@ if (layer.isPresent()) {
 ----
 
 `current()` reads the layer at each call, so a dev reload's new layer is the one it returns. It is empty when the application has no layer of its own, and when no Vidocq runtime is on the path, as in an extension's unit tests. `list` walks the modules of that layer only, directories and jars alike, and returns the files under the directory, at any depth, sorted. The Flyway and Liquibase backends list their `classpath:` locations this way (xref:modules/vidocq-runtime-extensions.adoc#schema-migration-layer[Scripts in the application layer]).
+
+[#application-module]
+`applicationModule()` is the application module the startup banner names: the module of the class that called `Vidocq.run`, else the one `-Dvidocq.app.main` or `-Dvidocq.app.module` names, else the `-m` module, never one guessed among the application's archives. It is empty when the application is not a named module, and when no Vidocq runtime is on the path. An extension reads it to declare something for the application by default: the Noether Persistence extension makes the persistence unit `default` of its entities (xref:modules/vidocq-runtime-extensions.adoc#noether-persistence-keys[Units declared with keys]). A module's root, the directory or the archive it was resolved from, is the location of its reference in its layer: `module.getLayer().configuration().findModule(module.getName())`, then `ResolvedModule.reference().location()`.
 
 [#launch-mode-api]
 == Reading the launch mode

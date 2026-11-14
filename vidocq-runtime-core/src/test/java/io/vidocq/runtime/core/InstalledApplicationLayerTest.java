@@ -51,6 +51,21 @@ class InstalledApplicationLayerTest {
         assertTrue(ApplicationLayer.current().isEmpty());
     }
 
+    /**
+     * An extension that declares something for the application by default, such as the persistence unit of its
+     * entities, needs the module the banner names, which only the core resolves.
+     */
+    @Test
+    void theApplicationModuleIsTheOneTheRuntimeNames() {
+        String previous = System.setProperty(VidocqAppLayer.APP_MODULE_PROPERTY, "java.logging");
+        try {
+            assertEquals("java.logging", ApplicationLayer.applicationModule().orElseThrow().getName());
+            assertEquals(Vidocq.applicationModule(), new InstalledApplicationLayer().module().orElseThrow());
+        } finally {
+            restore(VidocqAppLayer.APP_MODULE_PROPERTY, previous);
+        }
+    }
+
     @Test
     void theInstalledLayerIsPublishedUntilADevReloadTearsItDown() throws Exception {
         Path app = Files.createDirectories(dir.resolve("acme.app"));
@@ -72,12 +87,16 @@ class InstalledApplicationLayerTest {
             assertNotNull(loader.getResource("db/migration/V1__create.sql"), "the layer's loader serves a file by name");
         } finally {
             VidocqAppLayer.resetForReload();
-            if (previous == null) {
-                System.clearProperty(VidocqAppLayer.APP_PATH_PROPERTY);
-            } else {
-                System.setProperty(VidocqAppLayer.APP_PATH_PROPERTY, previous);
-            }
+            restore(VidocqAppLayer.APP_PATH_PROPERTY, previous);
         }
         assertTrue(ApplicationLayer.current().isEmpty(), "a reload withdraws the layer it tears down");
+    }
+
+    private static void restore(String property, String previous) {
+        if (previous == null) {
+            System.clearProperty(property);
+        } else {
+            System.setProperty(property, previous);
+        }
     }
 }

@@ -28,6 +28,7 @@ import java.util.Optional;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 /**
@@ -53,22 +54,49 @@ public interface ApplicationLayer {
     Optional<ModuleLayer> layer();
 
     /**
+     * The application module, as the startup banner names it: the module of the class that called
+     * {@code Vidocq.run}, else the one {@code -Dvidocq.app.main} or {@code -Dvidocq.app.module} names, else the
+     * {@code -m} module. Never guessed among the application's archives.
+     *
+     * @return the module; empty by default, for an implementation that does not know it
+     */
+    default Optional<Module> module() {
+        return Optional.empty();
+    }
+
+    /**
      * The application layer of the running Vidocq.
      *
      * @return the layer; empty when there is none, in a flat or class-path launch, and when no
      *         runtime implements this interface, as in the unit tests of an extension
      */
     static Optional<ModuleLayer> current() {
+        return first(ApplicationLayer::layer);
+    }
+
+    /**
+     * The application module of the running Vidocq, for an extension that declares something for the
+     * application by default, such as the persistence unit of its entities.
+     *
+     * @return the module; empty when the application is not a named module, and when no runtime
+     *         implements this interface
+     */
+    static Optional<Module> applicationModule() {
+        return first(ApplicationLayer::module);
+    }
+
+    /** What the first implementation that knows it answers. */
+    private static <T> Optional<T> first(Function<ApplicationLayer, Optional<T>> answer) {
         try {
             for (ApplicationLayer provider : ServiceLoader.load(ApplicationLayer.class,
                     ApplicationLayer.class.getClassLoader())) {
-                Optional<ModuleLayer> layer = provider.layer();
-                if (layer.isPresent()) {
-                    return layer;
+                Optional<T> value = answer.apply(provider);
+                if (value.isPresent()) {
+                    return value;
                 }
             }
         } catch (ServiceConfigurationError _) {
-            // a provider that cannot be loaded gives no layer
+            // a provider that cannot be loaded gives nothing
         }
         return Optional.empty();
     }
