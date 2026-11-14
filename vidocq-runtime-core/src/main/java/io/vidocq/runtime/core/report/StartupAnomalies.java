@@ -53,6 +53,12 @@ public final class StartupAnomalies {
      */
     public static final String UNINDEXED_BEANS = "VIDOCQ-GEN-002";
     /**
+     * A production start ran the build compatible extensions because the record the build wrote of them is not this
+     * deployment's: a class or a jar differs from what {@code vidocq:generate} froze (Vidocq/vauban#288). The message
+     * names what differs.
+     */
+    public static final String RECORD_REFUSED = "VIDOCQ-GEN-003";
+    /**
      * A startup report contributor could not be loaded, created or identified, or failed while it wrote its
      * section, which is skipped; logged with the stack trace when there is one.
      */
@@ -91,6 +97,16 @@ public final class StartupAnomalies {
      * @param accepted the values it accepts, as they are written
      */
     public static String invalidValue(String key, String value, String accepted) {
-        return "Invalid value '" + value + "' for " + key + " (" + accepted + "): using auto";
+        return invalidValue(key, value, accepted, "auto");
+    }
+
+    /**
+     * The {@value #INVALID_VALUE} message of a key whose default is not {@code auto}: {@code Invalid value 'yes' for
+     * vidocq.startup.require-frozen-extensions (true, false): using false}.
+     *
+     * @param fallback the value used instead
+     */
+    public static String invalidValue(String key, String value, String accepted, String fallback) {
+        return "Invalid value '" + value + "' for " + key + " (" + accepted + "): using " + fallback;
     }
 }

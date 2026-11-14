@@ -200,8 +200,10 @@ class CreateThenBuildIT {
     private static void assertStartsOnTheFrozenExtensions(Path launcher) throws Exception {
         ProcessBuilder command = new ProcessBuilder(launcher.toString()).redirectErrorStream(true);
         command.environment().put("JAVA_HOME", System.getProperty("java.home"));
-        // The java launcher reads it itself, whatever the launcher: the one of a jlink image passes no JAVA_OPTS.
-        command.environment().put("JDK_JAVA_OPTIONS", "-Dvidocq.http.port=0 -Dvidocq.startup.report=detailed");
+        // The java launcher reads it itself, whatever the launcher: the one of a jlink image passes no JAVA_OPTS. A
+        // start that does not load the record of its build fails, and its message names the classes that differ.
+        command.environment().put("JDK_JAVA_OPTIONS", "-Dvidocq.http.port=0 -Dvidocq.startup.report=detailed"
+                + " -Dvidocq.startup.require-frozen-extensions=true");
         Process application = command.start();
         String boot;
         try (ExecutorService reader = Executors.newVirtualThreadPerTaskExecutor()) {

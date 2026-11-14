@@ -502,7 +502,7 @@ An anomaly is something wrong that does not stop the boot. Each one is its own W
 
 [source,text]
 ----
-[WARN ][2026-09-18 14:19:46.775][main           ][i.v.r.c.r.StartupAnomalies#warn              ] : [VIDOCQ-CFG-003] Configuration key 'vidocq.startup.reprot' is read by nothing and has no effect. Known keys in this namespace: vidocq.startup.report
+[WARN ][2026-09-18 14:19:46.775][main           ][i.v.r.c.r.StartupAnomalies#warn              ] : [VIDOCQ-CFG-003] Configuration key 'vidocq.startup.reprot' is read by nothing and has no effect. Known keys in this namespace: vidocq.startup.report, vidocq.startup.require-frozen-extensions
 ----
 
 It is logged at every report level, `off` included, and before the report, so a boot that fails later still shows it, and a log pipeline can alert on its code. It is always one line: a line break or another control character in what it quotes, a configured value or a key name, becomes `?`, so no anomaly can start a line that looks like another record. It is never cut. The report only recalls the codes, in its `anomalies` section. A library can report anomalies of its own, under its own codes, from its section of the report (xref:modules/vidocq-runtime-spi.adoc#startup-report-contributors[Contributing to the startup report]).
@@ -512,7 +512,7 @@ The core raises these codes.
 [#vidocq-cfg-001]
 ==== VIDOCQ-CFG-001 — invalid value
 
-`vidocq.startup.report` or `vidocq.launch.mode` has a value that it does not accept. The key is read as `auto`, and the boot goes on.
+`vidocq.startup.report` or `vidocq.launch.mode` has a value that it does not accept. The key is read as `auto`, and the boot goes on. `vidocq.startup.require-frozen-extensions` takes `true` or `false`; another value is reported the same way and read as `false`.
 
 [source,text]
 ----
@@ -538,7 +538,7 @@ A configured `vidocq.*` key, under a namespace that the core or a loaded extensi
 
 [source,text]
 ----
-[VIDOCQ-CFG-003] Configuration key 'vidocq.startup.reprot' is read by nothing and has no effect. Known keys in this namespace: vidocq.startup.report
+[VIDOCQ-CFG-003] Configuration key 'vidocq.startup.reprot' is read by nothing and has no effect. Known keys in this namespace: vidocq.startup.report, vidocq.startup.require-frozen-extensions
 ----
 
 The core claims `vidocq.log.`, `vidocq.console.`, `vidocq.banner.`, `vidocq.launch.` and `vidocq.startup.`; every extension claims the namespaces of its `configKeys()` (xref:modules/vidocq-runtime-spi.adoc#configuration-keys-audit[Configuration keys audit]). The detailed report lists the audited namespaces. Build-time keys such as `vidocq.mainClass` and the `vidocq.dev.*` keys are never reported.
@@ -583,6 +583,20 @@ concerned.
 ----
 [VIDOCQ-GEN-002] The application module com.example.todo has bean classes but no Vauban index (META-INF/vauban-beans.list): it was compiled without Vauban's annotation processor, so its beans are not registered. Build it with Maven (mvn process-classes); in an IDE, turn annotation processing on and run its compiler on Java 25 (VS Code: java.jdt.ls.java.home).
 ----
+
+[#vidocq-gen-003]
+==== VIDOCQ-GEN-003 — the record of the build compatible extensions refused [.tag-new]#NEW#
+
+`vidocq:generate` runs the build compatible extensions of the application once and records what they did (xref:modules/vidocq-runtime-maven-plugin.adoc#frozen-extensions[Build compatible extensions frozen at build]); a start of the same deployment loads that record instead of running them. Vauban uses the record only for the deployment it was written for, and a production start whose deployment differs runs every extension at start, on each start. The anomaly says so, with Vauban's note, which names what differs from the build: the discovery settings, then the bean classes added, removed or changed since, ten of them by name.
+
+[source,text]
+----
+[VIDOCQ-GEN-003] 3 build compatible extensions ran at start: the record of the frozen extensions (META-INF/vauban-frozen-extensions.properties) was written for another deployment: 1 bean class differs from the build's: com.acme.audit.AuditTrail (added). Start the application on the path its build packaged, or build it again: a jar added to the path, or a class changed since the build, makes another deployment, and its extensions run at each start.
+----
+
+A jar added to the path of a packaged application, a class replaced in it, or a build that packaged other classes than those `vidocq:generate` saw, each make another deployment. A test launch and an embedded deployment expect it, since a test or an Arquillian deployment adds its own classes, and a dev launch only loses a few milliseconds of its restart: there the note is one INFO line of `io.vidocq.runtime.core.RefusedRecord`, not an anomaly. A start with no record at all is not concerned: an application built without the goal is <<vidocq-gen-001>>'s.
+
+`vidocq.startup.require-frozen-extensions=true` turns any of those starts into a failure, a refused record or none, whatever the launch mode: the boot stops with an `IllegalStateException` whose message, `[VIDOCQ-GEN-003] vidocq.startup.require-frozen-extensions is true and ...`, carries the same note. An extension that runs at start by design, because it asked `ExtensionPhase.isBuildTime()` or the build named it, never fails it: the record was used. The integration tests of the runtime that start a packaged application set it.
 
 [#vidocq-rpt-001]
 ==== VIDOCQ-RPT-001 — contributor failed
@@ -674,6 +688,10 @@ To hide the report, prefer `vidocq.startup.report=off`, which keeps everything e
 | `vidocq.launch.mode`
 | `auto`
 | The launch mode that `auto` follows, detected unless forced (<<launch-mode>>).
+
+| `vidocq.startup.require-frozen-extensions`
+| `false`
+| `true`: a start whose build compatible extensions ran because no record of the build was used fails (<<vidocq-gen-003>>). Another value than `true` or `false` is reported as <<vidocq-cfg-001>> and means `false`.
 |===
 
 [#console-logging]

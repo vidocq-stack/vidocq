@@ -208,6 +208,10 @@ the one backend
 | `auto`
 | Level of the startup report: `auto` (`detailed` on the first boot of a dev launch, `summary` otherwise, `off` for an embedded deployment), `off`, `summary` or `detailed`. Another value is reported as `VIDOCQ-CFG-001` and means `auto`. See xref:modules/vidocq-runtime-core.adoc#startup-report[Startup report].
 
+| `vidocq.startup.require-frozen-extensions`
+| `false`
+| `true`: a start whose build compatible extensions ran because no record of the build was used fails, with the classes that differ from the build. Another value than `true` or `false` is reported as `VIDOCQ-CFG-001` and means `false`. See xref:modules/vidocq-runtime-core.adoc#vidocq-gen-003[VIDOCQ-GEN-003].
+
 | `vidocq.banner.mode`
 | `auto`
 | Startup banner: `auto` (the art on a terminal or a dev launch, one INFO line elsewhere), `console`, `log` or `off`. See xref:modules/vidocq-runtime-core.adoc#startup-banner[Startup banner].
@@ -439,7 +443,7 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 | Code | Raised when
 
 | xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-001[`VIDOCQ-CFG-001`]
-| `vidocq.startup.report` or `vidocq.launch.mode` has a value it does not accept; `auto` is used.
+| `vidocq.startup.report` or `vidocq.launch.mode` has a value it does not accept; `auto` is used. `vidocq.startup.require-frozen-extensions` is neither `true` nor `false`; `false` is used.
 
 | xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-002[`VIDOCQ-CFG-002`]
 | The audit of the configured keys failed; unread keys are not reported on this boot.
@@ -455,6 +459,9 @@ Each is one WARNING record on `io.vidocq.startup.anomaly`, its code first, logge
 
 | xref:modules/vidocq-runtime-core.adoc#vidocq-gen-002[`VIDOCQ-GEN-002`]
 | The application module has bean classes and no Vauban index: it was compiled without the annotation processor.
+
+| xref:modules/vidocq-runtime-core.adoc#vidocq-gen-003[`VIDOCQ-GEN-003`]
+| A production start ran the build compatible extensions: the record `vidocq:generate` wrote of them is not this deployment's, and the message names the classes that differ.
 
 | xref:modules/vidocq-runtime-core.adoc#vidocq-rpt-001[`VIDOCQ-RPT-001`]
 | A startup report contributor could not be loaded, created or identified, or failed; its section is skipped.

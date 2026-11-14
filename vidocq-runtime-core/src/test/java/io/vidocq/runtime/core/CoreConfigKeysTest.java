@@ -79,8 +79,16 @@ class CoreConfigKeysTest {
         assertEquals(List.of("vidocq.startup.reprot"),
                 ConfigKeyAudit.unconsumedKeys(List.of("vidocq.startup.report", "vidocq.startup.reprot"), declared));
         assertEquals("[VIDOCQ-CFG-003] Configuration key 'vidocq.startup.reprot' is read by nothing and has no effect. "
-                + "Known keys in this namespace: vidocq.startup.report",
+                + "Known keys in this namespace: vidocq.startup.report, vidocq.startup.require-frozen-extensions",
                 ConfigKeyAudit.warningFor("vidocq.startup.reprot", declared));
+    }
+
+    @Test
+    void theKeyThatRequiresTheFrozenExtensionsIsDeclared() {
+        Set<String> declared = VidocqBootstrap.declaredConfigKeys(List.of());
+
+        assertEquals(List.of(), ConfigKeyAudit.unconsumedKeys(
+                List.of("vidocq.startup.report", "vidocq.startup.require-frozen-extensions"), declared));
     }
 
     @Test

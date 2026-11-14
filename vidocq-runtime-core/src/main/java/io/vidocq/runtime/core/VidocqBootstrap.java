@@ -111,7 +111,8 @@ public final class VidocqBootstrap {
             StartupBanner.MODE_KEY,
             StartupBanner.LOCATION_KEY,
             LaunchModeResolver.MODE_KEY,
-            VerbosityResolver.KEY);
+            VerbosityResolver.KEY,
+            RefusedRecord.REQUIRE_KEY);
 
     /**
      * Whether a bootstrap of this JVM was configured already. The dev reload loop boots again in the same
@@ -373,6 +374,8 @@ public final class VidocqBootstrap {
         var cdiExtensions = container.extensionsAtStart();
         recorder.cdiExtensions(CoreSections.cdiExtensions(cdiExtensions.frozen(), cdiExtensions.frozenAtBuild(),
                 cdiExtensions.ranAtStart(), cdiExtensions.note() != null));
+        RefusedRecord.report(cdiExtensions, embeddedDeployment || launchMode() != LaunchMode.PROD,
+                RefusedRecord.required(setting(config, RefusedRecord.REQUIRE_KEY), recorder::anomaly), recorder);
         recorder.end();
 
         // Notify extensions
@@ -621,16 +624,21 @@ public final class VidocqBootstrap {
      */
     private static String checkedSetting(VidocqConfig config, String key, Predicate<String> valid, String accepted,
                                          BiConsumer<String, String> anomalies) {
-        String value;
-        try {
-            value = config.getValue(key).map(String::strip).filter(v -> !v.isEmpty()).orElse(null);
-        } catch (RuntimeException _) {
-            return null;
-        }
+        String value = setting(config, key);
         if (!valid.test(value)) {
             anomalies.accept(StartupAnomalies.INVALID_VALUE, StartupAnomalies.invalidValue(key, value, accepted));
         }
         return value;
+    }
+
+    /** The value of {@code key}, stripped, or {@code null} when it is unset, blank or cannot be read. */
+    private static String setting(VidocqConfig config, String key) {
+        try {
+            return config == null ? null
+                    : config.getValue(key).map(String::strip).filter(v -> !v.isEmpty()).orElse(null);
+        } catch (RuntimeException _) {
+            return null;
+        }
     }
 
     /** Lets the next {@link #configure()} be the first boot of the JVM again. */

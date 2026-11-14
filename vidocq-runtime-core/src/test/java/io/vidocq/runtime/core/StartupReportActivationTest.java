@@ -156,7 +156,8 @@ class StartupReportActivationTest {
             VidocqBootstrap bootstrap = VidocqBootstrap.create().banner(BannerMode.OFF).configure().start();
             try {
                 assertTrue(anomalies.warnings().contains("[VIDOCQ-CFG-003] Configuration key 'vidocq.startup.reprot'"
-                        + " is read by nothing and has no effect. Known keys in this namespace: vidocq.startup.report"),
+                        + " is read by nothing and has no effect. Known keys in this namespace: vidocq.startup.report,"
+                        + " vidocq.startup.require-frozen-extensions"),
                         anomalies.warnings().toString());
             } finally {
                 bootstrap.shutdown();
@@ -199,7 +200,8 @@ class StartupReportActivationTest {
                         "[VIDOCQ-CFG-001] Invalid value 'x?[WARN ][2026-09-18 14:19:46.775][main] : forged' for"
                                 + " vidocq.startup.report (auto, off, summary, detailed): using auto",
                         "[VIDOCQ-CFG-003] Configuration key 'vidocq.startup.re?port' is read by nothing and has no"
-                                + " effect. Known keys in this namespace: vidocq.startup.report"), warnings);
+                                + " effect. Known keys in this namespace: vidocq.startup.report,"
+                                + " vidocq.startup.require-frozen-extensions"), warnings);
                 assertTrue(warnings.stream().allMatch(warning -> warning.lines().count() == 1), warnings.toString());
                 assertTrue(bootstrap.startupReport().orElseThrow().anomalies().stream()
                                 .noneMatch(anomaly -> anomaly.message().contains("\n")),
