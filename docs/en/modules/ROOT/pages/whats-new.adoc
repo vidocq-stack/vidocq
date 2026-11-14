@@ -29,6 +29,10 @@ New in the `{project-version}` development line — everything listed here lande
 * xref:modules/vidocq-runtime-cli.adoc#create-parentless[`vidocq create` without a parent, `--with-parent`, `--vidocq-version`] [.tag-new]#NEW# — the project builds on the BOM and the plugin by default; the parent on request (Vidocq/vidocq#380).
 * xref:modules/vidocq-runtime-cli.adoc#update-channel[`vidocq update --release` and `vidocq update --snapshot`] [.tag-new]#NEW# — switch the CLI to the latest release or the latest SNAPSHOT build whatever channel is installed (a `0.4.0-SNAPSHOT` CLI can move to the latest release, a release to the latest SNAPSHOT). They are mutually exclusive, combine with `--check`, and complete after `vidocq update`.
 
+== Configuration
+
+* xref:usage.adoc#property-expressions[Property expressions in every key] [.tag-new]#NEW# — `vidocq.chappe.listener.default.port=${DASHBOARD_PORT:8080}` and the other `${key}` and `${key:default}` expressions of MicroProfile Config are expanded for the Vidocq keys too, with or without Ravel. The start failed with a `NumberFormatException` on the expression as written (BUG-20261114-01).
+
 == Dev services
 
 * xref:dev-services.adoc#test-run-files[A test run has files of its own] [.tag-new]#NEW# — `vidocq test` and the JUnit listener write `target/vidocq-dev-services-test.json` and `-test.properties`, so a test run beside `vidocq dev` no longer overwrites the dev session's files, and the next reload no longer reports the test run's container as the application's, `stopped` (BUG-20261106-03).

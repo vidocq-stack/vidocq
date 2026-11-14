@@ -405,6 +405,25 @@ vidocq.http.port=8080
 
 Activate via the `-Dvidocq.profile=dev` system property (there is no environment-variable equivalent).
 
+[#property-expressions]
+== Property expressions [.tag-new]#NEW#
+
+A value may refer to other keys with the {spec-mp-config} property expressions, which every Vidocq key and the extensions read, with or without Ravel:
+
+[source,properties]
+----
+vidocq.chappe.listener.default.port=${DASHBOARD_PORT:8080}
+orders.url=jdbc:postgresql://${db.host}:${db.port:5432}/orders
+----
+
+* `${key}` is the value of `key`, from any source — an environment variable `DASHBOARD_PORT` above — and is itself expanded; `${key:default}` is `default` when no source has `key`. The key and the default may hold expressions: `${url.${target}}`.
+* `\${key}` is kept as written, `${key}`.
+* An expression without a default whose key has no value leaves the property without a value: the extension that reads it applies its own default.
+* An expression that comes back to its own key, or a `${` without its closing brace, fails the read with an `IllegalArgumentException`.
+* `mp.config.property.expressions.enabled=false` turns the expansion off: values are read as written.
+
+With Ravel, `ConfigProvider.getConfig()` and `VidocqConfig` expand a value the same way.
+
 == Docker deployment
 
 Minimal distroless image produced by `vidocq:docker`:

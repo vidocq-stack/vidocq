@@ -132,6 +132,40 @@ class VidocqConfigImplTest {
                 () -> cfg.getValue("k", java.math.BigDecimal.class));
     }
 
+    @Test
+    void expandsAPropertyExpressionBeforeConverting() {
+        // BUG-20261114-01: the port of the default listener written as an expression in vidocq.properties
+        ConfigSource file = source("vidocq.properties", 100,
+                Map.of("vidocq.chappe.listener.default.port", "${DASHBOARD_PORT:8080}"));
+        assertEquals(8080, new VidocqConfigImpl(List.of(file))
+                .getValue("vidocq.chappe.listener.default.port", Integer.class).orElseThrow());
+
+        ConfigSource env = source("env", 300, Map.of("DASHBOARD_PORT", "9090"));
+        assertEquals(9090, new VidocqConfigImpl(List.of(file, env))
+                .getValue("vidocq.chappe.listener.default.port", Integer.class).orElseThrow());
+    }
+
+    @Test
+    void anExpressionWhoseKeyHasNoValueLeavesTheKeyWithoutValue() {
+        VidocqConfig cfg = new VidocqConfigImpl(List.of(source("s", 100, Map.of("k", "${missing}"))));
+        assertEquals(Optional.empty(), cfg.getValue("k"));
+        assertEquals(42, cfg.getValue("k", Integer.class, 42));
+    }
+
+    @Test
+    void expandsAListBeforeSplittingIt() {
+        ConfigSource s = source("s", 100, Map.of("items", "${base},c", "base", "a,b"));
+        VidocqConfig cfg = new VidocqConfigImpl(List.of(s));
+        assertEquals(List.of("a", "b", "c"), cfg.getValues("items", String.class));
+    }
+
+    @Test
+    void theMicroProfileKeyTurnsTheExpansionOff() {
+        ConfigSource s = source("s", 100, Map.of("k", "${other}", "other", "x",
+                "mp.config.property.expressions.enabled", "false"));
+        assertEquals("${other}", new VidocqConfigImpl(List.of(s)).getValue("k").orElseThrow());
+    }
+
     private static ConfigSource source(String name, int ordinal, Map<String, String> data) {
         return new ConfigSource() {
             @Override public String getName() { return name; }

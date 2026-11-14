@@ -5,6 +5,32 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261114-01 — The Vidocq configuration does not expand `${...}` property expressions
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/config-property-expressions`
+- **Affected module**: vidocq-runtime-core (`VidocqConfigImpl.getValue`)
+- **Symptom**: an application whose `vidocq.properties` sets `vidocq.chappe.listener.default.port=${DASHBOARD_PORT:8080}`
+  fails to start: _Vidocq startup failed in onStart chappe-bootstrap — java.lang.NumberFormatException: For input
+  string: "${DASHBOARD_PORT:8080}"_, at `VidocqConfigImpl.getValue` called by `ChappeServerBootstrap.valueOrAlias`.
+- **Minimal repro**:
+  ```
+  # src/main/resources/vidocq.properties
+  vidocq.chappe.listener.default.port=${DASHBOARD_PORT:8080}
+  mvn vidocq:run
+  ```
+- **Cause**: `VidocqConfigImpl.getValue` returned the raw value of the first source that has the key. With Ravel the
+  Vidocq configuration reads Ravel's sources, raw too: the same key gave the expanded value through
+  `ConfigProvider.getConfig()` and the expression as written through `VidocqConfig`, which every extension reads.
+- **Fix**: `VidocqConfig` expands the MicroProfile Config property expressions the way Ravel does — `${key}`,
+  `${key:default}`, nested and composed keys, `\$` for a literal `$`, an expression without a default whose key has no
+  value making the property absent, a circular one an `IllegalArgumentException`, and
+  `mp.config.property.expressions.enabled=false` to turn the expansion off. `PropertyExpressionsTest`,
+  `VidocqConfigImplTest`.
+- **Investigations**:
+  - 2026-11-14: reported by another session on 0.4.0-SNAPSHOT; the `VIDOCQ_HTTP_PORT` environment variable works
+    around it.
+
 ## BUG-20261113-04 — The Noether extension reports each persistence unit twice
 
 - **Date**: 2026-11-13

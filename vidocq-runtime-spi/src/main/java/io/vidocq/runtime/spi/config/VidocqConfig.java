@@ -33,7 +33,9 @@ import java.util.Optional;
 public interface VidocqConfig {
 
     /**
-     * Retrieves the raw value of a property.
+     * Retrieves the value of a property, its MicroProfile Config property expressions ({@code ${key}},
+     * {@code ${key:default}}) expanded; empty when no source has the key, or when an expression without a default
+     * names a key that has no value. {@code mp.config.property.expressions.enabled=false} turns the expansion off.
      */
     Optional<String> getValue(String key);
 

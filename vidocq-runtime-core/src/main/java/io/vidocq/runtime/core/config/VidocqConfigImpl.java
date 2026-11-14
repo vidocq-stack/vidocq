@@ -53,6 +53,10 @@ import java.util.ServiceLoader;
  * <p>In both cases, the sources are sorted by {@link ConfigSource#getOrdinal()}
  * decreasing. First-wins resolution.</p>
  *
+ * <p>A value is returned with its MicroProfile Config property expressions
+ * ({@code ${key}}, {@code ${key:default}}) expanded, as Ravel expands them
+ * ({@link PropertyExpressions}).</p>
+ *
  * <p>The constructor {@link #VidocqConfigImpl(List)} forces a list of sources
  * explicit (used by unit tests).</p>
  */
@@ -61,6 +65,7 @@ public final class VidocqConfigImpl implements VidocqConfig {
     private final List<ConfigSource> sources;
     /** The class names of the providers whose sources replaced the native ones; empty for the native sources. */
     private final List<String> sourceProviders;
+    private final PropertyExpressions expressions;
 
     /**
      * Auto-discovery: first searches for {@link ConfigSourceProvider}
@@ -82,6 +87,7 @@ public final class VidocqConfigImpl implements VidocqConfig {
         copy.sort(Comparator.comparingInt(ConfigSource::getOrdinal).reversed());
         this.sources = Collections.unmodifiableList(copy);
         this.sourceProviders = List.copyOf(discovery.providers());
+        this.expressions = new PropertyExpressions(key -> rawValue(this.sources, key));
     }
 
     /**
@@ -92,13 +98,18 @@ public final class VidocqConfigImpl implements VidocqConfig {
         return sourceProviders;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The value of the first source that has the key, its property expressions expanded; empty as well when
+     * an expression without a default names a key that has no value.</p>
+     *
+     * @throws IllegalArgumentException when an expression is circular or has no closing brace
+     */
     @Override
     public Optional<String> getValue(String key) {
-        for (ConfigSource s : sources) {
-            String v = s.getValue(key);
-            if (v != null) return Optional.of(v);
-        }
-        return Optional.empty();
+        String raw = rawValue(sources, key);
+        return raw == null ? Optional.empty() : expressions.expand(key, raw);
     }
 
     @Override
@@ -138,6 +149,15 @@ public final class VidocqConfigImpl implements VidocqConfig {
     }
 
     // ---------- helpers ----------
+
+    /** The value of the first source that has {@code key}, as that source holds it; {@code null} when none has it. */
+    private static String rawValue(List<ConfigSource> sources, String key) {
+        for (ConfigSource s : sources) {
+            String v = s.getValue(key);
+            if (v != null) return v;
+        }
+        return null;
+    }
 
     /** The sources found, and the providers they came from when a provider replaced the native ones. */
     private record Discovery(List<ConfigSource> sources, List<String> providers) {}

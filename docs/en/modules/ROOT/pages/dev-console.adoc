@@ -302,7 +302,7 @@ The console's own panel, `config`, just before the CDI container: which keys the
 * **Table** `keys`, the application's keys first, then `vidocq.*`, then `mp.*`, each by name, 100 rows at most:
 ** `key`;
 ** `source` and `ordinal`: the source that wins, the first in lookup order that has a value for the key — the very value `VidocqConfig.getValue` returns. An environment variable `DB_USER` wins for `db.user` when it is set;
-** `value`: in a `dev` launch only, the raw value of that source. Under Ravel it is read before profiles and `${...}` expressions, so an expression is shown as written, never expanded;
+** `value`: in a `dev` launch only, the raw value of that source, read before xref:usage.adoc#property-expressions[`${...}` expressions] and, under Ravel, profiles: an expression is shown as written, never expanded;
 ** `status`: `unused` when a xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CFG-003`] anomaly of this boot names the key — a key nothing reads, a typo most of the time; `claimed` when the key falls under a namespace the core or a loaded extension reads, such as `vidocq.mcp.*`; `not audited` for any other key, the application's own among them. The status is read from the startup report, which is written after the console starts: until then it reads `report not written yet`.
 
 What is never shown:
