@@ -234,7 +234,7 @@ Runner shape (copy `foy-tck` and `bodoni-tck`, not a new design):
 **Still open:**
 
 6. Does the Authentication/Authorization TCK need a full platform? Answered in K0 (§7).
-7. Logo: none yet (tracked in `tasks/todo.md`, like Bodoni).
+7. Logo: a temporary one, generated with ChatGPT (2026-11-14); to be replaced by a designed logo.
 
 ## 10. Bootstrap checklist (state at scaffold, 2026-11-14)
 

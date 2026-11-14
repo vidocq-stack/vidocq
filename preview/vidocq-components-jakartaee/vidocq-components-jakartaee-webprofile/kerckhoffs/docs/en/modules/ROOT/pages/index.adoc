@@ -1,6 +1,9 @@
 = Kerckhoffs
 :description: Jakarta Security 4.0 implementation for the Vidocq ecosystem.
 
+[.text-center]
+image::kerckhoffs-logo.png[Kerckhoffs,300,role=module-logo]
+
 [.lead]
 Kerckhoffs implements {spec-security-4-0}[Jakarta Security 4.0]: HTTP authentication
 mechanisms, identity stores and the security context of a Jakarta EE application, with zero

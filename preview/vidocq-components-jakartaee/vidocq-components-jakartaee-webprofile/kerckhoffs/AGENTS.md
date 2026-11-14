@@ -123,7 +123,8 @@ provides a shared UI bundle. **Never customise the UI per project.** Mirror **Va
   the first content they carry.
 - `performance` carries only figures that have an entry in `BENCH.md`; `tck` comes before it.
 - `index.adoc`: `= Kerckhoffs`, `:description:`, `[.lead]`, `== Origin of the name`,
-  `== At a glance`, ecosystem links. No logo yet (`tasks/todo.md`).
+  `== At a glance`, ecosystem links. The logo (`kerckhoffs-logo.png`) is a temporary one generated
+  with ChatGPT; replace it when a designed one exists.
 
 ## Terminology
 
