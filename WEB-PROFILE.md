@@ -25,7 +25,7 @@ already tracked in `CERTIFICATION.md`) plus:
 | Jakarta Persistence (JPA) | 3.2 | Antoine's project, split out of Mansart | 🟡 TCK 2131/2135 on a locally patched 3.2.1 suite, not an official result; first release pending | 1.0.0; may be pulled into a 0.4.x release if Noether publishes in time |
 | Jakarta Validation (Bean Validation) | 3.1 | `erasmus` | 🟡 21/22 built-in constraints; cascading, groups, executable validation, TCK and runtime extension to do — [#64](https://codefloe.com/Vidocq/vidocq/issues/64) | 1.1.0 |
 | Jakarta Concurrency | 3.1 | — | ❌ no implementation, a natural fit for virtual threads — [#72](https://codefloe.com/Vidocq/vidocq/issues/72) | 1.1.0 |
-| Jakarta WebSocket | 2.2 | Chappe (protocol only) | ❌ Chappe speaks RFC 6455; the annotated and programmatic API, encoders/decoders and Servlet integration are missing — [#65](https://codefloe.com/Vidocq/vidocq/issues/65) | 1.1.0 |
+| Jakarta WebSocket | 2.2 | `foy` (`foy-websocket`) on Chappe | 🚧 lot 1: programmatic server API (`vidocq-runtime-foy-websocket-extension`, on Foy); annotated endpoints, client, TCK to come — [#65](https://codefloe.com/Vidocq/vidocq/issues/65) | 1.1.0 |
 | Jakarta Security | 4.0 | — | ❌ Foy enforces Servlet security (BASIC, FORM, CLIENT-CERT) with its own `IdentityStore`, which is not Jakarta Security — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) | 1.1.0 |
 | Jakarta Authentication | 3.1 | — | ❌ no implementation — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) | 1.1.0 |
 | Jakarta Authorization | 3.1 | — | ❌ no implementation — [#63](https://codefloe.com/Vidocq/vidocq/issues/63) | 1.1.0 |
@@ -66,7 +66,7 @@ API at runtime instead of a third-party bytecode library), lives in
 | Portable Extensions — isolated legacy runtime-codegen module | [vauban#39](https://codefloe.com/Vidocq/vauban/issues/39) |
 | Jakarta Security 4.0 / Authentication 3.1 / Authorization 3.1 | [vidocq#63](https://codefloe.com/Vidocq/vidocq/issues/63) |
 | Jakarta Validation 3.1 (Bean Validation) | [vidocq#64](https://codefloe.com/Vidocq/vidocq/issues/64) |
-| Jakarta WebSocket 2.2 (annotated API) | [vidocq#65](https://codefloe.com/Vidocq/vidocq/issues/65) |
+| Jakarta WebSocket 2.2 (annotated endpoints, client API, official TCK) | [vidocq#65](https://codefloe.com/Vidocq/vidocq/issues/65) |
 | Faces 4.1 (from scratch) | [vidocq#66](https://codefloe.com/Vidocq/vidocq/issues/66) |
 | Standard Tag Library 3.0 (Bodoni) | [vidocq#266](https://codefloe.com/Vidocq/vidocq/issues/266) |
 | `java:` naming context backed by CDI (`vidocq-runtime-naming-extension`): names declared in `vidocq.properties` (`vidocq.naming.*`: beans and links, four distinct namespaces) delivered; `@Resource`, `resource-ref`, `env-entry` to come | [vidocq#297](https://codefloe.com/Vidocq/vidocq/issues/297) |
@@ -176,8 +176,8 @@ Updated on 2026-10-22.
   its official TCK passing; the `java:comp/env` naming context for data sources
   (`vidocq-runtime-naming-extension`, Vauban Naming).
 - **In progress:** Persistence 3.2 (Antoine's project, planned for 1.0.0; may be pulled into a 0.4.x release if Noether publishes in time), Validation 3.1 (Erasmus),
-  Transactions 2.0 beyond minimal JTA.
-- **Not started:** Concurrency, WebSocket API, Security / Authentication / Authorization,
+  Transactions 2.0 beyond minimal JTA, WebSocket 2.2 (programmatic server API on Foy; annotated endpoints, client, TCK to come).
+- **Not started:** Concurrency, Security / Authentication / Authorization,
   Standard Tag Library, Debugging Support (1.1.0); CDI Full and Enterprise Beans Lite
   (1.2.0); Faces, from scratch (1.3.0).
 - Production readiness (1.0.0: fuzzing, soak and chaos tests, end-to-end benchmarks,

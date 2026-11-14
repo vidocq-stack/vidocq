@@ -142,6 +142,10 @@ The `io.vidocq.runtime.extensions.*` modules each correspond to a built-in exten
 `UTF-8`
 | The Servlet extension: context path (the `web.xml` `<default-context-path>` when unset), listener, session timeout in seconds, and the default response encoding when no descriptor declares a `<response-character-encoding>` (`ISO-8859-1` restores the Servlet default). See xref:modules/vidocq-runtime-extensions.adoc#servlet[Servlet (Foy)].
 
+| `vidocq.websocket.allowed-origins`
+| _none_
+| Origins allowed to open a WebSocket besides the server's own: comma-separated (`https://admin.example.com, http://localhost:5173`), or `*` for any. Applies to Jakarta WebSocket endpoints and to native Chappe WebSocket mounts. A malformed entry stops the start. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[Jakarta WebSocket (Foy)].
+
 | `vidocq.servlet.users.<name>.password`+
 `vidocq.servlet.users.<name>.roles` +
 `vidocq.servlet.confidential-port` +

@@ -58,6 +58,10 @@
 | `jakartaee-web`
 | Serves the application's Jakarta Servlet 6.1 components through xref:foy::index.adoc[Foy] on the shared Chappe server, with the request and session scopes. Companion `-codegen` artefact. See <<servlet>>.
 
+| `vidocq-runtime-foy-websocket-extension`
+| `jakartaee-web`
+| Jakarta WebSocket 2.2 through xref:foy::index.adoc[Foy], programmatic server API. A Vaadin application gets it with `vidocq-runtime-vaadin-extension`. See <<foy-websocket>>.
+
 | `vidocq-runtime-ibarra-pages-extension`
 | `jakartaee-web`
 | Serves the application's JSP pages, compiled at build time by xref:ibarra::index.adoc[Ibarra], through the Servlet extension, with Jakarta EL from Peano. See <<ibarra-pages>>.
@@ -305,6 +309,46 @@ The `servlet` section gives the number of servlets and filters and the prefixes 
 
 Under `vidocq:dev`, `vidocq-runtime-foy-servlet-extension-dev` makes the section live in the dev console: it plots the active sessions of each servlet deployment. Only `vidocq:dev` adds the module; no binary contains it.
 
+[[foy-websocket]]
+== Jakarta WebSocket (Foy)
+
+`vidocq-runtime-foy-websocket-extension` (Java module `io.vidocq.runtime.extensions.jakartaee.web.websocket`) brings Foy's `foy-websocket` module into the application: Jakarta WebSocket 2.2, programmatic server API. Foy puts the `ServerContainer` in the `jakarta.websocket.server.ServerContainer` servlet context attribute; an application adds its endpoints to it, from a `ServletContextListener` (`@WebListener`) for instance, with `ServerContainer.addEndpoint(ServerEndpointConfig)`. `vidocq-runtime-vaadin-extension` depends on this extension, so a Vaadin application needs no dependency of its own (xref:vaadin.adoc#push[Push]). Declare it for any other application:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-foy-websocket-extension</artifactId>
+</dependency>
+----
+
+It runs on the Servlet extension, so the application is mounted as described in <<servlet>>. The application module requires `jakarta.websocket` for the API.
+
+[WARNING]
+====
+On the module path, Foy's component factory creates a programmatic `Endpoint` subclass by reflection. The application module must open the endpoint's package to Foy, or the handshake fails:
+
+[source,java]
+----
+opens com.example.app.ws to io.vidocq.foy.core;
+----
+
+See `vidocq-runtime-it-foy-websocket` for a complete module.
+====
+
+[cols="2,1,3"]
+|===
+| Key | Default | Description
+
+| `vidocq.websocket.allowed-origins`
+| _none_
+| Origins allowed to open a WebSocket besides the server's own: comma-separated (`https://admin.example.com, http://localhost:5173`), or `*` for any. Applies to Jakarta WebSocket endpoints and to native Chappe WebSocket mounts. A malformed entry stops the start.
+|===
+
+With no value, or a blank one, only the same origin is allowed. The extension checks the syntax of the key at start and a malformed value stops the start with a message naming `vidocq.websocket.allowed-origins`; it then hands the value to Foy as a servlet context init parameter. Its `websocket` section of the startup report gives the accepted origins: `same origin only`, `any`, or the list.
+
+Annotated `@ServerEndpoint` endpoints, the client API and the official Jakarta WebSocket TCK come later (Vidocq/vidocq#65).
+
 [[ibarra-pages]]
 == Jakarta Pages (Ibarra)
 
@@ -521,6 +565,9 @@ rest          REST (Cassini) | 1 ms
 ----
 
 A listener an extension declares for itself is left to that extension's section: the dev console's is in the `devconsole` section. An extension reads the URL a listener really listens on with `ChappeMountPoint.instance().boundUrl(name)`, from its `contribute` onwards.
+
+[#chappe-websocket-origins]
+A native Chappe WebSocket mount (`vidocq.http.mount.<name>.type=websocket`) takes the same origin rule as the Jakarta WebSocket endpoints of Foy: `vidocq.websocket.allowed-origins` lists the origins allowed besides the server's own, `*` allows any, and a malformed entry stops the start. See <<foy-websocket>>.
 
 [#extension-listeners]
 === A listener of an extension's own

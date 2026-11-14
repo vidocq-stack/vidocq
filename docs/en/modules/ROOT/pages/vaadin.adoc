@@ -402,21 +402,35 @@ The resulting image is about 68 MB with its JDK, and starts in about 330 ms.
 [#push]
 == Push
 
-Foy implements no Jakarta WebSocket (Vidocq/vidocq#65), so `@Push` needs the long polling transport:
+Vaadin's WebSocket push runs on Jakarta WebSocket, which `vidocq-runtime-foy-websocket-extension` provides through
+xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[Foy]. `vidocq-runtime-vaadin-extension` depends on it, so a
+Vaadin application declares nothing more, and `@Push` takes the WebSocket transports:
 
 [source,java]
 ----
-@Push(transport = Transport.LONG_POLLING)
+@Push(transport = Transport.WEBSOCKET_XHR)
 public class AppShell implements AppShellConfigurator {
 }
 ----
 
-`@Push` goes on the app shell, so a jlink image also needs `vidocq-runtime-vaadin-extension`: see <<jlink-app-shell>>.
+`WEBSOCKET_XHR` and `WEBSOCKET` both open the WebSocket on `/VAADIN/push`; `LONG_POLLING` stays available and needs no
+WebSocket. `@Push` goes on the app shell, so a jlink image also needs `vidocq-runtime-vaadin-extension`: see
+<<jlink-app-shell>>.
 
-With the default transport, `WEBSOCKET`, or with `WEBSOCKET_XHR`, push never connects. Vaadin's push handler answers
-the WebSocket handshake on `/VAADIN/push` with `501 Not Implemented` and `X-Atmosphere-error: Websocket protocol not
-supported`, but the Vaadin 25.3.2 client does not fall back to long polling: it tries the WebSocket again every five
-seconds, for as long as the page stays open.
+A page served from another origin than the server (a Vite dev server on `http://localhost:5173` in front of the
+application, say) is refused by default: Foy accepts a WebSocket handshake whose `Origin` is the server's own, and no
+other. Name the others in `vidocq.websocket.allowed-origins`, in `vidocq.properties`:
+
+[source,properties]
+----
+vidocq.websocket.allowed-origins=https://admin.example.com, http://localhost:5173
+----
+
+`*` allows any origin. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[the extension] for the key.
+
+The module-path integration test of the extension (`vidocq-runtime-it-foy-websocket`) checks the Jakarta WebSocket
+server API on the module path. The Vaadin push itself over the WebSocket transports was not run end to end yet: the
+checks below were made with long polling.
 
 Long polling was checked with Vaadin 25.3.2 under `vidocq:run`, and with Vaadin's Java module snapshots in a
 `vidocq:package` distribution and a jlink image (Vidocq/vidocq#256): a virtual thread updates the UI through
@@ -476,8 +490,8 @@ the descriptor of a jlink image cannot let use an application class.
 
 | Push never reaches the page, and the browser opens a WebSocket to `/VAADIN/push` every five seconds, which closes
 with code 1006.
-| `@Push` uses the WebSocket transport, its default, and Foy implements no Jakarta WebSocket.
-| Use `@Push(transport = Transport.LONG_POLLING)`. See <<push>>.
+| The page is served from another origin than the server, and the WebSocket handshake is refused.
+| Add the origin of the page to `vidocq.websocket.allowed-origins`, or use `@Push(transport = Transport.LONG_POLLING)`. See <<push>>.
 
 | Every five seconds, a request to `/VAADIN/push` answers 503.
 | A filter that runs on `/VAADIN/push` does not support asynchronous requests, so long polling cannot suspend them.
@@ -530,7 +544,7 @@ xref:modules/vidocq-runtime-extensions.adoc#vaadin[the extension].
 * Only production mode was checked: on one view with a button and push, where the bootstrap page and the frontend
   bundles are served, a click reaches the server and push works in long polling, and in VidocqTools/forge-dashboard,
   which runs in production with push in long polling.
-* Push needs long polling: Foy implements no Jakarta WebSocket (Vidocq/vidocq#65). See <<push>>.
+* Push over the WebSocket transports comes from the Foy WebSocket extension, whose Jakarta WebSocket support is the programmatic server API (Vidocq/vidocq#65); long polling is the transport checked end to end. See <<push>>.
 * `vidocq.app.layer=classes`, the opt-out, does not work for Vaadin: see <<app-layer>>.
 * In a jlink image, Collaboration Engine and LitTemplate are not available while `forceExplicit` is needed.
 *In a jlink image, an `AppShellConfigurator` needs `vidocq-runtime-vaadin-extension`: see
