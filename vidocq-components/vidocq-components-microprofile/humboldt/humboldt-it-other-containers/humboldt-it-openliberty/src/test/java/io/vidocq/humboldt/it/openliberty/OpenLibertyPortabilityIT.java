@@ -28,6 +28,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -70,7 +71,11 @@ class OpenLibertyPortabilityIT {
 
     @Test
     void failingResourceRecordsTheExceptionOnItsServerSpan() throws Exception {
-        assertEquals(500, status("/traced/fail"));
+        HttpResponse<String> failed = HTTP.send(HttpRequest.newBuilder(URI.create(BASE + "/traced/fail")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(500, failed.statusCode());
+        // BUG-20261114-01: the client learns nothing of the failure, its message stays in the server's log.
+        assertFalse(failed.body().contains("boom"), failed.body());
 
         List<String> spans = spans();
         assertTrue(spans.stream().anyMatch(s -> s.startsWith("SERVER|") && s.contains("/traced/fail|")

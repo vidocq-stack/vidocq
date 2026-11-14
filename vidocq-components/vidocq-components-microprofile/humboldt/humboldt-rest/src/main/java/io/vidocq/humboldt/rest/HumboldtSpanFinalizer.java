@@ -27,6 +27,8 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 /**
  * {@link ExceptionMapper} fallback that records an exception escaping a resource method on the
  * SERVER span started by {@link HumboldtServerRequestFilter}.
@@ -45,11 +47,23 @@ import jakarta.ws.rs.ext.Provider;
  * container only selects it when no more specific application mapper matches. A
  * {@link WebApplicationException} keeps its own response, so a 404 or a 406 stays one; only a 5xx
  * marks the span as an error, as for any response.</p>
+ *
+ * <p>Any other exception gets what the runtime would give it without this mapper: a bare 500, with no entity, so the
+ * client learns nothing of the failure (CWE-209), and an ERROR line with the exception for the operator, since
+ * mapping it skips the runtime's own (BUG-20261114-01).</p>
  */
 @Provider
 @jakarta.enterprise.context.Dependent
 @Priority(jakarta.ws.rs.Priorities.USER + 1000)
 public class HumboldtSpanFinalizer implements ExceptionMapper<Throwable> {
+
+    private static final AtomicReference<System.Logger> LOG =
+            new AtomicReference<>(System.getLogger(HumboldtSpanFinalizer.class.getName()));
+
+    /** Replaces the logger the unmapped exceptions go to, and returns the previous one (tests). */
+    static System.Logger useLogger(System.Logger logger) {
+        return LOG.getAndSet(logger);
+    }
 
     @Override
     public Response toResponse(Throwable exception) {
@@ -57,11 +71,11 @@ public class HumboldtSpanFinalizer implements ExceptionMapper<Throwable> {
             return wae.getResponse();
         }
         recordOnServerSpan(exception);
-        return Response.status(500)
-                .entity(exception.getClass().getSimpleName()
-                        + ": " + (exception.getMessage() != null ? exception.getMessage() : ""))
-                .type("text/plain")
-                .build();
+        // What the runtime does without this mapper: the operator gets the exception in the log, the client a bare
+        // 500 that tells nothing of the failure (CWE-209). Mapping the exception skips the runtime's own log line.
+        LOG.get().log(System.Logger.Level.ERROR,
+                "A resource method threw an exception no ExceptionMapper handles; the client gets a 500", exception);
+        return Response.serverError().build();
     }
 
     private static void recordOnServerSpan(Throwable t) {

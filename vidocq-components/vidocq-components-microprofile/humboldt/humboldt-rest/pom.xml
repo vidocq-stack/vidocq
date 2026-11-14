@@ -88,6 +88,14 @@
             <version>${vauban.version}</version>
             <scope>provided</scope>
         </dependency>
+        <!-- Test only: a Jakarta REST RuntimeDelegate, so a unit test can read the Response that
+             HumboldtSpanFinalizer builds. Never shipped. -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-jdk-http</artifactId>
+            <version>${cassini.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
