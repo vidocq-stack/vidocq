@@ -22,9 +22,11 @@ package io.vidocq.runtime.maven;
 import io.vidocq.runtime.core.LayerSplit;
 import io.vidocq.runtime.core.VidocqAppLayer;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.TreeSet;
 
 /**
@@ -108,7 +110,7 @@ record ImageLaunch(String entryPoint, List<String> vmOptions, List<String> layer
         var roots = new TreeSet<>(bootRoots);
         roots.removeAll(layer);
         roots.remove("java.base");
-        List<String> options = new java.util.ArrayList<>();
+        List<String> options = new ArrayList<>();
         if (!roots.isEmpty()) {
             options.add("--add-modules=" + String.join(",", roots));
         }
@@ -123,6 +125,6 @@ record ImageLaunch(String entryPoint, List<String> vmOptions, List<String> layer
     }
 
     private static String layerOption(LayerSplit.Mode layerMode) {
-        return "-D" + LayerSplit.MODE_PROPERTY + "=" + layerMode.name().toLowerCase(java.util.Locale.ROOT);
+        return "-D" + LayerSplit.MODE_PROPERTY + "=" + layerMode.name().toLowerCase(Locale.ROOT);
     }
 }

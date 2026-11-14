@@ -29,10 +29,12 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.TreeMap;
+import java.util.stream.Stream;
 
 /**
  * Discovers and loads {@link VidocqExtension} via {@link ServiceLoader}.
@@ -103,9 +105,9 @@ final class ExtensionLoader {
      */
     static Map<String, String> descriptors(List<VidocqExtension> extensions, ModuleLayer applicationLayer) {
         Map<String, String> descriptors = new TreeMap<>(descriptors(ModuleLayer.boot()));
-        java.util.stream.Stream.concat(java.util.stream.Stream.ofNullable(applicationLayer),
+        Stream.concat(Stream.ofNullable(applicationLayer),
                         extensions.stream().map(ext -> ext.getClass().getModule().getLayer()))
-                .filter(java.util.Objects::nonNull).distinct()
+                .filter(Objects::nonNull).distinct()
                 .forEach(layer -> descriptors.putAll(descriptors(layer)));
         return descriptors;
     }

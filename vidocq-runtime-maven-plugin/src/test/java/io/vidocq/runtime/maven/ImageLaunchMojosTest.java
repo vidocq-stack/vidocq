@@ -34,6 +34,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.spi.ToolProvider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -129,7 +130,7 @@ class ImageLaunchMojosTest {
         flowPush.setFile(dir.resolve("jlink-mods").resolve("flow.push").toFile());
         for (String keep : new String[] {"com.vaadin:flow-push", "flow.push"}) {
             VidocqJlinkMojo mojo = jlink("acme.app", null, new Infos());
-            ((MavenProject) get(mojo, "project")).setArtifacts(java.util.Set.of(flowPush));
+            ((MavenProject) get(mojo, "project")).setArtifacts(Set.of(flowPush));
             set(VidocqJlinkMojo.class, mojo, "appLayerKeep", keep);
 
             ImageLaunch launch = mojo.bakedLaunch("acme.app,aura.theme,flow.push,java.base");
@@ -183,7 +184,7 @@ class ImageLaunchMojosTest {
         mojo.moveLayerProvides(launch);
 
         var stage = java.lang.module.ModuleFinder.of(dir.resolve("jlink-mods"));
-        assertEquals(java.util.Set.of(), stage.find("acme.app").orElseThrow().descriptor().provides());
+        assertEquals(Set.of(), stage.find("acme.app").orElseThrow().descriptor().provides());
         assertEquals(List.of("acme.app.Tool"), Files.readAllLines(dir.resolve("jlink-mods/acme.app/META-INF/services")
                 .resolve(ToolProvider.class.getName())));
         assertEquals(1, stage.find("io.vidocq.foy.core").orElseThrow().descriptor().provides().size());

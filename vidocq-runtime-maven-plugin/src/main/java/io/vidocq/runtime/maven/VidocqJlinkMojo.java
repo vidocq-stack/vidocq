@@ -55,7 +55,9 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.spi.ToolProvider;
 import java.util.stream.Stream;
 
@@ -462,14 +464,14 @@ public class VidocqJlinkMojo extends AbstractMojo {
      */
     ImageLaunch bakedLaunch(String rootModules) throws IOException, MojoExecutionException {
         LayerSplit.Mode mode = LayerSplit.Mode.of(appLayer);
-        Map<String, Path> staged = new java.util.TreeMap<>();
+        Map<String, Path> staged = new TreeMap<>();
         for (var ref : ModuleFinder.of(modsDir.toPath()).findAll()) {
             ref.location().ifPresent(location -> staged.put(ref.descriptor().name(), Path.of(location)));
         }
         List<String> layer = List.of(mainModule.strip());
         if (mode == LayerSplit.Mode.ALL) {
             // A staged jar keeps its artifact's file name: a groupId:artifactId pattern of appLayerKeep matches it.
-            Map<String, String> coordinates = new java.util.HashMap<>();
+            Map<String, String> coordinates = new HashMap<>();
             for (var artifact : project.getArtifacts()) {
                 if (artifact.getFile() != null) {
                     coordinates.put(artifact.getFile().getName(), artifact.getGroupId() + ":" + artifact.getArtifactId());
@@ -495,7 +497,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
         }
         Set<String> bootRoots = new LinkedHashSet<>(Arrays.asList(rootModules.split(",")));
         bootRoots.addAll(ApplicationLaunch.systemModulesRequiredBy(
-                layer.stream().map(staged::get).filter(java.util.Objects::nonNull).toList()));
+                layer.stream().map(staged::get).filter(Objects::nonNull).toList()));
         ImageLaunch launch = ImageLaunch.of(mainModule, mainClass, mode, bootRoots, layer);
         getLog().info("Vidocq jlink — main: " + launch.entryPoint() + " " + String.join(" ", launch.vmOptions()));
         return launch;

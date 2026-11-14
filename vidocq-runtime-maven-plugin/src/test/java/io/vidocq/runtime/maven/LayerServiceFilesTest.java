@@ -25,10 +25,12 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.jar.JarEntry;
@@ -85,7 +87,7 @@ class LayerServiceFilesTest {
 
         try (var zip = FileSystems.newFileSystem(jar)) {
             for (String entry : List.of("module-info.class", "META-INF/versions/11/module-info.class")) {
-                var read = ModuleDescriptor.read(java.nio.ByteBuffer.wrap(Files.readAllBytes(zip.getPath(entry))));
+                var read = ModuleDescriptor.read(ByteBuffer.wrap(Files.readAllBytes(zip.getPath(entry))));
                 assertTrue(read.provides().isEmpty(), entry);
             }
         }
@@ -144,7 +146,7 @@ class LayerServiceFilesTest {
             }
         }
         Files.writeString(src.resolve("module-info.java"), info.append("}\n").toString());
-        List<String> args = new java.util.ArrayList<>(List.of("-d", out.toString()));
+        List<String> args = new ArrayList<>(List.of("-d", out.toString()));
         try (var files = Files.walk(src)) {
             files.filter(f -> f.toString().endsWith(".java")).forEach(f -> args.add(f.toString()));
         }
