@@ -47,7 +47,10 @@ extensions and beans are discovered from the module path (`ServiceLoader` + the 
 
 An application main class is optional: a `@VidocqMain` trampoline that calls `Vidocq.run(App.class, args)`, for a
 right-click Run in the IDE or a `VidocqApp` that runs after boot. `Vidocq.run` re-layers the trampoline's module the
-same way, see xref:usage.adoc#entry-point[The application entry point].
+same way, see xref:usage.adoc#entry-point[The application entry point]. From a right-click Run, the module stays in the
+boot layer too, and the start warns with <<vidocq-lay-001>>. A launcher without a layer
+(`vidocq.package.layer=false`, `vidocq.dev.layer=false`) sets `vidocq.app.layer.off=true`, and the trampoline then
+runs the application where the JVM resolved it, without a layer.
 
 [#app-module-property]
 The runtime's own main does the trampoline's work when the application module sits in the boot layer and `-Dvidocq.app.module=<module>` names it: `Vidocq.main` re-layers that module, and what it reads, exactly as `Vidocq.run` does from a trampoline. This is how a jlink image without an application main class starts (`java --add-modules=<module> -Dvidocq.app.module=<module> -m io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`): `vidocq:jlink` bakes both options into the image, see xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[the `vidocq:jlink` goal]. A module the property names but the boot layer does not hold fails the start with the `--add-modules` that fixes it.
@@ -583,6 +586,25 @@ concerned.
 ----
 [VIDOCQ-GEN-002] The application module com.example.todo has bean classes but no Vauban index (META-INF/vauban-beans.list): it was compiled without Vauban's annotation processor, so its beans are not registered. Build it with Maven (mvn process-classes); in an IDE, turn annotation processing on and run its compiler on Java 25 (VS Code: java.jdt.ls.java.home).
 ----
+
+[#vidocq-lay-001]
+==== VIDOCQ-LAY-001 — the application loaded twice [.tag-new]#NEW#
+
+A `Vidocq.run` trampoline launched with the application on the module path, as an IDE runs a main class, loads the
+application into the application layer while the JVM already holds it in the boot layer. Each class of the modules
+named exists twice, two `Class` objects of one name: the runtime's own lookups prefer the copy of the layer, but a
+library that calls `ServiceLoader` itself finds twice each provider their `module-info.java` declares, and one that
+looks a class up by its name can get the copy of the boot layer. Vaadin stops with "multiple eligible instantiator
+implementations" when the application `provides` an `InstantiatorFactory` (BUG-20261114-10).
+
+[source,text]
+----
+[VIDOCQ-LAY-001] 1 application module is in the boot layer and in the application layer: com.example.todo. The launch put the application on the module path, as an IDE run of its main class does, and Vidocq.run() loaded it again into the application layer. Each of their classes exists twice: a ServiceLoader finds each of their providers twice, and a library that looks a class up by its name can get the copy of the boot layer. Run the application through vidocq:dev or vidocq:run, as the (dev) and (run) configurations that vidocq:idea writes do: they hand it to the runtime without the module path.
+----
+
+`vidocq:run`, `vidocq:dev`, the `vidocq:package` launchers and `@VidocqTest` hand the application to the runtime
+through `vidocq.app.path`, off the module path, and the launchers without a layer set `vidocq.app.layer.off`: none of
+them loads it twice.
 
 [#vidocq-gen-003]
 ==== VIDOCQ-GEN-003 — the record of the build compatible extensions refused [.tag-new]#NEW#

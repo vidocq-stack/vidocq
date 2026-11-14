@@ -218,8 +218,10 @@ module com.example.app {
 
 There is no main class: the runtime's own main boots the module that `vidocq.mainModule` names,
 under every goal down to the `vidocq:jlink` image. Add a `@VidocqMain` trampoline (and `requires
-io.vidocq.runtime.core; requires io.vidocq.runtime.spi;`) only for a right-click Run in the IDE or logic after
-boot, see xref:usage.adoc#vidocq-main-trampoline[When to add a trampoline]. A view is plain Vaadin:
+io.vidocq.runtime.core; requires io.vidocq.runtime.spi;`) only for logic after boot, see
+xref:usage.adoc#vidocq-main-trampoline[When to add a trampoline]. A right-click Run of that main loads the application
+and Vaadin twice; when the application `provides` a Vaadin service, such as an `InstantiatorFactory`, Vaadin stops
+with "multiple eligible instantiator implementations". Run the `(dev)` or `(run)` configuration of `vidocq:idea` instead (xref:usage.adoc#ide-run-twice[`VIDOCQ-LAY-001`]). A view is plain Vaadin:
 
 [source,java]
 ----

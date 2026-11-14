@@ -64,7 +64,8 @@ todo/
 
 There is no main class: the runtime's own main boots the application from
 `vidocq.mainModule`. `vidocq create --main` adds an `@VidocqMain` trampoline, for a right-click
-Run in the IDE or logic after boot (a `VidocqApp`). See
+Run in the IDE or logic after boot (a `VidocqApp`); a right-click Run loads the application twice and warns, see
+xref:usage.adoc#ide-run-twice[the trampoline]. See
 xref:modules/vidocq-runtime-cli.adoc#create[`vidocq create`].
 
 TIP: Run `vidocq extension list --available` to see all first-party extensions, and `vidocq help create` for the options (`--package`, `--parent-version`, `--main`, …).

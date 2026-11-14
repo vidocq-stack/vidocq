@@ -38,6 +38,16 @@ A main class of your own is worth having in two cases only:
 That main is a *trampoline*: it contains nothing but `Vidocq.run(...)`, and its module `requires
 io.vidocq.runtime.core` and `io.vidocq.runtime.spi`. Point `vidocq.mainClass` at it.
 
+[#ide-run-twice]
+A right-click Run leaves the application on the module path, so in the JVM's boot layer, and `Vidocq.run` loads it
+again into the application layer: each class of the application, and under `vidocq.app.layer=all` of its libraries,
+exists twice. The runtime's own lookups prefer the copy of the layer, but a library that looks its services up
+itself finds twice each provider that these modules declare in their `module-info.java`: Vaadin stops with "multiple
+eligible instantiator implementations" when the application `provides` an `InstantiatorFactory`. The start warns with
+xref:modules/vidocq-runtime-core.adoc#vidocq-lay-001[`VIDOCQ-LAY-001`] and names the modules loaded twice. The
+`(dev)` and `(run)` configurations that `vidocq:idea` writes by default run `vidocq:dev` and `vidocq:run`, which hand
+the application to the runtime without the module path, and load it once (BUG-20261114-10).
+
 [source,java]
 ----
 @VidocqMain
@@ -180,8 +190,9 @@ boot layer.
 
 *Known limits.*
 
-* A plain IDE run of `main` (the `Vidocq.run` trampoline) keeps the automatic libraries in the boot layer. The
-  `(dev)` configuration that `vidocq:idea` writes has no such limit.
+* A plain IDE run of `main` (the `Vidocq.run` trampoline) keeps the automatic libraries in the boot layer, and
+  loads the application and its other libraries twice: the start warns with `VIDOCQ-LAY-001`, see
+  <<ide-run-twice,above>>. The `(dev)` configuration that `vidocq:idea` writes has no such limit.
 * `vidocq:jlink`, `vidocq:jpackage` and the Docker image built on the jlink image follow the same default. The image is
   linked as one boot layer, and at start the runtime re-layers the application from it (`vidocq.app.module`, or the
   `@VidocqMain` trampoline), the way it does for an IDE launch: the application and its libraries go into the
