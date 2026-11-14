@@ -131,15 +131,44 @@ Facts established on 2026-11-14:
 - Source: `github.com/jakartaee/security`, tag **`4.0.0-RELEASE`**, directory `tck/`; a distribution
   `jakarta-security-tck-4.0.0.zip` exists (Payara certification report). Tags `5.0.0-M1`/`-M2` are
   Jakarta EE 12 work: **not** the target.
-- The TCK is Arquillian-based and contains application fixtures (`app-custom-*`, `app-db-basic`,
-  ...). **(to verify)** which of them need a JDBC `DataSource`, an embedded LDAP server, EJB, or
-  `@DataSourceDefinition`; those decide how much of the platform Kerckhoffs' test container must
-  fake.
-- **Authentication 3.1 and Authorization 3.0 have their own TCKs** (separate suites from Security's). **(to verify)** where they live, how they are distributed, and whether they run without a full platform; each module gets its own runner (`kerckhoffs-authentication-tck`, `kerckhoffs-authorization-tck`) behind `-Ptck`, added in the milestone that grows the module.
-- Maven Central carries only the API (`jakarta.security.enterprise-api`); the TCK artifact
-  coordinates are **to verify** (Maven Central listing under `jakarta/security/enterprise/` shows
-  the API only). If none exists, follow Bodoni: pin the zip URL and its SHA-256 in the script and
-  extract what is needed.
+- The TCK is Arquillian-based (Arquillian 1.8.0.Final) and holds 26 `app-*` fixture modules plus
+  `common`, `old-tck` and the signature test. Verified on 2026-11-14 by scanning the 258 source
+  files of tag `4.0.0-RELEASE` (`tck/`, `old-tck` excluded):
+  - **Plain Servlet fixtures** (no database, directory or EJB): `app-mem*`, `app-custom*` except
+    `app-custom-identity-store-handler`, `app-securitycontext*` (two of them touch EJB, see below),
+    `app-mem-policy*` (also use Jakarta Authorization `Policy`), `app-jaxrs` (needs Jakarta REST).
+  - **`app-db`**: `@DataSourceDefinition` and EJB, an embedded database — needs a JDBC `DataSource`
+    from the container (Mansart's pool, or a fake).
+  - **`app-ldap`, `app-ldap2`, `app-ldap3`, `app-custom-identity-store-handler`**: LDAP; the
+    sources mention an embedded directory and EJB in all four (**to verify**: which LDAP server
+    library, and whether the fixture starts it or the container must).
+  - **`app-openid`, `app-openid2`, `app-openid3`, `app-multiple-store-backup`**: OpenID Connect;
+    `app-openid` also uses Jakarta REST (**to verify**: how the provider is faked).
+  This is a keyword scan of the sources, not a deployment: every line above is a hypothesis until
+  the first run of each fixture.
+  - **EJB** also appears in `app-securitycontext` and `app-securitycontext-customprincipal`.
+  So the first baseline (K0/K1) targets the plain Servlet group; `app-db` needs the Mansart pool
+  or a test double. Fixtures that use EJB are not excluded on a guess: check them against the
+  Web Profile 11 requirements first, and report them as a gap, never as "not applicable".
+- **Authentication 3.1 and Authorization 3.0 have their own TCKs**, one per specification
+  repository, both Arquillian-based and both under `tck/`:
+  - `jakartaee/authentication`, tag **`3.1.0-RELEASE-tck`** (666 files, artifact
+    `jakarta-authentication-tck`): `basic-authentication`, `custom-principal`,
+    `programmatic-authentication`, `lifecycle`, `wrapping`, `register-session`,
+    `async-authentication`, `status-codes`, `dispatching*`, plus `ejb-propagation`,
+    `ejb-register-session` and `jacc-propagation`; and the signature test.
+  - `jakartaee/authorization`, tag **`3.0.0-RELEASE`** (305 files, artifact
+    `jakarta-authorization-tck`): `app-custom-policy*`, `app-custom-trace-policy*`
+    (`PolicyConfiguration` and factory), `app-policy-within-servlet`, `app-servlet-constraints`,
+    `app-permissions-equals-hashcode`, `app-ejb-constraints`, and the signature test.
+  Neither suite needs a full platform for its Servlet parts; the EJB and JACC propagation parts
+  do. Each module gets its own runner (`kerckhoffs-authentication-tck`,
+  `kerckhoffs-authorization-tck`) behind `-Ptck`, added in the milestone that grows the module.
+- **No TCK artifact exists on Maven Central** for any of the three: the listings under
+  `jakarta/security/enterprise/`, `jakarta/authentication/` and `jakarta/authorization/` show the
+  API only. The TCK poms at the release tags still carry a `-SNAPSHOT` version. Follow Bodoni: pin
+  the distribution (or source tag) URL and its SHA-256 in the script and build or extract what is
+  needed. The distribution assembly lives in `tck-dist/` of each repository.
 
 Runner shape (copy `foy-tck` and `bodoni-tck`, not a new design):
 
