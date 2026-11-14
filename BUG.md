@@ -5,6 +5,23 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261114-02 — `CreateThenBuildIT` leaves the JVM of the jlink image running
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/it-jlink-orphan`
+- **Affected module**: vidocq-runtime-it-create (`CreateThenBuildIT.assertStartsOnTheFrozenExtensions`)
+- **Symptom**: after each run of the IT, a `.../junit-*/demo-app/target/dist/bin/java -m io.vidocq.runtime.core/...`
+  process keeps running, its parent `init`, its temporary directory deleted, listening on its port. Three were found on
+  the maintainer's machine on 2026-11-14; one, from a run before the IT moved to port 0, held 8080 and was taken for
+  another session's process.
+- **Minimal repro**: `mvn -Pit -pl vidocq-runtime-integration-tests/vidocq-runtime-it-create verify`, then
+  `ps -axo pid,ppid,command | grep dist/bin/java`.
+- **Cause**: the launcher jlink writes (`bin/<launcher>`) runs `$DIR/java ... "$@"` without `exec`, so the JVM is a
+  child of the shell. `Process.destroy()` stopped the shell only. The launcher of `vidocq:package` uses `exec` and was
+  not affected.
+- **Fix**: the IT stops the descendants of the launcher with it, and fails when one of them is still running 30 s
+  later.
+
 ## BUG-20261114-01 — The Vidocq configuration does not expand `${...}` property expressions
 
 - **Date**: 2026-11-14

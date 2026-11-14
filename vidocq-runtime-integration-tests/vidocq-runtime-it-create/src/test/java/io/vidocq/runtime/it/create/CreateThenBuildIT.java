@@ -33,6 +33,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -214,16 +215,34 @@ class CreateThenBuildIT {
                 throw new AssertionError(launcher + " did not start within " + START_TIMEOUT, e);
             } finally {
                 // Ends the read as well: the stream of a stopped process closes.
+                // The launcher of a jlink image runs java without exec: its JVM is a child of the script, and
+                // stopping the script alone leaves the JVM running after the test (BUG-20261114-02).
+                List<ProcessHandle> children = application.descendants().toList();
+                children.forEach(ProcessHandle::destroy);
                 application.destroy();
                 if (!application.waitFor(30, TimeUnit.SECONDS)) {
                     application.destroyForcibly();
                 }
+                assertStopped(launcher, children);
             }
         }
         assertTrue(boot.contains(STARTED), launcher + " did not start:\n" + boot);
         assertFalse(boot.contains(":8080/"), launcher + " listened on the default port:\n" + boot);
         assertTrue(FROZEN_AT_BUILD.matcher(boot).find(),
                 launcher + " did not start on the extensions frozen at build:\n" + boot);
+    }
+
+    /** Every process the launcher started has ended: none outlives the test, holding its port (BUG-20261114-02). */
+    private static void assertStopped(Path launcher, List<ProcessHandle> started) throws InterruptedException {
+        for (ProcessHandle process : started) {
+            try {
+                process.onExit().get(30, TimeUnit.SECONDS);
+            } catch (ExecutionException | TimeoutException e) {
+                String command = process.info().commandLine().orElse("pid " + process.pid());
+                process.destroyForcibly();
+                fail(launcher + " left a process running after it was stopped: " + command, e);
+            }
+        }
     }
 
     /** What the application prints up to the last line of its boot, or up to its end when it does not start. */
