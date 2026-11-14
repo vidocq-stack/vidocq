@@ -59,6 +59,9 @@ class UnitsPerModuleIT {
             // Each unit once, though noether-jpa-cdi gives each two factory beans on one factory.
             assertEquals(1, Fixture.lines(log, "Noether Persistence: persistence units [archive, ledger] started")
                     .size(), Fixture.read(log));
+            // The EntityManager and EntityManagerFactory synthetic beans are proxied by classes the build generated,
+            // not by java.lang.reflect.Proxy (Vauban BUG-20261113-19).
+            assertEquals(List.of(), Fixture.lines(log, "RUNTIME CODE GENERATION FALLBACK"), Fixture.read(log));
         } finally {
             Fixture.stop(mvn);
         }

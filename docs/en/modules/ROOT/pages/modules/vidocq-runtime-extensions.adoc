@@ -1177,6 +1177,7 @@ EntityManagerFactory archive;
 ----
 
 * *Same unit, same factory.* The beans run on the factory that `@PersistenceContext` and `@PersistenceUnit` inject, so an `@Inject` entity manager and a `@PersistenceContext` of the same unit share the persistence context of a transaction.
+* *Proxies generated at build* [.tag-new]#NEW#. The `EntityManager` and `EntityManagerFactory` beans are of normal scopes, so they are injected through client proxies. The extension's jar holds them, generated when it was built (xref:dev@vauban::concepts.adoc#synthetic-interface-proxies[Client proxies of synthetic beans]): each call goes straight to the unit's entity manager or factory. They used to be `java.lang.reflect.Proxy` instances built at start, every call going through reflection, and the start printed the _VAUBAN — RUNTIME CODE GENERATION FALLBACK_ warning for them.
 * *No `EntityManager` bean for a RESOURCE_LOCAL unit.* A container-managed entity manager is a JTA one, so Vidocq gives that unit no `EntityManager` bean and logs its `<scope>` as ignored.
 * *Units without a qualifier.* Each of them gives `@Default` beans, so with two of them an `@Inject EntityManager` is ambiguous and fails the start. Give each unit a `<qualifier>`, or inject with `@PersistenceContext(unitName = ...)`.
 * *A pool and a unit of the same name.* The `EntityManagerFactory` bean takes the unit's name, and the `DataSource` bean of a named pool takes the pool's name, so CDI refuses the two and the start fails. Name them differently: the `archive` unit above runs on the pool `notes`.

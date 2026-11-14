@@ -21,9 +21,11 @@ package io.vidocq.runtime.extensions.jakartaee.web.noether.persistence;
 
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.vauban.api.ClientProxies;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.util.Set;
 import java.util.TreeSet;
@@ -37,8 +39,13 @@ import java.util.TreeSet;
  * factory, so that a unit that cannot be created fails the start instead of the first request. The container closes
  * the factories when it stops.
  *
+ * <p>The {@code @Inject} beans of a unit, its {@code @ApplicationScoped} factory and its {@code @TransactionScoped}
+ * entity manager, are synthetic beans of normal scopes: {@link ClientProxies} has their client proxies generated
+ * with this module, in this package, as {@code noether-jpa-cdi} stays free of Vauban (Vauban BUG-20261113-19).
+ *
  * <p>Priority 350: after the pool (200), the transaction manager (250) and Mansart Data (300).
  */
+@ClientProxies({EntityManager.class, EntityManagerFactory.class})
 public final class NoetherPersistenceExtension implements VidocqExtension {
 
     private static final System.Logger LOG = System.getLogger(NoetherPersistenceExtension.class.getName());
