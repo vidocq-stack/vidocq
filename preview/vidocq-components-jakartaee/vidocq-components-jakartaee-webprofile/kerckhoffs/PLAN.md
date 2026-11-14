@@ -41,7 +41,7 @@ Peano, Mansart or Champollion implementations: its Vidocq runtime extension (in 
 picks them. The spec API reaches applications transitively (`kerckhoffs-core` → compile
 `jakarta.security.enterprise-api`); its POM declares every other API `provided`.
 
-## 3. The structuring question (to validate)
+## 3. The structuring question (decided: A', §9)
 
 **Security 4.0 §2.5: the servlet container MUST use Jakarta Authentication to arrange for an
 `HttpAuthenticationMechanism` to be placed in service**, and `hasAccessToWebResource` SHOULD end in
@@ -80,13 +80,13 @@ branch name in Foy and Kerckhoffs** (companion branches; `docs/changes-across-re
 | `io.vidocq.kerckhoffs.cdi` | `kerckhoffs-cdi` | The CDI wiring as a **build compatible extension**: finds `*Definition` annotations and registers the built-in beans, interceptors and `Principal` bean; carries data as parameters (never as fields) | K1 |
 | `io.vidocq.kerckhoffs.authentication` | `kerckhoffs-authentication` | Jakarta Authentication 3.1: Servlet Container Profile first (`ServerAuthContext` driving an `HttpAuthenticationMechanism`), then `AuthConfigFactory` and the rest of the spec. `requires transitive jakarta.security.auth.message`, API `provided`. No dependency on Servlet containers beyond the API | K2 (minimal), K3+ |
 | `io.vidocq.kerckhoffs.authorization` | `kerckhoffs-authorization` | Jakarta Authorization 3.0: `Policy`, `PolicyConfiguration`, `PolicyFactory`, web permissions; `hasAccessToWebResource` ends in `Policy.implies`. API `provided` | K3 |
-| `io.vidocq.kerckhoffs.foy` | `kerckhoffs-foy` (name to validate) | Adapter from the neutral Foy hook (§3) to the two modules above. Depends on Foy, never the reverse | K2 |
+| `io.vidocq.kerckhoffs.foy` | `kerckhoffs-foy` | Adapter from the neutral Foy hook (§3) to the two modules above. Depends on Foy, never the reverse | K2 |
 | (tests) | `kerckhoffs-it-other-containers` | Open Liberty WAR with the exact exclusions of the Reference "Deploying on an application server" block | K6 |
 | (tests) | `kerckhoffs-tck` | Runner of the official TCK, `tck` profile, unpublished | scaffolded empty |
 
 `Vidocq/vidocq` side (separate PR, after the first SNAPSHOT is on `central-snapshots`):
-`vidocq-runtime-kerckhoffs-extension` under `vidocq-runtime-extensions/*-jakartaee-web` (or
-`*-jakartaee-core`, to validate: Security is a Web Profile 11 spec), `kerckhoffs.version`, the
+`vidocq-runtime-kerckhoffs-extension` under `vidocq-runtime-extensions/*-jakartaee-web` (decided,
+§9), `kerckhoffs.version`, the
 `dependencyManagement` entries, the BOM and the catalog.
 
 **Build-compatible-extension rules apply** (`vidocq-workspace/AGENTS.md`): compute from the classes
@@ -166,15 +166,20 @@ Runner shape (copy `foy-tck` and `bodoni-tck`, not a new design):
 | **K6** | Vidocq runtime extension (PR in `Vidocq/vidocq`); `kerckhoffs-it-other-containers` Open Liberty WAR; Reference page "Deploying on an application server" tested by that WAR. | Same unchanged jar runs under Vidocq and in the WAR |
 | **K7** | Full TCK pass, docs (Antora, `tck` page), `CYBER_SECU.md` review, SonarQube clean, first release candidate. | 100 % PASS of the full run is the merge gate, as in Bodoni |
 
-## 9. Open questions (maintainer)
+## 9. Decisions and open questions
 
-1. §3: option A' (two modules of this repository, dependencies one-way Kerckhoffs → Foy) on top of the Foy hook of B: confirm?
-2. Extension aggregator: `*-jakartaee-web` or `*-jakartaee-core`?
-3. Module name of the Foy adapter (`kerckhoffs-foy`)? It is an engine adapter, the documented exception to "a brick depends on APIs" (like `cassini-chappe`).
-4. Is Jakarta Security 5.0 (Jakarta EE 12, milestones M1/M2 exist) the follow-up line, planned as `0.5.x`?
-5. Logo: none yet (tracked in `tasks/todo.md`, like Bodoni).
-6. Release line: one version for Security, Authentication and Authorization, or independent versions per module? (Default: one line, `0.x`.)
-7. Does the Authentication/Authorization TCK need a full platform? Answer in K0 (§7).
+**Decided by the maintainer on 2026-11-14:**
+
+1. **§3: option A'**: Authentication 3.1 and Authorization 3.0 are modules of this repository, on top of a neutral Foy hook; dependencies go one way, Kerckhoffs → Foy.
+2. **Extension aggregator**: `vidocq-runtime-extensions/*-jakartaee-web` (Security is a Web Profile 11 spec), next to Ibarra, Peano and Bodoni.
+3. **Foy adapter**: `kerckhoffs-foy` (`io.vidocq.kerckhoffs.foy`), an engine adapter like `cassini-chappe`.
+4. **Release line**: one version for Security, Authentication and Authorization (`0.x`, then one line).
+5. **Jakarta Security 5.0** (Jakarta EE 12, milestones only): decided after 4.0 has a solid TCK baseline. Nothing is planned for it now.
+
+**Still open:**
+
+6. Does the Authentication/Authorization TCK need a full platform? Answered in K0 (§7).
+7. Logo: none yet (tracked in `tasks/todo.md`, like Bodoni).
 
 ## 10. Bootstrap checklist (state at scaffold, 2026-11-14)
 
