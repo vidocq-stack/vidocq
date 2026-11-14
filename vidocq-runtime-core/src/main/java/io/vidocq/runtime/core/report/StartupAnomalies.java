@@ -65,6 +65,12 @@ public final class StartupAnomalies {
     public static final String CONTRIBUTOR_FAILED = "VIDOCQ-RPT-001";
     /** Two startup report contributors of different classes use the same id; the second is skipped. */
     public static final String DUPLICATE_ID = "VIDOCQ-RPT-002";
+    /**
+     * A {@code Vidocq.run} trampoline launched with the application on the module path, as an IDE runs a main class:
+     * the application's modules are in the boot layer and in the application layer, and each of their classes exists
+     * twice (BUG-20261114-10).
+     */
+    public static final String MODULES_TWICE = "VIDOCQ-LAY-001";
 
     private static final System.Logger LOG = System.getLogger(LOGGER_NAME);
 
@@ -82,6 +88,24 @@ public final class StartupAnomalies {
     static void warn(String code, String message, Throwable thrown) {
         LOG.log(System.Logger.Level.WARNING, withCode(code, message), thrown);
     }
+
+    /**
+     * The {@value #MODULES_TWICE} message for the modules that the boot layer and the application layer both hold.
+     *
+     * @param modules their names
+     */
+    public static String modulesTwice(java.util.List<String> modules) {
+        return modules.size() + (modules.size() == 1 ? " application module is" : " application modules are")
+                + " in the boot layer and in the application layer: " + String.join(", ", modules) + ". The launch"
+                + " put the application on the module path, as an IDE run of its main class does, and Vidocq.run()"
+                + " loaded it again into the application layer. Each of their classes exists twice: a ServiceLoader"
+                + " finds each of their providers twice, and a library that looks a class up by its name can get the"
+                + " copy of the boot layer.";
+    }
+
+    /** The hint of {@value #MODULES_TWICE}: the launches that hand the application over without the module path. */
+    public static final String MODULES_TWICE_HINT = "Run the application through vidocq:dev or vidocq:run, as the (dev)"
+            + " and (run) configurations that vidocq:idea writes do: they hand it to the runtime without the module path.";
 
     /** {@code [code] message}, the shape of every anomaly. */
     public static String withCode(String code, String message) {

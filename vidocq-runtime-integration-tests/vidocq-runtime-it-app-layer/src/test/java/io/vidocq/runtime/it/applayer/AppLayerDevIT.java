@@ -84,6 +84,7 @@ class AppLayerDevIT {
             assertEquals(1, Fixture.occurrences(log, AppLayerPackageIT.ONE_COPY), out);
             assertFalse(out.contains("Application layer ready"), out);
             assertTrue(out.contains("no application layer"), out);
+            assertFalse(out.contains(AppLayerPackageIT.TWICE_WARNING), out);
         } finally {
             Fixture.stop(mvn);
         }

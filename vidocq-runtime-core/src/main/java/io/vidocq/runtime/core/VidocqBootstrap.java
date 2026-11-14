@@ -287,6 +287,18 @@ public final class VidocqBootstrap {
         return this;
     }
 
+    /**
+     * {@link StartupAnomalies#MODULES_TWICE} when the application layer holds modules the boot layer holds too: a
+     * trampoline launched from the module path (BUG-20261114-10).
+     */
+    private static void reportModulesTwice(StartupRecorder recorder) {
+        VidocqAppLayer.Installation installation = VidocqAppLayer.installation();
+        if (installation != null && !installation.twice().isEmpty()) {
+            recorder.anomaly(StartupAnomalies.MODULES_TWICE, StartupAnomalies.modulesTwice(installation.twice()),
+                    StartupAnomalies.MODULES_TWICE_HINT, StartupRecorder.CORE);
+        }
+    }
+
     /** {@link StartupAnomalies#UNINDEXED_BEANS} for each application module with bean classes and no Vauban index. */
     private static void reportUnindexedBeans(StartupRecorder recorder) {
         for (Module unindexed : GenerateStamp.beanModulesWithoutIndex(Vidocq.applicationModule(),
@@ -341,6 +353,7 @@ public final class VidocqBootstrap {
         if (!embeddedDeployment) {
             reportUnindexedBeans(recorder);
         }
+        reportModulesTwice(recorder);
 
         // Add extra bean classes (e.g. from Arquillian deployment)
         if (additionalBeanClassNames != null) {

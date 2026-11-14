@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.core;
 
+import io.vidocq.runtime.core.report.StartupAnomalies;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -68,6 +69,20 @@ class TrampolineLaunchProcessTest {
         assertEquals(0, run.exitCode(), run.output());
         assertTrue(run.output().contains("TOOL-PROVIDERS 1 " + APP_LOADER), run.output());
         assertFalse(run.output().contains("Application layer ready"), run.output());
+        assertFalse(run.output().contains("[" + StartupAnomalies.MODULES_TWICE + "]"), run.output());
+    }
+
+    @Test
+    @DisplayName("an IDE run: the trampoline loads the application twice, and the start warns with the modules")
+    void anIdeRunWarnsOfTheModulesLoadedTwice() throws Exception {
+        Run run = launch();
+
+        assertEquals(0, run.exitCode(), run.output());
+        assertTrue(run.output().contains("TOOL-PROVIDERS 2 io.vidocq.vauban.classloader.VaubanClassLoader"),
+                run.output());
+        assertTrue(run.output().contains("[" + StartupAnomalies.MODULES_TWICE + "] 1 application module is in the"
+                + " boot layer and in the application layer: acme.app."), run.output());
+        assertTrue(run.output().contains("Run the application through vidocq:dev or vidocq:run"), run.output());
     }
 
     // ---------------------------------------------------------------- fixtures

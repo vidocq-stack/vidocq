@@ -82,13 +82,20 @@ public final class VidocqAppLayer {
      * @param archives the archives resolved into the layer, as they were given
      * @param listed   whether {@code origin} is the property that lists {@code archives}
      * @param pinned   the modules kept in the parent layer by a pin, and why
+     * @param twice    the modules of the layer that the boot layer holds too, by name: those of a trampoline launched
+     *                 from the module path, as an IDE runs it (BUG-20261114-10); empty otherwise
      */
     record Installation(String origin, List<String> archives, boolean listed,
-            java.util.Map<String, String> pinned) {
+            java.util.Map<String, String> pinned, List<String> twice) {
 
         Installation {
             archives = List.copyOf(archives);
             pinned = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(pinned));
+            twice = List.copyOf(twice);
+        }
+
+        Installation(String origin, List<String> archives, boolean listed, java.util.Map<String, String> pinned) {
+            this(origin, archives, listed, pinned, List.of());
         }
     }
 
@@ -189,7 +196,19 @@ public final class VidocqAppLayer {
      * explicit module list.
      */
     static boolean installFromBootLayer(Class<?> caller) {
-        return installFromBootLayer(caller.getModule());
+        if (!installFromBootLayer(caller.getModule())) {
+            return false;
+        }
+        // The launch put the application on the module path, as an IDE does: the boot layer keeps what the layer now
+        // holds, and the startup warns of it (VIDOCQ-LAY-001, BUG-20261114-10).
+        INSTALLATION.updateAndGet(found -> new Installation(found.origin(), found.archives(), found.listed(),
+                found.pinned(), twice(INSTALLED.get().moduleNames(), caller.getModule().getLayer())));
+        return true;
+    }
+
+    /** The modules among {@code names} that {@code layer} holds too, sorted. */
+    static List<String> twice(java.util.Collection<String> names, ModuleLayer layer) {
+        return names.stream().filter(name -> layer.findModule(name).isPresent()).sorted().toList();
     }
 
     /**

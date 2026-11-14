@@ -143,7 +143,10 @@ Key mechanics (implemented in `vauban-classloader`, consumed by
   on the module path; the layer loader is *self-first* for its archives, so every
   internal reference of a layer class resolves against the woven world, never against
   its un-woven boot-layer twin. Duplicate `ServiceLoader` providers are deduplicated by
-  class name, preferring the layer's copy.
+  class name, preferring the layer's copy, in the runtime's own lookups only: a library
+  that calls `ServiceLoader` itself finds both, which is why the start warns with
+  xref:modules/vidocq-runtime-core.adoc#vidocq-lay-001[`VIDOCQ-LAY-001`]. Every launch
+  but this one keeps the application off the module path (BUG-20261114-10).
 * **Services promotion** — when the layer resolves an application module, the archive's
   `META-INF/services/*` files are promoted to synthetic `provides` directives in the
   module descriptor. Applications never declare generated providers
