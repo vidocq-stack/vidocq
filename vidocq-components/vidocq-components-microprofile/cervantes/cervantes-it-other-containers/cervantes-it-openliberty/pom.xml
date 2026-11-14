@@ -31,6 +31,8 @@
         <!-- SonarQube: this application only exists to be tested inside Open Liberty, whose JVM
              JaCoCo does not instrument; its code would only count as uncovered (Vidocq/vidocq#284). -->
         <sonar.skip>true</sonar.skip>
+        <!-- The second server: the same WAR, started with an invalid configuration. -->
+        <liberty.invalid.server>cervantesItInvalidConfiguration</liberty.invalid.server>
     </properties>
 
     <!--
@@ -96,6 +98,8 @@
                             <portNames>
                                 <portName>liberty.http.port</portName>
                                 <portName>liberty.https.port</portName>
+                                <portName>liberty.invalid.http.port</portName>
+                                <portName>liberty.invalid.https.port</portName>
                             </portNames>
                         </configuration>
                     </execution>
@@ -133,12 +137,45 @@
                             <goal>test-start</goal>
                         </goals>
                     </execution>
+                    <!-- A second server runs the same WAR in a JVM whose system properties, which
+                         Liberty's MicroProfile Config reads, set an unrecognised
+                         mp.jwt.verify.publickey.algorithm: Cervantes' start check stops the deployment,
+                         and OpenLibertyStartCheckIT reads the server's log. -->
+                    <execution>
+                        <id>start-liberty-invalid-configuration</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <goal>create</goal>
+                            <goal>deploy</goal>
+                            <goal>test-start</goal>
+                        </goals>
+                        <configuration>
+                            <serverName>${liberty.invalid.server}</serverName>
+                            <bootstrapProperties>
+                                <http.port>${liberty.invalid.http.port}</http.port>
+                                <https.port>${liberty.invalid.https.port}</https.port>
+                            </bootstrapProperties>
+                            <jvmOptions>
+                                <param>-Dmp.jwt.verify.publickey.algorithm=rs256</param>
+                            </jvmOptions>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>stop-liberty</id>
                         <phase>post-integration-test</phase>
                         <goals>
                             <goal>test-stop</goal>
                         </goals>
+                    </execution>
+                    <execution>
+                        <id>stop-liberty-invalid-configuration</id>
+                        <phase>post-integration-test</phase>
+                        <goals>
+                            <goal>test-stop</goal>
+                        </goals>
+                        <configuration>
+                            <serverName>${liberty.invalid.server}</serverName>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -149,6 +186,8 @@
                 <configuration>
                     <systemPropertyVariables>
                         <cervantes.it.base>http://localhost:${liberty.http.port}/cervantes</cervantes.it.base>
+                        <cervantes.it.invalid.base>http://localhost:${liberty.invalid.http.port}/cervantes</cervantes.it.invalid.base>
+                        <cervantes.it.invalid.log>${project.build.directory}/liberty/wlp/usr/servers/${liberty.invalid.server}/logs/messages.log</cervantes.it.invalid.log>
                     </systemPropertyVariables>
                 </configuration>
                 <executions>
