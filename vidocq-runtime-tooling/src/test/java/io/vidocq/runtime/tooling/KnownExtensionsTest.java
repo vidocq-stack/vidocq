@@ -128,6 +128,17 @@ class KnownExtensionsTest {
                 KnownExtensions.moduleDirectives("bodoni-jstl", "consumer"));
     }
 
+    /** vidocq#65: the endpoints of the application read the WebSocket API; the extension has no codegen bundle. */
+    @Test
+    void foyWebsocketRequiresTheWebSocketApiItsEndpointsRead() {
+        assertEquals("io.vidocq.runtime.extensions.jakartaee.web", KnownExtensions.resolve("foy-websocket").groupId());
+        assertEquals("vidocq-runtime-foy-websocket-extension", KnownExtensions.resolve("foy-websocket").artifactId());
+        assertEquals(java.util.Optional.empty(), KnownExtensions.codegenBundle("foy-websocket"));
+        assertEquals(List.of("requires io.vidocq.runtime.extensions.jakartaee.web.websocket",
+                        "requires jakarta.websocket"),
+                KnownExtensions.moduleDirectives("foy-websocket", "consumer"));
+    }
+
     /** vidocq#297: the java: namespace needs no codegen and no directive beyond its module. */
     @Test
     void namingIsAWebExtensionWithoutCodegen() {
