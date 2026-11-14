@@ -71,6 +71,13 @@ class VidocqTestExtensionTest {
                     var server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress(
                             System.getProperty("vidocq.chappe.listener.default.host"),
                             Integer.getInteger("vidocq.chappe.listener.default.port")), 0);
+                    server.createContext("/port", exchange -> {
+                        byte[] body = (System.getProperty("vidocq.chappe.listener.default.port") + " "
+                                + server.getAddress().getPort()).getBytes();
+                        exchange.sendResponseHeaders(200, body.length);
+                        exchange.getResponseBody().write(body);
+                        exchange.close();
+                    });
                     server.createContext("/hello", exchange -> {
                         byte[] body = (System.getProperty("greeting") + " from "
                                 + System.getProperty("vidocq.app.module") + " in "
@@ -81,6 +88,13 @@ class VidocqTestExtensionTest {
                         exchange.close();
                     });
                     server.start();
+                    // as the default Chappe listener does: no line logged, the port written in one move
+                    var portFile = java.nio.file.Path.of(System.getProperty("vidocq.chappe.listener.default.port-file"));
+                    var tmp = java.nio.file.Files.writeString(
+                            portFile.resolveSibling(portFile.getFileName() + ".tmp"),
+                            server.getAddress().getPort() + "\\n");
+                    java.nio.file.Files.move(tmp, portFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                            java.nio.file.StandardCopyOption.ATOMIC_MOVE);
                 }
             }
             """;
@@ -131,7 +145,7 @@ class VidocqTestExtensionTest {
 
         TestExecutionSummary summary = run(Fixture.class);
 
-        assertEquals(4, summary.getTestsSucceededCount(), () -> failures(summary));
+        assertEquals(5, summary.getTestsSucceededCount(), () -> failures(summary));
         assertEquals(0, summary.getTotalFailureCount(), () -> failures(summary));
         assertFalse(SEEN.get().isAlive(), "the application outlived its class");
     }
@@ -180,6 +194,16 @@ class VidocqTestExtensionTest {
             assertSame(SEEN.get(), application);
             assertEquals("hi from com.acme.demo in " + applicationClasses + " beside " + runtimeClasses,
                     application.get("/hello").body());
+        }
+
+        /**
+         * The application binds port {@code 0}, so the system picks its port as it binds it, and the extension reads
+         * the port it got from the file the listener writes: a port picked beforehand, then closed and bound by the
+         * application, could be taken in between (BUG-20261114-09).
+         */
+        @Test
+        void theApplicationBindsAPortTheSystemPicksAndTheUrlNamesIt(VidocqApplication application) {
+            assertEquals("0 " + application.url().getPort(), application.get("/port").body());
         }
 
         @Test

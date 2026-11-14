@@ -62,14 +62,17 @@ class ApplicationLaunchTest {
                 List.of(Path.of("/app/classes"), Path.of("/m2/lib.jar")), List.of("vidocq.app.layer=all"),
                 "ALL-MODULE-PATH,java.net.http");
 
-        List<String> command = ApplicationLaunch.command("/jdk/bin/java", layout, "com.acme.demo", 41234,
-                List.of("greeting=hi"));
+        Path portFile = dir.resolve("vidocq-test.port");
+
+        List<String> command = ApplicationLaunch.command("/jdk/bin/java", layout, "com.acme.demo",
+                List.of("greeting=hi"), portFile);
 
         assertEquals(List.of("/jdk/bin/java",
                 "-Dvidocq.chappe.listener.default.host=127.0.0.1",
-                "-Dvidocq.chappe.listener.default.port=41234",
+                "-Dvidocq.chappe.listener.default.port=0",
                 "-Dvidocq.app.layer=all",
                 "-Dgreeting=hi",
+                "-Dvidocq.chappe.listener.default.port-file=" + portFile,
                 "-Dvidocq.app.module=com.acme.demo",
                 "-Dvidocq.app.path=" + path("/app/classes", "/m2/lib.jar"),
                 "-p", path("/m2/core.jar", "/m2/vauban.jar"),
@@ -77,14 +80,49 @@ class ApplicationLaunchTest {
                 "-m", "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq"), command);
     }
 
+    /**
+     * The listener binds port {@code 0} unless the test names a port: a {@code -D} the JVM reads later wins, so the
+     * port of {@code @VidocqTest(properties)} stays as given, and the start reads whichever port was bound.
+     */
+    @Test
+    void aPortOfTheTestComesAfterPortZeroAndWins() {
+        var layout = new ApplicationLaunch.Layout(List.of(Path.of("/p")), List.of(Path.of("/a")), List.of(),
+                "ALL-MODULE-PATH");
+
+        List<String> command = ApplicationLaunch.command("java", layout, "m",
+                List.of("vidocq.chappe.listener.default.port=9000"), dir.resolve("port"));
+
+        int zero = command.indexOf("-Dvidocq.chappe.listener.default.port=0");
+        assertTrue(zero > 0, command.toString());
+        assertTrue(command.indexOf("-Dvidocq.chappe.listener.default.port=9000") > zero, command.toString());
+    }
+
+    /**
+     * The port file is the launcher's: it comes after the properties of the test, so the start reads the file it
+     * created, whatever the test sets.
+     */
+    @Test
+    void thePortFileOfTheLauncherComesAfterThePropertiesOfTheTest() {
+        var layout = new ApplicationLaunch.Layout(List.of(Path.of("/p")), List.of(Path.of("/a")), List.of(),
+                "ALL-MODULE-PATH");
+        Path portFile = dir.resolve("port");
+
+        List<String> command = ApplicationLaunch.command("java", layout, "m",
+                List.of("vidocq.chappe.listener.default.port-file=elsewhere"), portFile);
+
+        assertTrue(command.indexOf("-Dvidocq.chappe.listener.default.port-file=" + portFile)
+                > command.indexOf("-Dvidocq.chappe.listener.default.port-file=elsewhere"), command.toString());
+    }
+
     @Test
     void aPropertyWithoutValueIsRefused() {
         List<String> properties = List.of("greeting");
         var layout = new ApplicationLaunch.Layout(List.of(Path.of("/p")), List.of(Path.of("/a")), List.of(),
                 "ALL-MODULE-PATH");
+        Path portFile = dir.resolve("port");
 
         var e = assertThrows(IllegalArgumentException.class,
-                () -> ApplicationLaunch.command("java", layout, "m", 1, properties));
+                () -> ApplicationLaunch.command("java", layout, "m", properties, portFile));
 
         assertEquals("@VidocqTest(properties) takes key=value entries, not 'greeting'", e.getMessage());
     }

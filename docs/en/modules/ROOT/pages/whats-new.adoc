@@ -47,6 +47,7 @@ New in the `{project-version}` development line — everything listed here lande
 == Testing
 
 * xref:testing.adoc#application-layer[`@VidocqTest` starts the application layer of `vidocq:run`] [.tag-new]#NEW# — the application module and, under `vidocq.app.layer=all`, its libraries reach the runtime through `vidocq.app.path` and leave the module path. The application module was on both: the JVM loaded it twice, a `ServiceLoader` found each `provides` of its `module-info.java` twice, and a Vaadin application whose module provides an `InstantiatorFactory` answered 500, _multiple eligible instantiator implementations_, while its packaged distribution started (BUG-20261114-07). `vidocq.app.layer` and `vidocq.app.layer.keep` are read from `@VidocqTest(properties)`.
+* xref:testing.adoc#http-port[`@VidocqTest` lets the system pick the port] [.tag-new]#NEW# — the application's listener binds port `0`, then writes the port it got to a file the start reads, whatever the logging configuration of the application. The extension picked a free port, closed it, and gave it to the application, which bound it later: another process could take it in between, and the application then failed to start (BUG-20261114-09). A port `@VidocqTest(properties)` names now works: the start waited for the port it had picked and timed out.
 
 == Dev mode
 

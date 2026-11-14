@@ -98,10 +98,16 @@ class HelloResourceTest {
   `vidocq.properties` names. A key set by hand in the test JVM stays there; `properties` below wins over a dev
   service's key. Without that listener on the test class path, a plain `mvn test` starts no dev service, and the
   application uses what `vidocq.properties` points to.
-* **Its HTTP listener** is the `default` Chappe listener, on a free port of `127.0.0.1`
-  (`vidocq.chappe.listener.default.host` and `.port`, which win over `vidocq.properties`).
-* **The test starts** once that port listens. If the process exits first, or after 60 seconds, the class fails with
-  the application's output.
+* [[http-port]]**Its HTTP listener** is the `default` Chappe listener, on `127.0.0.1` and port `0`
+  (`vidocq.chappe.listener.default.host` and `.port`, which win over `vidocq.properties`) [.tag-new]#NEW#: the system
+  picks a free port as the listener binds it, so no other process can take it first. A port that
+  `@VidocqTest(properties)` names as `vidocq.chappe.listener.default.port=9090` wins and stays as given.
+  `VIDOCQ_HTTP_PORT` is not honoured, nor is its `vidocq.http.port`: the listener key the test passes outranks both
+  aliases, so a port exported for `vidocq dev` in the same shell never puts the tested application on the port of the
+  dev one.
+* **The test starts** once the listener listens: it writes the port it bound to a file that `@VidocqTest` reads,
+  whatever the logging configuration of the application, and the URL of the application takes that port. If the
+  process exits first, or after 60 seconds, the class fails with the application's output.
 * **After the last test** the application is stopped as Ctrl+C would stop it, then forcibly after ten seconds.
 
 == The application in a test

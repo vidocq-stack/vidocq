@@ -22,21 +22,24 @@ package io.vidocq.runtime.junit;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.UncheckedIOException;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 
 /**
  * The application a {@link VidocqTest} class runs against: a JVM of its own, listening on the loopback address.
@@ -56,64 +59,88 @@ public final class VidocqApplication implements AutoCloseable {
     /** How long a failed start waits for the last lines of the process's output. */
     private static final Duration DRAIN = Duration.ofSeconds(5);
 
+    /**
+     * {@code rw-------} where the default file system has POSIX permissions, none elsewhere (Windows), where the file
+     * system's own defaults apply. NIO already creates a temporary file so; the permissions are spelled out so the
+     * shared temporary directory is visibly used safely.
+     */
+    private static final FileAttribute<?>[] OWNER_ONLY =
+            FileSystems.getDefault().supportedFileAttributeViews().contains("posix")
+                    ? new FileAttribute<?>[] {
+                            PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))}
+                    : new FileAttribute<?>[0];
+
     private final Process process;
     private final URI url;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(REQUEST_TIMEOUT).build();
-    /** The process's output and error streams, kept in memory: no temporary file to share or clean. */
-    private final StringBuilder output = new StringBuilder();
-    private final Thread reader;
+    private final Output output;
+    private final Path portFile;
 
-    private VidocqApplication(Process process, URI url) {
+    private VidocqApplication(Process process, URI url, Output output, Path portFile) {
         this.process = process;
         this.url = url;
-        this.reader = Thread.ofVirtual().name("vidocq-test-output").start(this::readOutput);
+        this.output = output;
+        this.portFile = portFile;
     }
 
     /**
-     * Runs {@code command}, its output in memory, and returns once something listens on {@code 127.0.0.1:port}.
-     * Fails with the output when the process exits first, or when {@code timeout} runs out, after stopping it.
+     * Creates an empty port file, runs the {@code command} that names it, its output in memory, and returns once the
+     * application wrote a port to that file: its {@code default} listener listens on that port. The listener binds
+     * port {@code 0} ({@link ApplicationLaunch#command}), so the system picks the port as the listener binds it, and
+     * no other process can take it first, as it could a port picked here, then closed (BUG-20261114-09). A file, not a
+     * line of the log, carries the port: whatever the logging configuration of the application, it starts. Fails with
+     * the output when the process exits first, or when {@code timeout} runs out, after stopping it. The file is
+     * deleted then, or by {@link #close()}.
      */
-    static VidocqApplication start(List<String> command, int port, Duration timeout) throws IOException {
-        URI url = URI.create("http://127.0.0.1:" + port);
-        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        VidocqApplication application = new VidocqApplication(process, url);
+    static VidocqApplication start(Function<Path, List<String>> command, Duration timeout) throws IOException {
+        Path portFile = Files.createTempFile("vidocq-test-", ".port", OWNER_ONLY);
+        Process process;
+        try {
+            process = new ProcessBuilder(command.apply(portFile)).redirectErrorStream(true).start();
+        } catch (IOException | RuntimeException e) {
+            delete(portFile);
+            throw e;
+        }
+        Output output = new Output();
+        Thread reader = Thread.ofVirtual().name("vidocq-test-output").start(() -> read(process, output));
         long deadline = System.nanoTime() + timeout.toNanos();
         try {
-            while (!listens(port)) {
+            OptionalInt port = port(portFile);
+            while (port.isEmpty()) {
                 if (process.waitFor(POLL.toMillis(), TimeUnit.MILLISECONDS)) {
-                    application.reader.join(DRAIN);
+                    reader.join(DRAIN);
                     throw new IllegalStateException("The application stopped with exit code " + process.exitValue()
-                            + " before it listened on " + url + ". Its output:\n" + application.log());
+                            + " before it listened. Its output:\n" + output.text());
                 }
                 if (System.nanoTime() > deadline) {
-                    throw new IllegalStateException("The application did not listen on " + url + " within "
-                            + timeout.toSeconds() + " s. Its output:\n" + application.log());
+                    throw new IllegalStateException("The application did not listen within " + timeout.toSeconds()
+                            + " s: the start waits for its default Chappe listener. Its output:\n" + output.text());
                 }
+                port = port(portFile);
             }
-            return application;
+            return new VidocqApplication(process, URI.create("http://127.0.0.1:" + port.getAsInt()), output,
+                    portFile);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            application.close();
+            stop(process, portFile);
             throw new IllegalStateException("Interrupted while the application started", e);
         } catch (RuntimeException e) {
-            application.close();
+            stop(process, portFile);
             throw e;
         }
     }
 
-    /** A port free on the loopback address at the time of the call. */
-    static int freePort() throws IOException {
-        try (ServerSocket probe = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
-            return probe.getLocalPort();
-        }
-    }
-
-    private static boolean listens(int port) {
-        try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), (int) POLL.toMillis());
-            return true;
+    /**
+     * The port the listener wrote to {@code portFile}; empty until then, the file being created empty. The listener
+     * replaces the file in one move, so the port is never read in part.
+     */
+    private static OptionalInt port(Path portFile) {
+        try {
+            String port = Files.readString(portFile).strip();
+            return port.isEmpty() ? OptionalInt.empty() : OptionalInt.of(Integer.parseInt(port));
         } catch (IOException _) {
-            return false;
+            // not readable while it is replaced, on some systems: the next poll reads it
+            return OptionalInt.empty();
         }
     }
 
@@ -183,18 +210,14 @@ public final class VidocqApplication implements AutoCloseable {
 
     /** What the application wrote so far, on its output and error streams. */
     public String log() {
-        synchronized (output) {
-            return output.toString();
-        }
+        return output.text();
     }
 
-    private void readOutput() {
+    private static void read(Process process, Output output) {
         char[] buffer = new char[8192];
         try (Reader in = process.inputReader()) {
             for (int n = in.read(buffer); n != -1; n = in.read(buffer)) {
-                synchronized (output) {
-                    output.append(buffer, 0, n);
-                }
+                output.append(buffer, n);
             }
         } catch (IOException _) {
             // the process ended: its output is closed
@@ -206,10 +229,14 @@ public final class VidocqApplication implements AutoCloseable {
         return process.isAlive();
     }
 
-    /** Stops the application, as Ctrl+C would, then forcibly after a grace period. */
+    /** Stops the application, as Ctrl+C would, then forcibly after a grace period, and deletes its port file. */
     @Override
     public void close() {
         http.close();
+        stop(process, portFile);
+    }
+
+    private static void stop(Process process, Path portFile) {
         process.destroy();
         try {
             if (!process.waitFor(STOP_GRACE.toMillis(), TimeUnit.MILLISECONDS)) {
@@ -218,6 +245,30 @@ public final class VidocqApplication implements AutoCloseable {
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             process.destroyForcibly();
+        } finally {
+            delete(portFile);
+        }
+    }
+
+    private static void delete(Path portFile) {
+        try {
+            Files.deleteIfExists(portFile);
+        } catch (IOException _) {
+            // left in the temporary directory, where it harms nothing
+        }
+    }
+
+    /** The process's output and error streams, kept in memory: no temporary file to share or clean. */
+    private static final class Output {
+
+        private final StringBuilder text = new StringBuilder();
+
+        synchronized void append(char[] chars, int length) {
+            text.append(chars, 0, length);
+        }
+
+        synchronized String text() {
+            return text.toString();
         }
     }
 }

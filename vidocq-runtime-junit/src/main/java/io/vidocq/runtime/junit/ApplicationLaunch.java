@@ -91,6 +91,13 @@ final class ApplicationLaunch {
     /** Copy of {@code io.vidocq.runtime.devservices.host.StateFile.PROPERTY}, for the same reason. */
     static final String STATE_PROPERTY = "vidocq.devservices.state";
 
+    /**
+     * Copy of {@code io.vidocq.runtime.extensions.essentials.chappe.ChappeServerBootstrap.PORT_FILE}, an internal key:
+     * the file the {@code default} listener writes the port it bound to. A copy, not an import: this module does not
+     * depend on the Chappe extension.
+     */
+    static final String PORT_FILE_PROPERTY = "vidocq.chappe.listener.default.port-file";
+
     /** Copy of {@code io.vidocq.runtime.maven.EnrichedJars.DIR_NAME}: where {@code vidocq:generate} writes its copies. */
     static final String ENRICHED_DIR = "vidocq-enriched";
 
@@ -129,16 +136,22 @@ final class ApplicationLaunch {
     }
 
     /**
-     * {@code java} with the {@code default} Chappe listener on {@code 127.0.0.1:port}, then the properties of the
-     * layout and {@code properties} ({@code key=value}, as {@code -D}), then the application {@code module} on the
-     * paths of {@code layout}. Every module of the module path is resolved, as in {@code vidocq:dev} and the packaged
-     * application, so that a driver or a provider no module requires is still found through
-     * {@link java.util.ServiceLoader}.
+     * {@code java} with the {@code default} Chappe listener on {@code 127.0.0.1}, port {@code 0}, then the properties
+     * of the layout and {@code properties} ({@code key=value}, as {@code -D}), then {@code portFile}, then the
+     * application {@code module} on the paths of {@code layout}. Every module of the module path is resolved, as in
+     * {@code vidocq:dev} and the packaged application, so that a driver or a provider no module requires is still
+     * found through {@link java.util.ServiceLoader}.
+     *
+     * <p>Port {@code 0} lets the system pick the port as the listener binds it, and the listener writes the port it
+     * got to {@code portFile} ({@value #PORT_FILE_PROPERTY}), where {@link VidocqApplication#start} reads it: a port
+     * picked here, then closed and bound by the application, could be taken in between (BUG-20261114-09). A port
+     * {@code properties} name comes later on the command line, and the JVM keeps the last {@code -D}: that port stays
+     * as the test gives it. {@code portFile} comes after them: the start reads the file it created.
      */
-    static List<String> command(String java, Layout layout, String module, int port, List<String> properties) {
+    static List<String> command(String java, Layout layout, String module, List<String> properties, Path portFile) {
         List<String> command = new ArrayList<>(List.of(java,
                 "-Dvidocq.chappe.listener.default.host=127.0.0.1",
-                "-Dvidocq.chappe.listener.default.port=" + port));
+                "-Dvidocq.chappe.listener.default.port=0"));
         layout.properties().forEach(property -> command.add("-D" + property));
         for (String property : properties) {
             if (property.indexOf('=') <= 0) {
@@ -147,7 +160,8 @@ final class ApplicationLaunch {
             }
             command.add("-D" + property);
         }
-        command.addAll(List.of("-D" + VidocqAppLayer.APP_MODULE_PROPERTY + "=" + module,
+        command.addAll(List.of("-D" + PORT_FILE_PROPERTY + "=" + portFile,
+                "-D" + VidocqAppLayer.APP_MODULE_PROPERTY + "=" + module,
                 "-D" + VidocqAppLayer.APP_PATH_PROPERTY + "=" + join(layout.appPath()),
                 "-p", join(layout.modulePath()),
                 "--add-modules", layout.addModules(),

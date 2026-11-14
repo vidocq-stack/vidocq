@@ -31,8 +31,9 @@ import java.lang.annotation.Target;
 /**
  * Starts the application before the first test of the class and stops it after the last one. The application runs
  * in its own JVM, booted by the runtime's own main from the module path of the tests, with its HTTP listener on a
- * free port of {@code 127.0.0.1}; a test method gets its URL through a {@link VidocqUrl} parameter, or the
- * {@link VidocqApplication} itself.
+ * port of {@code 127.0.0.1} the system picks as the listener binds it, which the listener then writes to a file the
+ * start reads, whatever the logging configuration of the application; a test method gets its URL through a
+ * {@link VidocqUrl} parameter, or the {@link VidocqApplication} itself.
  *
  * <pre>{@code
  * @VidocqTest
@@ -58,6 +59,9 @@ public @interface VidocqTest {
      */
     String module() default "";
 
-    /** How long the application may take to listen, in seconds. */
+    /**
+     * How long the application may take to listen, in seconds: until its {@code default} Chappe listener has bound its
+     * port and written it to the file the start reads.
+     */
     int startupTimeoutSeconds() default 60;
 }
