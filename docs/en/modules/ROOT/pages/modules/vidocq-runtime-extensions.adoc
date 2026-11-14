@@ -553,6 +553,8 @@ Chappe listener 'default' started on http://localhost:43127/
 
 A wildcard host reads `localhost` and an IPv6 address is bracketed, `http://[::1]:8080/`.
 
+`vidocq.chappe.listener.default.port-file` is an internal key of xref:testing.adoc#http-port[`@VidocqTest`], not one for applications: the `default` listener writes the port it bound to that file, in one atomic move, so the test reads it whatever the logging configuration; a file it cannot write is a WARNING, never a failed start.
+
 [#chappe-http-section]
 The startup report gets the same addresses in its `http` section, one per listener of the configuration. The sections that declare routes, such as `rest`, then print them as absolute URLs, and the `mcp` section finds the URL of `/mcp` there:
 

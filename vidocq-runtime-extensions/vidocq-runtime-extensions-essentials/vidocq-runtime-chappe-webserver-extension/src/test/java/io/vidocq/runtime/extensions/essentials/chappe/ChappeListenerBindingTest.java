@@ -24,6 +24,7 @@ import io.vidocq.chappe.api.Server;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -32,6 +33,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -49,6 +53,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class ChappeListenerBindingTest {
 
     private static final String BOOTSTRAP_LOGGER = ChappeServerBootstrap.class.getName();
+    /** The internal key the test launcher of {@code @VidocqTest} sets: where the default listener writes its port. */
+    private static final String PORT_FILE = "vidocq.chappe.listener.default.port-file";
 
     private ChappeServerBootstrap bootstrap;
     private LogRecords log;
@@ -89,6 +95,66 @@ class ChappeListenerBindingTest {
         assertEquals(List.of("Chappe listener 'default' started on http://127.0.0.1:" + port + "/"),
                 log.messages(Level.INFO));
         assertEquals("hi", get("http://127.0.0.1:" + port + "/hello").body());
+    }
+
+    /**
+     * The test launcher of {@code @VidocqTest} names a file it created empty, and reads the port from it once the
+     * file holds one: the file is replaced in one move, so the launcher never reads half a port.
+     */
+    @Test
+    void thePortFileReceivesThePortTheDefaultListenerBound(@TempDir Path dir) throws Exception {
+        Path portFile = Files.createFile(dir.resolve("port"));
+
+        bootstrap.onStart(context(PORT_FILE, portFile.toString()));
+
+        int port = bootstrap.boundAddresses().get(ChappeListener.DEFAULT).getPort();
+        assertEquals(port + "\n", Files.readString(portFile));
+        try (Stream<Path> files = Files.list(dir)) {
+            assertEquals(List.of(portFile), files.toList(), "no temporary file left behind");
+        }
+        assertEquals(List.of(), log.messages(Level.WARNING));
+    }
+
+    @Test
+    void aPortFileThatCannotBeWrittenIsAWarningAndTheListenerStillServes(@TempDir Path dir) throws Exception {
+        Path portFile = dir.resolve("missing").resolve("port");
+        ChappeMountPoint.instance().router(ChappeListener.DEFAULT).get("/hello", _ -> Response.ok("hi"));
+
+        bootstrap.onStart(context(PORT_FILE, portFile.toString()));
+
+        int port = bootstrap.boundAddresses().get(ChappeListener.DEFAULT).getPort();
+        List<String> warnings = log.messages(Level.WARNING);
+        assertEquals(1, warnings.size(), warnings.toString());
+        assertTrue(warnings.get(0).startsWith("Chappe listener 'default': cannot write its port " + port
+                + " to " + portFile + ": java.nio.file.NoSuchFileException"), warnings.get(0));
+        assertFalse(Files.exists(portFile));
+        assertEquals("hi", get("http://127.0.0.1:" + port + "/hello").body());
+    }
+
+    @Test
+    void theDefaultListenerWritesTheNewPortItBindsOnResume(@TempDir Path dir) throws Exception {
+        Path portFile = dir.resolve("port");
+        bootstrap.onStart(context(PORT_FILE, portFile.toString()));
+        Files.delete(portFile);
+
+        bootstrap.suspend();
+        assertFalse(Files.exists(portFile), "nothing is written while the listener is released");
+        bootstrap.resume();
+
+        int port = bootstrap.boundAddresses().get(ChappeListener.DEFAULT).getPort();
+        assertEquals(port + "\n", Files.readString(portFile));
+    }
+
+    @Test
+    void onlyTheDefaultListenerWritesThePortFile(@TempDir Path dir) throws Exception {
+        Path portFile = dir.resolve("port");
+        ChappeMountPoint.instance().declareListener(ChappeListener.http("dev", "127.0.0.1", 0),
+                ListenerOptions.DEFAULTS);
+
+        bootstrap.onStart(context(PORT_FILE, portFile.toString()));
+
+        assertEquals(bootstrap.boundAddresses().get(ChappeListener.DEFAULT).getPort() + "\n",
+                Files.readString(portFile));
     }
 
     @Test

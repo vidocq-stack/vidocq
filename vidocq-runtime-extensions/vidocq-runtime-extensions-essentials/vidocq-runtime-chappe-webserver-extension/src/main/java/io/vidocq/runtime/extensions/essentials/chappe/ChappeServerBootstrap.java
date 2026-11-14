@@ -28,8 +28,12 @@ import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.runtime.spi.config.ConfigSource;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 
+import java.io.IOException;
 import java.net.BindException;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -58,6 +62,8 @@ import java.util.Optional;
  *   <li>{@code vidocq.chappe.listeners} — CSV list of listeners (default: {@code default})</li>
  *   <li>{@code vidocq.chappe.listener.<name>.host} — host (default: {@code 0.0.0.0})</li>
  *   <li>{@code vidocq.chappe.listener.<name>.port} — port (default: 8080 for {@code default}, required otherwise)</li>
+ *   <li>{@value #PORT_FILE} — internal to the test launcher of {@code @VidocqTest}: the file the default listener
+ *       writes the port it bound to</li>
  * </ul>
  */
 public final class ChappeServerBootstrap implements VidocqExtension, Suspendable {
@@ -79,7 +85,16 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
     /** The origins a native WebSocket handshake may come from, besides its own (Chappe {@code WebSocketOrigins}). */
     static final String WEBSOCKET_ORIGINS_KEY = "vidocq.websocket.allowed-origins";
 
+    /**
+     * Internal: the file the default listener writes the port it bound to, once it listens and again after each
+     * {@link #resume()}. The test launcher of {@code @VidocqTest} sets it, to learn the port the system picked for
+     * port {@code 0} without depending on the logging configuration of the application.
+     */
+    static final String PORT_FILE = "vidocq.chappe.listener.default.port-file";
+
     private final List<Server> servers = new ArrayList<>();
+    /** The value of {@link #PORT_FILE}, or {@code null}. */
+    private String portFile;
     /** The address each listener bound, by name, read once after its start: a stopped server forgets it. */
     private final Map<String, InetSocketAddress> boundAddresses = new LinkedHashMap<>();
     private ChappeMountPoint mountPoint;
@@ -116,9 +131,7 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
         for (int i = 0; i < servers.size(); i++) {
             Server s = servers.get(i);
             s.start();
-            InetSocketAddress bound = s.localAddress();
-            boundAddresses.put(serverNames.get(i), bound);
-            mountPoint.recordBound(serverNames.get(i), bound);
+            recordBound(serverNames.get(i), s.localAddress());
         }
         suspended = false;
         LOG.log(System.Logger.Level.INFO, "Resumed " + servers.size() + " Chappe listener(s)");
@@ -151,6 +164,7 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
     public void onStart(ExtensionContext context) {
         this.mountPoint = ChappeMountPoint.instance();
         mountPoint.webSocketOrigins(webSocketOrigins(context.config()));
+        this.portFile = context.config().getValue(PORT_FILE, String.class).orElse(null);
 
         // after the extensions' own listeners: a name the configuration shares with one of them fails here
         for (ChappeListener l : resolveListeners(context.config())) {
@@ -188,8 +202,7 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
         servers.add(server);
         serverNames.add(l.name());
         InetSocketAddress bound = server.localAddress();
-        boundAddresses.put(l.name(), bound);
-        mountPoint.recordBound(l.name(), bound);
+        recordBound(l.name(), bound);
 
         if (fellBack) {
             LOG.log(System.Logger.Level.WARNING, LISTENER + l.name() + "': port " + l.port()
@@ -205,6 +218,35 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
                 LOG.log(System.Logger.Level.WARNING,
                         LISTENER + l.name() + "': its onBound callback failed", e);
             }
+        }
+    }
+
+    /** Records the address a listener bound, and writes the port of the default one to {@link #PORT_FILE}, if set. */
+    private void recordBound(String name, InetSocketAddress bound) {
+        boundAddresses.put(name, bound);
+        mountPoint.recordBound(name, bound);
+        if (portFile != null && ChappeListener.DEFAULT.equals(name)) {
+            writePort(portFile, bound.getPort());
+        }
+    }
+
+    /**
+     * Writes {@code port} to {@code file} in one move, so that a reader finds either no port or the whole of it.
+     * Never fails the start: the file is for a test launcher, which times out without it.
+     */
+    private static void writePort(String file, int port) {
+        try {
+            Path target = Path.of(file).toAbsolutePath();
+            Path tmp = Files.createTempFile(target.getParent(), ".vidocq-port", ".tmp");
+            try {
+                Files.writeString(tmp, port + "\n");
+                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } finally {
+                Files.deleteIfExists(tmp);
+            }
+        } catch (IOException | RuntimeException failed) {
+            LOG.log(System.Logger.Level.WARNING, LISTENER + ChappeListener.DEFAULT + "': cannot write its port " + port
+                    + " to " + file + ": " + failed);
         }
     }
 
