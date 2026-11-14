@@ -583,6 +583,18 @@ A plain `vidocq.mainClass` without `vidocq.mainModule` fails the build, with a m
 other. The launchers used to pass the class name alone to `--module`, and the JVM stopped on a
 `FindException` before `main` (Vidocq/vidocq#198).
 
+[#layer-off]
+There is no application layer in this layout: the application runs from the boot layer, where the JVM resolved it.
+The launchers say so with `-Dvidocq.app.layer.off=true`, and so does `vidocq:dev` with `-Dvidocq.dev.layer=false`. A
+`@VidocqMain` trampoline then boots the runtime around the application as it is, and the startup report says
+`no application layer`. It used to load the application a second time into a layer, and each of its classes then
+existed twice: a `ServiceLoader` found each of its providers twice (BUG-20261114-10).
+
+Without a layer, nothing promotes the `META-INF/services` files the annotation processors write: the application
+module declares its generated provider, `provides io.vidocq.vauban.api.VaubanComponentProvider with
+<package>._VaubanComponents;`, or opens its bean packages to `io.vidocq.vauban.core`, or the start fails with a message
+that names both. An application with a trampoline main that ran in this layout through the second copy needs it now.
+
 [#app-layer-property]
 === The `vidocq.app.layer` property
 
@@ -645,9 +657,11 @@ artifact, so a dependency shared with an application library and reached by a ne
 application layer: pin it with `vidocq.app.layer.keep`.
 
 Under `vidocq:package` with `all`, `lib/` holds the parent layer and `app/` holds the application jar and its
-libraries. Both launchers boot the runtime with `-Dvidocq.app.path` pointing at `app/` and
-`-Dvidocq.app.main` naming the main class, also when `vidocq.mainModule` is set: the trampoline launch would keep the
-automatic libraries in the boot layer. They carry `-Dvidocq.app.layer=` with the mode, and the pinned list when there is one.
+libraries; with `classes`, `app/` holds the application jar alone. Both launchers boot the runtime with
+`-Dvidocq.app.path` pointing at `app/` and `-Dvidocq.app.main` naming the main class, also when `vidocq.mainModule` is
+set, under `classes` as under `all`: a trampoline launched from the module path would keep the automatic libraries in
+the boot layer, and load the application module twice, in the boot layer and in the application layer
+(BUG-20261114-10). They carry `-Dvidocq.app.layer=` with the mode, and the pinned list when there is one.
 A jar with classes parked by `vidocq:generate` ships enriched with them, so it moves to `app/` as well. The rule and the
 limits are in xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer].
 

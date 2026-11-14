@@ -328,37 +328,71 @@ class VidocqPackageMojoTest {
     }
 
     /**
-     * {@code classes} keeps today's trampoline scripts, plus the one {@code -Dvidocq.app.layer=classes} line: the
-     * trampoline re-layers the boot layer, and a runtime that finds the mode unset takes the default, {@code all}.
+     * {@code classes} hands {@code app/} to the runtime as {@code all} does, also with a trampoline main: the
+     * trampoline's module path put the application module in the boot layer, and the trampoline loaded it a second
+     * time into the application layer (BUG-20261114-10).
      */
     @Test
-    void classesKeepsTheTrampolineScripts(@TempDir Path binDir) throws Exception {
+    void classesLaunchesThroughTheAppPathEvenWithATrampolineMain(@TempDir Path binDir) throws Exception {
         VidocqPackageMojo mojo = trampolineMojo("classes");
 
         mojo.generateShScript(binDir);
         mojo.generateCmdScript(binDir);
 
-        // After the JDK check (vidocq#102), the launchers are what they were.
+        // After the JDK check (vidocq#102).
         String sh = Files.readString(binDir.resolve("app.sh"));
         assertEquals("""
                 BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
                 exec "$JAVA" $JAVA_OPTS \\
-                  --module-path "$BASEDIR/lib:$BASEDIR/app" \\
+                  --module-path "$BASEDIR/lib" \\
                   --add-modules ALL-MODULE-PATH \\
                   -Dvidocq.app.layer=classes \\
-                  --module io.repro.app/io.repro.app.Main \\
+                  -Dvidocq.app.path="$BASEDIR/app" \\
+                  -Dvidocq.app.main=io.repro.app.Main \\
+                  --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq \\
                   "$@"
                 """, sh.substring(sh.indexOf("BASEDIR=")));
         String cmd = Files.readString(binDir.resolve("app.cmd"));
         assertEquals("""
                 set BASEDIR=%~dp0..
                 "%JAVA%" %JAVA_OPTS% ^
-                  --module-path "%BASEDIR%\\lib;%BASEDIR%\\app" ^
+                  --module-path "%BASEDIR%\\lib" ^
                   --add-modules ALL-MODULE-PATH ^
                   -Dvidocq.app.layer=classes ^
-                  --module io.repro.app/io.repro.app.Main ^
+                  -Dvidocq.app.path="%BASEDIR%\\app" ^
+                  -Dvidocq.app.main=io.repro.app.Main ^
+                  --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq ^
                   %*
                 """, cmd.substring(cmd.indexOf("set BASEDIR=")));
+    }
+
+    /**
+     * The legacy layout launches the main class from the module path, and says that there is no application layer:
+     * a trampoline main must not load the application a second time into one (BUG-20261114-10).
+     */
+    @Test
+    void legacyLaunchersTurnTheApplicationLayerOff(@TempDir Path binDir) throws Exception {
+        VidocqPackageMojo mojo = mojoWith(null);
+        set(mojo, "mainClass", "io.repro.app.Main");
+        set(mojo, "mainModule", "io.repro.app");
+
+        mojo.generateShScript(binDir);
+        mojo.generateCmdScript(binDir);
+
+        assertTrue(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.layer.off=true \\"));
+        assertTrue(Files.readString(binDir.resolve("app.cmd")).contains("-Dvidocq.app.layer.off=true ^"));
+    }
+
+    /** The layer launchers leave the application layer on. */
+    @Test
+    void layerLaunchersLeaveTheApplicationLayerOn(@TempDir Path binDir) throws Exception {
+        VidocqPackageMojo mojo = trampolineMojo("classes");
+
+        mojo.generateShScript(binDir);
+        mojo.generateCmdScript(binDir);
+
+        assertFalse(Files.readString(binDir.resolve("app.sh")).contains("vidocq.app.layer.off"));
+        assertFalse(Files.readString(binDir.resolve("app.cmd")).contains("vidocq.app.layer.off"));
     }
 
     /** {@code classes} is written into the runtime-main scripts too, never left to the runtime's default. */

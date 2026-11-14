@@ -27,6 +27,8 @@ import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /** vidocq:dev under all: the lookup works, and again after a reload, which names the library's leaked thread. */
@@ -58,6 +60,30 @@ class AppLayerDevIT {
                 }
             }
             assertEquals(0, Fixture.occurrences(log, "LOOKUP-MISSING"), Fixture.read(log));
+            assertEquals(0, Fixture.occurrences(log, "TOOL-PROVIDERS 2"), Fixture.read(log));
+        } finally {
+            Fixture.stop(mvn);
+        }
+    }
+
+    /**
+     * vidocq.dev.layer=false runs the fixture's trampoline main from the module path: no application layer, as the
+     * switch promises, so the application module is loaded once (BUG-20261114-10).
+     */
+    @Test
+    void theLegacyLaunchRunsTheTrampolineWithoutALayer(@TempDir Path dir) throws Exception {
+        Path project = Fixture.copy(dir);
+        Fixture.install(project, Fixture.logs().resolve("dev-legacy-install.log"));
+        Path log = Fixture.logs().resolve("dev-legacy.log");
+
+        Process mvn = Fixture.start(project.resolve("app"), log, "vidocq:dev", "-Dvidocq.dev.layer=false");
+        try {
+            Fixture.awaitLog(mvn, log, "TOOL-PROVIDERS ");
+            Fixture.awaitLog(mvn, log, "Vidocq - Started in");
+            String out = Fixture.read(log);
+            assertEquals(1, Fixture.occurrences(log, AppLayerPackageIT.ONE_COPY), out);
+            assertFalse(out.contains("Application layer ready"), out);
+            assertTrue(out.contains("no application layer"), out);
         } finally {
             Fixture.stop(mvn);
         }

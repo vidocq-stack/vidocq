@@ -5,6 +5,40 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261114-10 — Two launchers put a trampoline application in the boot layer and in a Vauban layer
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/trampoline-boot-twin`
+- **Affected module**: vidocq-runtime-maven-plugin (`VidocqPackageMojo`, `ChildJvm`), vidocq-runtime-core
+  (`Vidocq.run`)
+- **Symptom**: the application module is loaded twice, once by the JVM's application loader in the boot layer and
+  once by the Vauban loader in the application layer, as in BUG-20261114-07. `ServiceLoader.load` through the context
+  loader returns each provider of the application twice, two `Class` objects of one name; Vaadin 25 then stops with
+  "multiple eligible instantiator implementations". Found in two launches, both with a main class that calls
+  `Vidocq.run` (a trampoline):
+  1. `vidocq:package` with `vidocq.app.layer=classes`: the launchers ran `--module-path lib:app --module <app>/<main>`.
+  2. the escape hatches `vidocq.package.layer=false` and `vidocq.dev.layer=false`, which promise the legacy launch
+     with everything on the module path and no layer: the trampoline built a layer anyway.
+- **Minimal repro**: an application module that `provides java.util.spi.ToolProvider` and counts, from a CDI
+  `Startup` observer, the providers of its own type that `ServiceLoader.load(ToolProvider.class)` finds:
+  `TOOL-PROVIDERS 2` under the two launches above, `1` under `vidocq:run` and the default `vidocq:package`.
+- **Cause**: both launches put the application module on the module path, so in the boot layer, and
+  `Vidocq.run` re-layers what the boot layer holds (`VidocqAppLayer.installFromBootLayer`), as it does for an IDE
+  run. The `classes` branch of the package launchers predates `-Dvidocq.app.path` there; under `all` they already
+  handed `app/` over as the documentation says ("also for an application with a main class"). Nothing told the
+  trampoline that a launch wanted no layer.
+- **Fix**:
+  1. the `vidocq:package` layer launchers always hand `app/` over through `-Dvidocq.app.path` and the main class
+     through `-Dvidocq.app.main`, under `classes` as under `all`;
+  2. the launchers without a layer (`vidocq.package.layer=false`, `vidocq.dev.layer=false`) pass
+     `-Dvidocq.app.layer.off=true` (`LayerSplit.OFF_PROPERTY`), and `Vidocq.run` then keeps the application where the
+     JVM resolved it: no second copy, the boot module is the application, the startup report says
+     `no application layer`.
+- **Validation**: `TrampolineLaunchProcessTest` (a real trampoline launch from the module path: one provider, the
+  application loader, with the switch); `VidocqPackageMojoTest` and `ChildJvmTest` (the launchers);
+  `AppLayerPackageIT` (`classes`, and the legacy layout) and `AppLayerDevIT` (`vidocq.dev.layer=false`) count one
+  provider in a real launch (`-Pit`). All red before the fix.
+
 ## BUG-20261114-07 — Under `@VidocqTest` the application module is loaded twice: each of its `provides` is found twice, and Vaadin does not start
 
 - **Date**: 2026-11-14
