@@ -5,6 +5,33 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261114-09 — `ChappeServerEndToEndTest` fails now and then on a port another process took
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `fix/chappe-e2e-port`
+- **Affected module**: vidocq-runtime-chappe-webserver-extension (test only: `ChappeServerEndToEndTest`)
+- **Symptom**: a full `-Pquality install` of `fix/dev-test-dev-services`, run while other sessions built and ran on the
+  same machine, failed in `ChappeServerEndToEndTest.multiListenerEachServesItsOwnRouter`:
+  `ChappeException$ServerException: Failed to bind to 127.0.0.1:49335`, caused by
+  `java.net.BindException: Address already in use`, at `ChappeServer.start` from `ChappeServerBootstrap.onStart`
+  (line 134 of the test). The `default` listener had started; the `admin` one failed. The same build, resumed, passed.
+- **Minimal repro**: not deterministic. The window is between the test's `freePort()` and the server's bind: any
+  process that binds an ephemeral port in that window can get the same one.
+- **Cause**: `freePort()` opened a `ServerSocket(0)`, read its port, closed it, and the server bound that port later.
+  Once closed, the port is free for anyone: another JVM of the machine, or the second `freePort()` of the same test,
+  since `multiListenerEachServesItsOwnRouter` picked two ports one after the other, the first one already closed. The
+  log does not say which of the two took 49335. The same pattern Vidocq/cassini#144 removed from Cassini's tests.
+- **Fix**: every listener of the test binds port `0`, and the test reads the port each got from
+  `ChappeServerBootstrap.boundAddresses()`: the system picks the port as the server binds it, so nothing can take it
+  first. `multiListenerEachServesItsOwnRouter` also checks the two listeners got two ports, and
+  `httpPortAliasAloneBindsTheAdvertisedPort` sets the alias to `0` and checks the default listener did not bind its
+  default port, 8080, which only a listener that ignores the alias would.
+- **Investigations**:
+  - 2026-11-14: 14 other test files of the repository pick a port the same way (`new ServerSocket(0)`, closed, bound
+    later), among them `ChappeServerSuspendTest`, which needs a fixed port to check that a resume binds it again, and
+    tests that start the application in another JVM, which would have to read the port from its log. Not changed
+    here.
+
 ## BUG-20261114-05 — A jlink image resolves only the application's module graph: resource-only modules are linked but never served
 
 - **Date**: 2026-11-14

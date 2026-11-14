@@ -26,7 +26,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -43,16 +42,24 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Starts a real Chappe Server via ChappeEngineExtension + ChappeServerBootstrap
  * and verify that it serves a mounted handler, that the hooks turn, and that it stops properly.
+ *
+ * <p>Every listener binds port {@code 0} and the test reads the port it got from
+ * {@link ChappeServerBootstrap#boundAddresses()}. A port picked beforehand, then closed and bound again
+ * by the server, could be taken in between by another process of the machine (BUG-20261114-09).
  */
 class ChappeServerEndToEndTest {
 
+    /** The default listener on a port the system picks when it binds. */
+    private static final Map<String, String> ANY_PORT = Map.of("vidocq.chappe.listener.default.port", "0");
+
+    /** The port of the default listener when nothing configures one. */
+    private static final int DEFAULT_LISTENER_PORT = 8080;
+
     private ChappeEngineExtension engine;
     private ChappeServerBootstrap bootstrap;
-    private int port;
 
     @BeforeEach
-    void setUp() throws Exception {
-        this.port = freePort();
+    void setUp() {
         this.engine = new ChappeEngineExtension();
         this.bootstrap = new ChappeServerBootstrap();
         engine.configure(null);
@@ -69,11 +76,9 @@ class ChappeServerEndToEndTest {
         ChappeMountPoint.instance().router(ChappeListener.DEFAULT)
                 .get("/hello", _ -> Response.ok("hi"));
 
-        var ctx = new FakeExtensionContext(TestConfig.of(Map.of(
-                "vidocq.chappe.listener.default.port", Integer.toString(port))));
-        bootstrap.onStart(ctx);
+        start(ANY_PORT);
 
-        HttpResponse<String> resp = get("http://127.0.0.1:" + port + "/hello");
+        HttpResponse<String> resp = get("http://127.0.0.1:" + port(ChappeListener.DEFAULT) + "/hello");
         assertEquals(200, resp.statusCode());
         assertEquals("hi", resp.body());
     }
@@ -84,10 +89,9 @@ class ChappeServerEndToEndTest {
         mp.mount(ChappeListener.DEFAULT, "", _ -> Response.ok("servlet"));
         mp.mount(ChappeListener.DEFAULT, "/api", _ -> Response.ok("rest"));
 
-        var ctx = new FakeExtensionContext(TestConfig.of(Map.of(
-                "vidocq.chappe.listener.default.port", Integer.toString(port))));
-        bootstrap.onStart(ctx);
+        start(ANY_PORT);
 
+        int port = port(ChappeListener.DEFAULT);
         assertEquals("rest", get("http://127.0.0.1:" + port + "/api/items").body());
         assertEquals("servlet", get("http://127.0.0.1:" + port + "/hello").body());
     }
@@ -96,11 +100,9 @@ class ChappeServerEndToEndTest {
     void aPrefixWithATrailingSlashServesItsSubpaths() throws Exception {
         ChappeMountPoint.instance().mount(ChappeListener.DEFAULT, "/api/", _ -> Response.ok("rest"));
 
-        var ctx = new FakeExtensionContext(TestConfig.of(Map.of(
-                "vidocq.chappe.listener.default.port", Integer.toString(port))));
-        bootstrap.onStart(ctx);
+        start(ANY_PORT);
 
-        assertEquals("rest", get("http://127.0.0.1:" + port + "/api/items").body());
+        assertEquals("rest", get("http://127.0.0.1:" + port(ChappeListener.DEFAULT) + "/api/items").body());
     }
 
     @Test
@@ -110,9 +112,7 @@ class ChappeServerEndToEndTest {
         ChappeMountPoint.instance().addBeforeStartHook(() -> before.set(true));
         ChappeMountPoint.instance().addAfterStopHook(() -> after.set(true));
 
-        var ctx = new FakeExtensionContext(TestConfig.of(Map.of(
-                "vidocq.chappe.listener.default.port", Integer.toString(port))));
-        bootstrap.onStart(ctx);
+        start(ANY_PORT);
         assertTrue(before.get(), "beforeStart hook should have run");
 
         bootstrap.onStop();
@@ -121,18 +121,19 @@ class ChappeServerEndToEndTest {
 
     @Test
     void multiListenerEachServesItsOwnRouter() throws Exception {
-        int adminPort = freePort();
         ChappeMountPoint mp = ChappeMountPoint.instance();
         mp.router(ChappeListener.DEFAULT).get("/ping", _ -> Response.ok("public"));
         mp.router("admin").get("/ping", _ -> Response.ok("private"));
 
-        var ctx = new FakeExtensionContext(TestConfig.of(Map.of(
+        start(Map.of(
                 "vidocq.chappe.listeners", "default,admin",
-                "vidocq.chappe.listener.default.port", Integer.toString(port),
+                "vidocq.chappe.listener.default.port", "0",
                 "vidocq.chappe.listener.admin.host", "127.0.0.1",
-                "vidocq.chappe.listener.admin.port", Integer.toString(adminPort))));
-        bootstrap.onStart(ctx);
+                "vidocq.chappe.listener.admin.port", "0"));
 
+        int port = port(ChappeListener.DEFAULT);
+        int adminPort = port("admin");
+        assertNotEquals(port, adminPort, "two listeners, two sockets");
         assertEquals("public", get("http://127.0.0.1:" + port + "/ping").body());
         assertEquals("private", get("http://127.0.0.1:" + adminPort + "/ping").body());
     }
@@ -148,14 +149,12 @@ class ChappeServerEndToEndTest {
             }
         });
 
-        var ctx = new FakeExtensionContext(TestConfig.of(Map.of(
-                "vidocq.chappe.listener.default.port", Integer.toString(port))));
-        bootstrap.onStart(ctx);
+        start(ANY_PORT);
 
         CompletableFuture<String> received = new CompletableFuture<>();
         java.net.http.WebSocket client = HttpClient.newHttpClient().newWebSocketBuilder()
                 .connectTimeout(Duration.ofSeconds(3))
-                .buildAsync(URI.create("ws://127.0.0.1:" + port + "/echo"),
+                .buildAsync(URI.create("ws://127.0.0.1:" + port(ChappeListener.DEFAULT) + "/echo"),
                         new java.net.http.WebSocket.Listener() {
                             @Override
                             public CompletionStage<?> onText(java.net.http.WebSocket ws,
@@ -175,26 +174,30 @@ class ChappeServerEndToEndTest {
      * The exact report of Vidocq/chappe#7: a vidocq.properties carrying nothing but
      * {@code vidocq.http.port} used to leave the application listening on 8080, so the setting was
      * inert and the failure invisible whenever the configured value happened to be the default.
-     * The socket is the assertion.
+     * The socket is the assertion: with the alias at {@code 0}, only a listener that honours it binds
+     * a port other than the default's.
      */
     @Test
     void httpPortAliasAloneBindsTheAdvertisedPort() throws Exception {
         ChappeMountPoint.instance().router(ChappeListener.DEFAULT)
                 .get("/", _ -> Response.ok("hello from core"));
 
-        var ctx = new FakeExtensionContext(TestConfig.of(Map.of(
-                "vidocq.http.port", Integer.toString(port))));
-        bootstrap.onStart(ctx);
+        start(Map.of("vidocq.http.port", "0"));
 
+        int port = port(ChappeListener.DEFAULT);
+        assertNotEquals(DEFAULT_LISTENER_PORT, port, "the alias, not the default port");
         HttpResponse<String> resp = get("http://127.0.0.1:" + port + "/");
         assertEquals(200, resp.statusCode());
         assertEquals("hello from core", resp.body());
     }
 
-    private static int freePort() throws Exception {
-        try (ServerSocket s = new ServerSocket(0)) {
-            return s.getLocalPort();
-        }
+    private void start(Map<String, String> config) {
+        bootstrap.onStart(new FakeExtensionContext(TestConfig.of(config)));
+    }
+
+    /** The port {@code listener} bound, which the system picked as it bound it. */
+    private int port(String listener) {
+        return bootstrap.boundAddresses().get(listener).getPort();
     }
 
     private static HttpResponse<String> get(String url) throws Exception {
