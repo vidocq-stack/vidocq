@@ -35,6 +35,8 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The WebSocket extension declares the origins key, forwards it to Foy and reports it. */
 class FoyWebSocketExtensionTest {
@@ -98,6 +100,16 @@ class FoyWebSocketExtensionTest {
                 .initParameters(new MapConfig(Map.of(KEY, "https://a.example, https://b.example")));
 
         assertEquals(Map.of(FOY_PARAMETER, "https://a.example, https://b.example"), parameters);
+    }
+
+    @Test
+    void aMalformedOriginIsRefusedWithTheNameOfTheKey() {
+        var config = new MapConfig(Map.of(KEY, "ftp://x"));
+        var parameters = new AllowedOriginsParameter();
+
+        var failure = assertThrows(IllegalArgumentException.class, () -> parameters.initParameters(config));
+
+        assertTrue(failure.getMessage().startsWith(KEY), failure.getMessage());
     }
 
     @Test

@@ -27,6 +27,8 @@ module io.vidocq.runtime.extensions.jakartaee.web.websocket {
     requires io.vidocq.runtime.extensions.jakartaee.web.foy;
     // Foy's initializer registers the endpoints; the application module reads the API through its own requires.
     requires io.vidocq.foy.websocket;
+    // Parses the allowed origins like the native WebSocket upgrade does.
+    requires io.vidocq.chappe.api;
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.jakartaee.web.websocket.FoyWebSocketExtension;

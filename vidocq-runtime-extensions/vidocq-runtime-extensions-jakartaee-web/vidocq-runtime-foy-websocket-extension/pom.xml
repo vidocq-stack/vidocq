@@ -31,6 +31,10 @@
             <artifactId>foy-websocket</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
         </dependency>

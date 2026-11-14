@@ -5,6 +5,20 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261114-12 — A malformed `vidocq.websocket.allowed-origins` fails the start with Foy's parameter name
+
+- **Date**: 2026-11-14
+- **Status**: FIXED on `feat/websocket`
+- **Affected module**: vidocq-runtime-foy-websocket-extension (`AllowedOriginsParameter`)
+- **Symptom**: with `vidocq.websocket.allowed-origins=ftp://x` the start fails in `servlet-foy` with _Foy deployment
+  failed: Invalid WebSocket origin '"ftp://x"' ... (init parameter io.vidocq.foy.websocket.allowed-origins)_. The
+  message never names the key the user set.
+- **Minimal repro**: `FoyWebSocketModulePathTest.aMalformedAllowedOriginStopsTheStart` (vidocq-runtime-it-foy-websocket).
+- **Cause**: the Servlet extension (priority 600) starts before the Chappe web server extension (10000), which owns
+  the check that names the key. Foy therefore refuses the forwarded value first.
+- **Fix**: `AllowedOriginsParameter` parses the value with Chappe's `WebSocketOrigins.parse` and throws
+  `IllegalArgumentException("vidocq.websocket.allowed-origins is invalid: ...")`. Unit test
+  `aMalformedOriginIsRefusedWithTheNameOfTheKey`.
 ## BUG-20261114-08 — The tests of `vidocq dev` wipe the data of the running application
 
 - **Date**: 2026-11-14

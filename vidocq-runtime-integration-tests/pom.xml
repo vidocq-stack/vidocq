@@ -69,6 +69,7 @@
         <module>vidocq-runtime-it-grimm-openapi</module>
         <module>vidocq-runtime-it-cyrano-jpms</module>
         <module>vidocq-runtime-it-foy-servlet</module>
+        <module>vidocq-runtime-it-foy-websocket</module>
         <module>vidocq-runtime-it-ibarra-pages</module>
         <module>vidocq-runtime-it-bodoni-jstl</module>
         <module>vidocq-runtime-it-naming</module>

@@ -19,14 +19,17 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.websocket;
 
+import io.vidocq.chappe.api.WebSocketOrigins;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletInitParameters;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 
 import java.util.Map;
 
 /**
- * Gives Foy the allowed origins of {@value FoyWebSocketExtension#ORIGINS_KEY}. The key's syntax is checked at
- * start by the Chappe web server extension, which also applies it to the native WebSocket upgrade.
+ * Gives Foy the allowed origins of {@value FoyWebSocketExtension#ORIGINS_KEY}. The Servlet extension starts before
+ * the Chappe web server extension, so Foy would be the first to refuse a malformed value, naming its own init
+ * parameter: the key's syntax is checked here, with the parser the Chappe extension applies to the native WebSocket
+ * upgrade, and the failure names the key.
  */
 public final class AllowedOriginsParameter implements ServletInitParameters {
 
@@ -36,7 +39,17 @@ public final class AllowedOriginsParameter implements ServletInitParameters {
     @Override
     public Map<String, String> initParameters(VidocqConfig config) {
         return config.getValue(FoyWebSocketExtension.ORIGINS_KEY, String.class)
+                .map(AllowedOriginsParameter::checked)
                 .map(origins -> Map.of(FOY_PARAMETER, origins))
                 .orElse(Map.of());
+    }
+
+    private static String checked(String origins) {
+        try {
+            WebSocketOrigins.parse(origins);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(FoyWebSocketExtension.ORIGINS_KEY + " is invalid: " + e.getMessage(), e);
+        }
+        return origins;
     }
 }
