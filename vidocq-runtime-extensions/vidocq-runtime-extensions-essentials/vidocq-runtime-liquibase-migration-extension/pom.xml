@@ -39,6 +39,15 @@
         <dependency>
             <groupId>org.liquibase</groupId>
             <artifactId>liquibase-core</artifactId>
+            <exclusions>
+                <!-- liquibase-core 4.33.0 declares jaxb-api and never uses it (jdeps finds no javax.xml.bind
+                     reference). On the module path, jaxb-api is the explicit module java.xml.bind, which
+                     requires java.activation, a jar Liquibase excludes: the JVM refused to start. -->
+                <exclusion>
+                    <groupId>javax.xml.bind</groupId>
+                    <artifactId>jaxb-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <!-- Override, nearer than Liquibase's own: Liquibase requires commons-lang3 >= 3.13.0
              (SystemProperties), which another path of the graph would lower to 3.12.0, and the 3.17.0

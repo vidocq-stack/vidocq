@@ -5,6 +5,19 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261115-04 — An application with the Liquibase extension does not start on the module path
+
+- **Date**: 2026-11-15
+- **Status**: FIXED on `fix/liquibase-without-jaxb`
+- **Module**: `vidocq-runtime-liquibase-migration-extension` (`pom.xml`)
+- **Symptom**: `vidocq create -x liquibase-migration`, then `vidocq:run`, the distribution or `vidocq:jlink`:
+  `FindException: Module java.activation not found, required by java.xml.bind`. Found by the tutorial session.
+- **Repro**: `ModulePathClosureTest` (every explicit module of the extension's runtime path finds what it requires).
+- **Cause**: liquibase-core 4.33.0 declares `javax.xml.bind:jaxb-api:2.3.1` and excludes the activation jar.
+  jaxb-api is the explicit module `java.xml.bind`, which requires `java.activation`: fine on a class path, refused on
+  the module path. Liquibase itself never references `javax.xml.bind` (jdeps finds no class of it).
+- **Fix**: the extension excludes `jaxb-api` from liquibase-core.
+
 ## BUG-20261115-03 — An encrypted jar without its key stops the start with a bare stack trace and no failure line
 
 - **Date**: 2026-11-15
