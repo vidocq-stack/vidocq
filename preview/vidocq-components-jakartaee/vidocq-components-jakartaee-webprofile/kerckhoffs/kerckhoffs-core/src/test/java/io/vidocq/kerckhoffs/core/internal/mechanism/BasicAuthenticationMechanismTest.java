@@ -21,7 +21,6 @@ package io.vidocq.kerckhoffs.core.internal.mechanism;
 
 import io.vidocq.kerckhoffs.core.internal.identitystore.DefaultIdentityStoreHandler;
 import io.vidocq.kerckhoffs.core.internal.identitystore.InMemoryIdentityStore;
-import jakarta.security.enterprise.AuthenticationException;
 import jakarta.security.enterprise.AuthenticationStatus;
 import jakarta.security.enterprise.identitystore.InMemoryIdentityStoreDefinition;
 import jakarta.security.enterprise.identitystore.InMemoryIdentityStoreDefinition.Credentials;
@@ -59,7 +58,7 @@ class BasicAuthenticationMechanismTest {
         return "Basic " + Base64.getEncoder().encodeToString(userColonPassword.getBytes(StandardCharsets.UTF_8));
     }
 
-    private AuthenticationStatus request(String authorization, boolean mandatory) throws AuthenticationException {
+    private AuthenticationStatus request(String authorization, boolean mandatory) {
         policy.put(DefaultHttpMessageContext.MANDATORY, Boolean.toString(mandatory));
         Map<String, String> headers = authorization == null ? Map.of() : Map.of("Authorization", authorization);
         var info = new Fakes.Info(Fakes.request(new HashMap<>(), new ArrayList<>(), headers), Fakes.response(sent), policy);
@@ -68,7 +67,7 @@ class BasicAuthenticationMechanismTest {
     }
 
     @Test
-    void aProtectedResourceWithoutCredentialsIsChallenged() throws Exception {
+    void aProtectedResourceWithoutCredentialsIsChallenged() {
         assertEquals(AuthenticationStatus.SEND_FAILURE, request(null, true));
 
         assertEquals(List.of("header WWW-Authenticate: Basic realm=\"test realm\"", "status 401"), sent);
@@ -76,7 +75,7 @@ class BasicAuthenticationMechanismTest {
     }
 
     @Test
-    void aWrongPasswordIsChallengedNotLoggedIn() throws Exception {
+    void aWrongPasswordIsChallengedNotLoggedIn() {
         assertEquals(AuthenticationStatus.SEND_FAILURE, request(basic("reza:wrong"), true));
 
         assertTrue(callbacks.isEmpty());
@@ -84,14 +83,14 @@ class BasicAuthenticationMechanismTest {
     }
 
     @Test
-    void anUnknownCallerIsChallengedToo() throws Exception {
+    void anUnknownCallerIsChallengedToo() {
         assertEquals(AuthenticationStatus.SEND_FAILURE, request(basic("nobody:secret1"), true));
 
         assertTrue(callbacks.isEmpty());
     }
 
     @Test
-    void aHeaderThatIsNotBasicOrNotWellFormedIsIgnored() throws Exception {
+    void aHeaderThatIsNotBasicOrNotWellFormedIsIgnored() {
         assertEquals(AuthenticationStatus.SEND_FAILURE, request("Bearer abc", true));
         assertEquals(AuthenticationStatus.SEND_FAILURE, request("Basic !!!not-base64!!!", true));
         assertEquals(AuthenticationStatus.SEND_FAILURE, request(basic("no-colon"), true));
@@ -101,19 +100,19 @@ class BasicAuthenticationMechanismTest {
     }
 
     @Test
-    void anUnprotectedResourceWithoutCredentialsIsLeftAlone() throws Exception {
+    void anUnprotectedResourceWithoutCredentialsIsLeftAlone() {
         assertEquals(AuthenticationStatus.NOT_DONE, request(null, false));
 
         assertTrue(sent.isEmpty(), "nothing is sent: the resource is public");
     }
 
     @Test
-    void anUnprotectedResourceWithWrongCredentialsIsRefusedAllTheSame() throws Exception {
+    void anUnprotectedResourceWithWrongCredentialsIsRefusedAllTheSame() {
         assertEquals(AuthenticationStatus.SEND_FAILURE, request(basic("reza:wrong"), false));
     }
 
     @Test
-    void validCredentialsLogTheCallerIn() throws Exception {
+    void validCredentialsLogTheCallerIn() {
         assertEquals(AuthenticationStatus.SUCCESS, request(basic("reza:secret1"), true));
 
         assertEquals(List.of("login"), callbacks);
@@ -121,17 +120,17 @@ class BasicAuthenticationMechanismTest {
     }
 
     @Test
-    void aPasswordMayContainAColon() throws Exception {
+    void aPasswordMayContainAColon() {
         assertEquals(AuthenticationStatus.SEND_FAILURE, request(basic("reza:secret:1"), true));
     }
 
     @Test
-    void theSchemeIsCaseInsensitive() throws Exception {
+    void theSchemeIsCaseInsensitive() {
         assertEquals(AuthenticationStatus.SUCCESS, request("basic " + basic("reza:secret1").substring(6), true));
     }
 
     @Test
-    void theRealmIsQuotedAndCannotBreakTheChallenge() throws Exception {
+    void theRealmIsQuotedAndCannotBreakTheChallenge() {
         var tricky = new BasicAuthenticationMechanism("a\"b\r\nX: y", () -> new DefaultIdentityStoreHandler(List.of()));
         policy.put(DefaultHttpMessageContext.MANDATORY, "true");
         var info = new Fakes.Info(Fakes.request(new HashMap<>(), new ArrayList<>()), Fakes.response(sent), policy);

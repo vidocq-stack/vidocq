@@ -55,11 +55,11 @@ public final class BasicAuthenticationMechanism implements HttpAuthenticationMec
     @Override
     public AuthenticationStatus validateRequest(HttpServletRequest request, HttpServletResponse response,
                                                 HttpMessageContext context) {
-        String[] parsed = credentials(request.getHeader("Authorization"));
+        Pair parsed = credentials(request.getHeader("Authorization"));
         if (parsed == null) {
             return context.isProtected() ? challenge(response, context) : context.doNothing();
         }
-        var credential = new UsernamePasswordCredential(parsed[0], new Password(parsed[1].toCharArray()));
+        var credential = new UsernamePasswordCredential(parsed.user(), new Password(parsed.password().toCharArray()));
         try {
             CredentialValidationResult result = handler.get().validate(credential);
             if (result.getStatus() != CredentialValidationResult.Status.VALID) {
@@ -76,8 +76,11 @@ public final class BasicAuthenticationMechanism implements HttpAuthenticationMec
         return context.responseUnauthorized();
     }
 
-    /** The user name and the password of a {@code Basic} header, or {@code null} when it is not a valid one. */
-    private static String[] credentials(String header) {
+    /** The user name and the password of a {@code Basic} header. */
+    private record Pair(String user, String password) { }
+
+    /** What a {@code Basic} header holds, or {@code null} when it is not a valid one. */
+    private static Pair credentials(String header) {
         if (header == null || header.length() <= SCHEME.length() + 1
                 || !header.regionMatches(true, 0, SCHEME, 0, SCHEME.length())
                 || header.charAt(SCHEME.length()) != ' ') {
@@ -86,13 +89,13 @@ public final class BasicAuthenticationMechanism implements HttpAuthenticationMec
         byte[] decoded;
         try {
             decoded = Base64.getDecoder().decode(header.substring(SCHEME.length() + 1).trim());
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             return null;
         }
         try {
             String pair = new String(decoded, StandardCharsets.UTF_8);
             int colon = pair.indexOf(':');
-            return colon <= 0 ? null : new String[] {pair.substring(0, colon), pair.substring(colon + 1)};
+            return colon <= 0 ? null : new Pair(pair.substring(0, colon), pair.substring(colon + 1));
         } finally {
             Arrays.fill(decoded, (byte) 0);
         }
