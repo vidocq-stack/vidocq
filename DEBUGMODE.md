@@ -21,7 +21,7 @@ the value of `quarkus dev`: stay focused and iterate quickly.
 - **static codegen** — Class-File API (JEP 484) + APT, zero dynamic proxy, zero runtime reflection;
 - **strict Java Modules** — each module has its own `module-info.java`, launch on the **module-path**,
   minimal exports;
-- **AOT-friendly** — compatible with GraalVM native-image / Leyden CDS;
+- **AOT-friendly** — the JDK's AOT cache works on a packaged application; a GraalVM native image is not available yet;
 - **virtual threads** everywhere for I/O.
 
 Hot reload, by nature, is churn: classloader recreation, rescans, and mutable state — the opposite

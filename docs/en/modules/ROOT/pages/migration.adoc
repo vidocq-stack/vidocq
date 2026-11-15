@@ -44,21 +44,14 @@ Vidocq Runtime is at **{project-version}**. Any real-world migration is prematur
 | No
 | No
 
-| Native AOT
-| GraalVM + Leyden CDS
+| Native image (GraalVM)
+| Not yet
 | GraalVM
 | GraalVM
 | GraalVM
 | Partial
 | Partial
 
-| Typical cold start (jlink/CDS)
-| ~1 s
-| ~0.5 s (native)
-| ~1 s
-| ~3 s
-| ~5 s
-| ~3 s
 
 | Standalone image size
 | ~40 MB (jlink)

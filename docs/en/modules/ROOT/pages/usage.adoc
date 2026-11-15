@@ -211,23 +211,20 @@ boot layer.
 
 == Packaging with `vidocq-runtime-maven-plugin`
 
-The Maven plugin exposes three packaging targets. See xref:modules/vidocq-runtime-maven-plugin.adoc[the dedicated page] for the full inventory and the internal `JLINK.md` details.
+The Maven plugin exposes three packaging targets. See xref:modules/vidocq-runtime-maven-plugin.adoc[the dedicated page] for the full inventory and the internal `JLINK.md` details, and xref:shipping.adoc[Choosing how to ship an application] for which one fits which situation.
 
-[cols="1,1,3"]
+[cols="1,3"]
 |===
-| Goal | Output | Typical startup
+| Goal | Output
 
 | `vidocq:jlink`
 | `target/dist/` (binary + embedded Java runtime, ~40 MB)
-| ~4 s
 
 | `vidocq:jpackage`
 | `target/installer/<name>.app` or `.exe`/`.msi`/`.deb`/`.rpm`
-| ~1 s (CDS)
 
 | `vidocq:docker`
-| `target/Dockerfile` distroless based on `distroless/base-debian12:nonroot`
-| ~50 MB image
+| `target/Dockerfile`: around the jlink image on `distroless/base-debian12:nonroot` (~50 MB image), or the `vidocq:package` distribution on a JDK base image (`-Dvidocq.docker.kind=jdk`)
 |===
 
 Quick start (from `vidocq-runtime-cassini-rest-example`):
@@ -449,15 +446,42 @@ docker run --rm -p 8080:8080 \
 
 The `distroless/base-debian12:nonroot` base image has no shell, no package manager — minimal attack surface. The `nonroot` user (UID 65532) is enforced.
 
-== AOT — GraalVM and Leyden
+[#aot]
+== Ahead of time: the JDK's AOT cache, and GraalVM
 
-* **Leyden CDS** — supported out of the box. Static Class-File API codegen produces bytecode that archives perfectly.
-* **GraalVM native-image** — Vidocq Runtime's zero-reflection + zero-proxy strategy minimises `reachability-metadata`. See `vidocq/JLINK.md` for runtime prerequisites (logging.properties, named Java modules, serialised records).
+[#aot-cache]
+*The JDK's AOT cache works, and you record it yourself.* Since JDK 25, a first run records the classes it loaded and linked into a cache, and the next runs start from it (JEP 483, 514, 515). No Vidocq goal records or ships that cache yet: pass the JDK's own options.
 
-[NOTE]
-====
-// TODO@user: document the official GraalVM profile when the `vidocq-runtime-native-extension` extension ships.
-====
+On a `vidocq:package` distribution, through `JAVA_OPTS`:
+
+[source,bash]
+----
+# 1. A training run: start the application, use it, stop it. The cache is written when the JVM ends.
+JAVA_OPTS="-XX:AOTCacheOutput=app.aot" bin/my-app.sh
+
+# 2. Every later run starts from the cache.
+JAVA_OPTS="-XX:AOTCache=app.aot" bin/my-app.sh
+----
+
+On a jlink image, whose launcher reads no `JAVA_OPTS`, through the `JDK_JAVA_OPTIONS` variable the `java` launcher reads itself:
+
+[source,bash]
+----
+JDK_JAVA_OPTIONS="-XX:AOTCacheOutput=app.aot" target/dist/bin/my-app
+JDK_JAVA_OPTIONS="-XX:AOTCache=app.aot" target/dist/bin/my-app
+----
+
+What to know:
+
+* **The cache matches one build on one JDK.** Record it again after each build of the application and each change of JDK: classes that no longer match are loaded the usual way, silently.
+* **The two launches do not gain the same.** In a jlink image, which has one layer, every class of the application is stored loaded and linked. In the application layer of a `vidocq:package` distribution, the classes of that layer are stored too, but not linked: they gain less (xref:shipping.adoc#why-two-ways[why two ways of loading]).
+* **Never add `--limit-modules`** to the JVM options of an application: the JVM then turns CDS and the AOT cache off.
+* **Do not record a cache over an encrypted jar (sjar).** The cache holds the classes as the JVM received them, so decrypted (Vidocq/vauban#304).
+
+Start times are not given here: a figure belongs in `BENCH.md`, with its machine and its command (Vidocq/vidocq#579).
+
+[#aot-graalvm]
+*A GraalVM native image is not available yet.* What is in place is its groundwork: no reflection where code can be generated, no dynamic proxy, and, for an image, a launch in one layer with nothing defined at run time. The reachability metadata, the build goal and the tests are not done.
 
 == Next steps
 

@@ -4,11 +4,11 @@ Complete workflow for packaging a Vidocq application into a self-contained
 deployable artefact via the `vidocq-runtime-maven-plugin`. Three packaging
 targets are available, plus an external configuration override mechanism.
 
-| Target | Goal | Output | Size | Start-up |
-|-------|------|--------|--------|-----------|
-| jlink runtime image | `vidocq:jlink` | `target/dist/` (binary + embedded Java runtime) | ~40 MB | ~4 s |
-| Native bundle | `vidocq:jpackage` | `target/installer/<name>.app` (macOS), `.exe`/`.msi`/`.deb`/`.rpm` depending on OS, or cross-platform app-image | ~40 MB | ~1 s (CDS) |
-| Docker image | `vidocq:docker` | `target/Dockerfile` to build via `docker build` | ~50 MB total | n/a |
+| Target | Goal | Output | Size |
+|-------|------|--------|--------|
+| jlink runtime image | `vidocq:jlink` | `target/dist/` (binary + embedded Java runtime) | ~40 MB |
+| Native bundle | `vidocq:jpackage` | `target/installer/<name>.app` (macOS), `.exe`/`.msi`/`.deb`/`.rpm` depending on OS, or cross-platform app-image | ~40 MB |
+| Docker image | `vidocq:docker` | `target/Dockerfile` to build via `docker build` | ~50 MB total |
 
 All three rely on the **same** jlink runtime (see §Layout). `jpackage`
 reuses the image produced by `jlink`; `docker` copies it into a minimal
@@ -458,8 +458,9 @@ ENTRYPOINT ["/opt/app/bin/<launcher>"]
 - **In-house `cassini-jsonb` / `cassini-jsonp`**
   ([roadmap](../cassini/JSON-ROADMAP.md)) — will remove the records + Yasson
   friction.
-- **Pre-generated CDS** in `vidocq:jlink` (`--generate-cds-archive`) — additional
-  100–300 ms gain at start-up.
+- **An AOT cache recorded by the build** — today the JDK's options work on the image and
+  on the distribution, passed by hand (see "Ahead of time" in the usage page); no goal
+  records the cache yet.
 - **Multi-arch Docker image** (buildx, `linux/amd64`+`linux/arm64`) — useful for
   multi-architecture production deployments.
 - **Sign macOS / Windows installers** — `codesign` + Apple notarization workflow,
