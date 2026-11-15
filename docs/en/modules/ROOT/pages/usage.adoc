@@ -196,7 +196,7 @@ boot layer.
 * `vidocq:jlink`, `vidocq:jpackage` and the Docker image built on the jlink image have no application layer: an
   image has one layer, the JVM's own, with every module linked into it, and `vidocq.app.layer` does not apply
   (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-one-layer[one layer], BUG-20261114-11). The same application
-  runs in both; xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-differences[three things differ]. An encrypted jar
+  runs in both; xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-differences[four things differ]. An encrypted jar
   needs the application layer, so the `vidocq:package` distribution.
 * A library with native code (JNI) cannot be loaded twice by the JVM, and the dev reload loads the application
   layer again: pin it with `vidocq.app.layer.keep`.

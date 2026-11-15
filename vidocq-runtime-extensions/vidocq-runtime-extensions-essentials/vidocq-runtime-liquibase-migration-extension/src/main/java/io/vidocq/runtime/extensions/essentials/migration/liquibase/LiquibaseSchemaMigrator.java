@@ -166,9 +166,14 @@ public final class LiquibaseSchemaMigrator implements SchemaMigrator {
         return Scope.child(Map.of(AnalyticsArgs.ENABLED.getKey(), Boolean.FALSE), work);
     }
 
+    /**
+     * The change logs of the application's modules: those of the application layer, or, in a launch with one layer
+     * such as a jlink image, those of the application module's layer, where no class loader lists a directory either
+     * (BUG-20261115-02). Liquibase's own accessor in a class-path launch.
+     */
     private static ResourceAccessor currentResources() {
         ClassLoader loader = applicationLoader();
-        return ApplicationLayer.current()
+        return ApplicationLayer.home()
                 .<ResourceAccessor>map(layer ->
                         new ApplicationResourceAccessor(directory -> ApplicationLayer.list(layer, directory), loader))
                 .orElseGet(() -> new ClassLoaderResourceAccessor(loader));

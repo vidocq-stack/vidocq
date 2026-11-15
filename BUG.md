@@ -5,6 +5,39 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261115-02 — In a jlink image, Flyway finds no migration: the schema is not created
+
+- **Date**: 2026-11-15
+- **Status**: FIXED on `fix/flyway-flat-image`
+- **Affected module**: vidocq-runtime-spi (`ApplicationLayer`), vidocq-runtime-flyway-migration-extension
+  (`FlywaySchemaMigrator`), vidocq-runtime-liquibase-migration-extension (`LiquibaseSchemaMigrator`)
+- **Symptom**: in the image of `vidocq:jlink`, and in the `vidocq:jpackage` application and the `vidocq:docker` image
+  of the `jlink` kind, an application with the Flyway extension starts without its schema: `No migrations found. Are
+  your locations set up correctly?`, `Migration done: … applied=0`, the anomaly `[VIDOCQ-MIG-001]`, then every
+  request fails on a missing table. The `vidocq:package` distribution of the same build applies the migrations.
+  Found by the tutorial session on main 688eaf7a, the day the image got one layer (Vidocq/vidocq#584); the image of
+  ab6d15fe, with its application layer, applied them.
+- **Minimal repro**: the tutorial at step 11 (`flyway-migration`, `src/main/resources/db/migration/V1__books.sql`,
+  `opens db.migration;`), `./mvnw -DskipTests verify vidocq:jlink`, then `target/dist/bin/library` on an empty
+  database. With the image's `bin/java`: `getResources("db/migration")` is empty, while
+  `getResources("db/migration/V1__books.sql")` returns `jrt:/com.example.library/db/migration/V1__books.sql`.
+- **Cause**: an image has no directory entry, so no class loader lists `db/migration`, and Flyway's class-path
+  scanner starts from that directory (it has no `jrt:` scanner either). The extension already listed the migrations
+  from the modules for a launch in the application layer (vidocq#96), but only when there was such a layer: an image
+  no longer has one. The package is open and the file is found by name: this is not the documented difference about
+  a resource in a package of another module.
+- **Fix**: `ApplicationLayer.home()` gives the layer whose modules hold the application: the application layer, else
+  the layer of the application module, as in an image. `ApplicationLayer.list` skips the modules of the JDK, which
+  that layer holds too. The Flyway extension lists from `home()`, and so does the Liquibase extension, which had the
+  same condition and was not tried in an image. The other callers of `ApplicationLayer.current()` (Foy, Ibarra,
+  Bodoni, Noether) already fall back to the boot layer.
+- **Validation**: `ApplicationLayerTest` (a module of the JDK is never listed; no runtime, no home).
+  `AppLayerImageIT` and `AppLayerPackageIT` (`-Pit`): the fixture prints what `ApplicationLayer.list(home(), …)` finds,
+  `[META-INF/acme/index.html]`, in the image and in the distribution. Not validated here: Flyway itself in an image,
+  which needs a database; the tutorial session runs it on the published SNAPSHOT.
+- **Documentation**: the difference is added to "What differs from a launch in the application layer" and to the
+  page "Choosing how to ship an application".
+
 ## BUG-20261115-01 — An application stop cuts every WebSocket without a Close frame
 
 - **Date**: 2026-11-15

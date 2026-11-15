@@ -66,6 +66,7 @@ class AppLayerPackageIT {
         String out = run(script, runLog);
         // The loader's name, not the URL's scheme: Vauban gives a plain jar a jar: URL (Vidocq/vauban#178)
         assertTrue(out.contains("LOOKUP-LOADER " + LAYER_LOADER), "the library's loader is the application layer's:\n" + out);
+        assertTrue(out.contains("LIST-HOME [META-INF/acme/index.html]"), "a directory of the application:\n" + out);
         assertTrue(out.contains("LOOKUP-FOUND "), "it sees the application's resource:\n" + out);
         assertTrue(out.contains("3 modules, 2 libraries"), "the report counts the libraries in the layer:\n" + out);
         assertTrue(out.contains("SQL-OK"), "a JDK module only an app/ module requires is resolved (vidocq#254):\n" + out);

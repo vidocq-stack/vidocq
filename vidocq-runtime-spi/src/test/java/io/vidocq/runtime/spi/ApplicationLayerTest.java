@@ -63,10 +63,23 @@ class ApplicationLayerTest {
         assertTrue(ApplicationLayer.list(layer, "").contains("module-info.class"), "\"\" lists every file");
     }
 
+    /**
+     * A launch with one layer, such as a jlink image, holds the JDK's modules next to the application's: the layer
+     * of the application module is then listed, and a file of the JDK is never one of the application's
+     * (BUG-20261115-02).
+     */
+    @Test
+    void aModuleOfTheJdkIsNeverListed() {
+        assertTrue(ModuleLayer.boot().findModule("java.base").isPresent());
+
+        assertEquals(List.of(), ApplicationLayer.list(ModuleLayer.boot(), "java/lang"));
+    }
+
     @Test
     void thereIsNoApplicationLayerWithoutARuntime() {
         assertTrue(ApplicationLayer.current().isEmpty(), "no runtime on the path implements ApplicationLayer");
         assertTrue(ApplicationLayer.applicationModule().isEmpty(), "no runtime names the application module");
+        assertTrue(ApplicationLayer.home().isEmpty(), "no runtime, so no layer that holds the application");
     }
 
     @Test

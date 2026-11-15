@@ -1,6 +1,7 @@
 package acme.app;
 
 import acme.pages.Pages;
+import io.vidocq.runtime.spi.ApplicationLayer;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.event.Startup;
@@ -24,6 +25,10 @@ public class Probe {
                 .map(ServiceLoader.Provider::get)
                 .filter(tool -> tool.name().equals("acme-app-tool")).count();
         System.out.println("TOOL-PROVIDERS " + tools);
+        // What a library that lists a directory of the application finds, such as a migration engine: no class loader
+        // lists one in an application layer, nor in a jlink image, which has no directory entry (BUG-20261115-02).
+        System.out.println("LIST-HOME " + ApplicationLayer.home()
+                .map(layer -> ApplicationLayer.list(layer, "META-INF/acme")).orElse(null));
         Pages.startPoller();
     }
 }

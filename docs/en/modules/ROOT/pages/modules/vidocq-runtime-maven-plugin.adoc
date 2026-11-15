@@ -644,7 +644,7 @@ The build logs `application layer: <n> libraries, <m> kept in the parent layer b
 
 *Jlink, jpackage and Docker.* An image has no application layer (Vidocq/vidocq#580): `vidocq:jlink` links every
 module into one layer, the JVM's own, and the split above does not apply (<<jlink-one-layer>>). `vidocq.app.layer` and
-`vidocq.app.layer.keep` set on an image goal are named in a warning and change nothing. `vidocq:jpackage` and
+`vidocq.app.layer.keep` set on an image goal change nothing, and the build says so in an information line. `vidocq:jpackage` and
 `vidocq:docker` build on that image.
 
 *Native code and threads.* A library with native code (JNI) cannot be loaded twice by the JVM, so the dev reload cannot reload it: pin it
@@ -808,13 +808,18 @@ The image links only the JDK modules the application needs, and `jdk.jfr` is not
 `-XX:StartFlightRecording` or `jcmd <pid> JFR.start`, add it with `-Dvidocq.jlink.addModules=jdk.jfr`.
 
 [#jlink-differences]
-*What differs from a launch in the application layer.* The same application runs in both. Three things differ:
+*What differs from a launch in the application layer.* The same application runs in both. Four things differ:
 
 * **A resource in a package of another module.** The loader of the application layer returns any resource of any
   archive. The JVM's loader hides a resource that sits in a package of a named module from the other modules, unless
   the package is open. A resource outside any package, such as `META-INF/resources/...` or `META-INF/acme/x.html`,
   is found from anywhere, in the image too. Code that reads `com/acme/data/x.json` of another module through a
   class loader works under `vidocq:run` and fails in the image: move the file out of the package, or open the package.
+* **A directory of resources cannot be listed through a class loader.** An image has no directory entry:
+  `getResources("db/migration")` returns nothing, while `getResource("db/migration/V1__init.sql")` finds the file.
+  The Flyway extension lists the migrations from the application's modules, in an image as in the application layer
+  (BUG-20261115-02). A library of your own that scans a directory needs the same: `ApplicationLayer.home()` gives the
+  layer that holds the application, and `ApplicationLayer.list(layer, directory)` its files.
 * **The context class loader** is the JVM's application loader, not Vauban's.
 * **The settings of the application layer** (`vidocq.app.layer`, `vidocq.app.layer.keep`, the pins) have no effect.
 

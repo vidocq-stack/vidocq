@@ -109,9 +109,12 @@ class ImageLaunchMojosTest {
         assertEquals(List.of(), log.warnings);
     }
 
-    /** The settings of the application layer do not apply to an image: one that is set is named in a warning. */
+    /**
+     * The settings of the application layer do not apply to an image. One that is set is named in an information
+     * line, never a warning: a property of the pom also serves vidocq:package, where it applies.
+     */
     @Test
-    void aLayerSettingIsNamedInAWarning() throws Exception {
+    void aLayerSettingIsNamedWithoutAWarning() throws Exception {
         for (String setting : new String[] {"appLayer", "appLayerKeep"}) {
             var log = new Infos();
             VidocqJlinkMojo mojo = jlink("acme.app", "acme.app.App", log);
@@ -120,8 +123,8 @@ class ImageLaunchMojosTest {
             ImageLaunch launch = mojo.bakedLaunch("acme.app,flow.push,java.base");
 
             assertEquals(List.of("--add-modules=flow.push", NO_LAYER), launch.vmOptions(), setting);
-            assertEquals(1, log.warnings.size(), setting);
-            assertTrue(log.warnings.getFirst().contains("do not apply to a jlink image"), log.warnings.getFirst());
+            assertEquals(List.of(), log.warnings, setting);
+            assertTrue(log.lines.getFirst().contains("do not apply to a jlink image"), log.lines.toString());
         }
     }
 
@@ -343,14 +346,15 @@ class ImageLaunchMojosTest {
 
     /** vidocq.app.layer does not apply to the application jpackage builds on an image: set, it is named. */
     @Test
-    void jpackageNamesALayerSettingInAWarning() throws Exception {
+    void jpackageNamesALayerSettingWithoutAWarning() throws Exception {
         var log = new Infos();
         VidocqJpackageMojo mojo = jpackage("acme.app", log);
         set(VidocqJpackageMojo.class, mojo, "appLayer", "all");
 
         mojo.launchOf();
 
-        assertTrue(log.warnings.getLast().contains("vidocq.app.layer does not apply"), log.warnings.toString());
+        assertEquals(List.of(), log.warnings);
+        assertTrue(log.lines.getLast().contains("vidocq.app.layer does not apply"), log.lines.toString());
     }
 
     private VidocqJpackageMojo jpackage(String mainModule, Infos log) throws Exception {

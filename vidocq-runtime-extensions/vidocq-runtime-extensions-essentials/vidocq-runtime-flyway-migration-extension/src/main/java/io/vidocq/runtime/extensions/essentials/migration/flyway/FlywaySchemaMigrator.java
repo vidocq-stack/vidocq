@@ -128,9 +128,14 @@ public final class FlywaySchemaMigrator implements SchemaMigrator {
         return configuration.load();
     }
 
-    /** What lists the application layer's files, or {@code null} without a layer. */
+    /**
+     * What lists the files of the application's modules, or {@code null} in a class-path launch: the modules of the
+     * application layer, or, in a launch with one layer such as a jlink image, those of the application module's
+     * layer. An image has no directory entry, so Flyway's scanner, which asks for the directory first, finds no
+     * migration there either (BUG-20261115-02).
+     */
     private static Function<String, List<String>> currentLister() {
-        return ApplicationLayer.current()
+        return ApplicationLayer.home()
                 .<Function<String, List<String>>>map(layer -> directory -> ApplicationLayer.list(layer, directory))
                 .orElse(null);
     }

@@ -1,5 +1,6 @@
 module acme.app {
     requires io.vidocq.runtime.core;
+    requires io.vidocq.runtime.spi;
     requires jakarta.cdi;
     requires acme.pages;
     requires acme.sql;

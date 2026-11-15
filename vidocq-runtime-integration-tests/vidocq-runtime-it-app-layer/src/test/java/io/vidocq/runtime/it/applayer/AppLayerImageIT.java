@@ -59,6 +59,9 @@ class AppLayerImageIT {
         assertTrue(out.contains("LOOKUP-LOADER app"), "the library is loaded by the JVM's loader:\n" + out);
         // A library finds the application's resource, which no package holds, in the image (Foy#96).
         assertTrue(out.contains("LOOKUP-FOUND jrt:/"), "the library sees the application's resource:\n" + out);
+        // An image has no directory entry: a library lists a directory of the application from its modules
+        // (BUG-20261115-02, Flyway found no migration).
+        assertTrue(out.contains("LIST-HOME [META-INF/acme/index.html]"), "a directory of the application:\n" + out);
         assertTrue(out.contains("SQL-OK"), "a JDK module only a library requires is resolved (vidocq#254):\n" + out);
         assertTrue(out.contains("anomalies   none"), out);
         assertFalse(out.contains(AppLayerPackageIT.TWICE_WARNING), out);

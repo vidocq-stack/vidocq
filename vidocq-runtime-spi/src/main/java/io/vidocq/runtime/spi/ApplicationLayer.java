@@ -85,6 +85,19 @@ public interface ApplicationLayer {
         return first(ApplicationLayer::module);
     }
 
+    /**
+     * The layer whose modules hold the application, for a library that lists a directory of them: the application
+     * layer when there is one; else the layer of the application module, when the application is a named module.
+     * That second case is a launch with one layer, such as a jlink image (Vidocq/vidocq#580): there too no class
+     * loader lists a directory, since an image has no directory entry, and {@link #list} reads the modules instead.
+     *
+     * @return the layer; empty in a class-path launch, and when no runtime implements this interface
+     */
+    static Optional<ModuleLayer> home() {
+        Optional<ModuleLayer> layer = current();
+        return layer.isPresent() ? layer : applicationModule().filter(Module::isNamed).map(Module::getLayer);
+    }
+
     /** What the first implementation that knows it answers. */
     private static <T> Optional<T> first(Function<ApplicationLayer, Optional<T>> answer) {
         try {
@@ -104,9 +117,10 @@ public interface ApplicationLayer {
     /**
      * The files under {@code directory} in the modules of {@code layer}, at any depth: their resource
      * names, such as {@code db/migration/V1__init.sql} for {@code db/migration}. Directories are left out.
-     * Only the modules of {@code layer} itself are listed, not those of its parents.
+     * Only the modules of {@code layer} itself are listed, not those of its parents, and never a module of the JDK
+     * ({@code java.*}, {@code jdk.*}), which a launch with one layer holds next to the application's.
      *
-     * @param layer     the layer, usually the one {@link #current()} returns
+     * @param layer     the layer, usually the one {@link #home()} returns
      * @param directory a resource directory, such as {@code db/migration}; a leading or trailing
      *                  {@code /} is ignored, and {@code ""} lists every file
      * @return the names, sorted, each once; an immutable list, empty when there is none
@@ -117,6 +131,9 @@ public interface ApplicationLayer {
         String prefix = root.isEmpty() ? "" : root + "/";
         TreeSet<String> names = new TreeSet<>();
         for (ResolvedModule module : layer.configuration().modules()) {
+            if (module.name().startsWith("java.") || module.name().startsWith("jdk.")) {
+                continue;
+            }
             try (ModuleReader reader = module.reference().open();
                  Stream<String> entries = reader.list()) {
                 entries.filter(name -> name.startsWith(prefix) && !name.endsWith("/")).forEach(names::add);

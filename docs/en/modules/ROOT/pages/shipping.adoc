@@ -95,11 +95,12 @@ The rule fits in one sentence: *what stays as jars keeps the application layer; 
 [#same-application]
 == The same application in both
 
-Your sources, your `module-info.java` and your build do not change with the form. Three things differ at run time, and they show only in an image, so test the image itself in CI (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-differences[what differs]):
+Your sources, your `module-info.java` and your build do not change with the form. Four things differ at run time, and they show only in an image, so test the image itself in CI (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-differences[what differs]):
 
 * a resource in a package of another module is hidden by the JVM's loader, unless the package is open; a resource outside any package, such as `META-INF/resources/...`, is found from anywhere;
+* a directory of resources cannot be listed through a class loader in an image, which has no directory entry; the Flyway extension lists its migrations from the application's modules instead, and a library of your own that scans a directory does the same with `ApplicationLayer.home()` and `ApplicationLayer.list`;
 * the context class loader is the JVM's, not Vauban's;
-* `vidocq.app.layer` and `vidocq.app.layer.keep` have no effect on an image: set there, they are named in a warning.
+* `vidocq.app.layer` and `vidocq.app.layer.keep` have no effect on an image.
 
 [#not-yet]
 == Not available yet

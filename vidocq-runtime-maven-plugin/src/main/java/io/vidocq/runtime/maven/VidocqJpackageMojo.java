@@ -175,7 +175,7 @@ public class VidocqJpackageMojo extends AbstractMojo {
                         + ": nothing but the application module is started.");
             }
             if (appLayer != null && !appLayer.isBlank()) {
-                getLog().warn("vidocq.app.layer does not apply to a jlink image or to the application jpackage"
+                getLog().info("vidocq.app.layer does not apply to a jlink image or to the application jpackage"
                         + " builds on it: the image has one layer, the JVM's own.");
             }
             return ImageLaunch.of(mainModule, mainClass, modules);

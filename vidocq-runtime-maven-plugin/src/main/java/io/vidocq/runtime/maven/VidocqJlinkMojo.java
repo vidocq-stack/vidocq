@@ -453,13 +453,14 @@ public class VidocqJlinkMojo extends AbstractMojo {
      * The launch baked into the image: one layer, the JVM's own, every module of {@code rootModules} rooted so that
      * a module nothing requires is resolved too (BUG-20261114-05), and no application layer (Vidocq/vidocq#580).
      * Logged, since this line is what to read when a module is missing at start. The settings of the application
-     * layer do not apply to an image: one that is set is named in a warning.
+     * layer do not apply to an image; one that is set is named in an information line, not a warning: a property of
+     * the pom also serves {@code vidocq:package}, where it applies.
      *
      * @param rootModules the modules jlink links, comma separated
      */
     ImageLaunch bakedLaunch(String rootModules) {
         if (isSet(appLayer) || isSet(appLayerKeep)) {
-            getLog().warn("vidocq.app.layer and vidocq.app.layer.keep do not apply to a jlink image: it has one"
+            getLog().info("vidocq.app.layer and vidocq.app.layer.keep do not apply to a jlink image: it has one"
                     + " layer, the JVM's own, with every module linked into it. They still apply to vidocq:package,"
                     + " vidocq:run and vidocq:dev.");
         }
