@@ -161,7 +161,7 @@ class McpClientTest {
      * listening does not do: macOS drops the connection, which then times out.
      */
     @Test
-    void aClosedPortIsUnreachable() throws Exception {
+    void aClosedPortIsUnreachable() {
         URI closed = URI.create("http://127.0.0.1:0/mcp");
         try (McpClient nowhere = new McpClient(closed, Duration.ofSeconds(5))) {
             JsonObject request = nowhere.request("tools/call", Json.createObjectBuilder().add("name", "t")
