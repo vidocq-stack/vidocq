@@ -45,7 +45,8 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261115-05 — A packaged servlet application runs its build compatible extensions at every start
 
 - **Date**: 2026-11-15
-- **Status**: OPEN — the cause is in Vauban (`vauban-core`, `vauban-classloader`); nothing to change in Vidocq
+- **Status**: FIXED in Vauban (BUG-20261115-07, `vauban-core`), on the companion branches
+  `fix/bce-processed-source-location` of Vauban and Vidocq; nothing to change in Vidocq's code
 - **Module**: the packaged application (`vidocq:package` layout, application layer); found by
   `CreateThenBuildIT.aPackagedServletApplicationInjectsTheRequestTheSessionAndTheContext` (`vidocq-runtime-it-create`)
 - **Symptom**: `vidocq create -x foy-servlet` with one `@WebServlet`, then `mvn verify`: `vidocq:generate` says
@@ -69,11 +70,17 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   the container compares the two as strings (`ContainerScanner.extractSourceRoot` against
   `CodeSource.getLocation().toString()`). The application's classes look unprocessed, and every extension runs.
   Not caused by Vidocq/foy#107: any packaged application whose bean archives were all processed at compile has it.
-- **Fix to make (Vauban)**: compare locations, not strings (both as a `Path` or a normalised `URI`), or have
-  `VaubanClassLoader` give the JDK's `jar:file:/` form (Vauban BUG-20261115-07, branch
-  `fix/bce-processed-source-location`). The IT's `servlet` case asserts today's `cdi extensions  2 extensions run at
-  start` row, so that fix makes it fail: then it starts with `ON_THE_RECORD` and asserts that no `cdi extensions` row
-  is printed.
+- **Fix (Vauban)**: the container compares the archive that holds the marker with the class's code source as
+  locations, not as strings (Vauban BUG-20261115-07). The build of such an application now says
+  `Vauban: nothing to freeze: every build compatible extension of the deployment ran at compile.` (Vauban's
+  `FrozenExtensions.ALL_AT_COMPILE`, at INFO), and the start runs no extension: the detailed report has no
+  `cdi extensions` row, and `-Dvidocq.startup.require-frozen-extensions=true` starts.
+- **Test**: the `servlet` case of `CreateThenBuildIT.aPackagedServletApplicationInjectsTheRequestTheSessionAndTheContext`
+  now starts under `require-frozen-extensions=true`, as the `servlet-rest` case does, and asserts the build's line,
+  no record, no `cdi extensions` row, no `VIDOCQ-GEN-` anomaly and the three HTTP answers. Against the published
+  Vauban it fails on the build's line (`… are not frozen, the container start runs them: the deployment has no build
+  compatible extension.`), and on the start (`[VIDOCQ-GEN-003] … 2 build compatible extensions ran at start`) when
+  the build assertion is left out.
 
 ## BUG-20261115-04 — An application with the Liquibase extension does not start on the module path
 

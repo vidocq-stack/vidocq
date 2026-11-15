@@ -69,7 +69,8 @@ import static org.junit.jupiter.api.Assertions.fail;
  * with {@code @VidocqTest} and calls {@code GET /hello}, {@code vidocq:package} writes the distribution, and
  * {@code vidocq:jlink} the self-contained image ({@code vidocq build jlink}). With {@code --with-parent}, the same
  * project builds under the parent. A created servlet application, packaged, injects Foy's request, session and
- * context beans on the extensions frozen at build (Vidocq/foy#107).
+ * context beans (Vidocq/foy#107), and starts without running a build compatible extension: they are frozen at build,
+ * or they all ran at compile.
  */
 class CreateThenBuildIT {
 
@@ -99,10 +100,30 @@ class CreateThenBuildIT {
             Pattern.compile("cdi extensions\\s+[1-9]\\d* extensions? frozen at build");
 
     /**
-     * The {@code cdi extensions} row of the startup report of the created servlet application, whose two extensions
-     * (Foy's and the web contexts') run at start: BUG-20261115-05.
+     * What {@code vidocq:generate} logs when every bean archive of the deployment was processed at compile: the
+     * extensions ran then, and the start runs none of them (Vidocq BUG-20261115-05, Vauban BUG-20261115-07).
      */
-    private static final Pattern RUN_AT_START = Pattern.compile("cdi extensions\\s+2 extensions run at start");
+    private static final String RAN_AT_COMPILE =
+            "[INFO] Vauban: nothing to freeze: every build compatible extension of the deployment ran at compile.";
+
+    /**
+     * The {@code cdi extensions} row of the startup report, whatever it says: a start that neither ran an extension
+     * nor loaded a record has none.
+     */
+    private static final Pattern CDI_EXTENSIONS_ROW = Pattern.compile("^\\s+cdi extensions\\s", Pattern.MULTILINE);
+
+    /**
+     * The {@code weaving} row of the {@code layer} section of the detailed startup report, which the {@code cdi
+     * extensions} row follows when there is one: the report was printed, so a missing row is really missing. Not the
+     * {@code weaving 4 ms} of the {@code phases} row.
+     */
+    private static final Pattern WEAVING_ROW = Pattern.compile("^\\s+weaving\\s+(?!\\d)\\S", Pattern.MULTILINE);
+
+    /**
+     * The prefix of the anomalies of a start that misses what the build step did: no {@code vidocq:generate} index
+     * ({@code VIDOCQ-GEN-001}), no processor output ({@code -002}), no usable record of the extensions ({@code -003}).
+     */
+    private static final String GENERATE_ANOMALY = "[VIDOCQ-GEN-";
 
     /** The last line of a boot. */
     private static final String STARTED = "Vidocq - Started in";
@@ -275,9 +296,8 @@ class CreateThenBuildIT {
     /**
      * The created servlet applications. With REST's extensions, whose archives make {@code vidocq:generate} freeze
      * every extension, Foy's included, the start must load that record. Foy's extensions alone all run when the
-     * application compiles: the build has nothing to freeze, and the start should run none, but it runs them in the
-     * application layer (BUG-20261115-05, in Vauban), so that start is not required to run on a record, and its
-     * report must still say so: the fix makes the case fail, to be switched to the record.
+     * application compiles: the build has nothing to freeze and says so, and the start, required to run on a record
+     * all the same, runs none of them (BUG-20261115-05, fixed in Vauban: BUG-20261115-07).
      */
     static Stream<Arguments> servletApplications() {
         return Stream.of(
@@ -289,8 +309,10 @@ class CreateThenBuildIT {
      * Vidocq/foy#107 on the packaged path: in the project {@code vidocq create} writes, a servlet injects the
      * {@code HttpServletRequest}, the {@code HttpSession} and the {@code ServletContext}, and an application
      * {@code ServletContextListener} uses the injected context in {@code contextInitialized}. The packaged
-     * application starts, on the record {@code vidocq:generate} wrote when it froze the extensions; the three beans
-     * answer over HTTP, and the container generates no class at run time: their client proxies come from Foy's build.
+     * application starts under {@code vidocq.startup.require-frozen-extensions=true}: on the record
+     * {@code vidocq:generate} wrote when it froze the extensions, or, when they all ran at compile, without running
+     * any. The three beans answer over HTTP, and the container generates no class at run time: their client proxies
+     * come from Foy's build.
      */
     @ParameterizedTest(name = "{0}")
     @MethodSource("servletApplications")
@@ -317,27 +339,29 @@ class CreateThenBuildIT {
                         extension + " is not in the record of the build:\n" + frozenRecord);
             }
         } else {
-            assertFalse(Files.exists(project.resolve("target/classes/" + FROZEN_RECORD)),
-                    "vidocq:generate froze extensions the compilation already ran:\n" + output);
+            assertTheBuildHadNothingToFreeze(project, output);
         }
 
         Path launcher = project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh");
         Path log = logs().resolve("create-" + name + "-run.log");
-        String options = "-Dvidocq.http.host=127.0.0.1 -Dvidocq.http.port=0 " + (frozen ? ON_THE_RECORD : REPORT);
+        String options = "-Dvidocq.http.host=127.0.0.1 -Dvidocq.http.port=0 " + ON_THE_RECORD;
         Process application = launch(launcher, options).redirectOutput(log.toFile()).start();
         try {
+            // Started under require-frozen-extensions: no extension ran at start without the record of the build.
             String boot = awaitStarted(application, log);
             if (frozen) {
                 assertTrue(FROZEN_AT_BUILD.matcher(boot).find(),
                         launcher + " did not start on the extensions frozen at build:\n" + boot);
             } else {
-                // Vidocq BUG-20261115-05: every archive was processed at compile, so the start should run no
-                // extension, but Vauban's application layer misses the archives' markers and runs both. Once Vauban
-                // fixes it (Vauban BUG-20261115-07, branch fix/bce-processed-source-location), this row goes: start
-                // this case ON_THE_RECORD instead, and close the bug.
-                assertTrue(RUN_AT_START.matcher(boot).find(), launcher + " no longer runs its two extensions at"
-                        + " start: BUG-20261115-05 is fixed, start this case ON_THE_RECORD:\n" + boot);
+                // Vidocq BUG-20261115-05, Vauban BUG-20261115-07: every archive was processed at compile, and the
+                // application layer sees their markers: the start runs no extension and has no record to load.
+                assertTrue(WEAVING_ROW.matcher(boot).find(),
+                        launcher + " printed no layer section of the detailed startup report:\n" + boot);
+                assertFalse(CDI_EXTENSIONS_ROW.matcher(boot).find(),
+                        launcher + " ran, or loaded, extensions that all ran at compile:\n" + boot);
             }
+            assertFalse(boot.contains(GENERATE_ANOMALY),
+                    launcher + " reports a build step it did not miss:\n" + boot);
             URI whoAmI = URI.create("http://127.0.0.1:" + boundPort(boot) + CONTEXT_PATH + "/whoami");
             try (HttpClient alice = HttpClient.newBuilder().cookieHandler(new CookieManager()).build();
                  HttpClient bob = HttpClient.newBuilder().cookieHandler(new CookieManager()).build()) {
@@ -478,6 +502,17 @@ class CreateThenBuildIT {
                 "vidocq:generate wrote no record of the build compatible extensions:\n" + output);
         assertTrue(FROZE.matcher(output).find(),
                 "vidocq:generate did not freeze the build compatible extensions:\n" + output);
+    }
+
+    /**
+     * Vidocq BUG-20261115-05, Vauban BUG-20261115-07: every bean archive of the deployment was processed at compile,
+     * so {@code vidocq:generate} has nothing to freeze, writes no record, and says why, without a warning.
+     */
+    private static void assertTheBuildHadNothingToFreeze(Path project, String output) {
+        assertFalse(Files.exists(project.resolve("target/classes/" + FROZEN_RECORD)),
+                "vidocq:generate froze extensions the compilation already ran:\n" + output);
+        assertTrue(output.lines().anyMatch(RAN_AT_COMPILE::equals),
+                "vidocq:generate did not say that every extension ran at compile:\n" + output);
     }
 
     /**
