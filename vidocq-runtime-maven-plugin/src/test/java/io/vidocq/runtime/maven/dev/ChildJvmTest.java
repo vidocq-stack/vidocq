@@ -106,6 +106,10 @@ class ChildJvmTest {
         var command = jvm.command();
         assertTrue(command.contains("-Dvidocq.app.module=com.example.app"), command.toString());
         assertTrue(command.stream().noneMatch(a -> a.startsWith("-Dvidocq.app.main=")), command.toString());
+
+        var unnamed = ChildJvm.of(List.of(tmp.resolve("libs")), List.of(tmp.resolve("classes")), " ", null, List.of(),
+                Map.of(), tmp).command();
+        assertTrue(unnamed.stream().noneMatch(a -> a.startsWith("-Dvidocq.app.module=")), unnamed.toString());
     }
 
     /** An exploded module whose descriptor requires {@code required}, besides java.base. */

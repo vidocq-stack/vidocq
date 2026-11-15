@@ -191,6 +191,25 @@ class VidocqPackageMojoTest {
         assertTrue(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.module=io.repro.app \\"));
     }
 
+    /** An automatic application jar, or one the module system cannot read, names no module: the option is left out. */
+    @Test
+    void layerLaunchers_nameNoModuleForAnAutomaticOrUnreadableJar(@TempDir Path dir) throws Exception {
+        VidocqPackageMojo mojo = packageMojo(dir, "classes", null);
+        set(mojo, "mainClass", "io.vidocq.runtime.core.Vidocq");
+        Path binDir = Files.createDirectories(dir.resolve("bin"));
+
+        moduleJar(dir, "app-1.0.jar", "io.repro.app", false);
+        mojo.generateShScript(binDir);
+        assertFalse(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.module="));
+
+        try (var out = new JarOutputStream(Files.newOutputStream(dir.resolve("app-1.0.jar")))) {
+            out.putNextEntry(new ZipEntry("module-info.class"));
+            out.write(new byte[] {1, 2, 3});
+        }
+        mojo.generateShScript(binDir);
+        assertFalse(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.module="));
+    }
+
     /** The legacy layout (vidocq.package.layer=false) launches {@code <module>/<class>} (BUG-20260710-02, #198). */
     @Test
     void legacyLaunchers_runTheRuntimeMainThroughItsModuleByDefault(@TempDir Path binDir) throws Exception {
