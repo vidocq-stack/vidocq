@@ -25,7 +25,6 @@ import java.security.Principal;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -61,6 +60,6 @@ class CurrentCallerPrincipalTest {
         assertEquals("reza".hashCode(), current.hashCode());
         assertEquals(current, new CurrentCallerPrincipal(() -> Optional.of(caller)));
         assertNotEquals(current, new CurrentCallerPrincipal(Optional::empty));
-        assertFalse(current.equals(null));
+        assertNotEquals(null, current);
     }
 }
