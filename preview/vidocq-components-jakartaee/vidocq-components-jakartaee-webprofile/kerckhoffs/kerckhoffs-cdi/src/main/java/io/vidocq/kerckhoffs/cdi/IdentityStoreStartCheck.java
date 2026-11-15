@@ -19,6 +19,9 @@
  */
 package io.vidocq.kerckhoffs.cdi;
 
+import jakarta.enterprise.context.ConversationScoped;
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.context.SessionScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.event.Startup;
 import jakarta.enterprise.inject.Instance;
@@ -35,9 +38,16 @@ public class IdentityStoreStartCheck {
 
     void check(@Observes Startup startup, Instance<IdentityStore> stores) {
         try {
-            stores.forEach(IdentityStore::priority);
+            for (var store : stores.handles()) {
+                // A store bound to the request (or the session) has no context to be created in at start.
+                if (!isBoundToARequest(store.getBean().getScope())) store.get().priority();
+            }
         } catch (RuntimeException e) {
             throw new DeploymentException("An identity store cannot be created: " + e.getMessage(), e);
         }
+    }
+
+    private static boolean isBoundToARequest(Class<?> scope) {
+        return scope == RequestScoped.class || scope == SessionScoped.class || scope == ConversationScoped.class;
     }
 }

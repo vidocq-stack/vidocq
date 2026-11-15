@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -91,6 +92,21 @@ class IdentityStoreCdiTest {
 
             assertEquals(Status.VALID, second.getStatus());
             assertEquals(Set.of("bar"), second.getCallerGroups());
+        }
+    }
+
+    @Test
+    void a_request_scoped_store_does_not_stop_the_start() {
+        try (var container = start(MemoryApplication.class, RequestScopedStore.class)) {
+            assertNotNull(container.select(IdentityStoreHandler.class), "the container started");
+        }
+    }
+
+    @Test
+    void a_handler_of_the_application_replaces_the_default_one() {
+        try (var container = start(MemoryApplication.class, ApplicationHandler.class)) {
+            assertEquals(Status.NOT_VALIDATED, validate(container, "reza", "secret1").getStatus(),
+                    "the application's handler answers, not the default one");
         }
     }
 

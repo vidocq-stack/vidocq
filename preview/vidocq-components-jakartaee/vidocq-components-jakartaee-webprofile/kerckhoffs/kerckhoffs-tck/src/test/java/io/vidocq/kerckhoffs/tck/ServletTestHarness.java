@@ -32,9 +32,12 @@ import io.vidocq.foy.internal.boot.WebAppModel.ServletDecl;
 import io.vidocq.foy.internal.container.VidocqServletContext;
 import io.vidocq.foy.internal.gen.RegistryComponentFactory;
 import io.vidocq.foy.internal.gen.WebComponentRegistry;
+import io.vidocq.foy.internal.listener.CdiRequestScopeListener;
+import io.vidocq.foy.spi.cdi.CdiContextListeners;
 import io.vidocq.foy.spi.jsp.JspEngine;
 import io.vidocq.foy.spi.security.IdentityStore;
 import io.vidocq.foy.spi.security.RequestAuthentication;
+import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
 import jakarta.servlet.Servlet;
@@ -140,6 +143,7 @@ public final class ServletTestHarness implements AutoCloseable {
         private final Map<String, PendingFilter> filters = new LinkedHashMap<>();
         private final List<FilterMappingDecl> filterMappings = new ArrayList<>();
         private final List<EventListener> listeners = new ArrayList<>();
+        private BeanManager beanManager;
         private String contextPath = "/";
         private IdentityStore identityStore;
         private RequestAuthentication requestAuthentication;
@@ -309,6 +313,15 @@ public final class ServletTestHarness implements AutoCloseable {
             return this;
         }
 
+        /**
+         * The CDI container of the application: the request context is active for each request, and the contexts
+         * CDI Lite leaves to the servlet container are driven, as {@code FoyChappeBoot} does.
+         */
+        public Builder beanManager(BeanManager beanManager) {
+            this.beanManager = beanManager;
+            return this;
+        }
+
         public ServletTestHarness start() {
             var cl = Thread.currentThread().getContextClassLoader();
             var reg = registry != null ? registry : WebComponentRegistry.forClassLoader(cl);
@@ -326,6 +339,7 @@ public final class ServletTestHarness implements AutoCloseable {
                 options = options.withSecurity(options.security().withRequestAuthentication(requestAuthentication));
             }
             Deployment d = WebAppDeployer.deploy(built, options, pagesLayer, jspEngine);
+            if (beanManager != null) registerCdiListeners(d);
             boolean owned = host == null;
             ServletTestHost mountHost = owned ? new ServletTestHost() : host;
             try {
@@ -336,6 +350,15 @@ public final class ServletTestHarness implements AutoCloseable {
                 throw e;
             }
             return new ServletTestHarness(mountHost, owned, mountHost.port(), built.contextPath(), d, built);
+        }
+
+        private void registerCdiListeners(Deployment deployment) {
+            deployment.listeners().addFirst(new CdiRequestScopeListener(beanManager));
+            for (var provider : java.util.ServiceLoader.load(CdiContextListeners.class)) {
+                for (EventListener listener : provider.listeners(beanManager)) {
+                    deployment.listeners().registerFirst(listener);
+                }
+            }
         }
 
         /** Appends the pre-built instances registered on this builder (conformance tests). */

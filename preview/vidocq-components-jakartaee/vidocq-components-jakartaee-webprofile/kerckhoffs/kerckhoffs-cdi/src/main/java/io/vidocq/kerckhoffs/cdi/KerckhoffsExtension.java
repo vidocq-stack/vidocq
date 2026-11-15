@@ -57,6 +57,13 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
     private final List<Declared> inMemoryDefinitions = new ArrayList<>();
     private final List<Declared> basicDefinitions = new ArrayList<>();
     private final List<Declared> formDefinitions = new ArrayList<>();
+    private boolean applicationHandler;
+
+    /** A handler the application provides replaces the default one (section 3.4.3): there is only ever one. */
+    @Enhancement(types = IdentityStoreHandler.class, withSubtypes = true)
+    public void collectApplicationHandler(ClassInfo candidate) {
+        if (!candidate.isInterface() && !candidate.isAbstract()) applicationHandler = true;
+    }
 
     @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = InMemoryIdentityStoreDefinition.class)
     public void collectInMemoryDefinition(ClassInfo declaring) {
@@ -109,10 +116,12 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
                             login == null || !login.hasMember("useForwardToLogin") || login.member("useForwardToLogin").asBoolean())
                     .createWith(FormMechanismCreator.class);
         }
-        components.addBean(IdentityStoreHandler.class)
-                .type(IdentityStoreHandler.class)
-                .scope(Singleton.class)
-                .createWith(IdentityStoreHandlerCreator.class);
+        if (!applicationHandler) {
+            components.addBean(IdentityStoreHandler.class)
+                    .type(IdentityStoreHandler.class)
+                    .scope(Singleton.class)
+                    .createWith(IdentityStoreHandlerCreator.class);
+        }
     }
 
     /**

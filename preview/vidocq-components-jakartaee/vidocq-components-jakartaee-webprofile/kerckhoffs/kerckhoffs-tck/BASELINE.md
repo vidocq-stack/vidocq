@@ -63,8 +63,8 @@ The container installs the mechanism of the war on that hook, as the Vidocq runt
 | `app-custom-session` | **5 of 5 green** | `@AutoApplySession`: the caller is kept in the session, the mechanism is not asked again, a logout forgets it |
 | `app-multiple-store` | **4 of 4 green** | several identity stores behind one handler |
 | `app-mem-basic-decorate` | 1 of 2 red | a CDI decorator on the mechanism: the decorated response header is missing |
-| `app-custom-identity-store-handler` | 4 of 5 red | an application `IdentityStoreHandler` does not replace the default one yet (it is a synthetic bean) |
-| `app-multiple-store-backup` | deployment refused | the start check creates a request-scoped identity store while no request scope is active |
+| `app-multiple-store-backup` | **6 of 6 green** | request-scoped identity stores, several stores with a backup |
+| `app-custom-identity-store-handler` | 4 of 5 green | an application `IdentityStoreHandler` replaces the default one; the red test reads groups from an embedded LDAP directory, not available yet |
 | `app-custom-authentication-mechanism-handler`, `…2` | red | `HttpAuthenticationMechanismHandler` (several mechanisms in one application) is not implemented |
 | `app-securitycontext-auth` | 1 of 5 green | `SecurityContext.authenticate(...)` and `hasAccessToWebResource` are refused for now |
 | `app-custom-rememberme` | 13 of 25 green | `@RememberMe` is not implemented (K3) |

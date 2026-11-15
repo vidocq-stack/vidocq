@@ -42,6 +42,7 @@ unauthenticated caller; `testAuthenticated` waits for the HTTP authentication me
 | `app-custom` | 4 of 4 green | Custom mechanism and identity store, injected `SecurityContext`.
 | `app-custom-session` | 5 of 5 green | `@AutoApplySession`.
 | `app-multiple-store` | 4 of 4 green | Several identity stores behind one handler.
+| `app-multiple-store-backup` | 6 of 6 green | Request-scoped identity stores.
 |===
 
 The other applications of the TCK need an EJB, a `DataSource`, an embedded directory or an
