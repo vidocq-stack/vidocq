@@ -232,6 +232,10 @@ public class VidocqJlinkMojo extends AbstractMojo {
                 stageDependency(stage, packaging, artifact, f);
             }
         }
+        List<String> encrypted = EncryptedJars.find(stage);
+        if (!encrypted.isEmpty()) {
+            throw new MojoExecutionException(EncryptedJars.failureMessage(encrypted));
+        }
         checkNamedModules(stage);
         checkSharedResources(stage);
         writeSbom(stage);

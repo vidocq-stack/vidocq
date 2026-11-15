@@ -822,7 +822,15 @@ Test the image itself in CI: these differences show only there.
 
 [#jlink-sjar]
 *Encrypted jars.* An encrypted jar (sjar) is read by Vauban's loader, which only the application layer has: it
-does not work in an image. Ship an application that holds one as a `vidocq:package` distribution.
+does not work in an image. `vidocq:jlink` fails before linking and names the jars:
+
+----
+An encrypted jar cannot go into a jlink image: acme-secret-1.0.jar. Only Vauban's class loader decrypts it, in the
+application layer, and an image has one layer, the JVM's own. Ship this application as a vidocq:package distribution,
+which keeps the application layer (for a container: a JDK base image with that distribution copied in).
+----
+
+`vidocq:jpackage` and `vidocq:docker` build on that image, so they stop there too.
 
 A missing `vidocq.mainModule` fails the goal with a message naming the property, and so does
 `vidocq.mainModule` set to the runtime's module `io.vidocq.runtime.core`.
