@@ -827,7 +827,7 @@ does not work in an image. `vidocq:jlink` fails before linking and names the jar
 ----
 An encrypted jar cannot go into a jlink image: acme-secret-1.0.jar. Only Vauban's class loader decrypts it, in the
 application layer, and an image has one layer, the JVM's own. Ship this application as a vidocq:package distribution,
-which keeps the application layer (for a container: a JDK base image with that distribution copied in).
+which keeps the application layer (for a container: vidocq:docker with -Dvidocq.docker.kind=jdk).
 ----
 
 `vidocq:jpackage` and `vidocq:docker` build on that image, so they stop there too.

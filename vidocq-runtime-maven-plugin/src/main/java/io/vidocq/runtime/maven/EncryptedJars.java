@@ -64,6 +64,6 @@ final class EncryptedJars {
         return "An encrypted jar cannot go into a jlink image: " + String.join(", ", jars) + ". Only Vauban's class"
                 + " loader decrypts it, in the application layer, and an image has one layer, the JVM's own. Ship"
                 + " this application as a vidocq:package distribution, which keeps the application layer (for a"
-                + " container: a JDK base image with that distribution copied in).";
+                + " container: vidocq:docker with -Dvidocq.docker.kind=jdk).";
     }
 }

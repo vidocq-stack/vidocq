@@ -67,6 +67,7 @@ class EncryptedJarsTest {
         assertTrue(message.contains("secret-a.jar, secret-b.jar"), message);
         assertTrue(message.contains("application layer"), message);
         assertTrue(message.contains("vidocq:package"), message);
+        assertTrue(message.contains("-Dvidocq.docker.kind=jdk"), message);
     }
 
     private void jar(String name, String... entries) throws IOException {
