@@ -837,6 +837,19 @@ which keeps the application layer (for a container: vidocq:docker with -Dvidocq.
 
 `vidocq:jpackage` and `vidocq:docker` build on that image, so they stop there too.
 
+[#sjar-needs]
+*What an application with an encrypted jar needs.* In a launch that keeps the application layer (`vidocq:dev`,
+`vidocq:run`, the `vidocq:package` distribution, `vidocq:docker` of the `jdk` kind):
+
+* **the decryption module**, declared by the application: `io.vidocq.vauban:vauban-sjar`. Without it the start
+  logs `Encrypted JAR … found but no ByteSourcePlugin available`, and the first encrypted class is missing;
+* **the key, at start**: the environment variable `VAUBAN_SJAR_KEY` (64 hexadecimal characters, a 256-bit key),
+  or a keystore named by `-Dvauban.sjar.keystore` and `-Dvauban.sjar.keypassword`. In a container:
+  `docker run -e VAUBAN_SJAR_KEY=… <image>`. The key is never in the image.
+
+An encrypted jar's internal classes are called by its exported ones since Vidocq/vauban#306 (Vauban
+BUG-20261115-01): before, the first such call failed.
+
 A missing `vidocq.mainModule` fails the goal with a message naming the property, and so does
 `vidocq.mainModule` set to the runtime's module `io.vidocq.runtime.core`.
 
@@ -921,6 +934,12 @@ ENTRYPOINT ["/opt/app/bin/my-app.sh"]
 
 The goal fails with a message that names `vidocq:package` when the distribution is missing.
 
+[#docker-cli]
+*From the CLI.* `vidocq build docker` builds the `jlink` kind: it runs `vidocq:jlink`, then `vidocq:docker`. It has
+no option for the `jdk` kind yet, and passing `-Dvidocq.docker.kind=jdk` after `--` still links an image first, which
+an application with an encrypted jar cannot do. For the `jdk` kind, run Maven:
+`./mvnw package vidocq:docker -Dvidocq.docker.kind=jdk -Dvidocq.docker.build=true`.
+
 [#docker-jlink-kind]
 === The `jlink` kind
 
@@ -932,14 +951,14 @@ Generates a distroless `Dockerfile`. Why `distroless/base-debian12:nonroot`?
 
 [source,bash]
 ----
-./mvnw -ntp package -Dvidocq.docker.build=true
-docker run --rm -p 8080:8080 example/my-app:1.0.0
+./mvnw -ntp package vidocq:jlink vidocq:docker -Dvidocq.docker.build=true
+docker run --rm -p 8080:8080 my-app:1.0.0      # the tag is <artifactId>:<version>, or -Dvidocq.docker.imageTag
 
 # With external config
 docker run --rm -p 8080:8080 \
     -e VIDOCQ_CONFIG_DIR=/etc/myapp \
     -v $(pwd)/conf:/etc/myapp:ro \
-    example/my-app:1.0.0
+    my-app:1.0.0
 ----
 
 [#docker-linux-image]

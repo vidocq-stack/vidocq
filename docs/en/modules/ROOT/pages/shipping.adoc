@@ -62,7 +62,7 @@ A Vidocq application ships as a distribution of jars, as a runtime image, as a n
 
 | The application holds an encrypted jar (sjar).
 | `vidocq:package`, or `vidocq:docker` with `-Dvidocq.docker.kind=jdk`
-| Only the application layer can decrypt it, and an image has none. `vidocq:jlink` refuses the jar and says so (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-sjar[encrypted jars]).
+| Only the application layer can decrypt it, and an image has none. `vidocq:jlink` refuses the jar and says so (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-sjar[encrypted jars]). The application declares `vauban-sjar` and receives the key at start (xref:modules/vidocq-runtime-maven-plugin.adoc#sjar-needs[what it needs]).
 
 | A library that is not a named module, and that `vauban:modularize` cannot describe.
 | `vidocq:package`, or `vidocq:docker` with `-Dvidocq.docker.kind=jdk`
@@ -91,6 +91,9 @@ A Vidocq application ships as a distribution of jars, as a runtime image, as a n
 *In one layer.* A jlink image, and what is built on it, starts as any modular application: one layer, the JVM's own loaders. The reason is the image itself. Every module linked into an image is visible to the JVM's layer, which also takes in any module that provides a service it uses: an application layer on top would hold a second copy of the application, and each of its services would be found twice. With one layer there is one copy, by construction. What the application layer does at each start, the build does once, on the copies it links (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-one-layer[one layer]).
 
 The rule fits in one sentence: *what stays as jars keeps the application layer; what is linked into an image has one layer.*
+
+[#cli]
+*From the CLI.* `vidocq build package`, `jlink`, `jpackage` and `docker` run the goals above; `vidocq build docker` builds the `jlink` kind, and the `jdk` kind is a Maven command for now (xref:modules/vidocq-runtime-maven-plugin.adoc#docker-cli[from the CLI]).
 
 [#same-application]
 == The same application in both
