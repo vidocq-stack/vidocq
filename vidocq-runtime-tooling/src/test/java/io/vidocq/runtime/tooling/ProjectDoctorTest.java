@@ -435,6 +435,33 @@ class ProjectDoctorTest {
     }
 
     /**
+     * BUG-20261115-10: {@code vidocq:check-module-info} asks for the {@code opens} of a sub-folder of a resource
+     * package (Liquibase's {@code includeAll path="db/changelog/changes/"}, BUG-20261115-06), and its message sends
+     * the user to {@code vidocq doctor --fix}. Doctor now asks for it too, and {@code --fix} writes it; a folder
+     * holding code is left to the checks that read the classes.
+     */
+    @Test
+    void aClosedSubFolderOfAResourcePackageFailsAndIsOpened(@TempDir Path dir) throws IOException {
+        Path project = create(dir, Set.of("liquibase-migration"), true);
+        Path moduleInfo = project.resolve("src/main/java/module-info.java");
+        Path changes = Files.createDirectories(project.resolve("src/main/resources/db/changelog/changes"));
+        Files.writeString(changes.resolve("001-things.sql"), "--liquibase formatted sql\n");
+        Files.createDirectories(project.resolve("src/main/resources/db/changelog/empty"));
+
+        Diagnostic directives = check(project).get("Module directives");
+        assertEquals(Diagnostic.Status.FAIL, directives.status());
+        assertTrue(directives.detail().contains("liquibase-migration: opens db.changelog.changes"),
+                directives.detail());
+        assertFalse(directives.detail().contains("db.changelog.empty"), directives.detail());
+
+        ProjectDoctor.fix(project, RUNTIME, new RecordingReporter());
+
+        assertTrue(Files.readString(moduleInfo).contains("opens db.changelog.changes; // vidocq:liquibase-migration"),
+                Files.readString(moduleInfo));
+        assertEquals(Diagnostic.Status.OK, check(project).get("Module directives").status());
+    }
+
+    /**
      * BUG-20261031-01, second part: with compiled classes, {@code doctor} runs the check of {@code check-module-info} on
      * the packages the runtime reaches by reflection, and {@code --fix} opens them as {@code complete-module-info}
      * does. The check reads {@code module-info.java} too, so the fix is seen before the next compile.

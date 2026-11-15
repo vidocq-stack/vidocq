@@ -23,6 +23,7 @@ import io.vidocq.runtime.codegen.commons.ModuleRequirementsDescriptor;
 import io.vidocq.runtime.codegen.commons.Requirement;
 import io.vidocq.runtime.tooling.ExtensionCoordinate;
 import io.vidocq.runtime.tooling.KnownExtensions;
+import io.vidocq.runtime.tooling.ResourcePackages;
 import io.vidocq.runtime.tooling.ReflectedPackages;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.logging.Log;
@@ -133,7 +134,8 @@ final class ModuleRequirementsCollector {
             if (keep) {
                 out.add(r);
                 if (r.kind() == Requirement.Kind.OPENS) {
-                    resourceSubPackages(outputDirectory, r.name())
+                    // The folders below it that hold resources: a migration tool reads them too (BUG-20261115-06).
+                    ResourcePackages.below(outputDirectory == null ? null : outputDirectory.toPath(), r.name())
                             .forEach(sub -> out.add(Requirement.opens(sub, r.reason())));
                 }
             }
@@ -203,38 +205,6 @@ final class ModuleRequirementsCollector {
         return exported;
     }
 
-    /**
-     * The packages below {@code pkg} that hold resources and no class: a migration tool reads them as it reads
-     * {@code pkg} (Liquibase's {@code includeAll path="db/changelog/changes/"}), and an {@code opens} is never
-     * inherited by a sub-package. A folder with no file is no package; one with a class is code, left to the
-     * checks that read the classes (BUG-20261115-06).
-     */
-    private static List<String> resourceSubPackages(File outputDirectory, String pkg) {
-        if (outputDirectory == null) {
-            return List.of();
-        }
-        Path root = outputDirectory.toPath().resolve(pkg.replace('.', '/'));
-        List<String> subPackages = new ArrayList<>();
-        try (var dirs = Files.walk(root)) {
-            for (Path dir : dirs.filter(Files::isDirectory).filter(d -> !d.equals(root)).toList()) {
-                if (holdsResourcesOnly(dir)) {
-                    subPackages.add(outputDirectory.toPath().relativize(dir).toString()
-                            .replace(File.separatorChar, '.'));
-                }
-            }
-        } catch (IOException _) {
-            // An unreadable folder adds no requirement: the package itself is still checked.
-        }
-        return subPackages;
-    }
-
-    /** Whether {@code dir} holds at least one file and no class file. */
-    private static boolean holdsResourcesOnly(Path dir) throws IOException {
-        try (var entries = Files.list(dir)) {
-            List<Path> files = entries.filter(Files::isRegularFile).toList();
-            return !files.isEmpty() && files.stream().noneMatch(f -> f.getFileName().toString().endsWith(".class"));
-        }
-    }
 
     private static boolean containsPackage(File outputDirectory, String pkg) {
         return outputDirectory != null

@@ -73,6 +73,7 @@ public final class ProjectDoctor {
     private static final String POM_XML = "pom.xml";
     private static final String WRAPPER_PROPERTIES = ".mvn/wrapper/maven-wrapper.properties";
     private static final String MODULE_INFO = "src/main/java/module-info.java";
+    private static final String RESOURCES = "src/main/resources";
     private static final String CLASSES = "target/classes";
     private static final ExtensionCoordinate INDEXER =
             new ExtensionCoordinate("io.vidocq.runtime", "vidocq-runtime-core-codegen");
@@ -94,9 +95,12 @@ public final class ProjectDoctor {
      *                           does not open, with the reason, as {@code vidocq:check-module-info} reads them; {@code
      *                           null} before a compile
      * @param config             the entries of the project's {@code vidocq.properties}, empty without one
+     * @param resources          the project's {@code src/main/resources}, whose folders below a resource package an
+     *                           extension reads need their own {@code opens} (BUG-20261115-10)
      */
     public record Facts(String pom, String moduleInfo, String applicationPackage, String mavenVersion, int httpPort,
-                        boolean httpPortFree, Map<String, String> unopenedPackages, Map<String, String> config) {}
+                        boolean httpPortFree, Map<String, String> unopenedPackages, Map<String, String> config,
+                        Path resources) {}
 
     /**
      * The facts of the project in {@code projectDir}, {@code portFree} telling whether a port is free; {@code null}
@@ -121,7 +125,8 @@ public final class ProjectDoctor {
             int port = httpPort(projectDir);
             Map<String, String> unopened = moduleInfo == null ? null
                     : ReflectedPackages.unopened(projectDir.resolve(CLASSES), moduleInfo).orElse(null);
-            return new Facts(pom, moduleInfo, pkg, maven, port, portFree.test(port), unopened, config(projectDir));
+            return new Facts(pom, moduleInfo, pkg, maven, port, portFree.test(port), unopened, config(projectDir),
+                    projectDir.resolve(RESOURCES));
         } catch (IOException e) {
             throw new java.io.UncheckedIOException("Could not read the project in " + projectDir, e);
         }
@@ -523,7 +528,7 @@ public final class ProjectDoctor {
         Map<String, List<String>> missing = new LinkedHashMap<>();
         for (String id : extensions.keySet()) {
             List<String> lacking = ModuleInfoEditor.missing(facts.moduleInfo(),
-                    KnownExtensions.moduleDirectives(id, facts.applicationPackage()));
+                    KnownExtensions.moduleDirectives(id, facts.applicationPackage(), facts.resources()));
             if (!lacking.isEmpty()) {
                 missing.put(id, lacking);
             }

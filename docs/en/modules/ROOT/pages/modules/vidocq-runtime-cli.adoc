@@ -800,7 +800,9 @@ A fixable ✘ or ⚠ is followed by `↳ Fix: vidocq doctor --fix`. `--fix` firs
 * it makes `annotationProcessorPaths` append to the parent's, or declares the indexer without the Vidocq parent;
 * it declares what the dev services of the extensions need, as `vidocq extension add` does;
 * it adds the missing `module-info.java` directives, each marked `// vidocq:<id>`, as `vidocq extension add` does,
-  and creates the folder of a resource package it opens, such as `src/main/resources/db/migration`;
+  and creates the folder of a resource package it opens, such as `src/main/resources/db/migration`. It opens each
+  sub-folder of scripts below such a package too, as `vidocq:check-module-info` asks: `opens db.changelog.changes;`
+  for a Liquibase `includeAll path="db/changelog/changes/"`;
 * it opens the packages the runtime reaches by reflection, in the block `vidocq:complete-module-info` writes;
 * it writes a missing Maven wrapper, and moves an older wrapper to the Maven Vidocq is built with.
 

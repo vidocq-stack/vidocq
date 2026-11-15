@@ -5,6 +5,22 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261115-10 — `vidocq doctor --fix` does not write the `opens` of a sub-folder the build asks for
+
+- **Date**: 2026-11-15
+- **Status**: FIXED on `fix/doctor-resource-subpackages`
+- **Module**: `vidocq-runtime-tooling` (`ProjectDoctor`, `ExtensionEditor`, `KnownExtensions`)
+- **Symptom**: with a Liquibase `includeAll path="db/changelog/changes/"`, the build fails with "module-info of ... is
+  missing 1 directive(s) required by its Vidocq extensions — `vidocq doctor --fix` adds them ... opens
+  db.changelog.changes;", but `vidocq doctor` says every check is ok and `--fix` writes nothing. Found by the tutorial
+  session, replaying BUG-20261115-06 on snapshot -136.
+- **Repro**: `ProjectDoctorTest.aClosedSubFolderOfAResourcePackageFailsAndIsOpened`.
+- **Cause**: BUG-20261115-06 taught `vidocq:check-module-info` to ask for the `opens` of each sub-folder of scripts
+  below a resource package, from the compiled output. Doctor and its fix compute the directives from the catalog
+  alone, which names the package and not its sub-folders.
+- **Fix**: `ResourcePackages.below` finds those sub-folders (a file, no class or source file); the build check reads
+  the compiled output with it, doctor and `--fix` read `src/main/resources`.
+
 ## BUG-20261115-09 — `CreateThenBuildIT` fails on the build machine's repository, not on the created project
 
 - **Date**: 2026-11-15

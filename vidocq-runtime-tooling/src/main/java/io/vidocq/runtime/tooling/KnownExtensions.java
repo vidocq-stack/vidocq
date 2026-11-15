@@ -58,6 +58,7 @@ public final class KnownExtensions {
     static final String CATALOG_RESOURCE = "META-INF/vidocq/extension-catalog.properties";
 
     private static final String ARTIFACT_ID = ".artifactId";
+    private static final String OPENS = "opens ";
 
     /** Every catalog key, prefixed by the extension's short id, e.g. {@code knock-health.groupId}. */
     private static final Properties DESCRIPTORS = load();
@@ -360,9 +361,25 @@ public final class KnownExtensions {
         csv(property(key, "module-info.requires")).forEach(m -> directives.add("requires " + m));
         if (Boolean.parseBoolean(property(key, "module-info.opens-application-package"))
                 && applicationPackage != null && !applicationPackage.isBlank()) {
-            directives.add("opens " + applicationPackage);
+            directives.add(OPENS + applicationPackage);
         }
-        resourcePackagesToOpen(id).forEach(p -> directives.add("opens " + p));
+        resourcePackagesToOpen(id).forEach(p -> directives.add(OPENS + p));
+        return List.copyOf(directives);
+    }
+
+    /**
+     * {@link #moduleDirectives(String, String)}, plus the {@code opens} of each folder below a resource package of
+     * {@code id} that holds resources under {@code resources} ({@link ResourcePackages}): the build check asks for
+     * them, so doctor and its fix do too (BUG-20261115-10).
+     *
+     * @param resources the project's {@code src/main/resources}, or {@code null}
+     */
+    public static List<String> moduleDirectives(String id, String applicationPackage, java.nio.file.Path resources) {
+        List<String> directives = new ArrayList<>(moduleDirectives(id, applicationPackage));
+        if (!directives.isEmpty()) {
+            resourcePackagesToOpen(id).forEach(p -> ResourcePackages.below(resources, p)
+                    .forEach(sub -> directives.add(OPENS + sub)));
+        }
         return List.copyOf(directives);
     }
 }

@@ -256,7 +256,7 @@ public final class ExtensionEditor {
         for (String resourcePackage : KnownExtensions.resourcePackagesToOpen(id)) {
             keepResourcePackage(projectDir, resourcePackage, id, reporter);
         }
-        return KnownExtensions.moduleDirectives(id, pkg);
+        return KnownExtensions.moduleDirectives(id, pkg, projectDir.resolve("src/main/resources"));
     }
 
     /**
