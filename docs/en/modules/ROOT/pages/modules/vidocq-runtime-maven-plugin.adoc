@@ -569,6 +569,9 @@ the application:
 JAVA_OPTS="-Xmx1g -Dlibrary.loan.max=3" bin/library.sh --port 8081
 ----
 
+A jlink image and a jpackage application do not read `JAVA_OPTS`: see
+xref:usage.adoc#jvm-options[JVM options of each binary].
+
 [#package-legacy-layout]
 === The legacy layout
 

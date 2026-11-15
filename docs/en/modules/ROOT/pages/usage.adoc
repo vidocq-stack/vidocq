@@ -446,6 +446,45 @@ docker run --rm -p 8080:8080 \
 
 The `distroless/base-debian12:nonroot` base image has no shell, no package manager — minimal attack surface. The `nonroot` user (UID 65532) is enforced.
 
+[#jvm-options]
+== JVM options of each binary
+
+Each binary has its own launcher, and each launcher reads JVM options from a different place:
+
+[cols="1,2"]
+|===
+| Binary | Where its JVM options go
+
+| `vidocq:package` distribution
+| The `JAVA_OPTS` variable, read by `bin/<app>.sh` and `bin/<app>.bat`.
+
+| `vidocq:jlink` image
+| The `JDK_JAVA_OPTIONS` variable, read by the image's `java` launcher. `JAVA_OPTS` is not read.
+
+| `vidocq:jpackage` application
+| The `JAVA_TOOL_OPTIONS` variable, or the `[JavaOptions]` section of the launcher's `.cfg` file. `JDK_JAVA_OPTIONS`
+and `JAVA_OPTS` are not read.
+|===
+
+A jpackage launcher is a native program, not the `java` launcher, so it ignores `JDK_JAVA_OPTIONS`. Two ways remain:
+
+* `JAVA_TOOL_OPTIONS`, read by the JVM itself, which then prints `Picked up JAVA_TOOL_OPTIONS: …` on standard error.
+  The options of the launcher come after it: for a system property both set, the launcher's value wins.
++
+[source,bash]
+----
+JAVA_TOOL_OPTIONS="-Xmx512m" target/installer/my-app.app/Contents/MacOS/my-app
+----
+* The launcher's `.cfg` file, one `java-options=` line per option under `[JavaOptions]`. These lines apply at every
+  start, without a variable: `my-app.app/Contents/app/my-app.cfg` on macOS, `my-app/lib/app/my-app.cfg` on Linux,
+  `my-app\app\my-app.cfg` on Windows.
++
+[source,ini]
+----
+[JavaOptions]
+java-options=-Xmx512m
+----
+
 [#aot]
 == Ahead of time: the JDK's AOT cache, and GraalVM
 
@@ -470,6 +509,8 @@ On a jlink image, whose launcher reads no `JAVA_OPTS`, through the `JDK_JAVA_OPT
 JDK_JAVA_OPTIONS="-XX:AOTCacheOutput=app.aot" target/dist/bin/my-app
 JDK_JAVA_OPTIONS="-XX:AOTCache=app.aot" target/dist/bin/my-app
 ----
+
+On a `vidocq:jpackage` application, through `JAVA_TOOL_OPTIONS` or the launcher's `.cfg` file (see <<jvm-options>>).
 
 What to know:
 
