@@ -19,11 +19,18 @@
  */
 package io.vidocq.kerckhoffs.core.internal.context;
 
+import io.vidocq.kerckhoffs.core.internal.mechanism.DefaultHttpMessageContext;
+import jakarta.security.enterprise.AuthenticationStatus;
+import jakarta.security.enterprise.authentication.mechanism.http.AuthenticationParameters;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
 import java.security.Principal;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -105,7 +112,78 @@ class DefaultSecurityContextTest {
         var context = contextOf(request(new Named("reza"), Set.of()));
 
         assertThrows(UnsupportedOperationException.class, context::getAllDeclaredCallerRoles);
-        assertThrows(UnsupportedOperationException.class, () -> context.authenticate(null, null, null));
         assertFalse(context.hasAccessToWebResource("/protected"), "access is denied while nothing can decide it");
+    }
+
+    /** A request whose {@code authenticate} answers {@code outcome}; the attributes it holds are recorded. */
+    private static HttpServletRequest authenticating(Map<String, Object> attributes, Object outcome) {
+        return (HttpServletRequest) Proxy.newProxyInstance(HttpServletRequest.class.getClassLoader(),
+                new Class<?>[] {HttpServletRequest.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "setAttribute" -> attributes.put((String) args[0], args[1]);
+                    case "removeAttribute" -> attributes.remove((String) args[0]);
+                    case "authenticate" -> {
+                        attributes.put("seen", attributes.get(DefaultHttpMessageContext.PARAMETERS));
+                        if (outcome instanceof Exception failure) throw failure;
+                        yield outcome;
+                    }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    private static HttpServletResponse response(boolean committed, int status) {
+        return (HttpServletResponse) Proxy.newProxyInstance(HttpServletResponse.class.getClassLoader(),
+                new Class<?>[] {HttpServletResponse.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "isCommitted" -> committed;
+                    case "getStatus" -> status;
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    private final Map<String, Object> attributes = new HashMap<>();
+    private final AuthenticationParameters parameters = new AuthenticationParameters();
+
+    @Test
+    void aCallerTheMechanismLetInIsAuthenticated() {
+        var request = authenticating(attributes, true);
+
+        var status = contextOf(request).authenticate(request, response(false, 200), parameters);
+
+        assertEquals(AuthenticationStatus.SUCCESS, status);
+        assertEquals(parameters, attributes.get("seen"), "the mechanism could read the parameters");
+        assertFalse(attributes.containsKey(DefaultHttpMessageContext.PARAMETERS), "and they do not outlive the call");
+    }
+
+    @Test
+    void aMechanismThatRefusedIsAFailure() {
+        var request = authenticating(attributes, false);
+
+        assertEquals(AuthenticationStatus.SEND_FAILURE,
+                contextOf(request).authenticate(request, response(false, 200), parameters));
+        assertFalse(attributes.containsKey(DefaultHttpMessageContext.PARAMETERS));
+    }
+
+    @Test
+    void aMechanismThatFailedIsAFailureNotAnException() {
+        var request = authenticating(attributes, new ServletException("the authentication mechanism failed"));
+
+        assertEquals(AuthenticationStatus.SEND_FAILURE,
+                contextOf(request).authenticate(request, response(false, 200), parameters));
+        assertFalse(attributes.containsKey(DefaultHttpMessageContext.PARAMETERS), "even when the call failed");
+    }
+
+    @Test
+    void aResponseThatContinuesElsewhereIsAContinue() {
+        var request = authenticating(attributes, false);
+
+        assertEquals(AuthenticationStatus.SEND_CONTINUE,
+                contextOf(request).authenticate(request, response(true, 302), parameters));
+    }
+
+    @Test
+    void anErrorResponseIsAFailure() {
+        var request = authenticating(attributes, false);
+
+        assertEquals(AuthenticationStatus.SEND_FAILURE,
+                contextOf(request).authenticate(request, response(true, 401), parameters));
     }
 }
