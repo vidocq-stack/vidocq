@@ -50,6 +50,6 @@ public class WhoAmIServlet extends HttpServlet {
         resp.setContentType("text/plain");
         resp.getWriter().write(String.join("|", security.getCallerPrincipal().getName(),
                 String.valueOf(security.isCallerInRole("admin")), caller.getName(),
-                String.valueOf(req.isUserInRole("admin"))));
+                String.valueOf(req.isUserInRole("admin")), req.getAuthType()));
     }
 }

@@ -88,7 +88,7 @@ class KerckhoffsSecurityTest {
         HttpResponse<String> response = get("/secured", "alice:wonderland");
 
         assertEquals(200, response.statusCode());
-        assertEquals("alice|true|alice|true", response.body());
+        assertEquals("alice|true|alice|true|BASIC", response.body());
     }
 
     @Test
