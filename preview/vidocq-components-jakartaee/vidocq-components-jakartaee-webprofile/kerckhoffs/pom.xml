@@ -74,6 +74,7 @@
         <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
         <jakarta.inject.version>2.0.1</jakarta.inject.version>
         <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <foy.version>0.4.0-SNAPSHOT</foy.version>
         <jakarta.interceptor.version>2.2.0</jakarta.interceptor.version>
         <jakarta.el.version>6.0.1</jakarta.el.version>
 
@@ -89,7 +90,9 @@
     -->
     <modules>
         <module>kerckhoffs-core</module>
+        <module>kerckhoffs-authentication</module>
         <module>kerckhoffs-cdi</module>
+        <module>kerckhoffs-foy</module>
     </modules>
 
     <dependencyManagement>
@@ -163,6 +166,18 @@
                 <groupId>io.vidocq.kerckhoffs</groupId>
                 <artifactId>kerckhoffs-core</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.kerckhoffs</groupId>
+                <artifactId>kerckhoffs-authentication</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- The Servlet container the adapter bridges to: its API only, never an implementation. -->
+            <dependency>
+                <groupId>io.vidocq.foy</groupId>
+                <artifactId>foy-api</artifactId>
+                <version>${foy.version}</version>
+                <scope>provided</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>

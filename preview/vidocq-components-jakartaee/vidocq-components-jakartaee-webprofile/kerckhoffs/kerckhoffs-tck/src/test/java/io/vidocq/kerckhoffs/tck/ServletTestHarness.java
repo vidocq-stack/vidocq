@@ -34,6 +34,7 @@ import io.vidocq.foy.internal.gen.RegistryComponentFactory;
 import io.vidocq.foy.internal.gen.WebComponentRegistry;
 import io.vidocq.foy.spi.jsp.JspEngine;
 import io.vidocq.foy.spi.security.IdentityStore;
+import io.vidocq.foy.spi.security.RequestAuthentication;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
 import jakarta.servlet.Servlet;
@@ -141,6 +142,7 @@ public final class ServletTestHarness implements AutoCloseable {
         private final List<EventListener> listeners = new ArrayList<>();
         private String contextPath = "/";
         private IdentityStore identityStore;
+        private RequestAuthentication requestAuthentication;
         private WebAppModel.Builder model;
         private ComponentFactory componentFactory;
         private Set<String> reservedServletNames = Set.of();
@@ -301,6 +303,12 @@ public final class ServletTestHarness implements AutoCloseable {
             return this;
         }
 
+        /** The runtime that takes over the authentication of the application (null: Foy's own mechanisms). */
+        public Builder requestAuthentication(RequestAuthentication hook) {
+            this.requestAuthentication = hook;
+            return this;
+        }
+
         public ServletTestHarness start() {
             var cl = Thread.currentThread().getContextClassLoader();
             var reg = registry != null ? registry : WebComponentRegistry.forClassLoader(cl);
@@ -314,6 +322,9 @@ public final class ServletTestHarness implements AutoCloseable {
                     .withResourceProvider(resourceProvider)
                     .withReserved(reservedServletNames, reservedFilterNames, reservedUrlPatterns);
             if (handlesTypes != null) options = options.withHandlesTypes(handlesTypes);
+            if (requestAuthentication != null) {
+                options = options.withSecurity(options.security().withRequestAuthentication(requestAuthentication));
+            }
             Deployment d = WebAppDeployer.deploy(built, options, pagesLayer, jspEngine);
             boolean owned = host == null;
             ServletTestHost mountHost = owned ? new ServletTestHost() : host;

@@ -48,10 +48,21 @@ What this run proves, and what it does not:
 - The three green tests expect a caller that is *not* authenticated, so they do not yet measure the identity
   stores: no mechanism runs at all. Only `testAuthenticated` exercises the stores, and it needs K2.
 
+## Run of 2026-11-15 (K2: HTTP mechanism through Jakarta Authentication)
+
+Kerckhoffs: K1 plus `kerckhoffs-authentication` (Servlet Container Profile slice), `kerckhoffs-foy` and the
+`HttpAuthenticationMechanism` module of `kerckhoffs-core`. Foy: the `RequestAuthentication` hook (Vidocq/foy#103).
+The container installs the mechanism of the war on that hook, as the Vidocq runtime extension will.
+
+| Application | Result | Note |
+|---|---|---|
+| `app-mem` | **4 of 4 green** | `testAuthenticated` now measures the in-memory identity store through the mechanism of the war |
+
+Not claimed: this is one application of the TCK. The others need an EJB, a `DataSource`, an embedded directory or an
+OpenID provider, and are not run yet.
+
 ## Next
 
-- Hosting the authentication mechanism needs the installation through Jakarta Authentication (spec section 2.5),
-  which Foy does not offer yet (PLAN.md section 3).
 - The other applications are not run yet: they need an EJB, a `DataSource`, an embedded directory or an
   OpenID provider (PLAN.md section 7). They are added here as the platform needs are met.
 - `ci.tck.command` stays undeclared until a smoke set is green.

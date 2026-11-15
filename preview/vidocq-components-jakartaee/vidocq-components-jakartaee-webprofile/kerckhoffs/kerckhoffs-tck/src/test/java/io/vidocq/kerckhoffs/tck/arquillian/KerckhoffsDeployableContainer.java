@@ -21,6 +21,8 @@ package io.vidocq.kerckhoffs.tck.arquillian;
 
 import io.vidocq.foy.cdi.vauban.FoyWebExtension;
 import io.vidocq.kerckhoffs.cdi.IdentityStoreStartCheck;
+import io.vidocq.kerckhoffs.foy.MechanismRequestAuthentication;
+import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanism;
 import io.vidocq.kerckhoffs.cdi.KerckhoffsExtension;
 import io.vidocq.foy.internal.boot.ApplicationSources;
 import io.vidocq.foy.internal.boot.ComponentFactory;
@@ -201,6 +203,8 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
                 .registry(registry)
                 .componentFactory(factory)
                 .reserved(reservedServlets, reservedFilters, reservedPatterns)
+                // What the Vidocq runtime extension will do: a mechanism of the war is placed in service.
+                .requestAuthentication(mechanismOf(cdi))
                 // @HandlesTypes over the war's own classes (TCK wars carry no class index).
                 .handlesTypes(IndexedHandlesTypesResolver.scanOnly(registry, cl,
                         () -> ClassFileHandlesTypesScanner.scanNamed(content.loadableNames(cl), cl)))
@@ -230,6 +234,12 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
                 registered.isEmpty() ? "_vidocq" : registered.get(0), tckContextRoot));
         pmd.addContext(ctx);
         return pmd;
+    }
+
+    /** The authentication of a war that declares an {@code HttpAuthenticationMechanism}; null for one that does not. */
+    private static MechanismRequestAuthentication mechanismOf(VaubanContainer cdi) {
+        if (cdi.getBeanManager().getBeans(HttpAuthenticationMechanism.class).isEmpty()) return null;
+        return new MechanismRequestAuthentication(() -> cdi.select(HttpAuthenticationMechanism.class));
     }
 
     /**

@@ -29,6 +29,7 @@ command line and none is in the TCK sources; they are listed in `kerckhoffs-tck/
 | 2026-11-14 | deployment refused | Nothing implemented: no `IdentityStoreHandler`.
 | 2026-11-15 | 3 of 4 tests green | Identity stores are provided (K1). The three green tests expect an
 unauthenticated caller; `testAuthenticated` waits for the HTTP authentication mechanism (K2).
+| 2026-11-15 (K2) | 4 of 4 tests green | The mechanism of the war is placed in service through Jakarta Authentication on the Foy hook.
 |===
 
 The other applications of the TCK need an EJB, a `DataSource`, an embedded directory or an

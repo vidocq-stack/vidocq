@@ -34,4 +34,7 @@ module io.vidocq.kerckhoffs.core {
 
     // The implementations the CDI integration instantiates; nothing else reaches them.
     exports io.vidocq.kerckhoffs.core.internal.identitystore to io.vidocq.kerckhoffs.cdi;
+    // The module that places a mechanism in service, and the context it acts through: used by the Jakarta
+    // Authentication profile that drives them.
+    exports io.vidocq.kerckhoffs.core.internal.mechanism to io.vidocq.kerckhoffs.authentication, io.vidocq.kerckhoffs.foy;
 }
