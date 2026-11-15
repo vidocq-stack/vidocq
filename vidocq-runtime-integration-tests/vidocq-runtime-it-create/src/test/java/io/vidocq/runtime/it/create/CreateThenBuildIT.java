@@ -355,6 +355,141 @@ class CreateThenBuildIT {
     }
 
     /**
+     * Jakarta Security on the packaged path: in the project {@code vidocq create} writes with the Servlet and
+     * Kerckhoffs extensions, the BASIC mechanism and the identity store of the application authenticate the requests
+     * Foy serves. The build compatible extensions of Kerckhoffs are frozen by {@code vidocq:generate}, the packaged
+     * application starts on that record, and the container generates no class at run time.
+     */
+    @Test
+    void aPackagedSecurityApplicationAuthenticatesOnTheExtensionsFrozenAtBuild(@TempDir Path dir) throws Exception {
+        String version = System.getProperty("it.version");
+        ProjectScaffolder.scaffold(new ProjectSpec("demo-app", "com.acme", "com.acme.demo.app",
+                Set.of("foy-servlet", "kerckhoffs-security"), null, false), dir, version, SILENT);
+        Path project = dir.resolve("demo-app");
+        useThisBuildsArtifacts(project);
+        addTheSecuredServlet(project);
+
+        String output = build(project, "create-security.log", "verify");
+        List<String> warnings = output.lines()
+                .filter(l -> l.startsWith("[WARNING]") && !l.contains(LAST_ROUND) && !DEFERRED.matcher(l).find())
+                .toList();
+        assertEquals(List.of(), warnings, "the created security project builds with warnings:\n" + output);
+        assertTheBuildFrozeItsExtensions(project, output);
+        String frozenRecord = Files.readString(project.resolve("target/classes/" + FROZEN_RECORD));
+        for (String extension : List.of("io.vidocq.kerckhoffs.cdi.KerckhoffsExtension",
+                "io.vidocq.kerckhoffs.foy.FoySecurityContextExtension")) {
+            assertTrue(frozenRecord.contains(extension),
+                    extension + " is not in the record of the build:\n" + frozenRecord);
+        }
+
+        Path launcher = project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh");
+        Path log = logs().resolve("create-security-run.log");
+        Process application = launch(launcher, "-Dvidocq.http.host=127.0.0.1 -Dvidocq.http.port=0 " + ON_THE_RECORD)
+                .redirectOutput(log.toFile()).start();
+        try {
+            String boot = awaitStarted(application, log);
+            assertTrue(FROZEN_AT_BUILD.matcher(boot).find(),
+                    launcher + " did not start on the extensions frozen at build:\n" + boot);
+            URI secured = URI.create("http://127.0.0.1:" + boundPort(boot) + "/secured");
+            try (HttpClient client = HttpClient.newHttpClient()) {
+                assertEquals(401, client.send(HttpRequest.newBuilder(secured).GET().build(),
+                        HttpResponse.BodyHandlers.ofString()).statusCode());
+                HttpResponse<String> response = client.send(HttpRequest.newBuilder(secured)
+                        .header("Authorization", "Basic " + java.util.Base64.getEncoder()
+                                .encodeToString("alice:wonderland".getBytes(StandardCharsets.UTF_8)))
+                        .GET().build(), HttpResponse.BodyHandlers.ofString());
+                assertEquals(200, response.statusCode(), response::body);
+                assertEquals("alice|true", response.body());
+            }
+        } finally {
+            stop(launcher, application);
+        }
+        String run = read(log);
+        assertFalse(run.contains(RUNTIME_GENERATION), "the container generated classes at run time:\n" + run);
+    }
+
+    /**
+     * Writes into the created project the BASIC mechanism, an identity store with one user ({@code alice}, role
+     * {@code admin}) and a servlet protected for that role that answers with the caller of the injected security
+     * context; the module reads what they use.
+     */
+    private static void addTheSecuredServlet(Path project) throws IOException {
+        Path sources = project.resolve("src/main/java/com/acme/demo/app");
+        Files.createDirectories(sources);
+        Files.writeString(sources.resolve("Basic.java"), """
+                package com.acme.demo.app;
+
+                import jakarta.enterprise.context.Dependent;
+                import jakarta.security.enterprise.authentication.mechanism.http.BasicAuthenticationMechanismDefinition;
+
+                @BasicAuthenticationMechanismDefinition(realmName = "demo")
+                @Dependent
+                public class Basic {
+                }
+                """);
+        Files.writeString(sources.resolve("UserStore.java"), """
+                package com.acme.demo.app;
+
+                import jakarta.enterprise.context.ApplicationScoped;
+                import jakarta.security.enterprise.credential.Credential;
+                import jakarta.security.enterprise.credential.UsernamePasswordCredential;
+                import jakarta.security.enterprise.identitystore.CredentialValidationResult;
+                import jakarta.security.enterprise.identitystore.IdentityStore;
+                import java.util.Set;
+
+                @ApplicationScoped
+                public class UserStore implements IdentityStore {
+                    @Override
+                    public CredentialValidationResult validate(Credential credential) {
+                        if (credential instanceof UsernamePasswordCredential login
+                                && "alice".equals(login.getCaller()) && login.getPassword().compareTo("wonderland")) {
+                            return new CredentialValidationResult("alice", Set.of("admin"));
+                        }
+                        return CredentialValidationResult.INVALID_RESULT;
+                    }
+                }
+                """);
+        Files.writeString(sources.resolve("SecuredServlet.java"), """
+                package com.acme.demo.app;
+
+                import jakarta.inject.Inject;
+                import jakarta.security.enterprise.SecurityContext;
+                import jakarta.servlet.annotation.HttpConstraint;
+                import jakarta.servlet.annotation.ServletSecurity;
+                import jakarta.servlet.annotation.WebServlet;
+                import jakarta.servlet.http.HttpServlet;
+                import jakarta.servlet.http.HttpServletRequest;
+                import jakarta.servlet.http.HttpServletResponse;
+                import java.io.IOException;
+
+                @WebServlet("/secured")
+                @ServletSecurity(@HttpConstraint(rolesAllowed = "admin"))
+                public class SecuredServlet extends HttpServlet {
+                    @Inject SecurityContext security;
+
+                    @Override
+                    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+                        resp.setContentType("text/plain");
+                        resp.getWriter().write(security.getCallerPrincipal().getName() + "|"
+                                + security.isCallerInRole("admin"));
+                    }
+                }
+                """);
+        Path moduleInfo = project.resolve("src/main/java/module-info.java");
+        String source = Files.readString(moduleInfo);
+        String declaration = "module com.acme.demo.app {\n";
+        assertTrue(source.startsWith(declaration), source);
+        StringBuilder requires = new StringBuilder(declaration);
+        for (String module : List.of("jakarta.cdi", "jakarta.inject", "jakarta.servlet", "jakarta.security",
+                "io.vidocq.foy.api")) {
+            if (!source.contains("requires " + module + ";")) {
+                requires.append("    requires ").append(module).append(";\n");
+            }
+        }
+        Files.writeString(moduleInfo, requires + source.substring(declaration.length()));
+    }
+
+    /**
      * Writes into the created project a servlet that answers with what the injected request, session and context
      * give, and a listener that uses the injected context while the application starts; the module reads what they
      * use.
