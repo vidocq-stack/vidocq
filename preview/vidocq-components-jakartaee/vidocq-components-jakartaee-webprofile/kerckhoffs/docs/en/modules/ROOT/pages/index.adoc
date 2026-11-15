@@ -9,7 +9,7 @@ Kerckhoffs implements {spec-security-4-0}[Jakarta Security 4.0]: HTTP authentica
 mechanisms, identity stores and the security context of a Jakarta EE application, with zero
 third-party dependency and strict Java Modules.
 
-NOTE: Kerckhoffs is a scaffold. Nothing is implemented yet and no TCK has run; the design of
+NOTE: Kerckhoffs is under construction: identity stores (K1) are in; the HTTP authentication mechanisms are not. The first TCK figures are on the xref:tck.adoc[TCK] page; the design of
 record is `PLAN.md` in the {repo-kerckhoffs}[repository].
 
 == Origin of the name
@@ -29,5 +29,5 @@ NOTE: "Kerckhoffs" names the repository. Besides Jakarta Security 4.0 it is plan
 | Group id | `io.vidocq.kerckhoffs`
 | Version | {project-version}
 | Depends on | The Jakarta Security API at `compile`; Authentication, Authorization, Servlet, CDI and EL APIs `provided`
-| Status | Scaffold (milestone K0)
+| Status | Identity stores (milestone K1)
 |===

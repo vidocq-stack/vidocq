@@ -1,0 +1,22 @@
+= Reference
+:description: Modules of Kerckhoffs and how to deploy them.
+
+== Modules
+
+[cols="1,1,3"]
+|===
+| Artifact | Java module | Role
+
+| `kerckhoffs-core` | `io.vidocq.kerckhoffs.core` | `IdentityStoreHandler` chain, in-memory identity store, PBKDF2 password hash. No CDI.
+| `kerckhoffs-cdi` | `io.vidocq.kerckhoffs.cdi` | Build compatible extension: declares the identity stores of `@InMemoryIdentityStoreDefinition` and the handler as beans, and fails the start on an invalid definition.
+|===
+
+The extension works at build and is frozen by `vidocq:generate`; the check of the definitions
+runs in an observer of `Startup`, so an invalid definition still stops a frozen application.
+
+== Deploying on an application server
+
+WARNING: Kerckhoffs is not tested on an application server yet. Jakarta Security is a feature
+of such servers: keep their own security feature on only if you do not ship Kerckhoffs, and do
+not ship both. The tested `<exclusions>` and the Open Liberty WAR arrive with the
+`kerckhoffs-it-openliberty` module.
