@@ -282,7 +282,9 @@ public final class CoreSections {
      * {@code 8 extensions frozen at build, 2 run at start: ConfigCdiExtension, CervantesClaimExtension} when some
      * left work for the start; {@code 10 extensions run at start} without a record, followed by
      * {@code (the record of the build is not this deployment's)} when there is one for other classes, as under
-     * {@code vidocq:dev} or a test class path. {@code null} for a deployment without any.
+     * {@code vidocq:dev} or a test class path. {@code null} for a deployment without any, and for one whose
+     * extensions all ran at compile, every bean archive having been processed then: nothing frozen, nothing run at
+     * start (Vidocq BUG-20261115-05).
      *
      * @param frozen        whether the start loaded the record of the build
      * @param frozenAtBuild the class names of the extensions the start did not run

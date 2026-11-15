@@ -221,7 +221,7 @@ the one backend
 
 | `vidocq.startup.require-frozen-extensions`
 | `false`
-| `true`: a start whose build compatible extensions ran because no record of the build was used fails, with the classes that differ from the build. Another value than `true` or `false` is reported as `VIDOCQ-CFG-001` and means `false`. See xref:modules/vidocq-runtime-core.adoc#vidocq-gen-003[VIDOCQ-GEN-003].
+| `true`: a start whose build compatible extensions ran because no record of the build was used fails, with the classes that differ from the build. A deployment whose extensions all ran at compile has no record and runs none: it starts. Another value than `true` or `false` is reported as `VIDOCQ-CFG-001` and means `false`. See xref:modules/vidocq-runtime-core.adoc#vidocq-gen-003[VIDOCQ-GEN-003].
 
 | `vidocq.banner.mode`
 | `auto`
