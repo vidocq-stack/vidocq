@@ -175,15 +175,19 @@ class VidocqApplicationTest {
         assertFalse(Files.exists(command.portFile));
     }
 
-    /** An application whose {@code default} listener never starts fails the start, which says what it waited for. */
+    /**
+     * An application whose {@code default} listener never starts fails the start, which says what it waited for.
+     * The timeout leaves the child JVM, launched from a source file, the time to print its line on a busy machine:
+     * with 2 s, a CI runner once stopped it before it had printed anything.
+     */
     @Test
     void aProcessThatNeverWritesItsPortFailsTheStartAfterTheTimeoutAndIsStopped() throws IOException {
         Recorded command = new Recorded(program("Silent", SILENT));
-        Duration timeout = Duration.ofSeconds(2);
+        Duration timeout = Duration.ofSeconds(15);
 
         var e = assertThrows(IllegalStateException.class, () -> VidocqApplication.start(command, timeout));
 
-        assertTrue(e.getMessage().startsWith("The application did not listen within 2 s: the start waits for its"
+        assertTrue(e.getMessage().startsWith("The application did not listen within 15 s: the start waits for its"
                 + " default Chappe listener. Its output:\n"), e.getMessage());
         assertTrue(e.getMessage().contains("started, quietly"), e.getMessage());
         assertFalse(Files.exists(command.portFile));
