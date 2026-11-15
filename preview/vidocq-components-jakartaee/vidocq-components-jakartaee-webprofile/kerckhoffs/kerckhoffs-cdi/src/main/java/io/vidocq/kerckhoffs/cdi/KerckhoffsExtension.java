@@ -28,6 +28,7 @@ import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import jakarta.inject.Singleton;
 import jakarta.security.enterprise.authentication.mechanism.http.BasicAuthenticationMechanismDefinition;
+import jakarta.security.enterprise.authentication.mechanism.http.FormAuthenticationMechanismDefinition;
 import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanism;
 import jakarta.security.enterprise.identitystore.IdentityStore;
 import jakarta.security.enterprise.identitystore.IdentityStoreHandler;
@@ -52,6 +53,7 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
 
     private final List<Declared> inMemoryDefinitions = new ArrayList<>();
     private final List<Declared> basicDefinitions = new ArrayList<>();
+    private final List<Declared> formDefinitions = new ArrayList<>();
 
     @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = InMemoryIdentityStoreDefinition.class)
     public void collectInMemoryDefinition(ClassInfo declaring) {
@@ -61,6 +63,11 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
     @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = BasicAuthenticationMechanismDefinition.class)
     public void collectBasicDefinition(ClassInfo declaring) {
         basicDefinitions.add(new Declared(declaring.name(), declaring.annotation(BasicAuthenticationMechanismDefinition.class)));
+    }
+
+    @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = FormAuthenticationMechanismDefinition.class)
+    public void collectFormDefinition(ClassInfo declaring) {
+        formDefinitions.add(new Declared(declaring.name(), declaring.annotation(FormAuthenticationMechanismDefinition.class)));
     }
 
     @Synthesis
@@ -79,8 +86,25 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
                     .type(HttpAuthenticationMechanism.class)
                     .scope(Singleton.class)
                     .withParam("origin", declared.origin())
-                    .withParam("realmName", realmName(declared))
+                    .withParam("realmName", literal(declared, text(declared.definition(), "realmName", "")))
                     .createWith(BasicMechanismCreator.class);
+        }
+        for (Declared declared : formDefinitions) {
+            AnnotationInfo login = declared.definition().hasMember("loginToContinue")
+                    ? declared.definition().member("loginToContinue").asNestedAnnotation() : null;
+            if (!text(login, "useForwardToLoginExpression", "").isEmpty()) {
+                throw new DeploymentException("useForwardToLoginExpression of " + declared.origin()
+                        + " is an expression: only useForwardToLogin is supported yet");
+            }
+            components.addBean(HttpAuthenticationMechanism.class)
+                    .type(HttpAuthenticationMechanism.class)
+                    .scope(Singleton.class)
+                    .withParam("origin", declared.origin())
+                    .withParam("loginPage", literal(declared, text(login, "loginPage", "/login")))
+                    .withParam("errorPage", literal(declared, text(login, "errorPage", "/login-error")))
+                    .withParam("forwardToLogin",
+                            login == null || !login.hasMember("useForwardToLogin") || login.member("useForwardToLogin").asBoolean())
+                    .createWith(FormMechanismCreator.class);
         }
         components.addBean(IdentityStoreHandler.class)
                 .type(IdentityStoreHandler.class)
@@ -89,21 +113,25 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
     }
 
     /**
-     * The realm of a BASIC definition, as a literal: an attribute is written as text or as an Expression Language
-     * string literal ({@code ${'name'}}); a richer expression waits for Jakarta Expression Language (PLAN.md, K3).
+     * An attribute of a mechanism definition, as a literal: written as text or as an Expression Language string
+     * literal ({@code ${'name'}}); a richer expression waits for Jakarta Expression Language (PLAN.md, K3).
      */
-    private static String realmName(Declared declared) {
-        String realm = declared.definition().member("realmName").asString();
-        if (!realm.startsWith("${")) return realm;
-        if (realm.endsWith("}") && realm.length() >= 5) {
-            String inner = realm.substring(2, realm.length() - 1).trim();
+    private static String literal(Declared declared, String value) {
+        if (!value.startsWith("${")) return value;
+        if (value.endsWith("}") && value.length() >= 5) {
+            String inner = value.substring(2, value.length() - 1).trim();
             char quote = inner.charAt(0);
             if ((quote == '\'' || quote == '"') && inner.length() >= 2 && inner.charAt(inner.length() - 1) == quote
                     && inner.indexOf(quote, 1) == inner.length() - 1) {
                 return inner.substring(1, inner.length() - 1);
             }
         }
-        throw new DeploymentException("The realm name of the BASIC mechanism of " + declared.origin()
-                + " is an expression (" + realm + "): only a literal is supported yet");
+        throw new DeploymentException("An attribute of the mechanism declared by " + declared.origin()
+                + " is an expression (" + value + "): only a literal is supported yet");
+    }
+
+    /** A text attribute of {@code annotation}, or {@code fallback} when the annotation or the attribute is absent. */
+    private static String text(AnnotationInfo annotation, String name, String fallback) {
+        return annotation != null && annotation.hasMember(name) ? annotation.member(name).asString() : fallback;
     }
 }

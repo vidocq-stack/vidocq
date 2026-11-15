@@ -38,6 +38,7 @@ unauthenticated caller; `testAuthenticated` waits for the HTTP authentication me
 
 | `app-mem` | 4 of 4 green | In-memory identity store behind the mechanism of the war.
 | `app-mem-basic` | 4 of 4 green | Built-in BASIC mechanism.
+| `app-mem-form` | 4 of 4 green, one class red | Built-in FORM mechanism. `AppMemFormImmediateIT` needs Jakarta Expression Language (a CDI bean in `loginPage`), planned for K3.
 |===
 
 The other applications of the TCK need an EJB, a `DataSource`, an embedded directory or an

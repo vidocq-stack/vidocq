@@ -58,6 +58,7 @@ The container installs the mechanism of the war on that hook, as the Vidocq runt
 |---|---|---|
 | `app-mem` | **4 of 4 green** | `testAuthenticated` now measures the in-memory identity store through the mechanism of the war |
 | `app-mem-basic` | **4 of 4 green** | the built-in BASIC mechanism (`@BasicAuthenticationMechanismDefinition`, realm as a literal or an EL string literal) |
+| `app-mem-form` | **4 of 4 green**; `AppMemFormImmediateIT` red | the built-in FORM mechanism with login to continue (forward or redirect, session-bound caller, logout). The red class deploys `loginPage="${applicationConfigImmediate.loginPage}"`: a CDI bean read through Jakarta Expression Language, which Kerckhoffs does not evaluate yet (K3); the deployment is refused with an explicit message |
 
 Not claimed: this is one application of the TCK. The others need an EJB, a `DataSource`, an embedded directory or an
 OpenID provider, and are not run yet.

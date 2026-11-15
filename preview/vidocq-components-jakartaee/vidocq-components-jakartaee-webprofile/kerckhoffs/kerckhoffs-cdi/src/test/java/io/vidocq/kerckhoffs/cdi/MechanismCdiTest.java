@@ -20,6 +20,7 @@
 package io.vidocq.kerckhoffs.cdi;
 
 import io.vidocq.kerckhoffs.core.internal.mechanism.BasicAuthenticationMechanism;
+import io.vidocq.kerckhoffs.core.internal.mechanism.FormAuthenticationMechanism;
 import io.vidocq.vauban.core.container.VaubanContainer;
 import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanism;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,18 @@ class MechanismCdiTest {
     void aBasicDefinitionPutsTheBasicMechanismInService() {
         try (var container = start(MemoryApplication.class, BasicApplication.class)) {
             assertInstanceOf(BasicAuthenticationMechanism.class, container.select(HttpAuthenticationMechanism.class));
+        }
+    }
+
+    @Test
+    void anExpressionForTheForwardFlagIsRefusedNotIgnored() {
+        assertThrows(RuntimeException.class, () -> start(ExpressionFormApplication.class));
+    }
+
+    @Test
+    void aFormDefinitionPutsTheFormMechanismInService() {
+        try (var container = start(MemoryApplication.class, FormApplication.class)) {
+            assertInstanceOf(FormAuthenticationMechanism.class, container.select(HttpAuthenticationMechanism.class));
         }
     }
 }

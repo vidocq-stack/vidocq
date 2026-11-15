@@ -23,8 +23,11 @@ import jakarta.security.auth.message.MessageInfo;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -60,21 +63,64 @@ final class Fakes {
     /** The same, with the request headers {@code headers}. */
     static HttpServletRequest request(Map<String, Object> attributes, List<String> forwarded,
                                       Map<String, String> headers) {
+        return request(attributes, forwarded, headers, new Exchange());
+    }
+
+    /** What a form login reads from, and leaves in, a request: its session, parameters and addressing. */
+    static final class Exchange {
+        final Map<String, Object> session = new HashMap<>();
+        final Map<String, String> parameters = new HashMap<>();
+        final List<String> sessionEvents = new ArrayList<>();
+        String method = "GET";
+        String uri = "/app/servlet";
+        String query;
+        boolean hasSession = true;
+        /** The method of each forwarded request, in the order of the forwards. */
+        final List<String> forwardedAs = new ArrayList<>();
+    }
+
+    /** The same, over an {@link Exchange}. */
+    static HttpServletRequest request(Map<String, Object> attributes, List<String> forwarded,
+                                      Map<String, String> headers, Exchange exchange) {
         return (HttpServletRequest) Proxy.newProxyInstance(Fakes.class.getClassLoader(),
                 new Class<?>[] {HttpServletRequest.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "getHeader" -> headers.get((String) args[0]);
                     case "getAttribute" -> attributes.get((String) args[0]);
                     case "setAttribute" -> attributes.put((String) args[0], args[1]);
                     case "getContextPath" -> "/app";
-                    case "getRequestDispatcher" -> dispatcher((String) args[0], forwarded);
+                    case "getRequestDispatcher" -> dispatcher((String) args[0], forwarded, exchange);
+                    case "getMethod" -> exchange.method;
+                    case "getRequestURI" -> exchange.uri;
+                    case "getQueryString" -> exchange.query;
+                    case "getParameter" -> exchange.parameters.get((String) args[0]);
+                    case "getSession" -> session(exchange, args == null || (Boolean) args[0]);
+                    case "changeSessionId" -> {
+                        exchange.sessionEvents.add("changeSessionId");
+                        yield "new-id";
+                    }
                     default -> null;
                 });
     }
 
-    private static RequestDispatcher dispatcher(String path, List<String> forwarded) {
+    private static HttpSession session(Exchange exchange, boolean create) {
+        if (!exchange.hasSession && !create) return null;
+        exchange.hasSession = true;
+        return (HttpSession) Proxy.newProxyInstance(Fakes.class.getClassLoader(), new Class<?>[] {HttpSession.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getAttribute" -> exchange.session.get((String) args[0]);
+                    case "setAttribute" -> exchange.session.put((String) args[0], args[1]);
+                    case "removeAttribute" -> exchange.session.remove((String) args[0]);
+                    default -> null;
+                });
+    }
+
+    private static RequestDispatcher dispatcher(String path, List<String> forwarded, Exchange exchange) {
         return (RequestDispatcher) Proxy.newProxyInstance(Fakes.class.getClassLoader(),
                 new Class<?>[] {RequestDispatcher.class}, (proxy, method, args) -> {
-                    if ("forward".equals(method.getName())) forwarded.add(path);
+                    if ("forward".equals(method.getName())) {
+                        forwarded.add(path);
+                        exchange.forwardedAs.add(((HttpServletRequest) args[0]).getMethod());
+                    }
                     return null;
                 });
     }
