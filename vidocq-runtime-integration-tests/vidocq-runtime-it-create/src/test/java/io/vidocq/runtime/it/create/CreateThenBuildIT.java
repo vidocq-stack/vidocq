@@ -79,13 +79,6 @@ class CreateThenBuildIT {
     /** The fixture module that holds only {@code META-INF/resources/x.css} and that the application does not require. */
     private static final String RESOURCE_MODULE = "acme.resources";
 
-    /**
-     * The javac warnings the created project is allowed: one per class Vauban writes in javac's last round (#337,
-     * documented). From Vidocq/vauban#251 on, Vauban writes them earlier and there are none (BUG-20261030-26); until
-     * that Vauban is the one this build uses, two are still allowed.
-     */
-    private static final String LAST_ROUND = "created in the last round will not be subject to annotation processing";
-
     /** How long a packaged application may take to print the last line of its boot. */
     private static final Duration START_TIMEOUT = Duration.ofMinutes(1);
 
@@ -146,15 +139,6 @@ class CreateThenBuildIT {
     /** What Vauban prints when the container generates a class at run time instead of at build. */
     private static final String RUNTIME_GENERATION = "RUNTIME CODE GENERATION FALLBACK";
 
-    /**
-     * The warning vauban-processor prints at the created servlet application's build for its injection points of the
-     * servlet built-in beans: they are Foy's beans, in {@code foy-cdi-vauban}, which the application module does not
-     * read, so the processor leaves them to the container. Tolerated, not required: Vauban is to stop printing it.
-     */
-    private static final Pattern DEFERRED = Pattern.compile("\\[Vauban] Unsatisfied dependency: field"
-            + " (WhoAmIServlet\\.(request|session|context)|ContextStartListener\\.context) of type .*"
-            + " resolution deferred to the runtime container");
-
     /** The IT checks what the scaffolder writes and what the build prints, not what the scaffolder says. */
     private static final Reporter SILENT = new Reporter() {
         @Override public void success(String message, String detail) { /* see SILENT */ }
@@ -195,12 +179,8 @@ class CreateThenBuildIT {
                 "vidocq:jlink wrote no image launcher:\n" + output);
         assertTrue(modules(project.resolve("target/dist/bin/java")).contains("com.acme.demo.app"),
                 "the image does not link the application module:\n" + output);
-        List<String> warnings = BuildWarnings.warningsOf(output, outerRepositoryUrl()).stream()
-                .filter(l -> !l.contains(LAST_ROUND))
-                .toList();
+        List<String> warnings = BuildWarnings.warningsOf(output, outerRepositoryUrl());
         assertEquals(List.of(), warnings, "the created project builds with warnings:\n" + output);
-        long lastRound = output.lines().filter(l -> l.contains(LAST_ROUND)).count();
-        assertTrue(lastRound == 0 || lastRound == 2, () -> lastRound + " last-round warnings:\n" + output);
 
         assertTheBuildFrozeItsExtensions(project, output);
         assertStartsOnTheFrozenExtensions(project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh"));
@@ -326,9 +306,7 @@ class CreateThenBuildIT {
         addTheWhoAmIServlet(project);
 
         String output = build(project, "create-" + name + ".log", "verify");
-        List<String> warnings = BuildWarnings.warningsOf(output, outerRepositoryUrl()).stream()
-                .filter(l -> !l.contains(LAST_ROUND) && !DEFERRED.matcher(l).find())
-                .toList();
+        List<String> warnings = BuildWarnings.warningsOf(output, outerRepositoryUrl());
         assertEquals(List.of(), warnings, "the created " + name + " project builds with warnings:\n" + output);
         if (frozen) {
             assertTheBuildFrozeItsExtensions(project, output);
