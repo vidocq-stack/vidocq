@@ -42,8 +42,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 /**
  * Package a Vidocq application as a standalone ZIP distribution.
@@ -193,7 +191,7 @@ public class VidocqPackageMojo extends AbstractMojo {
 
             // Create ZIP
             Path zipFile = buildDir.toPath().resolve(distName + "-dist.zip");
-            createZip(distRoot, zipFile);
+            DistributionZip.write(distRoot, zipFile);
 
             // Attach artifact
             projectHelper.attachArtifact(project, "zip", "dist", zipFile.toFile());
@@ -537,22 +535,4 @@ public class VidocqPackageMojo extends AbstractMojo {
         }
     }
 
-    private void createZip(Path sourceDir, Path zipFile) throws IOException {
-        try (var zos = new ZipOutputStream(new BufferedOutputStream(
-                Files.newOutputStream(zipFile)))) {
-            Path parent = sourceDir.getParent();
-            try (var walker = Files.walk(sourceDir)) {
-                walker.filter(Files::isRegularFile).forEach(file -> {
-                    try {
-                        String entryName = parent.relativize(file).toString();
-                        zos.putNextEntry(new ZipEntry(entryName));
-                        Files.copy(file, zos);
-                        zos.closeEntry();
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
-                    }
-                });
-            }
-        }
-    }
 }

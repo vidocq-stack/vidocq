@@ -175,7 +175,7 @@ Spring Boot does not naturally align with the MicroProfile model, and migration 
 
 Payara Micro and Vidocq Runtime share the MicroProfile target. The main difference is the build-time approach: Payara Micro embeds GlassFish; Vidocq Runtime produces a minimal jlink binary without a classical application server.
 
-* `payara-micro --deploy app.war` → `bin/run.sh` from the `vidocq:package` `bin/` + `lib/` distribution (also attached as a `-dist.zip`).
+* `payara-micro --deploy app.war` → `bin/<artifactId>.sh` from the `vidocq:package` `bin/` + `lib/` distribution (also attached as a `-dist.zip`).
 * `payara-micro.jar` (~80 MB) → jlink image (~40 MB).
 * Every enabled MicroProfile `feature.xml` is replaced by the matching Vidocq Runtime extension.
 

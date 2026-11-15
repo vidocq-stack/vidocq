@@ -294,7 +294,7 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
   The plugin depends on `io.vidocq.ibarra:ibarra-compiler` for it: build tooling, never in the application.
 
 | `vidocq:package`
-| Standalone distribution: `bin/run.sh` + `bin/run.cmd` launchers, `lib/*.jar` (application + module-path closure), attached as a `-dist.zip`.
+| Standalone distribution: `bin/<artifactId>.sh` + `bin/<artifactId>.cmd` launchers (`vidocq.scriptName`), `lib/*.jar` (application + module-path closure), attached as a `-dist.zip` that keeps the execute bit of the `.sh` launcher.
 
 | `vidocq:dev`
 | Dev/watch mode — forks a child JVM with `-Dvidocq.profile=dev`, recompiles and hot-reloads on change.

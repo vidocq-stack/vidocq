@@ -99,7 +99,7 @@ flowchart LR
     SRC[Source code<br/>+ extensions<br/>declared as deps] --> APT[APT scan<br/>vidocq-runtime-core-codegen<br/>+ extension codegens]
     APT --> PLUGIN[vidocq-runtime-maven-plugin<br/>generate + package]
     PLUGIN --> DIST[bin/ + lib/ distribution<br/>+ -dist.zip]
-    DIST --> JAVA[bin/run.sh / jlink image]
+    DIST --> JAVA[bin launcher / jlink image]
     JAVA --> BOOT[Vidocq.main]
     BOOT --> LIFE[VidocqBootstrap<br/>extension lifecycle]
     LIFE --> READY[HTTP listener ready]
@@ -176,7 +176,7 @@ sequenceDiagram
     participant EXT as VidocqExtension (sorted by priority)
     participant VAU as Vauban (CDI)
 
-    U->>V: bin/run.sh, jlink launcher (or IDE @VidocqMain)
+    U->>V: bin launcher, jlink launcher (or IDE @VidocqMain)
     V->>B: configure()
     B->>B: build VidocqConfig / VidocqConfiguration<br/>(system props, env, properties files)
     B->>L: ExtensionLoader.load()

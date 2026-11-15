@@ -8,7 +8,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261116-02 — The `-dist.zip` of `vidocq:package` loses the execute bit of `bin/<name>.sh`
 
 - **Date**: 2026-11-16
-- **Status**: OPEN
+- **Status**: FIXED on `fix/dist-zip-exec-bit`
 - **Module**: `vidocq-runtime-maven-plugin` (`VidocqPackageMojo.createZip`)
 - **Symptom**: `vidocq build` (or `mvn package`) on vaadin-on-vidocq writes `target/vaadin-on-vidocq-0.4.0-SNAPSHOT-dist.zip`.
   Unzipped elsewhere, `./bin/vaadin-on-vidocq.sh` fails with `Permission denied`: the file is `-rw-r--r--`. `zipinfo`
@@ -18,10 +18,13 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Repro**: `vidocq build && mkdir /tmp/d && cd /tmp/d && unzip -q <project>/target/*-dist.zip && ./*/bin/*.sh`.
 - **Cause**: `createZip` writes the archive with `java.util.zip.ZipOutputStream`, which has no API for the Unix mode of
   an entry; the `setExecutable(true)` on the staged launcher does not reach the archive.
-- **Fix (proposed)**: write the ZIP through the `jdk.zipfs` file system with `enablePosixFileAttributes=true` and
-  `Files.setPosixFilePermissions` on `bin/*.sh` (JDK only, no dependency), and test that an unzipped launcher is
-  executable. Side note: `reference.adoc` and the plugin page name the launchers `bin/run.sh` and `bin/run.cmd`; the
-  files are `bin/<artifactId>.sh` and `.cmd`.
+- **Fix**: `DistributionZip` writes the archive through the `jdk.zipfs` file system with
+  `enablePosixFileAttributes=true` (JDK only, no dependency): each entry keeps the POSIX permissions of its staged
+  file, and on a build machine without POSIX permissions (Windows) the `bin/*.sh` launcher gets `rwx------`. Checked
+  by hand: `unzip` gives `-rwxr-xr-x` and the launcher starts. Tests: `DistributionZipTest`
+  (`eachEntryKeepsTheModeOfItsStagedFile`, `withoutPosixPermissionsTheLauncherIsExecutableByItsOwner`,
+  `theArchiveHoldsEveryFileUnderTheDistributionDirectory`). The docs now name the launchers `bin/<artifactId>.sh` and
+  `.cmd` instead of `bin/run.sh` and `bin/run.cmd`.
 
 ## BUG-20261116-01 — The Application run configuration of `vidocq idea --kind application` cannot start a Vaadin application
 

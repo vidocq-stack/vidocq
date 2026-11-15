@@ -72,7 +72,7 @@ cd vidocq-runtime-examples/vidocq-runtime-mansart-h2-example
 ./mvnw -ntp package
 
 # vidocq:package produced a bin/ + lib/ distribution (also zipped as *-dist.zip)
-./target/vidocq-runtime-mansart-h2-example-<version>/bin/run.sh
+./target/vidocq-runtime-mansart-h2-example-<version>/bin/vidocq-runtime-mansart-h2-example.sh
 
 curl -X POST http://localhost:8080/api/products \
      -H 'Content-Type: application/json' \
