@@ -19,7 +19,11 @@
  */
 package io.vidocq.kerckhoffs.core.internal.mechanism;
 
+import io.vidocq.kerckhoffs.core.internal.identitystore.DefaultIdentityStoreHandler;
+import io.vidocq.kerckhoffs.core.internal.identitystore.InMemoryIdentityStore;
 import jakarta.security.auth.message.AuthException;
+import jakarta.security.enterprise.identitystore.InMemoryIdentityStoreDefinition;
+import jakarta.security.enterprise.identitystore.InMemoryIdentityStoreDefinition.Credentials;
 import jakarta.security.auth.message.AuthStatus;
 import jakarta.security.enterprise.AuthenticationException;
 import jakarta.security.enterprise.AuthenticationStatus;
@@ -31,12 +35,15 @@ import org.junit.jupiter.api.Test;
 
 import javax.security.auth.Subject;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -141,5 +148,34 @@ class HttpAuthenticationMechanismModuleTest {
     void theModuleSpeaksServletMessages() throws Exception {
         assertEquals(List.of(HttpServletRequest.class, HttpServletResponse.class),
                 List.of(module(answering(AuthenticationStatus.SUCCESS)).getSupportedMessageTypes()));
+    }
+
+    @Test
+    void theBuiltInMechanismsNameTheirServletAuthenticationType() {
+        assertEquals("BASIC", HttpAuthenticationMechanismModule.authTypeOf(new BasicAuthenticationMechanism("realm", () -> null)));
+        assertEquals("FORM", HttpAuthenticationMechanismModule.authTypeOf(
+                new FormAuthenticationMechanism("/login", "/error", true, () -> null)));
+        assertNull(HttpAuthenticationMechanismModule.authTypeOf(answering(AuthenticationStatus.SUCCESS)),
+                "a custom mechanism names none: the container answers for it");
+    }
+
+    @InMemoryIdentityStoreDefinition({@Credentials(callerName = "reza", password = "secret1", groups = {"foo"})})
+    private static final class Store { }
+
+    @Test
+    void aCallerLoggedInByTheBasicMechanismIsOfTheBasicType() throws Exception {
+        var handler = new DefaultIdentityStoreHandler(List.of(
+                InMemoryIdentityStore.of(Store.class.getAnnotation(InMemoryIdentityStoreDefinition.class))));
+        var header = "Basic " + Base64.getEncoder().encodeToString("reza:secret1".getBytes(StandardCharsets.UTF_8));
+        var basicInfo = new Fakes.Info(
+                Fakes.request(new HashMap<>(), new ArrayList<>(), Map.of("Authorization", header)),
+                Fakes.response(new ArrayList<>()), policy);
+        policy.put(DefaultHttpMessageContext.MANDATORY, "true");
+
+        var status = module(new BasicAuthenticationMechanism("realm", () -> handler))
+                .validateRequest(basicInfo, client, null);
+
+        assertEquals(AuthStatus.SUCCESS, status);
+        assertEquals("BASIC", policy.get("jakarta.servlet.http.authType"));
     }
 }

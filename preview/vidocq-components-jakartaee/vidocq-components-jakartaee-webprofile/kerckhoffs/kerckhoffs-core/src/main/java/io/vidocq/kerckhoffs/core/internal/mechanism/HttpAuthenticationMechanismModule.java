@@ -44,6 +44,9 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public final class HttpAuthenticationMechanismModule implements ServerAuthModule {
 
+    /** The key of the message map by which the module gives the {@code getAuthType()} of the caller. */
+    private static final String AUTH_TYPE = "jakarta.servlet.http.authType";
+
     private static final Class<?>[] MESSAGE_TYPES = {HttpServletRequest.class, HttpServletResponse.class};
 
     private final HttpAuthenticationMechanism mechanism;
@@ -73,10 +76,25 @@ public final class HttpAuthenticationMechanismModule implements ServerAuthModule
             throw authException("the authentication mechanism failed", e);
         }
         if (status == null) throw new AuthException("the authentication mechanism answered nothing");
+        if (status == AuthenticationStatus.SUCCESS && authTypeOf(mechanism) instanceof String type) {
+            info.getMap().putIfAbsent(AUTH_TYPE, type);
+        }
         return switch (status) {
             case SUCCESS, NOT_DONE -> AuthStatus.SUCCESS;
             case SEND_CONTINUE -> AuthStatus.SEND_CONTINUE;
             case SEND_FAILURE -> AuthStatus.SEND_FAILURE;
+        };
+    }
+
+    /**
+     * The {@code getAuthType()} a built-in mechanism stands for ({@code HttpServletRequest.BASIC_AUTH},
+     * {@code FORM_AUTH}), or {@code null} for a mechanism of the application, which names none.
+     */
+    static String authTypeOf(HttpAuthenticationMechanism mechanism) {
+        return switch (mechanism) {
+            case BasicAuthenticationMechanism basic -> "BASIC";
+            case FormAuthenticationMechanism form -> "FORM";
+            default -> null;
         };
     }
 
