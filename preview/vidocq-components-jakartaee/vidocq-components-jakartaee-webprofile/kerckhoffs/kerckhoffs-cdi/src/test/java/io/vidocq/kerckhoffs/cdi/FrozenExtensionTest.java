@@ -19,8 +19,10 @@
  */
 package io.vidocq.kerckhoffs.cdi;
 
+import io.vidocq.kerckhoffs.core.internal.mechanism.BasicAuthenticationMechanism;
 import io.vidocq.vauban.core.container.VaubanContainer;
 import jakarta.enterprise.inject.spi.DeploymentException;
+import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanism;
 import jakarta.security.enterprise.credential.UsernamePasswordCredential;
 import jakarta.security.enterprise.identitystore.CredentialValidationResult.Status;
 import jakarta.security.enterprise.identitystore.IdentityStoreHandler;
@@ -38,6 +40,7 @@ import java.util.Enumeration;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -86,14 +89,16 @@ class FrozenExtensionTest {
         }
     }
 
-    private void application(Class<?> definition) throws Exception {
+    private void application(Class<?>... definitions) throws Exception {
         copy(KerckhoffsExtension.class, KerckhoffsExtension.Declared.class, InMemoryIdentityStoreCreator.class,
-                IdentityStoreHandlerCreator.class, IdentityStoreStartCheck.class, definition);
+                IdentityStoreHandlerCreator.class, BasicMechanismCreator.class, IdentityStoreStartCheck.class);
+        copy(definitions);
         Files.createDirectories(classes.resolve(SERVICE).getParent());
         Files.writeString(classes.resolve(SERVICE), KerckhoffsExtension.class.getName() + "\n");
         // What the annotation processor writes: the beans of the archive, read by scanClasspath().
-        Files.writeString(classes.resolve("META-INF/vauban-beans.list"),
-                IdentityStoreStartCheck.class.getName() + "\n" + definition.getName() + "\n");
+        var beans = new StringBuilder(IdentityStoreStartCheck.class.getName()).append('\n');
+        for (Class<?> definition : definitions) beans.append(definition.getName()).append('\n');
+        Files.writeString(classes.resolve("META-INF/vauban-beans.list"), beans.toString());
     }
 
     @BeforeEach
@@ -142,6 +147,18 @@ class FrozenExtensionTest {
         freeze();
 
         assertThrows(DeploymentException.class, this::startAndClose);
+    }
+
+    @Test
+    void a_frozen_basic_definition_still_puts_the_mechanism_in_service() throws Exception {
+        application(MemoryApplication.class, BasicApplication.class);
+        freeze();
+
+        try (var loader = new ApplicationLoader(classes);
+             var container = VaubanContainer.builder().classLoader(loader).scanClasspath().build()) {
+            assertEquals(List.of(), container.extensionsAtStart().ranAtStart());
+            assertInstanceOf(BasicAuthenticationMechanism.class, container.select(HttpAuthenticationMechanism.class));
+        }
     }
 
     /** Starts the application from its output; the start itself is what a test asks to fail. */

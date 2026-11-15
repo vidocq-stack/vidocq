@@ -25,7 +25,10 @@ import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
+import jakarta.enterprise.inject.spi.DeploymentException;
 import jakarta.inject.Singleton;
+import jakarta.security.enterprise.authentication.mechanism.http.BasicAuthenticationMechanismDefinition;
+import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanism;
 import jakarta.security.enterprise.identitystore.IdentityStore;
 import jakarta.security.enterprise.identitystore.IdentityStoreHandler;
 import jakarta.security.enterprise.identitystore.InMemoryIdentityStoreDefinition;
@@ -48,10 +51,16 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
     }
 
     private final List<Declared> inMemoryDefinitions = new ArrayList<>();
+    private final List<Declared> basicDefinitions = new ArrayList<>();
 
     @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = InMemoryIdentityStoreDefinition.class)
     public void collectInMemoryDefinition(ClassInfo declaring) {
         inMemoryDefinitions.add(new Declared(declaring.name(), declaring.annotation(InMemoryIdentityStoreDefinition.class)));
+    }
+
+    @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = BasicAuthenticationMechanismDefinition.class)
+    public void collectBasicDefinition(ClassInfo declaring) {
+        basicDefinitions.add(new Declared(declaring.name(), declaring.annotation(BasicAuthenticationMechanismDefinition.class)));
     }
 
     @Synthesis
@@ -65,9 +74,36 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
                     .withParam("definition", declared.definition())
                     .createWith(InMemoryIdentityStoreCreator.class);
         }
+        for (Declared declared : basicDefinitions) {
+            components.addBean(HttpAuthenticationMechanism.class)
+                    .type(HttpAuthenticationMechanism.class)
+                    .scope(Singleton.class)
+                    .withParam("origin", declared.origin())
+                    .withParam("realmName", realmName(declared))
+                    .createWith(BasicMechanismCreator.class);
+        }
         components.addBean(IdentityStoreHandler.class)
                 .type(IdentityStoreHandler.class)
                 .scope(Singleton.class)
                 .createWith(IdentityStoreHandlerCreator.class);
+    }
+
+    /**
+     * The realm of a BASIC definition, as a literal: an attribute is written as text or as an Expression Language
+     * string literal ({@code ${'name'}}); a richer expression waits for Jakarta Expression Language (PLAN.md, K3).
+     */
+    private static String realmName(Declared declared) {
+        String realm = declared.definition().member("realmName").asString();
+        if (!realm.startsWith("${")) return realm;
+        if (realm.endsWith("}") && realm.length() >= 5) {
+            String inner = realm.substring(2, realm.length() - 1).trim();
+            char quote = inner.charAt(0);
+            if ((quote == '\'' || quote == '"') && inner.length() >= 2 && inner.charAt(inner.length() - 1) == quote
+                    && inner.indexOf(quote, 1) == inner.length() - 1) {
+                return inner.substring(1, inner.length() - 1);
+            }
+        }
+        throw new DeploymentException("The realm name of the BASIC mechanism of " + declared.origin()
+                + " is an expression (" + realm + "): only a literal is supported yet");
     }
 }

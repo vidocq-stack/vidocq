@@ -54,8 +54,15 @@ final class Fakes {
 
     /** A request with attributes, the context path {@code /app}, and a dispatcher that records its forwards. */
     static HttpServletRequest request(Map<String, Object> attributes, List<String> forwarded) {
+        return request(attributes, forwarded, Map.of());
+    }
+
+    /** The same, with the request headers {@code headers}. */
+    static HttpServletRequest request(Map<String, Object> attributes, List<String> forwarded,
+                                      Map<String, String> headers) {
         return (HttpServletRequest) Proxy.newProxyInstance(Fakes.class.getClassLoader(),
                 new Class<?>[] {HttpServletRequest.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "getHeader" -> headers.get((String) args[0]);
                     case "getAttribute" -> attributes.get((String) args[0]);
                     case "setAttribute" -> attributes.put((String) args[0], args[1]);
                     case "getContextPath" -> "/app";
@@ -80,6 +87,7 @@ final class Fakes {
                         case "sendRedirect" -> sent.add("redirect " + args[0]);
                         case "sendError" -> sent.add("error " + args[0]);
                         case "setStatus" -> sent.add("status " + args[0]);
+                        case "setHeader" -> sent.add("header " + args[0] + ": " + args[1]);
                         case "encodeRedirectURL" -> { return args[0]; }
                         default -> {
                             // Every other call is accepted and ignored: the tests ask only what they check.

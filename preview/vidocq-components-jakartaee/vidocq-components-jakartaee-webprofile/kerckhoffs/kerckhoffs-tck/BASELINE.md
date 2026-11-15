@@ -57,6 +57,7 @@ The container installs the mechanism of the war on that hook, as the Vidocq runt
 | Application | Result | Note |
 |---|---|---|
 | `app-mem` | **4 of 4 green** | `testAuthenticated` now measures the in-memory identity store through the mechanism of the war |
+| `app-mem-basic` | **4 of 4 green** | the built-in BASIC mechanism (`@BasicAuthenticationMechanismDefinition`, realm as a literal or an EL string literal) |
 
 Not claimed: this is one application of the TCK. The others need an EJB, a `DataSource`, an embedded directory or an
 OpenID provider, and are not run yet.
