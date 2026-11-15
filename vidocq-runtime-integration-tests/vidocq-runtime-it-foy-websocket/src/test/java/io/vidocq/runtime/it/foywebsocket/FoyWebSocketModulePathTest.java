@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -148,6 +149,31 @@ class FoyWebSocketModulePathTest {
     }
 
     @Test
+    void anApplicationStopClosesTheConnectionWith1001BeforeTheServerStops() throws Exception {
+        EchoEndpoint.reset();
+        boot(null);
+        try (Socket socket = new Socket("127.0.0.1", port)) {
+            socket.setSoTimeout(10_000);
+            upgrade(socket, FOY_PATH);
+            assertTrue(EchoEndpoint.OPENED.get().await(5, TimeUnit.SECONDS), "the endpoint saw the connection open");
+
+            bootstrap.shutdown();
+
+            InputStream in = socket.getInputStream();
+            byte[] header = in.readNBytes(2);
+            assertEquals(2, header.length, "the client reads a frame, not a dropped connection");
+            assertEquals(0x88, header[0] & 0xFF, "a Close frame");
+            byte[] payload = in.readNBytes(header[1] & 0x7F);
+            assertTrue(payload.length >= 2, "the Close frame carries a code");
+            assertEquals(1001, ((payload[0] & 0xFF) << 8) | (payload[1] & 0xFF));
+            assertTrue(EchoEndpoint.CLOSED.get().await(5, TimeUnit.SECONDS), "the endpoint saw onClose");
+            assertEquals(List.of(1001), EchoEndpoint.CLOSE_CODES);
+        }
+        // After the runtime stopped and the client's socket closed: a late onError would show here.
+        assertEquals(List.of(), EchoEndpoint.ERRORS);
+    }
+
+    @Test
     void aMalformedAllowedOriginStopsTheStart() {
         Throwable failure = assertThrows(Throwable.class, () -> boot("ftp://x"));
 
@@ -194,20 +220,39 @@ class FoyWebSocketModulePathTest {
         return answer;
     }
 
+    /** The bytes of an HTTP/1.1 WebSocket upgrade request, with an {@code Origin} header when given. */
+    private byte[] upgradeRequest(String path, String origin) {
+        String key = Base64.getEncoder().encodeToString(new byte[16]);
+        StringBuilder request = new StringBuilder("GET " + path + " HTTP/1.1\r\n"
+                + "Host: 127.0.0.1:" + port + "\r\n"
+                + "Upgrade: websocket\r\n"
+                + "Connection: Upgrade\r\n"
+                + "Sec-WebSocket-Key: " + key + "\r\n"
+                + "Sec-WebSocket-Version: 13\r\n");
+        if (origin != null) request.append("Origin: ").append(origin).append("\r\n");
+        request.append("\r\n");
+        return request.toString().getBytes(StandardCharsets.US_ASCII);
+    }
+
+    /** Sends an upgrade request and reads the response head, which must be a 101. */
+    private void upgrade(Socket socket, String path) throws IOException {
+        socket.getOutputStream().write(upgradeRequest(path, null));
+        socket.getOutputStream().flush();
+        InputStream in = socket.getInputStream();
+        StringBuilder head = new StringBuilder();
+        while (!head.toString().endsWith("\r\n\r\n")) {
+            int b = in.read();
+            assertTrue(b >= 0, "the response head ended early: " + head);
+            head.append((char) b);
+        }
+        assertTrue(head.toString().startsWith("HTTP/1.1 101"), head.toString());
+    }
+
     /** A hand-written HTTP/1.1 upgrade request; the status code of the first response line. */
     private int handshakeStatus(String path, String origin) throws IOException {
         try (Socket socket = new Socket("127.0.0.1", port)) {
             socket.setSoTimeout(5000);
-            String key = Base64.getEncoder().encodeToString(new byte[16]);
-            StringBuilder request = new StringBuilder("GET " + path + " HTTP/1.1\r\n"
-                    + "Host: 127.0.0.1:" + port + "\r\n"
-                    + "Upgrade: websocket\r\n"
-                    + "Connection: Upgrade\r\n"
-                    + "Sec-WebSocket-Key: " + key + "\r\n"
-                    + "Sec-WebSocket-Version: 13\r\n");
-            if (origin != null) request.append("Origin: ").append(origin).append("\r\n");
-            request.append("\r\n");
-            socket.getOutputStream().write(request.toString().getBytes(StandardCharsets.US_ASCII));
+            socket.getOutputStream().write(upgradeRequest(path, origin));
             socket.getOutputStream().flush();
             var in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII));
             return Integer.parseInt(in.readLine().split(" ")[1]);

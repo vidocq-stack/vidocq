@@ -437,6 +437,8 @@ vidocq.websocket.allowed-origins=https://admin.example.com, http://localhost:517
 
 `*` allows any origin and turns the protection off. See xref:modules/vidocq-runtime-extensions.adoc#foy-websocket[the extension] for the key.
 
+When the application stops, every push connection is closed with a Close frame of code 1001 before the server stops: the browser gets a clean close instead of a dropped connection.
+
 The module-path integration test of the extension (`vidocq-runtime-it-foy-websocket`) checks the Jakarta WebSocket
 server API on the module path. The Vaadin push itself was run end to end over `WEBSOCKET_XHR`, under `vidocq:run`, with a
 minimal Vaadin 25.3 application: `/VAADIN/push` answered 101, the page stayed connected for over five minutes without

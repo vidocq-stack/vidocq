@@ -111,6 +111,13 @@ class ChappeMountPointTest {
     }
 
     @Test
+    void beforeStopHooksCollected() {
+        mp.addBeforeStopHook(() -> {});
+        assertEquals(1, mp.beforeStopHooks().size());
+        assertThrows(NullPointerException.class, () -> mp.addBeforeStopHook(null));
+    }
+
+    @Test
     void afterStopHooksCollected() {
         mp.addAfterStopHook(() -> {});
         assertEquals(1, mp.afterStopHooks().size());

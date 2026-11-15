@@ -275,6 +275,16 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
 
     @Override
     public void onStop() {
+        // Taken once: a second onStop finds no mount point and runs no hook again.
+        ChappeMountPoint stopping = mountPoint;
+        mountPoint = null;
+        if (stopping != null) {
+            // Before any server stops: the listeners still serve, so a hook can reach the peers.
+            // Last registered first, as the extensions stop.
+            for (Runnable h : stopping.beforeStopHooks().reversed()) {
+                runHookSilently(h, "beforeStop");
+            }
+        }
         List<Server> started = new ArrayList<>(servers);
         for (Server s : started.reversed()) {
             try {
@@ -287,12 +297,12 @@ public final class ChappeServerBootstrap implements VidocqExtension, Suspendable
         serverNames.clear();
         suspended = false;
         boundAddresses.clear();
-        if (mountPoint != null) {
-            mountPoint.clearBound();
+        if (stopping != null) {
+            stopping.clearBound();
         }
 
-        if (mountPoint != null) {
-            for (Runnable h : mountPoint.afterStopHooks()) {
+        if (stopping != null) {
+            for (Runnable h : stopping.afterStopHooks()) {
                 runHookSilently(h, "afterStop");
             }
         }

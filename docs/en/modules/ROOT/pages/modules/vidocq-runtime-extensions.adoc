@@ -336,6 +336,8 @@ opens com.example.app.ws to io.vidocq.foy.core;
 See `vidocq-runtime-it-foy-websocket` for a complete module.
 ====
 
+An application stop closes every open WebSocket connection with a Close frame of code 1001 (going away), and calls the endpoint's `onClose` with that code, before the Chappe servers stop: the Servlet extension closes Foy's deployments in a before-stop hook of the Chappe mount point (`ChappeMountPoint.addBeforeStopHook`). Without it the connections dropped with no Close frame and the peer saw 1006 (BUG-20261115-01). `Servlet.destroy()` and `ServletContextListener.contextDestroyed` run while the server still serves, too.
+
 [cols="2,1,3"]
 |===
 | Key | Default | Description
@@ -542,7 +544,7 @@ The `vidocq-runtime-chappe-webserver-extension` extension illustrates the patter
 | `onStop`
 | `ChappeServerBootstrap`
 | 10000
-| shuts servers down cleanly
+| runs the hooks of `ChappeMountPoint.addBeforeStopHook(Runnable)` while every listener still serves, then shuts servers down cleanly, then runs the `addAfterStopHook` ones
 |===
 
 Every listener logs the address it actually bound, not the one it was given: with `port=0`, the line shows the real port.

@@ -32,6 +32,7 @@ final class LogRecords implements AutoCloseable {
 
     private final Logger logger;
     private final Level previousLevel;
+    private final boolean previousUseParentHandlers;
     private final List<LogRecord> records = new ArrayList<>();
     private final Handler handler = new Handler() {
         @Override
@@ -55,6 +56,9 @@ final class LogRecords implements AutoCloseable {
     LogRecords(String loggerName) {
         logger = Logger.getLogger(loggerName);
         previousLevel = logger.getLevel();
+        previousUseParentHandlers = logger.getUseParentHandlers();
+        // Captured, not printed: the test output stays clean.
+        logger.setUseParentHandlers(false);
         logger.setLevel(Level.ALL);
         handler.setLevel(Level.ALL);
         logger.addHandler(handler);
@@ -83,5 +87,6 @@ final class LogRecords implements AutoCloseable {
     public void close() {
         logger.removeHandler(handler);
         logger.setLevel(previousLevel);
+        logger.setUseParentHandlers(previousUseParentHandlers);
     }
 }

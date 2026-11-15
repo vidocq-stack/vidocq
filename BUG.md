@@ -5,6 +5,24 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261115-01 — An application stop cuts every WebSocket without a Close frame
+
+- **Date**: 2026-11-15
+- **Status**: FIXED on `fix/websocket-stop-order`
+- **Affected modules**: vidocq-runtime-chappe-webserver-extension (`ChappeMountPoint`, `ChappeServerBootstrap`),
+  vidocq-runtime-foy-servlet-extension (`FoyExtension`)
+- **Symptom**: at application stop every open Jakarta WebSocket connection drops with no Close frame (the peer sees
+  1006), the endpoint may get `onError` before `onClose`, and `Servlet.destroy()` and
+  `ServletContextListener.contextDestroyed` run after the server is gone.
+- **Minimal repro**: boot `vidocq-runtime-it-foy-websocket`, open a raw WebSocket to the Foy endpoint, shut the runtime
+  down, read the socket. Test: `FoyWebSocketModulePathTest.anApplicationStopClosesTheConnectionWith1001BeforeTheServerStops`
+  (red before the fix: the client reads no frame).
+- **Cause**: extensions stop in reverse start order. `ChappeServerBootstrap` (priority 10000) stops first, so the
+  servers were gone when `FoyExtension.onStop` (priority 600) ran `deployments.closeAll()`, after the 1001 Foy sends at
+  undeploy (BUG-20261114-05 in Vidocq/foy) could no longer be sent.
+- **Fix**: `ChappeMountPoint.addBeforeStopHook`, run by `ChappeServerBootstrap.onStop` before any server stops;
+  `FoyExtension` registers `deployments::closeAll` there at start. `onStop` keeps its idempotent `closeAll()`.
+
 ## BUG-20261114-13 — A refused WebSocket origin names a setting the Vidocq user never wrote
 
 - **Date**: 2026-11-14

@@ -69,6 +69,7 @@ public final class ChappeMountPoint {
     private final Map<String, List<PendingMount>> mounts = new LinkedHashMap<>();
     private final Map<String, Declaration> listeners = new LinkedHashMap<>();
     private final List<Runnable> beforeStartHooks = new ArrayList<>();
+    private final List<Runnable> beforeStopHooks = new ArrayList<>();
     private final List<Runnable> afterStopHooks = new ArrayList<>();
     private volatile boolean frozen;
     /** The URL each started listener really listens on, by name: read by report sections and the dev console. */
@@ -365,6 +366,18 @@ public final class ChappeMountPoint {
     }
 
     /**
+     * Hook executed at stop, before any Chappe server stops.
+     * <p>Every listener still serves while the hook runs. It is for work that must reach the peers,
+     * such as closing a deployment so that its open WebSocket connections get a Close frame. The hooks
+     * run in reverse registration order, mirroring the stop order of the extensions that register them.
+     * A hook that throws is logged and does not stop the other hooks nor the servers.</p>
+     */
+    public void addBeforeStopHook(Runnable hook) {
+        Objects.requireNonNull(hook, "hook");
+        beforeStopHooks.add(hook);
+    }
+
+    /**
      * Hook executed just after each server shuts down.
      * <p>Hook executed right after each server stops.</p>
      */
@@ -406,6 +419,10 @@ public final class ChappeMountPoint {
 
     List<Runnable> beforeStartHooks() {
         return List.copyOf(beforeStartHooks);
+    }
+
+    List<Runnable> beforeStopHooks() {
+        return List.copyOf(beforeStopHooks);
     }
 
     List<Runnable> afterStopHooks() {

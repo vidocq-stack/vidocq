@@ -42,6 +42,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -73,6 +76,7 @@ class FoyExtensionTest {
 
     private final List<Mount> mounts = new ArrayList<>();
     private final List<FoyExtension> extensions = new ArrayList<>();
+    private final List<Runnable> beforeStopHooks = new ArrayList<>();
 
     @AfterEach
     void forget() {
@@ -131,6 +135,61 @@ class FoyExtensionTest {
 
         assertEquals(before + 1, LifecycleListener.DESTROYED.get());
         assertTrue(extension.deployments().all().isEmpty());
+    }
+
+    @Test
+    void startRegistersABeforeStopHookThatClosesTheDeployments(@TempDir Path root) throws Exception {
+        FoyExtension extension = configured(Map.of());
+        extension.begin(new Object());
+        extension.start(null, config(Map.of()), loaderWith(root, WEB_XML));
+        int before = LifecycleListener.DESTROYED.get();
+
+        assertEquals(1, beforeStopHooks.size());
+        beforeStopHooks.getFirst().run();
+
+        assertEquals(before + 1, LifecycleListener.DESTROYED.get());
+        assertTrue(extension.deployments().all().isEmpty());
+        extension.onStop();
+        assertEquals(before + 1, LifecycleListener.DESTROYED.get());
+    }
+
+    @Test
+    void aFailureClosingTheDeploymentsIsLoggedAsAnErrorNamingTheExtension() {
+        Logger logger = Logger.getLogger(FoyExtension.class.getName());
+        List<LogRecord> records = new ArrayList<>();
+        java.util.logging.Handler handler = new java.util.logging.Handler() {
+            @Override
+            public void publish(LogRecord logRecord) {
+                records.add(logRecord);
+            }
+
+            @Override
+            public void flush() {
+                // nothing buffered
+            }
+
+            @Override
+            public void close() {
+                // nothing to release
+            }
+        };
+        boolean parents = logger.getUseParentHandlers();
+        logger.setUseParentHandlers(false);
+        logger.addHandler(handler);
+        try {
+            Runnable hook = FoyExtension.failureLogged(() -> {
+                throw new IllegalStateException("boom");
+            });
+            hook.run();
+        } finally {
+            logger.removeHandler(handler);
+            logger.setUseParentHandlers(parents);
+        }
+
+        assertEquals(1, records.size());
+        assertEquals(Level.SEVERE, records.getFirst().getLevel());
+        assertTrue(records.getFirst().getMessage().contains("servlet-foy"));
+        assertEquals("boom", records.getFirst().getThrown().getMessage());
     }
 
     @Test
@@ -252,7 +311,8 @@ class FoyExtensionTest {
     }
 
     private FoyExtension configured(Map<String, String> values) {
-        FoyExtension extension = new FoyExtension((l, p, h) -> mounts.add(new Mount(l, p, h)), new FoyDeployments());
+        FoyExtension extension = new FoyExtension((l, p, h) -> mounts.add(new Mount(l, p, h)), new FoyDeployments(),
+                beforeStopHooks::add);
         extension.configure(new MapConfiguration(values));
         extensions.add(extension);
         return extension;

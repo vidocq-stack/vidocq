@@ -26,16 +26,20 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -118,6 +122,69 @@ class ChappeServerEndToEndTest {
 
         bootstrap.onStop();
         assertTrue(after.get(), "afterStop hook should have run");
+    }
+
+    @Test
+    void beforeStopHookRunsWhileTheServerStillServes() {
+        ChappeMountPoint.instance().router(ChappeListener.DEFAULT).get("/hello", _ -> Response.ok("hi"));
+        AtomicReference<String> answer = new AtomicReference<>();
+        AtomicBoolean afterRanFirst = new AtomicBoolean();
+        AtomicBoolean after = new AtomicBoolean();
+        start(ANY_PORT);
+        String url = "http://127.0.0.1:" + port(ChappeListener.DEFAULT) + "/hello";
+        ChappeMountPoint.instance().addBeforeStopHook(() -> {
+            afterRanFirst.set(after.get());
+            try {
+                answer.set(get(url).body());
+            } catch (Exception e) {
+                answer.set("failed: " + e);
+            }
+        });
+        ChappeMountPoint.instance().addAfterStopHook(() -> after.set(true));
+
+        bootstrap.onStop();
+
+        assertEquals("hi", answer.get(), "the hook reached a listener that still served");
+        assertFalse(afterRanFirst.get());
+        assertTrue(after.get());
+    }
+
+    @Test
+    void aFailingBeforeStopHookStopsNeitherTheOthersNorTheServers() {
+        AtomicBoolean second = new AtomicBoolean();
+        AtomicBoolean after = new AtomicBoolean();
+        start(ANY_PORT);
+        int port = port(ChappeListener.DEFAULT);
+        ChappeMountPoint.instance().addBeforeStopHook(() -> second.set(true));
+        ChappeMountPoint.instance().addBeforeStopHook(() -> {
+            throw new IllegalStateException("boom");
+        });
+        ChappeMountPoint.instance().addAfterStopHook(() -> after.set(true));
+
+        try (LogRecords logs = new LogRecords(ChappeServerBootstrap.class.getName())) {
+            bootstrap.onStop();
+
+            List<String> warnings = logs.messages(Level.WARNING);
+            assertEquals(1, warnings.size(), warnings.toString());
+            assertTrue(warnings.getFirst().contains("beforeStop"), warnings.getFirst());
+        }
+
+        assertTrue(second.get(), "the next hook still ran");
+        assertTrue(after.get(), "the servers stopped");
+        assertThrows(IOException.class, () -> get("http://127.0.0.1:" + port + "/hello"));
+    }
+
+    @Test
+    void beforeStopHooksRunLastRegisteredFirstAndOnlyOnce() {
+        List<String> order = new ArrayList<>();
+        start(ANY_PORT);
+        ChappeMountPoint.instance().addBeforeStopHook(() -> order.add("first"));
+        ChappeMountPoint.instance().addBeforeStopHook(() -> order.add("second"));
+
+        bootstrap.onStop();
+        bootstrap.onStop();
+
+        assertEquals(List.of("second", "first"), order);
     }
 
     @Test

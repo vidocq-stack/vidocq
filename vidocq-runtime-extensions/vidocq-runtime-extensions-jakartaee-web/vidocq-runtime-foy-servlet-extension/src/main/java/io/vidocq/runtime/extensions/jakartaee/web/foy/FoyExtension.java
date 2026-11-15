@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * Serves the application's Jakarta Servlet components through Foy on the shared Chappe web
@@ -49,6 +50,8 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
     private static final System.Logger LOG = System.getLogger(FoyExtension.class.getName());
 
     private final MountTarget target;
+    /** Where the hook that closes the deployments before the servers stop is registered. */
+    private final Consumer<Runnable> beforeStop;
     private ServletSettings settings;
     private FoyDeployments deployments;
     /** The container of the boot this extension started in: the key of its deployments. */
@@ -58,12 +61,17 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
         // Declared here, not in MountTarget: the mount point names the class that mounts in its errors.
         // No prefix stripping: Foy dispatches on the full request path, its context path included.
         this((listener, prefix, handler) -> ChappeMountPoint.instance().mount(listener, prefix, handler, false),
-                new FoyDeployments());
+                new FoyDeployments(), hook -> ChappeMountPoint.instance().addBeforeStopHook(hook));
     }
 
     FoyExtension(MountTarget target, FoyDeployments deployments) {
+        this(target, deployments, hook -> { });
+    }
+
+    FoyExtension(MountTarget target, FoyDeployments deployments, Consumer<Runnable> beforeStop) {
         this.target = target;
         this.deployments = deployments;
+        this.beforeStop = beforeStop;
     }
 
     @Override
@@ -90,9 +98,33 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
 
     @Override
     public void onStart(ExtensionContext context) {
-        boot = context.container();
-        deployments = FoyDeployments.forBoot(boot);
+        begin(context.container());
         start(context.beanManager(), context.config(), Thread.currentThread().getContextClassLoader());
+    }
+
+    /**
+     * Binds this extension to its boot's deployments and has them closed before any Chappe server
+     * stops: the declarative mounts register into the same {@link FoyDeployments}, so one hook covers
+     * both paths. Open WebSockets then get their 1001 Close while the listeners still serve.
+     */
+    void begin(Object bootKey) {
+        boot = bootKey;
+        deployments = FoyDeployments.forBoot(bootKey);
+        beforeStop.accept(failureLogged(deployments::closeAll));
+    }
+
+    /**
+     * {@code closeAll} for a before-stop hook: a failure is logged as the stop of an extension logs it,
+     * naming this extension, since the Chappe mount point would only warn about "a beforeStop hook".
+     */
+    static Runnable failureLogged(Runnable closeAll) {
+        return () -> {
+            try {
+                closeAll.run();
+            } catch (RuntimeException | LinkageError e) {
+                LOG.log(System.Logger.Level.ERROR, "Error stopping extension: servlet-foy", e);
+            }
+        };
     }
 
     void start(BeanManager beanManager, VidocqConfig config, ClassLoader loader) {
