@@ -20,6 +20,7 @@
 package io.vidocq.runtime.cli;
 
 import io.vidocq.runtime.cli.build.BuildType;
+import io.vidocq.runtime.cli.build.DockerKind;
 import io.vidocq.runtime.cli.completion.Shell;
 import io.vidocq.runtime.cli.spi.CliPlugins;
 import io.vidocq.runtime.cli.spi.VidocqCliPlugin;
@@ -64,6 +65,7 @@ public final class CliParser {
             BUILD, CLEAN, CONFIG, COMPLETION, UPDATE, EXTENSION, POM);
     private static final String DRY_RUN = "--dry-run";
     private static final String PORT = "--port";
+    private static final String KIND = "--kind";
     private static final String EXAMPLES = "Examples:";
 
     private CliParser() {}
@@ -326,6 +328,7 @@ public final class CliParser {
         boolean offline = false;
         boolean skipTests = false;
         boolean dryRun = false;
+        DockerKind kind = null;
         List<String> passthrough = new ArrayList<>();
         int first = from;
         // An optional leading non-flag token selects the build flavour.
@@ -344,11 +347,20 @@ public final class CliParser {
                 case "--offline", "-o" -> offline   = true;
                 case "--skip-tests"    -> skipTests = true;
                 case DRY_RUN       -> dryRun    = true;
+                case KIND              -> {
+                    String value = next(it, KIND);
+                    kind = DockerKind.of(value).orElseThrow(() -> new CliException(
+                            "Option --kind expects jlink or jdk, got: " + value));
+                }
                 case "--"              -> it.forEachRemaining(passthrough::add);
                 default                -> unknownOpt(arg, BUILD);
             }
         }
-        return new Command.Build(type, offline, skipTests, dryRun, List.copyOf(passthrough));
+        if (kind != null && type != BuildType.DOCKER) {
+            throw new CliException("Option --kind applies to vidocq build docker only.");
+        }
+        return new Command.Build(type, kind == null ? DockerKind.JLINK : kind, offline, skipTests, dryRun,
+                List.copyOf(passthrough));
     }
 
     private static Command.Clean parseClean(String[] args, int from) {
@@ -600,12 +612,13 @@ public final class CliParser {
                 cmd("package  (default)", "Standalone distribution ZIP (mvn package)");
                 cmd("jlink",              "Self-contained jlink runtime image (vidocq:jlink)");
                 cmd("jpackage",           "Native installer / app-image (vidocq:jpackage)");
-                cmd("docker",             "Dockerfile around the jlink image (vidocq:docker)");
+                cmd("docker",             "Docker image of the jlink image, or of the distribution (vidocq:docker)");
                 CliOutput.println();
                 CliOutput.println(OPTIONS);
                 opt("--offline, -o",  "Run Maven offline (-o)");
                 opt("--skip-tests",   "Skip tests (-DskipTests)");
                 opt(DRY_RUN,      "Print the Maven command without running it");
+                opt("--kind <jlink|jdk>", "docker only: the jlink image (default), or the distribution on a JDK");
                 opt("-- <args...>",   "Pass everything after -- straight to Maven");
                 CliOutput.println();
                 CliOutput.println("Example:");

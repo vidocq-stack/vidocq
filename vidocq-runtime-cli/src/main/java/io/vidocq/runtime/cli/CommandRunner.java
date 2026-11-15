@@ -438,10 +438,10 @@ public final class CommandRunner {
 
     private static int runBuild(Command.Build build) {
         // vidocq build docker builds the image when Docker answers, and says it did not otherwise (BUG-20261030-17).
-        var plan = DockerBuild.plan(build.type(), build.type() == BuildType.DOCKER && DockerBuild.available(),
-                build.passthrough());
+        var plan = DockerBuild.plan(build.type(), build.dockerKind(),
+                build.type() == BuildType.DOCKER && DockerBuild.available(), build.passthrough());
         MavenInvocation.Options opts = new MavenInvocation.Options(build.offline(), build.skipTests(), plan.passthrough());
-        int code = runMaven(build.type().goals(), opts, build.dryRun(),
+        int code = runMaven(DockerBuild.goals(build.type(), build.dockerKind()), opts, build.dryRun(),
                 "Building " + CliOutput.bold(build.type().label()) + "…", plan.done());
         if (code == 0 && plan.done() == null && !build.dryRun()) {
             CliOutput.warning(DockerBuild.unavailableMessage());

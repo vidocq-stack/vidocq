@@ -20,6 +20,7 @@
 package io.vidocq.runtime.cli;
 
 import io.vidocq.runtime.cli.build.BuildType;
+import io.vidocq.runtime.cli.build.DockerKind;
 import io.vidocq.runtime.cli.completion.Shell;
 
 import java.nio.file.Path;
@@ -126,6 +127,7 @@ public sealed interface Command {
 
     record Build(
             BuildType type,
+            DockerKind dockerKind,
             boolean offline,
             boolean skipTests,
             boolean dryRun,

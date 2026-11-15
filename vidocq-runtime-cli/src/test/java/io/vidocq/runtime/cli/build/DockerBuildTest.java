@@ -75,7 +75,7 @@ class DockerBuildTest {
 
     @Test
     void anotherBuildKeepsItsArgumentsAndSaysDone() {
-        var plan = DockerBuild.plan(BuildType.JLINK, false, List.of("-X"));
+        var plan = DockerBuild.plan(BuildType.JLINK, DockerKind.JLINK, false, List.of("-X"));
 
         assertEquals(List.of("-X"), plan.passthrough());
         assertEquals("Done.", plan.done());
@@ -83,7 +83,7 @@ class DockerBuildTest {
 
     @Test
     void aDockerBuildWithDockerBuildsTheImageAndSaysSo() {
-        var plan = DockerBuild.plan(BuildType.DOCKER, true, List.of("-X"));
+        var plan = DockerBuild.plan(BuildType.DOCKER, DockerKind.JLINK, true, List.of("-X"));
 
         assertEquals(List.of("-X", "-Dvidocq.docker.build=true"), plan.passthrough());
         assertEquals("Docker image built.", plan.done());
@@ -92,10 +92,26 @@ class DockerBuildTest {
     /** No "Done." over an image nobody built: the CLI prints {@link DockerBuild#unavailableMessage()} instead. */
     @Test
     void aDockerBuildWithoutDockerSaysNothingDone() {
-        var plan = DockerBuild.plan(BuildType.DOCKER, false, List.of());
+        var plan = DockerBuild.plan(BuildType.DOCKER, DockerKind.JLINK, false, List.of());
 
         assertEquals(List.of(), plan.passthrough());
         assertNull(plan.done());
+    }
+
+    /** The jdk kind needs no jlink image: an application with an encrypted jar cannot link one. */
+    @Test
+    void theJdkKindSkipsJlinkAndAsksForItsKind() {
+        var plan = DockerBuild.plan(BuildType.DOCKER, DockerKind.JDK, true, List.of());
+
+        assertEquals(List.of("-Dvidocq.docker.kind=jdk", "-Dvidocq.docker.build=true"), plan.passthrough());
+        assertEquals(List.of("package", "vidocq:docker"), DockerBuild.goals(BuildType.DOCKER, DockerKind.JDK));
+    }
+
+    @Test
+    void theJlinkKindLinksTheImageFirst() {
+        assertEquals(List.of("package", "vidocq:jlink", "vidocq:docker"),
+                DockerBuild.goals(BuildType.DOCKER, DockerKind.JLINK));
+        assertEquals(List.of("package", "vidocq:jlink"), DockerBuild.goals(BuildType.JLINK, DockerKind.JLINK));
     }
 
     @Test

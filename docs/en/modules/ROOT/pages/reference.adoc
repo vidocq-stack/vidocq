@@ -347,7 +347,7 @@ The `vidocq` command-line tool (see xref:getting-started.adoc[Getting started] f
 | Scaffold a new application (`--name`, `--group-id`, `--extension`/`-x`, `--package`, `--parent-version`).
 
 | `build [type]`
-| Build & package the project by wrapping the Vidocq Maven plugin. With no type it runs the `package` lifecycle phase (standalone distribution ZIP); a type layers the matching plugin goal on top: `package` (default), `jlink`, `jpackage`, `docker`. Options: `--offline`/`-o`, `--skip-tests`, `--dry-run`, `-- <args...>` passed to Maven.
+| Build & package the project by wrapping the Vidocq Maven plugin. With no type it runs the `package` lifecycle phase (standalone distribution ZIP); a type layers the matching plugin goal on top: `package` (default), `jlink`, `jpackage`, `docker`. Options: `--offline`/`-o`, `--skip-tests`, `--dry-run`, `--kind jlink|jdk` (`docker` only: the jlink image, the default, or the distribution on a JDK base image), `-- <args...>` passed to Maven.
 
 | `dev`
 | Run the application in watch mode from the CLI's module path. For extension-based apps prefer `mvn vidocq:dev`, which sees the extensions declared in the pom.

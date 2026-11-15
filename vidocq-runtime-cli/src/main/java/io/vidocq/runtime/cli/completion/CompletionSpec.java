@@ -76,20 +76,21 @@ public final class CompletionSpec {
 
     private static final String CHECK = "--check";
     private static final String PORT = "--port";
+    private static final String KIND = "--kind";
 
     /** Offered anywhere after the context. */
     static final Map<String, List<String>> ARGUMENTS = ordered(
             "start", List.of(PORT, "--config", "--debug"),
             "dev", List.of(PORT, "--profile", "--debug"),
             "doctor", List.of("--fix", "--verbose"),
-            "idea", List.of(CHECK, "--strict", "--kind"),
+            "idea", List.of(CHECK, "--strict", KIND),
             "vscode", List.of(CHECK),
             "eclipse", List.of(CHECK),
             "create", List.of("--name", "--group-id", "--package", "--extension", "--vidocq-version", "--with-parent",
                     "--main", "--open-module"),
             "pom convert", List.of("--to", CHECK),
             "pom upgrade", List.of("--to", "--release", "--snapshot", CHECK),
-            "build", List.of("--offline", "--skip-tests", "--dry-run"),
+            "build", List.of("--offline", "--skip-tests", "--dry-run", KIND),
             "clean", List.of("--offline", "--dry-run"),
             "update", List.of(CHECK, "--release", "--snapshot"),
             "extension list", List.of("--installed", "--available", "--all", "--refresh"),
@@ -108,7 +109,7 @@ public final class CompletionSpec {
     /** Options followed by a value — nothing is offered for a free-form one. */
     static final Set<String> VALUE_OPTIONS = Set.of(
             PORT, "-p", "--config", "-c", "--profile", "-P", "--name", "-n",
-            "--group-id", "-g", "--package", "--extension", "-x", "--vidocq-version", "--parent-version", "--kind",
+            "--group-id", "-g", "--package", "--extension", "-x", "--vidocq-version", "--parent-version", KIND,
             "--to");
 
     private CompletionSpec() {}

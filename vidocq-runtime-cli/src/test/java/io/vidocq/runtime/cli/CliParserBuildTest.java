@@ -20,6 +20,7 @@
 package io.vidocq.runtime.cli;
 
 import io.vidocq.runtime.cli.build.BuildType;
+import io.vidocq.runtime.cli.build.DockerKind;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -78,6 +79,34 @@ class CliParserBuildTest {
     void unknownBuildOption() {
         assertThrows(CliException.class,
                 () -> CliParser.parse(new String[]{"build", "--nope"}));
+    }
+
+    @Test
+    void dockerBuildsTheJlinkKindByDefault() {
+        Command.Build b = assertInstanceOf(Command.Build.class,
+                CliParser.parse(new String[]{"build", "docker"}));
+        assertEquals(DockerKind.JLINK, b.dockerKind());
+    }
+
+    @Test
+    void kindSelectsTheDockerKind() {
+        Command.Build b = assertInstanceOf(Command.Build.class,
+                CliParser.parse(new String[]{"build", "docker", "--kind", "jdk"}));
+        assertEquals(DockerKind.JDK, b.dockerKind());
+    }
+
+    @Test
+    void anUnknownKindIsCliException() {
+        CliException ex = assertThrows(CliException.class,
+                () -> CliParser.parse(new String[]{"build", "docker", "--kind", "native"}));
+        assertTrue(ex.getMessage().contains("jlink or jdk"), ex.getMessage());
+    }
+
+    @Test
+    void kindAppliesToDockerOnly() {
+        CliException ex = assertThrows(CliException.class,
+                () -> CliParser.parse(new String[]{"build", "jlink", "--kind", "jdk"}));
+        assertTrue(ex.getMessage().contains("vidocq build docker"), ex.getMessage());
     }
 
     @Test

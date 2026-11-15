@@ -542,6 +542,7 @@ Shared options:
 
 | `--offline, -o` | Run Maven offline (`-o`).
 | `--skip-tests` | Skip tests (`build` only, `-DskipTests`).
+| `--kind <jlink\|jdk>` | `build docker` only: the jlink image on a distroless base (default), or the distribution on a JDK base image, with no jlink image (`-Dvidocq.docker.kind=jdk`).
 | `--dry-run` | Print the resolved Maven command without running it.
 | `-- <args…>` | Pass everything after `--` straight through to Maven.
 |===

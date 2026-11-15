@@ -93,7 +93,7 @@ A Vidocq application ships as a distribution of jars, as a runtime image, as a n
 The rule fits in one sentence: *what stays as jars keeps the application layer; what is linked into an image has one layer.*
 
 [#cli]
-*From the CLI.* `vidocq build package`, `jlink`, `jpackage` and `docker` run the goals above; `vidocq build docker` builds the `jlink` kind, and the `jdk` kind is a Maven command for now (xref:modules/vidocq-runtime-maven-plugin.adoc#docker-cli[from the CLI]).
+*From the CLI.* `vidocq build package`, `jlink`, `jpackage` and `docker` run the goals above; `vidocq build docker` builds the `jlink` kind, and `vidocq build docker --kind jdk` the `jdk` kind (xref:modules/vidocq-runtime-maven-plugin.adoc#docker-cli[from the CLI]).
 
 [#same-application]
 == The same application in both

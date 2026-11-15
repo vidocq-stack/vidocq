@@ -938,10 +938,11 @@ ENTRYPOINT ["/opt/app/bin/my-app.sh"]
 The goal fails with a message that names `vidocq:package` when the distribution is missing.
 
 [#docker-cli]
-*From the CLI.* `vidocq build docker` builds the `jlink` kind: it runs `vidocq:jlink`, then `vidocq:docker`. It has
-no option for the `jdk` kind yet, and passing `-Dvidocq.docker.kind=jdk` after `--` still links an image first, which
-an application with an encrypted jar cannot do. For the `jdk` kind, run Maven:
-`./mvnw package vidocq:docker -Dvidocq.docker.kind=jdk -Dvidocq.docker.build=true`.
+*From the CLI.* `vidocq build docker` builds the `jlink` kind: it runs `vidocq:jlink`, then `vidocq:docker`.
+`vidocq build docker --kind jdk` builds the `jdk` kind: it runs `vidocq:docker` with `-Dvidocq.docker.kind=jdk` and
+links no image, so an application with an encrypted jar can use it. Pass `--kind`, not `-Dvidocq.docker.kind=jdk`
+after `--`: the property alone still links an image first. Both build the image when Docker answers
+(`-Dvidocq.docker.build=true`).
 
 [#docker-jlink-kind]
 === The `jlink` kind

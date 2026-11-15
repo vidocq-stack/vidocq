@@ -81,12 +81,20 @@ public final class DockerBuild {
     public record Plan(List<String> passthrough, String done) {
     }
 
-    /** The plan of a {@code type} build, Docker answering or not. */
-    public static Plan plan(BuildType type, boolean dockerAvailable, List<String> passthrough) {
+    /** The Maven phases and goals of a {@code type} build: a Docker build runs those of its {@code kind}. */
+    public static List<String> goals(BuildType type, DockerKind kind) {
+        return type == BuildType.DOCKER ? kind.goals() : type.goals();
+    }
+
+    /** The plan of a {@code type} build of the {@code kind} image, Docker answering or not. */
+    public static Plan plan(BuildType type, DockerKind kind, boolean dockerAvailable, List<String> passthrough) {
         if (type != BuildType.DOCKER) {
             return new Plan(passthrough, "Done.");
         }
         List<String> arguments = new ArrayList<>(passthrough);
+        if (kind != DockerKind.JLINK) {
+            arguments.add("-Dvidocq.docker.kind=" + kind.value());
+        }
         arguments.addAll(properties(dockerAvailable));
         return new Plan(List.copyOf(arguments), dockerAvailable ? "Docker image built." : null);
     }

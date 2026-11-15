@@ -20,6 +20,7 @@
 package io.vidocq.runtime.cli;
 
 import io.vidocq.runtime.cli.build.BuildType;
+import io.vidocq.runtime.cli.build.DockerKind;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -48,7 +49,7 @@ class CommandRunnerBuildTest {
     @Test
     void aJlinkBuildPrintsItsGoals() {
         int[] code = new int[1];
-        String out = run(new Command.Build(BuildType.JLINK, false, true, true, List.of("-X")), code);
+        String out = run(new Command.Build(BuildType.JLINK, DockerKind.JLINK, false, true, true, List.of("-X")), code);
 
         assertEquals(0, code[0]);
         assertTrue(out.contains("package vidocq:jlink") && out.contains("-X") && out.contains("dry run"), out);
@@ -58,10 +59,20 @@ class CommandRunnerBuildTest {
     @Test
     void aDockerBuildPrintsItsGoals() {
         int[] code = new int[1];
-        String out = run(new Command.Build(BuildType.DOCKER, false, false, true, List.of()), code);
+        String out = run(new Command.Build(BuildType.DOCKER, DockerKind.JLINK, false, false, true, List.of()), code);
 
         assertEquals(0, code[0]);
         assertTrue(out.contains("package vidocq:jlink vidocq:docker") && out.contains("dry run"), out);
+    }
+
+    @Test
+    void aJdkDockerBuildSkipsJlink() {
+        int[] code = new int[1];
+        String out = run(new Command.Build(BuildType.DOCKER, DockerKind.JDK, false, false, true, List.of()), code);
+
+        assertEquals(0, code[0]);
+        assertTrue(out.contains("package vidocq:docker") && !out.contains("vidocq:jlink")
+                && out.contains("-Dvidocq.docker.kind=jdk"), out);
     }
 
     @Test
