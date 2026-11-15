@@ -370,9 +370,7 @@ class CreateThenBuildIT {
         addTheSecuredServlet(project);
 
         String output = build(project, "create-security.log", "verify");
-        List<String> warnings = output.lines()
-                .filter(l -> l.startsWith("[WARNING]") && !l.contains(LAST_ROUND) && !DEFERRED.matcher(l).find())
-                .toList();
+        List<String> warnings = BuildWarnings.warningsOf(output, outerRepositoryUrl());
         assertEquals(List.of(), warnings, "the created security project builds with warnings:\n" + output);
         assertTheBuildFrozeItsExtensions(project, output);
         String frozenRecord = Files.readString(project.resolve("target/classes/" + FROZEN_RECORD));
