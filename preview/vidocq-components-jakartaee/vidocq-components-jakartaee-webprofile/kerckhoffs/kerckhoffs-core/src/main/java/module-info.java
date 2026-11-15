@@ -38,4 +38,6 @@ module io.vidocq.kerckhoffs.core {
     // Authentication profile that drives them.
     exports io.vidocq.kerckhoffs.core.internal.mechanism to io.vidocq.kerckhoffs.authentication, io.vidocq.kerckhoffs.cdi,
             io.vidocq.kerckhoffs.foy;
+    // The security context, instantiated by the extension of the web container that knows how to find the request.
+    exports io.vidocq.kerckhoffs.core.internal.context to io.vidocq.kerckhoffs.foy;
 }

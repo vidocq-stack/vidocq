@@ -27,6 +27,12 @@ module io.vidocq.kerckhoffs.foy {
     requires io.vidocq.kerckhoffs.authentication;
     requires io.vidocq.foy.api;
     requires jakarta.servlet;
+    requires static jakarta.cdi;
+    requires static jakarta.inject;
 
+    // The container instantiates the creator of the security context.
     exports io.vidocq.kerckhoffs.foy;
+
+    provides jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension
+            with io.vidocq.kerckhoffs.foy.FoySecurityContextExtension;
 }

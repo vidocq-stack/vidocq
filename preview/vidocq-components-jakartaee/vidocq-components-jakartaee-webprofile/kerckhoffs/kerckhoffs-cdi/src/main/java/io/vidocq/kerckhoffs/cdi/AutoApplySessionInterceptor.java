@@ -1,0 +1,70 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.kerckhoffs.cdi;
+
+import io.vidocq.kerckhoffs.core.internal.mechanism.AutoApplySessionSupport;
+import jakarta.annotation.Priority;
+import jakarta.interceptor.AroundInvoke;
+import jakarta.interceptor.Interceptor;
+import jakarta.interceptor.InvocationContext;
+import jakarta.security.enterprise.AuthenticationStatus;
+import jakarta.security.enterprise.authentication.mechanism.http.AutoApplySession;
+import jakarta.security.enterprise.authentication.mechanism.http.HttpMessageContext;
+import jakarta.servlet.http.HttpServletRequest;
+
+import java.io.Serializable;
+
+/**
+ * The interceptor of {@link AutoApplySession} (Jakarta Security 4.0, section 3.8.6): it wraps the
+ * {@code validateRequest} and {@code cleanSubject} of the mechanism it is bound to and leaves every other call alone.
+ */
+@AutoApplySession
+@Interceptor
+@Priority(Interceptor.Priority.PLATFORM_BEFORE + 200)
+public class AutoApplySessionInterceptor implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    @AroundInvoke
+    public Object intercept(InvocationContext invocation) throws Exception {
+        Object[] parameters = invocation.getParameters();
+        if (parameters.length == 3 && parameters[0] instanceof HttpServletRequest request) {
+            switch (invocation.getMethod().getName()) {
+                case "validateRequest" -> {
+                    if (parameters[2] instanceof HttpMessageContext context) {
+                        return AutoApplySessionSupport.validateRequest(request, context,
+                                () -> (AuthenticationStatus) invocation.proceed());
+                    }
+                }
+                case "cleanSubject" -> {
+                    try {
+                        return invocation.proceed();
+                    } finally {
+                        AutoApplySessionSupport.cleanSubject(request);
+                    }
+                }
+                default -> {
+                    // Any other call of the mechanism goes through untouched.
+                }
+            }
+        }
+        return invocation.proceed();
+    }
+}

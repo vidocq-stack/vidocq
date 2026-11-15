@@ -22,6 +22,8 @@ module io.vidocq.kerckhoffs.cdi {
     requires io.vidocq.kerckhoffs.core;
     requires static jakarta.cdi;
     requires static jakarta.inject;
+    requires static jakarta.interceptor;
+    requires static jakarta.annotation;
 
     // The container instantiates the creators and the start check of this package.
     exports io.vidocq.kerckhoffs.cdi;

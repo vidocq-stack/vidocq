@@ -59,6 +59,17 @@ The container installs the mechanism of the war on that hook, as the Vidocq runt
 | `app-mem` | **4 of 4 green** | `testAuthenticated` now measures the in-memory identity store through the mechanism of the war |
 | `app-mem-basic` | **4 of 4 green** | the built-in BASIC mechanism (`@BasicAuthenticationMechanismDefinition`, realm as a literal or an EL string literal) |
 | `app-mem-form` | **4 of 4 green**; `AppMemFormImmediateIT` red | the built-in FORM mechanism with login to continue (forward or redirect, session-bound caller, logout). The red class deploys `loginPage="${applicationConfigImmediate.loginPage}"`: a CDI bean read through Jakarta Expression Language, which Kerckhoffs does not evaluate yet (K3); the deployment is refused with an explicit message |
+| `app-custom` | **4 of 4 green** | a custom mechanism, a custom identity store and an injected `SecurityContext` (caller and roles of the request) |
+| `app-custom-session` | **5 of 5 green** | `@AutoApplySession`: the caller is kept in the session, the mechanism is not asked again, a logout forgets it |
+| `app-multiple-store` | **4 of 4 green** | several identity stores behind one handler |
+| `app-mem-basic-decorate` | 1 of 2 red | a CDI decorator on the mechanism: the decorated response header is missing |
+| `app-custom-identity-store-handler` | 4 of 5 red | an application `IdentityStoreHandler` does not replace the default one yet (it is a synthetic bean) |
+| `app-multiple-store-backup` | deployment refused | the start check creates a request-scoped identity store while no request scope is active |
+| `app-custom-authentication-mechanism-handler`, `…2` | red | `HttpAuthenticationMechanismHandler` (several mechanisms in one application) is not implemented |
+| `app-securitycontext-auth` | 1 of 5 green | `SecurityContext.authenticate(...)` and `hasAccessToWebResource` are refused for now |
+| `app-custom-rememberme` | 13 of 25 green | `@RememberMe` is not implemented (K3) |
+| `app-mem-policy`, `app-mem-policy2` | deployment refused | needs Jakarta Authorization (JACC `PolicyFactory`), K3 |
+| `app-securitycontext`, `app-securitycontext-customprincipal` | deployment refused | the application needs an EJB |
 
 Not claimed: this is one application of the TCK. The others need an EJB, a `DataSource`, an embedded directory or an
 OpenID provider, and are not run yet.
