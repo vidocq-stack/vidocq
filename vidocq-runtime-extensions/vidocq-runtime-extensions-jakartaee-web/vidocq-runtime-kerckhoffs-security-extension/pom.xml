@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-kerckhoffs-security-extension</artifactId>
+    <name>Vidocq :: Web Extensions :: Kerckhoffs Security</name>
+    <description>Wires Jakarta Security 4.0 (Kerckhoffs) into the Vidocq lifecycle: the build compatible extensions of
+        kerckhoffs-cdi and kerckhoffs-foy are found by Vauban, and the Servlet extension hands the authentication of
+        every request to the application's HttpAuthenticationMechanism.</description>
+
+    <properties>
+        <!--
+            checkpom asks for the companion codegen bundle of every vidocq-runtime-*-extension this pom declares.
+            This module compiles against the Servlet extension (KerckhoffsServletAuthentication implements its
+            ServletAuthentication SPI) and so declares it, but has no servlet component for the Servlet
+            extension's processors to process: the bundle belongs to the applications that carry servlets, not here.
+        -->
+        <vidocq.checkpom.skip>true</vidocq.checkpom.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-spi</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <!-- The hook is installed on the Foy deployments, through the SPI of the Servlet extension. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
+        </dependency>
+        <!-- The Jakarta Security API reaches the application through kerckhoffs-core (it ships the API at compile
+             scope): the application declares this extension alone. The Servlet, CDI and Interceptor APIs are the
+             runtime's. -->
+        <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-core</artifactId>
+            <version>${kerckhoffs.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-cdi</artifactId>
+            <version>${kerckhoffs.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-authentication</artifactId>
+            <version>${kerckhoffs.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-foy</artifactId>
+            <version>${kerckhoffs.version}</version>
+        </dependency>
+        <!-- Kerckhoffs leaves the Authentication API provided (vidocq-workspace#17): this extension brings it, as the
+             Jakarta Security API requires it transitively. -->
+        <dependency>
+            <groupId>jakarta.authentication</groupId>
+            <artifactId>jakarta.authentication-api</artifactId>
+            <version>3.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.interceptor</groupId>
+            <artifactId>jakarta.interceptor-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- The unit tests need no module wiring of their own. -->
+                    <useModulePath>false</useModulePath>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

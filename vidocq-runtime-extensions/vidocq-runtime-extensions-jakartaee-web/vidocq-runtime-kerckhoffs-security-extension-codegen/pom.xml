@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+        <artifactId>vidocq-runtime-extensions-jakartaee-web</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-kerckhoffs-security-extension-codegen</artifactId>
+    <packaging>jar</packaging>
+    <name>Vidocq :: Web Extensions :: Kerckhoffs Security :: Codegen Bundle</name>
+    <description>
+        Companion codegen bundle for vidocq-runtime-kerckhoffs-security-extension.
+        Declare this artifact in &lt;annotationProcessorPaths&gt; whenever the
+        application depends on the Kerckhoffs Security extension.
+
+        Pulls in the build compatible extensions of Kerckhoffs, which the APT classloader (isolated by Maven)
+        must see or the Vauban indexer would not run them:
+          - kerckhoffs-cdi : the identity store handler, and the stores and mechanisms declared by annotation.
+          - kerckhoffs-foy : the SecurityContext and Principal beans of an application served by Foy.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-cdi</artifactId>
+            <version>${kerckhoffs.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-foy</artifactId>
+            <version>${kerckhoffs.version}</version>
+        </dependency>
+        <!-- The Kerckhoffs bricks leave the Jakarta platform APIs to the runtime (provided, vidocq-workspace#17): on
+             the processor path nothing else brings them, and their BuildCompatibleExtensions could not be loaded. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.interceptor</groupId>
+            <artifactId>jakarta.interceptor-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+        <!-- The Foy SPI that kerckhoffs-foy's creators use. -->
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-api</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Only the empty module-info to compile: no processor, not even the
+                         inherited core-codegen path. -->
+                    <proc>none</proc>
+                    <annotationProcessorPaths combine.self="override" />
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

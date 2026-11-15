@@ -166,6 +166,11 @@
         </dependency>
         <dependency>
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-kerckhoffs-security-extension</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
             <version>${project.version}</version>
         </dependency>
