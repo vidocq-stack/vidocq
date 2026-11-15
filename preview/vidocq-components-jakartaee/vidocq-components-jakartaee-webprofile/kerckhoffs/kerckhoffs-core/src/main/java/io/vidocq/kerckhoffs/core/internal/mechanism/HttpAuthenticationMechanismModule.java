@@ -92,8 +92,8 @@ public final class HttpAuthenticationMechanismModule implements ServerAuthModule
      */
     static String authTypeOf(HttpAuthenticationMechanism mechanism) {
         return switch (mechanism) {
-            case BasicAuthenticationMechanism basic -> "BASIC";
-            case FormAuthenticationMechanism form -> "FORM";
+            case BasicAuthenticationMechanism _ -> "BASIC";
+            case FormAuthenticationMechanism _ -> "FORM";
             default -> null;
         };
     }
