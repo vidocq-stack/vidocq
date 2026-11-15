@@ -34,7 +34,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.spi.ToolProvider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,17 +47,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ImageLaunchMojosTest {
 
     private static final String RUNTIME_MAIN = "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq";
+    private static final String NO_LAYER = "-Dvidocq.app.layer.off=true";
 
     @TempDir
     Path dir;
 
-    /** The info lines a goal logs. */
+    /** The info lines and the warnings a goal logs. */
     static final class Infos extends SystemStreamLog {
         final List<String> lines = new ArrayList<>();
+        final List<String> warnings = new ArrayList<>();
 
         @Override
         public void info(CharSequence content) {
             lines.add(content.toString());
+        }
+
+        @Override
+        public void warn(CharSequence content) {
+            warnings.add(content.toString());
         }
     }
 
@@ -84,82 +90,57 @@ class ImageLaunchMojosTest {
     }
 
     /**
-     * The build splits the stage as vidocq:package splits its jars, and the image starts with that split: the parent
-     * layer and the JDK modules rooted in the boot layer, every other staged module listed for the application layer,
-     * a resource-only one too (BUG-20261114-05), and never rooted (BUG-20261114-11). Logged, since this line is what
-     * to read when a module is missing at start.
+     * The image has one layer: every linked module is rooted, a resource-only one too (BUG-20261114-05), and the
+     * runtime builds no application layer (Vidocq/vidocq#580). Logged, since this line is what to read when a module
+     * is missing at start.
      */
     @Test
-    void theBakedLaunchSplitsTheStageAndIsLogged() throws Exception {
+    void theBakedLaunchRootsEveryModuleAndIsLogged() throws Exception {
         var log = new Infos();
         VidocqJlinkMojo mojo = jlink("acme.app", null, log);
-        stage("flow.push", "acme.app", "aura.theme", "io.vidocq.foy.core");
 
         ImageLaunch launch = mojo.bakedLaunch("acme.app,aura.theme,flow.push,io.vidocq.foy.core,java.base,java.sql");
 
-        assertEquals(List.of("--add-modules=io.vidocq.foy.core,java.sql", "-Dvidocq.app.module=acme.app",
-                "-Dvidocq.app.modules=acme.app,aura.theme,flow.push", "-Dvidocq.app.layer=all"), launch.vmOptions());
+        assertEquals(List.of("--add-modules=acme.app,aura.theme,flow.push,io.vidocq.foy.core,java.sql", NO_LAYER,
+                "-Dvidocq.app.module=acme.app"), launch.vmOptions());
         assertTrue(log.lines.contains("Vidocq jlink — main: " + RUNTIME_MAIN
-                + " --add-modules=io.vidocq.foy.core,java.sql -Dvidocq.app.module=acme.app"
-                + " -Dvidocq.app.modules=acme.app,aura.theme,flow.push -Dvidocq.app.layer=all"), log.lines.toString());
+                + " --add-modules=acme.app,aura.theme,flow.push,io.vidocq.foy.core,java.sql " + NO_LAYER
+                + " -Dvidocq.app.module=acme.app"), log.lines.toString());
+        assertEquals(List.of(), log.warnings);
     }
 
-    /** Under classes, the libraries stay in the boot layer, with the parent layer: the layer holds the application. */
+    /** The settings of the application layer do not apply to an image: one that is set is named in a warning. */
     @Test
-    void underClassesTheLayerHoldsTheApplicationModuleAlone() throws Exception {
-        VidocqJlinkMojo mojo = jlink("acme.app", "acme.app.App", new Infos());
-        set(VidocqJlinkMojo.class, mojo, "appLayer", "classes");
-        stage("flow.push", "acme.app", "io.vidocq.foy.core");
+    void aLayerSettingIsNamedInAWarning() throws Exception {
+        for (String setting : new String[] {"appLayer", "appLayerKeep"}) {
+            var log = new Infos();
+            VidocqJlinkMojo mojo = jlink("acme.app", "acme.app.App", log);
+            set(VidocqJlinkMojo.class, mojo, setting, "classes");
 
-        ImageLaunch launch = mojo.bakedLaunch("acme.app,flow.push,io.vidocq.foy.core,java.base");
+            ImageLaunch launch = mojo.bakedLaunch("acme.app,flow.push,java.base");
 
-        assertEquals(List.of("--add-modules=flow.push,io.vidocq.foy.core", "-Dvidocq.app.module=acme.app",
-                "-Dvidocq.app.modules=acme.app", "-Dvidocq.app.main=acme.app.App", "-Dvidocq.app.layer=classes"),
-                launch.vmOptions());
-    }
-
-    /**
-     * vidocq.app.layer.keep keeps a module in the parent layer of the image as it does in vidocq:package, by module
-     * name or by the groupId:artifactId of the artifact it was staged from.
-     */
-    @Test
-    void theKeptModulesStayInTheParentLayerOfTheImage() throws Exception {
-        stage("acme.app", "flow.push", "aura.theme");
-        var flowPush = new DefaultArtifact("com.vaadin", "flow-push", "25.3.3", "compile", "jar", "",
-                new DefaultArtifactHandler("jar"));
-        flowPush.setFile(dir.resolve("jlink-mods").resolve("flow.push").toFile());
-        for (String keep : new String[] {"com.vaadin:flow-push", "flow.push"}) {
-            VidocqJlinkMojo mojo = jlink("acme.app", null, new Infos());
-            ((MavenProject) get(mojo, "project")).setArtifacts(Set.of(flowPush));
-            set(VidocqJlinkMojo.class, mojo, "appLayerKeep", keep);
-
-            ImageLaunch launch = mojo.bakedLaunch("acme.app,aura.theme,flow.push,java.base");
-
-            assertEquals(List.of("acme.app", "aura.theme"), launch.layerModules(), keep);
-            assertTrue(launch.vmOptions().contains("--add-modules=flow.push"), keep + ": " + launch.vmOptions());
+            assertEquals(List.of("--add-modules=flow.push", NO_LAYER), launch.vmOptions(), setting);
+            assertEquals(1, log.warnings.size(), setting);
+            assertTrue(log.warnings.getFirst().contains("do not apply to a jlink image"), log.warnings.getFirst());
         }
     }
 
-    /** The jlink run, the recipe of vidocq:docker and both launch shapes carry the split and the layer's modules. */
+    /** The jlink run, the recipe of vidocq:docker and both launch shapes carry the same options. */
     @Test
-    void theJlinkRunAndTheDockerRecipeCarryTheSplit() throws Exception {
-        stage("acme.app", "flow.push");
+    void theJlinkRunAndTheDockerRecipeCarryTheLaunch() throws Exception {
         for (String mainClass : new String[] {null, "acme.app.App"}) {
             VidocqJlinkMojo mojo = jlink("acme.app", mainClass, new Infos());
             ImageLaunch launch = mojo.bakedLaunch("acme.app,flow.push,java.base");
             String options = mainClass == null
-                    ? "--add-options=-Dvidocq.app.module=acme.app -Dvidocq.app.modules=acme.app,flow.push"
-                            + " -Dvidocq.app.layer=all"
-                    : "--add-options=-Dvidocq.app.module=acme.app -Dvidocq.app.modules=acme.app,flow.push"
-                            + " -Dvidocq.app.main=acme.app.App -Dvidocq.app.layer=all";
-            String release = "add:" + ImageLaunch.RELEASE_KEY + "=acme.app,flow.push";
+                    ? "--add-options=--add-modules=acme.app,flow.push " + NO_LAYER + " -Dvidocq.app.module=acme.app"
+                    : "--add-options=--add-modules=flow.push " + NO_LAYER;
 
             List<String> jlink = mojo.jlinkArgs("acme.app,flow.push,java.base", launch);
-            assertTrue(jlink.contains(options) && jlink.contains(release), "jlink: " + jlink);
-            // Every staged module is linked: the application layer reads them from the image.
+            assertTrue(jlink.contains(options), "jlink: " + jlink);
             assertEquals("acme.app,flow.push,java.base", jlink.get(jlink.indexOf("--add-modules") + 1));
             List<String> recipe = mojo.portableJlinkArgs("acme.app,flow.push,java.base", launch);
-            assertTrue(recipe.contains(options) && recipe.contains(release), "recipe: " + recipe);
+            assertTrue(recipe.contains(options), "recipe: " + recipe);
+            assertTrue(recipe.stream().noneMatch("--release-info"::equals), "recipe: " + recipe);
             PortableImage.write(dir.resolve("build-" + mainClass), recipe, launch.entryPoint(), List.of());
             String file = Files.readString(dir.resolve("build-" + mainClass).resolve(PortableImage.DIRECTORY)
                     .resolve(PortableImage.ARGUMENTS));
@@ -169,46 +150,46 @@ class ImageLaunchMojosTest {
     }
 
     /**
-     * Before jlink runs, the staged modules of the application layer lose their provides to their services files, so
-     * that no service binds them into the boot layer of the image; a module of the parent layer keeps its own
-     * (BUG-20261114-11).
+     * Before jlink runs, a staged module gains the provides its services files declare: the image has no application
+     * layer to promote them at start. A provides the module declared itself is kept.
      */
     @Test
-    void theApplicationLayerModulesReachTheImageWithoutProvides() throws Exception {
+    void theStagedModulesReachTheImageWithTheirProvides() throws Exception {
         var log = new Infos();
         VidocqJlinkMojo mojo = jlink("acme.app", null, log);
-        stageProvider("acme.app");
-        stageProvider("io.vidocq.foy.core");
-        ImageLaunch launch = mojo.bakedLaunch("acme.app,io.vidocq.foy.core,java.base");
+        stageProvider("acme.app", false);
+        stageProvider("acme.lib", true);
 
-        mojo.moveLayerProvides(launch);
+        mojo.promoteProvides();
 
         var stage = java.lang.module.ModuleFinder.of(dir.resolve("jlink-mods"));
-        assertEquals(Set.of(), stage.find("acme.app").orElseThrow().descriptor().provides());
-        assertEquals(List.of("acme.app.Tool"), Files.readAllLines(dir.resolve("jlink-mods/acme.app/META-INF/services")
-                .resolve(ToolProvider.class.getName())));
-        assertEquals(1, stage.find("io.vidocq.foy.core").orElseThrow().descriptor().provides().size());
-        assertTrue(log.lines.contains("Vidocq jlink — acme.app: provides moved to META-INF/services ["
-                + ToolProvider.class.getName() + "]"), log.lines.toString());
-    }
-
-    /** Compiles an empty module of each name into the stage of {@code vidocq:jlink}. */
-    private void stage(String... modules) throws Exception {
-        for (String module : modules) {
-            compile(module, Map.of("module-info.java", "module " + module + " {}\n"));
+        for (String module : new String[] {"acme.app", "acme.lib"}) {
+            var provides = stage.find(module).orElseThrow().descriptor().provides();
+            assertEquals(1, provides.size(), module);
+            assertEquals(List.of(module + ".Tool"), provides.iterator().next().providers(), module);
         }
+        assertEquals(List.of("Vidocq jlink — acme.app: provides added to module-info.class ["
+                + ToolProvider.class.getName() + "]"), log.lines);
     }
 
-    /** Compiles a module that provides a {@link ToolProvider}, {@code <module>.Tool}, into the stage. */
-    private void stageProvider(String module) throws Exception {
+    /**
+     * Compiles into the stage a module with a {@link ToolProvider}, {@code <module>.Tool}: declared by a provides of
+     * its descriptor, or by a services file alone, as an annotation processor declares what it generates.
+     */
+    private void stageProvider(String module, boolean declared) throws Exception {
         compile(module, Map.of(
-                "module-info.java", "module " + module + " { provides java.util.spi.ToolProvider with " + module
-                        + ".Tool; }\n",
+                "module-info.java", "module " + module + " { " + (declared
+                        ? "provides java.util.spi.ToolProvider with " + module + ".Tool; " : "") + "}\n",
                 module.replace('.', '/') + "/Tool.java", "package " + module + ";\n"
                         + "public class Tool implements java.util.spi.ToolProvider {\n"
                         + "  public String name() { return \"tool\"; }\n"
                         + "  public int run(java.io.PrintWriter out, java.io.PrintWriter err, String... args) {"
                         + " return 0; }\n}\n"));
+        if (!declared) {
+            Path services = Files.createDirectories(dir.resolve("jlink-mods").resolve(module)
+                    .resolve("META-INF/services"));
+            Files.writeString(services.resolve(ToolProvider.class.getName()), module + ".Tool\n");
+        }
     }
 
     private void compile(String module, Map<String, String> sources) throws Exception {
@@ -230,14 +211,13 @@ class ImageLaunchMojosTest {
         VidocqJlinkMojo mojo = jlink("acme.app", null, new Infos());
         set(VidocqJlinkMojo.class, mojo, "stripDebug", true);
 
-        List<String> args = mojo.jlinkArgs("acme.app,java.base", ImageLaunch.of("acme.app", null, io.vidocq.runtime.core.LayerSplit.Mode.ALL));
+        List<String> args = mojo.jlinkArgs("acme.app,java.base", ImageLaunch.of("acme.app", null));
 
         assertEquals(dir.resolve("jlink-mods") + File.pathSeparator + System.getProperty("java.home") + "/jmods",
                 args.get(args.indexOf("--module-path") + 1));
         assertEquals("acme.app,java.base", args.get(args.indexOf("--add-modules") + 1));
         assertEquals("app=" + RUNTIME_MAIN, args.get(args.indexOf("--launcher") + 1));
-        assertTrue(args.contains("--add-options=-Dvidocq.app.module=acme.app -Dvidocq.app.modules=acme.app"
-                + " -Dvidocq.app.layer=all"), args.toString());
+        assertTrue(args.contains("--add-options=" + NO_LAYER + " -Dvidocq.app.module=acme.app"), args.toString());
         assertEquals(dir.resolve("dist").toString(), args.get(args.indexOf("--output") + 1));
         assertTrue(args.contains("--strip-debug"), args.toString());
         assertTrue(args.contains("--compress=zip-6"), args.toString());
@@ -249,14 +229,13 @@ class ImageLaunchMojosTest {
         VidocqJlinkMojo mojo = jlink("acme.app", null, new Infos());
         set(VidocqJlinkMojo.class, mojo, "stripDebug", true);
 
-        List<String> args = mojo.portableJlinkArgs("acme.app,java.base", ImageLaunch.of("acme.app", null, io.vidocq.runtime.core.LayerSplit.Mode.ALL));
+        List<String> args = mojo.portableJlinkArgs("acme.app,java.base", ImageLaunch.of("acme.app", null));
 
         assertTrue(args.stream().noneMatch(a -> a.equals("--module-path") || a.equals("--output")
                 || a.contains(dir.toString())), args.toString());
         assertEquals("acme.app,java.base", args.get(args.indexOf("--add-modules") + 1));
         assertEquals("app=" + RUNTIME_MAIN, args.get(args.indexOf("--launcher") + 1));
-        assertTrue(args.contains("--add-options=-Dvidocq.app.module=acme.app -Dvidocq.app.modules=acme.app"
-                + " -Dvidocq.app.layer=all"), args.toString());
+        assertTrue(args.contains("--add-options=" + NO_LAYER + " -Dvidocq.app.module=acme.app"), args.toString());
         assertTrue(args.contains("--strip-debug") && args.contains("--compress=zip-6"), args.toString());
     }
 
@@ -274,17 +253,16 @@ class ImageLaunchMojosTest {
         assertTrue(Files.isRegularFile(dir.resolve("dist/conf/vidocq.properties")));
     }
 
-    /** The launcher runs the runtime's main, which runs the trampoline inside the layer (BUG-20261114-11). */
+    /** The launcher runs the trampoline itself: the image has one layer, so one copy of it (BUG-20261114-11). */
     @Test
-    void theJlinkRunOfATrampolineRunsItInsideTheLayer() throws Exception {
+    void theJlinkRunOfATrampolineLaunchesIt() throws Exception {
         VidocqJlinkMojo mojo = jlink("acme.app", "acme.app.App", new Infos());
         set(VidocqJlinkMojo.class, mojo, "compress", " ");
 
-        List<String> args = mojo.jlinkArgs("acme.app", ImageLaunch.of("acme.app", "acme.app.App", io.vidocq.runtime.core.LayerSplit.Mode.ALL));
+        List<String> args = mojo.jlinkArgs("acme.app", ImageLaunch.of("acme.app", "acme.app.App"));
 
-        assertEquals("app=" + RUNTIME_MAIN, args.get(args.indexOf("--launcher") + 1));
-        assertTrue(args.contains("--add-options=-Dvidocq.app.module=acme.app -Dvidocq.app.modules=acme.app"
-                + " -Dvidocq.app.main=acme.app.App -Dvidocq.app.layer=all"), args.toString());
+        assertEquals("app=acme.app/acme.app.App", args.get(args.indexOf("--launcher") + 1));
+        assertTrue(args.contains("--add-options=" + NO_LAYER), args.toString());
         assertTrue(args.stream().noneMatch(a -> a.startsWith("--compress") || a.equals("--strip-debug")),
                 args.toString());
     }
@@ -344,37 +322,35 @@ class ImageLaunchMojosTest {
     }
 
     /**
-     * The wiring: the goal starts the image it packages as vidocq:jlink baked it, the layer's modules read from the
-     * key vidocq:jlink wrote in the image's release file, the other modules of the image rooted.
+     * The wiring: the goal starts the image it packages as vidocq:jlink baked it, with one layer, every module of
+     * the image that is not the JDK's rooted.
      */
     @Test
     void jpackageArgumentsStartTheImageAsVidocqJlinkBakedIt() throws Exception {
-        VidocqJpackageMojo mojo = jpackage("acme.app", new Infos());
+        var log = new Infos();
+        VidocqJpackageMojo mojo = jpackage("acme.app", log);
         Files.writeString(dir.resolve("image").resolve("release"),
-                "MODULES=\"java.base flow.push io.vidocq.foy.core acme.app\"\n"
-                        + ImageLaunch.RELEASE_KEY + "=acme.app,flow.push\n");
+                "MODULES=\"java.base flow.push io.vidocq.foy.core acme.app\"\n");
 
         ImageLaunch launch = mojo.launchOf();
 
-        assertEquals(List.of("--add-modules=io.vidocq.foy.core", "-Dvidocq.app.module=acme.app",
-                "-Dvidocq.app.modules=acme.app,flow.push", "-Dvidocq.app.layer=all"), launch.vmOptions());
-        assertTrue(VidocqJpackageMojo.entryArgs(launch).containsAll(List.of("--java-options",
-                "-Dvidocq.app.modules=acme.app,flow.push")), VidocqJpackageMojo.entryArgs(launch).toString());
+        assertEquals(List.of("--add-modules=acme.app,flow.push,io.vidocq.foy.core", NO_LAYER,
+                "-Dvidocq.app.module=acme.app"), launch.vmOptions());
+        assertTrue(VidocqJpackageMojo.entryArgs(launch).containsAll(List.of("--java-options", NO_LAYER)),
+                VidocqJpackageMojo.entryArgs(launch).toString());
+        assertEquals(List.of(), log.warnings);
     }
 
-    /** An image vidocq:jlink did not build lists no layer: the application module alone goes to the layer. */
+    /** vidocq.app.layer does not apply to the application jpackage builds on an image: set, it is named. */
     @Test
-    void jpackageOfAnImageWithoutTheLayerKeyLayersTheApplicationModule() throws Exception {
-        VidocqJpackageMojo mojo = jpackage("acme.app", new Infos());
-        Files.writeString(dir.resolve("image").resolve("release"), "MODULES=\"java.base flow.push acme.app\"\n");
+    void jpackageNamesALayerSettingInAWarning() throws Exception {
+        var log = new Infos();
+        VidocqJpackageMojo mojo = jpackage("acme.app", log);
+        set(VidocqJpackageMojo.class, mojo, "appLayer", "all");
 
-        assertEquals(List.of("--add-modules=flow.push", "-Dvidocq.app.module=acme.app",
-                "-Dvidocq.app.modules=acme.app", "-Dvidocq.app.layer=all"), mojo.launchOf().vmOptions());
-        assertEquals(List.of(), VidocqJpackageMojo.layerModulesOf(dir.resolve("image")));
-        // Quoted, as the other keys of the file are.
-        Files.writeString(dir.resolve("image").resolve("release"), ImageLaunch.RELEASE_KEY + "=\"acme.app,flow.push\"\n");
-        assertEquals(List.of("acme.app", "flow.push"), VidocqJpackageMojo.layerModulesOf(dir.resolve("image")));
-        assertEquals(List.of(), VidocqJpackageMojo.layerModulesOf(dir.resolve("no-image")));
+        mojo.launchOf();
+
+        assertTrue(log.warnings.getLast().contains("vidocq.app.layer does not apply"), log.warnings.toString());
     }
 
     private VidocqJpackageMojo jpackage(String mainModule, Infos log) throws Exception {
@@ -394,11 +370,5 @@ class ImageLaunchMojosTest {
         Field f = type.getDeclaredField(field);
         f.setAccessible(true);
         f.set(mojo, value);
-    }
-
-    private static Object get(VidocqJlinkMojo mojo, String field) throws Exception {
-        Field f = VidocqJlinkMojo.class.getDeclaredField(field);
-        f.setAccessible(true);
-        return f.get(mojo);
     }
 }

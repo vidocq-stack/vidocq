@@ -43,7 +43,8 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261114-11 — A jlink image loads the application module twice: in the boot layer and in the application layer
 
 - **Date**: 2026-11-14
-- **Status**: FIXED on `fix/jlink-boot-twin` (stacked on `fix/trampoline-boot-twin`)
+- **Status**: FIXED on `fix/jlink-boot-twin` (stacked on `fix/trampoline-boot-twin`); the fix replaced on
+  `feat/flat-images` (2026-11-15, see the last point)
 - **Affected module**: vidocq-runtime-maven-plugin (`ImageLaunch`, `VidocqJlinkMojo`, `VidocqJpackageMojo`, new
   `LayerServiceFiles`), vidocq-runtime-core (`VidocqAppLayer.installFromModuleIfConfigured`, `ExtensionLoader`)
 - **Symptom**: in the image of `vidocq:jlink`, and in the `vidocq:jpackage` application and the `vidocq:docker` image
@@ -95,6 +96,17 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   `@Push(transport = LONG_POLLING)` and `provides AppShellConfigurator`): `GET /` and the stylesheet answer 200, the
   layer's loader returns `jrt:/vaadin.aura.theme/META-INF/resources/aura/aura.css`, Vaadin's `Lookup` and
   `ServiceLoader` each find the app shell once, and a click's update reaches the page over long polling.
+- **2026-11-15, the fix replaced (Vidocq/vidocq#580)**: an image has one layer, the JVM's own, so the duplicate
+  cannot exist. The launcher runs the trampoline, or the runtime's main with `-Dvidocq.app.module`; the image bakes
+  `-Dvidocq.app.layer.off=true` and an `--add-modules` with every staged module (point 2 above no longer holds). The
+  build no longer splits the staged modules (point 1), and where it moved the `provides` out (point 3,
+  `LayerServiceFiles`, deleted) it now adds to the staged modules the `provides` their services files declare
+  (`StagedProvides`, with the rule of Vauban's layer, `VaubanLayerFactory.promotingServices`, public since
+  Vidocq/vauban#305). `VidocqAppLayer` no longer reads a layer from `jrt:` (point 4), and the `release` key is gone
+  (point 5). `vidocq.app.layer` set on an image goal is named in a warning. Proved first by a throwaway spike: the
+  flat image of the `it-app-layer` fixture (`TOOL-PROVIDERS 1`, `no application layer`, `anomalies none`) and of a
+  Vaadin 25 application of 96 modules (page and `aura/aura.css` answer 200, no exception). `AppLayerImageIT` and
+  `CreateThenBuildIT` now assert the one layer; `StagedProvidesTest`, `ImageLaunchTest`, `ImageLaunchMojosTest`.
 
 ## BUG-20261114-10 — Two launchers put a trampoline application in the boot layer and in a Vauban layer
 

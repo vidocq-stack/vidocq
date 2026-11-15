@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * {@value VidocqAppLayer#APP_MODULE_PROPERTY}: the runtime's own main, launched with the application's module in
- * the boot layer (a jlink image without an application main class), re-layers the application as a
+ * the boot layer (a launch from the module path), re-layers the application as a
  * {@code @VidocqMain} trampoline does.
  */
 @DisplayName("vidocq.app.module — the runtime's main re-layers a boot-layer application")
@@ -82,34 +82,26 @@ class VidocqAppLayerModuleTest {
         }
     }
 
+    /**
+     * A jlink image has one layer (Vidocq/vidocq#580): it names the application module for the banner and passes
+     * {@value LayerSplit#OFF_PROPERTY}, and the runtime's main then builds no layer around that module.
+     */
     @Test
-    @DisplayName("a jlink image lists the modules of the application layer, which the layer reads from the image")
-    void anImageListsTheModulesOfTheApplicationLayer() {
-        // java.sql and java.logging stand for the application's modules: linked into the image, so read from jrt:.
-        var paths = VidocqAppLayer.systemModulePaths(List.of("java.sql", "java.logging"),
-                java.lang.module.ModuleFinder.ofSystem());
-        assertEquals(List.of("/modules/java.sql", "/modules/java.logging"),
-                paths.stream().map(Path::toString).toList());
-        assertEquals("jrt", paths.getFirst().getFileSystem().provider().getScheme());
-    }
-
-    @Test
-    @DisplayName("a listed module the image does not link fails, naming it and the goal that links it")
-    void aListedModuleTheImageDoesNotLinkFails() {
-        var names = List.of("java.sql", "acme.absent");
-        var system = java.lang.module.ModuleFinder.ofSystem();
-        var failure = assertThrows(IllegalStateException.class, () -> VidocqAppLayer.systemModulePaths(names, system));
-        assertTrue(failure.getMessage().contains("acme.absent"), failure.getMessage());
-        assertTrue(failure.getMessage().contains("vidocq:jlink"), failure.getMessage());
-    }
-
-    @Test
-    @DisplayName("the image lists the application module first, once, and the others in their order")
-    void theApplicationModuleIsListedFirstOnce() {
-        assertEquals(List.of("acme.app", "acme.pages", "flow.push"),
-                VidocqAppLayer.layerModules("acme.app", "acme.pages, acme.app,flow.push"));
-        assertEquals(List.of("acme.app"), VidocqAppLayer.layerModules("acme.app", ""));
-        assertEquals(List.of("acme.app"), VidocqAppLayer.layerModules("acme.app", null));
+    @DisplayName("with the layer switched off, the named module stays where the JVM resolved it")
+    void withTheLayerOffTheNamedModuleIsLeftInPlace() {
+        String previous = System.setProperty(VidocqAppLayer.APP_MODULE_PROPERTY, "acme.absent");
+        String off = System.setProperty(LayerSplit.OFF_PROPERTY, "true");
+        try {
+            assertFalse(VidocqAppLayer.installFromModuleIfConfigured());
+            assertFalse(VidocqAppLayer.alreadyInLayer());
+        } finally {
+            restore(previous);
+            if (off == null) {
+                System.clearProperty(LayerSplit.OFF_PROPERTY);
+            } else {
+                System.setProperty(LayerSplit.OFF_PROPERTY, off);
+            }
+        }
     }
 
     @Test
@@ -206,8 +198,8 @@ class VidocqAppLayerModuleTest {
     }
 
     /**
-     * Runs {@code Vidocq.main} with {@code acme.app} resolved into the boot layer, as a jlink image without an
-     * application main class launches it. {@code vidocq.app.main} lets the JVM end once the application ran.
+     * Runs {@code Vidocq.main} with {@code acme.app} resolved into the boot layer, as a launch from the module path
+     * with the runtime's own main does. {@code vidocq.app.main} lets the JVM end once the application ran.
      */
     private Run child(Path module) throws Exception {
         List<String> command = new ArrayList<>();

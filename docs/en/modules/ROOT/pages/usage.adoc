@@ -193,12 +193,11 @@ boot layer.
 * A plain IDE run of `main` (the `Vidocq.run` trampoline) keeps the automatic libraries in the boot layer, and
   loads the application and its other libraries twice: the start warns with `VIDOCQ-LAY-001`, see
   <<ide-run-twice,above>>. The `(dev)` configuration that `vidocq:idea` writes has no such limit.
-* `vidocq:jlink`, `vidocq:jpackage` and the Docker image built on the jlink image follow the same default. The build
-  splits the modules as `vidocq:package` does, links them all into the image, and bakes the split into the launcher
-  (`--add-options`, and `--java-options` for jpackage): the boot layer holds the runtime and the bricks, and at start
-  the runtime defines the application layer from the application and its libraries, read from the image
-  (`vidocq.app.modules`). No module is in both layers (BUG-20261114-11). The image keeps the mode it was built under:
-  build it with `-Dvidocq.app.layer=classes` to opt out.
+* `vidocq:jlink`, `vidocq:jpackage` and the Docker image built on the jlink image have no application layer: an
+  image has one layer, the JVM's own, with every module linked into it, and `vidocq.app.layer` does not apply
+  (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-one-layer[one layer], BUG-20261114-11). The same application
+  runs in both; xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-differences[three things differ]. An encrypted jar
+  needs the application layer, so the `vidocq:package` distribution.
 * A library with native code (JNI) cannot be loaded twice by the JVM, and the dev reload loads the application
   layer again: pin it with `vidocq.app.layer.keep`.
 * A thread that a library leaves running keeps the previous layer in memory; the dev reload warns, as above.

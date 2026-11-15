@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * The Bistro, running as a jlink image launches it: the runtime's own main with {@code --add-modules <module>
+ * The Bistro, launched from the module path by the runtime's own main with {@code --add-modules <module>
  * -Dvidocq.app.module=<module>}, in a child JVM on this test's module path, listening on a port the system picks. The runtime then builds
  * the application layer from that module, which reads the providers the processors listed in
  * {@code META-INF/services}. Booted in the test's JVM, the module would stay in the boot layer, where those files

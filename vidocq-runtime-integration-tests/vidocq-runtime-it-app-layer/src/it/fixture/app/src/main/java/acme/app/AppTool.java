@@ -9,9 +9,8 @@ import java.util.spi.ToolProvider;
  * it again in the application layer finds two (BUG-20261114-10).
  *
  * <p>Only a {@code public static provider()} method creates it, no public constructor: a form valid in a
- * {@code provides} and not in a {@code META-INF/services} file. A jlink image moves the {@code provides} of the
- * application layer's modules to services files, and the layer must turn them back into {@code provides}, or
- * {@link Probe} fails to create it (BUG-20261114-11).
+ * {@code provides} and not in a {@code META-INF/services} file. Whatever a launch does with the descriptor of the
+ * module, {@link Probe} must still create it through that method (BUG-20261114-11).
  */
 public final class AppTool implements ToolProvider {
 

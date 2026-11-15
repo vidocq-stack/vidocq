@@ -19,7 +19,6 @@
  */
 package io.vidocq.runtime.maven;
 
-import io.vidocq.runtime.core.LayerSplit;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -63,9 +62,8 @@ import java.util.stream.Stream;
 public class VidocqJpackageMojo extends AbstractMojo {
 
     /**
-     * The mode of the application layer the image starts under, baked into its launcher as
-     * {@code -Dvidocq.app.layer}: {@code all} (the default since 0.4.0) or {@code classes}. The image re-layers the
-     * application at start, as {@code vidocq:run} does (Vidocq/vidocq#247).
+     * The mode of the application layer of {@code vidocq:package}, {@code vidocq:run} and {@code vidocq:dev}. It
+     * does not apply to an image, which has one layer (Vidocq/vidocq#580): read here only to warn when it is set.
      */
     @Parameter(property = "vidocq.app.layer")
     private String appLayer;
@@ -165,10 +163,8 @@ public class VidocqJpackageMojo extends AbstractMojo {
     }
 
     /**
-     * The launch of the image to package, as {@code vidocq:jlink} baked it: the modules of the application layer
-     * read from the key it wrote in the image's {@code release} file ({@link ImageLaunch#RELEASE_KEY}), every other
-     * module of the image that is not the JDK's rooted at start (BUG-20261114-05, BUG-20261114-11). An image without
-     * the key layers the application module alone.
+     * The launch of the image to package, as {@code vidocq:jlink} baked it: one layer, every module of the image
+     * that is not the JDK's rooted at start (BUG-20261114-05), and no application layer (Vidocq/vidocq#580).
      */
     ImageLaunch launchOf() throws MojoExecutionException {
         try {
@@ -178,8 +174,11 @@ public class VidocqJpackageMojo extends AbstractMojo {
                 getLog().warn("The release file of " + runtimeImage + " lists no " + MODULES_KEY
                         + ": nothing but the application module is started.");
             }
-            return ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer), modules,
-                    layerModulesOf(image));
+            if (appLayer != null && !appLayer.isBlank()) {
+                getLog().warn("vidocq.app.layer does not apply to a jlink image or to the application jpackage"
+                        + " builds on it: the image has one layer, the JVM's own.");
+            }
+            return ImageLaunch.of(mainModule, mainClass, modules);
         } catch (IllegalArgumentException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         } catch (IOException e) {
@@ -212,17 +211,6 @@ public class VidocqJpackageMojo extends AbstractMojo {
     static List<String> nonJdkModulesOf(Path image) throws IOException {
         return Arrays.stream(releaseValue(image, MODULES_KEY).split("\\s+"))
                 .filter(m -> !m.isEmpty() && ModuleFinder.ofSystem().find(m).isEmpty())
-                .toList();
-    }
-
-    /**
-     * The modules of the application layer that {@code vidocq:jlink} listed in the image's {@code release} file
-     * ({@link ImageLaunch#RELEASE_KEY}); empty when the image has no such key.
-     */
-    static List<String> layerModulesOf(Path image) throws IOException {
-        return Arrays.stream(releaseValue(image, ImageLaunch.RELEASE_KEY + "=").split(","))
-                .map(String::strip)
-                .filter(m -> !m.isEmpty())
                 .toList();
     }
 

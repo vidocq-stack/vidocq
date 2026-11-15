@@ -31,9 +31,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * vidocq:jlink: the image links every module, and its start loads the application layer from the image ({@code jrt:})
- * without the boot layer holding a second copy of the application module (BUG-20261114-11). Both launch shapes: the
- * fixture's trampoline main, and the runtime's own main when the build names no main class.
+ * vidocq:jlink: the image links every module, and its start has one layer, the JVM's own: no application layer, so
+ * no second copy of the application module (BUG-20261114-11, Vidocq/vidocq#580). Both launch shapes: the fixture's
+ * trampoline main, and the runtime's own main when the build names no main class.
  */
 class AppLayerImageIT {
 
@@ -52,15 +52,15 @@ class AppLayerImageIT {
         assertLoadedOnceFromTheImage(out);
     }
 
-    /** Under all, the default: the application and its two libraries are in the layer, read from the image. */
+    /** The application and its two libraries are modules of the image, loaded by the JVM's application loader. */
     private static void assertLoadedOnceFromTheImage(String out) {
         assertTrue(out.contains(AppLayerPackageIT.ONE_COPY), "one copy of the application module:\n" + out);
-        assertTrue(out.contains("(jlink image)"), "the layer comes from the image:\n" + out);
-        assertTrue(out.contains("LOOKUP-LOADER vauban-app-layer"), "the library is in the application layer:\n" + out);
-        // The layer's loader serves the resources of a module of the image from its jrt: location (Foy#96).
+        assertTrue(out.contains("no application layer"), "the image has one layer:\n" + out);
+        assertTrue(out.contains("LOOKUP-LOADER app"), "the library is loaded by the JVM's loader:\n" + out);
+        // A library finds the application's resource, which no package holds, in the image (Foy#96).
         assertTrue(out.contains("LOOKUP-FOUND jrt:/"), "the library sees the application's resource:\n" + out);
-        assertTrue(out.contains("3 modules, 2 libraries"), out);
-        assertTrue(out.contains("SQL-OK"), "a JDK module only the layer requires is resolved (vidocq#254):\n" + out);
+        assertTrue(out.contains("SQL-OK"), "a JDK module only a library requires is resolved (vidocq#254):\n" + out);
+        assertTrue(out.contains("anomalies   none"), out);
         assertFalse(out.contains(AppLayerPackageIT.TWICE_WARNING), out);
     }
 

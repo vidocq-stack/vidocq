@@ -155,25 +155,24 @@ class CreateThenBuildIT {
     }
 
     /**
-     * The image reads its application layer from the modules it links, and its boot layer holds none of them
-     * (BUG-20261114-11). A module that nothing {@code requires} (Vaadin's resource-only {@code flow.push}) is
-     * served only if a layer resolves it: the build lists every module of the application layer, so the layer
-     * resolves it (BUG-20261114-05). The resolution the JVM prints for the image's own launch names neither the
-     * application module, which its {@code provides} would bind there, nor the fixture module.
+     * The image has one layer, the JVM's own (BUG-20261114-11, Vidocq/vidocq#580): the start builds no application
+     * layer. A module that nothing {@code requires} (Vaadin's resource-only {@code flow.push}) is served only if it
+     * is resolved: the image roots every module the build staged (BUG-20261114-05), so the resolution the JVM prints
+     * for the image's own launch names the fixture module and the application module.
      */
     private static void assertTheImageLayersTheApplicationOnce(Path java, String boot, String output) throws Exception {
         assertTrue(modules(java).contains(RESOURCE_MODULE), "the image does not link " + RESOURCE_MODULE + ":\n" + output);
-        String layer = boot.lines().filter(l -> l.contains("Application layer ready")).findFirst().orElse("");
-        assertTrue(layer.contains(RESOURCE_MODULE) && layer.contains("com.acme.demo.app")
-                && layer.contains("(jlink image)"), "the application layer of the image:\n" + boot);
+        assertTrue(boot.contains("no application layer"), "the image has one layer:\n" + boot);
+        assertTrue(boot.lines().noneMatch(l -> l.contains("Application layer ready")),
+                "the image built an application layer:\n" + boot);
         Process dry = new ProcessBuilder(java.toString(), "--show-module-resolution", "--dry-run",
                 "-m", "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq")
                 .redirectErrorStream(true).start();
         String resolution = new String(dry.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertTrue(dry.waitFor(1, TimeUnit.MINUTES), "the dry run did not end");
         for (String module : List.of(RESOURCE_MODULE, "com.acme.demo.app")) {
-            assertTrue(resolution.lines().noneMatch(l -> (" " + l + " ").contains(" " + module + " ")),
-                    module + " is in the boot layer of the image:\n" + resolution);
+            assertTrue(resolution.lines().anyMatch(l -> (" " + l + " ").contains(" " + module + " ")),
+                    module + " is not resolved by the image:\n" + resolution);
         }
     }
 

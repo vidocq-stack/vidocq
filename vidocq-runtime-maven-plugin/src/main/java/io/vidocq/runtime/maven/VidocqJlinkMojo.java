@@ -21,7 +21,6 @@ package io.vidocq.runtime.maven;
 
 import io.vidocq.vauban.maven.modularize.ModularizedJars;
 import io.vidocq.vauban.maven.modularize.Modularizer;
-import io.vidocq.runtime.core.LayerSplit;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -55,9 +54,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.spi.ToolProvider;
 import java.util.stream.Stream;
 
@@ -85,17 +82,13 @@ import java.util.stream.Stream;
 public class VidocqJlinkMojo extends AbstractMojo {
 
     /**
-     * The mode of the application layer the image starts under: {@code all} (the default since 0.4.0) or
-     * {@code classes}. The build splits the staged modules under it, as {@code vidocq:package} splits its jars, and
-     * bakes it into the launcher as {@code -Dvidocq.app.layer} (Vidocq/vidocq#247).
+     * The mode of the application layer of {@code vidocq:package}, {@code vidocq:run} and {@code vidocq:dev}. It
+     * does not apply to an image, which has one layer (Vidocq/vidocq#580): read here only to warn when it is set.
      */
     @Parameter(property = "vidocq.app.layer")
     private String appLayer;
 
-    /**
-     * Patterns of modules kept in the parent layer under {@code all}, as {@code vidocq:package} reads them
-     * ({@code vidocq.app.layer.keep}). The split is made at build: the image starts with it.
-     */
+    /** As {@link #appLayer}: the patterns of {@code vidocq.app.layer.keep} do not apply to an image. */
     @Parameter(property = "vidocq.app.layer.keep")
     private String appLayerKeep;
 
@@ -199,15 +192,15 @@ public class VidocqJlinkMojo extends AbstractMojo {
         }
         try {
             // Validation only, before anything is staged: the launch that is baked needs the stage (bakedLaunch).
-            ImageLaunch.of(mainModule, mainClass, LayerSplit.Mode.of(appLayer));
+            ImageLaunch.of(mainModule, mainClass);
         } catch (IllegalArgumentException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         }
         try {
             stageModules();
+            promoteProvides();
             String rootModules = resolveAddModules();
             ImageLaunch launch = bakedLaunch(rootModules);
-            moveLayerProvides(launch);
             runJlink(rootModules, launch);
             List<Path> conf = copyResources();
             DistributionSbom.write(sbomFile(), new DistributionSbom.Subject(project.getGroupId(),
@@ -453,74 +446,37 @@ public class VidocqJlinkMojo extends AbstractMojo {
     }
 
     /**
-     * The launch baked into the image. Every module staged in {@link #modsDir} is linked, and the build splits them
-     * as {@code vidocq:package} splits its jars: the application module and, under {@code all}, the libraries the
-     * split gives it form the application layer, which the image reads from {@code jrt:} at start; the boot layer
-     * roots the other modules of {@code rootModules} and the JDK modules the layer requires (vidocq#254), never a
-     * module of the layer (BUG-20261114-11). Logged, since this line is what to read when a module is missing at
-     * start.
+     * The launch baked into the image: one layer, the JVM's own, every module of {@code rootModules} rooted so that
+     * a module nothing requires is resolved too (BUG-20261114-05), and no application layer (Vidocq/vidocq#580).
+     * Logged, since this line is what to read when a module is missing at start. The settings of the application
+     * layer do not apply to an image: one that is set is named in a warning.
      *
      * @param rootModules the modules jlink links, comma separated
      */
-    ImageLaunch bakedLaunch(String rootModules) throws IOException, MojoExecutionException {
-        LayerSplit.Mode mode = LayerSplit.Mode.of(appLayer);
-        Map<String, Path> staged = new TreeMap<>();
-        for (var ref : ModuleFinder.of(modsDir.toPath()).findAll()) {
-            ref.location().ifPresent(location -> staged.put(ref.descriptor().name(), Path.of(location)));
+    ImageLaunch bakedLaunch(String rootModules) {
+        if (isSet(appLayer) || isSet(appLayerKeep)) {
+            getLog().warn("vidocq.app.layer and vidocq.app.layer.keep do not apply to a jlink image: it has one"
+                    + " layer, the JVM's own, with every module linked into it. They still apply to vidocq:package,"
+                    + " vidocq:run and vidocq:dev.");
         }
-        List<String> layer = List.of(mainModule.strip());
-        if (mode == LayerSplit.Mode.ALL) {
-            // A staged jar keeps its artifact's file name: a groupId:artifactId pattern of appLayerKeep matches it.
-            Map<String, String> coordinates = new HashMap<>();
-            for (var artifact : project.getArtifacts()) {
-                if (artifact.getFile() != null) {
-                    coordinates.put(artifact.getFile().getName(), artifact.getGroupId() + ":" + artifact.getArtifactId());
-                }
-            }
-            List<LayerSplit.Candidate> candidates = new ArrayList<>();
-            for (Path location : staged.values()) {
-                candidates.add(LayerSplit.candidate(location, coordinates.get(location.getFileName().toString())));
-            }
-            try {
-                var split = LayerSplit.split(candidates, Set.of(mainModule.strip()),
-                        LayerSplit.patterns(appLayerKeep), Map.of());
-                layer = split.application().stream().map(c -> c.descriptor().name()).toList();
-                getLog().info(ApplicationLaunch.layerSummary(Math.max(0, layer.size() - 1), split.pinned().size())
-                        + " (every module is linked; the application layer reads its own from the image)");
-            } catch (IllegalStateException e) {
-                if (LayerSplit.requested(appLayer)) {
-                    throw new MojoExecutionException(e.getMessage(), e);
-                }
-                getLog().warn(ApplicationLaunch.splitFallbackWarning(e.getMessage()));
-                mode = LayerSplit.Mode.CLASSES;
-            }
-        }
-        Set<String> bootRoots = new LinkedHashSet<>(Arrays.asList(rootModules.split(",")));
-        bootRoots.addAll(ApplicationLaunch.systemModulesRequiredBy(
-                layer.stream().map(staged::get).filter(Objects::nonNull).toList()));
-        ImageLaunch launch = ImageLaunch.of(mainModule, mainClass, mode, bootRoots, layer);
+        ImageLaunch launch = ImageLaunch.of(mainModule, mainClass, Arrays.asList(rootModules.split(",")));
         getLog().info("Vidocq jlink — main: " + launch.entryPoint() + " " + String.join(" ", launch.vmOptions()));
         return launch;
     }
 
+    private static boolean isSet(String value) {
+        return value != null && !value.isBlank();
+    }
+
     /**
-     * Moves the {@code provides} of the staged modules of the application layer into their services files
-     * ({@link LayerServiceFiles}). The boot layer of the image binds every linked module that provides a service one
-     * of its modules uses, root or not, and a module of the application layer bound there is loaded twice
-     * (BUG-20261114-11). Without its {@code provides}, nothing binds it; Vauban turns the services files back into
-     * {@code provides} when it defines the application layer.
+     * Writes into the staged modules the {@code provides} their services files declare ({@link StagedProvides}):
+     * the image has no application layer to promote them at start, and {@code ServiceLoader} reads the descriptor
+     * of a named module only.
      */
-    void moveLayerProvides(ImageLaunch launch) throws IOException {
-        Set<String> layer = Set.copyOf(launch.layerModules());
-        for (var ref : ModuleFinder.of(modsDir.toPath()).findAll()) {
-            var location = ref.location();
-            if (layer.contains(ref.descriptor().name()) && !ref.descriptor().provides().isEmpty()
-                    && location.isPresent()) {
-                var moved = LayerServiceFiles.move(Path.of(location.get()));
-                getLog().info("Vidocq jlink — " + ref.descriptor().name() + ": provides moved to META-INF/services "
-                        + moved.keySet());
-            }
-        }
+    void promoteProvides() throws IOException {
+        StagedProvides.promote(modsDir.toPath()).forEach((module, provides) ->
+                getLog().info("Vidocq jlink — " + module + ": provides added to module-info.class "
+                        + provides.keySet()));
     }
 
     /** Resolves the full set of modules to include: user modules + transitive JDK (via jdeps). */
@@ -593,18 +549,15 @@ public class VidocqJlinkMojo extends AbstractMojo {
     }
 
     /**
-     * The {@code --launcher} of the image, the {@code --add-options} that bake the JVM options of {@code launch}
-     * into the image, and the {@code release} key that lists the modules of its application layer. Every way of
-     * starting the image gets the options: the launcher script, {@code bin/java -m …}, the jpackage application and
-     * the Docker image built on it; {@code vidocq:jpackage} reads the key ({@link ImageLaunch#RELEASE_KEY}).
+     * The {@code --launcher} of the image and the {@code --add-options} that bake the JVM options of {@code launch}
+     * into the image. Every way of starting the image gets the options: the launcher script, {@code bin/java -m …},
+     * the jpackage application and the Docker image built on it.
      */
     static List<String> launcherArgs(String launcher, ImageLaunch launch) {
         List<String> args = new ArrayList<>();
         args.add("--launcher"); args.add(launcher + "=" + launch.entryPoint());
         // One argument: jlink refuses a separate value that starts with "--" (the --add-modules option).
         args.add("--add-options=" + String.join(" ", launch.vmOptions()));
-        args.add("--release-info");
-        args.add("add:" + ImageLaunch.RELEASE_KEY + "=" + String.join(",", launch.layerModules()));
         return args;
     }
 

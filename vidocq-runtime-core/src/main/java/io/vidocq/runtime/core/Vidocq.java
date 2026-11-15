@@ -73,7 +73,7 @@ public final class Vidocq {
         // into a child module layer defined by the Vauban class loader. Must precede
         // everything — extensions and configuration read through the loader installed here.
         // Without a path, -Dvidocq.app.module=… names the application module the launch resolved into the boot
-        // layer (a jlink image without an application main class): re-layered as a trampoline would.
+        // layer: re-layered as a trampoline would, unless the launch wants no layer (a jlink image).
         boolean layerJustInstalled = VidocqAppLayer.installIfConfigured()
                 || VidocqAppLayer.installFromModuleIfConfigured();
         if (layerJustInstalled && VidocqAppLayer.runAppMainIfConfigured(args)) {

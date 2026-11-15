@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the kitchen, logs out, and is asked to log in again. With BASIC authentication the browser kept the credentials
  * until it closed, and no page could sign the user out.
  *
- * <p>The application runs as a jlink image launches it ({@link BistroApplication}).
+ * <p>The application runs in a JVM of its own, inside its application layer ({@link BistroApplication}).
  */
 class KitchenLoginTest {
 

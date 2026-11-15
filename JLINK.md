@@ -66,18 +66,17 @@ runtime **into a self-contained directory** (`target/dist/`). The binary
 1. Stages all `compile`+`runtime` jars into `target/jlink-mods/`.
 2. Verifies that none is an automatic module (otherwise a clear error is raised).
 3. `jdeps --print-module-deps` (ToolProvider) resolves transitive JDK modules.
-4. Splits the staged modules as `vidocq:package` does (`vidocq.app.layer`,
-   `vidocq.app.layer.keep`), and moves the `provides` of the staged copies of the application
-   layer's modules into their `META-INF/services` files, so that no service binds them into the
-   boot layer (BUG-20261114-11).
+4. Adds to the `module-info.class` of each staged module the `provides` its
+   `META-INF/services` files declare, with the rule of Vauban's application layer: the image
+   has one layer and no application layer to promote them at start (Vidocq/vidocq#580).
 5. `jlink --module-path stage:$JAVA_HOME/jmods --add-modules <set>
-   --launcher <name>=io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq
-   --add-options=<options> --release-info add:VIDOCQ_APP_MODULES=<layer>
+   --launcher <name>=<entry point> --add-options=<options>
    --strip-debug --compress=zip-6 --no-header-files --no-man-pages --output target/dist`.
-   The options are `--add-modules=<parent layer and JDK modules> -Dvidocq.app.module=<module>
-   -Dvidocq.app.modules=<application layer> [-Dvidocq.app.main=<mainClass>]
-   -Dvidocq.app.layer=<mode>`: `Vidocq.main` defines the application layer from the listed
-   modules, read from the image, and runs a `@VidocqMain` trampoline inside it.
+   The entry point is `<mainModule>/<mainClass>` for a `@VidocqMain` trampoline, else
+   `io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq` with `-Dvidocq.app.module=<module>`.
+   The options are `--add-modules=<every staged module and the JDK modules added>
+   -Dvidocq.app.layer.off=true`: the application runs where the JVM resolved it, in one copy
+   (BUG-20261114-11).
 6. Copies `vidocq.properties` + `logging.properties` (and any configured
    resource) into `dist/conf/`.
 
