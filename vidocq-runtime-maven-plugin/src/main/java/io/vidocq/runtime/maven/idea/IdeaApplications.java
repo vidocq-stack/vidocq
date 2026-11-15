@@ -71,7 +71,8 @@ final class IdeaApplications {
     static final String CONFIGURATION_NAME_PROPERTY = "vidocq.idea.configurationName";
     /** The IntelliJ module of an application, by default its artifactId. */
     static final String MODULE_NAME_PROPERTY = "vidocq.idea.moduleName";
-
+    /** The JVM arguments of {@code vidocq:run}, which the Application configuration passes too. */
+    static final String RUN_JVM_ARGS_PROPERTY = "vidocq.run.jvmArgs";
 
     /**
      * Settings read from each module's own model. A command-line {@code -D} does not change them, and no goal
@@ -79,7 +80,7 @@ final class IdeaApplications {
      */
     static final List<String> MODULE_PROPERTIES = List.of(ApplicationMainClass.PROPERTY,
             ApplicationMainClass.MODULE_PROPERTY, CONFIGURATION_NAME_PROPERTY, MODULE_NAME_PROPERTY,
-            EXCLUDE_PROPERTY, "vidocq.dev.debugHost", "vidocq.dev.debugPort");
+            EXCLUDE_PROPERTY, "vidocq.dev.debugHost", "vidocq.dev.debugPort", RUN_JVM_ARGS_PROPERTY);
 
     private static final String COMPILER_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
     private static final String COMPILE = "compile";
@@ -211,11 +212,26 @@ final class IdeaApplications {
         String pomPath = pomPath(project.getFile(), directory, coordinates, errors);
         String debugHost = debugHost(project, coordinates, errors);
         int debugPort = debugPort(project, coordinates, errors);
+        String runJvmArgs = runJvmArgs(project, coordinates, errors);
         if (errors.size() > errorsBefore) {
             return null;
         }
         return new IdeaApplication(coordinates, mainClass, configurationName, moduleName, pomPath,
-                generateGoal(plugin, coordinates, diagnostics), debugHost, debugPort);
+                generateGoal(plugin, coordinates, diagnostics), debugHost, debugPort, runJvmArgs);
+    }
+
+    /**
+     * {@value #RUN_JVM_ARGS_PROPERTY}, from the module's own model, or {@code null}: the Application
+     * configuration passes it as {@code vidocq:run} does (BUG-20261116-01). Line breaks and tabs separate
+     * arguments like spaces; any other control character would make the written XML invalid.
+     */
+    private static String runJvmArgs(MavenProject project, String coordinates, List<String> errors) {
+        String value = project.getProperties().getProperty(RUN_JVM_ARGS_PROPERTY);
+        if (value != null && value.chars().anyMatch(c -> Character.isISOControl(c) && !Character.isWhitespace(c))) {
+            errors.add(PREFIX + coordinates + ": " + RUN_JVM_ARGS_PROPERTY + " must not contain control characters.");
+            return null;
+        }
+        return value;
     }
 
     /** Warns when IntelliJ may give the module another name than the configuration's default one. */

@@ -31,6 +31,7 @@ import java.util.Set;
 import static io.vidocq.runtime.maven.idea.RunConfigurationRendererTest.MCP_TIME_SERVER;
 import static io.vidocq.runtime.maven.idea.RunConfigurationRendererTest.MEASURED_MAVEN_REFERENCE;
 import static io.vidocq.runtime.maven.idea.RunConfigurationRendererTest.MEASURED_REFERENCE;
+import static io.vidocq.runtime.maven.idea.RunConfigurationRendererTest.REFERENCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -87,7 +88,7 @@ class RunConfigurationFilesTest {
     void anUnmarkedFileWithTheExpectedBodyIsAdopted() {
         String pinned = RunConfigurationRenderer.body(MCP_TIME_SERVER, Kind.APPLICATION, "temurin-25", true);
 
-        assertEquals(State.UNMARKED, RunConfigurationFiles.classify(bytes(MEASURED_REFERENCE), pinned));
+        assertEquals(State.UNMARKED, RunConfigurationFiles.classify(bytes(REFERENCE), pinned));
     }
 
     @Test

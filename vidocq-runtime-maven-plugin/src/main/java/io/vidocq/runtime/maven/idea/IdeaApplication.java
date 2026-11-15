@@ -38,18 +38,40 @@ import io.vidocq.runtime.maven.JdwpAgent;
  *                          becomes {@link JdwpAgent#DEFAULT_HOST} (Vidocq/vidocq#143)
  * @param debugPort         the port the {@code (debug)} configuration attaches to; not positive becomes
  *                          {@code 5005}, the default of {@code vidocq:dev}'s own debug agent
+ * @param runJvmArgs        the application's {@code vidocq.run.jvmArgs}, its runs of tokens separated by single
+ *                          spaces as {@code vidocq:run} splits them; {@code null} becomes empty
  */
 record IdeaApplication(String coordinates, String mainClass, String configurationName, String moduleName,
-                       String pomPath, String generateGoal, String debugHost, int debugPort) {
+                       String pomPath, String generateGoal, String debugHost, int debugPort, String runJvmArgs) {
+
+    /**
+     * What the Application configuration passes to the JVM before {@code vidocq.run.jvmArgs}. IntelliJ runs a
+     * modular main class with {@code -m}, which resolves only what the application module requires; a module
+     * its dependencies need without a {@code requires} (an SLF4J provider, a service) would be missing, as
+     * {@code vidocq:run} avoids with the same option (BUG-20261116-01).
+     */
+    static final String ADD_MODULES = "--add-modules ALL-MODULE-PATH";
 
     IdeaApplication {
         debugHost = debugHost == null || debugHost.isBlank() ? JdwpAgent.DEFAULT_HOST : debugHost;
         debugPort = debugPort <= 0 ? 5005 : debugPort;
+        runJvmArgs = runJvmArgs == null ? "" : String.join(" ", runJvmArgs.strip().split("\\s+"));
+    }
+
+    /** No {@code vidocq.run.jvmArgs}. */
+    IdeaApplication(String coordinates, String mainClass, String configurationName, String moduleName,
+                    String pomPath, String generateGoal, String debugHost, int debugPort) {
+        this(coordinates, mainClass, configurationName, moduleName, pomPath, generateGoal, debugHost, debugPort, null);
     }
 
     /** The debug host and port default to those of {@code vidocq:dev}'s own debug agent. */
     IdeaApplication(String coordinates, String mainClass, String configurationName, String moduleName,
                     String pomPath, String generateGoal) {
         this(coordinates, mainClass, configurationName, moduleName, pomPath, generateGoal, null, 0);
+    }
+
+    /** The VM options of the Application configuration: {@link #ADD_MODULES}, then {@code vidocq.run.jvmArgs}. */
+    String vmParameters() {
+        return runJvmArgs.isEmpty() ? ADD_MODULES : ADD_MODULES + " " + runJvmArgs;
     }
 }

@@ -218,7 +218,8 @@ final class RunConfigurationRenderer {
     /**
      * An Application run configuration: Make, then (unless disabled) {@code vidocq:generate} on the
      * application's pom before launch; the JDK is left to IntelliJ (the module SDK) unless {@code jre}
-     * names one.
+     * names one. The VM options are those of {@link IdeaApplication#vmParameters()}, after the module, where
+     * IntelliJ writes {@code VM_PARAMETERS}.
      */
     private static String applicationBody(IdeaApplication application, String jre, boolean generateBeforeLaunch) {
         StringBuilder xml = new StringBuilder(700);
@@ -233,6 +234,9 @@ final class RunConfigurationRenderer {
         xml.append("    <option name=\"MAIN_CLASS_NAME\" value=\"")
                 .append(escapeAttribute(application.mainClass().replace('$', '.'))).append(ATTRIBUTE_END);
         xml.append("    <module name=\"").append(escapeAttribute(application.moduleName())).append(ATTRIBUTE_END);
+        // The JVM options vidocq:run passes, which -m alone would miss (BUG-20261116-01).
+        xml.append("    <option name=\"VM_PARAMETERS\" value=\"").append(escapeAttribute(application.vmParameters()))
+                .append(ATTRIBUTE_END);
         xml.append("    <method v=\"2\">\n");
         xml.append("      <option name=\"Make\" enabled=\"true\" />\n");
         if (generateBeforeLaunch) {

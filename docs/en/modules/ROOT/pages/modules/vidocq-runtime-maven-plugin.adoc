@@ -1556,6 +1556,13 @@ xref:modules/vidocq-runtime-core.adoc#vidocq-lay-001[`VIDOCQ-LAY-001`], naming t
 services up itself can find them twice (BUG-20261114-10). The Maven kind runs `vidocq:dev` and `vidocq:run`, which
 load the application once: prefer it.
 
+The VM options are those `vidocq:run` passes: `--add-modules ALL-MODULE-PATH`, then the application's
+`vidocq.run.jvmArgs`, read from its own pom like the other settings of the goal. IntelliJ runs a modular main class
+with `-m`, which resolves only the modules the application requires: a module its libraries need without a
+`requires` of theirs (an SLF4J provider of automatic Vaadin jars, for instance) would be missing, and the start would
+fail with a `NoClassDefFoundError` (BUG-20261116-01). An application with no main class gets no file of this kind:
+the goal says so for each one, and names the files the Maven kind wrote for it instead of calling them orphans.
+
 [source,xml]
 ----
 <component name="ProjectRunConfigurationManager">
@@ -1564,6 +1571,7 @@ load the application once: prefer it.
     <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
     <option name="MAIN_CLASS_NAME" value="io.vidocq.tools.lc4jcdi.mcptimeserver.McpTimeServerApp" />
     <module name="mcp-time-server" />
+    <option name="VM_PARAMETERS" value="--add-modules ALL-MODULE-PATH" />
     <method v="2">
       <option name="Make" enabled="true" />
       <option name="Maven.BeforeRunTask" enabled="true" file="$PROJECT_DIR$/mcp-time-server/pom.xml" goal="vidocq:generate" />
@@ -1641,6 +1649,12 @@ on how Maven was invoked.
 | `5005`
 | The port the `(debug)` file attaches to, `1`-`65535`. An invalid value is a configuration error, reported with
   the goal's other errors, and the default is used.
+
+| `vidocq.run.jvmArgs`
+| none
+| The JVM arguments of `vidocq:run`, which the `application` kind writes into its VM options after
+  `--add-modules ALL-MODULE-PATH`. Line breaks separate arguments like spaces; another control character is a
+  configuration error.
 |===
 
 === Goal parameters
