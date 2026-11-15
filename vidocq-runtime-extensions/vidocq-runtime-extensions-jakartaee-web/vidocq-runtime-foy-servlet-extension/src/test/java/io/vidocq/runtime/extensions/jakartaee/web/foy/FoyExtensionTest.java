@@ -22,6 +22,7 @@ package io.vidocq.runtime.extensions.jakartaee.web.foy;
 import io.vidocq.chappe.api.Handler;
 import io.vidocq.foy.chappe.FoyChappeBoot;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMount;
+import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletAuthentication;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletInitParameters;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMounts;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.fixture.LifecycleListener;
@@ -264,6 +265,32 @@ class FoyExtensionTest {
         VidocqConfig config = config(Map.of());
 
         assertThrows(NullPointerException.class, () -> FoyDeployments.initParameters(noMap, config));
+    }
+
+    private static final io.vidocq.foy.spi.security.RequestAuthentication HOOK =
+            (request, response, mandatory) -> io.vidocq.foy.spi.security.RequestAuthentication.anonymous();
+
+    @Test
+    void anExtensionTakesOverTheAuthenticationOfEveryRequest() {
+        ServletAuthentication provider = beanManager -> Optional.of(HOOK);
+
+        assertEquals(Optional.of(HOOK), FoyDeployments.requestAuthentication(List.of(provider), null));
+    }
+
+    @Test
+    void withoutAnExtensionTheContainersOwnMechanismsApply() {
+        ServletAuthentication silent = beanManager -> Optional.empty();
+
+        assertEquals(Optional.empty(), FoyDeployments.requestAuthentication(List.of(), null));
+        assertEquals(Optional.empty(), FoyDeployments.requestAuthentication(List.of(silent), null));
+    }
+
+    @Test
+    void twoExtensionsTakingOverTheAuthenticationFail() {
+        ServletAuthentication one = beanManager -> Optional.of(HOOK);
+        List<ServletAuthentication> both = List.of(one, one);
+
+        assertThrows(IllegalStateException.class, () -> FoyDeployments.requestAuthentication(both, null));
     }
 
     @Test

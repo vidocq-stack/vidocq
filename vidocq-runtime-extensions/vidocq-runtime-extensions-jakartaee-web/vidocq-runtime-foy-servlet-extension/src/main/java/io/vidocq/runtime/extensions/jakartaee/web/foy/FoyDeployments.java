@@ -20,10 +20,12 @@
 package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.foy.chappe.FoyChappeBoot;
+import io.vidocq.foy.spi.security.RequestAuthentication;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMount;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMounts;
 import io.vidocq.runtime.spi.ApplicationLayer;
 import io.vidocq.runtime.spi.config.VidocqConfig;
+import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletAuthentication;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletDeploymentListener;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletInitParameters;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -111,6 +113,8 @@ final class FoyDeployments {
                 .defaultResponseCharacterEncoding(responseCharacterEncoding);
         if (contextPath != null) builder.contextPath(contextPath);
         ServletSecurity.from(config).applyTo(builder, ServletSecurity.identityStoreBean(beanManager));
+        requestAuthentication(java.util.ServiceLoader.load(ServletAuthentication.class), beanManager)
+                .ifPresent(builder::requestAuthentication);
         initParameters(initParameters, config).forEach(builder::initParameter);
         try {
             Optional<FoyChappeBoot.Mounted> mounted = builder.build();
@@ -119,6 +123,23 @@ final class FoyDeployments {
         } catch (ServletException e) {
             throw new IllegalStateException(e.getMessage(), e);
         }
+    }
+
+    /** The hook of the extension that takes over the authentication; empty when none does, two fail. */
+    static Optional<RequestAuthentication> requestAuthentication(Iterable<ServletAuthentication> providers,
+                                                                 BeanManager beanManager) {
+        RequestAuthentication hook = null;
+        for (ServletAuthentication provider : providers) {
+            Optional<RequestAuthentication> given = Objects.requireNonNull(provider.requestAuthentication(beanManager),
+                    () -> provider.getClass().getName() + " returned no answer");
+            if (given.isEmpty()) continue;
+            if (hook != null) {
+                throw new IllegalStateException("Two extensions take over the authentication of the servlet "
+                        + "deployments: keep one");
+            }
+            hook = given.get();
+        }
+        return Optional.ofNullable(hook);
     }
 
     /** The init parameters of every provider; a name two providers give fails. */

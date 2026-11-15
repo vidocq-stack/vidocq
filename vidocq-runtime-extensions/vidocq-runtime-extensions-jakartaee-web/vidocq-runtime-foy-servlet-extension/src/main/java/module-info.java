@@ -36,7 +36,9 @@ module io.vidocq.runtime.extensions.jakartaee.web.foy {
     // contribute context init parameters to it (the WebSocket extension).
     exports io.vidocq.runtime.extensions.jakartaee.web.foy.spi
             to io.vidocq.runtime.extensions.jakartaee.web.ibarra,
+               io.vidocq.runtime.extensions.jakartaee.web.kerckhoffs,
                io.vidocq.runtime.extensions.jakartaee.web.websocket;
+    uses io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletAuthentication;
     uses io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletDeploymentListener;
     uses io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletInitParameters;
 
