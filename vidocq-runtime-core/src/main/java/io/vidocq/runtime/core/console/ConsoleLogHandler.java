@@ -22,6 +22,7 @@ package io.vidocq.runtime.core.console;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.logging.Formatter;
+import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
 import java.util.logging.StreamHandler;
 
@@ -33,6 +34,12 @@ import java.util.logging.StreamHandler;
  * formatter read the thread name at format time. {@link #close()} only flushes: the handler does
  * not own {@code System.out}, and {@code LogManager.reset()} closes every root handler at
  * shutdown.
+ *
+ * <p>The JDK's own shutdown hook, {@code LogManager}'s {@value #JDK_LOGGING_SHUTDOWN_HOOK}, resets
+ * every logger while the other hooks run, Vidocq's among them: without a handler on the root, the
+ * stop of the application logged nothing, or only its first lines (BUG-20261115-07). Closed by that
+ * hook, the handler puts itself back on the root logger, so the console keeps the lines until the
+ * JVM ends.</p>
  */
 public final class ConsoleLogHandler extends StreamHandler {
 
@@ -60,9 +67,18 @@ public final class ConsoleLogHandler extends StreamHandler {
         flush();
     }
 
-    /** Flushes, and never closes the underlying stream. */
+    /** The name of the thread {@code LogManager} registers as a shutdown hook to reset the loggers. */
+    static final String JDK_LOGGING_SHUTDOWN_HOOK = "Logging-Cleaner";
+
+    /**
+     * Flushes, and never closes the underlying stream. Closed by the JDK's logging shutdown hook,
+     * goes back on the root logger.
+     */
     @Override
     public synchronized void close() {
         flush();
+        if (JDK_LOGGING_SHUTDOWN_HOOK.equals(Thread.currentThread().getName())) {
+            LogManager.getLogManager().getLogger("").addHandler(this);
+        }
     }
 }

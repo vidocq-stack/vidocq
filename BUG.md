@@ -5,6 +5,22 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261115-07 — The stop of an application sometimes logs nothing, not even "Vidocq - Shutting down"
+
+- **Date**: 2026-11-15
+- **Status**: FIXED on `fix/console-log-shutdown`
+- **Module**: `vidocq-runtime-core` (`ConsoleLogHandler`)
+- **Symptom**: on SIGTERM or `System.exit`, the line `Vidocq - Shutting down` and the lines of the stop after it
+  are printed on some runs and missing on others. Found by the tutorial session.
+- **Repro**: `ConsoleLoggingProcessTest.aLineLoggedByAShutdownHookStillReachesTheConsole`: a child JVM with Vidocq's
+  console exits, and a shutdown hook logs after 500 ms. Before the fix the line never appears.
+- **Cause**: `LogManager` registers its own shutdown hook, the thread `Logging-Cleaner`, which calls `reset()`:
+  every handler is removed from every logger and closed. The JVM starts all shutdown hooks at once, so Vidocq's
+  `vidocq-shutdown` races it, and a record logged after the reset reaches no handler.
+- **Fix**: `ConsoleLogHandler.close()`, when the `Logging-Cleaner` thread calls it, puts the handler back on the root
+  logger. The reset still sets the levels back (root `INFO`, the others inherited). With
+  `vidocq.log.console=jdk`, the JDK's `ConsoleHandler` keeps the JDK behaviour.
+
 ## BUG-20261115-06 — `vidocq create -x liquibase-migration` prepares the folder Flyway reads, not Liquibase's
 
 - **Date**: 2026-11-15
@@ -2470,7 +2486,6 @@ where this whole bug class is invisible.
   - 2026-10-07 : the residual now fails with a message that names the class, the package and both ways out (an
     `exports … to io.vidocq.runtime.core;` or a CDI bean): `Vidocq.inaccessibleApplicationClass`, vidocq#201,
     `BootLayerAccessTest`.
-
 
 ## BUG-20261010-01 — A scaffolded application boots in place and loses its generated code in jlink
 

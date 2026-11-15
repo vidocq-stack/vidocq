@@ -120,14 +120,28 @@ class ConsoleLoggingProcessTest {
         assertTrue(run.stderr().contains("Vidocq - Configuration phase"), run.stderr());
     }
 
+    @Test
+    void aLineLoggedByAShutdownHookStillReachesTheConsole() throws Exception {
+        Run run = child(ConsoleLoggingShutdownChildMain.class, List.of(), Map.of());
+
+        assertEquals(0, run.exitCode(), run.stderr());
+        assertEquals("", run.stderr());
+        assertTrue(run.stdout().contains("] : " + ConsoleLoggingShutdownChildMain.LAST_LINE), run.stdout());
+    }
+
     private Run child(List<String> jvmOptions, Map<String, String> environment)
+            throws IOException, InterruptedException {
+        return child(ConsoleLoggingChildMain.class, jvmOptions, environment);
+    }
+
+    private Run child(Class<?> main, List<String> jvmOptions, Map<String, String> environment)
             throws IOException, InterruptedException {
         List<String> command = new ArrayList<>();
         command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
         command.addAll(jvmOptions);
         command.add("-cp");
         command.add(childClassPath());
-        command.add(ConsoleLoggingChildMain.class.getName());
+        command.add(main.getName());
 
         ProcessBuilder builder = new ProcessBuilder(command);
         Map<String, String> env = builder.environment();
