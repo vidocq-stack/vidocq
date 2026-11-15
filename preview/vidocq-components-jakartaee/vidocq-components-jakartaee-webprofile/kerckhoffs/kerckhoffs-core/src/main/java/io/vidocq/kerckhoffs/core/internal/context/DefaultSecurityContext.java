@@ -88,7 +88,7 @@ public final class DefaultSecurityContext implements SecurityContext {
             if (request.authenticate(response)) return AuthenticationStatus.SUCCESS;
             return response.isCommitted() && response.getStatus() < 400
                     ? AuthenticationStatus.SEND_CONTINUE : AuthenticationStatus.SEND_FAILURE;
-        } catch (ServletException | IOException failed) {
+        } catch (ServletException | IOException _) {
             // A mechanism that failed has not authenticated anybody: that is an outcome, not an error.
             return AuthenticationStatus.SEND_FAILURE;
         } finally {
