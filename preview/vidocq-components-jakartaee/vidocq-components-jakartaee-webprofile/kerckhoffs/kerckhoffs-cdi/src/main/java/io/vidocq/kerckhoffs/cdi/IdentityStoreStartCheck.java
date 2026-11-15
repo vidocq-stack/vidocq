@@ -36,7 +36,11 @@ import jakarta.security.enterprise.identitystore.IdentityStore;
 @Singleton
 public class IdentityStoreStartCheck {
 
-    void check(@Observes Startup startup, Instance<IdentityStore> stores) {
+    /**
+     * Observes {@code Startup}. Public so that a runtime extension compiled ahead of time can call it from a bean of
+     * its own, without reflective access to this module.
+     */
+    public void check(@Observes Startup startup, Instance<IdentityStore> stores) {
         try {
             for (var store : stores.handles()) {
                 // A store bound to the request (or the session) has no context to be created in at start.
