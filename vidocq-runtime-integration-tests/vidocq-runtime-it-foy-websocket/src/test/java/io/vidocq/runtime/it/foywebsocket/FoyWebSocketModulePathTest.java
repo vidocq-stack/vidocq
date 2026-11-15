@@ -149,7 +149,7 @@ class FoyWebSocketModulePathTest {
     }
 
     @Test
-    void anApplicationStopClosesTheConnectionWith1001BeforeTheServerStops() throws Exception {
+    void anApplicationStopClosesTheConnectionWith1001AndReports1006BeforeTheServerStops() throws Exception {
         EchoEndpoint.reset();
         boot(null);
         try (Socket socket = new Socket("127.0.0.1", port)) {
@@ -167,7 +167,8 @@ class FoyWebSocketModulePathTest {
             assertTrue(payload.length >= 2, "the Close frame carries a code");
             assertEquals(1001, ((payload[0] & 0xFF) << 8) | (payload[1] & 0xFF));
             assertTrue(EchoEndpoint.CLOSED.get().await(5, TimeUnit.SECONDS), "the endpoint saw onClose");
-            assertEquals(List.of(1001), EchoEndpoint.CLOSE_CODES);
+            // The stop is a close the container initiates: onClose hears 1006 (Jakarta WebSocket 2.2 §2.1.5).
+            assertEquals(List.of(1006), EchoEndpoint.CLOSE_CODES);
         }
         // After the runtime stopped and the client's socket closed: a late onError would show here.
         assertEquals(List.of(), EchoEndpoint.ERRORS);

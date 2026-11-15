@@ -336,7 +336,7 @@ opens com.example.app.ws to io.vidocq.foy.core;
 See `vidocq-runtime-it-foy-websocket` for a complete module.
 ====
 
-An application stop closes every open WebSocket connection with a Close frame of code 1001 (going away), and calls the endpoint's `onClose` with that code, before the Chappe servers stop: the Servlet extension closes Foy's deployments in a before-stop hook of the Chappe mount point (`ChappeMountPoint.addBeforeStopHook`). Without it the connections dropped with no Close frame and the peer saw 1006 (BUG-20261115-01). `Servlet.destroy()` and `ServletContextListener.contextDestroyed` run while the server still serves, too.
+An application stop closes every open WebSocket connection with a Close frame of code 1001 (going away), and calls the endpoint's `onClose` with 1006 (closed abnormally), before the Chappe servers stop. The stop is a close the container initiates, and Jakarta WebSocket 2.2 §2.1.5 gives `onClose` 1006 for those, so the endpoint can tell it from a peer that sent 1001 (Foy BUG-20261115-08). The Servlet extension closes Foy's deployments in a before-stop hook of the Chappe mount point (`ChappeMountPoint.addBeforeStopHook`). Without it the connections dropped with no Close frame and the peer saw 1006 (BUG-20261115-01). `Servlet.destroy()` and `ServletContextListener.contextDestroyed` run while the server still serves, too.
 
 [cols="2,1,3"]
 |===
