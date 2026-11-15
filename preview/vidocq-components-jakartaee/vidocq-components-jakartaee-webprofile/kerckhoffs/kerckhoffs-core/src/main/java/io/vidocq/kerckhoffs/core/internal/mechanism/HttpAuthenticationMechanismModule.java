@@ -35,6 +35,7 @@ import javax.security.auth.callback.CallbackHandler;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The server authentication module that places an {@link HttpAuthenticationMechanism} in service through Jakarta
@@ -46,7 +47,7 @@ public final class HttpAuthenticationMechanismModule implements ServerAuthModule
     private static final Class<?>[] MESSAGE_TYPES = {HttpServletRequest.class, HttpServletResponse.class};
 
     private final HttpAuthenticationMechanism mechanism;
-    private volatile CallbackHandler handler;
+    private final AtomicReference<CallbackHandler> handler = new AtomicReference<>();
 
     public HttpAuthenticationMechanismModule(HttpAuthenticationMechanism mechanism) {
         this.mechanism = Objects.requireNonNull(mechanism, "mechanism");
@@ -56,7 +57,7 @@ public final class HttpAuthenticationMechanismModule implements ServerAuthModule
     public void initialize(MessagePolicy requestPolicy, MessagePolicy responsePolicy, CallbackHandler handler,
                            Map<String, Object> options) throws AuthException {
         if (handler == null) throw new AuthException("a callback handler is required");
-        this.handler = handler;
+        this.handler.set(handler);
     }
 
     @Override public Class<?>[] getSupportedMessageTypes() { return MESSAGE_TYPES.clone(); }
@@ -104,7 +105,7 @@ public final class HttpAuthenticationMechanismModule implements ServerAuthModule
     }
 
     private DefaultHttpMessageContext context(MessageInfo info, Subject clientSubject) {
-        CallbackHandler given = handler;
+        CallbackHandler given = handler.get();
         if (given == null) throw new IllegalStateException("the module was not initialized");
         return new DefaultHttpMessageContext(info, clientSubject == null ? new Subject() : clientSubject, given);
     }

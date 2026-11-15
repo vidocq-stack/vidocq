@@ -73,17 +73,20 @@ class HttpAuthenticationMechanismModuleTest {
     }
 
     @Test
-    void aMechanismThatFailsIsAFailedRequest() throws Exception {
+    void aMechanismThatFailsIsAFailedRequest() throws AuthException {
         HttpAuthenticationMechanism broken = (request, response, context) -> {
             throw new AuthenticationException("boom");
         };
+        var module = module(broken);
 
-        assertThrows(AuthException.class, () -> module(broken).validateRequest(info, client, null));
+        assertThrows(AuthException.class, () -> module.validateRequest(info, client, null));
     }
 
     @Test
-    void aMechanismThatAnswersNothingIsAFailedRequest() throws Exception {
-        assertThrows(AuthException.class, () -> module(answering(null)).validateRequest(info, client, null));
+    void aMechanismThatAnswersNothingIsAFailedRequest() throws AuthException {
+        var module = module(answering(null));
+
+        assertThrows(AuthException.class, () -> module.validateRequest(info, client, null));
     }
 
     @Test

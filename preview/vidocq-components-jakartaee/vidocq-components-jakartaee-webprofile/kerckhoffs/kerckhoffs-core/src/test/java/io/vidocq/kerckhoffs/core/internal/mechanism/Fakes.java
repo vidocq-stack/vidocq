@@ -81,7 +81,9 @@ final class Fakes {
                         case "sendError" -> sent.add("error " + args[0]);
                         case "setStatus" -> sent.add("status " + args[0]);
                         case "encodeRedirectURL" -> { return args[0]; }
-                        default -> { }
+                        default -> {
+                            // Every other call is accepted and ignored: the tests ask only what they check.
+                        }
                     }
                     return null;
                 });

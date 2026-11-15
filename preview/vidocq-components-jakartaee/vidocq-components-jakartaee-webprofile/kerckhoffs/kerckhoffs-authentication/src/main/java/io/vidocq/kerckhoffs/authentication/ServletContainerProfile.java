@@ -134,8 +134,8 @@ public final class ServletContainerProfile {
         Principal caller = null;
         Set<String> groups = new HashSet<>();
         for (Principal p : client.getPrincipals()) {
-            if (p instanceof Caller named) caller = named.principal();
-            else if (p instanceof Group group) groups.add(group.name());
+            if (p instanceof Caller(var principal)) caller = principal;
+            else if (p instanceof Group(var name)) groups.add(name);
         }
         return caller == null ? new Result(Status.ANONYMOUS, null, Set.of(), register, null)
                 : new Result(Status.AUTHENTICATED, caller, groups, register, authType);
@@ -170,23 +170,32 @@ public final class ServletContainerProfile {
         public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
             for (Callback callback : callbacks) {
                 switch (callback) {
-                    case CallerPrincipalCallback caller -> {
-                        var principals = caller.getSubject().getPrincipals();
-                        principals.removeIf(Caller.class::isInstance);
-                        Principal named = caller.getPrincipal() != null ? caller.getPrincipal()
-                                : (caller.getName() == null ? null : new Named(caller.getName()));
-                        if (named != null) principals.add(new Caller(named));
-                    }
-                    case GroupPrincipalCallback groups -> {
-                        var principals = groups.getSubject().getPrincipals();
-                        principals.removeIf(Group.class::isInstance);
-                        if (groups.getGroups() != null) {
-                            for (String name : groups.getGroups()) principals.add(new Group(name));
-                        }
-                    }
+                    case CallerPrincipalCallback caller -> nameCaller(caller);
+                    case GroupPrincipalCallback groups -> nameGroups(groups);
                     default -> throw new UnsupportedCallbackException(callback);
                 }
             }
+        }
+
+        private static void nameCaller(CallerPrincipalCallback callback) {
+            var principals = callback.getSubject().getPrincipals();
+            principals.removeIf(Caller.class::isInstance);
+            Principal named = callerOf(callback);
+            if (named != null) principals.add(new Caller(named));
+        }
+
+        private static Principal callerOf(CallerPrincipalCallback callback) {
+            if (callback.getPrincipal() != null) return callback.getPrincipal();
+            if (callback.getName() == null) return null;
+            return new Named(callback.getName());
+        }
+
+        private static void nameGroups(GroupPrincipalCallback callback) {
+            var principals = callback.getSubject().getPrincipals();
+            principals.removeIf(Group.class::isInstance);
+            String[] names = callback.getGroups();
+            if (names == null) return;
+            for (String name : names) principals.add(new Group(name));
         }
     }
 }
