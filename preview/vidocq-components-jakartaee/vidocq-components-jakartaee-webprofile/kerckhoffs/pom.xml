@@ -78,9 +78,9 @@
         <jakarta.interceptor.version>2.2.0</jakarta.interceptor.version>
         <jakarta.el.version>6.0.1</jakarta.el.version>
 
-        <!-- The official TCK pull requests are gated on: declared when the runner exists
-             (PLAN.md, milestone K0). Until then no TCK runs on pull requests.
-             <ci.tck.command>mvn -B -ntp -P tck,tck-official -pl kerckhoffs-tck test</ci.tck.command> -->
+        <!-- The official TCK the pull requests are gated on: the smoke set of the runner (the applications
+             that are green, see kerckhoffs-tck/BASELINE.md). A measurement, never a certification. -->
+        <ci.tck.command>./run-official-tck-security-4.0.sh</ci.tck.command>
     </properties>
 
     <!--

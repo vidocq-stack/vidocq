@@ -19,7 +19,7 @@
 #     module needs to be read, are set to the Security API coordinates.
 #
 # Usage: run-official-tck-security-4.0.sh [app-mem ...] [-- extra Maven args]
-#   with no application, runs the smoke set: app-mem.
+#   with no application, runs the smoke set: the applications that are green (kerckhoffs-tck/BASELINE.md).
 # Environment: MVN_EXTRA  extra Maven arguments (for example -s /path/settings.xml)
 set -euo pipefail
 
@@ -42,7 +42,7 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-[ ${#apps[@]} -gt 0 ] || apps=(app-mem)
+[ ${#apps[@]} -gt 0 ] || apps=(app-mem app-mem-basic app-custom app-custom-session app-multiple-store app-multiple-store-backup app-securitycontext-auth)
 
 # shellcheck disable=SC2206
 mvn_extra=(${MVN_EXTRA:-})

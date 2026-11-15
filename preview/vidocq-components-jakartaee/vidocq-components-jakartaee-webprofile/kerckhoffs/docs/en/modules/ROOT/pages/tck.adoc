@@ -16,7 +16,7 @@ command line and none is in the TCK sources; they are listed in `kerckhoffs-tck/
 
 [source,shell]
 ----
-./run-official-tck-security-4.0.sh            # smoke set: app-mem
+./run-official-tck-security-4.0.sh            # smoke set: the applications that are green
 ./run-official-tck-security-4.0.sh app-mem
 ----
 
@@ -48,4 +48,5 @@ unauthenticated caller; `testAuthenticated` waits for the HTTP authentication me
 
 The other applications of the TCK need an EJB, a `DataSource`, an embedded directory or an
 OpenID provider; they are added as the platform provides them. The `ci.tck.command` gate of the
-pull requests is declared only once a smoke set is green.
+pull requests runs the smoke set: every application above that is green, `app-mem-form` excluded until
+Jakarta Expression Language is evaluated.

@@ -78,4 +78,6 @@ OpenID provider, and are not run yet.
 
 - The other applications are not run yet: they need an EJB, a `DataSource`, an embedded directory or an
   OpenID provider (PLAN.md section 7). They are added here as the platform needs are met.
-- `ci.tck.command` stays undeclared until a smoke set is green.
+- `ci.tck.command` is declared (2026-11-15) on the smoke set: `app-mem`, `app-mem-basic`, `app-custom`, `app-custom-session`,
+  `app-multiple-store`, `app-multiple-store-backup`, `app-securitycontext-auth`. A red application leaves the smoke set
+  until it is green again; `app-mem-form` joins it once Jakarta Expression Language is evaluated (K3).
