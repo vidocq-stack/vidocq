@@ -47,6 +47,9 @@ import java.util.List;
  */
 public class KerckhoffsExtension implements BuildCompatibleExtension {
 
+    /** The parameter that tells two synthetic beans of equal signature apart. */
+    private static final String ORIGIN = "origin";
+
     /** A definition and the class that declares it. */
     record Declared(String origin, AnnotationInfo definition) {
     }
@@ -77,7 +80,7 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
                     .type(IdentityStore.class)
                     .scope(Singleton.class)
                     // The origin tells two definitions apart: the container merges beans of equal parameters.
-                    .withParam("origin", declared.origin())
+                    .withParam(ORIGIN, declared.origin())
                     .withParam("definition", declared.definition())
                     .createWith(InMemoryIdentityStoreCreator.class);
         }
@@ -85,7 +88,7 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
             components.addBean(HttpAuthenticationMechanism.class)
                     .type(HttpAuthenticationMechanism.class)
                     .scope(Singleton.class)
-                    .withParam("origin", declared.origin())
+                    .withParam(ORIGIN, declared.origin())
                     .withParam("realmName", literal(declared, text(declared.definition(), "realmName", "")))
                     .createWith(BasicMechanismCreator.class);
         }
@@ -99,7 +102,7 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
             components.addBean(HttpAuthenticationMechanism.class)
                     .type(HttpAuthenticationMechanism.class)
                     .scope(Singleton.class)
-                    .withParam("origin", declared.origin())
+                    .withParam(ORIGIN, declared.origin())
                     .withParam("loginPage", literal(declared, text(login, "loginPage", "/login")))
                     .withParam("errorPage", literal(declared, text(login, "errorPage", "/login-error")))
                     .withParam("forwardToLogin",
