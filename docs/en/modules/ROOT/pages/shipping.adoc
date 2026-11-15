@@ -1,0 +1,109 @@
+= Choosing how to ship an application
+:description: The forms a Vidocq application ships in, which one fits which situation, and why they do not all load the application the same way.
+
+[.lead]
+A Vidocq application ships as a distribution of jars, as a runtime image, as a native installer or as a container. This page says which form fits which situation, and why. The details of each goal are on the xref:modules/vidocq-runtime-maven-plugin.adoc[plugin page].
+
+[#forms]
+== The forms
+
+[cols="2,3,2,2",options="header"]
+|===
+| Form | What it is | Needs on the machine | How the application is loaded
+
+| `vidocq:package`
+| A directory and a ZIP: `lib/`, `app/`, and a launcher in `bin/`.
+| A JDK 25 or later.
+| In the application layer.
+
+| `vidocq:jlink`
+| A runtime image: a trimmed JDK with the application linked into it.
+| Nothing.
+| In one layer, the JVM's own.
+
+| `vidocq:jpackage`
+| A native application or installer (`.app`, `.dmg`, `.msi`, `.deb`...), built on the jlink image.
+| Nothing.
+| In one layer, as the image.
+
+| `vidocq:docker`, `jlink` kind (default)
+| A container image: the jlink image on a base without a JRE.
+| A container runtime.
+| In one layer, as the image.
+
+| `vidocq:docker`, `jdk` kind
+| A container image: the `vidocq:package` distribution on a base image that brings the JDK.
+| A container runtime.
+| In the application layer.
+|===
+
+[#which]
+== Which one, for which situation
+
+[cols="2,2,3",options="header"]
+|===
+| Your situation | Take | Why
+
+| A server that already has a JDK.
+| `vidocq:package`
+| The simplest form: unzip and start. The JDK is updated on its own.
+
+| No JDK on the target, or you want to choose the JDK yourself.
+| `vidocq:jlink`
+| The image brings its own runtime, with only the JDK modules the application needs.
+
+| An application users install on their desktop.
+| `vidocq:jpackage`
+| An installer of the operating system, with no JDK to install first.
+
+| A container, as small as possible.
+| `vidocq:docker` (the `jlink` kind)
+| A trimmed runtime on a base without a shell or a package manager.
+
+| The application holds an encrypted jar (sjar).
+| `vidocq:package`, or `vidocq:docker` with `-Dvidocq.docker.kind=jdk`
+| Only the application layer can decrypt it, and an image has none. `vidocq:jlink` refuses the jar and says so (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-sjar[encrypted jars]).
+
+| A library that is not a named module, and that `vauban:modularize` cannot describe.
+| `vidocq:package`, or `vidocq:docker` with `-Dvidocq.docker.kind=jdk`
+| jlink links named modules only. A distribution of jars uses the library as it is.
+
+| The fastest start, with the JVM's AOT cache.
+| `vidocq:jlink`, or what is built on it
+| With one layer, the cache holds every class of the application loaded and linked. In the application layer, the classes of that layer are stored unlinked.
+
+| A container whose JDK you update by changing the base image.
+| `vidocq:docker` with `-Dvidocq.docker.kind=jdk`
+| The JDK is the base image. With the `jlink` kind, the JDK is inside the image you build: you build it again.
+|===
+
+[#why-two-ways]
+== Why two ways of loading the application
+
+[#application-layer]
+*In the application layer.* Under `vidocq:dev`, `vidocq:run` and the `vidocq:package` distribution, the runtime and the bricks are in the JVM's own layer, and the application and its libraries are in a second layer on top, defined by Vauban's class loader. That loader is what makes three things possible:
+
+* the hot reload of `vidocq:dev`: a class can only be replaced by dropping its loader;
+* encrypted jars: their classes exist in clear only once that loader decrypted them;
+* what the build left undone, done at each start: the `provides` of the generated code, for instance.
+
+[#one-layer]
+*In one layer.* A jlink image, and what is built on it, starts as any modular application: one layer, the JVM's own loaders. The reason is the image itself. Every module linked into an image is visible to the JVM's layer, which also takes in any module that provides a service it uses: an application layer on top would hold a second copy of the application, and each of its services would be found twice. With one layer there is one copy, by construction. What the application layer does at each start, the build does once, on the copies it links (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-one-layer[one layer]).
+
+The rule fits in one sentence: *what stays as jars keeps the application layer; what is linked into an image has one layer.*
+
+[#same-application]
+== The same application in both
+
+Your sources, your `module-info.java` and your build do not change with the form. Three things differ at run time, and they show only in an image, so test the image itself in CI (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-differences[what differs]):
+
+* a resource in a package of another module is hidden by the JVM's loader, unless the package is open; a resource outside any package, such as `META-INF/resources/...`, is found from anywhere;
+* the context class loader is the JVM's, not Vauban's;
+* `vidocq.app.layer` and `vidocq.app.layer.keep` have no effect on an image: set there, they are named in a warning.
+
+[#not-yet]
+== Not available yet
+
+* *A native image (GraalVM).* The one-layer launch is its prerequisite; the rest is not done.
+* *A CRaC option for the Docker image.* The runtime supports checkpoint and restore (xref:crac.adoc[CRaC]); the Docker goal has no option for it yet.
+* *An option that records the AOT cache.* The JDK's own flags work on an image (`-XX:AOTCacheOutput`, `-XX:AOTCache`); no goal runs them for you.

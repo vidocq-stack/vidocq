@@ -166,6 +166,86 @@ class VidocqDockerMojoTest {
         assertTrue(Files.readString(target.resolve("Dockerfile")).contains("ENTRYPOINT [\"/opt/app/bin/app\"]"));
     }
 
+    // ---------------------------------------------------------------- vidocq.docker.kind=jdk
+
+    /**
+     * The jdk kind copies the vidocq:package distribution onto a JDK base image and starts it with its own launcher:
+     * the application keeps its application layer, so an encrypted jar works (Vidocq/vidocq#580).
+     */
+    @Test
+    void theJdkKindCopiesTheDistributionOntoAJdkBaseImage(@TempDir Path target) throws Exception {
+        var warnings = new Warnings();
+        var mojo = jdkKind(target, warnings);
+        mojo.execute();
+
+        String dockerfile = Files.readString(target.resolve("Dockerfile"));
+        assertTrue(dockerfile.contains("FROM eclipse-temurin:" + Runtime.version().feature() + "-jre\n"), dockerfile);
+        // The files belong to the user that runs the application: a jar readable by its owner only is still read.
+        assertTrue(dockerfile.contains("COPY --chown=65532:65532 app-1.0 /opt/app/"), dockerfile);
+        assertTrue(dockerfile.contains("USER 65532:65532"), dockerfile);
+        assertTrue(dockerfile.contains("ENTRYPOINT [\"/opt/app/bin/app.sh\"]"), dockerfile);
+        assertFalse(dockerfile.contains("jlink"), dockerfile);
+        assertEquals("*\n!app-1.0\n", Files.readString(target.resolve(".dockerignore")));
+        assertEquals(List.of(), warnings.lines);
+    }
+
+    @Test
+    void theJdkKindTakesTheBaseImageTheBuildNames(@TempDir Path target) throws Exception {
+        var mojo = jdkKind(target, new Warnings());
+        set(mojo, "baseImage", " eclipse-temurin:25-jre-alpine ");
+        mojo.execute();
+
+        assertTrue(Files.readString(target.resolve("Dockerfile")).contains("FROM eclipse-temurin:25-jre-alpine\n"));
+    }
+
+    @Test
+    void theJdkKindNeedsTheDistributionOfVidocqPackage(@TempDir Path target) throws Exception {
+        var mojo = jdkKind(target, new Warnings());
+        deleteRecursive(target.resolve("app-1.0"));
+
+        var failure = assertThrows(MojoExecutionException.class, mojo::execute);
+        assertTrue(failure.getMessage().contains("vidocq:package"), failure.getMessage());
+        assertTrue(Files.notExists(target.resolve("Dockerfile")));
+    }
+
+    @Test
+    void theJlinkKindKeepsItsDistrolessBaseByDefault(@TempDir Path target) throws Exception {
+        var mojo = mojo(target, "java", ELF, "auto", false, new Warnings());
+        set(mojo, "baseImage", null);
+        set(mojo, "kind", "jlink");
+        mojo.execute();
+
+        assertTrue(Files.readString(target.resolve("Dockerfile"))
+                .contains("FROM gcr.io/distroless/base-debian12:nonroot\n"));
+    }
+
+    @Test
+    void anUnknownKindIsRefused(@TempDir Path target) throws Exception {
+        var mojo = mojo(target, "java", ELF, "auto", false, new Warnings());
+        set(mojo, "kind", "native");
+
+        var failure = assertThrows(MojoExecutionException.class, mojo::execute);
+        assertTrue(failure.getMessage().contains("jlink or jdk"), failure.getMessage());
+    }
+
+    /** A project that ran vidocq:package only: the distribution and its launcher, no jlink image. */
+    private static VidocqDockerMojo jdkKind(Path target, Warnings log) throws Exception {
+        Path bin = Files.createDirectories(target.resolve("app-1.0/bin"));
+        Files.writeString(bin.resolve("app.sh"), "#!/bin/sh\n");
+        var mojo = new VidocqDockerMojo();
+        set(mojo, "kind", "jdk");
+        set(mojo, "distName", "app-1.0");
+        set(mojo, "scriptName", "app");
+        set(mojo, "runtimeImage", target.resolve("dist").toFile());
+        set(mojo, "buildDir", target.toFile());
+        set(mojo, "imageTag", "app:1");
+        set(mojo, "launcher", "app");
+        set(mojo, "exposedPort", 8080);
+        set(mojo, "linkInContainer", "auto");
+        mojo.setLog(log);
+        return mojo;
+    }
+
     private static VidocqDockerMojo mojo(Path target, String javaName, byte[] header, String linkInContainer,
             boolean build, Warnings log) throws Exception {
         Path bin = Files.createDirectories(target.resolve("dist/bin"));

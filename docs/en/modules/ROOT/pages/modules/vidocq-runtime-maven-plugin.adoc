@@ -849,6 +849,76 @@ See `vidocq/JLINK.md` §3 for the exhaustive parameter list.
 
 == `vidocq:docker` goal
 
+Generates a `Dockerfile`, of one of two kinds (xref:shipping.adoc[choosing how to ship] compares every form). The choice is yours, with `-Dvidocq.docker.kind`: the goal never
+switches kind by itself, since the base and the size of the image change with it.
+
+[cols="1,2,2",options="header"]
+|===
+| | `jlink` (default) | `jdk`
+
+| Built on
+| The runtime image of `vidocq:jlink`, on a base image without a JRE.
+| The distribution of `vidocq:package`, on a base image that brings the JDK.
+
+| Layers
+| One, the JVM's own (<<jlink-one-layer>>).
+| The application layer, as under `vidocq:run`.
+
+| Encrypted jar (sjar)
+| Refused by `vidocq:jlink` (<<jlink-sjar>>).
+| Works.
+
+| A library that is not a named module
+| Must be given a descriptor to be linked (`vauban:modularize`).
+| Used as it is.
+
+| AOT cache
+| Every class loaded and linked ahead of time.
+| The classes of the application layer are stored unlinked.
+
+| Size
+| Small: a trimmed runtime, a base without a shell.
+| Larger: a whole JRE and its system.
+
+| A new JDK
+| Build the image again.
+| Change the base image.
+
+| Command
+| `./mvnw package vidocq:jlink vidocq:docker`
+| `./mvnw package vidocq:docker -Dvidocq.docker.kind=jdk`
+|===
+
+[#docker-jdk-kind]
+=== The `jdk` kind
+
+The image copies `target/<artifactId>-<version>/`, the distribution `vidocq:package` wrote (`lib/`, `app/`,
+`bin/`), onto `eclipse-temurin:<build JDK version>-jre`, and starts it with the distribution's own launcher,
+`bin/<artifactId>.sh`: the same launch as outside a container. `-Dvidocq.docker.baseImage=…` names another base
+image; it needs a JDK 25 or later and a shell. `JAVA_OPTS` reaches the JVM, as with the launcher.
+
+[source,dockerfile]
+----
+FROM eclipse-temurin:25-jre
+
+COPY --chown=65532:65532 my-app-1.0.0 /opt/app/
+
+WORKDIR /opt/app
+USER 65532:65532
+EXPOSE 8080
+ENTRYPOINT ["/opt/app/bin/my-app.sh"]
+----
+
+* The application runs as the non-root user `65532`, as in the `jlink` kind, and the files belong to that user: a
+  jar copied from a local repository may be readable by its owner only.
+* The launcher ends in `exec java`, so the JVM is process 1 and receives the signals of `docker stop`.
+* `vidocq.distName` and `vidocq.scriptName` name the distribution and its launcher when the build renamed them.
+
+The goal fails with a message that names `vidocq:package` when the distribution is missing.
+
+[#docker-jlink-kind]
+=== The `jlink` kind
+
 Generates a distroless `Dockerfile`. Why `distroless/base-debian12:nonroot`?
 
 * No shell, no package manager — minimal attack surface.

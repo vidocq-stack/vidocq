@@ -185,6 +185,12 @@ set an explicit `<appVersion>1.x.y</appVersion>` if the project is on `0.x.x`.
 Generates a `Dockerfile` that packages the jlink runtime image into a minimal
 container. No additional JRE required — jlink includes its own runtime.
 
+With `-Dvidocq.docker.kind=jdk` the goal instead copies the `vidocq:package`
+distribution onto a JDK base image (`eclipse-temurin:<version>-jre` by default) and
+starts it with its own launcher: the application keeps its application layer, so an
+encrypted jar works there (Vidocq/vidocq#580). The rest of this section describes the
+default kind, `jlink`; the plugin page of the documentation compares the two.
+
 ### Configuration
 
 ```xml
@@ -194,7 +200,7 @@ container. No additional JRE required — jlink includes its own runtime.
     <configuration>
         <launcher>my-app</launcher>                          <!-- default: artifactId -->
         <imageTag>example/my-app:1.0.0</imageTag>            <!-- default: artifactId:version -->
-        <baseImage>gcr.io/distroless/base-debian12:nonroot</baseImage>  <!-- default -->
+        <baseImage>gcr.io/distroless/base-debian12:nonroot</baseImage>  <!-- default of the jlink kind -->
         <exposedPort>8080</exposedPort>                      <!-- default: 8080 -->
         <runtimeImage>${project.build.directory}/dist</runtimeImage>
         <build>false</build>                                 <!-- default: false (generate only) -->

@@ -315,7 +315,7 @@ carries the code xref:modules/vidocq-runtime-core.adoc#vidocq-cfg-003[`VIDOCQ-CF
 | Native bundle (`.app`, `.exe`, `.msi`, `.deb`, `.rpm`, or app-image).
 
 | `vidocq:docker`
-| Generates `target/Dockerfile` distroless; optional Docker build via `vidocq.docker.build=true`.
+| Generates `target/Dockerfile`: around the jlink image on a distroless base (default), or, with `vidocq.docker.kind=jdk`, the `vidocq:package` distribution on a JDK base image, which keeps the application layer. Optional Docker build via `vidocq.docker.build=true`.
 
 | `vidocq:check-module-info`
 | Verifies the application `module-info.java` declares the Java module directives its Vidocq extensions need (e.g. `opens db.migration`).

@@ -70,9 +70,35 @@ public class VidocqDockerMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.directory}/dist", property = "vidocq.runtimeImage")
     private File runtimeImage;
 
-    /** Docker base image. Default: {@code gcr.io/distroless/base-debian12:nonroot}. */
-    @Parameter(defaultValue = "gcr.io/distroless/base-debian12:nonroot", property = "vidocq.docker.baseImage")
+    /**
+     * What the image is built on (Vidocq/vidocq#580):
+     * <ul>
+     *   <li>{@code jlink} (default): the runtime image of {@code vidocq:jlink}, on a base image without a JRE. One
+     *       layer, small; an encrypted jar cannot go into it.</li>
+     *   <li>{@code jdk}: the distribution of {@code vidocq:package}, on a base image that brings the JDK. The
+     *       application keeps its application layer, so an encrypted jar works, and a library that is not a named
+     *       module is used as it is.</li>
+     * </ul>
+     * The choice is explicit: the goal never switches kind by itself, since the base and the size of the image
+     * change with it.
+     */
+    @Parameter(defaultValue = "jlink", property = "vidocq.docker.kind")
+    private String kind;
+
+    /**
+     * Docker base image. Default: {@code gcr.io/distroless/base-debian12:nonroot} for the {@code jlink} kind,
+     * {@code eclipse-temurin:<feature version of the build JDK>-jre} for the {@code jdk} kind.
+     */
+    @Parameter(property = "vidocq.docker.baseImage")
     private String baseImage;
+
+    /** The directory of the {@code vidocq:package} distribution under {@code target/}, for the {@code jdk} kind. */
+    @Parameter(defaultValue = "${project.artifactId}-${project.version}", property = "vidocq.distName")
+    private String distName;
+
+    /** The launcher of the {@code vidocq:package} distribution ({@code bin/<name>.sh}), for the {@code jdk} kind. */
+    @Parameter(defaultValue = "${project.artifactId}", property = "vidocq.scriptName")
+    private String scriptName;
 
     /** Tag of the generated image. Default: {@code &lt;artifactId&gt;:&lt;version&gt;}. */
     @Parameter(defaultValue = "${project.artifactId}:${project.version}", property = "vidocq.docker.imageTag")
@@ -114,42 +140,24 @@ public class VidocqDockerMojo extends AbstractMojo {
     /** The directory where {@code vidocq:jlink} stages the modules, relative to {@code target/}. */
     static final String STAGED_MODULES = "jlink-mods";
 
+    /** The base image of the {@code jlink} kind: no JRE, no shell, a non-root user. */
+    static final String DISTROLESS = "gcr.io/distroless/base-debian12:nonroot";
+
     @Override
     public void execute() throws MojoExecutionException {
-        if (!runtimeImage.isDirectory()) {
-            throw new MojoExecutionException(
-                    "runtimeImage not found: " + runtimeImage
-                            + ". Run vidocq:jlink first (or point runtimeImage to an existing image).");
-        }
         Path target = buildDir.toPath();
-
-        // jlink links against the build host's JDK: an image made on macOS or Windows cannot start in
-        // the Linux container this goal describes (BUG-20260711-02, #199).
-        String platform = nonLinuxPlatform(runtimeImage.toPath());
-        boolean inContainer = linksInContainer(platform);
-        checkPlatform(platform, inContainer, target);
-
-        String entryPoint = PortableImage.entryPoint(target).orElse(null);
-        String content;
-        String ignored;
-        if (inContainer) {
-            String jdk = jdkImage == null || jdkImage.isBlank() ? defaultJdkImage() : jdkImage.strip();
-            content = linkingDockerfile(jdk, entryPoint);
-            ignored = "*\n!" + STAGED_MODULES + "\n!" + PortableImage.DIRECTORY + "\n";
-            getLog().info((platform == null ? "The Dockerfile links" : "The runtime image was linked for "
-                    + platform + ": the Dockerfile links it again") + " inside " + jdk + " (Linux).");
-        } else {
-            // The COPY references dist/ relative to target/ (= build context).
-            String distRel = target.relativize(runtimeImage.toPath()).toString();
-            content = wrappingDockerfile(distRel, entryPoint);
-            ignored = "*\n!" + distRel + "\n";
-        }
+        String chosen = kind == null ? "jlink" : kind.strip().toLowerCase(java.util.Locale.ROOT);
+        Recipe recipe = switch (chosen) {
+            case "jlink" -> jlinkRecipe(target);
+            case "jdk" -> jdkRecipe(target);
+            default -> throw new MojoExecutionException("vidocq.docker.kind is '" + kind + "': use jlink or jdk.");
+        };
 
         Path dockerfile = target.resolve("Dockerfile");
         try {
-            Files.writeString(dockerfile, content);
+            Files.writeString(dockerfile, recipe.dockerfile());
             // Only what the Dockerfile copies goes to the Docker daemon, not the whole target/.
-            Files.writeString(target.resolve(".dockerignore"), ignored);
+            Files.writeString(target.resolve(".dockerignore"), recipe.dockerignore());
             getLog().info("Dockerfile generated: " + dockerfile.toAbsolutePath());
             getLog().info("Build with: docker build -t " + imageTag + " -f " + dockerfile + " " + target);
         } catch (IOException e) {
@@ -160,6 +168,71 @@ public class VidocqDockerMojo extends AbstractMojo {
             runDockerBuild(dockerfile, target);
             getLog().info("Run with: docker run --rm -p " + exposedPort + ":" + exposedPort + " " + imageTag);
         }
+    }
+
+    /** A Dockerfile, and the {@code .dockerignore} that sends the daemon only what it copies. */
+    private record Recipe(String dockerfile, String dockerignore) {}
+
+    private String base(String byDefault) {
+        return baseImage == null || baseImage.isBlank() ? byDefault : baseImage.strip();
+    }
+
+    /**
+     * The Dockerfile of the {@code jdk} kind: the distribution of {@code vidocq:package} on a base image that
+     * brings the JDK, started by the distribution's own launcher, which hands {@code app/} to the runtime: the
+     * application runs in its application layer, as it does outside a container. The launcher ends in
+     * {@code exec java}, so the JVM is the process the container signals.
+     */
+    private Recipe jdkRecipe(Path target) throws MojoExecutionException {
+        Path launcherScript = target.resolve(distName).resolve("bin").resolve(scriptName + ".sh");
+        if (!Files.isRegularFile(launcherScript)) {
+            throw new MojoExecutionException("No distribution launcher " + launcherScript
+                    + ": run vidocq:package first (mvn package vidocq:docker -Dvidocq.docker.kind=jdk), or set"
+                    + " vidocq.distName and vidocq.scriptName to the distribution to copy.");
+        }
+        String from = base("eclipse-temurin:" + Runtime.version().feature() + "-jre");
+        getLog().info("The image copies the vidocq:package distribution " + distName + " onto " + from
+                + ": the application keeps its application layer.");
+        return new Recipe(header("") + """
+
+                FROM %s
+
+                # Owned by the user that runs the application: a jar copied from a local repository may be
+                # readable by its owner only, and the launcher executable by its owner only.
+                COPY --chown=65532:65532 %s /opt/app/
+
+                WORKDIR /opt/app
+                USER 65532:65532
+                EXPOSE %d
+                ENTRYPOINT ["/opt/app/bin/%s.sh"]
+                """.formatted(from, distName, exposedPort, scriptName), "*\n!" + distName + "\n");
+    }
+
+    /** The Dockerfile of the {@code jlink} kind: the runtime image of {@code vidocq:jlink}, copied or linked again. */
+    private Recipe jlinkRecipe(Path target) throws MojoExecutionException {
+        if (!runtimeImage.isDirectory()) {
+            throw new MojoExecutionException(
+                    "runtimeImage not found: " + runtimeImage
+                            + ". Run vidocq:jlink first (or point runtimeImage to an existing image).");
+        }
+
+        // jlink links against the build host's JDK: an image made on macOS or Windows cannot start in
+        // the Linux container this goal describes (BUG-20260711-02, #199).
+        String platform = nonLinuxPlatform(runtimeImage.toPath());
+        boolean inContainer = linksInContainer(platform);
+        checkPlatform(platform, inContainer, target);
+
+        String entryPoint = PortableImage.entryPoint(target).orElse(null);
+        if (inContainer) {
+            String jdk = jdkImage == null || jdkImage.isBlank() ? defaultJdkImage() : jdkImage.strip();
+            getLog().info((platform == null ? "The Dockerfile links" : "The runtime image was linked for "
+                    + platform + ": the Dockerfile links it again") + " inside " + jdk + " (Linux).");
+            return new Recipe(linkingDockerfile(jdk, entryPoint),
+                    "*\n!" + STAGED_MODULES + "\n!" + PortableImage.DIRECTORY + "\n");
+        }
+        // The COPY references dist/ relative to target/ (= build context).
+        String distRel = target.relativize(runtimeImage.toPath()).toString();
+        return new Recipe(wrappingDockerfile(distRel, entryPoint), "*\n!" + distRel + "\n");
     }
 
     /**
@@ -230,7 +303,7 @@ public class VidocqDockerMojo extends AbstractMojo {
                 WORKDIR /opt/app
                 EXPOSE %d
                 %s
-                """.formatted(baseImage, distRel, exposedPort, entryPointLine(entryPoint));
+                """.formatted(base(DISTROLESS), distRel, exposedPort, entryPointLine(entryPoint));
     }
 
     /**
@@ -257,7 +330,7 @@ public class VidocqDockerMojo extends AbstractMojo {
                 EXPOSE %d
                 %s
                 """.formatted(jdk, STAGED_MODULES, recipe, PortableImage.ARGUMENTS, recipe, PortableImage.CONF,
-                baseImage, exposedPort, entryPointLine(entryPoint));
+                base(DISTROLESS), exposedPort, entryPointLine(entryPoint));
     }
 
     /**
