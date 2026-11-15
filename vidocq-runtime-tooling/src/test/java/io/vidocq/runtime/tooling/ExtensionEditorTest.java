@@ -427,6 +427,24 @@ class ExtensionEditorTest {
         assertFalse(reporter.lines.stream().anyMatch(l -> l.startsWith("warning: ")), reporter.lines.toString());
     }
 
+    /**
+     * Liquibase reads {@code db/changelog/db.changelog-master.xml} by default, not {@code db/migration}: the edit
+     * prepares and opens the folder the extension reads (BUG-20261115-06, the tutorial session).
+     */
+    @Test
+    void addingLiquibasePreparesTheChangelogFolder() throws IOException {
+        writePom("");
+        writeModuleInfo();
+
+        edit(List.of("liquibase-migration"), true);
+
+        String moduleInfo = Files.readString(moduleInfo());
+        assertTrue(moduleInfo.contains("opens db.changelog; // vidocq:liquibase-migration"), moduleInfo);
+        assertFalse(moduleInfo.contains("db.migration"), moduleInfo);
+        assertTrue(Files.isRegularFile(project.resolve("src/main/resources/db/changelog/README.md")));
+        assertFalse(Files.exists(project.resolve("src/main/resources/db/migration")));
+    }
+
     /** Mansart Data reads its DataSource from the pool: adding it brings the pool, its dev service and driver. */
     @Test
     void addingMansartDataBringsThePoolItNeeds() throws IOException {

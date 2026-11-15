@@ -5,6 +5,27 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261115-06 — `vidocq create -x liquibase-migration` prepares the folder Flyway reads, not Liquibase's
+
+- **Date**: 2026-11-15
+- **Status**: FIXED on `fix/liquibase-changelog-folder`
+- **Module**: `vidocq-runtime-tooling` (extension catalog), `vidocq-runtime-liquibase-migration-extension`
+  (`extension.properties`)
+- **Symptom**: the CLI creates `src/main/resources/db/migration` ("where liquibase-migration reads its files") and
+  writes `opens db.migration;`, while Liquibase reads `db/changelog/db.changelog-master.xml` by default. The
+  folder is of no use until `vidocq.migration.locations` points there. Found by the tutorial session. In a jlink
+  image, a module that does not open `db.changelog` and `db.changelog.changes` (an `includeAll` folder) stops the
+  start with `The file db/changelog/db.changelog-master.xml was not found in the configured search path`, and
+  `vidocq:check-module-info` passed the build: it knew only `db.migration`, and only the package itself.
+- **Repro**: `ExtensionEditorTest.addingLiquibasePreparesTheChangelogFolder`,
+  `ModuleRequirementsCollectorTest.opensReachesTheSubPackagesThatHoldAFile` and
+  `catalogResourcePackagesAreCollectedAsOpens`.
+- **Cause**: the Liquibase entry copied Flyway's `module-info.opens-resource-package = db.migration`, and
+  `check-module-info` read the opens of a resource folder from one generic descriptor, without its sub-folders.
+- **Fix**: Liquibase's resource package is `db.changelog`, in the extension's descriptor and the catalog.
+  `check-module-info` asks for the opens of the catalog's resource packages, and of each sub-package below them
+  that holds resources and no class.
+
 ## BUG-20261115-05 — A packaged servlet application runs its build compatible extensions at every start
 
 - **Date**: 2026-11-15

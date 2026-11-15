@@ -62,6 +62,38 @@ class ModuleRequirementsCollectorTest {
                         + "depends on the migration extension but ships no db.migration)");
     }
 
+    /**
+     * Liquibase's {@code includeAll path="db/changelog/changes/"} reads a sub-folder: in a jlink image the module
+     * must open {@code db.changelog.changes} too, or the files are not found (BUG-20261115-06, the tutorial session).
+     * An empty folder is no package and needs no {@code opens}.
+     */
+    @Test
+    void opensReachesTheSubPackagesThatHoldAFile(@TempDir Path out) throws Exception {
+        Path changelog = Files.createDirectories(out.resolve("db/changelog"));
+        Files.writeString(changelog.resolve("db.changelog-master.xml"), "<databaseChangeLog/>");
+        Path changes = Files.createDirectories(changelog.resolve("changes"));
+        Files.writeString(changes.resolve("002-first-row.sql"), "select 1;");
+        Files.createDirectories(changelog.resolve("empty"));
+
+        Set<Requirement> applicable = ModuleRequirementsCollector.applicableTo(
+                Set.of(Requirement.opens("db.changelog", "Liquibase reads its changelog there")), out.toFile());
+
+        assertEquals(List.of("db.changelog", "db.changelog.changes"),
+                applicable.stream().map(Requirement::name).sorted().toList());
+    }
+
+    /** The folder the catalog names for a migration backend is a package the application opens. */
+    @Test
+    void catalogResourcePackagesAreCollectedAsOpens(@TempDir Path empty) {
+        Artifact liquibase = artifact("io.vidocq.runtime.extensions.essentials",
+                "vidocq-runtime-liquibase-migration-extension", empty);
+
+        Set<Requirement> collected = ModuleRequirementsCollector.collect(Set.of(liquibase), new SystemStreamLog());
+
+        assertTrue(collected.stream().anyMatch(r -> r.kind() == Requirement.Kind.OPENS
+                && "db.changelog".equals(r.name())), collected::toString);
+    }
+
     @Test
     void requiresAlwaysApplies(@TempDir Path out) {
         Set<Requirement> applicable = ModuleRequirementsCollector.applicableTo(

@@ -309,7 +309,8 @@ public final class KnownExtensions {
 
     /**
      * The packages of the application's resources that {@code id} reads and that its module must open once they
-     * exist, {@code db.migration} for a migration extension (BUG-20261030-11); empty for an id outside the catalog.
+     * exist, {@code db.migration} for Flyway and {@code db.changelog} for Liquibase (BUG-20261030-11); empty for an
+     * id outside the catalog.
      */
     public static List<String> resourcePackagesToOpen(String id) {
         return byId(id).map(e -> csv(property(e.id(), "module-info.opens-resource-package"))).orElse(List.of());
