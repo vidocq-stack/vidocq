@@ -48,4 +48,19 @@ class FoySecurityContextExtensionTest {
             assertEquals("reza", CurrentRequest.callWhere(() -> request, () -> context.getCallerPrincipal().getName()));
         }
     }
+
+    @Test
+    void theApplicationCanInjectThePrincipalOfTheCaller() {
+        Principal reza = () -> "reza";
+        var request = (HttpServletRequest) Proxy.newProxyInstance(HttpServletRequest.class.getClassLoader(),
+                new Class<?>[] {HttpServletRequest.class},
+                (proxy, method, args) -> "getUserPrincipal".equals(method.getName()) ? reza : null);
+
+        try (var container = VaubanContainer.builder().addBeanClass(FoySecurityContextExtension.class).build()) {
+            var principal = container.select(Principal.class);
+
+            assertNull(principal.getName(), "outside a request there is no caller");
+            assertEquals("reza", CurrentRequest.callWhere(() -> request, principal::getName));
+        }
+    }
 }

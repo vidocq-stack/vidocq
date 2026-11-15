@@ -22,11 +22,14 @@ package io.vidocq.kerckhoffs.foy;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
+import jakarta.enterprise.context.Dependent;
 import jakarta.inject.Singleton;
 import jakarta.security.enterprise.SecurityContext;
 
+import java.security.Principal;
+
 /**
- * Registers the {@link SecurityContext} bean of an application served by Foy. It computes from nothing but its own
+ * Registers the {@link SecurityContext} and {@code Principal} beans of an application served by Foy. It computes from nothing but its own
  * classes, so the build can freeze it. The context is a single object that reads the request of the moment, so it
  * needs no normal scope and no client proxy.
  */
@@ -38,5 +41,10 @@ public class FoySecurityContextExtension implements BuildCompatibleExtension {
                 .type(SecurityContext.class)
                 .scope(Singleton.class)
                 .createWith(SecurityContextCreator.class);
+        // The Principal of the caller (section 1.2.4): dependent, so that no proxy is needed; it reads the request when asked.
+        components.addBean(Principal.class)
+                .type(Principal.class)
+                .scope(Dependent.class)
+                .createWith(CallerPrincipalCreator.class);
     }
 }
