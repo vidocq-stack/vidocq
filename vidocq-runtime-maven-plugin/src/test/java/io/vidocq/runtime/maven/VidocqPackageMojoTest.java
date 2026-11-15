@@ -160,6 +160,37 @@ class VidocqPackageMojoTest {
                 "the runtime's own main class must not be passed as the application main class");
     }
 
+    /**
+     * Without an application main class, the layer launchers name the application module: the runtime's main finds
+     * it nowhere else, and what needs it fails at start, such as Noether's default persistence unit
+     * (BUG-20261115-08).
+     */
+    @Test
+    void layerLaunchers_nameTheApplicationModuleWhenTheRuntimeMainRuns(@TempDir Path binDir) throws Exception {
+        VidocqPackageMojo mojo = mojoWith(null);
+        setBoolean(mojo, "layerMode", true);
+        set(mojo, "mainClass", "io.vidocq.runtime.core.Vidocq");
+        set(mojo, "mainModule", "io.repro.app");
+
+        mojo.generateShScript(binDir);
+        mojo.generateCmdScript(binDir);
+
+        assertTrue(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.module=io.repro.app \\"));
+        assertTrue(Files.readString(binDir.resolve("app.cmd")).contains("-Dvidocq.app.module=io.repro.app ^"));
+    }
+
+    /** Without {@code vidocq.mainModule}, the layer launchers name the module the application jar declares. */
+    @Test
+    void layerLaunchers_nameTheModuleOfTheApplicationJarWithoutAMainModule(@TempDir Path dir) throws Exception {
+        VidocqPackageMojo mojo = packageMojo(dir, "classes", null);
+        set(mojo, "mainClass", "io.vidocq.runtime.core.Vidocq");
+        Path binDir = Files.createDirectories(dir.resolve("bin"));
+
+        mojo.generateShScript(binDir);
+
+        assertTrue(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.module=io.repro.app \\"));
+    }
+
     /** The legacy layout (vidocq.package.layer=false) launches {@code <module>/<class>} (BUG-20260710-02, #198). */
     @Test
     void legacyLaunchers_runTheRuntimeMainThroughItsModuleByDefault(@TempDir Path binDir) throws Exception {

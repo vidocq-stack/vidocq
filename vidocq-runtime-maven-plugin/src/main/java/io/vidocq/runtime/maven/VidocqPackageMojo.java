@@ -363,7 +363,6 @@ public class VidocqPackageMojo extends AbstractMojo {
         String jvmArgsLine = jvmArgsLine();
         String script;
         if (layerMode) {
-            String appMain = appMainProperty();
             script = """
                     #!/bin/sh
                     BASEDIR=$(cd "$(dirname "$0")/.." && pwd)
@@ -374,7 +373,7 @@ public class VidocqPackageMojo extends AbstractMojo {
                       --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq \\
                       "$@"
                     """.formatted(jvmArgsLine, addModules(), appLayerOptions("\\"),
-                    appMain == null ? "" : "\n  -Dvidocq.app.main=" + appMain + " \\");
+                    applicationOption("\\"));
         } else {
             script = """
                     #!/bin/sh
@@ -434,7 +433,6 @@ public class VidocqPackageMojo extends AbstractMojo {
         String jvmArgsLine = jvmArgsLine();
         String script;
         if (layerMode) {
-            String appMain = appMainProperty();
             script = """
                     @echo off
                     set BASEDIR=%%~dp0..
@@ -445,7 +443,7 @@ public class VidocqPackageMojo extends AbstractMojo {
                       --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq ^
                       %%*
                     """.formatted(jvmArgsLine, addModules(), appLayerOptions("^"),
-                    appMain == null ? "" : "\n  -Dvidocq.app.main=" + appMain + " ^");
+                    applicationOption("^"));
         } else {
             script = """
                     @echo off
@@ -501,6 +499,42 @@ public class VidocqPackageMojo extends AbstractMojo {
      */
     private String appMainProperty() {
         return ApplicationMainClass.normalize(mainClass);
+    }
+
+    /**
+     * The option of a layer launcher that names the application: its main class when it has one, which the runtime
+     * runs in the layer, else its module. The runtime's own main finds the application module nowhere else, and what
+     * reads it fails at start without it, such as Noether's default persistence unit (BUG-20261115-08). Empty when
+     * neither is known.
+     */
+    private String applicationOption(String continuation) {
+        String appMain = appMainProperty();
+        if (appMain != null) {
+            return "\n  -Dvidocq.app.main=" + appMain + " " + continuation;
+        }
+        String module = applicationModuleName();
+        return module == null ? "" : "\n  -Dvidocq.app.module=" + module + " " + continuation;
+    }
+
+    /**
+     * The application's module: {@code vidocq.mainModule}, else the name the descriptor of the project's jar declares;
+     * {@code null} when the jar is an automatic module or cannot be read.
+     */
+    private String applicationModuleName() {
+        if (mainModule != null && !mainModule.isBlank()) {
+            return mainModule.strip();
+        }
+        File jar = project == null || project.getArtifact() == null ? null : project.getArtifact().getFile();
+        if (jar == null || !jar.isFile()) {
+            return null;
+        }
+        try {
+            return java.lang.module.ModuleFinder.of(jar.toPath()).findAll().stream()
+                    .map(java.lang.module.ModuleReference::descriptor).filter(d -> !d.isAutomatic())
+                    .map(java.lang.module.ModuleDescriptor::name).findFirst().orElse(null);
+        } catch (java.lang.module.FindException _) {
+            return null; // a jar the module system cannot read names no module
+        }
     }
 
     private void createZip(Path sourceDir, Path zipFile) throws IOException {

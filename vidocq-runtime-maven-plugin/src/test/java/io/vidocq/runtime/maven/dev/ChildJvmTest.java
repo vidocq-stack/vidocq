@@ -94,6 +94,20 @@ class ChildJvmTest {
                 "the module path carries only the dependencies");
     }
 
+    /**
+     * Without a main class the runtime's main runs, and finds the application module nowhere else: what reads it, such
+     * as Noether's default persistence unit, failed at start (BUG-20261115-08).
+     */
+    @Test
+    void layer_mode_names_the_application_module_without_a_main_class(@TempDir Path tmp) {
+        ChildJvm jvm = ChildJvm.of(List.of(tmp.resolve("libs")), List.of(tmp.resolve("classes")), "com.example.app",
+                null, List.of(), Map.of(), tmp);
+
+        var command = jvm.command();
+        assertTrue(command.contains("-Dvidocq.app.module=com.example.app"), command.toString());
+        assertTrue(command.stream().noneMatch(a -> a.startsWith("-Dvidocq.app.main=")), command.toString());
+    }
+
     /** An exploded module whose descriptor requires {@code required}, besides java.base. */
     static Path moduleRequiring(Path dir, String name, String... required) throws Exception {
         Files.createDirectories(dir);

@@ -63,7 +63,9 @@ On a module path, when the launch resolved the module into the boot layer (`--ad
 
 Vidocq chooses the application's main itself whenever the application is handed over as a path rather than as a module to launch: `mvn vidocq:run`, `vidocq:dev` with `-Dvidocq.dev.hotReload=false`, and the packaged launcher of an application that has no `@VidocqMain` trampoline. All three pass `-Dvidocq.app.main`, and the runtime reaches that main by reflection, inside the application layer. (With a trampoline the script launches `--module app/acme.App` and the JVM launcher makes the choice; `vidocq:dev`'s hot-reload loop, the default, ignores `vidocq.app.main` on purpose and reboots the layer instead.) All of this concerns an application that
 declares `vidocq.mainClass`: without one, no `vidocq.app.main` is passed and the runtime's main boots the
-application itself.
+application itself. The launchers then pass `-Dvidocq.app.module` with the application's module (`vidocq.mainModule`,
+or the module its jar declares): the runtime finds it nowhere else, and an extension that declares something for the
+application by default needs it, such as the Noether Persistence extension's `default` unit (BUG-20261115-08).
 
 The choice accepts the four shapes the Java SE launcher accepts since Java 25 (JEP 512), and, like the launcher, never requires `public`:
 

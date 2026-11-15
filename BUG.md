@@ -40,6 +40,26 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   from" the outer repository's URL, taken as the fixture computes it; the same warning from another repository still
   fails the test (`BuildWarningsTest`).
 
+## BUG-20261115-08 — A packaged application without a main class has no Noether `default` unit at start
+
+- **Date**: 2026-11-15
+- **Status**: FIXED on `fix/package-app-module`
+- **Module**: `vidocq-runtime-maven-plugin` (`VidocqPackageMojo` launchers, `ChildJvm`)
+- **Symptom**: an application with an entity and no `persistence.xml` passes its tests, but its `vidocq:package`
+  distribution fails at start: `Default persistence injection requires exactly one named persistence unit; found []`,
+  or, frozen, `persistence unit default was declared when the beans were built, not at start`. Found by the tutorial
+  session (step 03 on Noether).
+- **Repro**: `VidocqPackageMojoTest.layerLaunchers_nameTheApplicationModuleWhenTheRuntimeMainRuns` and
+  `ChildJvmTest.layer_mode_names_the_application_module_without_a_main_class`; by hand, `bin/<app>.sh` of such an
+  application starts with `JAVA_OPTS=-Dvidocq.app.module=<module>` and fails without it.
+- **Cause**: the layer launchers of `vidocq:package`, and the child JVM of `vidocq:run`, pass `-Dvidocq.app.main`
+  when the application has a main class, and nothing otherwise. The runtime's own main then finds no application
+  module (`ApplicationLayer.applicationModule()` is empty), and the Noether Persistence extension declares its
+  `default` unit only for the application module. The build and `@VidocqTest` name the module, so they see the unit.
+- **Fix**: without a main class, the launchers pass `-Dvidocq.app.module` with `vidocq.mainModule`, or, for
+  `vidocq:package` when it is unset, the module the application jar declares.
+>>>>>>> dee77db7 (fix(maven-plugin): launchers name the application module without a main class (BUG-20261115-08))
+
 ## BUG-20261115-07 — The stop of an application sometimes logs nothing, not even "Vidocq - Shutting down"
 
 - **Date**: 2026-11-15

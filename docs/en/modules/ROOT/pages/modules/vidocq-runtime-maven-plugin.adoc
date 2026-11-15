@@ -674,7 +674,9 @@ libraries; with `classes`, `app/` holds the application jar alone. Both launcher
 `-Dvidocq.app.path` pointing at `app/` and `-Dvidocq.app.main` naming the main class, also when `vidocq.mainModule` is
 set, under `classes` as under `all`: a trampoline launched from the module path would keep the automatic libraries in
 the boot layer, and load the application module twice, in the boot layer and in the application layer
-(BUG-20261114-10). They carry `-Dvidocq.app.layer=` with the mode, and the pinned list when there is one.
+(BUG-20261114-10). Without a main class they pass `-Dvidocq.app.module` instead, with `vidocq.mainModule` or, when it
+is unset, the module the application jar declares: the runtime's own main finds the application module nowhere else
+(BUG-20261115-08). They carry `-Dvidocq.app.layer=` with the mode, and the pinned list when there is one.
 A jar with classes parked by `vidocq:generate` ships enriched with them, so it moves to `app/` as well. The rule and the
 limits are in xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer].
 
@@ -1054,8 +1056,8 @@ run always uses.
 | `vidocq.mainClass`
 | _(unset)_
 | The application main class, typically a `@VidocqMain` trampoline. Optional: without it the runtime's own main boots the
-  application; with it, the class is passed as `-Dvidocq.app.main` and run inside the application
-  layer. See xref:usage.adoc#entry-point[The application entry point].
+  application, and `vidocq.mainModule` is passed as `-Dvidocq.app.module`; with it, the class is passed as
+  `-Dvidocq.app.main` and run inside the application layer. See xref:usage.adoc#entry-point[The application entry point].
 
 | `vidocq.run.jvmArgs`
 | _(empty)_

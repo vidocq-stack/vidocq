@@ -84,6 +84,20 @@ public final class ChildJvm {
     public record Application(List<Path> modulePath, List<Path> appPath, String mainModule, String mainClass) {}
 
     /**
+     * The option that names the application in layer mode: its main class, which the runtime runs in the layer, else
+     * its module, which the runtime's main finds nowhere else (BUG-20261115-08).
+     */
+    private static java.util.Optional<String> applicationOption(String mainModule, String mainClass) {
+        if (mainClass != null && !mainClass.isBlank()) {
+            return java.util.Optional.of("-Dvidocq.app.main=" + mainClass);
+        }
+        if (mainModule != null && !mainModule.isBlank()) {
+            return java.util.Optional.of("-Dvidocq.app.module=" + mainModule.strip());
+        }
+        return java.util.Optional.empty();
+    }
+
+    /**
      * Same launch, with {@code appArgs} appended after the main module reference: they reach the
      * application's {@code main(String[])} exactly as they would on a command line.
      */
@@ -106,9 +120,7 @@ public final class ChildJvm {
         }
         if (layerMode) {
             command.add("-Dvidocq.app.path=" + joinPath(appPath));
-            if (mainClass != null && !mainClass.isBlank()) {
-                command.add("-Dvidocq.app.main=" + mainClass);
-            }
+            applicationOption(mainModule, mainClass).ifPresent(command::add);
         } else {
             // The legacy launch has no application layer: a trampoline main must not load the application a second
             // time into one (BUG-20261114-10).
