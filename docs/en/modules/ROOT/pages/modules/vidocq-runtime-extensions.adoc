@@ -293,6 +293,11 @@ public class Accounts implements IdentityStore {
 
 Foy activates the request context around every request, and the session context with the `HttpSession`: a `@SessionScoped` bean lives as long as its session, `HttpSession.invalidate()` or the timeout destroys it and fires `@Destroyed(SessionScoped.class)`. Passivation of session beans is not supported.
 
+[[servlet-built-in-beans]]
+=== Injecting the request, the session and the context [.tag-new]#NEW#
+
+A bean injects the `HttpServletRequest` being served (`@RequestScoped`), its `HttpSession` (`@SessionScoped`, created at first use) and the application's `ServletContext` (`@ApplicationScoped`, there from the start of the deployment, so a `ServletContextListener` can use it in `contextInitialized`). Foy's `foy-cdi-vauban`, which the extension brings, provides the three beans: the application declares nothing. Their client proxies are generated when Foy is built, so a packaged application generates no class for them when it starts. Where they work, and their limits: xref:foy::usage.adoc#servlet-built-in-beans[Injecting the request, the session and the context].
+
 === Next to REST
 
 The REST and Servlet extensions are two mounts of one server. The longest prefix wins: with REST on `/api` and the servlets on `/`, `/api/items` reaches Cassini and every other path reaches Foy. Two mounts on the same prefix of one listener fail at startup, with the extensions and the keys to change named in the message. Servlet filters and the `HttpSession` do not apply to REST resources; running REST inside Foy instead is tracked by https://codefloe.com/Vidocq/vidocq/issues/215[vidocq#215].
