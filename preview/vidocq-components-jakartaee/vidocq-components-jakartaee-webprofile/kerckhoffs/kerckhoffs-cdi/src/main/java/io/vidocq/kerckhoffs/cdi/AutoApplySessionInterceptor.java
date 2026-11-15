@@ -45,26 +45,22 @@ public class AutoApplySessionInterceptor implements Serializable {
     @AroundInvoke
     public Object intercept(InvocationContext invocation) throws Exception {
         Object[] parameters = invocation.getParameters();
-        if (parameters.length == 3 && parameters[0] instanceof HttpServletRequest request) {
-            switch (invocation.getMethod().getName()) {
-                case "validateRequest" -> {
-                    if (parameters[2] instanceof HttpMessageContext context) {
-                        return AutoApplySessionSupport.validateRequest(request, context,
-                                () -> (AuthenticationStatus) invocation.proceed());
-                    }
-                }
-                case "cleanSubject" -> {
-                    try {
-                        return invocation.proceed();
-                    } finally {
-                        AutoApplySessionSupport.cleanSubject(request);
-                    }
-                }
-                default -> {
-                    // Any other call of the mechanism goes through untouched.
-                }
+        String method = invocation.getMethod().getName();
+        if ("validateRequest".equals(method) && parameters.length == 3
+                && parameters[0] instanceof HttpServletRequest request
+                && parameters[2] instanceof HttpMessageContext context) {
+            return AutoApplySessionSupport.validateRequest(request, context,
+                    () -> (AuthenticationStatus) invocation.proceed());
+        }
+        if ("cleanSubject".equals(method) && parameters.length == 3
+                && parameters[0] instanceof HttpServletRequest request) {
+            try {
+                return invocation.proceed();
+            } finally {
+                AutoApplySessionSupport.cleanSubject(request);
             }
         }
+        // Any other call of the mechanism goes through untouched.
         return invocation.proceed();
     }
 }

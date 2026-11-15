@@ -43,8 +43,8 @@ public final class AutoApplySessionSupport {
 
     /** What the mechanism, wrapped by the interceptor, would do. */
     @FunctionalInterface
-    public interface Proceed {
-        AuthenticationStatus validate() throws Exception;
+    public interface Proceed<X extends Exception> {
+        AuthenticationStatus validate() throws X;
     }
 
     private record SessionCaller(String name, Set<String> groups) implements Serializable { }
@@ -53,10 +53,10 @@ public final class AutoApplySessionSupport {
     }
 
     /** Applies the caller of the session, or asks the mechanism and keeps the caller it identified. */
-    public static AuthenticationStatus validateRequest(HttpServletRequest request, HttpMessageContext context,
-                                                       Proceed proceed) throws Exception {
-        if (!context.isAuthenticationRequest() && keptCaller(request) instanceof SessionCaller kept) {
-            return context.notifyContainerAboutLogin(new CallerPrincipal(kept.name()), kept.groups());
+    public static <X extends Exception> AuthenticationStatus validateRequest(HttpServletRequest request,
+            HttpMessageContext context, Proceed<X> proceed) throws X {
+        if (!context.isAuthenticationRequest() && keptCaller(request) instanceof SessionCaller(var name, var groups)) {
+            return context.notifyContainerAboutLogin(new CallerPrincipal(name), groups);
         }
         AuthenticationStatus status = proceed.validate();
         if (status == AuthenticationStatus.SUCCESS && context.getCallerPrincipal() != null) {
@@ -71,9 +71,9 @@ public final class AutoApplySessionSupport {
         if (session != null) session.removeAttribute(IDENTITY);
     }
 
-    private static SessionCaller keptCaller(HttpServletRequest request) {
+    private static Object keptCaller(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
-        return session != null && session.getAttribute(IDENTITY) instanceof SessionCaller kept ? kept : null;
+        return session == null ? null : session.getAttribute(IDENTITY);
     }
 
     private static void keep(HttpServletRequest request, HttpMessageContext context) {

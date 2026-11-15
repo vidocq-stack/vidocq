@@ -104,7 +104,7 @@ class DefaultSecurityContextTest {
     void whatIsNotKnownYetIsRefusedNotGuessed() {
         var context = contextOf(request(new Named("reza"), Set.of()));
 
-        assertThrows(UnsupportedOperationException.class, () -> context.getAllDeclaredCallerRoles());
+        assertThrows(UnsupportedOperationException.class, context::getAllDeclaredCallerRoles);
         assertThrows(UnsupportedOperationException.class, () -> context.authenticate(null, null, null));
         assertFalse(context.hasAccessToWebResource("/protected"), "access is denied while nothing can decide it");
     }
