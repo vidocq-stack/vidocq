@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.module.FindException;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -42,6 +43,23 @@ class VidocqAppLayerFailureTest {
 
         assertTrue(failure.getMessage().contains("--add-modules java.sql"), failure.getMessage());
         assertTrue(failure.getMessage().contains("flow.data"), failure.getMessage());
+    }
+
+    /**
+     * An encrypted jar without its key fails the layer before any boot phase: the failure says it as a failed boot
+     * does, with what to do, instead of leaving a bare stack trace from {@code main} (tutorial, 2026-11-15).
+     */
+    @Test
+    @DisplayName("an encrypted jar without its key fails the start with the message of the key provider")
+    void aMissingKeyFailsTheStartWithItsMessage() {
+        var failure = VidocqAppLayer.layerFailure("vidocq.app.module",
+                new SecurityException("No SJAR key found. Set VAUBAN_SJAR_KEY env var or vauban.sjar.keystore"
+                        + " system property."));
+
+        assertEquals("Vidocq startup failed in application layer (vidocq.app.module): No SJAR key found. Set"
+                + " VAUBAN_SJAR_KEY env var or vauban.sjar.keystore system property.",
+                VidocqAppLayer.failureLine(failure));
+        assertTrue(failure.getCause() instanceof SecurityException, failure::toString);
     }
 
     @Test

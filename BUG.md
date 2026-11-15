@@ -5,6 +5,21 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261115-03 — An encrypted jar without its key stops the start with a bare stack trace and no failure line
+
+- **Date**: 2026-11-15
+- **Status**: FIXED on `fix/app-layer-failure-line`
+- **Module**: `vidocq-runtime-core` (`VidocqAppLayer.installLayer`)
+- **Symptom**: the distribution of an application that depends on an encrypted jar, started without
+  `VAUBAN_SJAR_KEY`, prints `Exception in thread "main" java.lang.SecurityException: No SJAR key found. …` and a
+  20-line stack trace from Vauban's layer factory, with no banner and no `Vidocq startup failed` line. Found by the
+  tutorial session.
+- **Repro**: `VidocqAppLayerFailureTest.aMissingKeyFailsTheStartWithItsMessage`.
+- **Cause**: the application layer is created before the first boot phase, so the failure line of a failed boot
+  is never logged, and `installLayer` turned only an `IOException` or a `FindException` into a layer failure.
+- **Fix**: a `SecurityException` is a layer failure too, and `installLayer` logs it as a failed boot does:
+  `Vidocq startup failed in application layer (<origin>): <message>`, then throws it.
+
 ## BUG-20261115-02 — In a jlink image, Flyway finds no migration: the schema is not created
 
 - **Date**: 2026-11-15

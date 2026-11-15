@@ -381,13 +381,26 @@ public final class VidocqAppLayer {
             LOG.log(System.Logger.Level.INFO, "Application layer ready: modules {0} ({1})",
                     appLayer.moduleNames(), origin);
             return true;
-        } catch (IOException | java.lang.module.FindException e) {
-            throw layerFailure(origin, e);
+        } catch (IOException | java.lang.module.FindException | SecurityException e) {
+            // A SecurityException: an encrypted jar whose key the start does not have.
+            var failure = layerFailure(origin, e);
+            LOG.log(System.Logger.Level.WARNING, failureLine(failure));
+            throw failure;
         }
     }
 
+    private static final String LAYER_FAILURE = "Cannot create the application layer";
+
     private static final java.util.regex.Pattern MISSING_MODULE =
             java.util.regex.Pattern.compile("Module (\\S+) not found");
+
+    /**
+     * The warning logged when the application layer cannot be created, worded as the one of a boot that fails in a
+     * phase: the layer comes before the first phase, and a launch that waits for {@code startup failed} must see it.
+     */
+    static String failureLine(IllegalStateException failure) {
+        return "Vidocq startup failed in application layer" + failure.getMessage().substring(LAYER_FAILURE.length());
+    }
 
     /**
      * Why the application layer could not be created. A JDK module the application requires, missing from the boot
@@ -395,7 +408,7 @@ public final class VidocqAppLayer {
      * written by hand ({@code vidocq:run}, {@code vidocq:dev} and {@code vidocq:package} add it, vidocq#254).
      */
     static IllegalStateException layerFailure(String origin, Exception e) {
-        String message = "Cannot create the application layer (" + origin + "): " + e.getMessage();
+        String message = LAYER_FAILURE + " (" + origin + "): " + e.getMessage();
         var missing = MISSING_MODULE.matcher(String.valueOf(e.getMessage()));
         if (e instanceof java.lang.module.FindException && missing.find()
                 && java.lang.module.ModuleFinder.ofSystem().find(missing.group(1)).isPresent()) {
