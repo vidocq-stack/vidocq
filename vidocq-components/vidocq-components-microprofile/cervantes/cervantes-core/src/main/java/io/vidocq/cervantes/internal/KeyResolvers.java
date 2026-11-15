@@ -23,6 +23,7 @@ import io.vidocq.cervantes.api.JwtValidationException;
 import io.vidocq.cervantes.api.KeyResolver;
 import io.vidocq.cervantes.api.SignatureAlgorithm;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.PublicKey;
 import java.util.Base64;
@@ -80,7 +81,9 @@ public final class KeyResolvers {
     public static KeyResolver fromLocation(String location, Optional<SignatureAlgorithm.Family> family) throws JwtValidationException {
         if (location.startsWith("http://") || location.startsWith("https://")) {
             // Lazy auto-detect resolver: URL is re-read from system properties at detection time
-            // to capture port rewrites applied after server startup (TCK harness pattern).
+            // to capture port rewrites applied after server startup (TCK harness pattern). The transport is
+            // checked now, so a refused location fails the start instead of every validation (CERV-012).
+            JwksSource.checkTransport(URI.create(location), location);
             return new LazyHttpKeyResolver(location, family);
         }
         byte[] bytes = JwksSource.fromLocation(location).fetch();

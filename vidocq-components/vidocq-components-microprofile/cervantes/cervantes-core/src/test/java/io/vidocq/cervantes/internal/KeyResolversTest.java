@@ -36,6 +36,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Key resolvers built from {@code mp.jwt.verify.publickey} and {@code mp.jwt.verify.publickey.location}
@@ -158,5 +159,13 @@ class KeyResolversTest {
                 System.setProperty(LOCATION_PROPERTY, previous);
             }
         }
+    }
+
+    @Test
+    void cleartextHttpLocationToANonLoopbackHost_isRefusedWhenTheResolverIsBuilt() {
+        // CERV-012: refused at the first validation only, the error became a 401 without a word.
+        JwtValidationException ex = assertThrows(JwtValidationException.class,
+                () -> KeyResolvers.fromLocation("http://192.0.2.1/jwks", ANY));
+        assertTrue(ex.getMessage().contains("io.vidocq.cervantes.jwks.allowHttp"), ex.getMessage());
     }
 }

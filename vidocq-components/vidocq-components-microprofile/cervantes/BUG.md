@@ -387,3 +387,32 @@ environment of `cervantes-it-openliberty` (`SRVE0283E` with the message of the c
 `CWWKZ0012I`: the application is not started). The TCK harness adds the bean next to the producer.
 MP JWT TCK 208/208.
 
+
+## CERV-012 — A cleartext `http://` JWKS location to a remote host answers every request 401 without a word
+
+- **Opening date**: 2026-11-15
+- **Status**: ✅ FIXED 2026-11-15 (branch `fix/jwks-http-at-start`)
+
+### Symptom
+
+With `mp.jwt.verify.publickey.location=http://<a host that is not loopback>/…`, the application starts and every
+request with a token answers 401. No line says why. Found by the tutorial session of Vidocq.
+
+### Minimal repro
+
+`KeyResolversTest.cleartextHttpLocationToANonLoopbackHost_isRefusedWhenTheResolverIsBuilt` and
+`JwtConfigurationCheckTest.cleartextHttpKeyLocationToARemoteHostFailsTheStart`: before the fix the resolver is built
+and the start check passes.
+
+### Cause
+
+`JwksSource.fromLocation` refuses such a location (security audit F-05) with a clear message, but an `http(s)://`
+location is read lazily, at the first validation: the refusal is a `JwtValidationException` that
+`JwtAuthenticationFilter` turns into a bare 401. The start check (`JwtConfigurationCheck`) builds the resolver and never
+reached that code. The opt-in property, `io.vidocq.cervantes.jwks.allowHttp`, was in no page.
+
+### Fix
+
+`KeyResolvers.fromLocation` checks the transport (`JwksSource.checkTransport`) when it builds the lazy resolver, with
+no network access, so the start fails with a `DeploymentException` that names the location and the property. The
+fetch itself stays lazy. The reference page documents the loopback rule and the property.

@@ -69,6 +69,17 @@ class JwtConfigurationCheckTest {
         assertTrue(ex.getMessage().contains("'rs256'"), ex.getMessage());
     }
 
+    /** CERV-012: a refused JWKS location stops the start instead of turning every request into a silent 401. */
+    @Test
+    void cleartextHttpKeyLocationToARemoteHostFailsTheStart() {
+        CdiTestSupport.registerGlobalConfig(Map.of("mp.jwt.verify.publickey.location", "http://192.0.2.1/jwks"));
+
+        DeploymentException ex = assertThrows(DeploymentException.class, () -> check.checkAtStart(startup));
+
+        assertTrue(ex.getMessage().contains("http://192.0.2.1/jwks"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("io.vidocq.cervantes.jwks.allowHttp"), ex.getMessage());
+    }
+
     @Test
     void validConfigurationPasses() throws Exception {
         CdiTestSupport.registerGlobalConfig(Map.of(

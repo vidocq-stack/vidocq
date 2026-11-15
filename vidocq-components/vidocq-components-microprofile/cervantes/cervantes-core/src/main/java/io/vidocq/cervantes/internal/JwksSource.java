@@ -52,14 +52,7 @@ interface JwksSource {
     static JwksSource fromLocation(String location, HttpClient httpClient, Duration timeout) throws JwtValidationException {
         if (location.startsWith("http://") || location.startsWith("https://")) {
             URI uri = URI.create(location);
-            // Security audit F-05: cleartext http:// to a non-loopback host lets a MITM serve attacker
-            // keys (token forgery). Refused unless explicitly opted in; loopback stays allowed for dev.
-            if ("http".equalsIgnoreCase(uri.getScheme()) && !isLoopbackHost(uri.getHost())
-                    && !Boolean.getBoolean("io.vidocq.cervantes.jwks.allowHttp")) {
-                throw new JwtValidationException("JWKS location over cleartext http:// to a non-loopback host is refused"
-                        + " (a MITM could serve attacker keys); use https:// or set"
-                        + " -Dio.vidocq.cervantes.jwks.allowHttp=true: " + location);
-            }
+            checkTransport(uri, location);
             return new Http(uri, httpClient, timeout);
         }
         if (location.startsWith("file:")) {
@@ -93,6 +86,23 @@ interface JwksSource {
                 location,
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(),
                 Duration.ofSeconds(5));
+    }
+
+    /** The system property that lets a JWKS location use cleartext {@code http://} to a non-loopback host. */
+    String ALLOW_HTTP = "io.vidocq.cervantes.jwks.allowHttp";
+
+    /**
+     * Refuses a cleartext {@code http://} location to a non-loopback host, without any network access but a DNS
+     * lookup of a host name: a MITM could serve attacker keys (security audit F-05). Loopback stays allowed for
+     * development, and {@value #ALLOW_HTTP}{@code =true} allows the rest.
+     */
+    static void checkTransport(URI uri, String location) throws JwtValidationException {
+        if ("http".equalsIgnoreCase(uri.getScheme()) && !isLoopbackHost(uri.getHost())
+                && !Boolean.getBoolean(ALLOW_HTTP)) {
+            throw new JwtValidationException("JWKS location over cleartext http:// to a non-loopback host is refused"
+                    + " (a MITM could serve attacker keys); use https:// or set"
+                    + " -D" + ALLOW_HTTP + "=true: " + location);
+        }
     }
 
     /** Whether the host of a URI is loopback (literal IP or {@code localhost}), without a DNS lookup for literals. */
