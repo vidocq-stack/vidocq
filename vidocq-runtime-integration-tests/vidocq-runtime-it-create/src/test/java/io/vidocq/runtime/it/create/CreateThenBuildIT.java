@@ -24,13 +24,23 @@ import io.vidocq.runtime.tooling.ProjectSpec;
 import io.vidocq.runtime.tooling.Reporter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.net.CookieManager;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -41,8 +51,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.spi.ToolProvider;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -56,7 +68,8 @@ import static org.junit.jupiter.api.Assertions.fail;
  * resource's adapter source into {@code target/generated-sources/annotations}, the first test starts the application
  * with {@code @VidocqTest} and calls {@code GET /hello}, {@code vidocq:package} writes the distribution, and
  * {@code vidocq:jlink} the self-contained image ({@code vidocq build jlink}). With {@code --with-parent}, the same
- * project builds under the parent.
+ * project builds under the parent. A created servlet application, packaged, injects Foy's request, session and
+ * context beans on the extensions frozen at build (Vidocq/foy#107).
  */
 class CreateThenBuildIT {
 
@@ -85,8 +98,41 @@ class CreateThenBuildIT {
     private static final Pattern FROZEN_AT_BUILD =
             Pattern.compile("cdi extensions\\s+[1-9]\\d* extensions? frozen at build");
 
+    /**
+     * The {@code cdi extensions} row of the startup report of the created servlet application, whose two extensions
+     * (Foy's and the web contexts') run at start: BUG-20261115-05.
+     */
+    private static final Pattern RUN_AT_START = Pattern.compile("cdi extensions\\s+2 extensions run at start");
+
     /** The last line of a boot. */
     private static final String STARTED = "Vidocq - Started in";
+
+    /** The detailed startup report, which has the {@code cdi extensions} row. */
+    private static final String REPORT = "-Dvidocq.startup.report=detailed";
+
+    /**
+     * The options of a start that must run on the record of its build: a start that runs an extension without it
+     * fails, and its message names the classes that differ.
+     */
+    private static final String ON_THE_RECORD = REPORT + " -Dvidocq.startup.require-frozen-extensions=true";
+
+    /** The context path of the created servlet application, off the root where its REST resources are. */
+    private static final String CONTEXT_PATH = "/demo";
+
+    /** The line Chappe logs once the default listener listens, with the port it bound. */
+    private static final Pattern LISTENING = Pattern.compile("Chappe listener 'default' started on http://[^/]+:(\\d+)/");
+
+    /** What Vauban prints when the container generates a class at run time instead of at build. */
+    private static final String RUNTIME_GENERATION = "RUNTIME CODE GENERATION FALLBACK";
+
+    /**
+     * The warning vauban-processor prints at the created servlet application's build for its injection points of the
+     * servlet built-in beans: they are Foy's beans, in {@code foy-cdi-vauban}, which the application module does not
+     * read, so the processor leaves them to the container. Tolerated, not required: Vauban is to stop printing it.
+     */
+    private static final Pattern DEFERRED = Pattern.compile("\\[Vauban] Unsatisfied dependency: field"
+            + " (WhoAmIServlet\\.(request|session|context)|ContextStartListener\\.context) of type .*"
+            + " resolution deferred to the runtime container");
 
     /** The IT checks what the scaffolder writes and what the build prints, not what the scaffolder says. */
     private static final Reporter SILENT = new Reporter() {
@@ -105,18 +151,7 @@ class CreateThenBuildIT {
         useThisBuildsArtifacts(project);
         addAResourceOnlyDependency(project);
 
-        Path log = Files.createDirectories(Path.of(System.getProperty("it.logs"))).resolve("create-then-build.log");
-        Process build = new ProcessBuilder("mvn", "-ntp", "-B", "verify", "vidocq:jlink")
-                .directory(project.toFile())
-                .redirectErrorStream(true)
-                .redirectOutput(log.toFile())
-                .start();
-        if (!build.waitFor(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
-            build.destroyForcibly();
-            fail("mvn verify vidocq:jlink did not end within " + TIMEOUT + ":\n" + read(log));
-        }
-        String output = read(log);
-        assertEquals(0, build.exitValue(), () -> "mvn verify vidocq:jlink failed:\n" + output);
+        String output = build(project, "create-then-build.log", "verify", "vidocq:jlink");
         String pom = Files.readString(project.resolve("pom.xml"));
         assertFalse(pom.contains("<parent>"), "the created project builds without a parent (#380):\n" + pom);
         assertTrue(pom.contains("<extensions>true</extensions>"), pom);
@@ -224,18 +259,7 @@ class CreateThenBuildIT {
         Path project = dir.resolve("demo-app");
         useThisBuildsArtifacts(project);
 
-        Path log = Files.createDirectories(Path.of(System.getProperty("it.logs"))).resolve("create-with-parent.log");
-        Process build = new ProcessBuilder("mvn", "-ntp", "-B", "verify")
-                .directory(project.toFile())
-                .redirectErrorStream(true)
-                .redirectOutput(log.toFile())
-                .start();
-        if (!build.waitFor(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
-            build.destroyForcibly();
-            fail("mvn verify did not end within " + TIMEOUT + ":\n" + read(log));
-        }
-        String output = read(log);
-        assertEquals(0, build.exitValue(), () -> "mvn verify failed:\n" + output);
+        String output = build(project, "create-with-parent.log", "verify");
         String pom = Files.readString(project.resolve("pom.xml"));
         assertTrue(pom.contains("<artifactId>vidocq-runtime-parent</artifactId>"), pom);
         assertFalse(output.contains("no Vidocq parent in the pom"), "the plugin added to a project under the parent:\n"
@@ -246,6 +270,203 @@ class CreateThenBuildIT {
 
         assertTheBuildFrozeItsExtensions(project, output);
         assertStartsOnTheFrozenExtensions(project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh"));
+    }
+
+    /**
+     * The created servlet applications. With REST's extensions, whose archives make {@code vidocq:generate} freeze
+     * every extension, Foy's included, the start must load that record. Foy's extensions alone all run when the
+     * application compiles: the build has nothing to freeze, and the start should run none, but it runs them in the
+     * application layer (BUG-20261115-05, in Vauban), so that start is not required to run on a record, and its
+     * report must still say so: the fix makes the case fail, to be switched to the record.
+     */
+    static Stream<Arguments> servletApplications() {
+        return Stream.of(
+                Arguments.of("servlet-rest", Set.of("foy-servlet", "cassini-rest"), true),
+                Arguments.of("servlet", Set.of("foy-servlet"), false));
+    }
+
+    /**
+     * Vidocq/foy#107 on the packaged path: in the project {@code vidocq create} writes, a servlet injects the
+     * {@code HttpServletRequest}, the {@code HttpSession} and the {@code ServletContext}, and an application
+     * {@code ServletContextListener} uses the injected context in {@code contextInitialized}. The packaged
+     * application starts, on the record {@code vidocq:generate} wrote when it froze the extensions; the three beans
+     * answer over HTTP, and the container generates no class at run time: their client proxies come from Foy's build.
+     */
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("servletApplications")
+    void aPackagedServletApplicationInjectsTheRequestTheSessionAndTheContext(
+            String name, Set<String> extensions, boolean frozen, @TempDir Path dir) throws Exception {
+        String version = System.getProperty("it.version");
+        ProjectScaffolder.scaffold(new ProjectSpec("demo-app", "com.acme", "com.acme.demo.app",
+                extensions, null, false), dir, version, SILENT);
+        Path project = dir.resolve("demo-app");
+        useThisBuildsArtifacts(project);
+        addTheWhoAmIServlet(project);
+
+        String output = build(project, "create-" + name + ".log", "verify");
+        List<String> warnings = output.lines()
+                .filter(l -> l.startsWith("[WARNING]") && !l.contains(LAST_ROUND) && !DEFERRED.matcher(l).find())
+                .toList();
+        assertEquals(List.of(), warnings, "the created " + name + " project builds with warnings:\n" + output);
+        if (frozen) {
+            assertTheBuildFrozeItsExtensions(project, output);
+            String frozenRecord = Files.readString(project.resolve("target/classes/" + FROZEN_RECORD));
+            for (String extension : List.of("io.vidocq.foy.cdi.vauban.FoyWebExtension",
+                    "io.vidocq.vauban.webcontexts.WebContextsExtension")) {
+                assertTrue(frozenRecord.contains(extension),
+                        extension + " is not in the record of the build:\n" + frozenRecord);
+            }
+        } else {
+            assertFalse(Files.exists(project.resolve("target/classes/" + FROZEN_RECORD)),
+                    "vidocq:generate froze extensions the compilation already ran:\n" + output);
+        }
+
+        Path launcher = project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh");
+        Path log = logs().resolve("create-" + name + "-run.log");
+        String options = "-Dvidocq.http.host=127.0.0.1 -Dvidocq.http.port=0 " + (frozen ? ON_THE_RECORD : REPORT);
+        Process application = launch(launcher, options).redirectOutput(log.toFile()).start();
+        try {
+            String boot = awaitStarted(application, log);
+            if (frozen) {
+                assertTrue(FROZEN_AT_BUILD.matcher(boot).find(),
+                        launcher + " did not start on the extensions frozen at build:\n" + boot);
+            } else {
+                // Vidocq BUG-20261115-05: every archive was processed at compile, so the start should run no
+                // extension, but Vauban's application layer misses the archives' markers and runs both. Once Vauban
+                // fixes it (Vauban BUG-20261115-07, branch fix/bce-processed-source-location), this row goes: start
+                // this case ON_THE_RECORD instead, and close the bug.
+                assertTrue(RUN_AT_START.matcher(boot).find(), launcher + " no longer runs its two extensions at"
+                        + " start: BUG-20261115-05 is fixed, start this case ON_THE_RECORD:\n" + boot);
+            }
+            URI whoAmI = URI.create("http://127.0.0.1:" + boundPort(boot) + CONTEXT_PATH + "/whoami");
+            try (HttpClient alice = HttpClient.newBuilder().cookieHandler(new CookieManager()).build();
+                 HttpClient bob = HttpClient.newBuilder().cookieHandler(new CookieManager()).build()) {
+                assertEquals(whoAmIAnswer("alice", 1), get(alice, whoAmI, "alice"));
+                assertEquals(whoAmIAnswer("bob", 1), get(bob, whoAmI, "bob"));
+                assertEquals(whoAmIAnswer("alice", 2), get(alice, whoAmI, "alice"));
+            }
+        } finally {
+            stop(launcher, application);
+        }
+        String run = read(log);
+        assertFalse(run.contains(RUNTIME_GENERATION), "the container generated classes at run time:\n" + run);
+    }
+
+    /**
+     * Writes into the created project a servlet that answers with what the injected request, session and context
+     * give, and a listener that uses the injected context while the application starts; the module reads what they
+     * use.
+     */
+    private static void addTheWhoAmIServlet(Path project) throws IOException {
+        Path sources = project.resolve("src/main/java/com/acme/demo/app");
+        Files.createDirectories(sources);
+        Files.writeString(sources.resolve("WhoAmIServlet.java"), """
+                package com.acme.demo.app;
+
+                import jakarta.inject.Inject;
+                import jakarta.servlet.ServletContext;
+                import jakarta.servlet.annotation.WebServlet;
+                import jakarta.servlet.http.HttpServlet;
+                import jakarta.servlet.http.HttpServletRequest;
+                import jakarta.servlet.http.HttpServletResponse;
+                import jakarta.servlet.http.HttpSession;
+                import java.io.IOException;
+
+                @WebServlet("/whoami")
+                public class WhoAmIServlet extends HttpServlet {
+                    @Inject HttpServletRequest request;
+                    @Inject HttpSession session;
+                    @Inject ServletContext context;
+
+                    @Override
+                    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+                        Integer visits = (Integer) session.getAttribute("visits");
+                        int visit = visits == null ? 1 : visits + 1;
+                        session.setAttribute("visits", visit);
+                        String same = session.getId().equals(req.getSession().getId()) ? "same session" : "another session";
+                        resp.setContentType("text/plain");
+                        resp.getWriter().write(String.join("|", request.getRequestURI(), request.getHeader("X-Caller"),
+                                String.valueOf(visit), same, context.getContextPath(),
+                                String.valueOf(context.getAttribute("whoami.started"))));
+                    }
+                }
+                """);
+        Files.writeString(sources.resolve("ContextStartListener.java"), """
+                package com.acme.demo.app;
+
+                import jakarta.inject.Inject;
+                import jakarta.servlet.ServletContext;
+                import jakarta.servlet.ServletContextEvent;
+                import jakarta.servlet.ServletContextListener;
+                import jakarta.servlet.annotation.WebListener;
+
+                @WebListener
+                public class ContextStartListener implements ServletContextListener {
+                    @Inject ServletContext context;
+
+                    @Override
+                    public void contextInitialized(ServletContextEvent event) {
+                        context.setAttribute("whoami.started", "started in " + context.getContextPath());
+                    }
+                }
+                """);
+        // What the servlets read, and io.vidocq.foy.api for the $$FoyComponent factories the Servlet codegen bundle
+        // generates; another extension of the project may already have the module read one of them.
+        Path moduleInfo = project.resolve("src/main/java/module-info.java");
+        String source = Files.readString(moduleInfo);
+        String declaration = "module com.acme.demo.app {\n";
+        assertTrue(source.startsWith(declaration), source);
+        StringBuilder requires = new StringBuilder(declaration);
+        for (String module : List.of("jakarta.inject", "jakarta.servlet", "io.vidocq.foy.api")) {
+            if (!source.contains("requires " + module + ";")) {
+                requires.append("    requires ").append(module).append(";\n");
+            }
+        }
+        Files.writeString(moduleInfo, requires + source.substring(declaration.length()));
+        Files.writeString(project.resolve("src/main/resources/vidocq.properties"),
+                "\nvidocq.servlet.context-path=" + CONTEXT_PATH + "\n", StandardOpenOption.APPEND);
+    }
+
+    /** What {@code WhoAmIServlet} answers to {@code caller} on its {@code visit}-th request of one session. */
+    private static String whoAmIAnswer(String caller, int visit) {
+        return String.join("|", CONTEXT_PATH + "/whoami", caller, String.valueOf(visit), "same session", CONTEXT_PATH,
+                "started in " + CONTEXT_PATH);
+    }
+
+    /** {@code GET uri} with {@code X-Caller: caller}; returns the body of a 200. */
+    private static String get(HttpClient client, URI uri, String caller) throws Exception {
+        HttpResponse<String> response = client.send(HttpRequest.newBuilder(uri).header("X-Caller", caller).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), response::body);
+        return response.body();
+    }
+
+    /** The port the default listener bound, from the line Chappe logs once it listens. */
+    private static int boundPort(String boot) {
+        Matcher started = LISTENING.matcher(boot);
+        assertTrue(started.find(), "no start line of the default listener:\n" + boot);
+        return Integer.parseInt(started.group(1));
+    }
+
+    /**
+     * Waits for the application writing to {@code log} to print the last line of its boot; fails as soon as it ends
+     * before, or after {@link #START_TIMEOUT}.
+     *
+     * @return what it printed until then
+     */
+    private static String awaitStarted(Process application, Path log) throws Exception {
+        long deadline = System.nanoTime() + START_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            String out = read(log);
+            if (out.contains(STARTED)) {
+                return out;
+            }
+            if (application.waitFor(250, TimeUnit.MILLISECONDS)) {
+                return fail("the application ended with " + application.exitValue() + " before it started:\n"
+                        + read(log));
+            }
+        }
+        return fail("the application did not start within " + START_TIMEOUT + ":\n" + read(log));
     }
 
     /**
@@ -270,13 +491,7 @@ class CreateThenBuildIT {
      * @return what the application printed until it started
      */
     private static String assertStartsOnTheFrozenExtensions(Path launcher) throws Exception {
-        ProcessBuilder command = new ProcessBuilder(launcher.toString()).redirectErrorStream(true);
-        command.environment().put("JAVA_HOME", System.getProperty("java.home"));
-        // The java launcher reads it itself, whatever the launcher: the one of a jlink image passes no JAVA_OPTS. A
-        // start that does not load the record of its build fails, and its message names the classes that differ.
-        command.environment().put("JDK_JAVA_OPTIONS", "-Dvidocq.http.port=0 -Dvidocq.startup.report=detailed"
-                + " -Dvidocq.startup.require-frozen-extensions=true");
-        Process application = command.start();
+        Process application = launch(launcher, "-Dvidocq.http.port=0 " + ON_THE_RECORD).start();
         String boot;
         try (ExecutorService reader = Executors.newVirtualThreadPerTaskExecutor()) {
             Future<String> started = reader.submit(() -> untilStarted(application));
@@ -294,6 +509,48 @@ class CreateThenBuildIT {
         assertTrue(FROZEN_AT_BUILD.matcher(boot).find(),
                 launcher + " did not start on the extensions frozen at build:\n" + boot);
         return boot;
+    }
+
+    /**
+     * The launch of what the build packaged.
+     *
+     * @param options the system properties of this launch, as {@code -Dkey=value} separated by spaces
+     */
+    private static ProcessBuilder launch(Path launcher, String options) {
+        ProcessBuilder command = new ProcessBuilder(launcher.toString()).redirectErrorStream(true);
+        command.environment().put("JAVA_HOME", System.getProperty("java.home"));
+        // The java launcher reads it itself, whatever the launcher: the one of a jlink image passes no JAVA_OPTS.
+        command.environment().put("JDK_JAVA_OPTIONS", options);
+        return command;
+    }
+
+    /**
+     * Runs {@code mvn -ntp -B goals} in the created project, into {@code log} under the IT logs.
+     *
+     * @return what the build printed, once it ended with 0
+     */
+    private static String build(Path project, String log, String... goals) throws Exception {
+        Path file = logs().resolve(log);
+        List<String> command = new ArrayList<>(List.of("mvn", "-ntp", "-B"));
+        command.addAll(List.of(goals));
+        String what = "mvn " + String.join(" ", goals);
+        Process build = new ProcessBuilder(command)
+                .directory(project.toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(file.toFile())
+                .start();
+        if (!build.waitFor(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
+            build.destroyForcibly();
+            fail(what + " did not end within " + TIMEOUT + ":\n" + read(file));
+        }
+        String output = read(file);
+        assertEquals(0, build.exitValue(), () -> what + " failed:\n" + output);
+        return output;
+    }
+
+    /** Where the IT writes the logs of the builds and starts it runs, kept for a post-mortem. */
+    private static Path logs() throws IOException {
+        return Files.createDirectories(Path.of(System.getProperty("it.logs")));
     }
 
     /**

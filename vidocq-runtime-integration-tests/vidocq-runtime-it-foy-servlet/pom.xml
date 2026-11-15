@@ -90,7 +90,7 @@
                                 <arg>--add-modules</arg>
                                 <arg>java.net.http</arg>
                                 <arg>--add-reads</arg>
-                                <arg>io.vidocq.runtime.it.foyservlet=java.net.http,java.logging</arg>
+                                <arg>io.vidocq.runtime.it.foyservlet=java.net.http,java.logging,io.vidocq.vauban.core</arg>
                             </compilerArgs>
                         </configuration>
                     </execution>
@@ -104,7 +104,7 @@
                     <argLine>
                         @{argLine}
                         --add-modules java.net.http
-                        --add-reads io.vidocq.runtime.it.foyservlet=java.net.http,java.logging
+                        --add-reads io.vidocq.runtime.it.foyservlet=java.net.http,java.logging,io.vidocq.vauban.core
                     </argLine>
                 </configuration>
             </plugin>

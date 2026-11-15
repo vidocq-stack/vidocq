@@ -5,6 +5,39 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261115-05 — A packaged servlet application runs its build compatible extensions at every start
+
+- **Date**: 2026-11-15
+- **Status**: OPEN — the cause is in Vauban (`vauban-core`, `vauban-classloader`); nothing to change in Vidocq
+- **Module**: the packaged application (`vidocq:package` layout, application layer); found by
+  `CreateThenBuildIT.aPackagedServletApplicationInjectsTheRequestTheSessionAndTheContext` (`vidocq-runtime-it-create`)
+- **Symptom**: `vidocq create -x foy-servlet` with one `@WebServlet`, then `mvn verify`: `vidocq:generate` says
+  `Vauban: the build compatible extensions are not frozen, the container start runs them: the deployment has no build
+  compatible extension.` and writes no record. The distribution's start then runs `FoyWebExtension` and
+  `WebContextsExtension` (`cdi extensions  2 extensions run at start` in the detailed report); with
+  `-Dvidocq.startup.require-frozen-extensions=true` it fails: `[VIDOCQ-GEN-003] … 2 build compatible extensions ran at
+  start: no record of the build is on the path`. The application works; its extensions run at every start, against
+  "build compatible extensions work at build, and only there". The same project with `cassini-rest` too is frozen
+  (`4 extensions frozen at build`) and starts on the record.
+- **Minimal repro**: the IT's `servlet` case: launch it with `-Dvidocq.startup.require-frozen-extensions=true`. By
+  hand: on the distribution's `lib/` class path, `VaubanClassLoader.of(List.of(app/demo-app.jar), …)` lists the
+  marker as `jar:file:///…/app/demo-app.jar!/META-INF/vauban-bce-processed`, while
+  `WhoAmIServlet`'s code source is `file:/…/app/demo-app.jar`; a `URLClassLoader` gives `jar:file:/…` for both.
+- **Cause**: every bean archive of this deployment was processed at compile (the application by the Foy codegen
+  bundle, `foy-cdi-vauban` at Foy's build): both carry `META-INF/vauban-bce-processed`. `vidocq:generate` freezes on a
+  `URLClassLoader` over `target/classes` and the jars, where `VaubanContainerBuilder.isClassFromBceProcessedSource`
+  matches each class to its archive's marker, so no extension needs to run and there is nothing to freeze. The start
+  defines the application in Vauban's application layer: `VaubanClassLoader` gives a jar's resources
+  `"jar:" + path.toUri() + "!/"` (`file:///`) and its classes the code source `path.toUri().toURL()` (`file:/`), and
+  the container compares the two as strings (`ContainerScanner.extractSourceRoot` against
+  `CodeSource.getLocation().toString()`). The application's classes look unprocessed, and every extension runs.
+  Not caused by Vidocq/foy#107: any packaged application whose bean archives were all processed at compile has it.
+- **Fix to make (Vauban)**: compare locations, not strings (both as a `Path` or a normalised `URI`), or have
+  `VaubanClassLoader` give the JDK's `jar:file:/` form (Vauban BUG-20261115-07, branch
+  `fix/bce-processed-source-location`). The IT's `servlet` case asserts today's `cdi extensions  2 extensions run at
+  start` row, so that fix makes it fail: then it starts with `ON_THE_RECORD` and asserts that no `cdi extensions` row
+  is printed.
+
 ## BUG-20261115-04 — An application with the Liquibase extension does not start on the module path
 
 - **Date**: 2026-11-15
