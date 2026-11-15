@@ -19,19 +19,17 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.kerckhoffs;
 
-import io.vidocq.kerckhoffs.cdi.AutoApplySessionInterceptor;
-import io.vidocq.kerckhoffs.cdi.IdentityStoreStartCheck;
 import io.vidocq.runtime.spi.VidocqExtension;
-import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 
 /**
  * Jakarta Security 4.0 on the Vidocq runtime, with Kerckhoffs.
  *
  * <p>The build compatible extensions of {@code kerckhoffs-cdi} (identity store handler, stores and mechanisms declared
  * by annotation) and of {@code kerckhoffs-foy} (the {@code SecurityContext} and {@code Principal} beans) are found by
- * Vauban, and frozen by the build with the others. This extension adds the two classes of the runtime that are beans
- * without being scanned: the check of the identity stores, which runs on {@code Startup}, and the interceptor of
- * {@code @AutoApplySession}. {@link KerckhoffsServletAuthentication} hands Foy the authentication of every request.
+ * Vauban, and frozen by the build with the others. Two beans of this module, which Vauban compiles ahead of time,
+ * carry the rest of the runtime: {@link VidocqIdentityStoreStartCheck} checks the identity stores on {@code Startup},
+ * and {@link VidocqAutoApplySessionInterceptor} weaves {@code @AutoApplySession}.
+ * {@link KerckhoffsServletAuthentication} hands Foy the authentication of every request.
  *
  * <p>Priority 580: before the Servlet extension (600), whose deployment asks for the hook.
  */
@@ -47,11 +45,4 @@ public final class KerckhoffsSecurityExtension implements VidocqExtension {
         return 580;
     }
 
-    @Override
-    public void beforeStart(VaubanContainerBuilder builder) {
-        // Beans of the runtime created by a plain constructor call: the extensions the build froze stay frozen
-        // (Vidocq/vauban#288).
-        builder.addHostBean(IdentityStoreStartCheck.class, IdentityStoreStartCheck::new);
-        builder.addHostBean(AutoApplySessionInterceptor.class, AutoApplySessionInterceptor::new);
-    }
 }

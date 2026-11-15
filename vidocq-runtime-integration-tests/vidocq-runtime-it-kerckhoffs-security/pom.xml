@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Jakarta Security 4.0 (Kerckhoffs) on the Vidocq runtime, on the module path: an application that declares the
+    BASIC mechanism and an identity store has the requests Foy serves authenticated, and the injected security context
+    answers for the caller.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-integration-tests</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-it-kerckhoffs-security</artifactId>
+    <name>Vidocq Runtime :: IT :: Security (Kerckhoffs) on the module path</name>
+
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+        <!-- SonarQube: test vehicle, its main code only exists for its own tests (Vidocq/vidocq#284). -->
+        <sonar.skip>true</sonar.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-kerckhoffs-security-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                            <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                            <artifactId>vidocq-runtime-kerckhoffs-security-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <!-- The test talks HTTP with the JDK client, and reads the port Chappe bound from its log. -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <compilerArgs combine.children="append">
+                                <arg>--add-modules</arg>
+                                <arg>java.net.http</arg>
+                                <arg>--add-reads</arg>
+                                <arg>io.vidocq.runtime.it.kerckhoffs=java.net.http,java.logging,io.vidocq.vauban.core</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>
+                        @{argLine}
+                        --add-modules java.net.http
+                        --add-reads io.vidocq.runtime.it.kerckhoffs=java.net.http,java.logging,io.vidocq.vauban.core
+                    </argLine>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -32,6 +32,13 @@ module io.vidocq.runtime.extensions.jakartaee.web.kerckhoffs {
     requires io.vidocq.runtime.extensions.jakartaee.web.foy;
     requires io.vidocq.foy.api;
     requires jakarta.cdi;
+    requires jakarta.inject;
+    requires jakarta.interceptor;
+    requires jakarta.annotation;
+
+    // The beans of this module are created in-module by the generated provider: no `opens` to the container.
+    provides io.vidocq.vauban.api.VaubanComponentProvider
+            with io.vidocq.runtime.extensions.jakartaee.web.kerckhoffs._VaubanComponents;
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.jakartaee.web.kerckhoffs.KerckhoffsSecurityExtension;
