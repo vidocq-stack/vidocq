@@ -5,6 +5,25 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261115-09 — `CreateThenBuildIT` fails on the build machine's repository, not on the created project
+
+- **Date**: 2026-11-15
+- **Status**: FIXED on `fix/bce-processed-source-location`
+- **Module**: `vidocq-runtime-it-create` (`CreateThenBuildIT`)
+- **Symptom**: `aPackagedServletApplicationInjectsTheRequestTheSessionAndTheContext[1]` (servlet-rest) fails with
+  `the created servlet-rest project builds with warnings`, then passes on Failsafe's rerun (the job reports success
+  with a `Flakes:` line). The build prints, for each Vauban POM it fetches (ten lines in all, no other warning):
+  `[WARNING] Could not validate integrity of download from file:///root/.m2/repository/io/vidocq/vauban/vauban-core/0.4.0-SNAPSHOT/vauban-core-0.4.0-SNAPSHOT.pom`
+- **Repro**: a producer's `pr-validate` downstream job that builds Vidocq (Vauban PR #311, run 2065, job 22): Run 1
+  failed, Run 2 passed. Any producer whose downstream job builds Vidocq hits it on the first fixture build.
+- **Cause**: the fixture mirrors every repository to the outer local repository as a `file:` URL
+  (`src/it/it-settings.xml`), and the producer's artifacts are *installed* there, so they have no checksum files.
+  Maven's default `warn` checksum policy prints one warning per file. The test asserts that the build prints no
+  `[WARNING]`. The first fixture build fills the fixture's own local repository, so the rerun prints none.
+- **Fix**: `BuildWarnings.warningsOf` keeps every `[WARNING]` line except "Could not validate integrity of download
+  from" the outer repository's URL, taken as the fixture computes it; the same warning from another repository still
+  fails the test (`BuildWarningsTest`).
+
 ## BUG-20261115-07 — The stop of an application sometimes logs nothing, not even "Vidocq - Shutting down"
 
 - **Date**: 2026-11-15

@@ -195,8 +195,8 @@ class CreateThenBuildIT {
                 "vidocq:jlink wrote no image launcher:\n" + output);
         assertTrue(modules(project.resolve("target/dist/bin/java")).contains("com.acme.demo.app"),
                 "the image does not link the application module:\n" + output);
-        List<String> warnings = output.lines()
-                .filter(l -> l.startsWith("[WARNING]") && !l.contains(LAST_ROUND))
+        List<String> warnings = BuildWarnings.warningsOf(output, outerRepositoryUrl()).stream()
+                .filter(l -> !l.contains(LAST_ROUND))
                 .toList();
         assertEquals(List.of(), warnings, "the created project builds with warnings:\n" + output);
         long lastRound = output.lines().filter(l -> l.contains(LAST_ROUND)).count();
@@ -326,8 +326,8 @@ class CreateThenBuildIT {
         addTheWhoAmIServlet(project);
 
         String output = build(project, "create-" + name + ".log", "verify");
-        List<String> warnings = output.lines()
-                .filter(l -> l.startsWith("[WARNING]") && !l.contains(LAST_ROUND) && !DEFERRED.matcher(l).find())
+        List<String> warnings = BuildWarnings.warningsOf(output, outerRepositoryUrl()).stream()
+                .filter(l -> !l.contains(LAST_ROUND) && !DEFERRED.matcher(l).find())
                 .toList();
         assertEquals(List.of(), warnings, "the created " + name + " project builds with warnings:\n" + output);
         if (frozen) {
@@ -642,11 +642,16 @@ class CreateThenBuildIT {
      */
     private static void useThisBuildsArtifacts(Path project) throws IOException {
         Path settings = Path.of(System.getProperty("it.settings"));
-        String url = Path.of(System.getProperty("it.outerRepository")).toUri().toString();
+        String url = outerRepositoryUrl();
         String template = Files.readString(Path.of(System.getProperty("it.settings.template")));
         Files.writeString(settings, template.replace("@localRepositoryUrl@", url));
         Files.writeString(project.resolve(".mvn/maven.config"),
                 "-Dmaven.repo.local=" + System.getProperty("it.repo") + "\n--settings\n" + settings + "\n");
+    }
+
+    /** The outer local repository as the fixture's settings name it, and as Maven prints it in a warning. */
+    private static String outerRepositoryUrl() {
+        return Path.of(System.getProperty("it.outerRepository")).toUri().toString();
     }
 
     /** What {@code java --list-modules} of an image prints. */
