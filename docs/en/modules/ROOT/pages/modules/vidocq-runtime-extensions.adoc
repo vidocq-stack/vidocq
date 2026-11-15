@@ -98,6 +98,10 @@
 | `jakartaee-web`
 | Jakarta Persistence 3.2 via xref:noether::index.adoc[Noether] — the units of `persistence.xml` on the application's Mansart pools, `@PersistenceContext` and `@PersistenceUnit` injected, JTA units in `@Transactional` (companion `-codegen` artefact). Needs the Mansart Pool and Mansart Transactions extensions (<<noether-persistence>>).
 
+| `vidocq-runtime-kerckhoffs-security-extension`
+| `jakartaee-web`
+| Jakarta Security 4.0 via xref:kerckhoffs::index.adoc[Kerckhoffs] — the application's `HttpAuthenticationMechanism` (its own bean, or `@BasicAuthenticationMechanismDefinition` and `@FormAuthenticationMechanismDefinition`) authenticates every request Foy serves, against its `IdentityStore` beans; `SecurityContext` and `Principal` are injectable (companion `-codegen` artefact). Needs the Servlet extension (<<kerckhoffs-security>>).
+
 | `vidocq-runtime-ravel-config-extension`
 | `microprofile`
 | {spec-mp-config} via xref:ravel::index.adoc[Ravel] — external sources, profiles, typed conversion. [[ravel-config-codegen]]Companion `-codegen` artefact: it runs Ravel's extension in the compiler, so `@Inject @ConfigProperty` points are satisfied when Vauban validates the application at build time; the values themselves are checked when the application starts. [[ravel-config-release]]The configuration of the application layer is released when the layer stops: Ravel keeps one `Config` per class loader for the life of the JVM, so each `vidocq dev` hot reload used to keep the stopped layer reachable; the extension now takes the layer's configurations out of that registry at stop.
@@ -1141,6 +1145,48 @@ Mansart Data's JDBC-to-JTA bridge (`io.vidocq.mansart.transactions.jdbc.Connecti
     <version>{project-version}</version>
 </dependency>
 ----
+
+[#kerckhoffs-security]
+== Jakarta Security (Kerckhoffs) [.tag-new]#NEW#
+
+`vidocq-runtime-kerckhoffs-security-extension` puts the application's authentication under Jakarta Security 4.0, on xref:kerckhoffs::index.adoc[Kerckhoffs]. `vidocq extension add kerckhoffs-security` adds it with the Servlet extension it runs on; the Vidocq Maven plugin puts its `-codegen` bundle, which carries Kerckhoffs's build compatible extensions, on the compiler's processor path.
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+    <artifactId>vidocq-runtime-kerckhoffs-security-extension</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
+
+The application declares a mechanism and an identity store, and protects its servlets as usual:
+
+[source,java]
+----
+@BasicAuthenticationMechanismDefinition(realmName = "shop")
+@Dependent
+public class ShopSecurity {
+}
+
+@ApplicationScoped
+public class UserStore implements IdentityStore {
+    @Override
+    public CredentialValidationResult validate(Credential credential) { /* ... */ }
+}
+
+@WebServlet("/orders")
+@ServletSecurity(@HttpConstraint(rolesAllowed = "admin"))
+public class OrdersServlet extends HttpServlet {
+    @Inject SecurityContext security;
+}
+----
+
+How it works: the extension finds the `HttpAuthenticationMechanism` bean of the application and hands it to Foy through the `ServletAuthentication` SPI of the Servlet extension. Foy then asks the mechanism for *every* request, protected or not, before it applies the constraint of the resource, so the mechanism replaces the `login-config` of the container. Without a mechanism, the container keeps its own. Two extensions that both take over the authentication fail the start.
+
+* The identity stores are created at start, so a store that cannot be created stops the start instead of the first login (a store bound to a request or session scope is left to its first use).
+* `SecurityContext` and `Principal` answer for the request Foy is serving; outside a request, nobody is the caller.
+* Not there yet: the Expression Language in the definitions (Peano), Authorization (`@RolesAllowed` through Jakarta Authorization), Remember-Me, and the `HttpAuthenticationMechanismHandler`.
 
 [#noether-persistence]
 == Jakarta Persistence (Noether) [.tag-new]#NEW#
