@@ -634,7 +634,7 @@ class HotSwapClassifierTest {
     }
 
     private static void assertRedefine(Optional<ReloadRequest> result, String binaryName, String... methods) {
-        var redefine = assertInstanceOf(ReloadRequest.Redefine.class, result.orElseThrow(), () -> result.toString());
+        var redefine = assertInstanceOf(ReloadRequest.Redefine.class, result.orElseThrow(), result::toString);
         assertEquals(List.of(binaryName), List.copyOf(redefine.methodsByClass().keySet()));
         assertEquals(List.of(methods), List.copyOf(redefine.methodsByClass().get(binaryName)));
     }
