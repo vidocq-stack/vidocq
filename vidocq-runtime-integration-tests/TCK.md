@@ -204,6 +204,41 @@ What the first runs found, all fixed:
 - Multipart form fields read as parameters (`PartTests`, `Part1Tests`) failed against an older Foy
   snapshot and pass on `ee6c899`.
 
+## Jakarta Security 4.0 (Kerckhoffs, as the runtime assembles it)
+
+`vidocq-runtime-tck-kerckhoffs-security` runs the official Jakarta Security 4.0 TCK against Kerckhoffs as the runtime
+assembles it: Foy on Chappe with Vauban, and `vidocq-runtime-kerckhoffs-security-extension` putting the application's
+authentication mechanism and identity stores in service. Kerckhoffs' own `kerckhoffs-tck` measures the brick alone.
+
+The TCK is published as sources only, so the runner is a script, not a test class:
+`vidocq-runtime-tck-kerckhoffs-security/run-official-tck-security-4.0.sh [app-* ...]` downloads the distribution
+(SHA-256 pinned), builds `common` and the selected `app-*` modules with the TCK's own Maven build, and runs their
+Arquillian tests on the embedded Vidocq container with this module's class path. The deviations from an unmodified run
+are on the command line only (the default `glassfish-ci-managed` profile off, the class path and Arquillian
+configuration of this module, `sigtest.api.*`); the script header lists them. With no argument it runs the smoke set
+of Kerckhoffs (`kerckhoffs-tck/BASELINE.md`).
+
+| Application | Result (2026-11-16) |
+|---|---|
+| `app-mem` | 4/4 |
+| `app-mem-basic` | 4/4 |
+| `app-custom` | 4/4 |
+| `app-custom-session` | 5/5 |
+| `app-multiple-store` | 4/4 |
+| `app-multiple-store-backup` | 6/6 |
+| `app-securitycontext-auth` | 5/5 |
+
+32 tests, the same set and the same counts as on the Kerckhoffs container. A local run of selected applications is a
+measurement, never a certification; the applications that need Expression Language, JACC, Remember Me or the handler
+beans stay red by design (Kerckhoffs milestone K3).
+
+Two defects in the assembly showed up while building this runner, both fixed where they live: Vauban's bean discovery
+threw `NoClassDefFoundError` on a library class whose constructor names an optional dependency (`nimbus-jose-jwt` in
+the TCK wars, Vidocq/vauban#312), and Foy's web extension left a servlet without a scope, so without a bean, when it
+carried a Jakarta Security annotation the model could not resolve (Vidocq/foy#111). The Security extension also lists
+its services in `META-INF/services`, which a class path deployment such as this one reads instead of
+`module-info.java`.
+
 ## TCK glue vs. runtime code
 
 Each runner ships only the glue the TCK's own porting SPI requires — never patches to
