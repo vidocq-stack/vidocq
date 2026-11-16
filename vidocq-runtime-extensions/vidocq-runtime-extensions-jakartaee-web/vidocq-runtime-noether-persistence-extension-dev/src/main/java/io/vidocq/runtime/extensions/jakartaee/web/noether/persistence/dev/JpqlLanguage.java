@@ -40,9 +40,11 @@ final class JpqlLanguage {
     /** The media type of a query property. */
     static final String MEDIA_TYPE = "text/x-query";
 
+    private static final String UPDATE = "UPDATE";
+
     static final List<String> KEYWORDS = List.of("SELECT", "FROM", "WHERE", "GROUP", "BY", "HAVING", "ORDER", "ASC",
             "DESC", "NULLS", "FIRST", "LAST", "AS", "DISTINCT", "JOIN", "LEFT", "INNER", "OUTER", "FETCH", "ON",
-            "UPDATE", "SET", "DELETE", "NEW", "AND", "OR", "NOT", "IS", "NULL", "EMPTY", "MEMBER", "OF", "IN", "LIKE",
+            UPDATE, "SET", "DELETE", "NEW", "AND", "OR", "NOT", "IS", "NULL", "EMPTY", "MEMBER", "OF", "IN", "LIKE",
             "ESCAPE", "BETWEEN", "EXISTS", "ALL", "ANY", "SOME", "CASE", "WHEN", "THEN", "ELSE", "END", "TRUE",
             "FALSE", "UNION", "INTERSECT", "EXCEPT", "TYPE", "TREAT", "KEY", "VALUE", "ENTRY");
     static final List<String> FUNCTIONS = List.of("UPPER", "LOWER", "LENGTH", "LOCATE", "SUBSTRING", "TRIM", "CONCAT",
@@ -50,7 +52,7 @@ final class JpqlLanguage {
             "MOD", "SIZE", "INDEX", "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE", "NULLIF", "EXTRACT", "CAST",
             "ID", "VERSION", "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP", "LOCAL");
     static final List<String> CLAUSES = List.of("SELECT", "FROM", "WHERE", "GROUP BY", "HAVING", "ORDER BY", "SET",
-            "UPDATE", "DELETE FROM");
+            UPDATE, "DELETE FROM");
 
     private JpqlLanguage() {
     }
@@ -65,7 +67,7 @@ final class JpqlLanguage {
         Map<String, Object> targets = new LinkedHashMap<>();
         entities.values().forEach(entity -> targets.put(entity.name(), target(entity, entities)));
         Map<String, Object> dialect = Json.object("keywords", KEYWORDS, "functions", FUNCTIONS, "clauses", CLAUSES,
-                "targetAfter", List.of("FROM", "JOIN", "UPDATE"), "self", null, "quote", "'", "aliases", true,
+                "targetAfter", List.of("FROM", "JOIN", UPDATE), "self", null, "quote", "'", "aliases", true,
                 "identifierQuote", null);
         return Json.write(Json.object("mode", "query", "dialect", dialect, "targets", targets));
     }

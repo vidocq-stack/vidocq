@@ -100,7 +100,7 @@ class SchemaActionsTest {
 
     @Test
     void theDeclaredIndexesAreReadFromMemory() {
-        ActionResult result = new IndexActions(new UnitWork(() -> null)).declared(unit(null), Map.of());
+        ActionResult result = new IndexActions(new UnitWork(() -> null)).declaredIndexes(unit(null));
 
         assertEquals("3 indexes on 1 table", result.summary());
         assertTrue(result.body().contains("[\"note\",\"idx_note_title\",\"title\",\"no\"]"), result.body());
@@ -110,7 +110,7 @@ class SchemaActionsTest {
 
     @Test
     void theComparisonReadsTheDatabaseInATransactionRolledBack() {
-        ActionResult result = new IndexActions(new UnitWork(() -> null)).compare(unit(null), Map.of());
+        ActionResult result = new IndexActions(new UnitWork(() -> null)).compareIndexes(unit(null));
 
         assertFalse(result.error(), result.summary());
         assertEquals("2 same, 1 missing in the database, 1 extra in the database", result.summary());
@@ -149,8 +149,8 @@ class SchemaActionsTest {
         };
         DdlActions ddl = new DdlActions();
 
-        ActionResult create = ddl.create(unit(scripts), Map.of());
-        ActionResult drop = ddl.drop(unit(scripts), Map.of());
+        ActionResult create = ddl.createScript(unit(scripts));
+        ActionResult drop = ddl.dropScript(unit(scripts));
 
         assertEquals(ActionResult.SQL, create.contentType());
         assertEquals("CREATE TABLE NOTE (ID BIGINT);\nCREATE INDEX IDX_NOTE_TITLE ON NOTE (TITLE);\n", create.body());
@@ -161,7 +161,7 @@ class SchemaActionsTest {
 
     @Test
     void aUnitWithoutScriptsSaysWhy() {
-        ActionResult result = new DdlActions().create(unit(null), Map.of());
+        ActionResult result = new DdlActions().createScript(unit(null));
 
         assertTrue(result.error());
         assertEquals("PersistenceException: Unsupported unwrap type " + SchemaScripts.class.getName(),

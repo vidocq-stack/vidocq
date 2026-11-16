@@ -76,17 +76,18 @@ final class JpqlActions {
         String parameters = "\nA named parameter, :name, takes the member of params of that name, converted to the"
                 + " type the query gives it.";
         return List.of(
-                new PanelAction(QUERY + suffix, "Query", null, List.of(unit, statement), on.apply(this::query), GROUP,
+                new PanelAction(QUERY + suffix, "Query", null, List.of(unit, statement), on.apply(this::runQuery),
+                        GROUP,
                         "A JPQL SELECT, or FROM <Entity>, run in a transaction that is always rolled back: at most "
                                 + ResultRows.MAX_ROWS + " rows are shown, an entity as the values it holds."
                                 + parameters),
                 new PanelAction(WRITE + suffix, "Update / Delete", "Runs this JPQL statement against the database.",
                         List.of(unit, statement, new PanelAction.Argument(TRANSACTION, "Transaction",
-                                List.of(ROLLBACK, COMMIT), null, null)), on.apply(this::write), GROUP,
+                                List.of(ROLLBACK, COMMIT), null, null)), on.apply(this::runWrite), GROUP,
                         "A JPQL UPDATE or DELETE, run in a transaction rolled back unless commit is asked. JPQL has"
                                 + " no INSERT." + parameters),
-                new PanelAction(EXPORT + suffix, "Export CSV", null, List.of(unit, statement), on.apply(this::export),
-                        GROUP,
+                new PanelAction(EXPORT + suffix, "Export CSV", null, List.of(unit, statement),
+                        on.apply(this::exportCsv), GROUP,
                         "The rows of a JPQL SELECT as CSV, at most " + EXPORT_ROWS + " rows and 256 KiB, read in a"
                                 + " transaction that is always rolled back." + parameters));
     }
@@ -97,11 +98,12 @@ final class JpqlActions {
      */
     static String schema(String example, String language) {
         return Json.write(Json.object("type", "object", "properties", Json.object(
-                "query", Json.object("type", "string", "format", "textarea", "contentMediaType",
+                Statement.QUERY_MEMBER, Json.object("type", "string", "format", "textarea", "contentMediaType",
                         JpqlLanguage.MEDIA_TYPE, "x-language", language, "description", example),
-                "params", Json.object("type", "string", "format", "textarea", "x-parameters-of", "query",
+                Statement.PARAMS_MEMBER, Json.object("type", "string", "format", "textarea", "x-parameters-of",
+                        Statement.QUERY_MEMBER,
                         "description", "the named parameters, a JSON object: {\"id\": 3}")),
-                "required", List.of("query")));
+                "required", List.of(Statement.QUERY_MEMBER)));
     }
 
     /**
@@ -116,7 +118,7 @@ final class JpqlActions {
     }
 
     /** Runs a query and shows its rows. */
-    ActionResult query(Unit unit, Map<String, String> given) {
+    ActionResult runQuery(Unit unit, Map<String, String> given) {
         long start = System.nanoTime();
         Statement statement;
         try {
@@ -131,7 +133,7 @@ final class JpqlActions {
     }
 
     /** Runs an update or a delete, committed when {@value #TRANSACTION} is {@value #COMMIT}. */
-    ActionResult write(Unit unit, Map<String, String> given) {
+    ActionResult runWrite(Unit unit, Map<String, String> given) {
         Statement statement;
         try {
             statement = read(given, true);
@@ -152,7 +154,7 @@ final class JpqlActions {
     }
 
     /** Runs a query and gives its rows as CSV. */
-    ActionResult export(Unit unit, Map<String, String> given) {
+    ActionResult exportCsv(Unit unit, Map<String, String> given) {
         Statement statement;
         try {
             statement = read(given, false);

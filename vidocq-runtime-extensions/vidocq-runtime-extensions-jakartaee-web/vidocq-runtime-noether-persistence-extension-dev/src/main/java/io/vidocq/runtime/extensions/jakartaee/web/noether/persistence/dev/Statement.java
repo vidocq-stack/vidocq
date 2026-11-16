@@ -49,8 +49,10 @@ record Statement(String query, Map<String, Object> params) {
     /** The json argument of the tab's actions. */
     static final String ARGUMENT = "statement";
 
-    private static final String QUERY = "query";
-    private static final String PARAMS = "params";
+    /** The member of the json argument that holds the query. */
+    static final String QUERY_MEMBER = "query";
+    /** The member of the json argument that holds the named parameters. */
+    static final String PARAMS_MEMBER = "params";
     private static final Pattern WRITE = Pattern.compile("(?i)(UPDATE|DELETE)\\b");
     private static final Pattern DELETE = Pattern.compile("(?i)DELETE\\b");
 
@@ -87,13 +89,13 @@ record Statement(String query, Map<String, Object> params) {
         Object params = null;
         for (Map.Entry<?, ?> member : object(ARGUMENT, parse(ARGUMENT, sent)).entrySet()) {
             switch (String.valueOf(member.getKey())) {
-                case QUERY -> query = text(member.getValue());
-                case PARAMS -> params = member.getValue();
+                case QUERY_MEMBER -> query = text(member.getValue());
+                case PARAMS_MEMBER -> params = member.getValue();
                 default -> throw new Refused(member.getKey() + ": unknown argument");
             }
         }
         if (query == null || query.isBlank()) {
-            throw new Refused(QUERY + ": missing");
+            throw new Refused(QUERY_MEMBER + ": missing");
         }
         return new Statement(query.strip(), params(params));
     }
@@ -168,7 +170,7 @@ record Statement(String query, Map<String, Object> params) {
         try {
             Parameter<?> parameter = target.getParameter(name);
             return parameter == null ? null : parameter.getParameterType();
-        } catch (IllegalArgumentException | IllegalStateException unknown) {
+        } catch (IllegalArgumentException | IllegalStateException _) {
             return null;
         }
     }
@@ -192,24 +194,24 @@ record Statement(String query, Map<String, Object> params) {
         if (value == null || value instanceof String) {
             return (String) value;
         }
-        throw new Refused(QUERY + ": not a string");
+        throw new Refused(QUERY_MEMBER + ": not a string");
     }
 
     private static Map<String, Object> params(Object given) throws Refused {
         Object value = given;
         if (value instanceof String text) {
-            value = text.isBlank() ? null : parse(PARAMS, text);
+            value = text.isBlank() ? null : parse(PARAMS_MEMBER, text);
         }
         if (value == null) {
             return Map.of();
         }
         Map<String, Object> out = new LinkedHashMap<>();
-        for (Map.Entry<?, ?> member : object(PARAMS, value).entrySet()) {
+        for (Map.Entry<?, ?> member : object(PARAMS_MEMBER, value).entrySet()) {
             Object parameter = member.getValue();
             boolean fits = isValue(parameter)
                     || parameter instanceof List<?> values && values.stream().allMatch(Statement::isValue);
             if (!fits) {
-                throw new Refused(PARAMS + "." + member.getKey() + ": not a value or a list of values");
+                throw new Refused(PARAMS_MEMBER + "." + member.getKey() + ": not a value or a list of values");
             }
             out.put(String.valueOf(member.getKey()), parameter);
         }

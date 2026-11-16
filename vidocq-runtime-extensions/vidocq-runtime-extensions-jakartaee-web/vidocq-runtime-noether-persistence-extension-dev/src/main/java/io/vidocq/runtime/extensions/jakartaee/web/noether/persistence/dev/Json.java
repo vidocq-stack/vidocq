@@ -59,7 +59,7 @@ final class Json {
         Object value = reader.value(0);
         reader.blanks();
         if (reader.at < text.length()) {
-            throw reader.wrong("Unexpected character '" + text.charAt(reader.at) + "'");
+            throw reader.unexpected();
         }
         return value;
     }
@@ -186,7 +186,7 @@ final class Json {
 
     private Object literal(String word, Object value) {
         if (!text.startsWith(word, at)) {
-            throw wrong("Unexpected character '" + text.charAt(at) + "'");
+            throw unexpected();
         }
         at += word.length();
         return value;
@@ -195,7 +195,7 @@ final class Json {
     private Object number() {
         Matcher matcher = NUMBER.matcher(text).region(at, text.length());
         if (!matcher.lookingAt()) {
-            throw wrong("Unexpected character '" + text.charAt(at) + "'");
+            throw unexpected();
         }
         String literal = matcher.group();
         at = matcher.end();
@@ -223,6 +223,10 @@ final class Json {
         if (!take(c)) {
             throw wrong(at >= text.length() ? END : "Expected '" + c + "'");
         }
+    }
+
+    private IllegalArgumentException unexpected() {
+        return wrong("Unexpected character '" + text.charAt(at) + "'");
     }
 
     private IllegalArgumentException wrong(String what) {

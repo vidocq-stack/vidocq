@@ -54,7 +54,7 @@ final class ExploreActions {
     static final String PAGE = "page";
     static final List<String> SIZES = List.of("20", "50", "100");
 
-    private static final Pattern PAGE_NUMBER = Pattern.compile("[0-9]{1,6}");
+    private static final Pattern PAGE_NUMBER = Pattern.compile("\\d{1,6}");
 
     /**
      * What a call asks.
@@ -95,20 +95,20 @@ final class ExploreActions {
                 new PanelAction.Argument(PAGE, "Page", null, "[0-9]{0,6}", null));
         return List.of(
                 new PanelAction(PAGE_ACTION + suffix, "Show a page", null, arguments,
-                        on.apply((found, given) -> page(found, given, write)), GROUP,
+                        on.apply((found, given) -> showPage(found, given, write)), GROUP,
                         "A page of the entity's rows, sorted by its id, each relation as its target's id. Select rows"
                                 + " and right-click them to delete or update them through the JPQL tab."),
-                new PanelAction(EXPORT + suffix, "Export the page", null, arguments, on.apply(this::export), GROUP,
+                new PanelAction(EXPORT + suffix, "Export the page", null, arguments, on.apply(this::exportPage), GROUP,
                         "The same page as CSV."));
     }
 
     /** A page of an entity's rows, whose menu fills the JPQL action {@code write}. */
-    ActionResult page(Unit unit, Map<String, String> given, String write) {
+    ActionResult showPage(Unit unit, Map<String, String> given, String write) {
         return read(unit, given, read -> shown(read, write));
     }
 
     /** The same page as CSV. */
-    ActionResult export(Unit unit, Map<String, String> given) {
+    ActionResult exportPage(Unit unit, Map<String, String> given) {
         return read(unit, given, ExploreActions::csv);
     }
 

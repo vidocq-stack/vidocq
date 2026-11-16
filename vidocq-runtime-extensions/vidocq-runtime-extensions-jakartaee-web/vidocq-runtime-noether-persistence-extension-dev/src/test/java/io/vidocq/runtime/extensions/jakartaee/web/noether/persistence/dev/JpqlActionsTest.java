@@ -101,7 +101,7 @@ class JpqlActionsTest {
     void aQueryShowsItsRowsAndIsRolledBack() {
         Unit unit = unit(ResultRowsTest.results(new Object[] {"first", 1L}, new Object[] {"second", 2L}), 0, null);
 
-        ActionResult result = jpql.query(unit, statement("SELECT n.title, n.id FROM Note n"));
+        ActionResult result = jpql.runQuery(unit, statement("SELECT n.title, n.id FROM Note n"));
 
         assertFalse(result.error(), result.summary());
         assertEquals(ActionResult.ROWS, result.contentType());
@@ -116,7 +116,7 @@ class JpqlActionsTest {
     void aParameterTakesTheTypeTheQueryDeclares() {
         Unit unit = unit(List.of(), 0, null);
 
-        jpql.query(unit, Map.of(JpqlActions.STATEMENT, "{\"query\": \"SELECT n FROM Note n WHERE n.day >= :since\","
+        jpql.runQuery(unit, Map.of(JpqlActions.STATEMENT, "{\"query\": \"SELECT n FROM Note n WHERE n.day >= :since\","
                 + " \"params\": {\"since\": \"2026-11-16\"}}"));
 
         assertEquals(LocalDate.of(2026, 11, 16), bound.get("since"));
@@ -126,28 +126,28 @@ class JpqlActionsTest {
     void eachActionRefusesTheOtherKindOfStatementBeforeAnythingRuns() {
         Unit unit = unit(List.of(), 0, null);
 
-        ActionResult query = jpql.query(unit, statement("DELETE FROM Note n"));
-        ActionResult write = jpql.write(unit, statement("SELECT n FROM Note n"));
-        ActionResult export = jpql.export(unit, statement("UPDATE Note n SET n.title = 'x'"));
+        ActionResult query = jpql.runQuery(unit, statement("DELETE FROM Note n"));
+        ActionResult write = jpql.runWrite(unit, statement("SELECT n FROM Note n"));
+        ActionResult export = jpql.exportCsv(unit, statement("UPDATE Note n SET n.title = 'x'"));
 
         assertEquals("an UPDATE or a DELETE: use Update / Delete", query.summary());
         assertEquals("not an UPDATE or a DELETE: use Query", write.summary());
         assertEquals("an UPDATE or a DELETE: use Update / Delete", export.summary());
         assertTrue(query.error() && write.error() && export.error());
         assertEquals(List.of(), calls);
-        assertEquals("statement: not a JSON object", jpql.query(unit, Map.of(JpqlActions.STATEMENT, "3")).summary());
+        assertEquals("statement: not a JSON object", jpql.runQuery(unit, Map.of(JpqlActions.STATEMENT, "3")).summary());
     }
 
     @Test
     void aWriteIsRolledBackUnlessCommitIsAsked() {
-        ActionResult rolledBack = jpql.write(unit(List.of(), 3, null), statement("UPDATE Note n SET n.title = 'x'"));
+        ActionResult rolledBack = jpql.runWrite(unit(List.of(), 3, null), statement("UPDATE Note n SET n.title = 'x'"));
         assertEquals("3 rows updated · rolled back", rolledBack.summary());
         assertTrue(calls.contains("rollback"));
 
         calls.clear();
         Map<String, String> given = new HashMap<>(statement("DELETE FROM Note n WHERE n.id = 1"));
         given.put(JpqlActions.TRANSACTION, "commit");
-        ActionResult committed = jpql.write(unit(List.of(), 1, null), given);
+        ActionResult committed = jpql.runWrite(unit(List.of(), 1, null), given);
         assertEquals("1 row deleted · committed", committed.summary());
         assertTrue(calls.contains("commit"));
         assertFalse(calls.contains("rollback"));
@@ -159,7 +159,7 @@ class JpqlActionsTest {
             throw new IllegalArgumentException("Unexpected token SELEC\n  at line 1, password=secret");
         });
 
-        ActionResult result = jpql.query(unit, statement("SELEC n FROM Note n"));
+        ActionResult result = jpql.runQuery(unit, statement("SELEC n FROM Note n"));
 
         assertTrue(result.error());
         assertEquals("IllegalArgumentException: Unexpected token SELEC at line 1, password=***", result.summary());
@@ -171,7 +171,7 @@ class JpqlActionsTest {
     void anExportIsTheRowsAsCsv() {
         Unit unit = unit(ResultRowsTest.results(new Object[] {"first", 1L}, new Object[] {"a, \"b\"", 2L}), 0, null);
 
-        ActionResult result = jpql.export(unit, statement("SELECT n.title, n.id FROM Note n"));
+        ActionResult result = jpql.exportCsv(unit, statement("SELECT n.title, n.id FROM Note n"));
 
         assertEquals(ActionResult.CSV, result.contentType());
         assertEquals("n.title,n.id\nfirst,1\n\"a, \"\"b\"\"\",2\n", result.body());

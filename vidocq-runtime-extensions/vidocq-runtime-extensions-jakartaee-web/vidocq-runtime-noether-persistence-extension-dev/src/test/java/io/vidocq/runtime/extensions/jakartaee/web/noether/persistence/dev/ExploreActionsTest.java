@@ -130,7 +130,7 @@ class ExploreActionsTest {
         Unit notes = unit("notes", UNIT, ResultRowsTest.results(new Object[] {21L, "a", 4L, null, null},
                 new Object[] {22L, "b", null, "Main St", "Paris"}));
 
-        ActionResult result = explore.page(notes, page("Note", "20", "2"), WRITE);
+        ActionResult result = explore.showPage(notes, page("Note", "20", "2"), WRITE);
 
         assertFalse(result.error(), result.summary());
         assertEquals("SELECT e.id, e.title, j1.id, e.address.street, e.address.city FROM Note e"
@@ -146,7 +146,7 @@ class ExploreActionsTest {
     void aCompositeIdHasNoMenu() {
         Unit orders = unit("orders", LINES, ResultRowsTest.results(new Object[] {1L, 2, 9.5}));
 
-        ActionResult result = explore.page(orders, page("Line", "20", ""), WRITE);
+        ActionResult result = explore.showPage(orders, page("Line", "20", ""), WRITE);
 
         assertEquals("SELECT e.key.orderId, e.key.no, e.amount FROM Line e ORDER BY e.key.orderId, e.key.no",
                 asked.get("jpql"));
@@ -162,7 +162,7 @@ class ExploreActionsTest {
         for (long i = 0; i < 21; i++) {
             rows.add(i);
         }
-        ActionResult result = explore.page(unit("notes", UNIT, rows), page("Tag", "20", "1"), WRITE);
+        ActionResult result = explore.showPage(unit("notes", UNIT, rows), page("Tag", "20", "1"), WRITE);
 
         assertTrue(result.summary().startsWith("20 rows of Tag, page 1, more on the next page, in "),
                 result.summary());
@@ -173,9 +173,10 @@ class ExploreActionsTest {
     void anEntityOfAnotherUnitOrAPageThatIsNoNumberIsRefused() {
         Unit notes = unit("notes", UNIT, List.of());
 
-        assertEquals("Line is no entity of unit notes", explore.page(notes, page("Line", "20", "1"), WRITE).summary());
-        assertEquals("page: not a page number", explore.page(notes, page("Note", "20", "x"), WRITE).summary());
-        assertEquals("page: not a page number", explore.page(notes, page("Note", "20", "0"), WRITE).summary());
+        assertEquals("Line is no entity of unit notes",
+                explore.showPage(notes, page("Line", "20", "1"), WRITE).summary());
+        assertEquals("page: not a page number", explore.showPage(notes, page("Note", "20", "x"), WRITE).summary());
+        assertEquals("page: not a page number", explore.showPage(notes, page("Note", "20", "0"), WRITE).summary());
         assertEquals(List.of(), calls);
     }
 
@@ -183,7 +184,7 @@ class ExploreActionsTest {
     void theExportIsThePageAsCsv() {
         Unit notes = unit("notes", UNIT, ResultRowsTest.results(new Object[] {1L, "a", null, null, null}));
 
-        ActionResult result = explore.export(notes, page("Note", "50", "1"));
+        ActionResult result = explore.exportPage(notes, page("Note", "50", "1"));
 
         assertEquals(ActionResult.CSV, result.contentType());
         assertEquals("id,title,author.id,address.street,address.city\n1,a,,,\n", result.body());

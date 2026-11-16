@@ -33,14 +33,15 @@ final class JavaTypes {
     private static final Set<String> NUMBERS = Set.of("java.lang.Double", "double", "java.lang.Float", "float",
             "java.math.BigDecimal");
     private static final Set<String> BOOLEANS = Set.of("java.lang.Boolean", "boolean");
+    private static final String DATE_TIME = "date-time";
     private static final Map<String, String> FORMATS = Map.of(
             "java.time.LocalDate", "date",
             "java.sql.Date", "date",
-            "java.time.LocalDateTime", "date-time",
-            "java.time.OffsetDateTime", "date-time",
-            "java.time.ZonedDateTime", "date-time",
-            "java.time.Instant", "date-time",
-            "java.sql.Timestamp", "date-time",
+            "java.time.LocalDateTime", DATE_TIME,
+            "java.time.OffsetDateTime", DATE_TIME,
+            "java.time.ZonedDateTime", DATE_TIME,
+            "java.time.Instant", DATE_TIME,
+            "java.sql.Timestamp", DATE_TIME,
             "java.time.LocalTime", "time",
             "java.sql.Time", "time",
             "java.util.UUID", "uuid");

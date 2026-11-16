@@ -28,6 +28,7 @@ import io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.live.Noeth
 import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.PanelAction.ActionResult;
 import io.vidocq.runtime.spi.devconsole.PanelAction.ActionResult.Column;
+import jakarta.persistence.EntityManager;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -48,8 +49,8 @@ final class IndexActions {
     static final String DECLARED = "indexes.declared";
     static final String COMPARE = "indexes.compare";
 
-    private static final List<Column> DECLARED_COLUMNS = List.of(new Column("table", "string"),
-            new Column("index", "string"), new Column("columns", "string"), new Column("unique", "string"));
+    private static final List<Column> DECLARED_COLUMNS = List.of(IndexDiff.text("table"), IndexDiff.text("index"),
+            IndexDiff.text("columns"), IndexDiff.text("unique"));
 
     private final UnitWork work;
 
@@ -61,16 +62,18 @@ final class IndexActions {
     List<PanelAction> actions(PanelAction.Argument unit,
                               Function<UnitCall, Function<Map<String, String>, ActionResult>> on) {
         return List.of(
-                new PanelAction(DECLARED, "Declared indexes", null, List.of(unit), on.apply(this::declared), GROUP,
+                new PanelAction(DECLARED, "Declared indexes", null, List.of(unit),
+                        on.apply((found, _) -> declaredIndexes(found)), GROUP,
                         "The indexes and unique constraints of the unit's mapping, read from memory."),
-                new PanelAction(COMPARE, "Compare with the database", null, List.of(unit), on.apply(this::compare),
-                        GROUP, "Each declared index against the database's: same, missing in the database, extra in"
+                new PanelAction(COMPARE, "Compare with the database", null, List.of(unit),
+                        on.apply((found, _) -> compareIndexes(found)), GROUP,
+                        "Each declared index against the database's: same, missing in the database, extra in"
                                 + " the database or different. Names are compared ignoring case; the indexes of"
                                 + " primary and foreign keys are left out."));
     }
 
     /** The declared indexes, a row each. */
-    ActionResult declared(Unit unit, Map<String, String> given) {
+    ActionResult declaredIndexes(Unit unit) {
         UnitDescription description;
         try {
             description = PersistenceLivePanel.describe(unit);
@@ -91,20 +94,23 @@ final class IndexActions {
     }
 
     /** The declared indexes against the database's. */
-    ActionResult compare(Unit unit, Map<String, String> given) {
-        Outcome<List<List<String>>> outcome = work.run(unit, Mode.READ, em -> {
-            List<Table> tables = PersistenceLivePanel.describe(unit).tables();
-            try {
-                return IndexDiff.rows(tables, DatabaseIndexes.read(em.unwrap(Connection.class), tables));
-            } catch (SQLException unreadable) {
-                throw new IllegalStateException("the database's indexes could not be read: "
-                        + unreadable.getMessage(), unreadable);
-            }
-        });
+    ActionResult compareIndexes(Unit unit) {
+        Outcome<List<List<String>>> outcome = work.run(unit, Mode.READ,
+                em -> compared(em, PersistenceLivePanel.describe(unit).tables()));
         if (outcome.failure() != null) {
             return JpqlActions.failure(outcome.failure());
         }
         List<List<String>> rows = outcome.value();
         return ActionResult.rows(IndexDiff.summary(rows), IndexDiff.COLUMNS, rows, false);
+    }
+
+    /** The rows comparing the declared indexes of {@code tables} with those {@code em}'s database holds. */
+    private static List<List<String>> compared(EntityManager em, List<Table> tables) {
+        try {
+            return IndexDiff.rows(tables, DatabaseIndexes.read(em.unwrap(Connection.class), tables));
+        } catch (SQLException unreadable) {
+            throw new IllegalStateException("the database's indexes could not be read: " + unreadable.getMessage(),
+                    unreadable);
+        }
     }
 }

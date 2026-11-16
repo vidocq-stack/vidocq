@@ -45,8 +45,13 @@ final class IndexDiff {
     static final String DIFFERENT = "different";
 
     /** The columns of a comparison's rows. */
-    static final List<Column> COLUMNS = List.of(new Column("table", "string"), new Column("index", "string"),
-            new Column("mapping", "string"), new Column("database", "string"), new Column("status", "string"));
+    static final List<Column> COLUMNS = List.of(text("table"), text("index"), text("mapping"), text("database"),
+            text("status"));
+
+    /** A column of text named {@code name}. */
+    static Column text(String name) {
+        return new Column(name, "string");
+    }
 
     /**
      * An index of the database.

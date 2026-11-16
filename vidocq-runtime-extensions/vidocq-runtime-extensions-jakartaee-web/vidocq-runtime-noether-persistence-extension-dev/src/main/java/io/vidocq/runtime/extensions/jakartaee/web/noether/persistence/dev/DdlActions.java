@@ -44,20 +44,22 @@ final class DdlActions {
                               Function<UnitCall, Function<Map<String, String>, ActionResult>> on) {
         String nothing = " Nothing runs against the database: copy or download the script.";
         return List.of(
-                new PanelAction(CREATE, "Create script", null, List.of(unit), on.apply(this::create), GROUP,
+                new PanelAction(CREATE, "Create script", null, List.of(unit),
+                        on.apply((found, _) -> createScript(found)), GROUP,
                         "The statements that create the unit's tables, sequences, indexes and constraints, in its"
                                 + " dialect." + nothing),
-                new PanelAction(DROP, "Drop script", null, List.of(unit), on.apply(this::drop), GROUP,
+                new PanelAction(DROP, "Drop script", null, List.of(unit), on.apply((found, _) -> dropScript(found)),
+                        GROUP,
                         "The statements that drop them." + nothing));
     }
 
     /** The create script. */
-    ActionResult create(Unit unit, Map<String, String> given) {
+    ActionResult createScript(Unit unit) {
         return script(unit, SchemaScripts::createScript);
     }
 
     /** The drop script. */
-    ActionResult drop(Unit unit, Map<String, String> given) {
+    ActionResult dropScript(Unit unit) {
         return script(unit, SchemaScripts::dropScript);
     }
 
