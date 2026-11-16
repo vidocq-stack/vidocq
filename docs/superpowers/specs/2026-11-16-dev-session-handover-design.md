@@ -159,17 +159,21 @@ object of the old layer is kept, and the old layer can be collected.
 `FoyDeployments.closeAll(Optional<DevHandover> handover)` replaces `closeAll()`. When the handover is present and
 `exporting()`, then for each live deployment:
 
-- read `activeSessions()` for the count;
 - call `mounted.closeExportingSessions()` in place of `close()`;
 - `put` the bytes under the deployment's key.
 
-It logs `Hot reload - handing 3 HTTP sessions to the next deployment`. Otherwise it closes and logs as today (#620).
+The export logs no count. `activeSessions()` read before the close still counts the sessions the export drops
+(expired, or holding an attribute that cannot be written), so it would overstate. The import gives the exact count.
+Without an exporting handover, it closes and logs as today (#620).
 `FoyExtension` keeps the `ExtensionContext`'s handover from `onStart` for the before-stop hook and `onStop`.
 
 At start, `FoyExtension.start` and `FoyMountHandlerProvider.create` call `importSessions` after `register` and before
 the mount. For that they `take` the key of the new deployment's context path, and when bytes are there call
-`mounted.importSessions(bytes)` and log `Hot reload - kept 3 HTTP sessions across the reload`. Foy's own WARN lines
-name the sessions dropped at export or import. A context path that changed between the two boots finds no bytes: its
+`mounted.importSessions(bytes)` and log its result: `Hot reload - kept 3 HTTP sessions across the reload`. Foy's own
+WARN lines name the sessions dropped at export or import. The import never fails the start: `importSessions` throws
+`IllegalArgumentException` on bytes it does not recognise (magic, version) and `IllegalStateException` on a closed
+deployment. Both callers catch `RuntimeException` around it, log one WARN (`Hot reload - the HTTP sessions of the
+previous deployment could not be imported, starting without them: <exception>`), and mount the deployment anyway. A context path that changed between the two boots finds no bytes: its
 sessions are dropped by `store.clear()`, as a new application's would be.
 
 ### 4. Push and the gap
@@ -220,7 +224,8 @@ a dev swap, answering 503 with `Retry-After` until the new handler is mounted. N
 - Foy extension, `FoyExtensionTest`, on a real Foy deployment through Chappe:
   - a session attribute survives `closeAll` with a handover, then a new `start`;
   - the same `JSESSIONID` finds it, and the two log lines are written;
-  - without a handover, today's invalidation line.
+  - without a handover, today's invalidation line;
+  - bytes `importSessions` refuses (a corrupted handover): one WARN, and the deployment is mounted and serves.
 - Replay R-c, on vaadin-on-vidocq with `vidocq-runtime-vaadin-extension`: a counter view.
   - Add a lambda after the existing ones: a swap, the counter's value kept, the same `JSESSIONID`, and the measured
     time until the UI answers.
