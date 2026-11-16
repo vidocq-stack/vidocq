@@ -22,6 +22,7 @@ package io.vidocq.runtime.spi.devconsole;
 import io.vidocq.runtime.spi.ExtensionContext;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * The live half of a section of the startup report, from a {@code -dev} module (Vidocq/vidocq#143): values sampled
@@ -62,5 +63,10 @@ public interface LivePanel {
     /** The languages of the page's code editor, read with the actions in a dev launch only; none by default. */
     default List<PanelLanguage> languages() {
         return List.of();
+    }
+
+    /** The one choice of the panel, among the names of its sample's groups, read once per boot; none by default. */
+    default Optional<PanelSelector> selector() {
+        return Optional.empty();
     }
 }

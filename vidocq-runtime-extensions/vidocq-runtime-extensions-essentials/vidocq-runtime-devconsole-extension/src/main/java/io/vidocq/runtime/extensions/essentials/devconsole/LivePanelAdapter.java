@@ -25,11 +25,13 @@ import io.vidocq.runtime.spi.devconsole.LivePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.PanelLanguage;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
+import io.vidocq.runtime.spi.devconsole.PanelSelector;
 import io.vidocq.runtime.spi.report.StartupReportContext;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
 import io.vidocq.runtime.spi.report.StartupReportSection;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * A static section and its live panel, seen as one {@link DevConsolePanel}: the contributor gives the id, the title
@@ -78,6 +80,11 @@ final class LivePanelAdapter implements DevConsolePanel {
     @Override
     public List<PanelLanguage> languages() {
         return live.languages();
+    }
+
+    @Override
+    public Optional<PanelSelector> selector() {
+        return live.selector();
     }
 
     @Override

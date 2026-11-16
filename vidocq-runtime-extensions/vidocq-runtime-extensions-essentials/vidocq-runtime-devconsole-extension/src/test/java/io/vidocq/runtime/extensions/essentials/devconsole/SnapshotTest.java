@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.essentials.devconsole;
 
 import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
 import io.vidocq.runtime.spi.devconsole.PanelSample;
+import io.vidocq.runtime.spi.devconsole.PanelSelector;
 import io.vidocq.runtime.spi.devconsole.Unit;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.StartupReportContext;
@@ -445,5 +446,84 @@ class SnapshotTest {
 
         assertNull(snapshot.panel("absent"));
         assertTrue(warnings.stream().anyMatch(w -> w.startsWith("[" + LivePanels.ORPHAN + "]")), warnings.toString());
+    }
+
+    /** A panel of one group per pool, whose selector is what {@code selector} gives, or throws. */
+    private static final class ChoicePanel implements DevConsolePanel {
+
+        private final java.util.function.Supplier<Optional<PanelSelector>> selector;
+
+        ChoicePanel(java.util.function.Supplier<Optional<PanelSelector>> selector) {
+            this.selector = selector;
+        }
+
+        @Override
+        public String id() {
+            return "choices";
+        }
+
+        @Override
+        public void contribute(StartupReportContext context, StartupReportSection section) {
+            section.summary("2 pools");
+        }
+
+        @Override
+        public Optional<PanelSelector> selector() {
+            return selector.get();
+        }
+
+        @Override
+        public void sample(PanelSample sample) {
+            sample.group("main").counter("borrows", 1, Unit.COUNT);
+            sample.group("audit").counter("borrows", 2, Unit.COUNT);
+        }
+    }
+
+    /** The panel {@code choices} of a ready snapshot whose only contributor is {@code panel}. */
+    private Map<String, Object> choicesPanel(DevConsolePanel panel) {
+        Snapshot snapshot = snapshot();
+        report.set(FakeReportView.of(panel));
+        List<Map<String, Object>> panels = at(Json.object(snapshot.document()), "panels");
+        return panels.stream().filter(p -> "choices".equals(p.get("id"))).findFirst().orElseThrow();
+    }
+
+    @Test
+    void aPanelWithASelectorWritesItsArgumentAndLabel() {
+        Map<String, Object> panel = choicesPanel(
+                new ChoicePanel(() -> Optional.of(new PanelSelector("pool", "Connection pool"))));
+
+        assertEquals(Map.of("argument", "pool", "label", "Connection pool"), panel.get("selector"));
+    }
+
+    @Test
+    void aPanelWithoutSelectorWritesNone() {
+        Map<String, Object> panel = choicesPanel(new ChoicePanel(Optional::empty));
+
+        assertFalse(panel.containsKey("selector"), panel.toString());
+    }
+
+    @Test
+    void aSelectorThatThrowsIsLeftOut() {
+        Map<String, Object> panel = choicesPanel(new ChoicePanel(() -> {
+            throw new IllegalStateException("no pools yet");
+        }));
+
+        assertFalse(panel.containsKey("selector"), panel.toString());
+        assertEquals(List.of("main", "audit"), ((List<Map<String, Object>>) at(panel, "sample", "groups")).stream()
+                .map(group -> group.get("name")).toList(), "the panel is shown, without its choice");
+    }
+
+    @Test
+    void aLivePanelGivesItsSelector() {
+        LivePanelsTest.Live live = new LivePanelsTest.Live("rest") {
+            @Override
+            public Optional<PanelSelector> selector() {
+                return Optional.of(new PanelSelector("unit", "Persistence unit"));
+            }
+        };
+        Snapshot snapshot = snapshotOf(FakeReportView.of(new TestPanels.Static("rest")),
+                LivePanels.of(List.of(live), w -> {}));
+
+        assertEquals(new PanelSelector("unit", "Persistence unit"), snapshot.panel("rest").selector());
     }
 }

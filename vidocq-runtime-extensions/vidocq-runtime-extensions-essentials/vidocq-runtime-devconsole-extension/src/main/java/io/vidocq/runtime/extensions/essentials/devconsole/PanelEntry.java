@@ -23,6 +23,7 @@ import io.vidocq.runtime.spi.devconsole.Chart;
 import io.vidocq.runtime.spi.devconsole.DevConsolePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.PanelLanguage;
+import io.vidocq.runtime.spi.devconsole.PanelSelector;
 import io.vidocq.runtime.spi.report.LaunchMode;
 import io.vidocq.runtime.spi.report.ReportSection;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
@@ -30,6 +31,7 @@ import io.vidocq.runtime.spi.report.StartupReportContributor;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -45,9 +47,11 @@ import java.util.Set;
  *                  panel or its {@code actions()} failed; each id once, {@value #MAX_ACTIONS} at most
  * @param languages what the page's code editor may fetch of it: read in a dev launch only, with the actions; empty
  *                  in any other, when there is no panel, its {@code languages()} failed or named one id twice
+ * @param selector  the one choice the page offers above the panel's sub-tabs, read in every launch; {@code null} when
+ *                  there is no panel, it has none or its {@code selector()} failed
  */
 record PanelEntry(String id, String title, ReportSection section, DevConsolePanel panel, List<Chart> charts,
-                  List<PanelAction> actions, List<PanelLanguage> languages) {
+                  List<PanelAction> actions, List<PanelLanguage> languages, PanelSelector selector) {
 
     /** The most actions of one panel the console shows. */
     static final int MAX_ACTIONS = 128;
@@ -104,7 +108,7 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
         DevConsolePanel panel = contributor instanceof DevConsolePanel live ? live : null;
         return new PanelEntry(section.id(), title(contributor, section.id()), section, panel,
                 charts(panel, section.id()), dev ? actions(panel, section.id()) : List.of(),
-                dev ? languages(panel, section.id()) : List.of());
+                dev ? languages(panel, section.id()) : List.of(), selector(panel, section.id()));
     }
 
     /**
@@ -126,7 +130,7 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
         }
         return new PanelEntry(id, title, section.toSection(), panel, charts(panel, id),
                 mode == LaunchMode.DEV ? actions(panel, id) : List.of(),
-                mode == LaunchMode.DEV ? languages(panel, id) : List.of());
+                mode == LaunchMode.DEV ? languages(panel, id) : List.of(), selector(panel, id));
     }
 
     private static String title(StartupReportContributor contributor, String id) {
@@ -150,6 +154,21 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
             LOG.log(System.Logger.Level.DEBUG, PANEL_PREFIX + id + "' has no charts: its charts() failed",
                     failed);
             return List.of();
+        }
+    }
+
+    /** The selector of {@code panel}, read once per boot; {@code null} when it has none or its selector fails. */
+    private static PanelSelector selector(DevConsolePanel panel, String id) {
+        if (panel == null) {
+            return null;
+        }
+        try {
+            Optional<PanelSelector> declared = panel.selector();
+            return declared == null ? null : declared.orElse(null);
+        } catch (RuntimeException | LinkageError failed) {
+            LOG.log(System.Logger.Level.DEBUG, PANEL_PREFIX + id + "' has no selector: its selector() failed",
+                    failed);
+            return null;
         }
     }
 

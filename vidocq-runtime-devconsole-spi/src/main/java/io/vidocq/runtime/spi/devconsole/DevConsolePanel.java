@@ -22,6 +22,7 @@ package io.vidocq.runtime.spi.devconsole;
 import io.vidocq.runtime.spi.report.StartupReportContributor;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * A section of the startup report that the dev console also shows live: the facts of the boot once, then values
@@ -164,6 +165,18 @@ public interface DevConsolePanel extends StartupReportContributor {
      */
     default List<PanelLanguage> languages() {
         return List.of();
+    }
+
+    /**
+     * The one choice this panel offers above its sub-tabs, among the names of the groups of its sample. Read once
+     * per boot, after the report is written, in every launch: the <i>Monitoring</i> tab follows it in any of them. A
+     * {@link RuntimeException} or a {@link LinkageError} thrown here leaves the panel without a choice. See
+     * {@link PanelSelector}.
+     *
+     * @return the choice; none by default
+     */
+    default Optional<PanelSelector> selector() {
+        return Optional.empty();
     }
 
     /**

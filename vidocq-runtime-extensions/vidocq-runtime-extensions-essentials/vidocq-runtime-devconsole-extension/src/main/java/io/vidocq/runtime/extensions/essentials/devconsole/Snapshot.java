@@ -83,6 +83,9 @@ import java.util.function.Supplier;
  *   <li>{@code panels} has one panel per contributor of the report, in report order, then the console's own. A
  *       contributor that is no {@link io.vidocq.runtime.spi.devconsole.DevConsolePanel} has boot facts only:
  *       {@code live} is {@code false}, its {@code charts} empty and its {@code sample} {@code null}.</li>
+ *   <li>A panel that offers one choice above its sub-tabs has {@code "selector": {"argument": "unit",
+ *       "label": "Persistence unit"}}, in every launch: the choices are the names of its sample's groups (see
+ *       {@link io.vidocq.runtime.spi.devconsole.PanelSelector}).</li>
  *   <li>A panel whose {@code sample()} throws has {@code "sample": {"error": "<class>"}}: the simple name of the
  *       exception's class, never its message, which may carry a secret. The console logs
  *       {@code [VIDOCQ-DEVC-005]} once per panel and boot, with the stack trace at DEBUG, and calls the panel
@@ -544,6 +547,10 @@ final class Snapshot implements Handler {
             out.endArray().endObject();
         }
         out.endArray();
+        if (panel.selector() != null) {
+            out.name("selector").beginObject().name("argument").value(panel.selector().argument())
+                    .name("label").value(Texts.clean(panel.selector().label())).endObject();
+        }
         out.name("sample");
         if (panel.panel() == null) {
             out.nullValue();
