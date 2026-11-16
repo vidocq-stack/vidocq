@@ -262,6 +262,11 @@ event runs without any refresh.
 * **What it must not do.** Block: a slow listener delays the listeners after it, never the reload loop. An exception
   it throws is logged, `Hot reload - the redefinition listener <class> failed: <exception>`, and the next listener
   still runs.
+* **Before a stop.** `stopping()`, a default method that does nothing, is called before each stop of the
+  application, a layer swap or the end of `vidocq:dev`, while it still serves requests. A listener ends there what it
+  keeps open, such as an event stream: the servlet container waits up to two seconds for the requests in service
+  before it destroys the servlets. The stopping thread waits for the listeners, so `stopping()` returns quickly; an
+  exception is logged with `failed before the stop`.
 
 `vidocq-runtime-vaadin-extension-dev` is the shipped example: it reloads the open pages that show a redefined
 component (xref:vaadin.adoc#dev-reload-session[Vaadin]).

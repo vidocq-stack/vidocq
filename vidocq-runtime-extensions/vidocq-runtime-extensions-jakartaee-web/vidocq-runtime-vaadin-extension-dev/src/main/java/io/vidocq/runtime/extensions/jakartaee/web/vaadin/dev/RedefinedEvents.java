@@ -104,9 +104,14 @@ public final class RedefinedEvents extends HttpServlet {
         }
     }
 
+    /** Ends every open stream: its request leaves the application. */
+    static void endAll() {
+        STREAMS.forEach(stream -> stream.add(END));
+    }
+
     @Override
     public void destroy() {
-        STREAMS.forEach(stream -> stream.add(END));
+        endAll();
     }
 
     /** Registers the servlet; only {@code vidocq:dev} adds this module, so only a dev deployment has it. */

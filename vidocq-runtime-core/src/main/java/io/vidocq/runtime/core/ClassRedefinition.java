@@ -88,6 +88,11 @@ final class ClassRedefinition {
             }
 
             @Override
+            public void stopping(ModuleLayer layer) {
+                // nobody to tell
+            }
+
+            @Override
             public void close() {
                 // nothing started
             }
@@ -99,6 +104,9 @@ final class ClassRedefinition {
          * @param methodsByClass the loaded classes redefined, each with the methods whose code changed
          */
         void redefined(ModuleLayer layer, SequencedMap<Class<?>, SequencedSet<String>> methodsByClass);
+
+        /** Tells the listeners of {@code layer} that the application stops, and returns once they have all answered. */
+        void stopping(ModuleLayer layer);
 
         @Override
         void close();

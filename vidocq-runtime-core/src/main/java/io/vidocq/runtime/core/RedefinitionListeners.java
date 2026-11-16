@@ -83,12 +83,24 @@ final class RedefinitionListeners implements ClassRedefinition.Notifier {
         }
     }
 
+    /** Tells the listeners of {@code layer} on the calling thread, before it returns. */
+    @Override
+    public void stopping(ModuleLayer layer) {
+        tell(layer, RedefinitionListener::stopping, "failed before the stop");
+    }
+
     private void tell(ModuleLayer layer, Redefinition redefinition) {
+        tell(layer, listener -> listener.redefined(redefinition), "failed");
+    }
+
+    /** Calls each listener of {@code layer}; one that throws is logged with {@code failed}, and the next is called. */
+    private void tell(ModuleLayer layer, Consumer<RedefinitionListener> call, String failed) {
         for (RedefinitionListener listener : load.apply(layer)) {
             try {
-                listener.redefined(redefinition);
+                call.accept(listener);
             } catch (RuntimeException e) {
-                warn.accept("Hot reload - the redefinition listener " + listener.getClass().getName() + " failed: " + e);
+                warn.accept("Hot reload - the redefinition listener " + listener.getClass().getName() + " " + failed
+                        + ": " + e);
             }
         }
     }

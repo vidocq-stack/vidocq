@@ -168,6 +168,8 @@ public final class VidocqBootstrap {
     private final AtomicReference<StartupReportView> reportView = new AtomicReference<>();
     /** The extensions to boot instead of those the {@link java.util.ServiceLoader} finds, for tests. */
     private List<VidocqExtension> givenExtensions;
+    /** Runs when this boot stops, before any extension stops: see {@link #beforeStop(Runnable)}. */
+    private Runnable beforeStop = () -> {};
     /**
      * Top-chrono taken during the construction of the bootstrap (= just after the entry
      * from {@code Vidocq.main()} via {@link #create()}). Comparable to {@code
@@ -591,6 +593,18 @@ public final class VidocqBootstrap {
         return Optional.ofNullable(startupReport.get());
     }
 
+    /**
+     * Runs {@code task} when this boot stops, whoever stops it (the dev reload loop, the JVM hook, {@link
+     * Vidocq#shutdown()}), before any extension stops, while the application still serves requests: the dev reload
+     * loop tells the {@code -dev} companions there. A task that fails is logged, and the stop goes on.
+     *
+     * @return this bootstrap
+     */
+    VidocqBootstrap beforeStop(Runnable task) {
+        this.beforeStop = task;
+        return this;
+    }
+
     /** Boots {@code extensions} instead of those the {@link java.util.ServiceLoader} finds: for tests. */
     VidocqBootstrap extensions(List<VidocqExtension> extensions) {
         this.givenExtensions = List.copyOf(extensions);
@@ -864,6 +878,11 @@ public final class VidocqBootstrap {
         // what the report offered the extensions goes first: nothing reads it from a boot being torn down
         reportView.set(null);
         reportContributors.set(List.of());
+        try {
+            beforeStop.run();
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "Vidocq - the task before the stop failed: " + e);
+        }
 
         // Stop extensions in reverse order
         stopInReverse(extensions);

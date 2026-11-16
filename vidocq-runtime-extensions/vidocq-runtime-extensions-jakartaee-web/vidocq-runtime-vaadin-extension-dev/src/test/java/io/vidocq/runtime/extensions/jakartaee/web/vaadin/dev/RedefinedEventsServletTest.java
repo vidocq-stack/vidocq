@@ -40,6 +40,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The event stream servlet, over stand-ins of the servlet API. */
@@ -69,6 +70,31 @@ class RedefinedEventsServletTest {
         assertEquals(": open\n\ndata: MainView\n\n", body.toString());
         assertEquals("text/event-stream", headers.get("contentType"));
         assertEquals("no-cache", headers.get("Cache-Control"));
+    }
+
+    /**
+     * Before the application stops, the listener ends the open streams: the servlet container then waits for no
+     * stream among the requests in service, and the page opens a new one on the next deployment.
+     */
+    @Test
+    void theListenerEndsTheStreamsBeforeTheApplicationStops() throws Exception {
+        var body = new StringWriter();
+        var opened = new CountDownLatch(1);
+        var out = new PrintWriter(body) {
+            @Override
+            public void flush() {
+                super.flush();
+                opened.countDown();
+            }
+        };
+        Thread reader = Thread.ofVirtual().start(() -> get(new RedefinedEvents(), out));
+        assertTrue(opened.await(5, TimeUnit.SECONDS), "the stream opens");
+
+        new VaadinRedefinitionListener().stopping();
+        reader.join(Duration.ofSeconds(5));
+
+        assertFalse(reader.isAlive(), "the stream ended");
+        assertEquals(": open\n\n", body.toString());
     }
 
     @Test

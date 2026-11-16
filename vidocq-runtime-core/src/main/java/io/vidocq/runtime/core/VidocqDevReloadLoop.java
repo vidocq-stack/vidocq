@@ -33,6 +33,7 @@ import java.util.OptionalLong;
 import java.util.SequencedMap;
 import java.util.SequencedSet;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -93,7 +94,8 @@ final class VidocqDevReloadLoop {
         long lastSignal = firstSignal;
         while (true) {
             VidocqAppLayer.installIfConfigured();
-            VidocqBootstrap bootstrap = VidocqBootstrap.create().configure();
+            VidocqBootstrap bootstrap = VidocqBootstrap.create()
+                    .beforeStop(beforeStop(listeners, VidocqAppLayer::installedLayer)).configure();
             // every cycle registers its own bootstrap: Vidocq.shutdown() must reach the running one
             Vidocq.register(bootstrap);
             bootstrap.start();
@@ -125,6 +127,19 @@ final class VidocqDevReloadLoop {
             LOG.log(System.Logger.Level.INFO,
                     "Hot reload - previous deployment stopped in " + elapsed + " ms");
         }
+    }
+
+    /**
+     * The task each boot runs before it stops, for a swap or for good: the listeners of the layer installed then
+     * end what they keep open while the application still serves requests; none when no layer is installed.
+     */
+    static Runnable beforeStop(ClassRedefinition.Notifier listeners, Supplier<ModuleLayer> installed) {
+        return () -> {
+            ModuleLayer layer = installed.get();
+            if (layer != null) {
+                listeners.stopping(layer);
+            }
+        };
     }
 
     /**

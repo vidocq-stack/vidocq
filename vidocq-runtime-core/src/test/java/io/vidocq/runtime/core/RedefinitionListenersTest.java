@@ -125,11 +125,69 @@ class RedefinitionListenersTest {
     }
 
     @Test
+    void theListenersOfTheLayerAreToldBeforeTheStopReturns() {
+        List<String> told = new CopyOnWriteArrayList<>();
+        List<ModuleLayer> layers = new CopyOnWriteArrayList<>();
+        ModuleLayer layer = ModuleLayer.boot();
+        try (var listeners = RedefinitionListeners.start(loaded -> {
+            layers.add(loaded);
+            return List.of(new Stopping("first", told), new Stopping("second", told));
+        }, warnings::add)) {
+            listeners.stopping(layer);
+
+            assertEquals(List.of("first", "second"), told);
+            assertEquals(List.of(layer), layers);
+        }
+    }
+
+    @Test
+    void aListenerThatFailsBeforeTheStopIsLoggedAndTheNextIsTold() {
+        List<String> told = new CopyOnWriteArrayList<>();
+        RedefinitionListener failing = new Stopping("failing", told) {
+            @Override
+            public void stopping() {
+                throw new IllegalStateException("no stream");
+            }
+        };
+        try (var listeners = RedefinitionListeners.start(_ -> List.of(failing, new Stopping("next", told)),
+                warnings::add)) {
+            listeners.stopping(ModuleLayer.boot());
+
+            assertEquals(List.of("next"), told);
+            assertEquals(List.of("Hot reload - the redefinition listener " + failing.getClass().getName()
+                    + " failed before the stop: java.lang.IllegalStateException: no stream"), warnings);
+        }
+    }
+
+    /** Adds its name to {@code told} when the application stops. */
+    private static class Stopping implements RedefinitionListener {
+
+        private final String name;
+        private final List<String> told;
+
+        Stopping(String name, List<String> told) {
+            this.name = name;
+            this.told = told;
+        }
+
+        @Override
+        public void redefined(Redefinition redefinition) {
+            // only the stop matters here
+        }
+
+        @Override
+        public void stopping() {
+            told.add(name);
+        }
+    }
+
+    @Test
     void noSpiModuleMeansNoListenerAndNoFailure() {
         var notifier = ClassRedefinition.listeners(ModuleLayer.empty(), warnings::add);
 
         assertSame(ClassRedefinition.Notifier.NONE, notifier);
         notifier.redefined(ModuleLayer.boot(), methods(String.class, "length"));
+        notifier.stopping(ModuleLayer.boot());
         notifier.close();
         assertEquals(List.of(), warnings);
     }

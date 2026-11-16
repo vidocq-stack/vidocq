@@ -5,6 +5,43 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261116-08 — Every start of `vidocq:dev` on a Vaadin application warns that the event stream is resolved by reflection
+
+- **Date**: 2026-11-16
+- **Status**: FIXED on `feat/dev-hotswap-listeners` (Vidocq/vidocq#629)
+- **Module**: `vidocq-runtime-vaadin-extension-dev` (`RedefinedEvents`, `RedefinedEvents.Initializer`)
+- **Symptom**: found while replaying the session handover (6c) on VidocqTools/vaadin-on-vidocq. Each start, and each
+  swap, logs two warnings: `foy: io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev.RedefinedEvents$Initializer
+  resolved by reflection (module io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev does not open ... to module
+  io.vidocq.foy.core); add foy-processor to the annotation processor path or open the package to io.vidocq.foy.core`,
+  and the same for `RedefinedEvents`. The replay of #629 itself had them too, unnoticed.
+- **Repro**: `vidocq:dev` on vaadin-on-vidocq with the Vaadin `-dev` companion of #629.
+- **Cause**: the `-dev` companion was compiled without `foy-processor`, so Foy found no generated component for its
+  servlet and initializer, and the package is not open to `io.vidocq.foy.core`.
+- **Fix**: `foy-processor` on the module's processor path, `foy-api` provided, `requires static io.vidocq.foy.api`
+  (`FoyComponentsTest`: both classes have their `$$FoyComponent`).
+
+## BUG-20261116-07 — With an open Vaadin page, each swap and each stop of `vidocq:dev` waits two seconds for the event stream
+
+- **Date**: 2026-11-16
+- **Status**: FIXED on `feat/dev-hotswap-listeners` (Vidocq/vidocq#629)
+- **Module**: `vidocq-runtime-vaadin-extension-dev` (`RedefinedEvents`), `vidocq-runtime-core` (`VidocqBootstrap`,
+  `VidocqDevReloadLoop`, `RedefinitionListeners`), `vidocq-runtime-devconsole-spi` (`RedefinitionListener`)
+- **Symptom**: found while replaying the session handover (6c) on VidocqTools/vaadin-on-vidocq. With one page open,
+  each swap logs `The undeploy stopped waiting for the requests still in service (1), 2 010 ms after it began: the
+  filters and servlets are destroyed while they run`, then `previous deployment stopped in 2045 ms`; Ctrl+C waits
+  the same. The (c) replay log had the same lines.
+- **Repro**: `vidocq:dev` on vaadin-on-vidocq, open the page, add a field to `MainView`.
+- **Cause**: the page keeps the event stream of `RedefinedEvents` open: a request in service. Foy's undeploy waits up
+  to two seconds for the requests in service (Servlet 6.1 section 2.3.4, Foy BUG-20261115-03) before it destroys the
+  servlets, and `RedefinedEvents.destroy()` was what ended the streams. The CDI `Shutdown` event comes too late to
+  help: `VidocqBootstrap.stop()` closes the container after the extensions stopped, Foy's undeploy included.
+- **Fix**: `RedefinitionListener.stopping()`, a default method, is called before each stop of the application while
+  it still serves requests: the dev reload loop gives each boot a task, `VidocqBootstrap.beforeStop`, that runs first
+  in `stop()`, whoever stops it (the swap, the JVM hook of Ctrl+C, `Vidocq.shutdown()`). The Vaadin listener ends
+  the open streams there (`BeforeStopTest`, `RedefinitionListenersTest`, `VidocqDevReloadLoopTest`,
+  `RedefinedEventsServletTest.theListenerEndsTheStreamsBeforeTheApplicationStops`).
+
 ## BUG-20261116-06 — A jlink image does not start when a producer returns a library class with a package-private method
 
 - **Date**: 2026-11-16

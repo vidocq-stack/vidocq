@@ -47,6 +47,9 @@ import java.util.stream.Stream;
  * </ul>
  * A class that is not a component, but that a view reads in its constructor, refreshes no page: it shows after the
  * next reload of the page, by hand.
+ *
+ * <p>Before the application stops, the listener ends the open streams of {@link RedefinedEvents}: the servlet
+ * container would otherwise wait for them among the requests in service, two seconds at each swap.
  */
 public final class VaadinRedefinitionListener implements RedefinitionListener {
 
@@ -102,6 +105,11 @@ public final class VaadinRedefinitionListener implements RedefinitionListener {
             }
         }
         events.accept(types.stream().map(Class::getSimpleName).collect(Collectors.joining(", ")));
+    }
+
+    @Override
+    public void stopping() {
+        RedefinedEvents.endAll();
     }
 
     /**

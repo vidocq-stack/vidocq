@@ -28,6 +28,7 @@ import java.lang.constant.ConstantDescs;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -235,5 +236,43 @@ class VidocqDevReloadLoopTest {
             methods.put(name, new LinkedHashSet<>(List.of("get")));
         }
         return new ReloadRequest.Redefine(methods);
+    }
+    @Test
+    void theTaskBeforeTheStopTellsTheListenersOfTheInstalledLayer() {
+        var listeners = new StopNotifier();
+
+        VidocqDevReloadLoop.beforeStop(listeners, ModuleLayer::boot).run();
+
+        assertEquals(List.of(ModuleLayer.boot()), listeners.stopped);
+    }
+
+    @Test
+    void withoutAnInstalledLayerTheTaskBeforeTheStopTellsNobody() {
+        var listeners = new StopNotifier();
+
+        VidocqDevReloadLoop.beforeStop(listeners, () -> null).run();
+
+        assertEquals(List.of(), listeners.stopped);
+    }
+
+    /** Records the layers whose listeners were told of a stop. */
+    private static final class StopNotifier implements ClassRedefinition.Notifier {
+
+        private final List<ModuleLayer> stopped = new ArrayList<>();
+
+        @Override
+        public void redefined(ModuleLayer layer, SequencedMap<Class<?>, SequencedSet<String>> methodsByClass) {
+            // only the stop matters here
+        }
+
+        @Override
+        public void stopping(ModuleLayer layer) {
+            stopped.add(layer);
+        }
+
+        @Override
+        public void close() {
+            // nothing started
+        }
     }
 }

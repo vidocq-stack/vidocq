@@ -45,11 +45,21 @@ package io.vidocq.runtime.spi.devconsole;
  *       open pages, lives in its module, which a swap drops with the layer.</li>
  * </ul>
  * An exception it throws is logged, {@code Hot reload - the redefinition listener <class> failed: <exception>}, and
- * the next listener still runs.
+ * the next listener still runs; one thrown by {@link #stopping()} is logged with {@code failed before the stop}.
  */
 @FunctionalInterface
 public interface RedefinitionListener {
 
     /** Called once for each redefinition that changed at least one loaded class. */
     void redefined(Redefinition redefinition);
+
+    /**
+     * Called before each stop of the application, a layer swap or the end of {@code vidocq:dev}, while it still
+     * serves requests: a listener ends there what it keeps open, such as an event stream, which the servlet
+     * container would otherwise wait for among the requests in service. The stopping thread calls it and waits for
+     * it, so it must return quickly. Does nothing by default.
+     */
+    default void stopping() {
+        // most listeners keep nothing open
+    }
 }
