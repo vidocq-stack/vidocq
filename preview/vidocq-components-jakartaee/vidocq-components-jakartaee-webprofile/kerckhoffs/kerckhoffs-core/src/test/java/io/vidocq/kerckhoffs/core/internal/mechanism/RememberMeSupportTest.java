@@ -129,7 +129,7 @@ class RememberMeSupportTest {
     }
 
     @Test
-    void aCallerIsRememberedWhenTheExpressionSaysSoAtTheMomentOfTheLogin() throws Exception {
+    void theRememberMeExpressionSeesTheVariablesOfTheCall() {
         var variables = new HashMap<String, Object>(Map.of("memorize", false));
         var settings = RememberMeSupport.resolve(Expressions.class.getAnnotation(RememberMe.class), variables);
 

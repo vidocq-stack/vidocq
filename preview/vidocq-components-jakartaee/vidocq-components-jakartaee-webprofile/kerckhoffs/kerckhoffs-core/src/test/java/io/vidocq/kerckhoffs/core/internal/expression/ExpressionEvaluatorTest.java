@@ -61,7 +61,8 @@ class ExpressionEvaluatorTest {
 
     @Test
     void anExpressionThatCannotBeEvaluatedIsRefusedNotIgnored() {
-        assertThrows(IllegalArgumentException.class,
-                () -> ExpressionEvaluator.evaluate("#{1 +}", Boolean.class, Map.of()));
+        Map<String, Object> none = Map.of();
+
+        assertThrows(IllegalArgumentException.class, () -> ExpressionEvaluator.evaluate("#{1 +}", Boolean.class, none));
     }
 }
