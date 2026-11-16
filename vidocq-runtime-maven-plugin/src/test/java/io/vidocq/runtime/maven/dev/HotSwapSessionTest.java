@@ -40,6 +40,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class HotSwapSessionTest {
 
     private static final String A = "package app; class A { int a() { return %s; } int b() { return %s; } }";
+    private static final String LISTENERS = "package app; class A { java.util.List<Runnable> listeners = "
+            + "new java.util.ArrayList<>(); %s A() { %s } }";
+    private static final Optional<String> KEEP = Optional.empty();
 
     @TempDir
     Path dir;
@@ -52,7 +55,7 @@ class HotSwapSessionTest {
         project.apply(build().source("app/A.java", A.formatted("1", "1")));
 
         var session = HotSwapSession.open(List.of(project.classes), List.of(project.src), List.of(plainJar()), null,
-                info::add, warnings::add);
+                true, info::add, warnings::add);
 
         assertTrue(session.isEmpty());
         assertEquals(List.of("Hot swap off: no dependency declares its start-time code (" + StartTimeDeclarations.FILE
@@ -65,7 +68,8 @@ class HotSwapSessionTest {
         project.apply(build().source("app/A.java", A.formatted("1", "1")));
 
         HotSwapSession.open(List.of(project.classes), List.of(project.src),
-                List.of(declaringJar("one"), plainJar(), declaringJar("two")), null, info::add, warnings::add);
+                List.of(declaringJar("one"), plainJar(), declaringJar("two")), null, true, info::add,
+                warnings::add);
 
         assertEquals(List.of("Hot swap: start-time declarations from 2 jars"), info);
     }
@@ -77,7 +81,7 @@ class HotSwapSessionTest {
                 .resource(StartTimeDeclarations.FILE, "long-lived-annotations = app.Keep\n"));
 
         HotSwapSession.open(List.of(project.classes), List.of(project.src), List.of(declaringJar("one")), null,
-                info::add, warnings::add);
+                true, info::add, warnings::add);
 
         assertEquals(List.of("Hot swap: start-time declarations from 1 jar and the application"), info);
     }
@@ -130,7 +134,7 @@ class HotSwapSessionTest {
         session.lost();
 
         project.apply(build().source("app/A.java", A.formatted("3", "1")));
-        assertEquals(Optional.of(new ReloadRequest.Swap("the previous reload was not confirmed")), session.next());
+        assertEquals(Optional.of(new ReloadRequest.Swap("the previous reload was not confirmed", KEEP)), session.next());
         session.acknowledged();
         project.apply(build().source("app/A.java", A.formatted("3", "2")));
 
@@ -148,12 +152,12 @@ class HotSwapSessionTest {
 
         project.apply(build().source("app/Keep.java", keep).source("app/Kept.java", kept.formatted("a"))
                 .resource(StartTimeDeclarations.FILE, "long-lived-annotations = app.Keep\n"));
-        assertEquals(Optional.of(new ReloadRequest.Swap(StartTimeDeclarations.FILE + " was added")), session.next());
+        assertEquals(Optional.of(new ReloadRequest.Swap(StartTimeDeclarations.FILE + " was added", KEEP)), session.next());
         session.acknowledged();
         project.apply(build().source("app/Keep.java", keep).source("app/Kept.java", kept.formatted("b"))
                 .resource(StartTimeDeclarations.FILE, "long-lived-annotations = app.Keep\n"));
 
-        assertEquals(Optional.of(new ReloadRequest.Swap("Kept's constructor ran at start")), session.next());
+        assertEquals(Optional.of(new ReloadRequest.Swap("Kept's constructor ran at start", KEEP)), session.next());
     }
 
     @Test
@@ -162,14 +166,14 @@ class HotSwapSessionTest {
         project.apply(build().source("app/A.java", A.formatted("1", "1"))
                 .source("app/B.java", A.replace("class A", "class B").formatted("1", "1")));
         var session = HotSwapSession.open(List.of(project.classes), List.of(project.src),
-                List.of(declaringJar("one")), "class redefinition is off: vidocq.dev.hotSwap=false", info::add,
-                warnings::add).orElseThrow();
+                List.of(declaringJar("one")), "class redefinition is off: vidocq.dev.hotSwap=false", true,
+                info::add, warnings::add).orElseThrow();
 
         project.apply(build().source("app/A.java", A.formatted("2", "1"))
                 .source("app/B.java", A.replace("class A", "class B").formatted("2", "1")));
 
         assertEquals(Optional.of(new ReloadRequest.Swap(
-                "2 classes changed in method bodies only; class redefinition is off: vidocq.dev.hotSwap=false")),
+                "2 classes changed in method bodies only; class redefinition is off: vidocq.dev.hotSwap=false", KEEP)),
                 session.next());
     }
 
@@ -193,9 +197,49 @@ class HotSwapSessionTest {
         assertEquals(1, warnings.size(), warnings::toString);
     }
 
+    @Test
+    void aSwapCarriesTheVerdict() {
+        var project = new HotSwapProject(dir, List.of());
+        project.apply(build().source("app/A.java", LISTENERS.formatted("", "listeners.add(() -> {});")));
+        var session = open(project);
+
+        project.apply(build().source("app/A.java",
+                LISTENERS.formatted("", "listeners.add(() -> {}); listeners.add(() -> {});")));
+
+        var swap = assertInstanceOf(ReloadRequest.Swap.class, session.next().orElseThrow());
+        assertEquals(KEEP, swap.dropSessions());
+    }
+
+    @Test
+    void aRedefinitionCarriesNone() {
+        var project = new HotSwapProject(dir, List.of());
+        project.apply(build().source("app/A.java", A.formatted("1", "1")));
+        var session = open(project);
+
+        project.apply(build().source("app/A.java", A.formatted("2", "1")));
+
+        assertRedefine(session.next(), "a");
+    }
+
+    @Test
+    void anUnconfirmedRequestStillChecksAgainstTheAcknowledgedOutput() {
+        var project = new HotSwapProject(dir, List.of());
+        project.apply(build().source("app/A.java", LISTENERS.formatted("", "")));
+        var session = open(project);
+        project.apply(build().source("app/A.java", LISTENERS.formatted("", "System.out.println();")));
+        session.next();
+        session.lost();
+
+        project.apply(build().source("app/A.java", LISTENERS.formatted("int total;", "System.out.println();")));
+
+        assertEquals(Optional.of(new ReloadRequest.Swap("the previous reload was not confirmed",
+                Optional.of("A gained a field total, so a restored instance would not match the new class"))),
+                session.next());
+    }
+
     private HotSwapSession open(HotSwapProject project) {
         return HotSwapSession.open(List.of(project.classes), List.of(project.src), List.of(declaringJar("one")), null,
-                info::add, warnings::add).orElseThrow();
+                true, info::add, warnings::add).orElseThrow();
     }
 
     private Path declaringJar(String name) {

@@ -102,6 +102,7 @@ final class ClassFingerprint {
             "SourceDebugExtension");
     private static final String INIT = "<init>";
     private static final String CLINIT = "<clinit>";
+    private static final String LAMBDA = "lambda$";
 
     /** A field or a method: its modifiers and descriptor, and its attributes by name. */
     private record Member(String name, String descriptor, int flags, SequencedMap<String, String> attributes) {}
@@ -195,6 +196,51 @@ final class ClassFingerprint {
         return attributeDifference(classAttributes, previous.classAttributes, "the class")
                 .or(() -> fieldDifference(previous))
                 .or(() -> methodDifference(previous));
+    }
+
+    /**
+     * The first difference since {@code previous} that changes what a serialized instance holds, worded as
+     * {@link #firstShapeDifference}: its superclass, its interfaces, or an instance field gained, lost or retyped.
+     * {@code transient} fields count: a restored instance leaves them at their default, as a new one would not.
+     */
+    Optional<String> instanceShapeDifference(ClassFingerprint previous) {
+        if (!Objects.equals(superclass, previous.superclass)) {
+            return Optional.of("changed its superclass");
+        }
+        if (!interfaces.equals(previous.interfaces)) {
+            return Optional.of("changed its interfaces");
+        }
+        var now = byName(instanceFields(fields));
+        var before = byName(instanceFields(previous.fields));
+        for (String name : now.keySet()) {
+            if (!before.containsKey(name)) {
+                return Optional.of("gained a field " + name);
+            }
+        }
+        for (String name : before.keySet()) {
+            if (!now.containsKey(name)) {
+                return Optional.of("lost a field " + name);
+            }
+        }
+        for (Member field : now.values()) {
+            if (!field.descriptor().equals(before.get(field.name()).descriptor())) {
+                return Optional.of("changed the type of field " + field.name());
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Whether the lambdas of this class moved since {@code previous}: it gained or lost a {@code lambda$} method while
+     * the code of one it kept changed, as when a lambda is inserted before the others and javac numbers them again. A
+     * listener restored from a session would then run another lambda's code. Lambdas appended, the last one removed,
+     * or a body edited in place did not move.
+     */
+    boolean lambdasMoved(ClassFingerprint previous) {
+        Set<String> now = lambdas(codeByMethod.keySet());
+        Set<String> before = lambdas(previous.codeByMethod.keySet());
+        return !now.equals(before) && now.stream().filter(before::contains)
+                .anyMatch(key -> !codeByMethod.get(key).equals(previous.codeByMethod.get(key)));
     }
 
     /** The names of the methods whose code changed since {@code previous}, among the methods both have. */
@@ -314,6 +360,15 @@ final class ClassFingerprint {
             case CLINIT -> "a static initializer";
             default -> "a method " + method;
         };
+    }
+
+    private static List<Member> instanceFields(List<Member> fields) {
+        return fields.stream().filter(field -> (field.flags() & ClassFile.ACC_STATIC) == 0).toList();
+    }
+
+    private static Set<String> lambdas(Set<String> methodKeys) {
+        return methodKeys.stream().filter(key -> key.startsWith(LAMBDA))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private static SequencedMap<String, Member> byName(List<Member> members) {

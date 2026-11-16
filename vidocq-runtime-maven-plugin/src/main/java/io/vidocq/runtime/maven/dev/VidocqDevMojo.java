@@ -324,6 +324,13 @@ public class VidocqDevMojo extends AbstractMojo {
     @Parameter(property = "vidocq.dev.hotSwap", defaultValue = "true")
     private boolean hotSwapEnabled = true;
 
+    /**
+     * Moves the HTTP sessions to the new application layer of a swap, unless a change would restore them wrong
+     * (session handover design §1). {@code false}: every swap starts the application with no session, as a restart.
+     */
+    @Parameter(property = "vidocq.dev.keepSessions", defaultValue = "true")
+    private boolean keepSessions = true;
+
     /** The port of an unset {@link #debugPort}: {@link JdwpAgent#DEFAULT_PORT}, another one in the unit tests only. */
     private int defaultDebugPort = JdwpAgent.DEFAULT_PORT;
 
@@ -368,7 +375,7 @@ public class VidocqDevMojo extends AbstractMojo {
             hotSwap = HotSwapSession.open(classRoots(layered.appPath()),
                     projectSourceRoots(project.getCompileSourceRoots(), buildDirPath()),
                     dependencyJars(modulePath, layered.appPath()),
-                    agent.jar() != null ? null : "class redefinition is off: " + agent.off(),
+                    agent.jar() != null ? null : "class redefinition is off: " + agent.off(), keepSessions,
                     getLog()::info, getLog()::warn)
                     .orElse(null);
         }

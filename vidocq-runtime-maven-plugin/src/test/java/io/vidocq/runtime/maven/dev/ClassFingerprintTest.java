@@ -28,6 +28,8 @@ import java.util.Set;
 
 import static io.vidocq.runtime.maven.dev.HotSwapFixtures.fingerprint;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClassFingerprintTest {
 
@@ -236,6 +238,95 @@ class ClassFingerprintTest {
 
         assertEquals(Optional.empty(), v2.firstShapeDifference(v1));
         assertEquals(Set.of("<init>"), v2.methodsWithChangedCode(v1));
+    }
+
+    private static final String ORDER = "package app; class Order implements java.io.Serializable { %s }";
+    private static final String VIEW = """
+            package app;
+            class MainView {
+                java.util.List<java.util.function.Supplier<String>> actions = new java.util.ArrayList<>();
+                MainView() { %s }
+            }
+            """;
+
+    @Test
+    void aGainedInstanceFieldIsAnInstanceShapeDifference(@TempDir Path dir) {
+        var v1 = fingerprint(dir, "v1", "app.Order", ORDER.formatted("int count;"));
+        var v2 = fingerprint(dir, "v2", "app.Order", ORDER.formatted("int count; int total;"));
+
+        assertEquals(Optional.of("gained a field total"), v2.instanceShapeDifference(v1));
+    }
+
+    @Test
+    void aGainedStaticFieldIsNot(@TempDir Path dir) {
+        var v1 = fingerprint(dir, "v1", "app.Order", ORDER.formatted("int count;"));
+        var v2 = fingerprint(dir, "v2", "app.Order", ORDER.formatted("int count; static int total;"));
+
+        assertEquals(Optional.empty(), v2.instanceShapeDifference(v1));
+    }
+
+    @Test
+    void aLostTransientFieldIs(@TempDir Path dir) {
+        var v1 = fingerprint(dir, "v1", "app.Order", ORDER.formatted("int count; transient String cache;"));
+        var v2 = fingerprint(dir, "v2", "app.Order", ORDER.formatted("int count;"));
+
+        assertEquals(Optional.of("lost a field cache"), v2.instanceShapeDifference(v1));
+    }
+
+    @Test
+    void aRetypedFieldIs(@TempDir Path dir) {
+        var v1 = fingerprint(dir, "v1", "app.Order", ORDER.formatted("int total;"));
+        var v2 = fingerprint(dir, "v2", "app.Order", ORDER.formatted("long total;"));
+
+        assertEquals(Optional.of("changed the type of field total"), v2.instanceShapeDifference(v1));
+    }
+
+    @Test
+    void aNewSuperclassIs(@TempDir Path dir) {
+        var v1 = fingerprint(dir, "v1", "app.Order", ORDER.formatted("int total;"));
+        var v2 = fingerprint(dir, "v2", "app.Order",
+                ORDER.replace("class Order", "class Order extends java.util.Date").formatted("int total;"));
+
+        assertEquals(Optional.of("changed its superclass"), v2.instanceShapeDifference(v1));
+    }
+
+    @Test
+    void aLambdaInsertedBeforeAnotherMovesTheLambdas(@TempDir Path dir) {
+        var v1 = fingerprint(dir, "v1", "app.MainView", VIEW.formatted(
+                "actions.add(() -> \"save\"); actions.add(() -> \"cancel\");"));
+        var v2 = fingerprint(dir, "v2", "app.MainView", VIEW.formatted(
+                "actions.add(() -> \"reset\"); actions.add(() -> \"save\"); actions.add(() -> \"cancel\");"));
+
+        assertTrue(v2.lambdasMoved(v1));
+    }
+
+    @Test
+    void aLambdaAppendedDoesNotMoveThem(@TempDir Path dir) {
+        var v1 = fingerprint(dir, "v1", "app.MainView", VIEW.formatted(
+                "actions.add(() -> \"save\"); actions.add(() -> \"cancel\");"));
+        var v2 = fingerprint(dir, "v2", "app.MainView", VIEW.formatted(
+                "actions.add(() -> \"save\"); actions.add(() -> \"cancel\"); actions.add(() -> \"reset\");"));
+
+        assertFalse(v2.lambdasMoved(v1));
+    }
+
+    @Test
+    void aLambdaBodyEditedInPlaceDoesNotMoveThem(@TempDir Path dir) {
+        var v1 = fingerprint(dir, "v1", "app.MainView", VIEW.formatted(
+                "actions.add(() -> \"save\"); actions.add(() -> \"cancel\");"));
+        var v2 = fingerprint(dir, "v2", "app.MainView", VIEW.formatted(
+                "actions.add(() -> \"store\"); actions.add(() -> \"cancel\");"));
+
+        assertFalse(v2.lambdasMoved(v1));
+    }
+
+    @Test
+    void theLastLambdaRemovedDoesNotMoveThem(@TempDir Path dir) {
+        var v1 = fingerprint(dir, "v1", "app.MainView", VIEW.formatted(
+                "actions.add(() -> \"save\"); actions.add(() -> \"cancel\");"));
+        var v2 = fingerprint(dir, "v2", "app.MainView", VIEW.formatted("actions.add(() -> \"save\");"));
+
+        assertFalse(v2.lambdasMoved(v1));
     }
 
     private static ClassFingerprint variant(Path dir, String name, String q, String source) {

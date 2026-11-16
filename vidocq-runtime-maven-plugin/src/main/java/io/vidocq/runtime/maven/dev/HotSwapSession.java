@@ -42,6 +42,7 @@ final class HotSwapSession {
     private final List<Path> projectSourceRoots;
     private final StartTimeDeclarations dependencyDeclarations;
     private final String redefinitionOff;
+    private final boolean keepSessions;
     private final Consumer<String> warn;
     private SupertypeIndex supertypes;
     private ClassesSnapshot base;
@@ -51,11 +52,12 @@ final class HotSwapSession {
 
     private HotSwapSession(List<Path> classRoots, List<Path> projectSourceRoots,
             StartTimeDeclarations dependencyDeclarations, List<Path> dependencyJars, String redefinitionOff,
-            Consumer<String> warn) {
+            boolean keepSessions, Consumer<String> warn) {
         this.classRoots = List.copyOf(classRoots);
         this.projectSourceRoots = List.copyOf(projectSourceRoots);
         this.dependencyDeclarations = dependencyDeclarations;
         this.redefinitionOff = redefinitionOff;
+        this.keepSessions = keepSessions;
         this.warn = warn;
         this.base = ClassesSnapshot.take(this.classRoots, ClassesSnapshot.EMPTY);
         this.latest = base;
@@ -68,10 +70,12 @@ final class HotSwapSession {
      * @param redefinitionOff {@code null} when the child redefines classes; otherwise why it cannot, such as
      *                        {@code class redefinition is off: vidocq.dev.hotSwap=false}: a body-only change then
      *                        swaps, saying so
+     * @param keepSessions    {@code vidocq.dev.keepSessions}: {@code false} drops the HTTP sessions at every swap
      * @return empty when no jar and no class root declares anything: today's reload, byte for byte
      */
     static Optional<HotSwapSession> open(List<Path> classRoots, List<Path> projectSourceRoots,
-            List<Path> dependencyJars, String redefinitionOff, Consumer<String> info, Consumer<String> warn) {
+            List<Path> dependencyJars, String redefinitionOff, boolean keepSessions, Consumer<String> info,
+            Consumer<String> warn) {
         Consumer<String> once = once(warn);
         var fromJars = StartTimeDeclarations.read(dependencyJars, once);
         var fromApplication = StartTimeDeclarations.read(classRoots, once);
@@ -84,7 +88,7 @@ final class HotSwapSession {
         info.accept("Hot swap: start-time declarations from " + jars + (jars == 1 ? " jar" : " jars")
                 + (fromApplication.isEmpty() ? "" : " and the application"));
         return Optional.of(new HotSwapSession(classRoots, projectSourceRoots, fromJars, dependencyJars,
-                redefinitionOff, once));
+                redefinitionOff, keepSessions, once));
     }
 
     /** After a successful recompile: what the child should do. Empty: nothing to reload. */
@@ -100,6 +104,10 @@ final class HotSwapSession {
             request = new HotSwapClassifier(projectSourceRoots, declarations).classify(base, snapshot, supertypes)
                     .map(this::available);
         }
+        // Every swap says whether the HTTP sessions move: judged against the output the child runs (design §1).
+        request = request.map(found -> found instanceof ReloadRequest.Swap swap
+                ? new ReloadRequest.Swap(swap.reason(), SessionVerdict.dropReason(base, snapshot, keepSessions))
+                : found);
         pending = request.isPresent() ? snapshot : null;
         return request;
     }

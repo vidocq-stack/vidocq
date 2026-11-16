@@ -87,6 +87,16 @@ class PluginDescriptorDevDebugTest {
      * when neither {@code -D} nor the goal's configuration sets it ({@link VidocqDevMojo#devServicesEnabled}).
      */
     @Test
+    void keepSessionsIsABooleanReadingItsPropertyAndDefaultsToTrue() throws Exception {
+        assertEquals("boolean", text(parameter("keepSessions"), "type"));
+        assertEquals(boolean.class, VidocqDevMojo.class.getDeclaredField("keepSessions").getType());
+        Element entry = child(child(dev, "configuration"), "keepSessions");
+        assertNotNull(entry, "<configuration> has no keepSessions entry");
+        assertEquals("${vidocq.dev.keepSessions}", entry.getTextContent().strip());
+        assertEquals("true", entry.getAttribute("default-value"));
+    }
+
+    @Test
     void devServicesIsAnUnsetBooleanReadingItsProperty() throws Exception {
         assertEquals("java.lang.Boolean", text(parameter("devServices"), "type"));
         assertEquals(Boolean.class, VidocqDevMojo.class.getDeclaredField("devServices").getType());
