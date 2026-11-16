@@ -66,10 +66,14 @@ runtime **into a self-contained directory** (`target/dist/`). The binary
 1. Stages all `compile`+`runtime` jars into `target/jlink-mods/`.
 2. Verifies that none is an automatic module (otherwise a clear error is raised).
 3. `jdeps --print-module-deps` (ToolProvider) resolves transitive JDK modules.
-4. Adds to the `module-info.class` of each staged module the `provides` its
+4. Generates, into the staged copy of a library, the client proxy that only a class of the
+   library's own package can be, with the `_VaubanComponents` that provides it: a producer of
+   a normal scope that returns a class with a package-private or protected method. The image
+   has no Vauban class loader to define that proxy at start (BUG-20261116-06).
+5. Adds to the `module-info.class` of each staged module the `provides` its
    `META-INF/services` files declare, with the rule of Vauban's application layer: the image
    has one layer and no application layer to promote them at start (Vidocq/vidocq#580).
-5. `jlink --module-path stage:$JAVA_HOME/jmods --add-modules <set>
+6. `jlink --module-path stage:$JAVA_HOME/jmods --add-modules <set>
    --launcher <name>=<entry point> --add-options=<options>
    --strip-debug --compress=zip-6 --no-header-files --no-man-pages --output target/dist`.
    The entry point is `<mainModule>/<mainClass>` for a `@VidocqMain` trampoline, else
@@ -77,7 +81,7 @@ runtime **into a self-contained directory** (`target/dist/`). The binary
    The options are `--add-modules=<every staged module and the JDK modules added>
    -Dvidocq.app.layer.off=true`: the application runs where the JVM resolved it, in one copy
    (BUG-20261114-11).
-6. Copies `vidocq.properties` + `logging.properties` (and any configured
+7. Copies `vidocq.properties` + `logging.properties` (and any configured
    resource) into `dist/conf/`.
 
 ### Configuration
