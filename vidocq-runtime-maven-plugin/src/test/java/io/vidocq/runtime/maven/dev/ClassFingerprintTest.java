@@ -21,6 +21,8 @@ package io.vidocq.runtime.maven.dev;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.nio.file.Path;
 import java.util.Optional;
@@ -273,30 +275,17 @@ class ClassFingerprintTest {
         assertEquals(Optional.of("lost a field cache"), v2.instanceShapeDifference(v1));
     }
 
-    @Test
-    void aRetypedFieldIs(@TempDir Path dir) {
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            class Order implements java.io.Serializable { long total; }                        | changed the type of field total
+            class Order extends java.util.Date implements java.io.Serializable { int total; } | changed its superclass
+            class Order implements java.io.Serializable, Cloneable { int total; }             | changed its interfaces
+            """)
+    void aRetypedFieldANewSuperclassOrNewInterfacesAre(String next, String difference, @TempDir Path dir) {
         var v1 = fingerprint(dir, "v1", "app.Order", ORDER.formatted("int total;"));
-        var v2 = fingerprint(dir, "v2", "app.Order", ORDER.formatted("long total;"));
+        var v2 = fingerprint(dir, "v2", "app.Order", "package app; " + next);
 
-        assertEquals(Optional.of("changed the type of field total"), v2.instanceShapeDifference(v1));
-    }
-
-    @Test
-    void aNewSuperclassIs(@TempDir Path dir) {
-        var v1 = fingerprint(dir, "v1", "app.Order", ORDER.formatted("int total;"));
-        var v2 = fingerprint(dir, "v2", "app.Order",
-                ORDER.replace("class Order", "class Order extends java.util.Date").formatted("int total;"));
-
-        assertEquals(Optional.of("changed its superclass"), v2.instanceShapeDifference(v1));
-    }
-
-    @Test
-    void newInterfacesAre(@TempDir Path dir) {
-        var v1 = fingerprint(dir, "v1", "app.Order", ORDER.formatted("int total;"));
-        var v2 = fingerprint(dir, "v2", "app.Order",
-                ORDER.replace("java.io.Serializable", "java.io.Serializable, Cloneable").formatted("int total;"));
-
-        assertEquals(Optional.of("changed its interfaces"), v2.instanceShapeDifference(v1));
+        assertEquals(Optional.of(difference), v2.instanceShapeDifference(v1));
     }
 
     @Test

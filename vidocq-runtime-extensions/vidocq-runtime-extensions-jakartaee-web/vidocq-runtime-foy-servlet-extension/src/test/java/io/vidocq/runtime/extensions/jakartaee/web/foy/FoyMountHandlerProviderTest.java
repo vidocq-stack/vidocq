@@ -40,6 +40,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class FoyMountHandlerProviderTest {
 
+    private static final Optional<DevHandover> NO_HANDOVER = Optional.empty();
+
     private final FoyDeployments deployments = new FoyDeployments();
 
     @AfterEach
@@ -167,7 +169,7 @@ class FoyMountHandlerProviderTest {
         FoyMountHandlerProvider provider = new FoyMountHandlerProvider();
         ClassLoader loader = FoyExtensionTest.loaderWith(root, null);
         IllegalStateException e = assertThrows(IllegalStateException.class,
-                () -> provider.create(cfg, deployments, null, loader, Optional.empty()));
+                () -> provider.create(cfg, deployments, null, loader, NO_HANDOVER));
         assertTrue(e.getMessage().contains("vidocq.http.mount.web.type=servlet"), e.getMessage());
     }
 
@@ -189,7 +191,7 @@ class FoyMountHandlerProviderTest {
         FoyMountHandlerProvider provider = new FoyMountHandlerProvider();
         ClassLoader loader = FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML);
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> provider.create(cfg, deployments, null, loader, Optional.empty()));
+                () -> provider.create(cfg, deployments, null, loader, NO_HANDOVER));
 
         assertTrue(e.getMessage().contains("vidocq.servlet.confidential-port"), e.getMessage());
     }
@@ -201,7 +203,7 @@ class FoyMountHandlerProviderTest {
         FoyMountHandlerProvider provider = new FoyMountHandlerProvider();
         ClassLoader loader = FoyExtensionTest.loaderWith(root, FoyExtensionTest.WEB_XML);
         IllegalStateException e = assertThrows(IllegalStateException.class,
-                () -> provider.create(cfg, deployments, null, loader, Optional.empty()));
+                () -> provider.create(cfg, deployments, null, loader, NO_HANDOVER));
 
         assertTrue(e.getMessage().contains("vidocq.http.mount.web.strip-prefix"), e.getMessage());
         assertTrue(deployments.all().isEmpty());
@@ -215,7 +217,7 @@ class FoyMountHandlerProviderTest {
 
         FoyMountHandlerProvider provider = new FoyMountHandlerProvider();
         IllegalStateException e = assertThrows(IllegalStateException.class,
-                () -> provider.create(admin, deployments, null, loader, Optional.empty()));
+                () -> provider.create(admin, deployments, null, loader, NO_HANDOVER));
 
         assertTrue(e.getMessage().contains("vidocq.http.mount.admin"), e.getMessage());
         assertTrue(e.getMessage().contains("vidocq.http.mount.web"), e.getMessage());

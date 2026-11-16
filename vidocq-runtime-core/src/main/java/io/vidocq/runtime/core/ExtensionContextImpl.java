@@ -59,7 +59,6 @@ record ExtensionContextImpl(
         // The type witness matters: without it an Eclipse (JDT) build types Optional::empty as Optional<Object>.
         suspendables = suspendables == null ? List.of() : List.copyOf(suspendables);
         startupReport = startupReport == null ? Optional::<StartupReportView>empty : startupReport;
-        devHandover = devHandover == null ? Optional.empty() : devHandover;
     }
 
     ExtensionContextImpl(VaubanContainer container, VidocqConfiguration configuration, VidocqConfig config,

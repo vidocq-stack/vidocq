@@ -111,6 +111,15 @@ class VidocqDevReloadLoopTest {
     }
 
     @Test
+    void aRefusedRedefinitionStopsWithASilentDrop() {
+        var swap = new ReloadRequest.Swap("A changed", Optional.empty());
+        var redefine = redefine("io.x.A");
+
+        assertSame(swap, VidocqDevReloadLoop.swapOf(swap));
+        assertEquals(new ReloadRequest.Swap(""), VidocqDevReloadLoop.swapOf(redefine));
+    }
+
+    @Test
     void whatNobodyTookIsDroppedAndNamed() {
         var store = new DevHandoverStore();
         store.beginExport();

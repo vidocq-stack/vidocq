@@ -125,9 +125,7 @@ final class VidocqDevReloadLoop {
             } while (answer.keepsRunning());
 
             long t0 = System.nanoTime();
-            // A refused redefinition carries no verdict on the HTTP sessions: they are dropped, as before.
-            ReloadRequest.Swap swap = request instanceof ReloadRequest.Swap asked ? asked : new ReloadRequest.Swap("");
-            stopForSwap(swap, store, bootstrap::shutdown, line -> LOG.log(System.Logger.Level.INFO, line));
+            stopForSwap(swapOf(request), store, bootstrap::shutdown, line -> LOG.log(System.Logger.Level.INFO, line));
             VidocqAppLayer.resetForReload();
             long elapsed = (System.nanoTime() - t0) / 1_000_000;
             LOG.log(System.Logger.Level.INFO,
@@ -155,16 +153,25 @@ final class VidocqDevReloadLoop {
      */
     static void stopForSwap(ReloadRequest.Swap swap, DevHandoverStore store, Runnable shutdown,
             Consumer<String> info) {
-        if (swap.dropSessions().isEmpty()) {
+        String drop = swap.dropSessions().orElse(null);
+        if (drop == null) {
             store.beginExport();
-        } else if (!swap.dropSessions().get().isBlank()) {
-            info.accept("Hot reload - HTTP sessions not kept: " + swap.dropSessions().get());
+        } else if (!drop.isBlank()) {
+            info.accept("Hot reload - HTTP sessions not kept: " + drop);
         }
         try {
             shutdown.run();
         } finally {
             store.endExport();
         }
+    }
+
+    /**
+     * The swap that stops the running boot after {@code request}: a refused redefinition carries no verdict on the
+     * HTTP sessions, so they are dropped, as before, without a line.
+     */
+    static ReloadRequest.Swap swapOf(ReloadRequest request) {
+        return request instanceof ReloadRequest.Swap swap ? swap : new ReloadRequest.Swap("");
     }
 
     /** Once the new boot started: what it did not take is dropped, and named at DEBUG. */
