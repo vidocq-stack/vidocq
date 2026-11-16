@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Optional;
 import java.util.SequencedMap;
 import java.util.SequencedSet;
 
@@ -37,9 +38,11 @@ import java.util.SequencedSet;
  * io.vidocq.tools.vaadin.MainView &lt;init&gt; lambda$new$0
  * </pre>
  *
- * one line per class, its binary name then the methods whose code changed; or {@code swap <reason>}. A file without
- * a mode line, as written before this format, asks for a swap. An older child reads only the modification time, and
- * swaps.
+ * one line per class, its binary name then the methods whose code changed; or {@code swap <reason>}, followed by
+ * {@code sessions keep} when the plugin vouches that the HTTP sessions can move to the new layer, or
+ * {@code sessions drop <reason>} when it found why not. A file without a mode line, as written before this format,
+ * asks for a swap; a swap without a {@code sessions} line drops the sessions and says nothing. An older child reads
+ * only the modification time, and swaps.
  */
 public sealed interface ReloadRequest permits ReloadRequest.Redefine, ReloadRequest.Swap {
 
@@ -53,11 +56,9 @@ public sealed interface ReloadRequest permits ReloadRequest.Redefine, ReloadRequ
             return new Swap("");
         }
         String mode = lines[1].strip();
-        if (mode.equals(Swap.MODE)) {
-            return new Swap("");
-        }
-        if (mode.startsWith(Swap.MODE + " ")) {
-            return new Swap(mode.substring(Swap.MODE.length() + 1).strip());
+        if (mode.equals(Swap.MODE) || mode.startsWith(Swap.MODE + " ")) {
+            return new Swap(mode.substring(Swap.MODE.length()).strip(),
+                    lines.length > 2 ? Swap.sessions(lines[2].strip()) : Swap.SILENT_DROP);
         }
         if (!mode.equals(Redefine.MODE)) {
             return new Swap("");
@@ -107,15 +108,40 @@ public sealed interface ReloadRequest permits ReloadRequest.Redefine, ReloadRequ
     /**
      * Restart on a fresh application layer.
      *
-     * @param reason why, for the log; empty when the request gave none
+     * @param reason       why, for the log; empty when the request gave none
+     * @param dropSessions empty when the HTTP sessions move to the new layer; otherwise why they do not, for the log,
+     *                     empty when nothing is to be said
      */
-    record Swap(String reason) implements ReloadRequest {
+    record Swap(String reason, Optional<String> dropSessions) implements ReloadRequest {
 
         static final String MODE = "swap";
+        private static final String KEEP = "sessions keep";
+        private static final String DROP = "sessions drop";
+        private static final Optional<String> SILENT_DROP = Optional.of("");
+
+        /** A swap no check vouched for: the sessions do not move, and nothing is said about them. */
+        public Swap(String reason) {
+            this(reason, SILENT_DROP);
+        }
 
         @Override
         public String format(long nanoTime) {
-            return nanoTime + "\n" + (reason.isBlank() ? MODE : MODE + " " + reason.strip()) + "\n";
+            String swap = nanoTime + "\n" + (reason.isBlank() ? MODE : MODE + " " + reason.strip()) + "\n";
+            if (dropSessions.isEmpty()) {
+                return swap + KEEP + "\n";
+            }
+            String why = dropSessions.get().strip();
+            return why.isEmpty() ? swap : swap + DROP + " " + why + "\n";
+        }
+
+        private static Optional<String> sessions(String line) {
+            if (line.equals(KEEP)) {
+                return Optional.empty();
+            }
+            if (line.startsWith(DROP + " ")) {
+                return Optional.of(line.substring(DROP.length() + 1).strip());
+            }
+            return SILENT_DROP;
         }
     }
 }

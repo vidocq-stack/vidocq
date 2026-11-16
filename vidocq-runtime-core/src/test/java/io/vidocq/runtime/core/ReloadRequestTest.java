@@ -24,10 +24,12 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.SequencedMap;
 import java.util.SequencedSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ReloadRequestTest {
@@ -64,6 +66,52 @@ class ReloadRequestTest {
     }
 
     @Test
+    void aKeptSwapRoundTrips() {
+        var swap = new ReloadRequest.Swap("MainView gained a method lambda$new$1", Optional.empty());
+
+        assertEquals("7\nswap MainView gained a method lambda$new$1\nsessions keep\n", swap.format(7));
+        assertEquals(swap, ReloadRequest.parse(swap.format(7)));
+    }
+
+    @Test
+    void aKeptSwapWithoutReasonRoundTrips() {
+        var swap = new ReloadRequest.Swap("", Optional.empty());
+
+        assertEquals("7\nswap\nsessions keep\n", swap.format(7));
+        assertEquals(swap, ReloadRequest.parse(swap.format(7)));
+    }
+
+    @Test
+    void aDroppedSwapRoundTripsWithItsReason() {
+        var swap = new ReloadRequest.Swap("Order lost a field total", Optional.of("vidocq.dev.keepSessions is false"));
+
+        assertEquals("7\nswap Order lost a field total\nsessions drop vidocq.dev.keepSessions is false\n",
+                swap.format(7));
+        assertEquals(swap, ReloadRequest.parse(swap.format(7)));
+    }
+
+    @Test
+    void aSwapWithoutASessionsLineDropsSilently() {
+        assertEquals(new ReloadRequest.Swap("A changed", Optional.of("")), ReloadRequest.parse("7\nswap A changed\n"));
+        assertEquals(Optional.of(""), swapOf("7\n").dropSessions());
+        assertEquals(Optional.of(""), swapOf("7\nswap\n").dropSessions());
+        assertEquals("7\nswap x\n", new ReloadRequest.Swap("x").format(7));
+    }
+
+    @Test
+    void anUnknownThirdLineDropsSilently() {
+        assertEquals(Optional.of(""), swapOf("7\nswap x\nsessions maybe\n").dropSessions());
+    }
+
+    @Test
+    void aRedefinitionHasNoSessionsLine() {
+        var redefine = new ReloadRequest.Redefine(methods("io.x.MainView", List.of("greet")));
+
+        assertEquals("7\nredefine\nio.x.MainView greet\n", redefine.format(7));
+        assertEquals(redefine, ReloadRequest.parse(redefine.format(7)));
+    }
+
+    @Test
     void aFileWithoutAModeLineIsASwapWithoutReason() {
         assertEquals(new ReloadRequest.Swap(""), ReloadRequest.parse("123456\n"));
         assertEquals(new ReloadRequest.Swap(""), ReloadRequest.parse(""));
@@ -93,6 +141,10 @@ class ReloadRequestTest {
         var empty = new LinkedHashMap<String, SequencedSet<String>>();
 
         assertThrows(IllegalArgumentException.class, () -> new ReloadRequest.Redefine(empty));
+    }
+
+    private static ReloadRequest.Swap swapOf(String content) {
+        return assertInstanceOf(ReloadRequest.Swap.class, ReloadRequest.parse(content));
     }
 
     private static SequencedMap<String, SequencedSet<String>> methods(Object... classThenMethods) {
