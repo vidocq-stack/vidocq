@@ -650,6 +650,43 @@ When the panel's actions have groups, the table is shown in the group sub-tabs r
 sub-tab keeping the rows whose cell names one of its own actions. A row whose cell names no action of the panel —
 one a dev reload orphaned, or a cell emptied for its length — is left out there.
 
+[#selector]
+=== One choice above the sub-tabs [.tag-new]#NEW#
+
+A panel about several items of one kind, such as the persistence units of an application, can let the user pick one
+item for the whole panel instead of asking for it in every form. It writes one <<values,group>> per item in its
+sample, and its `selector()` names the action argument that the choice fills:
+
+[source,java]
+----
+@Override
+public Optional<PanelSelector> selector() {
+    return Optional.of(new PanelSelector("unit", "Persistence unit"));
+}
+
+@Override
+public void sample(PanelSample out) {
+    // entitiesByUnit: a Map<String, Integer> the panel read at start, kept in memory
+    entitiesByUnit.forEach((unit, entities) -> out.group(unit).gauge("entities", entities, Unit.COUNT));
+}
+----
+
+* *The dropdown.* The page draws a *Persistence unit* dropdown above the panel's sub-tabs. Its choices are the
+  names of the sample's groups, in their order. A panel whose sample has no group, or failed, shows no dropdown.
+* *Monitoring.* The *Monitoring* tab shows the chosen group's card alone, with its values, charts and boot facts.
+  The values outside any group stay on view.
+* *The forms.* Every action that declares an argument named `unit` loses that field. The page sends the choice in
+  its place, and the action checks it as it checks any argument: the console only carries it. An action without
+  such an argument keeps its form as it is.
+* *A replay.* A <<replay-column,Replay>> button whose arguments give `unit` one of the choices switches the dropdown
+  to it before it fills the form. With any other value, the dropdown stays where it is.
+* *What is kept.* The page keeps the choice per panel in the browser's local storage. A choice that a dev reload
+  removed falls back to the first one.
+
+`selector()` is read once per boot, in every launch, as `charts()` is. A `RuntimeException` or a `LinkageError`
+thrown there leaves the panel without a choice, and its forms keep the field. `PanelSelector` checks the argument by
+the rule of a key (`[a-z][a-z0-9.-]{0,39}`) and refuses a blank label.
+
 [#rules]
 == The rules
 

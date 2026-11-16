@@ -1755,3 +1755,53 @@ export function rowsCsv(rows) {
   return [rows.columns.map((c) => field(c.name)), ...rows.rows.map((row) => row.map(field))]
     .map((fields) => fields.join(",") + "\r\n").join("");
 }
+
+// ------------------------------------------------------------------------------------------------ the panel's choice
+
+/** The rule of an argument name, PanelSample.requireKey's. */
+const KEY = /^[a-z][a-z0-9.-]{0,39}$/;
+
+/**
+ * The one choice a snapshot panel offers above its sub-tabs, { argument, label }: the action argument it fills and
+ * what the dropdown is called; null when the panel declares none, or one of another shape.
+ */
+export function selectorOf(panel) {
+  const s = isObject(panel) ? panel.selector : null;
+  if (!isObject(s) || typeof s.argument !== "string" || !KEY.test(s.argument)) return null;
+  if (typeof s.label !== "string" || !s.label.trim()) return null;
+  return { argument: s.argument, label: s.label };
+}
+
+/** The choices of a snapshot panel: the names of its sample's groups, in order; none when its sample failed. */
+export function choicesOf(panel) {
+  const sample = isObject(panel) ? panel.sample : null;
+  if (!isObject(sample) || sample.error || !Array.isArray(sample.groups)) return [];
+  return sample.groups.filter((g) => isObject(g) && typeof g.name === "string" && g.name).map((g) => g.name);
+}
+
+/** The choice to show: {@code kept} while it is one of {@code choices}, else the first; null when there is none. */
+export function pickChoice(choices, kept) {
+  if (choices.includes(kept)) return kept;
+  return choices.length ? choices[0] : null;
+}
+
+/** The arguments the form of {@code action} shows: all of them but the one {@code selector} fills. */
+export function formArguments(action, selector) {
+  const all = Array.isArray(action.arguments) ? action.arguments : [];
+  return selector ? all.filter((a) => a.name !== selector.argument) : all;
+}
+
+/** Whether {@code action} declares the argument {@code selector} fills, which the page then sends for it. */
+export function takesChoice(action, selector) {
+  return !!selector && Array.isArray(action.arguments) && action.arguments.some((a) => a.name === selector.argument);
+}
+
+/**
+ * The choice a replay of {@code values}, an action's arguments by name, switches the dropdown to: the value of the
+ * selector's argument when it is one of {@code choices}; null otherwise, the dropdown staying as it is.
+ */
+export function replayChoice(values, selector, choices) {
+  if (!selector || !isObject(values) || !Object.hasOwn(values, selector.argument)) return null;
+  const value = values[selector.argument];
+  return choices.includes(value) ? value : null;
+}

@@ -44,6 +44,9 @@
 //   group, in order of first appearance, which picks one action in a combo and shows its form, its last result apart
 //   and the rows of the panel's replay tables that name one of the group's actions. The page keeps, per panel, the
 //   open sub-tab, the action picked in each group and the last result of each action (panelState).
+// - A panel with a "selector" and a sample of groups gets a dropdown of the group names above its sub-tabs: Monitoring
+//   shows the chosen group alone, and a form leaves the selector's argument out and sends the choice in its place. A
+//   replay naming one of the choices switches the dropdown to it. The choice is kept per panel (CHOICE_KEY).
 // - A text/csv answer is shown as text with a Download button, which saves it in the browser, no request sent. A
 //   textarea of a form whose schema says "contentMediaType": "text/csv" gets Choose file, which reads a local file of
 //   60 KiB at most into it; nothing is sent until the form is.
@@ -57,6 +60,7 @@
 //   is shown as any other JSON.
 
 import { createEditor, jsonLanguage, queryLanguage, readRows, rowsCsv, FORMAT_EXAMPLES } from "./editor.js";
+import { selectorOf, choicesOf, pickChoice, formArguments, takesChoice, replayChoice } from "./editor.js";
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
 const WINDOW_MILLIS = 300_000;       // what a chart shows: the last five minutes
@@ -69,6 +73,8 @@ const PANEL_KEY = "vidocq.devconsole.panel";
 const PAUSED_KEY = "vidocq.devconsole.paused";
 /** Prefix of the key, by panel id, of a panel's open sub-tab. */
 const SUBTAB_KEY = "vidocq.devconsole.subtab.";
+/** The choice of a panel that offers one above its sub-tabs, by panel id. */
+const CHOICE_KEY = "vidocq.devconsole.choice.";
 /** The id of a panel's Monitoring sub-tab: a group title is never blank, so no group has it. */
 const MONITORING = "";
 const STARTUP = "startup";
@@ -116,7 +122,8 @@ const panelStates = new Map();
 function panelState(panelId) {
   let state = panelStates.get(panelId);
   if (!state) {
-    state = { tab: stored(SUBTAB_KEY + panelId) || MONITORING, chosen: new Map(), results: new Map() };
+    state = { tab: stored(SUBTAB_KEY + panelId) || MONITORING, chosen: new Map(), results: new Map(),
+      choice: stored(CHOICE_KEY + panelId) };
     panelStates.set(panelId, state);
   }
   return state;
@@ -1557,14 +1564,14 @@ function inlineOutlet(actionId, panelId) {
  * is {@code outlet}'s, { nodes, current(), publish(result) }: inlineOutlet for the panel's own bar, groupOutlet for a
  * group tab. A refusal, a network failure and an invalid field are results too, in state "error".
  */
-function actionRow(panelId, action, outlet) {
+function actionRow(panelId, action, outlet, selection) {
   const root = el("form", "action");
   root.noValidate = true;
   if (typeof action.description === "string" && action.description) {
     root.append(el("p", "action-desc", action.description));
   }
   const fields = [];
-  for (const argument of action.arguments || []) {
+  for (const argument of formArguments(action, selection ? selection.selector : null)) {
     const field = isObject(argument.schema) ? jsonField(argument, panelId) : stringField(argument);
     fields.push(field);
     root.append(field.root);
@@ -1601,6 +1608,14 @@ function actionRow(panelId, action, outlet) {
     } catch (invalid) {
       publish("error", invalid.message);
       return;
+    }
+    if (selection && takesChoice(action, selection.selector)) {
+      const choice = selection.current();
+      if (choice === null) {
+        publish("error", "Nothing to run on: " + selection.selector.label + " has no choice.");
+        return;
+      }
+      body[selection.selector.argument] = choice;
     }
     sending = true;
     busy(true);
@@ -1678,6 +1693,8 @@ function actionRow(panelId, action, outlet) {
     reveal() { root.hidden = false; },
     /** Fills the form with a replayed call's arguments, by name; sends nothing. */
     fill(values) {
+      const choice = selection ? replayChoice(values, selection.selector, selection.choices) : null;
+      if (choice !== null) selection.choose(choice);
       for (const field of fields) if (Object.hasOwn(values, field.name)) field.fill(values[field.name]);
       row.reveal();
       root.scrollIntoView({ block: "nearest" });
@@ -2083,6 +2100,35 @@ function panelView(panel, snapshot) {
   if (actions.length) for (const id of [...state.results.keys()]) if (!actions.some((a) => a.id === id)) {
     state.results.delete(id);
   }
+  // The one choice above the sub-tabs, among the sample's groups: Monitoring shows the chosen group alone, and every
+  // action that declares the selector's argument receives the choice instead of a field.
+  const selector = selectorOf(panel);
+  const choices = selector ? choicesOf(panel) : [];
+  const cards = new Map();                // the group cards, by name, which the choice shows or hides
+  let picker = null;
+  const choose = (value) => {
+    state.choice = value;
+    store(CHOICE_KEY + panel.id, value);
+    if (picker) picker.value = value;
+    for (const [name, card] of cards) card.hidden = name !== value;
+  };
+  const selection = choices.length ? { selector, choices, current: () => state.choice, choose } : null;
+  if (selection) {
+    state.choice = pickChoice(choices, state.choice);
+    const bar = el("div", "choice");
+    const label = el("label", null, selector.label);
+    picker = el("select", "action-select");
+    for (const name of choices) {
+      const option = el("option", null, name);
+      option.value = name;
+      picker.append(option);
+    }
+    picker.value = state.choice;
+    picker.addEventListener("change", () => choose(picker.value));
+    label.append(picker);
+    bar.append(label);
+    panelArea.append(bar);
+  }
   const groupTabs = new Map();
   for (const key of [...actionRows.keys()]) if (key.startsWith(panel.id + "\u0000")) actionRows.delete(key);
   const rows = actions.map((action) => {
@@ -2091,7 +2137,7 @@ function panelView(panel, snapshot) {
       const tab = groupTabs.get(group);
       if (tab) tab.changed(id);
     });
-    const row = actionRow(panel.id, action, outlet);
+    const row = actionRow(panel.id, action, outlet, selection);
     actionRows.set(actionKey(panel.id, row.id), row);
     return row;
   });
@@ -2212,6 +2258,10 @@ function panelView(panel, snapshot) {
 
   groups.forEach((group, index) => {
     const card = el("article", "group");
+    if (selection) {
+      cards.set(group.name, card);
+      card.hidden = group.name !== state.choice;
+    }
     const gh = el("div", "group-head");
     gh.append(el("h3", null, group.name));
     const facts = factsOf.get(group.name);
@@ -2221,7 +2271,8 @@ function panelView(panel, snapshot) {
     if (facts.lines.length) {
       const id = panel.id + "\u0000" + group.name;
       const details = el("details");
-      details.open = page.openGroups.has(id) || (index === 0 && !page.closedGroups.has(id));
+      const first = selection ? group.name === state.choice : index === 0;
+      details.open = page.openGroups.has(id) || (first && !page.closedGroups.has(id));
       details.addEventListener("toggle", () => {
         if (details.open) { page.openGroups.add(id); page.closedGroups.delete(id); }
         else { page.closedGroups.add(id); page.openGroups.delete(id); }

@@ -66,4 +66,5 @@ New in the `{project-version}` development line — everything listed here lande
 
 == Dev console
 
+* xref:dev-console-panels.adoc#selector[One choice above a panel's sub-tabs] [.tag-new]#NEW# — a panel that writes one group per item, such as a persistence unit, can return a `PanelSelector` from `selector()`. The page then draws a dropdown of the groups above the panel's sub-tabs, shows the chosen group alone in *Monitoring*, and sends the choice to every action that declares the selector's argument, in place of a form field.
 * xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools[The Mansart Data panel without JTA] [.tag-new]#NEW# — `vidocq dev` no longer resolves a `-dev` module's optional dependencies, so an application with Mansart Data and no `mansart-transactions` keeps its live Mansart Data panel, instead of `… needs jakarta.transaction:jakarta.transaction-api, which the application does not have; its panel shows its boot facts only` (BUG-20261106-04).

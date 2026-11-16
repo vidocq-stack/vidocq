@@ -329,7 +329,8 @@ class PageTest {
     void anActionPublishesEveryOutcomeToItsOutletWithTheWordingOfToday() {
         String script = file("console.js");
 
-        assertTrue(script.contains("function actionRow(panelId, action, outlet)"), "where results show is the outlet's");
+        assertTrue(script.contains("function actionRow(panelId, action, outlet, selection)"),
+                "where results show is the outlet's");
         assertTrue(script.contains("function inlineOutlet(actionId, panelId)"), "the panel's own bar keeps its look");
         assertTrue(script.contains("const started = performance.now();"), "the round trip the page measures");
         for (String wording : List.of("\"No token: reload the page.\"", "\"the console did not answer\"",
@@ -430,10 +431,24 @@ class PageTest {
     }
 
     @Test
+    void aPanelChoiceShowsItsGroupAloneAndFillsTheSelectorsArgument() {
+        String script = file("console.js");
+
+        assertTrue(script.contains("const CHOICE_KEY = \"vidocq.devconsole.choice.\";"), "kept per panel");
+        assertTrue(script.contains("const choices = selector ? choicesOf(panel) : [];"), "the sample's groups");
+        assertTrue(script.contains("card.hidden = group.name !== state.choice;"), "Monitoring shows the chosen group");
+        assertTrue(script.contains("formArguments(action, selection ? selection.selector : null)"),
+                "the form leaves the selector's argument out");
+        assertTrue(script.contains("body[selection.selector.argument] = choice;"), "and the page sends the choice");
+        assertTrue(script.contains("replayChoice(values, selection.selector, selection.choices)"),
+                "a replay of a choice switches the dropdown");
+    }
+
+    @Test
     void theConsoleImportsTheEditorAndNoOtherScript() {
         String script = file("console.js");
 
-        assertEquals(List.of("./editor.js"), IMPORT.matcher(script).results().map(m -> m.group(1)).toList());
+        assertEquals(List.of("./editor.js"), IMPORT.matcher(script).results().map(m -> m.group(1)).distinct().toList());
         assertTrue(script.contains(
                 "import { createEditor, jsonLanguage, queryLanguage, readRows, rowsCsv, FORMAT_EXAMPLES } "
                         + "from \"./editor.js\";"));
