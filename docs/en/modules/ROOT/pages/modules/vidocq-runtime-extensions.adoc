@@ -1862,6 +1862,9 @@ initializers and initializer methods ran at start. `jakarta.enterprise.context.A
 `jakarta.enterprise.event.Startup`, `jakarta.enterprise.context.Initialized`.
 | `start-callbacks` | Methods a container calls at start, as `owner#name(descriptor)`, matched on the classes that
 extend or implement the owner: `jakarta.servlet.Servlet#init(Ljakarta/servlet/ServletConfig;)V`.
+| `build-files` | Files of the class output that a build tool writes for its own use, as paths relative to the output;
+a path ending with `/` names a directory. A change to them alone reloads nothing, as for the build info of
+`META-INF/vidocq/build-info/`: `META-INF/VAADIN/config/flow-build-info.json`.
 |===
 
 Each value is a comma-separated list; a line ends with `\` to go on. The extensions of this repository declare their
@@ -1878,12 +1881,15 @@ initializers; `Servlet#init(ServletConfig)`, `GenericServlet#init()`, `Filter#in
 | `vidocq-runtime-cassini-rest-extension` | JAX-RS: `@Provider` classes and `Application` subclasses;
 `Application#getClasses`, `getSingletons` and `getProperties`, `Feature#configure`, `DynamicFeature#configure`.
 | `vidocq-runtime-vaadin-extension` | Vaadin: the Vaadin CDI scopes and `@PreserveOnRefresh` classes;
-`VaadinServiceInitListener#serviceInit`.
+`VaadinServiceInitListener#serviceInit`. Its build file `flow-build-info.json`, which Vaadin's `build-frontend`
+deletes when its Maven run ends: the first build of `vidocq:dev` runs in the JVM that stays, so the file is there at
+start and gone after the first recompile.
 |===
 
 The constructors of other objects, such as a Vaadin view, a `@Dependent` or `@RequestScoped` bean or a plain object,
 are not start-time: the next instance runs the new constructor. A declared type that no dependency has is never
-matched. An unknown key, or an entry that cannot be read (a callback without `#`, a bad descriptor), logs a warning
+matched. An unknown key, or an entry that cannot be read (a callback without `#`, a bad descriptor, a build file
+that leaves the output), logs a warning
 naming the jar and the entry, `Hot swap: <jar>: ...`, and is skipped: it never fails the build or the session. A
 supertype found in no dependency warns once, and the classes that extend it count as long-lived, which is the safe
 side.

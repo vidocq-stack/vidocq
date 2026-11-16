@@ -93,7 +93,12 @@ class HotSwapClassifierTest {
             Set.of("jakarta.annotation.PostConstruct", "jakarta.enterprise.inject.Produces"),
             Set.of("jakarta.enterprise.event.Observes"),
             Set.of("jakarta.enterprise.event.Startup", "jakarta.enterprise.context.Initialized"), Set.of(),
-            List.of("test"));
+            Set.of(), List.of("test"));
+
+    private static final String TOKEN = "META-INF/VAADIN/config/flow-build-info.json";
+
+    private static final StartTimeDeclarations BUILD_FILES = new StartTimeDeclarations(Set.of(), Set.of(), Set.of(),
+            Set.of(), Set.of(), Set.of(), Set.of(TOKEN, "META-INF/generated/"), List.of("test"));
 
     @TempDir
     static Path shared;
@@ -130,6 +135,48 @@ class HotSwapClassifierTest {
                 .resource("META-INF/vidocq/build-info/app.properties", "time=2");
 
         assertEquals(Optional.empty(), classify(CDI, v1, v2));
+    }
+
+    @Test
+    void aDeclaredBuildFileAddedOrRemovedIsNothing() {
+        var with = build().source("app/A.java", "package app; class A {}").resource(TOKEN, "{}");
+        var without = build().source("app/A.java", "package app; class A {}");
+
+        assertEquals(Optional.empty(), classify(BUILD_FILES, with, without));
+        assertEquals(Optional.empty(), classify(BUILD_FILES, without, with));
+    }
+
+    @Test
+    void aDeclaredBuildDirectoryCoversItsFiles() {
+        var v1 = build().source("app/A.java", "package app; class A {}").resource("META-INF/generated/a.txt", "1");
+        var v2 = build().source("app/A.java", "package app; class A {}").resource("META-INF/generated/a.txt", "2");
+
+        assertEquals(Optional.empty(), classify(BUILD_FILES, v1, v2));
+    }
+
+    @Test
+    void aBodyChangeIsRedefinedWhenADeclaredBuildFileWentAway() {
+        var v1 = build().source("app/A.java", "package app; class A { int a() { return 1; } }").resource(TOKEN, "{}");
+        var v2 = build().source("app/A.java", "package app; class A { int a() { return 2; } }");
+
+        assertRedefine(classify(BUILD_FILES, v1, v2), "app.A", "a");
+    }
+
+    @Test
+    void aFileNextToADeclaredBuildFileStillSwaps() {
+        String stats = "META-INF/VAADIN/config/stats.json";
+        var v1 = build().source("app/A.java", "package app; class A {}").resource(stats, "1");
+        var v2 = build().source("app/A.java", "package app; class A {}").resource(stats, "2");
+
+        assertSwap(stats + " changed", classify(BUILD_FILES, v1, v2));
+    }
+
+    @Test
+    void theShippedVaadinDeclarationsLeaveItsBuildTokenOut() {
+        var with = build().source("app/A.java", "package app; class A {}").resource(TOKEN, "{}");
+        var without = build().source("app/A.java", "package app; class A {}");
+
+        assertEquals(Optional.empty(), classify(shipped, with, without));
     }
 
     // Rule 2: a file added or removed
@@ -626,7 +673,8 @@ class HotSwapClassifierTest {
 
     private static StartTimeDeclarations declaring(Set<String> annotations, Set<String> types,
             Set<StartTimeDeclarations.Callback> callbacks) {
-        return new StartTimeDeclarations(annotations, types, Set.of(), Set.of(), Set.of(), callbacks, List.of("test"));
+        return new StartTimeDeclarations(annotations, types, Set.of(), Set.of(), Set.of(), callbacks, Set.of(),
+                List.of("test"));
     }
 
     private static void assertSwap(String reason, Optional<ReloadRequest> result) {

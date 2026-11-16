@@ -54,7 +54,10 @@ import java.util.zip.ZipFile;
  *   <li>{@code observer-annotations}, {@code start-events}: a method with a parameter carrying an observer annotation
  *       is start-time when that parameter's type, or a qualifier on it, is a start event;</li>
  *   <li>{@code start-callbacks}: {@code owner#name(descriptor)}, that method of a class extending or implementing the
- *       owner is start-time.</li>
+ *       owner is start-time;</li>
+ *   <li>{@code build-files}: paths in the class output that the build writes for its own use, a path ending with
+ *       {@code /} naming a directory: like {@code META-INF/vidocq/build-info/}, a change to them alone reloads
+ *       nothing (design §2, rule 3).</li>
  * </ul>
  *
  * <p>An unknown key or an entry that cannot be read is a warning naming the jar, and is skipped; it never fails the
@@ -62,13 +65,13 @@ import java.util.zip.ZipFile;
  */
 record StartTimeDeclarations(Set<String> longLivedAnnotations, Set<String> longLivedTypes,
         Set<String> startAnnotations, Set<String> observerAnnotations, Set<String> startEvents,
-        Set<Callback> startCallbacks, List<String> sources) {
+        Set<Callback> startCallbacks, Set<String> buildFiles, List<String> sources) {
 
     /** Where a jar, or a class directory, declares its start-time code. */
     static final String FILE = "META-INF/vidocq/dev/start-time.properties";
 
     static final StartTimeDeclarations EMPTY =
-            new StartTimeDeclarations(Set.of(), Set.of(), Set.of(), Set.of(), Set.of(), Set.of(), List.of());
+            new StartTimeDeclarations(Set.of(), Set.of(), Set.of(), Set.of(), Set.of(), Set.of(), Set.of(), List.of());
 
     private static final String LONG_LIVED_ANNOTATIONS = "long-lived-annotations";
     private static final String LONG_LIVED_TYPES = "long-lived-types";
@@ -76,6 +79,7 @@ record StartTimeDeclarations(Set<String> longLivedAnnotations, Set<String> longL
     private static final String OBSERVER_ANNOTATIONS = "observer-annotations";
     private static final String START_EVENTS = "start-events";
     private static final String START_CALLBACKS = "start-callbacks";
+    private static final String BUILD_FILES = "build-files";
     private static final List<String> NAME_KEYS = List.of(LONG_LIVED_ANNOTATIONS, LONG_LIVED_TYPES,
             START_ANNOTATIONS, OBSERVER_ANNOTATIONS, START_EVENTS);
 
@@ -98,6 +102,7 @@ record StartTimeDeclarations(Set<String> longLivedAnnotations, Set<String> longL
         observerAnnotations = frozen(observerAnnotations);
         startEvents = frozen(startEvents);
         startCallbacks = frozen(startCallbacks);
+        buildFiles = frozen(buildFiles);
         sources = List.copyOf(sources);
     }
 
@@ -130,7 +135,7 @@ record StartTimeDeclarations(Set<String> longLivedAnnotations, Set<String> longL
         return new StartTimeDeclarations(union(longLivedAnnotations, other.longLivedAnnotations),
                 union(longLivedTypes, other.longLivedTypes), union(startAnnotations, other.startAnnotations),
                 union(observerAnnotations, other.observerAnnotations), union(startEvents, other.startEvents),
-                union(startCallbacks, other.startCallbacks), allSources);
+                union(startCallbacks, other.startCallbacks), union(buildFiles, other.buildFiles), allSources);
     }
 
     /** {@code true} when no jar and no directory declared anything. */
@@ -166,10 +171,13 @@ record StartTimeDeclarations(Set<String> longLivedAnnotations, Set<String> longL
         Map<String, Set<String>> names = new LinkedHashMap<>();
         NAME_KEYS.forEach(key -> names.put(key, new LinkedHashSet<>()));
         Set<Callback> callbacks = new LinkedHashSet<>();
+        Set<String> paths = new LinkedHashSet<>();
         for (String key : new TreeSet<>(properties.stringPropertyNames())) {
             List<String> values = values(properties.getProperty(key));
             if (names.containsKey(key)) {
                 addNames(source, key, values, names.get(key), warn);
+            } else if (key.equals(BUILD_FILES)) {
+                addPaths(source, key, values, paths, warn);
             } else if (key.equals(START_CALLBACKS)) {
                 for (String value : values) {
                     callback(value).ifPresentOrElse(callbacks::add, () -> warn.accept(
@@ -181,7 +189,24 @@ record StartTimeDeclarations(Set<String> longLivedAnnotations, Set<String> longL
         }
         return new StartTimeDeclarations(names.get(LONG_LIVED_ANNOTATIONS), names.get(LONG_LIVED_TYPES),
                 names.get(START_ANNOTATIONS), names.get(OBSERVER_ANNOTATIONS), names.get(START_EVENTS), callbacks,
-                List.of(source));
+                paths, List.of(source));
+    }
+
+    private static void addPaths(String source, String key, List<String> values, Set<String> paths,
+            Consumer<String> warn) {
+        for (String value : values) {
+            if (outputPath(value)) {
+                paths.add(value);
+            } else {
+                warn.accept(skipped(source, key, value, "not a path in the class output"));
+            }
+        }
+    }
+
+    /** A relative path with {@code /} separators that stays in the class output. */
+    static boolean outputPath(String value) {
+        return !value.isEmpty() && !value.startsWith("/") && value.indexOf('\\') < 0
+                && !("/" + value + "/").contains("/../");
     }
 
     private static void addNames(String source, String key, List<String> values, Set<String> names,

@@ -5,6 +5,26 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261116-05 — The first change of each `vidocq:dev` session of a Vaadin application swaps the layer
+
+- **Date**: 2026-11-16
+- **Status**: FIXED on `fix/dev-build-files`
+- **Module**: `vidocq-runtime-maven-plugin` (`HotSwapClassifier`, `StartTimeDeclarations`), the start-time
+  declarations of `vidocq-runtime-vaadin-extension`
+- **Symptom**: found while replaying the hot swap on VidocqTools/vaadin-on-vidocq. The first change of a session, even
+  a comment, logs `Hot reload - restarting on a fresh application layer:
+  META-INF/VAADIN/config/flow-build-info.json was removed`; the following changes are classified as they should be. A
+  method body change then swaps and loses the session instead of being redefined.
+- **Repro**: in vaadin-on-vidocq (`build-frontend` bound to `process-classes`, as the Vaadin guide says), run
+  `vidocq:dev`, then add a comment to `MainView`.
+- **Cause**: Vaadin's `build-frontend` (flow-maven-plugin 25.3) calls `File.deleteOnExit()` on its token file after
+  `updateBuildFile`, unconditionally. The first build of `vidocq:dev` runs in the Maven JVM that stays for the whole
+  session, so the file is in `target/classes` when the first snapshot is taken; each recompile is a Maven run of its
+  own, which deletes the file when it ends. Two `process-classes` runs of a fresh copy leave no such file.
+- **Fix**: a `build-files` key in `META-INF/vidocq/dev/start-time.properties` names files of the class output that a
+  build tool writes for its own use; the classifier leaves them out, as it does `META-INF/vidocq/build-info/`. The
+  Vaadin extension declares `META-INF/VAADIN/config/flow-build-info.json`.
+
 ## BUG-20261116-04 — The 500-node graph layout test fails on a CI runner: 3.2 s for a one-second bound
 
 - **Date**: 2026-11-16

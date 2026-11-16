@@ -188,15 +188,21 @@ final class HotSwapClassifier {
         };
     }
 
-    /** Every file of every root, build-info left out. */
-    private static Map<File, ClassesSnapshot.Entry> files(ClassesSnapshot snapshot) {
+    /** Every file of every root, the files the build writes for its own use left out. */
+    private Map<File, ClassesSnapshot.Entry> files(ClassesSnapshot snapshot) {
         var files = new LinkedHashMap<File, ClassesSnapshot.Entry>();
         snapshot.byRoot().forEach((root, entries) -> entries.forEach((path, entry) -> {
-            if (!path.startsWith(BUILD_INFO)) {
+            if (!buildFile(path)) {
                 files.put(new File(root, path), entry);
             }
         }));
         return files;
+    }
+
+    /** Build-info, or a file or directory a jar declares in {@code build-files} (rule 3's exception). */
+    private boolean buildFile(String path) {
+        return path.startsWith(BUILD_INFO) || declarations.buildFiles().stream()
+                .anyMatch(file -> file.endsWith("/") ? path.startsWith(file) : path.equals(file));
     }
 
     private static Optional<ReloadRequest> swap(String reason) {

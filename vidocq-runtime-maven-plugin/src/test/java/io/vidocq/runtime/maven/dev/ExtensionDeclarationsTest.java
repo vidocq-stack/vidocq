@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -92,6 +93,11 @@ class ExtensionDeclarationsTest {
                 callback("jakarta.ws.rs.container.DynamicFeature#configure"
                         + "(Ljakarta/ws/rs/container/ResourceInfo;Ljakarta/ws/rs/core/FeatureContext;)V"))),
                 read::toString);
+    }
+
+    @Test
+    void vaadinDeclaresTheTokenItsBuildDeletesOnExit() {
+        assertEquals(Set.of("META-INF/VAADIN/config/flow-build-info.json"), read(VAADIN).buildFiles());
     }
 
     @Test

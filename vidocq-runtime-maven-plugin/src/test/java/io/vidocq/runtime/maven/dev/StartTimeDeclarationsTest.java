@@ -110,6 +110,29 @@ class StartTimeDeclarationsTest {
     }
 
     @Test
+    void buildFilesArePathsOfTheOutputMergedAcrossJars(@TempDir Path dir) throws IOException {
+        Path vaadin = declaring(dir, "vaadin", "build-files = META-INF/VAADIN/config/flow-build-info.json\n");
+        Path other = declaring(dir, "other", "build-files = META-INF/generated/\n");
+
+        var read = StartTimeDeclarations.read(List.of(vaadin, other), warnings::add);
+
+        assertEquals(Set.of("META-INF/VAADIN/config/flow-build-info.json", "META-INF/generated/"), read.buildFiles());
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
+    void aBuildFileOutsideTheOutputWarnsAndIsSkipped(@TempDir Path dir) throws IOException {
+        Path jar = declaring(dir, "odd", "build-files = /etc/hosts, ../outside.json, a\\\\b.json, kept.json\n");
+
+        var read = StartTimeDeclarations.read(List.of(jar), warnings::add);
+
+        assertEquals(Set.of("kept.json"), read.buildFiles());
+        assertEquals(3, warnings.size(), warnings::toString);
+        assertTrue(warnings.getFirst().contains("odd.jar") && warnings.getFirst().contains("build-files"),
+                warnings::toString);
+    }
+
+    @Test
     void aJarWithoutTheFileAddsNothing(@TempDir Path dir) throws IOException {
         Path jar = DepgenFixtures.jar(dir, "plain", Map.of(), List.of(), Map.of("README", "nothing"));
 

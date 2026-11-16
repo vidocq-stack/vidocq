@@ -161,7 +161,10 @@ decides:
    record, `META-INF/services`, static web resources), or `module-info.class`: **swap**. One exception: the files of
    `META-INF/vidocq/build-info/`. `build-info` runs in `initialize`, so in every recompile, and rewrites them with
    the build time to the second, the commit and the dirty flag. Without the exception, every change would swap. The
-   running application keeps the build info of its last swap.
+   running application keeps the build info of its last swap. A jar extends the exception with the `build-files` key
+   of its declarations (§2.1): Vaadin's `build-frontend` deletes `META-INF/VAADIN/config/flow-build-info.json` when
+   its Maven run ends, so the file is there after the first build of `vidocq:dev`, which runs in the JVM that stays,
+   and gone after every recompile. Without it, the first change of each session would swap.
 4. A changed class that does not come from the project's own sources: **swap**. "Its own sources" means a compile
    source root outside the build directory (`src/main/java` and the ones the pom adds), with the class's package
    and `SourceFile` found in it. Everything else is generated, with or without a source: `_VaubanComponents`, and

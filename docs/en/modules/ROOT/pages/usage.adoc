@@ -223,7 +223,9 @@ The reasons, in the order they are checked:
 
 * a class added or deleted: `MainView$1 is a new class`;
 * a resource or `module-info` changed: `application.properties changed`. The files of `META-INF/vidocq/build-info/`,
-  rewritten by every build, are left out;
+  rewritten by every build, are left out, and so are the files an extension declares as written by its build tool,
+  such as Vaadin's `flow-build-info.json`
+  (xref:modules/vidocq-runtime-extensions.adoc#start-time-code[Declaring start-time code]);
 * a class generated rather than compiled from the project's own sources (the compile source roots outside
   `target/`): `_VaubanComponents is not compiled from this project's sources`;
 * a change of shape, such as a field, a method, a signature, a modifier, a supertype or an annotation: `Order lost a
