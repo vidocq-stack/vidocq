@@ -163,7 +163,7 @@ public final class JpmsPatches {
     public static void enrich(Path srcJar, Path patchDir, Path outJar) throws IOException {
         Set<String> present = new HashSet<>();
         Files.createDirectories(outJar.toAbsolutePath().getParent());
-        Path tmp = Files.createTempFile(outJar.toAbsolutePath().getParent(), outJar.getFileName().toString(), ".tmp");
+        Path tmp = StagedFiles.temporarySibling(outJar);
         try (var zin = new ZipInputStream(Files.newInputStream(srcJar));
              var zout = new ZipOutputStream(new BufferedOutputStream(Files.newOutputStream(tmp)))) {
             for (ZipEntry entry; (entry = zin.getNextEntry()) != null; ) {

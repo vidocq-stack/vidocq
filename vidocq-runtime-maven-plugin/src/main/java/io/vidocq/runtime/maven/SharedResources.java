@@ -271,7 +271,7 @@ final class SharedResources {
      */
     private static void rewrite(Path jar, Set<String> removed, Map<String, byte[]> added, String pkg)
             throws IOException {
-        Path tmp = Files.createTempFile(jar.getParent(), jar.getFileName().toString(), ".tmp");
+        Path tmp = StagedFiles.temporarySibling(jar);
         try (JarFile in = new JarFile(jar.toFile());
              JarOutputStream out = new JarOutputStream(Files.newOutputStream(tmp))) {
             for (JarEntry entry : Collections.list(in.entries())) {

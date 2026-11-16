@@ -509,7 +509,7 @@ public final class EnrichedJars {
     private static void writeJar(Path out, Manifest manifest, List<String> sourceFolders, Map<String, byte[]> entries)
             throws IOException {
         Files.createDirectories(out.toAbsolutePath().getParent());
-        Path tmp = Files.createTempFile(out.toAbsolutePath().getParent(), out.getFileName().toString(), ".tmp");
+        Path tmp = StagedFiles.temporarySibling(out);
         try (JarOutputStream jar = new JarOutputStream(Files.newOutputStream(tmp), manifest)) {
             // Every folder gets its own entry, the source jar's own ones first, then any other before its first
             // file, as the jar tool writes them.

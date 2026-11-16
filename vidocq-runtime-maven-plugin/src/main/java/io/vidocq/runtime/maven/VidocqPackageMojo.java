@@ -385,7 +385,7 @@ public class VidocqPackageMojo extends AbstractMojo {
 
         Path shFile = binDir.resolve(scriptName + ".sh");
         Files.writeString(shFile, withJdkCheck(script, "#!/bin/sh\n", SH_JDK_CHECK));
-        if (!shFile.toFile().setExecutable(true)) {
+        if (!StagedFiles.makeExecutable(shFile)) {
             getLog().warn("Could not make " + shFile + " executable: run chmod +x on it.");
         }
     }

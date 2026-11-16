@@ -5,6 +5,26 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261116-03 — A distribution unpacked by one user is not usable by another: rewritten jars `rw-------`, launcher `rwxr--r--`
+
+- **Date**: 2026-11-16
+- **Status**: FIXED on `fix/dist-file-modes`
+- **Module**: `vidocq-runtime-maven-plugin` (`EnrichedJars.writeJar`, `JpmsPatches.enrich`, `SharedResources.rewrite`,
+  `VidocqPackageMojo` launcher)
+- **Symptom**: after BUG-20261116-02, the VAADIN session checked the `-dist.zip` of vaadin-on-vidocq with `zipinfo`:
+  the two jars Foy enriches (`atmosphere-runtime-3.0.5.slf4jvaadin1.jar`, `flow-server-25.3.3.jar`) are `rw-------`, in
+  the archive and in `target/…/app/`, and `bin/vaadin-on-vidocq.sh` is `rwxr--r--`. Unpacked by root in `/opt` and run
+  by a service user, the launcher cannot be executed and those jars cannot be read.
+- **Repro**: `vidocq build && zipinfo target/*-dist.zip | grep -E 'rw-------|rwxr--r--'`.
+- **Cause**: the jars the plugin rewrites are written through `Files.createTempFile`, which creates `rw-------`, and
+  moved in place with that mode; `File.setExecutable(true)` adds the execute bit for the owner only.
+- **Fix**: `StagedFiles.temporarySibling` creates the temporary file with `Files.createFile`, so it has the mode of a
+  plain new file under the user's umask; `StagedFiles.makeExecutable` gives the execute bit to each class of user that
+  can read the launcher (`rw-r--r--` becomes `rwxr-xr-x`, no right for who cannot read it). Tests: `StagedFilesTest`.
+  Not fixed: the external attributes of the ZIP entries carry no `S_IFREG` type bits (`zipinfo` prints `?rwx…`),
+  which `jdk.zipfs` does not expose; Info-ZIP `unzip` ignores it. The `depgen` memo files keep `createTempFile`: they
+  are a build cache, never part of a distribution.
+
 ## BUG-20261116-02 — The `-dist.zip` of `vidocq:package` loses the execute bit of `bin/<name>.sh`
 
 - **Date**: 2026-11-16
