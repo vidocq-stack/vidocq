@@ -49,6 +49,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ExploreActionsTest {
 
     static final String LINE_KEY = "com.acme.LineKey";
+    /** The JPQL write of the unit, which the menu of its rows fills. */
+    static final String WRITE = "jpql.write.1";
 
     /** Line, whose id is the embedded LineKey(orderId, no). */
     static final UnitDescription LINES = new UnitDescription("orders", List.of(
@@ -99,9 +101,9 @@ class ExploreActionsTest {
         PanelAction.Argument unit = new PanelAction.Argument("unit", "Persistence unit", List.of("notes"), null,
                 null);
 
-        List<PanelAction> actions = explore.actions(unit, List.of("Author", "Note"), call -> given -> null);
+        List<PanelAction> actions = explore.actions(unit, List.of("Author", "Note"), call -> given -> null, ".1");
 
-        assertEquals(List.of("explore.page", "explore.export"), actions.stream().map(PanelAction::id).toList());
+        assertEquals(List.of("explore.page.1", "explore.export.1"), actions.stream().map(PanelAction::id).toList());
         assertTrue(actions.stream().allMatch(a -> a.group().equals("Explore")));
         assertEquals(List.of("Author", "Note"), actions.getFirst().arguments().get(1).allowedValues());
         assertEquals(List.of("20", "50", "100"), actions.getFirst().arguments().get(2).allowedValues());
@@ -109,15 +111,17 @@ class ExploreActionsTest {
 
     @Test
     void theMenuDeletesOrUpdatesTheSelectedRowsThroughJpql() {
-        List<MenuItem> menu = ExploreActions.menu(entity(UNIT, "Note"), Projection.of(entity(UNIT, "Note"), UNIT));
+        List<MenuItem> menu = ExploreActions.menu(entity(UNIT, "Note"), Projection.of(entity(UNIT, "Note"), UNIT),
+                WRITE);
 
         assertEquals(List.of(
-                new MenuItem("Delete these rows", "jpql.write",
+                new MenuItem("Delete these rows", WRITE,
                         "{\"statement\":{\"query\":\"DELETE FROM Note e WHERE e.id IN (${id})\"}}"),
-                new MenuItem("Update these rows", "jpql.write",
+                new MenuItem("Update these rows", WRITE,
                         "{\"statement\":{\"query\":\"UPDATE Note e SET e.title = e.title WHERE e.id IN (${id})\"}}")),
                 menu);
-        assertEquals(1, ExploreActions.menu(entity(UNIT, "Tag"), Projection.of(entity(UNIT, "Tag"), UNIT)).size(),
+        assertEquals(1, ExploreActions.menu(entity(UNIT, "Tag"), Projection.of(entity(UNIT, "Tag"), UNIT), WRITE)
+                        .size(),
                 "an entity with nothing but its id has nothing to update");
     }
 
@@ -126,7 +130,7 @@ class ExploreActionsTest {
         Unit notes = unit("notes", UNIT, ResultRowsTest.results(new Object[] {21L, "a", 4L, null, null},
                 new Object[] {22L, "b", null, "Main St", "Paris"}));
 
-        ActionResult result = explore.page(notes, page("Note", "20", "2"));
+        ActionResult result = explore.page(notes, page("Note", "20", "2"), WRITE);
 
         assertFalse(result.error(), result.summary());
         assertEquals("SELECT e.id, e.title, j1.id, e.address.street, e.address.city FROM Note e"
@@ -142,14 +146,14 @@ class ExploreActionsTest {
     void aCompositeIdHasNoMenu() {
         Unit orders = unit("orders", LINES, ResultRowsTest.results(new Object[] {1L, 2, 9.5}));
 
-        ActionResult result = explore.page(orders, page("Line", "20", ""));
+        ActionResult result = explore.page(orders, page("Line", "20", ""), WRITE);
 
         assertEquals("SELECT e.key.orderId, e.key.no, e.amount FROM Line e ORDER BY e.key.orderId, e.key.no",
                 asked.get("jpql"));
         assertEquals(0, asked.get("first"));
         assertFalse(result.body().contains("\"menu\""), result.body());
         assertEquals(List.of(), ExploreActions.menu(LINES.entities().getFirst(),
-                Projection.of(LINES.entities().getFirst(), LINES)));
+                Projection.of(LINES.entities().getFirst(), LINES), WRITE));
     }
 
     @Test
@@ -158,7 +162,7 @@ class ExploreActionsTest {
         for (long i = 0; i < 21; i++) {
             rows.add(i);
         }
-        ActionResult result = explore.page(unit("notes", UNIT, rows), page("Tag", "20", "1"));
+        ActionResult result = explore.page(unit("notes", UNIT, rows), page("Tag", "20", "1"), WRITE);
 
         assertTrue(result.summary().startsWith("20 rows of Tag, page 1, more on the next page, in "),
                 result.summary());
@@ -169,9 +173,9 @@ class ExploreActionsTest {
     void anEntityOfAnotherUnitOrAPageThatIsNoNumberIsRefused() {
         Unit notes = unit("notes", UNIT, List.of());
 
-        assertEquals("Line is no entity of unit notes", explore.page(notes, page("Line", "20", "1")).summary());
-        assertEquals("page: not a page number", explore.page(notes, page("Note", "20", "x")).summary());
-        assertEquals("page: not a page number", explore.page(notes, page("Note", "20", "0")).summary());
+        assertEquals("Line is no entity of unit notes", explore.page(notes, page("Line", "20", "1"), WRITE).summary());
+        assertEquals("page: not a page number", explore.page(notes, page("Note", "20", "x"), WRITE).summary());
+        assertEquals("page: not a page number", explore.page(notes, page("Note", "20", "0"), WRITE).summary());
         assertEquals(List.of(), calls);
     }
 

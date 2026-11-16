@@ -46,9 +46,11 @@ import java.util.function.Supplier;
 /**
  * The live half of the {@code noether-persistence} section: a <i>Persistence unit</i> dropdown, a group per unit
  * with the counts its description holds, and the actions of the Model, JPQL, Explore, Indexes and DDL tabs, each
- * taking the chosen unit. {@link #sample} reads memory only; every action that needs the database runs on a click.
- * The units come from {@link NoetherPersistenceLive}, which the extension clears at its stop: the panel holds no
- * factory of its own.
+ * taking the chosen unit. The JPQL and Explore actions, whose entities, example and completion are a unit's own, are
+ * given once per unit, their ids followed by its number, {@code jpql.query.2}, their unit argument allowing it alone:
+ * the page offers those of the chosen unit. {@link #sample} reads memory only; every action that needs the database
+ * runs on a click. The units come from {@link NoetherPersistenceLive}, which the extension clears at its stop: the
+ * panel holds no factory of its own.
  */
 public final class PersistenceLivePanel implements LivePanel {
 
@@ -139,31 +141,36 @@ public final class PersistenceLivePanel implements LivePanel {
         if (started.isEmpty()) {
             return List.of();
         }
-        PanelAction.Argument unit = new PanelAction.Argument(UNIT, "Persistence unit",
-                started.stream().map(Unit::name).toList(), null, null);
+        PanelAction.Argument unit = unitArgument(started.stream().map(Unit::name).toList());
         List<PanelAction> actions = new ArrayList<>();
         actions.add(new PanelAction("model", "Show the model", null, List.of(unit),
                 onUnit((found, given) -> ModelGraph.of(describe(found))), "Model",
                 "The unit's entities, embeddables and mapped superclasses, their relations and their inheritance, "
                         + "read from memory. Click a box to list its table and its attributes."));
-        List<UnitDescription> described = descriptions(started);
-        actions.addAll(jpql.actions(unit, this::onUnit, JpqlActions.example(described)));
-        List<String> entities = described.stream().flatMap(d -> d.entities().stream()).map(Entity::name).distinct()
-                .sorted().toList();
-        if (!entities.isEmpty()) {
-            actions.addAll(explore.actions(unit, entities, this::onUnit));
+        List<PanelAction> explored = new ArrayList<>();
+        for (Described one : descriptions(started)) {
+            PanelAction.Argument only = unitArgument(List.of(one.unit().name()));
+            actions.addAll(jpql.actions(only, this::onUnit, JpqlActions.example(one.description()), one.suffix()));
+            List<String> entities = one.description().entities().stream().map(Entity::name).sorted().toList();
+            if (!entities.isEmpty()) {
+                explored.addAll(explore.actions(only, entities, this::onUnit, one.suffix()));
+            }
         }
+        actions.addAll(explored);
         actions.addAll(indexes.actions(unit, this::onUnit));
         actions.addAll(ddl.actions(unit, this::onUnit));
         return actions;
     }
 
-    /** The {@value JpqlLanguage#ID} language of the query editor, of the entities of every unit. */
+    /** The language of the query editor of each unit, {@value JpqlLanguage#ID} and its suffix: its own entities. */
     @Override
     public List<PanelLanguage> languages() {
-        List<UnitDescription> described = descriptions(units.get());
-        return described.isEmpty() ? List.of()
-                : List.of(new PanelLanguage(JpqlLanguage.ID, JpqlLanguage.json(described)));
+        return descriptions(units.get()).stream().map(one -> new PanelLanguage(JpqlLanguage.ID + one.suffix(),
+                JpqlLanguage.json(List.of(one.description())))).toList();
+    }
+
+    private static PanelAction.Argument unitArgument(List<String> names) {
+        return new PanelAction.Argument(UNIT, "Persistence unit", names, null, null);
     }
 
     /** The call of an action on the chosen unit: an error when no unit of the boot has that name. */
@@ -177,12 +184,28 @@ public final class PersistenceLivePanel implements LivePanel {
         };
     }
 
-    /** The descriptions of {@code started}, leaving out a unit that cannot describe itself. */
-    private static List<UnitDescription> descriptions(List<Unit> started) {
-        List<UnitDescription> described = new ArrayList<>();
-        for (Unit unit : started) {
+    /**
+     * A started unit and its description.
+     *
+     * @param number      its place among the started units, from 1, which its actions and language carry
+     * @param unit        the unit
+     * @param description what it holds
+     */
+    private record Described(int number, Unit unit, UnitDescription description) {
+
+        /** What follows the ids of the unit's own actions and language: {@code .2}. */
+        String suffix() {
+            return "." + number;
+        }
+    }
+
+    /** The descriptions of {@code started}, numbered in their order, leaving out a unit that cannot describe itself. */
+    private static List<Described> descriptions(List<Unit> started) {
+        List<Described> described = new ArrayList<>();
+        for (int i = 0; i < started.size(); i++) {
+            Unit unit = started.get(i);
             try {
-                described.add(describe(unit));
+                described.add(new Described(i + 1, unit, describe(unit)));
             } catch (RuntimeException failed) {
                 LOG.log(System.Logger.Level.DEBUG, "Noether Persistence: unit " + unit.name()
                         + " has no description: " + failed.getClass().getName());

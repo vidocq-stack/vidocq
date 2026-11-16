@@ -30,6 +30,7 @@ import io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.live.Noeth
 import io.vidocq.runtime.spi.devconsole.LivePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.PanelAction.ActionResult;
+import io.vidocq.runtime.spi.devconsole.PanelLanguage;
 import io.vidocq.runtime.spi.devconsole.PanelSelector;
 import org.junit.jupiter.api.Test;
 
@@ -120,6 +121,39 @@ class PersistenceLivePanelTest {
         assertEquals(ActionResult.GRAPH, drawn.contentType());
         assertTrue(drawn.body().contains("\"id\":\"entity:Note\""), drawn.body());
         assertFalse(drawn.error());
+    }
+
+    static PanelAction.Argument argument(PanelAction action, String name) {
+        return action.arguments().stream().filter(a -> a.name().equals(name)).findFirst()
+                .orElseThrow(() -> new AssertionError(action.id() + " takes no " + name));
+    }
+
+    @Test
+    void eachUnitHasItsOwnExploreAndJpqlActionsOnItsOwnEntities() {
+        PersistenceLivePanel panel = panel(unit("notes", ModelGraphTest.UNIT), unit("items", ResultRowsTest.ITEMS));
+
+        PanelAction notes = action(panel, "explore.page.1");
+        PanelAction items = action(panel, "explore.page.2");
+        assertEquals(List.of("notes"), argument(notes, "unit").allowedValues());
+        assertEquals(List.of("items"), argument(items, "unit").allowedValues());
+        assertEquals(List.of("Item"), argument(items, "entity").allowedValues());
+        assertFalse(argument(notes, "entity").allowedValues().contains("Item"), "no entity of another unit");
+        assertEquals(List.of("items"), argument(action(panel, "jpql.write.2"), "unit").allowedValues());
+        String statement = argument(action(panel, "jpql.query.2"), "statement").schema();
+        assertTrue(statement.contains("SELECT e FROM Item e ORDER BY e.id"), statement);
+        assertTrue(statement.contains("\"x-language\":\"jpql.2\""), statement);
+        assertEquals(List.of("notes", "items"), argument(action(panel, "model"), "unit").allowedValues(),
+                "a tab that only needs the unit stays one action");
+    }
+
+    @Test
+    void eachUnitsQueriesCompleteItsOwnEntities() {
+        List<PanelLanguage> languages = panel(unit("notes", ModelGraphTest.UNIT), unit("items", ResultRowsTest.ITEMS))
+                .languages();
+
+        assertEquals(List.of("jpql.1", "jpql.2"), languages.stream().map(PanelLanguage::id).toList());
+        assertTrue(languages.get(1).json().contains("\"Item\""), languages.get(1).json());
+        assertFalse(languages.get(1).json().contains("\"Note\""), languages.get(1).json());
     }
 
     @Test

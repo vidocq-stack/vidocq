@@ -35,10 +35,11 @@ import java.util.Objects;
 import java.util.function.Function;
 
 /**
- * The <i>JPQL</i> tab: {@value #QUERY} runs a {@code SELECT} and shows its rows, {@value #WRITE} an {@code UPDATE}
- * or a {@code DELETE}, which asks first and is rolled back unless {@code commit} is asked, and {@value #EXPORT} gives
- * a query's rows as CSV. A read runs in a transaction that is always rolled back. Each takes the unit and the
- * {@value #STATEMENT} json argument, its {@code query} in the query editor with the {@value JpqlLanguage#ID} language.
+ * The <i>JPQL</i> tab of one unit: {@value #QUERY} runs a {@code SELECT} and shows its rows, {@value #WRITE} an
+ * {@code UPDATE} or a {@code DELETE}, which asks first and is rolled back unless {@code commit} is asked, and
+ * {@value #EXPORT} gives a query's rows as CSV, each id followed by the unit's suffix, {@code jpql.query.2}. A read
+ * runs in a transaction that is always rolled back. Each takes the unit and the {@value #STATEMENT} json argument,
+ * its {@code query} in the query editor with the unit's own language, {@value JpqlLanguage#ID} and the suffix.
  */
 final class JpqlActions {
 
@@ -61,51 +62,54 @@ final class JpqlActions {
     }
 
     /**
-     * The tab's three actions.
+     * The tab's three actions on one unit.
      *
-     * @param unit    the unit argument every action of the panel takes
+     * @param unit    the unit argument, which allows that unit alone
      * @param on      the call of an action on the unit its arguments name
      * @param example the query the editor shows as an example, {@link #example}
+     * @param suffix  what follows the id of each action and of the unit's language, such as {@code .2}
      */
     List<PanelAction> actions(PanelAction.Argument unit, Function<UnitCall, Function<Map<String, String>,
-            ActionResult>> on, String example) {
-        PanelAction.Argument statement = PanelAction.Argument.json(STATEMENT, "Statement", schema(example));
+            ActionResult>> on, String example, String suffix) {
+        PanelAction.Argument statement = PanelAction.Argument.json(STATEMENT, "Statement",
+                schema(example, JpqlLanguage.ID + suffix));
         String parameters = "\nA named parameter, :name, takes the member of params of that name, converted to the"
                 + " type the query gives it.";
         return List.of(
-                new PanelAction(QUERY, "Query", null, List.of(unit, statement), on.apply(this::query), GROUP,
+                new PanelAction(QUERY + suffix, "Query", null, List.of(unit, statement), on.apply(this::query), GROUP,
                         "A JPQL SELECT, or FROM <Entity>, run in a transaction that is always rolled back: at most "
                                 + ResultRows.MAX_ROWS + " rows are shown, an entity as the values it holds."
                                 + parameters),
-                new PanelAction(WRITE, "Update / Delete", "Runs this JPQL statement against the database.",
+                new PanelAction(WRITE + suffix, "Update / Delete", "Runs this JPQL statement against the database.",
                         List.of(unit, statement, new PanelAction.Argument(TRANSACTION, "Transaction",
                                 List.of(ROLLBACK, COMMIT), null, null)), on.apply(this::write), GROUP,
                         "A JPQL UPDATE or DELETE, run in a transaction rolled back unless commit is asked. JPQL has"
                                 + " no INSERT." + parameters),
-                new PanelAction(EXPORT, "Export CSV", null, List.of(unit, statement), on.apply(this::export), GROUP,
+                new PanelAction(EXPORT + suffix, "Export CSV", null, List.of(unit, statement), on.apply(this::export),
+                        GROUP,
                         "The rows of a JPQL SELECT as CSV, at most " + EXPORT_ROWS + " rows and 256 KiB, read in a"
                                 + " transaction that is always rolled back." + parameters));
     }
 
     /**
-     * The JSON Schema of {@value #STATEMENT}: {@code query}, which the page shows in its query editor, and
-     * {@code params}, in its JSON editor whose members follow the query's parameters.
+     * The JSON Schema of {@value #STATEMENT}: {@code query}, which the page shows in its query editor with the
+     * language {@code language}, and {@code params}, in its JSON editor whose members follow the query's parameters.
      */
-    static String schema(String example) {
+    static String schema(String example, String language) {
         return Json.write(Json.object("type", "object", "properties", Json.object(
                 "query", Json.object("type", "string", "format", "textarea", "contentMediaType",
-                        JpqlLanguage.MEDIA_TYPE, "x-language", JpqlLanguage.ID, "description", example),
+                        JpqlLanguage.MEDIA_TYPE, "x-language", language, "description", example),
                 "params", Json.object("type", "string", "format", "textarea", "x-parameters-of", "query",
                         "description", "the named parameters, a JSON object: {\"id\": 3}")),
                 "required", List.of("query")));
     }
 
     /**
-     * The example of the query editor: the first entity in name order, ordered by its id when it has a simple one;
-     * {@code SELECT e FROM <Entity> e} without any.
+     * The example of the query editor of {@code unit}: its first entity in name order, ordered by its id when it has
+     * a simple one; {@code SELECT e FROM <Entity> e} without any.
      */
-    static String example(List<UnitDescription> units) {
-        return units.stream().flatMap(unit -> unit.entities().stream()).min(Comparator.comparing(Entity::name))
+    static String example(UnitDescription unit) {
+        return unit.entities().stream().min(Comparator.comparing(Entity::name))
                 .map(entity -> "SELECT e FROM " + entity.name() + " e" + Projection.simpleId(entity)
                         .map(id -> " ORDER BY e." + id.name()).orElse(""))
                 .orElse("SELECT e FROM <Entity> e");

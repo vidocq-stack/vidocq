@@ -24,7 +24,6 @@ import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.devconsole.LivePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.PanelAction.ActionResult;
-import io.vidocq.runtime.spi.devconsole.PanelLanguage;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.CDI;
@@ -42,6 +41,8 @@ import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -136,10 +137,21 @@ class NoetherPersistencePanelModulePathTest {
                 .orElseThrow(() -> new AssertionError("no action " + id));
     }
 
+    /**
+     * The action the page offers on {@code unit}: {@code action}, or, for a tab that gives each unit its own,
+     * {@code action} followed by the unit's number, whose unit argument allows that unit.
+     */
+    private static PanelAction offered(String action, String unit) {
+        return panel.actions().stream()
+                .filter(found -> found.id().equals(action) || found.id().startsWith(action + "."))
+                .filter(found -> found.arguments().getFirst().allowedValues().contains(unit)).findFirst()
+                .orElseThrow(() -> new AssertionError("no action " + action + " on " + unit));
+    }
+
     private static ActionResult run(String action, String unit, Map<String, String> arguments) {
         Map<String, String> given = new HashMap<>(arguments);
         given.put("unit", unit);
-        return action(action).call().apply(given);
+        return offered(action, unit).call().apply(given);
     }
 
     private static String statement(String query) {
@@ -162,12 +174,16 @@ class NoetherPersistencePanelModulePathTest {
     }
 
     @Test
-    void theEditorKnowsTheEntitiesOfEveryUnit() {
-        List<PanelLanguage> languages = panel.languages();
+    void theEditorOfEachUnitKnowsItsOwnEntities() {
+        String schema = offered("jpql.query", DRAFTS).arguments().get(1).schema();
+        Matcher language = Pattern.compile("\"x-language\":\"(jpql\\.[0-9]+)\"").matcher(schema);
+        assertTrue(language.find(), schema);
 
-        assertEquals(List.of("jpql"), languages.stream().map(PanelLanguage::id).toList());
-        assertTrue(languages.getFirst().json().contains("\"Draft\""), languages.getFirst().json());
-        assertTrue(languages.getFirst().json().contains("\"Note\""), languages.getFirst().json());
+        String json = panel.languages().stream().filter(found -> found.id().equals(language.group(1))).findFirst()
+                .orElseThrow(() -> new AssertionError("no language " + language.group(1))).json();
+        assertTrue(json.contains("\"Draft\""), json);
+        assertFalse(json.contains("\"Note\""), json);
+        assertEquals(4, panel.languages().size(), "a language per unit");
     }
 
     @Test
@@ -225,6 +241,9 @@ class NoetherPersistencePanelModulePathTest {
         assertTrue(page.summary().matches("[0-9]+ rows of Draft, page 1, in [0-9]+ ms"), page.summary());
         assertTrue(page.body().contains("\"first\""), page.body());
         assertTrue(page.body().contains("DELETE FROM Draft e WHERE e.id IN ("), page.body());
+        Matcher write = Pattern.compile("\"action\":\"(jpql\\.write\\.[0-9]+)\"").matcher(page.body());
+        assertTrue(write.find(), page.body());
+        assertEquals(offered("jpql.write", DRAFTS).id(), write.group(1), "the menu fills the JPQL tab of the unit");
     }
 
     @Test

@@ -38,10 +38,11 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 
 /**
- * The <i>Explore</i> tab: {@value #PAGE_ACTION} shows a page of an entity's rows, the values of its
+ * The <i>Explore</i> tab of one unit: {@value #PAGE_ACTION} shows a page of an entity's rows, the values of its
  * {@link Projection} sorted by its id, read in a transaction that is always rolled back, and {@value #EXPORT} gives
- * the same page as CSV. The rows of an entity with a simple id offer a menu: <i>Delete these rows</i> and <i>Update
- * these rows</i> fill the JPQL tab's write with a statement on the selected ids, for the user to review and run.
+ * the same page as CSV, each id followed by the unit's suffix, {@code explore.page.2}. The rows of an entity with a
+ * simple id offer a menu: <i>Delete these rows</i> and <i>Update these rows</i> fill the write of the unit's JPQL tab
+ * with a statement on the selected ids, for the user to review and run.
  */
 final class ExploreActions {
 
@@ -78,29 +79,32 @@ final class ExploreActions {
     }
 
     /**
-     * The tab's two actions.
+     * The tab's two actions on one unit.
      *
-     * @param unit     the unit argument every action of the panel takes
-     * @param entities the names of the entities of every unit, in order
+     * @param unit     the unit argument, which allows that unit alone
+     * @param entities the names of the unit's entities, in order
      * @param on       the call of an action on the unit its arguments name
+     * @param suffix   what follows the id of each action, and of the JPQL write of the unit the menu fills
      */
     List<PanelAction> actions(PanelAction.Argument unit, List<String> entities,
-                              Function<UnitCall, Function<Map<String, String>, ActionResult>> on) {
+                              Function<UnitCall, Function<Map<String, String>, ActionResult>> on, String suffix) {
+        String write = JpqlActions.WRITE + suffix;
         List<PanelAction.Argument> arguments = List.of(unit,
                 new PanelAction.Argument(ENTITY, "Entity", entities, null, null),
                 new PanelAction.Argument(SIZE, "Rows per page", SIZES, null, null),
                 new PanelAction.Argument(PAGE, "Page", null, "[0-9]{0,6}", null));
         return List.of(
-                new PanelAction(PAGE_ACTION, "Show a page", null, arguments, on.apply(this::page), GROUP,
+                new PanelAction(PAGE_ACTION + suffix, "Show a page", null, arguments,
+                        on.apply((found, given) -> page(found, given, write)), GROUP,
                         "A page of the entity's rows, sorted by its id, each relation as its target's id. Select rows"
                                 + " and right-click them to delete or update them through the JPQL tab."),
-                new PanelAction(EXPORT, "Export the page", null, arguments, on.apply(this::export), GROUP,
+                new PanelAction(EXPORT + suffix, "Export the page", null, arguments, on.apply(this::export), GROUP,
                         "The same page as CSV."));
     }
 
-    /** A page of an entity's rows. */
-    ActionResult page(Unit unit, Map<String, String> given) {
-        return read(unit, given, ExploreActions::shown);
+    /** A page of an entity's rows, whose menu fills the JPQL action {@code write}. */
+    ActionResult page(Unit unit, Map<String, String> given, String write) {
+        return read(unit, given, read -> shown(read, write));
     }
 
     /** The same page as CSV. */
@@ -139,9 +143,9 @@ final class ExploreActions {
                 (System.nanoTime() - start) / 1_000_000));
     }
 
-    private static ActionResult shown(Read read) {
+    private static ActionResult shown(Read read, String write) {
         ResultRows.Table page = read.page();
-        List<MenuItem> menu = menu(read.request().entity(), read.request().projection());
+        List<MenuItem> menu = menu(read.request().entity(), read.request().projection(), write);
         int held = ActionResult.rowsHeld(page.columns(), page.rows(), menu);
         String summary = (held < page.rows().size() ? "first " : "") + read.request().rows(held)
                 + (read.more() ? ", more on the next page" : "") + ", in " + read.millis() + " ms";
@@ -157,10 +161,11 @@ final class ExploreActions {
     }
 
     /**
-     * The menu of the rows of {@code entity}: a delete of the selected ids, and an update that sets its first basic
-     * value to itself, for the user to change; none for an entity without a simple id.
+     * The menu of the rows of {@code entity}, which fills the JPQL action {@code write}: a delete of the selected ids,
+     * and an update that sets its first basic value to itself, for the user to change; none for an entity without a
+     * simple id.
      */
-    static List<MenuItem> menu(Entity entity, Projection projection) {
+    static List<MenuItem> menu(Entity entity, Projection projection, String write) {
         if (projection.idPath() == null) {
             return List.of();
         }
@@ -168,17 +173,17 @@ final class ExploreActions {
         String alias = Projection.ALIAS;
         String where = " WHERE " + projection.idPath() + " IN (${" + id + "})";
         List<MenuItem> menu = new ArrayList<>();
-        menu.add(item("Delete these rows", "DELETE FROM " + entity.name() + " " + alias + where));
+        menu.add(item(write, "Delete these rows", "DELETE FROM " + entity.name() + " " + alias + where));
         entity.attributes().stream().filter(a -> a.kind() == Kind.BASIC).findFirst().ifPresent(basic -> {
             String path = alias + "." + basic.name();
-            menu.add(item("Update these rows", "UPDATE " + entity.name() + " " + alias + " SET " + path + " = "
+            menu.add(item(write, "Update these rows", "UPDATE " + entity.name() + " " + alias + " SET " + path + " = "
                     + path + where));
         });
         return menu;
     }
 
-    private static MenuItem item(String label, String query) {
-        return new MenuItem(label, JpqlActions.WRITE, Json.write(Json.object(JpqlActions.STATEMENT,
+    private static MenuItem item(String write, String label, String query) {
+        return new MenuItem(label, write, Json.write(Json.object(JpqlActions.STATEMENT,
                 Json.object("query", query))));
     }
 

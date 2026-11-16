@@ -1360,11 +1360,11 @@ Under `mvn vidocq:dev`, the *Noether Persistence* tab of the xref:dev-console.ad
 
 | *JPQL*
 | The database
-| *Query* runs a SELECT and shows at most 100 rows. *Update / Delete* runs an UPDATE or a DELETE, and *Export CSV* gives the rows of a SELECT as CSV, at most 10,000 rows and 256 KiB. The editor completes the entities of the units and their attributes (xref:dev-console.adoc#query-language[the query's language]).
+| *Query* runs a SELECT and shows at most 100 rows. *Update / Delete* runs an UPDATE or a DELETE, and *Export CSV* gives the rows of a SELECT as CSV, at most 10,000 rows and 256 KiB. The editor completes the unit's entities and their attributes (xref:dev-console.adoc#query-language[the query's language]), and its example is a query of the unit's first entity.
 
 | *Explore*
 | The database
-| *Show a page* lists the rows of an entity, 20, 50 or 100 at a time, sorted by its id. *Export the page* gives the same page as CSV.
+| *Show a page* lists the rows of an entity of the unit, 20, 50 or 100 at a time, sorted by its id. *Export the page* gives the same page as CSV.
 
 | *Indexes*
 | Memory, then the database

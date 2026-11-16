@@ -84,15 +84,16 @@ class JpqlActionsTest {
     @Test
     void theTabHasAQueryAWriteThatAsksFirstAndAnExport() {
         List<PanelAction> actions = jpql.actions(new PanelAction.Argument("unit", "Persistence unit",
-                List.of("notes"), null, null), call -> given -> ActionResult.of("called"), "SELECT e FROM Note e");
+                List.of("notes"), null, null), call -> given -> ActionResult.of("called"), "SELECT e FROM Note e",
+                ".1");
 
-        assertEquals(List.of("jpql.query", "jpql.write", "jpql.export"), actions.stream().map(PanelAction::id)
+        assertEquals(List.of("jpql.query.1", "jpql.write.1", "jpql.export.1"), actions.stream().map(PanelAction::id)
                 .toList());
         assertTrue(actions.stream().allMatch(a -> a.group().equals("JPQL")));
         assertNull(actions.get(0).confirmation());
         assertNotNull(actions.get(1).confirmation());
         assertEquals(List.of("rollback", "commit"), actions.get(1).arguments().get(2).allowedValues());
-        assertTrue(actions.get(0).arguments().get(1).schema().contains("\"x-language\":\"jpql\""));
+        assertTrue(actions.get(0).arguments().get(1).schema().contains("\"x-language\":\"jpql.1\""));
         assertTrue(actions.get(0).arguments().get(1).schema().contains("SELECT e FROM Note e"));
     }
 
