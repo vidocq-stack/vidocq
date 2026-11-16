@@ -1,11 +1,14 @@
 # HTTP sessions survive a dev swap: the Vidocq half
 
-Status: approved by VIDOCQ on Yann's behalf, 2026-11-16, with the four calls kept. Date: 2026-11-16. Branch: `design/dev-session-handover`.
+Status: approved by VIDOCQ on Yann's behalf, 2026-11-16, with the four calls kept. Updated the same day to Foy's
+final API (foy#114, merged as 108a6bd2, published as foy `0.4.0-20261116.193241-27`) and rebased on the hot swap
+pull requests. Date: 2026-11-16. Branch: `design/dev-session-handover`.
 
-Companion: the Foy half, `foy` branch `feat/session-survives-swap`,
-`docs/superpowers/specs/2026-11-16-session-survives-swap-design.md` (FOY, agreed). This document builds on its API and
-does not repeat it. Related: the hot swap design, `docs/superpowers/specs/2026-11-16-dev-hotswap-design.md`
-(`feat/dev-hotswap`), whose reload request this document extends.
+Companion: the Foy half, foy#114, `docs/superpowers/specs/2026-11-16-session-survives-swap-design.md` in foy (FOY,
+agreed). This document builds on its API and does not repeat it. Related: the hot swap design,
+`docs/superpowers/specs/2026-11-16-dev-hotswap-design.md`, delivered as Vidocq/vidocq#626 (the reload request and the
+classifier, merged), #627 (the agent), the listeners pull request (`feat/dev-hotswap-listeners`) and #628 (build
+files). This document extends its reload request.
 
 ## Intent
 
@@ -156,6 +159,16 @@ object of the old layer is kept, and the old layer can be collected.
 
 ### 3. The Foy extension: export at the close, import before the mount
 
+Foy's API, on `io.vidocq.foy.chappe.FoyChappeBoot.Mounted`, both methods additive:
+
+- `byte[] closeExportingSessions()`: the same undeploy as `close()`, but it exports the sessions instead of
+  invalidating them. No `sessionDestroyed` fires; `contextDestroyed` runs. On a deployment already closed or closing,
+  it returns an empty export.
+- `int importSessions(byte[] exported)`: called after `build()` and before the mount; it returns the number of
+  sessions imported. It throws `IllegalArgumentException` when the bytes are not an export of this Foy version, and
+  `IllegalStateException` when the deployment is closed. Only bytes from this JVM's `closeExportingSessions()` are
+  passed to it.
+
 `FoyDeployments.closeAll(Optional<DevHandover> handover)` replaces `closeAll()`. When the handover is present and
 `exporting()`, then for each live deployment:
 
@@ -175,6 +188,14 @@ WARN lines name the sessions dropped at export or import. The import never fails
 deployment. Both callers catch `RuntimeException` around it, log one WARN (`Hot reload - the HTTP sessions of the
 previous deployment could not be imported, starting without them: <exception>`), and mount the deployment anyway. A context path that changed between the two boots finds no bytes: its
 sessions are dropped by `store.clear()`, as a new application's would be.
+
+### 3a. What does not move yet: CDI session state
+
+Until FOY's Vauban companion and Foy PR 2 land, a session that holds a `@SessionScoped` instance stays behind and ends
+as today: `sessionDestroyed` fires, and its client starts a new session. That includes the built-in `@Inject
+HttpSession` bean and a CDI client proxy held as a session attribute. Plain servlet sessions and Vaadin sessions move.
+Foy drops such a session at the export and writes its own WARN line; Vidocq adds nothing, and the import's count shows
+how many moved. `vaadin.adoc` says so, next to what a swap keeps.
 
 ### 4. Push and the gap
 
@@ -221,7 +242,8 @@ a dev swap, answering 503 with `Retry-After` until the new handler is mounted. N
   - `exporting()` is true during its stop and false at its start;
   - the bytes it put are the bytes the next boot takes;
   - a `drop` request logs the reason, and the extension sees `exporting()` false.
-- Foy extension, `FoyExtensionTest`, on a real Foy deployment through Chappe:
+- Foy extension, `FoyExtensionTest`, on a real Foy deployment through Chappe (foy `0.4.0-20261116.193241-27` or
+  later, the first snapshot with the two methods):
   - a session attribute survives `closeAll` with a handover, then a new `start`;
   - the same `JSESSIONID` finds it, and the two log lines are written;
   - without a handover, today's invalidation line;
@@ -236,15 +258,16 @@ a dev swap, answering 503 with `Retry-After` until the new handler is mounted. N
 
 ## Delivery
 
-After hot swap PR (a), which brings `ReloadRequest` and the classifier, and after Foy PR 1's snapshot (Foy half).
-One Vidocq PR holds:
+After the hot swap pull requests: #627, #628 and the listeners pull request, on which this one is stacked. Foy PR 1's
+snapshot is out (foy#114, `0.4.0-20261116.193241-27`). One Vidocq PR holds:
 - the SPI `DevHandover` and the `ExtensionContext` default;
 - the core store and loop;
 - the request's `sessions` line;
 - the two mojo rules and `vidocq.dev.keepSessions`;
 - the Foy extension calls;
-- the docs: `usage.adoc` (dev reload), `vaadin.adoc` (what a swap keeps and when it drops, and that CDI state waits
-  for the Vauban companion of the Foy half), `whats-new.adoc`.
+- the docs: `usage.adoc` (dev reload), `vaadin.adoc` (what a swap keeps and when it drops, and §3a: a session holding
+  a `@SessionScoped` instance, the `@Inject HttpSession` bean or a CDI client proxy stays behind until the Vauban
+  companion and Foy PR 2), `whats-new.adoc`.
 
 Then replay R-c, and a vaadin-on-vidocq README note.
 
