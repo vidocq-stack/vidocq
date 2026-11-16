@@ -31,8 +31,10 @@ import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.SequencedMap;
 import java.util.SequencedSet;
@@ -41,12 +43,89 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VidocqDevReloadLoopTest {
+
+    private static final String SESSIONS = "servlet:sessions:/";
+
+    @Test
+    void aKeptSwapExportsDuringTheStop() {
+        var store = new DevHandoverStore();
+        List<Boolean> exportingDuringStop = new ArrayList<>();
+
+        VidocqDevReloadLoop.stopForSwap(new ReloadRequest.Swap("A changed", Optional.empty()), store, () -> {
+            exportingDuringStop.add(store.exporting());
+            store.put(SESSIONS, new byte[] {7});
+        }, _ -> {});
+
+        assertEquals(List.of(true), exportingDuringStop);
+        assertFalse(store.exporting());
+        assertArrayEquals(new byte[] {7}, store.take(SESSIONS).orElseThrow());
+    }
+
+    @Test
+    void aDroppedSwapSaysWhyAndDoesNotExport() {
+        var store = new DevHandoverStore();
+        List<Boolean> exportingDuringStop = new ArrayList<>();
+        List<String> info = new ArrayList<>();
+
+        VidocqDevReloadLoop.stopForSwap(
+                new ReloadRequest.Swap("A changed", Optional.of("vidocq.dev.keepSessions is false")), store,
+                () -> exportingDuringStop.add(store.exporting()), info::add);
+
+        assertEquals(List.of("Hot reload - HTTP sessions not kept: vidocq.dev.keepSessions is false"), info);
+        assertEquals(List.of(false), exportingDuringStop);
+    }
+
+    @Test
+    void aSilentDropSaysNothing() {
+        var store = new DevHandoverStore();
+        List<String> info = new ArrayList<>();
+
+        VidocqDevReloadLoop.stopForSwap(new ReloadRequest.Swap("x"), store, () -> {}, info::add);
+
+        assertEquals(List.of(), info);
+        assertFalse(store.exporting());
+    }
+
+    @Test
+    void theExportEndsWhenTheStopFails() {
+        var store = new DevHandoverStore();
+        var failure = new IllegalStateException("an extension failed to stop");
+        var swap = new ReloadRequest.Swap("A changed", Optional.empty());
+
+        var thrown = assertThrows(IllegalStateException.class,
+                () -> VidocqDevReloadLoop.stopForSwap(swap, store, () -> {
+                    throw failure;
+                }, _ -> {}));
+
+        assertSame(failure, thrown);
+        assertFalse(store.exporting());
+    }
+
+    @Test
+    void whatNobodyTookIsDroppedAndNamed() {
+        var store = new DevHandoverStore();
+        store.beginExport();
+        store.put("servlet:sessions:/old", new byte[] {1});
+        store.put(SESSIONS, new byte[] {2});
+        store.endExport();
+        store.take(SESSIONS);
+        List<String> debug = new ArrayList<>();
+
+        VidocqDevReloadLoop.dropUntaken(store, debug::add);
+        VidocqDevReloadLoop.dropUntaken(store, debug::add);
+
+        assertEquals(List.of("Hot reload - nothing took the handover of servlet:sessions:/old"), debug);
+        assertEquals(Optional.empty(), store.take("servlet:sessions:/old"));
+    }
 
     @Test
     void theReadyFileIsTheReloadFileWithReady(@TempDir Path dir) {

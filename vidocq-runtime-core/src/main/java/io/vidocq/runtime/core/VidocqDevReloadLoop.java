@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.SequencedMap;
 import java.util.SequencedSet;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -84,32 +85,35 @@ final class VidocqDevReloadLoop {
                 .orElseGet(() -> new ClassRedefinition.Refused("no application layer is installed"));
         try (ClassRedefinition.Notifier listeners = ClassRedefinition.listeners(ModuleLayer.boot(),
                 line -> LOG.log(System.Logger.Level.WARNING, line))) {
-            serve(reloadFile, lastSignal, redefine, jdwp, listeners);
+            serve(reloadFile, lastSignal, redefine, jdwp, listeners, new DevHandoverStore());
         }
     }
 
     private static void serve(Path reloadFile, long firstSignal,
             Function<ReloadRequest.Redefine, ClassRedefinition.Result> redefine, boolean jdwp,
-            ClassRedefinition.Notifier listeners) {
+            ClassRedefinition.Notifier listeners, DevHandoverStore store) {
         long lastSignal = firstSignal;
         while (true) {
             VidocqAppLayer.installIfConfigured();
-            VidocqBootstrap bootstrap = VidocqBootstrap.create()
+            VidocqBootstrap bootstrap = VidocqBootstrap.create().devHandover(store)
                     .beforeStop(beforeStop(listeners, VidocqAppLayer::installedLayer)).configure();
             // every cycle registers its own bootstrap: Vidocq.shutdown() must reach the running one
             Vidocq.register(bootstrap);
             bootstrap.start();
+            dropUntaken(store, line -> LOG.log(System.Logger.Level.DEBUG, line));
 
             acknowledge(reloadFile, lastSignal);
 
             Answer answer;
+            ReloadRequest request;
             do {
                 OptionalLong reload = awaitReloadSignal(bootstrap, reloadFile, lastSignal);
                 if (reload.isEmpty()) {
                     return; // normal shutdown (hook, or programmatic)
                 }
                 lastSignal = reload.getAsLong();
-                answer = answer(request(reloadFile), redefine, jdwp);
+                request = request(reloadFile);
+                answer = answer(request, redefine, jdwp);
                 LOG.log(System.Logger.Level.INFO, answer.line());
                 if (answer.keepsRunning()) {
                     acknowledge(reloadFile, lastSignal);
@@ -121,7 +125,9 @@ final class VidocqDevReloadLoop {
             } while (answer.keepsRunning());
 
             long t0 = System.nanoTime();
-            bootstrap.shutdown();
+            // A refused redefinition carries no verdict on the HTTP sessions: they are dropped, as before.
+            ReloadRequest.Swap swap = request instanceof ReloadRequest.Swap asked ? asked : new ReloadRequest.Swap("");
+            stopForSwap(swap, store, bootstrap::shutdown, line -> LOG.log(System.Logger.Level.INFO, line));
             VidocqAppLayer.resetForReload();
             long elapsed = (System.nanoTime() - t0) / 1_000_000;
             LOG.log(System.Logger.Level.INFO,
@@ -140,6 +146,33 @@ final class VidocqDevReloadLoop {
                 listeners.stopping(layer);
             }
         };
+    }
+
+    /**
+     * Stops the running boot for {@code swap} (session handover design §2): its extensions hand state over during
+     * the stop when the request kept the HTTP sessions; otherwise the reason they are dropped is logged, unless the
+     * request gave none.
+     */
+    static void stopForSwap(ReloadRequest.Swap swap, DevHandoverStore store, Runnable shutdown,
+            Consumer<String> info) {
+        if (swap.dropSessions().isEmpty()) {
+            store.beginExport();
+        } else if (!swap.dropSessions().get().isBlank()) {
+            info.accept("Hot reload - HTTP sessions not kept: " + swap.dropSessions().get());
+        }
+        try {
+            shutdown.run();
+        } finally {
+            store.endExport();
+        }
+    }
+
+    /** Once the new boot started: what it did not take is dropped, and named at DEBUG. */
+    static void dropUntaken(DevHandoverStore store, Consumer<String> debug) {
+        var dropped = store.clear();
+        if (!dropped.isEmpty()) {
+            debug.accept("Hot reload - nothing took the handover of " + String.join(", ", dropped));
+        }
     }
 
     /**
