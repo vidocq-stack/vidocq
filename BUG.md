@@ -177,7 +177,6 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   `default` unit only for the application module. The build and `@VidocqTest` name the module, so they see the unit.
 - **Fix**: without a main class, the launchers pass `-Dvidocq.app.module` with `vidocq.mainModule`, or, for
   `vidocq:package` when it is unset, the module the application jar declares.
->>>>>>> dee77db7 (fix(maven-plugin): launchers name the application module without a main class (BUG-20261115-08))
 
 ## BUG-20261115-07 — The stop of an application sometimes logs nothing, not even "Vidocq - Shutting down"
 
