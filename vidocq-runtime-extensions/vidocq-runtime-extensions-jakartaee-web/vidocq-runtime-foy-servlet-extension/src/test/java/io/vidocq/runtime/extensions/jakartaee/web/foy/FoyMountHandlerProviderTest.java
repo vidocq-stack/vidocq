@@ -21,6 +21,12 @@ package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.chappe.api.Handler;
 import io.vidocq.runtime.extensions.essentials.chappe.spi.MountConfig;
+import io.vidocq.runtime.spi.DevHandover;
+import io.vidocq.runtime.spi.ExtensionContext;
+import io.vidocq.runtime.spi.VidocqConfiguration;
+import io.vidocq.runtime.spi.config.VidocqConfig;
+import io.vidocq.vauban.core.container.VaubanContainer;
+import jakarta.enterprise.inject.spi.BeanManager;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.fixture.LifecycleListener;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -102,6 +108,56 @@ class FoyMountHandlerProviderTest {
                 FoyExtensionTest.loaderWith(b, FoyExtensionTest.SESSION_WEB_XML), Optional.of(handover));
 
         assertEquals("kept", FoyExtensionTest.text(FoyExtensionTest.get(after, "/web/get", cookie)));
+    }
+
+    @Test
+    void aMountTakesTheHandoverOfItsBoot(@TempDir Path root) throws Exception {
+        var handover = new MapHandover();
+        handover.values.put("servlet:sessions:/web", new byte[] {1, 2, 3});
+        MountConfig cfg = new MountConfig("web", "/web", "default", 0, FoyExtensionTest.config(Map.of()),
+                contextHanding(handover));
+        Thread thread = Thread.currentThread();
+        ClassLoader previous = thread.getContextClassLoader();
+        thread.setContextClassLoader(FoyExtensionTest.loaderWith(root, FoyExtensionTest.SESSION_WEB_XML));
+        try {
+            assertNotNull(new FoyMountHandlerProvider().create(cfg));
+        } finally {
+            thread.setContextClassLoader(previous);
+            FoyDeployments.forBoot(null).closeAll(Optional.empty());
+            FoyDeployments.forget(null);
+        }
+
+        assertTrue(handover.values.isEmpty(), "the mount took its key");
+    }
+
+    /** The context of a boot of the reload loop, without a container, as the other fakes of the runtime. */
+    private static ExtensionContext contextHanding(DevHandover handover) {
+        return new ExtensionContext() {
+            @Override
+            public VaubanContainer container() {
+                return null;
+            }
+
+            @Override
+            public BeanManager beanManager() {
+                return null;
+            }
+
+            @Override
+            public VidocqConfiguration configuration() {
+                return key -> Optional.empty();
+            }
+
+            @Override
+            public VidocqConfig config() {
+                return FoyExtensionTest.config(Map.of());
+            }
+
+            @Override
+            public Optional<DevHandover> devHandover() {
+                return Optional.of(handover);
+            }
+        };
     }
 
     @Test

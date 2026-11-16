@@ -291,6 +291,15 @@ class ClassFingerprintTest {
     }
 
     @Test
+    void newInterfacesAre(@TempDir Path dir) {
+        var v1 = fingerprint(dir, "v1", "app.Order", ORDER.formatted("int total;"));
+        var v2 = fingerprint(dir, "v2", "app.Order",
+                ORDER.replace("java.io.Serializable", "java.io.Serializable, Cloneable").formatted("int total;"));
+
+        assertEquals(Optional.of("changed its interfaces"), v2.instanceShapeDifference(v1));
+    }
+
+    @Test
     void aLambdaInsertedBeforeAnotherMovesTheLambdas(@TempDir Path dir) {
         var v1 = fingerprint(dir, "v1", "app.MainView", VIEW.formatted(
                 "actions.add(() -> \"save\"); actions.add(() -> \"cancel\");"));
