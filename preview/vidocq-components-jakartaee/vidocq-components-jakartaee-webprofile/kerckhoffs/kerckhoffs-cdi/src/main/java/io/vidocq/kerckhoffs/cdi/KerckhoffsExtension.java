@@ -22,8 +22,11 @@ package io.vidocq.kerckhoffs.cdi;
 import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
 import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
+import jakarta.enterprise.inject.Default;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
 import jakarta.enterprise.lang.model.AnnotationInfo;
+import jakarta.enterprise.lang.model.AnnotationMember;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.inject.spi.DeploymentException;
 import jakarta.inject.Singleton;
@@ -34,6 +37,7 @@ import jakarta.security.enterprise.identitystore.IdentityStore;
 import jakarta.security.enterprise.identitystore.IdentityStoreHandler;
 import jakarta.security.enterprise.identitystore.InMemoryIdentityStoreDefinition;
 
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -70,9 +74,20 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
         inMemoryDefinitions.add(new Declared(declaring.name(), declaring.annotation(InMemoryIdentityStoreDefinition.class)));
     }
 
-    @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = BasicAuthenticationMechanismDefinition.class)
+    /** The definition is repeatable (section 3.8.1): one annotation, or several held by the container annotation. */
+    @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = {
+            BasicAuthenticationMechanismDefinition.class, BasicAuthenticationMechanismDefinition.List.class})
     public void collectBasicDefinition(ClassInfo declaring) {
-        basicDefinitions.add(new Declared(declaring.name(), declaring.annotation(BasicAuthenticationMechanismDefinition.class)));
+        for (AnnotationInfo annotation : declaring.annotations()) {
+            String name = annotation.name().replace('$', '.');
+            if (name.equals(BasicAuthenticationMechanismDefinition.class.getCanonicalName())) {
+                basicDefinitions.add(new Declared(declaring.name(), annotation));
+            } else if (name.equals(BasicAuthenticationMechanismDefinition.List.class.getCanonicalName())) {
+                for (AnnotationMember repeated : annotation.member("value").asArray()) {
+                    basicDefinitions.add(new Declared(declaring.name(), repeated.asNestedAnnotation()));
+                }
+            }
+        }
     }
 
     @Enhancement(types = Object.class, withSubtypes = true, withAnnotations = FormAuthenticationMechanismDefinition.class)
@@ -92,12 +107,13 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
                     .createWith(InMemoryIdentityStoreCreator.class);
         }
         for (Declared declared : basicDefinitions) {
-            components.addBean(HttpAuthenticationMechanism.class)
+            var builder = components.addBean(HttpAuthenticationMechanism.class)
                     .type(HttpAuthenticationMechanism.class)
                     .scope(Singleton.class)
                     .withParam(ORIGIN, declared.origin())
-                    .withParam("realmName", literal(declared, text(declared.definition(), "realmName", "")))
-                    .createWith(BasicMechanismCreator.class);
+                    .withParam("realmName", literal(declared, text(declared.definition(), "realmName", "")));
+            qualify(builder, declared, BasicAuthenticationMechanismDefinition.BasicAuthenticationMechanism.class);
+            builder.createWith(BasicMechanismCreator.class);
         }
         for (Declared declared : formDefinitions) {
             AnnotationInfo login = declared.definition().hasMember("loginToContinue")
@@ -140,6 +156,31 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
         }
         throw new DeploymentException("An attribute of the mechanism declared by " + declared.origin()
                 + " is an expression (" + value + "): only a literal is supported yet");
+    }
+
+    /**
+     * Gives the mechanism the qualifiers its definition names (section 3.8.1). A definition that names none keeps
+     * {@code fallback}, and stays the {@code @Default} mechanism of the application as well.
+     */
+    private static void qualify(SyntheticBeanBuilder<?> builder, Declared declared,
+                                Class<? extends Annotation> fallback) {
+        List<AnnotationMember> named = declared.definition().hasMember("qualifiers")
+                ? declared.definition().member("qualifiers").asArray() : List.of();
+        if (named.isEmpty()) {
+            builder.qualifier(fallback);
+            builder.qualifier(Default.class);
+            return;
+        }
+        for (AnnotationMember qualifier : named) {
+            String name = qualifier.asType().asClass().declaration().name();
+            try {
+                builder.qualifier(Class.forName(name, false, Thread.currentThread().getContextClassLoader())
+                        .asSubclass(Annotation.class));
+            } catch (ClassNotFoundException | ClassCastException e) {
+                throw new DeploymentException("The qualifier " + name + " of the mechanism declared by "
+                        + declared.origin() + " is not an annotation the deployment can load", e);
+            }
+        }
     }
 
     /** A text attribute of {@code annotation}, or {@code fallback} when the annotation or the attribute is absent. */

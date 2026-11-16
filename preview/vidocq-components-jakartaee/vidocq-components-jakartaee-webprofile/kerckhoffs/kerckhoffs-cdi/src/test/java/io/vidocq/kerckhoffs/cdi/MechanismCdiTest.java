@@ -22,9 +22,12 @@ package io.vidocq.kerckhoffs.cdi;
 import io.vidocq.kerckhoffs.core.internal.mechanism.BasicAuthenticationMechanism;
 import io.vidocq.kerckhoffs.core.internal.mechanism.FormAuthenticationMechanism;
 import io.vidocq.vauban.core.container.VaubanContainer;
+import jakarta.enterprise.inject.Any;
+import jakarta.security.enterprise.authentication.mechanism.http.BasicAuthenticationMechanismDefinition;
 import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanism;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -55,6 +58,18 @@ class MechanismCdiTest {
     void aBasicDefinitionPutsTheBasicMechanismInService() {
         try (var container = start(MemoryApplication.class, BasicApplication.class)) {
             assertInstanceOf(BasicAuthenticationMechanism.class, container.select(HttpAuthenticationMechanism.class));
+        }
+    }
+
+    @Test
+    void eachRepeatedBasicDefinitionIsAMechanismOfItsOwnQualifiers() {
+        try (var container = start(MemoryApplication.class, QualifiedMechanismsApplication.class)) {
+            var beans = container.getBeanManager();
+
+            assertEquals(1, beans.getBeans(HttpAuthenticationMechanism.class, SecondRealm.Literal.INSTANCE).size());
+            assertEquals(1, beans.getBeans(HttpAuthenticationMechanism.class,
+                    BasicAuthenticationMechanismDefinition.BasicAuthenticationMechanism.Literal.INSTANCE).size());
+            assertEquals(2, beans.getBeans(HttpAuthenticationMechanism.class, Any.Literal.INSTANCE).size());
         }
     }
 

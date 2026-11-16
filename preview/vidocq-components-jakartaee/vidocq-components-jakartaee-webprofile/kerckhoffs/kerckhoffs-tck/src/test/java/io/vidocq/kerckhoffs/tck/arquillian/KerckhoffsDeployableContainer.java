@@ -23,8 +23,10 @@ import io.vidocq.foy.cdi.vauban.FoyWebExtension;
 import io.vidocq.kerckhoffs.cdi.AutoApplySessionInterceptor;
 import io.vidocq.kerckhoffs.cdi.IdentityStoreStartCheck;
 import io.vidocq.kerckhoffs.foy.FoySecurityContextExtension;
+import io.vidocq.kerckhoffs.foy.HandlerMechanism;
 import io.vidocq.kerckhoffs.foy.MechanismRequestAuthentication;
 import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanism;
+import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanismHandler;
 import io.vidocq.kerckhoffs.cdi.KerckhoffsExtension;
 import io.vidocq.foy.internal.boot.ApplicationSources;
 import io.vidocq.foy.internal.boot.ComponentFactory;
@@ -239,8 +241,15 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
         return pmd;
     }
 
-    /** The authentication of a war that declares an {@code HttpAuthenticationMechanism}; null for one that does not. */
+    /**
+     * The authentication of a war that declares an {@code HttpAuthenticationMechanism}, or a handler that chooses
+     * among several (it prevails); null for one that declares neither.
+     */
     private static MechanismRequestAuthentication mechanismOf(VaubanContainer cdi) {
+        if (!cdi.getBeanManager().getBeans(HttpAuthenticationMechanismHandler.class).isEmpty()) {
+            return new MechanismRequestAuthentication(
+                    () -> new HandlerMechanism(cdi.select(HttpAuthenticationMechanismHandler.class)));
+        }
         if (cdi.getBeanManager().getBeans(HttpAuthenticationMechanism.class).isEmpty()) return null;
         return new MechanismRequestAuthentication(() -> cdi.select(HttpAuthenticationMechanism.class));
     }
