@@ -122,7 +122,10 @@ directories, resources). The classifier lives there: `ClassesSnapshot` and `HotS
 
 **Snapshot.** The mojo records `target/classes` at session start (after the first build) and after every successful
 recompile. For every file: its relative path, size and SHA-256. For every `.class` file: the class's fingerprint
-below. Only files whose size or modification time moved are hashed and parsed again.
+below. Only files whose size or modification time moved are hashed and parsed again, and a file whose time is not at
+least two seconds before the previous snapshot is hashed again too: a clock that ticks once a second, or two compiles
+within one tick, give a rewrite of the same size the time the file had (git's "racy" entries). A file hashed again
+whose bytes did not move keeps its fingerprint.
 
 **What a change is compared against: the output the child runs.** Today the mojo does not wait for the child: it can
 recompile and write a new request while the previous one is still unread, and the child then reads only the latest
