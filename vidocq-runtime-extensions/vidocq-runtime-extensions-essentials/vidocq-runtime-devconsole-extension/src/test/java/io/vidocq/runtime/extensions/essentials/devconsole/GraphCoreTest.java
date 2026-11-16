@@ -218,6 +218,25 @@ class GraphCoreTest {
     }
 
     @Test
+    void linesIntoOneBoxEndApart() {
+        Value layout = layout(NOTES);
+
+        assertEquals("", core.eval("(l) => { const ends = l.edges.filter((e) => e.to === 'Base').map((e) => e.x2)"
+                + ".sort((a, b) => a - b); return ends.some((x, i) => i > 0 && x - ends[i - 1] < 8) ? ends.join(' ') "
+                + ": ''; }", layout).asString(), "Note, Author and Tag extend Base: three arrows, not one");
+    }
+
+    @Test
+    void theLabelOfALineAcrossLayersSitsNextToTheBoxItPointsTo() {
+        Value layout = layout(NOTES);
+        Value tag = core.eval("(l) => l.edges.find((e) => e.from === 'Tag' && e.to === 'Base')", layout);
+        Value note = box(layout, "Note");
+
+        assertTrue(tag.getMember("ly").asDouble() < note.getMember("y").asDouble(),
+                "in the gap between Base and Note, with the other extends labels");
+    }
+
+    @Test
     void aLoopsLabelSitsBesideItsLoopThoughABoxFollowsInItsLayer() {
         Value layout = layout("{\"nodes\":[" + node("Root", "entity") + "," + node("A", "entity") + ","
                 + node("B", "entity") + "],\"edges\":[" + edge("Root", "A", "a", false, false) + ","

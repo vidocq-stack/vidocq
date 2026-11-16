@@ -1869,6 +1869,8 @@ const LOOP = 22;
 const PARALLEL = 12;
 /** How far under its layer the first lane runs of a line between two boxes of that layer that are not side by side. */
 const DETOUR = 12;
+/** How far from the corners of a box a line leaves it by its top or its bottom. */
+const INSET = 8;
 /** The width of a character of an edge's label, at the page's 11 px, and the height of its line. */
 const LABEL_CHAR = 6.6;
 const LABEL_HEIGHT = 13;
@@ -2030,8 +2032,8 @@ function loopRooms(edges, index, count) {
  * Answers the part's width.
  */
 function placePart(layers, slots, room, before, left) {
-  const span = (v) => slots[v].w + (v < room.length ? room[v] : 0);
-  const widths = layers.map((row) => row.reduce((sum, v) => sum + span(v), 0) + BOX_GAP * (row.length - 1));
+  const taken = (v) => slots[v].w + (v < room.length ? room[v] : 0);
+  const widths = layers.map((row) => row.reduce((sum, v) => sum + taken(v), 0) + BOX_GAP * (row.length - 1));
   const width = Math.max(...widths);
   layers.forEach((row, l) => {
     let x = left + Math.round((width - widths[l]) / 2);
@@ -2043,7 +2045,7 @@ function placePart(layers, slots, room, before, left) {
         before[v] = boxes;
         boxes += 1;
       }
-      x += span(v) + BOX_GAP;
+      x += taken(v) + BOX_GAP;
     }
   });
   return width;
@@ -2072,11 +2074,28 @@ function polyline(edge, points, at) {
     ly: round((p.y + q.y) / 2 + 4), lw: Math.round(LABEL_CHAR * edge.label.length), loop: false };
 }
 
+/** The x a line may leave {@code box} from, by its top or its bottom: INSET off its corners; a waypoint's own. */
+const span = (box) => (box.w > 2 * INSET ? [box.x + INSET, box.x + box.w - INSET] : [middle(box), middle(box)]);
+const clamp = (v, [low, high]) => Math.max(low, Math.min(high, v));
+
+/**
+ * Where a line between {@code a} and {@code b}, of adjacent layers, leaves each: down the middle of the room they
+ * share when one stands over the other, else from the point of each nearest the other. Lines into one box from
+ * boxes and waypoints at different places so end apart.
+ */
+function ports(a, b) {
+  const low = Math.max(span(a)[0], span(b)[0]);
+  const high = Math.min(span(a)[1], span(b)[1]);
+  if (low <= high) return [(low + high) / 2, (low + high) / 2];
+  return [clamp(middle(b), span(a)), clamp(middle(a), span(b))];
+}
+
 /** The {@code k}-th of {@code n} lines between boxes of adjacent layers: from the upper's bottom to the lower's top. */
 function layerLine(edge, a, b, k, n) {
   const shift = offset(k, n, Math.min(a.w, b.w));
-  return polyline(edge, [{ x: middle(a) + shift, y: facing(a, b.y) }, { x: middle(b) + shift, y: facing(b, a.y) }],
-    0);
+  const [xa, xb] = ports(a, b);
+  return polyline(edge, [{ x: clamp(xa + shift, span(a)), y: facing(a, b.y) },
+    { x: clamp(xb + shift, span(b)), y: facing(b, a.y) }], 0);
 }
 
 /** The {@code k}-th of {@code n} lines between two boxes side by side in a layer: across the room between them. */
@@ -2094,19 +2113,20 @@ function detourLine(edge, a, b, lane) {
 
 /**
  * A line through the waypoints {@code passed}: from a's border to the near end of the first waypoint, along each
- * waypoint across its layer, from one to the next, and to b's border, every slanted piece between two layers. Its
- * label is at the middle of the middle slanted piece.
+ * waypoint across its layer, from one to the next, and to b's border, every slanted piece between two layers, each
+ * end where ports puts it. Its label is at the middle of the middle slanted piece, the one nearer b of two: a
+ * subclass's extends next to its parent.
  */
 function routedLine(edge, a, b, passed) {
-  const points = [{ x: middle(a), y: facing(a, passed[0].y) }];
+  const points = [{ x: ports(a, passed[0])[0], y: facing(a, passed[0].y) }];
   let previous = a;
   passed.forEach((w, i) => {
     const next = passed[i + 1] || b;
     points.push({ x: w.x, y: facing(w, previous.y) }, { x: w.x, y: facing(w, next.y) });
     previous = w;
   });
-  points.push({ x: middle(b), y: facing(b, previous.y) });
-  return polyline(edge, points, 2 * Math.floor(passed.length / 2));
+  points.push({ x: ports(previous, b)[1], y: facing(b, previous.y) });
+  return polyline(edge, points, 2 * Math.ceil(passed.length / 2));
 }
 
 /** The {@code k}-th loop of box {@code a}: right of it, PARALLEL further than the loop before, its label beside it. */
