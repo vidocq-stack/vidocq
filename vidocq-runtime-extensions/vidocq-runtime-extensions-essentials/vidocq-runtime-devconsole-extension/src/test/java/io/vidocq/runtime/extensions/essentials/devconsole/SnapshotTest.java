@@ -514,6 +514,13 @@ class SnapshotTest {
     }
 
     @Test
+    void aSelectorThatAnswersNullReadsAsNone() {
+        Map<String, Object> panel = choicesPanel(new ChoicePanel(() -> null));
+
+        assertFalse(panel.containsKey("selector"), panel.toString());
+    }
+
+    @Test
     void aLivePanelGivesItsSelector() {
         LivePanelsTest.Live live = new LivePanelsTest.Live("rest") {
             @Override

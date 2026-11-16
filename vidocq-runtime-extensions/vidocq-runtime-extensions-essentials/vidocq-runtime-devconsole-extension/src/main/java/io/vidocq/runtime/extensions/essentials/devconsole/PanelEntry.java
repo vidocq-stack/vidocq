@@ -163,8 +163,8 @@ record PanelEntry(String id, String title, ReportSection section, DevConsolePane
             return null;
         }
         try {
-            Optional<PanelSelector> declared = panel.selector();
-            return declared == null ? null : declared.orElse(null);
+            // a panel that breaks the contract and answers null is read as one without a selector
+            return Objects.requireNonNullElse(panel.selector(), Optional.<PanelSelector>empty()).orElse(null);
         } catch (RuntimeException | LinkageError failed) {
             LOG.log(System.Logger.Level.DEBUG, PANEL_PREFIX + id + "' has no selector: its selector() failed",
                     failed);

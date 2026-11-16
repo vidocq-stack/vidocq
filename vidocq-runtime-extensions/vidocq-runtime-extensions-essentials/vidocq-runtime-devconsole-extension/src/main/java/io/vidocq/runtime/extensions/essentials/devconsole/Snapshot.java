@@ -119,6 +119,8 @@ final class Snapshot implements Handler {
     static final int MAX_LINE_VALUES = 100;
 
     private static final System.Logger LOG = System.getLogger(DevConsoleExtension.LOGGER_NAME);
+    /** The member that names what the page shows for a selector, an action or an argument. */
+    private static final String LABEL = "label";
 
     private final String bootId;
     private final String vidocq;
@@ -549,7 +551,7 @@ final class Snapshot implements Handler {
         out.endArray();
         if (panel.selector() != null) {
             out.name("selector").beginObject().name("argument").value(panel.selector().argument())
-                    .name("label").value(Texts.clean(panel.selector().label())).endObject();
+                    .name(LABEL).value(Texts.clean(panel.selector().label())).endObject();
         }
         out.name("sample");
         if (panel.panel() == null) {
@@ -590,7 +592,7 @@ final class Snapshot implements Handler {
         for (PanelAction action : panel.actions()) {
             out.beginObject()
                     .name("id").value(action.id())
-                    .name("label").value(Texts.clean(action.label()))
+                    .name(LABEL).value(Texts.clean(action.label()))
                     .name("confirmation").value(Texts.clean(action.confirmation()));
             if (action.group() != null) {
                 out.name("group").value(Texts.clean(action.group()));
@@ -614,7 +616,7 @@ final class Snapshot implements Handler {
     /** One argument of an action: its name, label, allowed values when it has some, and schema when it is json. */
     private static void writeArgument(JsonWriter out, PanelAction.Argument argument) {
         out.beginObject().name("name").value(argument.name())
-                .name("label").value(Texts.clean(argument.label()))
+                .name(LABEL).value(Texts.clean(argument.label()))
                 .name("allowed");
         if (argument.allowedValues() == null) {
             out.nullValue();
