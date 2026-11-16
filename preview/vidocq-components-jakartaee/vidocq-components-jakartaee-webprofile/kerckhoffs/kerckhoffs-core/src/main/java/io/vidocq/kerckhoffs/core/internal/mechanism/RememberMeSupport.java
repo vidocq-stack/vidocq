@@ -124,7 +124,7 @@ public final class RememberMeSupport {
                 && resolved.rememberMe().getAsBoolean()) {
             String token = store.generateLoginToken(new CallerPrincipal(context.getCallerPrincipal().getName()),
                     context.getGroups());
-            response.addCookie(cookie(request, resolved, token, resolved.maxAgeSeconds()));
+            addCookie(request, response, resolved, token, resolved.maxAgeSeconds());
         }
         return status;
     }
@@ -164,16 +164,18 @@ public final class RememberMeSupport {
     }
 
     private static void expire(HttpServletRequest request, HttpServletResponse response, Settings settings) {
-        response.addCookie(cookie(request, settings, "", 0));
+        addCookie(request, response, settings, "", 0);
     }
 
-    private static Cookie cookie(HttpServletRequest request, Settings settings, String value, int maxAge) {
+    /** Sends the cookie with the flags of the settings: they are set here, where the cookie is made and sent. */
+    private static void addCookie(HttpServletRequest request, HttpServletResponse response, Settings settings,
+                                  String value, int maxAge) {
         Cookie cookie = new Cookie(settings.cookieName(), value);
         cookie.setMaxAge(maxAge);
         cookie.setHttpOnly(settings.httpOnly());
         cookie.setSecure(settings.secureOnly());
         String path = request.getContextPath();
         cookie.setPath(path == null || path.isEmpty() ? "/" : path);
-        return cookie;
+        response.addCookie(cookie);
     }
 }
