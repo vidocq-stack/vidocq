@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-build</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vidocq-runtime-dev-agent</artifactId>
+    <name>Vidocq :: Dev agent</name>
+    <description>The java.lang.instrument agent vidocq:dev starts its child with, so that a change in method bodies
+        only redefines the application's classes in place instead of swapping the application layer. A dev tool:
+        no binary ever contains it.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- No bean: turn off the inherited Vauban indexer APT (vidocq-runtime-core-codegen). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <!-- HotSwapProcessTest builds its jar with the same two agent entries. -->
+                            <Premain-Class>io.vidocq.runtime.dev.agent.HotSwap</Premain-Class>
+                            <Can-Redefine-Classes>true</Can-Redefine-Classes>
+                            <!-- Vidocq/vidocq#143: a dev tool; vidocq:dev adds it, no binary ever contains it. -->
+                            <Vidocq-Dev-Only>true</Vidocq-Dev-Only>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
