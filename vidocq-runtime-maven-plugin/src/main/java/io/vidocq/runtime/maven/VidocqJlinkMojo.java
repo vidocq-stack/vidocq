@@ -208,6 +208,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
         }
         try {
             stageModules();
+            placeProxies();
             promoteProvides();
             String rootModules = resolveAddModules();
             ImageLaunch launch = bakedLaunch(rootModules);
@@ -481,6 +482,29 @@ public class VidocqJlinkMojo extends AbstractMojo {
 
     private static boolean isSet(String value) {
         return value != null && !value.isBlank();
+    }
+
+    /**
+     * Adds to the staged libraries the client proxies that only a class of their own package can be
+     * ({@link StagedProxies}): the image has no application layer to define them there at each start.
+     */
+    void placeProxies() throws IOException {
+        StagedProxies.Outcome outcome = StagedProxies.place(modsDir.toPath(), this::coordinatesOf);
+        outcome.placed().forEach(placed -> getLog().info("Vidocq jlink — " + placed.jar() + ": client proxy of "
+                + placed.type() + " added to its package"));
+        outcome.warnings().forEach(warning -> getLog().warn(
+                "Vidocq jlink — client proxy left to the container at the start: " + warning));
+    }
+
+    /** The coordinates of the artifact staged as {@code jar}; the file name for a jar that is no dependency. */
+    private String coordinatesOf(String jar) {
+        for (var artifact : project.getArtifacts()) {
+            File file = artifact.getFile();
+            if (file != null && file.getName().equals(jar)) {
+                return artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion();
+            }
+        }
+        return jar;
     }
 
     /**

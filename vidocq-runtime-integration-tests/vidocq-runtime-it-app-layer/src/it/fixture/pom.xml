@@ -10,8 +10,10 @@
     <modules>
         <module>lib</module>
         <module>sql</module>
+        <module>gadget</module>
         <module>app</module>
         <module>jsp</module>
+        <module>placed</module>
     </modules>
     <!-- The outer build's version, as in lib/pom.xml: the fixture resolves plugins from the outer local repository
          only (it-settings.xml). -->

@@ -30,6 +30,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** vidocq:run: the library sees the application's resource under all, the default, and not under classes. */
 class AppLayerRunIT {
 
+    /** The start of the last line the fixture's {@code placed} application prints, about its client proxy. */
+    static final String PLACED_PROXY = "GADGET-PROXY ";
+
     @Test
     void allIsTheDefaultAndLetsTheLibrarySeeTheApplicationsResource(@TempDir Path dir) throws Exception {
         Path project = Fixture.copy(dir);
@@ -59,5 +62,39 @@ class AppLayerRunIT {
         } finally {
             Fixture.stop(mvn);
         }
+    }
+
+    /**
+     * A producer of a third-party class in a normal scope, when that class has a package-private member: the
+     * application layer defines the client proxy in the library's own package (Vauban's placed proxy), the only
+     * place from which a class overrides that member. Vauban's loader gives the class a constructor for the proxy,
+     * so the library's own constructors run for the produced gadget only.
+     */
+    @Test
+    void theApplicationLayerHoldsTheProxyOfAThirdPartyClassInItsPackage(@TempDir Path dir) throws Exception {
+        Path project = Fixture.copy(dir);
+        Fixture.install(project, Fixture.logs().resolve("run-placed-install.log"));
+        Path log = Fixture.logs().resolve("run-placed.log");
+
+        Process mvn = Fixture.start(project.resolve("placed"), log, "vidocq:run");
+        try {
+            Fixture.awaitLog(mvn, log, PLACED_PROXY);
+            String out = Fixture.read(log);
+            assertPlacedProxy(out);
+            assertTrue(out.contains("GADGET-CONSTRUCTED 1"), "no constructor of the library runs for the proxy:\n"
+                    + out);
+        } finally {
+            Fixture.stop(mvn);
+        }
+    }
+
+    /**
+     * What the fixture's {@code placed} application printed: the library called its package-private member on the
+     * proxy and got the answer of the produced instance, and the proxy is a class of the library's package.
+     */
+    static void assertPlacedProxy(String out) {
+        assertTrue(out.contains("GADGET-LABEL placed:x"), "the proxy forwards the package-private member:\n" + out);
+        assertTrue(out.contains(PLACED_PROXY + "acme.gadget.Gadget_ClientProxy in acme.gadget"),
+                "the proxy is a class of the library's package:\n" + out);
     }
 }

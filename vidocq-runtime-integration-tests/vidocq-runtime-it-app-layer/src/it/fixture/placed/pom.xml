@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- An application that produces, in a normal scope, a class of the third-party library of ../gadget: the client
+         proxy of that class must sit in the library's package (Vidocq/vidocq#580, step 4). -->
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-build</artifactId>
+        <version>@project.version@</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.vidocq.it</groupId>
+    <artifactId>app-layer-placed</artifactId>
+
+    <!-- No main class: the runtime's own main boots the application. -->
+    <properties>
+        <vidocq.mainModule>acme.placed</vidocq.mainModule>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.it</groupId>
+            <artifactId>app-layer-gadget</artifactId>
+            <version>1.0</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <version>@project.version@</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

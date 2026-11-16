@@ -39,6 +39,7 @@ class AppLayerImageIT {
 
     private static final String STARTED = "Vidocq - Started in";
     private static final String LAUNCHER = "app/target/dist/bin/app-layer-app";
+    private static final String PLACED_LAUNCHER = "placed/target/dist/bin/app-layer-placed";
 
     @Test
     void theImageOfATrampolineLoadsTheApplicationOnce(@TempDir Path dir) throws Exception {
@@ -101,6 +102,30 @@ class AppLayerImageIT {
         assertTrue(out.contains(AppLayerPackageIT.ONE_COPY), out);
     }
 
+    /**
+     * A producer of a third-party class in a normal scope, when that class has a package-private member: its client
+     * proxy must be a class of the library's own package. An image has no application layer to define it there at
+     * each start, so the build puts it in the copy of the library it links (BUG-20261116-06, Vidocq/vidocq#580).
+     * One documented difference with the application layer: the proxy of the image runs a constructor of the
+     * library's class, which the layer's proxy does not.
+     */
+    @Test
+    void theImageHoldsTheProxyOfAThirdPartyClassInItsPackage(@TempDir Path dir) throws Exception {
+        Path launcher = buildImage(dir, "placed", PLACED_LAUNCHER, "image-placed");
+        Process run = launch(launcher, "image-placed");
+        try {
+            Path runLog = Fixture.logs().resolve("image-placed-run.log");
+            Fixture.awaitLog(run, runLog, AppLayerRunIT.PLACED_PROXY);
+            String out = Fixture.read(runLog);
+            AppLayerRunIT.assertPlacedProxy(out);
+            assertTrue(out.contains("GADGET-CONSTRUCTED 2"), "the proxy runs a constructor of the library:\n" + out);
+            assertTrue(out.contains("no application layer"), "the image has one layer:\n" + out);
+            assertTrue(out.contains("anomalies   none"), out);
+        } finally {
+            Fixture.stop(run);
+        }
+    }
+
     private static String buildAndStart(Path dir, String name, String... options) throws Exception {
         Process run = start(build(dir, name, options), name);
         try {
@@ -110,8 +135,14 @@ class AppLayerImageIT {
         }
     }
 
-    /** Builds the fixture's image; returns its launcher. */
+    /** Builds the image of the fixture's main application; returns its launcher. */
     private static Path build(Path dir, String name, String... options) throws Exception {
+        return buildImage(dir, "app", LAUNCHER, name, options);
+    }
+
+    /** Builds the image of the application in {@code module} of the fixture; returns its launcher. */
+    private static Path buildImage(Path dir, String module, String launcherPath, String name, String... options)
+            throws Exception {
         Path project = Fixture.copy(dir);
         Fixture.install(project, Fixture.logs().resolve(name + "-install.log"));
         Path log = Fixture.logs().resolve(name + ".log");
@@ -120,24 +151,30 @@ class AppLayerImageIT {
         args[1] = "vidocq:jlink";
         args[2] = "-DskipTests";
         System.arraycopy(options, 0, args, 3, options.length);
-        Fixture.awaitSuccess(Fixture.start(project.resolve("app"), log, args), log, "vidocq:jlink");
-        Path launcher = project.resolve(LAUNCHER);
+        Fixture.awaitSuccess(Fixture.start(project.resolve(module), log, args), log, "vidocq:jlink");
+        Path launcher = project.resolve(launcherPath);
         assertTrue(Files.isRegularFile(launcher), "vidocq:jlink wrote no launcher:\n" + Fixture.read(log));
         return launcher;
     }
 
+    /** Starts the image of the main application, and waits until it started and probed its layer. */
+    private static Process start(Path launcher, String name, String... jvmOptions) throws Exception {
+        Process run = launch(launcher, name, jvmOptions);
+        Fixture.awaitLog(run, Fixture.logs().resolve(name + "-run.log"), "TOOL-PROVIDERS ");
+        return run;
+    }
+
     /**
      * Starts the image's launcher, the JVM options read by the java launcher itself (the launcher of a jlink image
-     * passes no {@code JAVA_OPTS}), and waits until the application started and probed its layer.
+     * passes no {@code JAVA_OPTS}), and waits until the application started.
      */
-    private static Process start(Path launcher, String name, String... jvmOptions) throws Exception {
+    private static Process launch(Path launcher, String name, String... jvmOptions) throws Exception {
         Path runLog = Fixture.logs().resolve(name + "-run.log");
         ProcessBuilder command = new ProcessBuilder(launcher.toString()).redirectErrorStream(true)
                 .redirectOutput(runLog.toFile());
         command.environment().put("JDK_JAVA_OPTIONS", String.join(" ", jvmOptions));
         Process run = command.start();
         Fixture.awaitLog(run, runLog, STARTED);
-        Fixture.awaitLog(run, runLog, "TOOL-PROVIDERS ");
         return run;
     }
 

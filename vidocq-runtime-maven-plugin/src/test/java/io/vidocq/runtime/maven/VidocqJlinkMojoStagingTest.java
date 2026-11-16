@@ -24,6 +24,7 @@ import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.artifact.handler.DefaultArtifactHandler;
 import org.apache.maven.model.Build;
 import org.apache.maven.model.Model;
+import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.apache.maven.project.MavenProject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,10 +34,14 @@ import java.lang.classfile.ClassFile;
 import java.lang.classfile.attribute.ModuleAttribute;
 import java.lang.classfile.attribute.ModuleRequireInfo;
 import java.lang.constant.ClassDesc;
+import java.lang.constant.ConstantDescs;
+import java.lang.constant.MethodTypeDesc;
 import java.lang.constant.ModuleDesc;
 import java.lang.reflect.Field;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -154,6 +159,37 @@ class VidocqJlinkMojoStagingTest {
         assertEquals(1, holders, "one jar of the image holds the shared directory");
     }
 
+    /**
+     * A producer of a normal scope may return a class of a library that only a class of its own package can extend.
+     * The application layer defines that client proxy in the library's package at each start. An image has no such
+     * layer: the staging adds the proxy to the copy of the library, which names the artifact it comes from, and
+     * says which type it leaves to the container (BUG-20261116-06).
+     */
+    @Test
+    void aLibraryGetsTheClientProxyOnlyItsPackageCanHold() throws Exception {
+        Path library = moduleJar(dir.resolve("gadget.jar"), "org.gadget", Map.of());
+        addOpenClass(library, "org.gadget.Gadget");
+        byte[] artifact = Files.readAllBytes(library);
+        VidocqJlinkMojo mojo = mojo(false, artifact("parent", null), artifact("gadget", library));
+        listForPlacement(dir.resolve("app.jar"), "org.gadget.Gadget", "org.absent.Widget");
+        mojo.stageModules();
+        Lines log = new Lines();
+        mojo.setLog(log);
+
+        mojo.placeProxies();
+
+        try (JarFile staged = new JarFile(stage().resolve("gadget.jar").toFile())) {
+            assertNotNull(staged.getEntry("org/gadget/Gadget_ClientProxy.class"), "the proxy rides in the library");
+            assertEquals("org.dep:gadget:" + VERSION,
+                    staged.getManifest().getMainAttributes().getValue("Vauban-Enhanced-From"));
+        }
+        assertArrayEquals(artifact, Files.readAllBytes(library), "the artifact itself is left alone");
+        assertEquals(List.of(
+                "INFO Vidocq jlink — gadget.jar: client proxy of org.gadget.Gadget added to its package",
+                "WARN Vidocq jlink — client proxy left to the container at the start: org.absent.Widget: no jar of"
+                        + " the image holds this class"), log.lines);
+    }
+
     private Artifact[] sharedResourceArtifacts() throws Exception {
         Path one = moduleJar(dir.resolve("one.jar"), "org.one", Map.of());
         Path two = moduleJar(dir.resolve("two.jar"), "org.two", Map.of());
@@ -233,6 +269,47 @@ class VidocqJlinkMojoStagingTest {
         out.write(ClassFile.of().build(ClassDesc.of(module + ".Marker"),
                 cb -> cb.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER)));
         out.closeEntry();
+    }
+
+    /** Collects what the goal logs at {@code INFO} and {@code WARN}, as {@code "LEVEL message"}. */
+    private static final class Lines extends SystemStreamLog {
+        final List<String> lines = new ArrayList<>();
+
+        @Override
+        public void info(CharSequence content) {
+            lines.add("INFO " + content);
+        }
+
+        @Override
+        public void warn(CharSequence content) {
+            lines.add("WARN " + content);
+        }
+    }
+
+    /**
+     * Adds to {@code jar} the class {@code name}, which only a class of its own package can extend: it has a
+     * package-private method.
+     */
+    private static void addOpenClass(Path jar, String name) throws IOException {
+        byte[] bytes = ClassFile.of().build(ClassDesc.of(name), cb -> cb
+                .withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER)
+                .withMethodBody(ConstantDescs.INIT_NAME, ConstantDescs.MTD_void, ClassFile.ACC_PUBLIC, code -> code
+                        .aload(0).invokespecial(ConstantDescs.CD_Object, ConstantDescs.INIT_NAME,
+                                ConstantDescs.MTD_void).return_())
+                .withMethodBody("label", MethodTypeDesc.of(ConstantDescs.CD_String), 0,
+                        code -> code.aconst_null().areturn()));
+        try (var zip = FileSystems.newFileSystem(jar)) {
+            Files.write(zip.getPath(name.replace('.', '/') + ".class"), bytes);
+        }
+    }
+
+    /** Writes into {@code jar} the placement manifest of a bean archive, with {@code types}. */
+    private static void listForPlacement(Path jar, String... types) throws IOException {
+        try (var zip = FileSystems.newFileSystem(jar)) {
+            Path manifest = zip.getPath(StagedProxies.MANIFEST);
+            Files.createDirectories(manifest.getParent());
+            Files.write(manifest, List.of(types));
+        }
     }
 
     /** Rewrites {@code jar} with a text entry {@code name} added. */

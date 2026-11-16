@@ -5,6 +5,46 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261116-06 — A jlink image does not start when a producer returns a library class with a package-private method
+
+- **Date**: 2026-11-16
+- **Status**: FIXED on `fix/image-placed-proxies`
+- **Module**: `vidocq-runtime-maven-plugin` (`VidocqJlinkMojo`, new `StagedProxies`)
+- **Symptom**: an application has a producer of a normal scope that returns a class of a library, and that class has a
+  package-private or protected method. It starts under `vidocq:dev`, `vidocq:run` and as a `vidocq:package`
+  distribution. Its `vidocq:jlink` image stops at the start, and so do the `vidocq:jpackage` application and the
+  `vidocq:docker` image of the `jlink` kind built on it:
+  `WARN OpensApplier: Vauban needs [acme.gadget] of acme.gadget opened to io.vidocq.vauban.core for a runtime producer
+  proxy, and will not do it on its own`, then `DeploymentException: No client proxy can be generated for
+  acme.gadget.Gadget, produced by acme.placed.GadgetProducer with the normal scope @ApplicationScoped: Vauban cannot
+  define a class in package acme.gadget (not opened to io.vidocq.vauban.core)`. Found while checking the points
+  Vidocq/vidocq#580 left unproven, not reported by a user.
+- **Repro**: the `placed` module of the fixture of `vidocq-runtime-it-app-layer`: a library `acme.gadget` whose
+  `Gadget` has a package-private `label(String)`, and an application with `@Produces @ApplicationScoped Gadget`.
+  `mvn package vidocq:jlink && target/dist/bin/app-layer-placed`.
+- **Cause**: only a class of the library's own package can be the client proxy of such a class. Vauban's processor
+  ships that proxy in the application jar (`META-INF/vauban/placed/`) and lists the type in
+  `META-INF/vauban/required-opens.list`. Under the application layer, Vauban's class loader defines the proxy in the
+  library's package at each start. An image has one layer, the JVM's own (BUG-20261114-11): no loader places the
+  proxy, the container falls back to generating it at the start, and that needs the package opened.
+- **Fix**: `vidocq:jlink` does the placement at build, after it staged the modules and before it promotes their
+  `provides` (`VidocqJlinkMojo.placeProxies`, `StagedProxies`). For each listed type it generates the proxy, and the
+  `_VaubanComponents` that provides it, into the staged copy of the library, with the engine of
+  `vauban:enhance-dependencies` (`DependencyEnhancer`). It gives the versioned descriptors of a multi-release jar the
+  same `provides` and `requires`, which that engine writes into the root descriptor only (Vauban BUG-20261116-03; the
+  step goes once the build reads a Vauban that has the fix). It then takes the type off
+  the staged placement manifest, so the start has nothing to place and logs no warning. The build logs
+  `<jar>: client proxy of <type> added to its package`. A type it cannot place stays listed, with a build warning
+  (`client proxy left to the container at the start: …`): a class whose constructors are all private, a library that
+  already holds generated Vauban components in that package, a class that refers to a type the image does not hold.
+  One difference with the application layer is left, measured by the fixture and documented (`#jlink-differences` of
+  the plugin page): the proxy of the image calls a constructor of the library's class with default values, where the
+  proxy of the layer runs none. Tests: `StagedProxiesTest`,
+  `VidocqJlinkMojoStagingTest.aLibraryGetsTheClientProxyOnlyItsPackageCanHold`,
+  `AppLayerImageIT.theImageHoldsTheProxyOfAThirdPartyClassInItsPackage` (red before the fix: the image exits with the
+  messages above) and its control under the application layer,
+  `AppLayerRunIT.theApplicationLayerHoldsTheProxyOfAThirdPartyClassInItsPackage`.
+
 ## BUG-20261116-05 — The first change of each `vidocq:dev` session of a Vaadin application swaps the layer
 
 - **Date**: 2026-11-16
