@@ -96,8 +96,8 @@ The mojo writes `sessions drop` with the first reason that applies:
 1. `-Dvidocq.dev.keepSessions=false` (default `true`, a new parameter of `vidocq:dev`). Reason: `vidocq.dev.keepSessions
    is false`.
 2. A changed class changed its serialized form: it gained, lost or retyped an instance field, or changed its
-   superclass or its interfaces. Reason: `Order gained a field total, and the restored instances would not have
-   it`. The classifier has these differences already (`ClassFingerprint.firstShapeDifference`). This rule needs
+   superclass or its interfaces. Reason: `Order gained a field total, so a restored instance would not match the new
+   class`. The classifier has these differences already (`ClassFingerprint.firstShapeDifference`). This rule needs
    every difference of the class, not only the first, so `ClassFingerprint` gains `instanceShapeDifference(previous)`.
    Without a declared `serialVersionUID`, Foy would drop these sessions anyway (`InvalidClassException`). The rule
    catches the classes that declare one, and says why in one line instead of one WARN per session.
@@ -154,7 +154,8 @@ The loop's order on a swap signal:
 4. `VidocqAppLayer.resetForReload()`, then the new boot;
 5. once the new boot has started: `store.clear()`. Keys nobody took are dropped, with a DEBUG line naming them.
 
-Keys are namespaced by the extension's id: `servlet-foy:sessions:<context path>`. Values are `byte[]` only, so no
+Keys are namespaced by the extension's id (`FoyExtension.id()` is `servlet`): `servlet:sessions:<context path>`,
+with `/` for the root context. Values are `byte[]` only, so no
 object of the old layer is kept, and the old layer can be collected.
 
 ### 3. The Foy extension: export at the close, import before the mount
