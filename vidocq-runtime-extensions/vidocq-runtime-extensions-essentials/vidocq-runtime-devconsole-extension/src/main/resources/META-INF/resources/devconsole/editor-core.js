@@ -1738,7 +1738,51 @@ export function readRows(text) {
   if (!body.rows.every((row) => Array.isArray(row) && row.length === columns.length && row.every(isCell))) {
     return null;
   }
-  return { columns: columns.map((c) => ({ name: c.name, type: c.type })), rows: body.rows, more: body.more };
+  const menu = Array.isArray(body.menu) ? body.menu.filter(isMenuEntry)
+    .map((m) => ({ label: m.label, action: m.action, arguments: m.arguments })) : [];
+  return { columns: columns.map((c) => ({ name: c.name, type: c.type })), rows: body.rows, more: body.more, menu };
+}
+
+/** An entry of a rows result's menu: a label, the id of an action of the panel, and a JSON object of its arguments. */
+const isMenuEntry = (m) => isObject(m) && typeof m.label === "string" && m.label.trim() !== ""
+  && typeof m.action === "string" && /^[a-z][a-z0-9.-]{0,39}$/.test(m.action) && isObject(m.arguments);
+
+/** A selected cell as a query literal: 'it''s', the exact digits of a number, TRUE, FALSE or NULL. */
+function queryLiteral(cell) {
+  if (cell === null) return "NULL";
+  if (typeof cell === "boolean") return cell ? "TRUE" : "FALSE";
+  if (isObject(cell) && typeof cell.digits === "string") return cell.digits;
+  return "'" + String(cell).replaceAll("'", "''") + "'";
+}
+
+/**
+ * The arguments a menu entry of a rows result fills for the selected rows at {@code picked}: a copy of
+ * {@code entry.arguments} in which each ${name} inside a string, at any depth, {@code name} a column of the result,
+ * becomes the literals of that column for those rows, in the rows' order, joined with ", " (queryLiteral). A ${name}
+ * that names no column stays. {@code text} is the result's body, read again so that a number keeps its exact digits,
+ * an integer past 2^53 included; null when it is no rows body.
+ */
+export function menuArguments(entry, text, picked) {
+  let body;
+  try {
+    body = JSON.parse(text, (key, value, context) => typeof value === "number"
+      ? { digits: context && typeof context.source === "string" ? context.source : String(value) } : value);
+  } catch (unreadable) {
+    return null;
+  }
+  if (!isObject(body) || !Array.isArray(body.columns) || !Array.isArray(body.rows)) return null;
+  const rows = [...new Set(picked)].filter((r) => Number.isInteger(r) && r >= 0 && r < body.rows.length)
+    .sort((a, b) => a - b);
+  const columns = new Map();
+  body.columns.forEach((c, i) => { if (isObject(c) && !columns.has(c.name)) columns.set(c.name, i); });
+  const fill = (text) => text.replace(/\$\{([^}]*)\}/g, (whole, name) => columns.has(name)
+    ? rows.map((r) => queryLiteral(body.rows[r][columns.get(name)])).join(", ") : whole);
+  const walk = (value) => {
+    if (typeof value === "string") return fill(value);
+    if (Array.isArray(value)) return value.map(walk);
+    return isObject(value) ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, walk(v)])) : value;
+  };
+  return walk(entry.arguments);
 }
 
 /**

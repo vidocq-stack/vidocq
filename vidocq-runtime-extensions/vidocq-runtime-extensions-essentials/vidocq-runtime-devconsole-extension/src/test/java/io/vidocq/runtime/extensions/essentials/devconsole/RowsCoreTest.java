@@ -91,8 +91,8 @@ class RowsCoreTest {
     void aBodyOfRowsIsItsColumnsItsRowsAndItsMoreFlag() {
         assertEquals("{\"columns\":[{\"name\":\"id\",\"type\":\"BIGINT\"},{\"name\":\"title\",\"type\":"
                 + "\"VARCHAR(200)\"},{\"name\":\"done\",\"type\":\"\"}],\"rows\":[[1,\"a, \\\"b\\\"\",true],"
-                + "[2.5,\"\",null],[3,\"two\\r\\nlines\",false]],\"more\":true}", read(BODY));
-        assertEquals("{\"columns\":[],\"rows\":[],\"more\":false}",
+                + "[2.5,\"\",null],[3,\"two\\r\\nlines\",false]],\"more\":true,\"menu\":[]}", read(BODY));
+        assertEquals("{\"columns\":[],\"rows\":[],\"more\":false,\"menu\":[]}",
                 read("{\"more\":false,\"rows\":[],\"columns\":[],\"other\":1}"), "another member is left out");
     }
 

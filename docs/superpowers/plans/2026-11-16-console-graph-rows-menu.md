@@ -155,7 +155,7 @@ action's form (Explore to JPQL, the way a replay cell already fills a form)".
 - Test: `MenuCoreTest.java` (GraalJS)
 
 **Interfaces:**
-- `queryLiteral(cell)`:
+- `queryLiteral(cell)`, internal to the module:
   - a string becomes `'…'`, with each `'` doubled;
   - a number keeps its exact source digits;
   - a boolean becomes `TRUE` or `FALSE`;
