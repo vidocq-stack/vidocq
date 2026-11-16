@@ -40,6 +40,13 @@
             <artifactId>vidocq-runtime-dev-agent</artifactId>
             <optional>true</optional>
         </dependency>
+        <dependency>
+            <!-- The dev reload loop tells the -dev companions what a redefinition changed when vidocq:dev put the dev
+                 SPI in the boot layer; optional, so no application and no binary ever gets it (RedefinitionListeners). -->
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-devconsole-spi</artifactId>
+            <optional>true</optional>
+        </dependency>
 
         <!--
             Ravel (MicroProfile Config 3.1) is deliberately EXCLUDED from the core.

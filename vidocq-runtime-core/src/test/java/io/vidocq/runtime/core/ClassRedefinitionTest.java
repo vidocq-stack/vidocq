@@ -110,7 +110,7 @@ class ClassRedefinitionTest {
         var result = agent.redefine(getClass().getClassLoader(), List.of("java.lang.String", "p.NotLoaded"),
                 _ -> new byte[0]);
 
-        assertEquals(new ClassRedefinition.Done(List.of("java.lang.String"), List.of("p.NotLoaded")), result);
+        assertEquals(new ClassRedefinition.Done(List.of(String.class), List.of("p.NotLoaded")), result);
     }
 
     /** The default redefiner asks this JVM's agent, which a JVM started without -javaagent does not have. */

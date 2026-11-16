@@ -113,10 +113,13 @@
                     <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). The application
                          module does not require the dev console's panel, so Surefire puts it on the class path:
                          the add-exports gives it the package of live units that the extension exports to the
-                         panel's module, which is how vidocq:dev runs it. -->
+                         panel's module, which is how vidocq:dev runs it. The core names the dev console SPI
+                         (requires static), so Surefire puts the SPI on the module path, where the test module
+                         reads it only when told to. -->
                     <argLine>
                         @{argLine}
                         --add-reads io.vidocq.runtime.it.noether=java.logging
+                        --add-reads io.vidocq.runtime.it.noether=io.vidocq.runtime.spi.devconsole
                         --add-exports io.vidocq.runtime.extensions.jakartaee.web.noether.persistence/io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.live=ALL-UNNAMED
                     </argLine>
                 </configuration>

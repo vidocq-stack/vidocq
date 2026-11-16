@@ -34,6 +34,9 @@ module io.vidocq.runtime.core {
     // The dev reload loop's class redefinition (ClassRedefinition): read only when vidocq:dev resolved the agent module
     // into the boot layer and named it in -javaagent; no other launch has it.
     requires static io.vidocq.runtime.dev.agent;
+    // The -dev companions told of a redefinition (RedefinitionListeners): read only when vidocq:dev put the dev SPI in
+    // the boot layer with the console; a packaged application never has it.
+    requires static io.vidocq.runtime.spi.devconsole;
 
     exports io.vidocq.runtime.core;
     exports io.vidocq.runtime.core.config;
@@ -45,6 +48,8 @@ module io.vidocq.runtime.core {
     uses io.vidocq.runtime.spi.config.ConfigSourceProvider;
     // Startup report sections of libraries that are not extensions (extensions implement it directly).
     uses io.vidocq.runtime.spi.report.StartupReportContributor;
+    // The -dev companions' listeners of a redefinition of vidocq:dev, loaded from the application layer.
+    uses io.vidocq.runtime.spi.devconsole.RedefinitionListener;
 
     // The application layer, for an extension that lists a directory of the application (vidocq#96).
     provides io.vidocq.runtime.spi.ApplicationLayer with io.vidocq.runtime.core.InstalledApplicationLayer;

@@ -61,7 +61,9 @@ final class ArchitectureRules {
     /**
      * Module descriptor of vidocq-runtime-core: the SPI, Vauban and the Jakarta CDI APIs, nothing else. The one
      * exception is the dev agent, {@code requires static}: only {@code AgentRedefiner} names it, loaded once
-     * {@code vidocq:dev} started the child with the agent (hot swap design §4), and no other launch has it.
+     * {@code vidocq:dev} started the child with the agent (hot swap design §4), and no other launch has it. The dev
+     * SPI ({@code io.vidocq.runtime.spi.devconsole}, under the SPI's packages) is {@code requires static} the same way:
+     * only {@code RedefinitionListeners} names it, built once {@code vidocq:dev} put it in the boot layer (§5).
      */
     static final ArchRule CORE_DEPENDENCIES = VidocqArchRules.dependOnlyOn(
             new String[] {CORE},

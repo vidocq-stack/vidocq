@@ -24,9 +24,14 @@ import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.SequencedMap;
+import java.util.SequencedSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -76,6 +81,16 @@ final class VidocqDevReloadLoop {
                 VidocqAppLayer.installedLoader())
                 .map(loader -> ClassRedefinition.apply(request, loader, agent))
                 .orElseGet(() -> new ClassRedefinition.Refused("no application layer is installed"));
+        try (ClassRedefinition.Notifier listeners = ClassRedefinition.listeners(ModuleLayer.boot(),
+                line -> LOG.log(System.Logger.Level.WARNING, line))) {
+            serve(reloadFile, lastSignal, redefine, jdwp, listeners);
+        }
+    }
+
+    private static void serve(Path reloadFile, long firstSignal,
+            Function<ReloadRequest.Redefine, ClassRedefinition.Result> redefine, boolean jdwp,
+            ClassRedefinition.Notifier listeners) {
+        long lastSignal = firstSignal;
         while (true) {
             VidocqAppLayer.installIfConfigured();
             VidocqBootstrap bootstrap = VidocqBootstrap.create().configure();
@@ -96,6 +111,10 @@ final class VidocqDevReloadLoop {
                 LOG.log(System.Logger.Level.INFO, answer.line());
                 if (answer.keepsRunning()) {
                     acknowledge(reloadFile, lastSignal);
+                    ModuleLayer layer = VidocqAppLayer.installedLayer();
+                    if (layer != null && !answer.redefined().isEmpty()) {
+                        listeners.redefined(layer, answer.redefined());
+                    }
                 }
             } while (answer.keepsRunning());
 
@@ -126,8 +145,19 @@ final class VidocqDevReloadLoop {
     /**
      * What the loop does with one signal: the line it logs, and whether the application keeps running (hot swap
      * design §4). A redefinition keeps it running; a swap request, or a redefinition that is refused, swaps the layer.
+     *
+     * @param redefined the loaded classes a redefinition changed, each with its changed methods, for the
+     *                  {@code -dev} companions (design §5); empty otherwise
      */
-    record Answer(String line, boolean keepsRunning) {
+    record Answer(String line, boolean keepsRunning, SequencedMap<Class<?>, SequencedSet<String>> redefined) {
+
+        Answer {
+            redefined = Collections.unmodifiableSequencedMap(new LinkedHashMap<>(redefined));
+        }
+
+        Answer(String line, boolean keepsRunning) {
+            this(line, keepsRunning, new LinkedHashMap<>());
+        }
     }
 
     private static final String SWAP = "Hot reload - restarting on a fresh application layer";
@@ -160,10 +190,20 @@ final class VidocqDevReloadLoop {
                 yield switch (result) {
                     case ClassRedefinition.Refused(String reason) -> new Answer("Hot reload - redefinition refused ("
                             + reason + "): restarting on a fresh application layer", false);
-                    case ClassRedefinition.Done done -> new Answer(redefinedLine(done, millis, jdwp), true);
+                    case ClassRedefinition.Done done -> new Answer(redefinedLine(done, millis, jdwp), true,
+                            methodsByClass(done, redefinition));
                 };
             }
         };
+    }
+
+    private static SequencedMap<Class<?>, SequencedSet<String>> methodsByClass(ClassRedefinition.Done done,
+            ReloadRequest.Redefine request) {
+        SequencedMap<Class<?>, SequencedSet<String>> methods = new LinkedHashMap<>();
+        for (Class<?> type : done.redefined()) {
+            methods.put(type, request.methodsByClass().getOrDefault(type.getName(), new LinkedHashSet<>()));
+        }
+        return methods;
     }
 
     private static String redefinedLine(ClassRedefinition.Done done, long millis, boolean jdwp) {
@@ -171,7 +211,7 @@ final class VidocqDevReloadLoop {
             return "Hot reload - " + classes(done.notLoaded().size()) + " changed in method bodies, none of them loaded"
                     + " yet: they load the new code when first used";
         }
-        String names = done.redefined().stream().map(VidocqDevReloadLoop::withoutPackage)
+        String names = done.redefined().stream().map(Class::getName).map(VidocqDevReloadLoop::withoutPackage)
                 .collect(Collectors.joining(", "));
         String line = "Hot reload - redefined " + classes(done.redefined().size()) + " in " + millis
                 + " ms, the application keeps running: " + names;

@@ -57,8 +57,7 @@ final class AgentRedefiner implements ClassRedefinition.Redefiner {
             Function<String, byte[]> bytes) {
         try {
             HotSwap.Outcome outcome = call.redefine(loader, names, bytes);
-            return new ClassRedefinition.Done(outcome.redefined().stream().map(Class::getName).toList(),
-                    outcome.notLoaded());
+            return new ClassRedefinition.Done(outcome.redefined(), outcome.notLoaded());
         } catch (RedefinitionRefused e) {
             return new ClassRedefinition.Refused(e.getMessage());
         }

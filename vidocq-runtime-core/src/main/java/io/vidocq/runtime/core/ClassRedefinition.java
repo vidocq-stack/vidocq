@@ -27,6 +27,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SequencedMap;
+import java.util.SequencedSet;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -34,12 +37,16 @@ import java.util.function.Function;
  * would define now, woven as the loaded classes are, handed to the JVM all or nothing.
  *
  * <p>The agent's own types stay in {@link AgentRedefiner}, which this class loads only once the agent module is in the
- * boot layer: in any other launch that module is absent, and so are its classes.
+ * boot layer: in any other launch that module is absent, and so are its classes. The same goes for the dev SPI's types
+ * and {@link RedefinitionListeners}.
  */
 final class ClassRedefinition {
 
     /** The module of the agent {@code vidocq:dev} starts the child with. */
     static final String AGENT_MODULE = "io.vidocq.runtime.dev.agent";
+
+    /** The module of the dev SPI, whose {@code RedefinitionListener} the {@code -dev} companions provide. */
+    static final String DEV_SPI_MODULE = "io.vidocq.runtime.spi.devconsole";
 
     /** Redefines the loaded classes among names, all or nothing. */
     @FunctionalInterface
@@ -52,10 +59,15 @@ final class ClassRedefinition {
     }
 
     /**
-     * @param redefined the binary names of the classes redefined
+     * @param redefined the classes redefined
      * @param notLoaded the binary names not loaded yet, which load the new code when first used
      */
-    record Done(List<String> redefined, List<String> notLoaded) implements Result {
+    record Done(List<Class<?>> redefined, List<String> notLoaded) implements Result {
+
+        Done {
+            redefined = List.copyOf(redefined);
+            notLoaded = List.copyOf(notLoaded);
+        }
     }
 
     /** Nothing was redefined; the reason is the JVM's, or why the bytes could not be read. */
@@ -64,6 +76,38 @@ final class ClassRedefinition {
 
     /** The redefiner of a JVM started without the agent. */
     static final Redefiner NO_AGENT = (loader, names, bytes) -> new Refused("the hot swap agent is not installed");
+
+    /** Tells the {@code -dev} companions what a redefinition changed (design §5), without naming the dev SPI's types. */
+    interface Notifier extends AutoCloseable {
+
+        /** No companion can listen: the dev SPI module is not in the boot layer. */
+        Notifier NONE = new Notifier() {
+            @Override
+            public void redefined(ModuleLayer layer, SequencedMap<Class<?>, SequencedSet<String>> methodsByClass) {
+                // nobody to tell
+            }
+
+            @Override
+            public void close() {
+                // nothing started
+            }
+        };
+
+        /**
+         * Returns at once: the listeners of {@code layer} run later, on their own thread.
+         *
+         * @param methodsByClass the loaded classes redefined, each with the methods whose code changed
+         */
+        void redefined(ModuleLayer layer, SequencedMap<Class<?>, SequencedSet<String>> methodsByClass);
+
+        @Override
+        void close();
+    }
+
+    /** The listeners of the {@code -dev} companions, or {@link Notifier#NONE} when {@code boot} lacks the dev SPI. */
+    static Notifier listeners(ModuleLayer boot, Consumer<String> warn) {
+        return boot.findModule(DEV_SPI_MODULE).isPresent() ? RedefinitionListeners.start(warn) : Notifier.NONE;
+    }
 
     private ClassRedefinition() {
     }

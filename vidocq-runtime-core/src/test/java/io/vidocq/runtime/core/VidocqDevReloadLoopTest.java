@@ -22,15 +22,20 @@ package io.vidocq.runtime.core;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.classfile.ClassFile;
+import java.lang.constant.ClassDesc;
+import java.lang.constant.ConstantDescs;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalLong;
 import java.util.SequencedMap;
 import java.util.SequencedSet;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -111,7 +116,7 @@ class VidocqDevReloadLoopTest {
     @Test
     void aRedefinitionKeepsTheApplicationRunning() {
         var answer = VidocqDevReloadLoop.answer(redefine("app.MainView"),
-                _ -> new ClassRedefinition.Done(List.of("app.MainView"), List.of()), false);
+                _ -> new ClassRedefinition.Done(List.of(MAIN_VIEW), List.of()), false);
 
         assertTrue(answer.keepsRunning());
         assertTrue(Pattern.matches("Hot reload - redefined 1 class in \\d+ ms, the application keeps running: MainView",
@@ -121,7 +126,7 @@ class VidocqDevReloadLoopTest {
     @Test
     void severalClassesAreNamedByTheirBinaryNameWithoutPackage() {
         var answer = VidocqDevReloadLoop.answer(redefine("app.MainView", "app.MainView$Row"),
-                _ -> new ClassRedefinition.Done(List.of("app.MainView", "app.MainView$Row"), List.of()), false);
+                _ -> new ClassRedefinition.Done(List.of(MAIN_VIEW, ROW), List.of()), false);
 
         assertTrue(answer.line().contains("redefined 2 classes in ")
                 && answer.line().endsWith("the application keeps running: MainView, MainView$Row"), answer.line());
@@ -147,7 +152,7 @@ class VidocqDevReloadLoopTest {
 
     @Test
     void theBreakpointSentenceOnlyWithAJdwpAgent() {
-        var done = new ClassRedefinition.Done(List.of("app.MainView"), List.of());
+        var done = new ClassRedefinition.Done(List.of(MAIN_VIEW), List.of());
 
         String debugged = VidocqDevReloadLoop.answer(redefine("app.MainView"), _ -> done, true).line();
         String plain = VidocqDevReloadLoop.answer(redefine("app.MainView"), _ -> done, false).line();
@@ -158,11 +163,66 @@ class VidocqDevReloadLoopTest {
     }
 
     @Test
+    void aRedefinitionTellsTheLoadedClassesWithTheirMethods() {
+        var answer = VidocqDevReloadLoop.answer(redefine("app.MainView", "app.Helper"),
+                _ -> new ClassRedefinition.Done(List.of(MAIN_VIEW), List.of("app.Helper")), false);
+
+        assertEquals(Map.of(MAIN_VIEW, Set.of("get")), answer.redefined());
+    }
+
+    @Test
+    void aSwapARefusalOrNoLoadedClassTellsNothing() {
+        var swap = VidocqDevReloadLoop.answer(new ReloadRequest.Swap("MainView gained a method"), NEVER, false);
+        var refused = VidocqDevReloadLoop.answer(redefine("app.MainView"),
+                _ -> new ClassRedefinition.Refused("attempted to add a method"), false);
+        var notLoaded = VidocqDevReloadLoop.answer(redefine("app.MainView"),
+                _ -> new ClassRedefinition.Done(List.of(), List.of("app.MainView")), false);
+
+        assertEquals(Map.of(), swap.redefined());
+        assertEquals(Map.of(), refused.redefined());
+        assertEquals(Map.of(), notLoaded.redefined());
+    }
+
+    @Test
     void aJdwpAgentIsSeenInTheInputArguments() {
         assertTrue(VidocqDevReloadLoop.jdwp(List.of("-Xmx1g",
                 "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005")));
         assertTrue(VidocqDevReloadLoop.jdwp(List.of("-Xrunjdwp:transport=dt_socket")));
         assertFalse(VidocqDevReloadLoop.jdwp(List.of("-javaagent:/tmp/vidocq-runtime-dev-agent.jar")));
+    }
+
+    /** {@code app.MainView} and {@code app.MainView$Row}, as an application layer defines them. */
+    private static final ClassLoader APP = new AppClasses("app.MainView", "app.MainView$Row");
+    private static final Class<?> MAIN_VIEW = load("app.MainView");
+    private static final Class<?> ROW = load("app.MainView$Row");
+
+    private static Class<?> load(String name) {
+        try {
+            return APP.loadClass(name);
+        } catch (ClassNotFoundException e) {
+            throw new AssertionError(e);
+        }
+    }
+
+    /** Defines empty classes of the given names, built with the Class-File API. */
+    private static final class AppClasses extends ClassLoader {
+
+        private final Set<String> names;
+
+        AppClasses(String... names) {
+            super(VidocqDevReloadLoopTest.class.getClassLoader());
+            this.names = Set.of(names);
+        }
+
+        @Override
+        protected Class<?> findClass(String name) throws ClassNotFoundException {
+            if (!names.contains(name)) {
+                throw new ClassNotFoundException(name);
+            }
+            byte[] bytes = ClassFile.of().build(ClassDesc.of(name),
+                    builder -> builder.withSuperclass(ConstantDescs.CD_Object));
+            return defineClass(name, bytes, 0, bytes.length);
+        }
     }
 
     private static final Function<ReloadRequest.Redefine, ClassRedefinition.Result> NEVER = _ -> {
