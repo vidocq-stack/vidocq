@@ -93,6 +93,7 @@
     <modules>
         <module>kerckhoffs-core</module>
         <module>kerckhoffs-authentication</module>
+        <module>kerckhoffs-authorization</module>
         <module>kerckhoffs-cdi</module>
         <module>kerckhoffs-foy</module>
     </modules>
@@ -178,6 +179,11 @@
             <dependency>
                 <groupId>io.vidocq.kerckhoffs</groupId>
                 <artifactId>kerckhoffs-authentication</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.kerckhoffs</groupId>
+                <artifactId>kerckhoffs-authorization</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <!-- The Servlet container the adapter bridges to: its API only, never an implementation. -->

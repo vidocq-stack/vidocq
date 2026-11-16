@@ -25,6 +25,7 @@
 module io.vidocq.kerckhoffs.foy {
     requires io.vidocq.kerckhoffs.core;
     requires io.vidocq.kerckhoffs.authentication;
+    requires io.vidocq.kerckhoffs.authorization;
     requires io.vidocq.foy.api;
     requires jakarta.servlet;
     requires static jakarta.cdi;

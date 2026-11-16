@@ -41,9 +41,11 @@ runtime (`vidocq-runtime-tck-kerckhoffs-security`, in `Vidocq/vidocq`). A dash m
 | `app-custom-authentication-mechanism-handler` | 4 of 4 | 4 of 4 | An application `HttpAuthenticationMechanismHandler` serves the requests.
 | `app-custom-authentication-mechanism-handler2` | 3 of 3 | 3 of 3 | Repeated `@BasicAuthenticationMechanismDefinition` with `qualifiers`.
 | `app-custom-rememberme` | 25 of 25 | 25 of 25 | `@RememberMe`: cookie, flags, `*Expression` attributes through Jakarta Expression Language.
+| `app-mem-policy` | 4 of 4 | not wired yet | A `Policy` the application registers with the `PolicyFactory` decides the access to a web resource (`kerckhoffs-authorization`, `PolicyAccessControl`).
+| `app-mem-policy2` | 5 of 5 | not wired yet | The same, with the `PrincipalMapper` of the policy context (`PolicyContext.PRINCIPAL_MAPPER`).
 |===
 
-These ten are the smoke set the `ci.tck.command` gate of the pull requests runs.
+These twelve are the smoke set the `ci.tck.command` gate of the pull requests runs.
 
 === Partly green
 
@@ -78,7 +80,6 @@ none of them is counted against the figures above.
 |===
 | Application | What is missing
 
-| `app-mem-policy`, `app-mem-policy2` | Jakarta Authorization: `Policy` and `PolicyFactory` (a `kerckhoffs-authorization` module, PLAN.md section 3). The deployment is refused.
 | `app-mem-basic-decorate` | The CDI decorator on a mechanism (1 of 2).
 | `app-jaxrs` | Authentication of the REST endpoints (4 of 8 on the runtime; not run on the Kerckhoffs container, which has no Jakarta REST).
 |===

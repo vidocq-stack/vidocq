@@ -35,6 +35,7 @@ import io.vidocq.foy.internal.gen.WebComponentRegistry;
 import io.vidocq.foy.internal.listener.CdiRequestScopeListener;
 import io.vidocq.foy.spi.cdi.CdiContextListeners;
 import io.vidocq.foy.spi.jsp.JspEngine;
+import io.vidocq.foy.spi.security.AccessControl;
 import io.vidocq.foy.spi.security.IdentityStore;
 import io.vidocq.foy.spi.security.RequestAuthentication;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -147,6 +148,7 @@ public final class ServletTestHarness implements AutoCloseable {
         private String contextPath = "/";
         private IdentityStore identityStore;
         private RequestAuthentication requestAuthentication;
+        private AccessControl accessControl;
         private WebAppModel.Builder model;
         private ComponentFactory componentFactory;
         private Set<String> reservedServletNames = Set.of();
@@ -313,6 +315,12 @@ public final class ServletTestHarness implements AutoCloseable {
             return this;
         }
 
+        /** The runtime that decides the access to web resources (null: the security constraints decide). */
+        public Builder accessControl(AccessControl control) {
+            this.accessControl = control;
+            return this;
+        }
+
         /**
          * The CDI container of the application: the request context is active for each request, and the contexts
          * CDI Lite leaves to the servlet container are driven, as {@code FoyChappeBoot} does.
@@ -337,6 +345,9 @@ public final class ServletTestHarness implements AutoCloseable {
             if (handlesTypes != null) options = options.withHandlesTypes(handlesTypes);
             if (requestAuthentication != null) {
                 options = options.withSecurity(options.security().withRequestAuthentication(requestAuthentication));
+            }
+            if (accessControl != null) {
+                options = options.withSecurity(options.security().withAccessControl(accessControl));
             }
             Deployment d = WebAppDeployer.deploy(built, options, pagesLayer, jspEngine);
             if (beanManager != null) registerCdiListeners(d);

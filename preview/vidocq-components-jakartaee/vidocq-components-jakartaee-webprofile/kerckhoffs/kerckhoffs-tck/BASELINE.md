@@ -69,7 +69,8 @@ The container installs the mechanism of the war on that hook, as the Vidocq runt
 | `app-custom-authentication-mechanism-handler2` | **3 of 3 green** | repeated `@BasicAuthenticationMechanismDefinition` with `qualifiers`, injected by qualifier into the handler |
 | `app-securitycontext-auth` | **5 of 5 green** | `SecurityContext.authenticate(...)`: the mechanism reads the parameters, the status is SUCCESS, SEND_CONTINUE or SEND_FAILURE |
 | `app-custom-rememberme` | **25 of 25 green** | `@RememberMe` (`RememberMeInterceptor`, `RememberMeSupport`): the cookie, its flags, the `*Expression` attributes through Jakarta Expression Language (Peano, test scope), and the logout that reaches the mechanism without a response |
-| `app-mem-policy`, `app-mem-policy2` | deployment refused | needs Jakarta Authorization (JACC `PolicyFactory`), K3 |
+| `app-mem-policy` | **4 of 4 green** | Jakarta Authorization: `kerckhoffs-authorization` (`ConstraintPolicyFactory`, `ConstraintPolicy`) and `PolicyAccessControl` on Foy's `AccessControl` hook (Foy#113); on the assembled runtime the wiring is still to do |
+| `app-mem-policy2` | **5 of 5 green** | the same plus the `PrincipalMapper` of the policy context (`SubjectPrincipalMapper`) |
 | `app-securitycontext`, `app-securitycontext-customprincipal` | deployment refused | the application needs an EJB |
 
 Not claimed: this is one application of the TCK. The others need an EJB, a `DataSource`, an embedded directory or an
@@ -84,8 +85,8 @@ on this container and on the assembled runtime, see the `tck` page of the docume
   `app-mem-form` (`@LoginToContinue` with `*Expression` attributes, no JSF involved), the EJB applications
   (`app-securitycontext`, `app-securitycontext-customprincipal`, `app-db`), the LDAP ones (`app-ldap*`,
   `app-custom-identity-store-handler`, K4) and OpenID (`app-openid*`, K5).
-- Still to do: Jakarta Authorization (`app-mem-policy`, `app-mem-policy2`), the mechanism decorator
-  (`app-mem-basic-decorate`, 1 of 2) and JAX-RS (`app-jaxrs`, 4 of 8 on the runtime).
+- Still to do: Jakarta Authorization on the assembled runtime (green on this container), the mechanism decorator
+  (`app-mem-basic-decorate`, 1 of 2: Vauban applies no `@Decorator`, and the mechanism is a synthetic bean) and JAX-RS (`app-jaxrs`: the runtime runner has no REST extension, and Cassini mounts outside Foy, so the authentication hook never sees its requests).
 - `ci.tck.command` is declared (2026-11-15) on the smoke set: `app-mem`, `app-mem-basic`, `app-custom`, `app-custom-session`,
-  `app-multiple-store`, `app-multiple-store-backup`, `app-securitycontext-auth`, `app-custom-authentication-mechanism-handler`, `…handler2`, `app-custom-rememberme`. A red application leaves the smoke set
+  `app-multiple-store`, `app-multiple-store-backup`, `app-securitycontext-auth`, `app-custom-authentication-mechanism-handler`, `…handler2`, `app-custom-rememberme`, `app-mem-policy`, `app-mem-policy2`. A red application leaves the smoke set
   until it is green again.

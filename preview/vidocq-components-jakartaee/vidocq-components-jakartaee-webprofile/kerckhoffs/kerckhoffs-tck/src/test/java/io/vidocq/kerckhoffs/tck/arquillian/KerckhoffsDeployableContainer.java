@@ -26,6 +26,7 @@ import io.vidocq.kerckhoffs.cdi.RememberMeInterceptor;
 import io.vidocq.kerckhoffs.foy.FoySecurityContextExtension;
 import io.vidocq.kerckhoffs.foy.HandlerMechanism;
 import io.vidocq.kerckhoffs.foy.MechanismRequestAuthentication;
+import io.vidocq.kerckhoffs.foy.PolicyAccessControl;
 import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanism;
 import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanismHandler;
 import io.vidocq.kerckhoffs.cdi.KerckhoffsExtension;
@@ -210,6 +211,7 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
                 .reserved(reservedServlets, reservedFilters, reservedPatterns)
                 // What the Vidocq runtime extension will do: a mechanism of the war is placed in service.
                 .requestAuthentication(mechanismOf(cdi))
+                .accessControl(new PolicyAccessControl())
                 .beanManager(cdi.getBeanManager())
                 // @HandlesTypes over the war's own classes (TCK wars carry no class index).
                 .handlesTypes(IndexedHandlesTypesResolver.scanOnly(registry, cl,
