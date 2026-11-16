@@ -129,7 +129,7 @@ The Vidocq CI automates the same steps in the `setup-maven/block-emudhra-interme
 
 WARNING: Do not edit the JDK itself, for instance its `lib/security/blocked.certs`. A JDK without jmods (Temurin 24 and later) links images from its own files, and `jlink` refuses to run once one of them has changed (JEP 493).
 
-Remove the custom trust store once your JDK vendor ships a release that blocks these certificates. Follow the progress in https://codefloe.com/Vidocq/vidocq/issues/292[Vidocq/vidocq#292].
+Remove the custom trust store once your JDK vendor ships a release that blocks these certificates. Follow the progress in https://codefloe.com/Vidocq/ci/issues/117[Vidocq/ci#117]; https://codefloe.com/Vidocq/vidocq/issues/292[Vidocq/vidocq#292], now closed, holds the measurements and the history.
 
 == Scope
 

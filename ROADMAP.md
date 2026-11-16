@@ -31,7 +31,7 @@ Web Profile is certified later, after the same audits and tests on the web tier.
 | **0.4.0** | **MicroProfile 7.2 ready**: every specification of the platform passes its TCK on the assembled runtime (some on release-candidate TCKs byte-identical to the finals); the certification claim itself waits for the platform release; security baseline: `SECURITY.md` and a CVE process, dependency and code scanning in CI, a self-hosted SonarQube Community Build with the community branch plugin analysing every pull request (report mode), the ecosystem's architecture rules as tests, an Error Prone profile in the parent POM (inactive by default), a CycloneDX SBOM per release; the scheduled re-scan of released SBOMs, Error Prone in every repository, image scans and the blocking mode follow in 0.4.1; Persistence 3.2 (Noether, Antoine's project) is planned for 1.0.0, where it is certified, and may be pulled into a 0.4.x release if Noether publishes in time | Q4 2026 |
 | **1.0.0-RC1 — production readiness** | The fixes found by the comparative benchmarks (exceptions thrown on the hot path, generated code left unused such as the static JSON-B generation); fuzzing of every parser exposed to the network; soak and chaos tests; end-to-end benchmarks on a dedicated bench with an external load generator, with a published, reproducible method and a performance regression gate in CI; threat model and internal audit; the static analysis findings fixed on the network-facing bricks; the external audit ordered | Q1 2027 |
 | **1.0.0 — ready for production** | Certified: Core Profile + MicroProfile 7.2 + Persistence 3.2, clean, documented, fast; the other components keep shipping, not certified yet. The fixes of the release candidate and of the external security audit; migration tooling from Spring Boot. The first stable line: the public APIs, configuration keys, extension SPI and Maven plugin goals stay compatible within 1.x | end of S1 2027 |
-| **1.1.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.1, Transactions full TCK and XA, Debugging Support 2.0; CDI 4.1 Full groundwork (Vauban: Full runner, failure map, deployment and archive model) | S2 2027 |
+| **1.1.0 — Web Profile, part 1** | Validation 3.1, Concurrency 3.1, WebSocket 2.2, Security 4.0 + Authentication 3.1 + Authorization 3.0, Transactions full TCK and XA, Debugging Support 2.0; CDI 4.1 Full groundwork (Vauban: Full runner, failure map, deployment and archive model) | S2 2027 |
 | **1.2.0 — Web Profile, part 2** | **CDI 4.1 Full**, Enterprise Beans Lite 4.0 | S1 2028 |
 | **1.3.0 — Web Profile, part 3** | Faces 4.1, written from scratch | S2 2028 |
 | **1.4.0** | Jakarta EE Web Profile 11 certification, after the security audit and the comparative performance tests of the web tier | S2 2028 |
@@ -160,7 +160,7 @@ Additional infrastructure bricks delivered as Vidocq extensions, useful to the e
 | Jakarta Data 1.0 (repositories) | [mansart-jakarta-data](../mansart) | `vidocq-runtime-mansart-data-extension` ✅ |
 | Virtual-thread-native JDBC pool | [mansart-pool](../mansart) | `vidocq-runtime-mansart-pool-extension` ✅ |
 | JTA transactions | [mansart-transactions](../mansart) | `vidocq-runtime-mansart-transactions-extension` ✅ |
-| Jakarta Persistence 3.2 (JPA) | Antoine's project, split out of Mansart | ⏳ planned for 1.0.0 (certified there), and may be pulled into a 0.4.x release if Noether publishes in time; the TCK runs |
+| Jakarta Persistence 3.2 (JPA) | [noether](../noether) (Antoine's project, split out of Mansart) | `vidocq-runtime-noether-persistence-extension` 🟡 on `main` since 2026-11-13, first Noether release pending; planned for 1.0.0 (certified there), and may be pulled into a 0.4.x release if Noether publishes in time; TCK 2131/2135 on the 3.2.1 suite with one fixture backported from upstream (2026-10-22), a local run, not an official result |
 
 ## Jakarta EE Core Profile 11 certification
 
@@ -185,7 +185,7 @@ Planned across 1.1.0, 1.2.0 and 1.3.0, certification for 1.4.0 (see the release 
 Gap analysis, per-spec status, and tracking issues: [`WEB-PROFILE.md`](WEB-PROFILE.md)
 (umbrella issue [vidocq#67](https://codefloe.com/Vidocq/vidocq/issues/67)). The pivotal
 gap is CDI 4.1 **Full** (Vauban implements Lite only), whose Portable Extensions
-sub-problem has a dedicated design doc: [`vauban/CDI-FULL.md`](https://codefloe.com/Vidocq/vauban/CDI-FULL.md)
+sub-problem has a dedicated design doc: [`vauban/CDI-FULL.md`](https://codefloe.com/Vidocq/vauban/src/branch/main/CDI-FULL.md)
 ([vauban#38](https://codefloe.com/Vidocq/vauban/issues/38), [vauban#39](https://codefloe.com/Vidocq/vauban/issues/39)).
 
 ## Reactor modules
