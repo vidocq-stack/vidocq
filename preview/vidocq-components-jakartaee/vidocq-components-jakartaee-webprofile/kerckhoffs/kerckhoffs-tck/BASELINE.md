@@ -3,6 +3,9 @@
 A compatibility **measurement**, not a certification: partial local runs of the official TCK
 sources, never a claim of conformance (AGENTS.md, "TCK").
 
+The figures "on the assembled runtime" come from the runner of the Vidocq repository run locally on 2026-11-17: Vidocq commit `e0d61cdd`
+(Vidocq/vidocq#634, `23331bda` on `main`), Kerckhoffs commit `3fe80a6`.
+
 ## How it is measured
 
 `./run-official-tck-security-4.0.sh [app-*]` (PLAN.md section 7). The TCK is built from its published

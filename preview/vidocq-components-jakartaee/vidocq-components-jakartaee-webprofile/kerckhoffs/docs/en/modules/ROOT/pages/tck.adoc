@@ -6,6 +6,8 @@ Kerckhoffs is measured against the official Jakarta Security 4.0 TCK (`jakartaee
 `4.0.0-RELEASE`). The figures below are a *compatibility measurement*, never a certification: a
 partial or local run does not certify anything.
 
+The runtime column was measured on 2026-11-17, locally, with the runner of the Vidocq repository (`vidocq-runtime-tck-kerckhoffs-security`) on the commit `e0d61cdd` of the pull request that added the REST servlet mode (Vidocq/vidocq#634), which is `23331bda` on `main`; the Kerckhoffs commit was `3fe80a6`.
+
 == How it runs
 
 The TCK is published as sources only. `run-official-tck-security-4.0.sh` downloads the
