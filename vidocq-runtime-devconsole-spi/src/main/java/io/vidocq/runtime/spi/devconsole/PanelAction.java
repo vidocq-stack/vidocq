@@ -82,10 +82,12 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
     public static final int MAX_GROUP = 40;
     /** The longest description. */
     public static final int MAX_DESCRIPTION = 2000;
+    /** The name of the label every record of an action checks. */
+    private static final String LABEL_PARAMETER = "label";
 
     public PanelAction {
         PanelSample.requireKey(id);
-        Objects.requireNonNull(label, "label");
+        Objects.requireNonNull(label, LABEL_PARAMETER);
         if (label.isBlank()) {
             throw new IllegalArgumentException("action '" + id + "' has a blank label");
         }
@@ -183,7 +185,7 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
 
         public Argument {
             PanelSample.requireKey(name);
-            Objects.requireNonNull(label, "label");
+            Objects.requireNonNull(label, LABEL_PARAMETER);
             if (label.isBlank()) {
                 throw new IllegalArgumentException("argument '" + name + "' has a blank label");
             }
@@ -349,7 +351,8 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          * another shape is shown as any other JSON. A column named {@link PanelSample#REPLAY_COLUMN replay} holds
          * replays, as a sample table's does: each is a button, named after its action, that fills that action's form.
          * A body may also carry, between its columns and its rows, {@code "menu": [{"label", "action",
-         * "arguments"}…]}: the entries of a right-click menu on the selected rows (see {@link MenuItem}).
+         * "arguments"}…]}: the entries of a right-click menu on the selected rows, which {@link #rowsWithMenu}
+         * writes (see {@link MenuItem}).
          */
         public static final String ROWS = "application/x-rows+json";
         /** What ends a body or details that was truncated. */
@@ -359,17 +362,17 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          * A graph of nodes and edges, such as the entities of a persistence unit and their relations: the page lays it
          * out as boxes and lines, lists a node's facts beside it on a click, and offers its JSON viewer. The body is
          * {@code {"nodes": [{"id", "label", "kind", "facts": [[name, value]…]}…], "edges": [{"from", "to", "label",
-         * "arrow", "dashed"}…]}}; {@link #graph} writes it. A body of another shape is shown as any other JSON.
+         * "arrow", "dashed"}…]}}; {@link #ofGraph} writes it. A body of another shape is shown as any other JSON.
          */
         public static final String GRAPH = "application/x-graph+json";
 
         /** The most entries of the menu a {@link #ROWS} result offers on its selected rows. */
         public static final int MAX_MENU = 16;
 
-        /** The most nodes a {@link #graph} holds. */
+        /** The most nodes a {@link #ofGraph} holds. */
         public static final int MAX_NODES = 500;
 
-        /** The most edges a {@link #graph} holds. */
+        /** The most edges a {@link #ofGraph} holds. */
         public static final int MAX_EDGES = 2000;
 
         public ActionResult {
@@ -414,7 +417,7 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          */
         public static ActionResult rows(String summary, List<Column> columns, List<? extends List<?>> rows,
                                         boolean more) {
-            return rows(summary, columns, rows, more, List.of());
+            return rowsWithMenu(summary, columns, rows, more, List.of());
         }
 
         /**
@@ -432,8 +435,8 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          * @throws IllegalArgumentException as {@link #rows(String, List, List, boolean)} does, or when there are more
          *                                  than {@value #MAX_MENU} entries
          */
-        public static ActionResult rows(String summary, List<Column> columns, List<? extends List<?>> rows,
-                                        boolean more, List<MenuItem> menu) {
+        public static ActionResult rowsWithMenu(String summary, List<Column> columns, List<? extends List<?>> rows,
+                                                boolean more, List<MenuItem> menu) {
             return new ActionResult(summary, ROWS, RowsBody.write(columns, rows, more, menu), false, null);
         }
 
@@ -451,14 +454,14 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
         }
 
         /**
-         * How many of the leading {@code rows} the body of {@link #rows(String, List, List, boolean, List)} holds
+         * How many of the leading {@code rows} the body of {@link #rowsWithMenu} holds
          * with {@code menu}, which takes room from the rows.
          *
          * @param columns the columns, in order
          * @param rows    the rows, in order
          * @param menu    the menu entries
          * @return how many rows the body holds
-         * @throws IllegalArgumentException as {@link #rows(String, List, List, boolean, List)} does
+         * @throws IllegalArgumentException as {@link #rowsWithMenu} does
          */
         public static int rowsHeld(List<Column> columns, List<? extends List<?>> rows, List<MenuItem> menu) {
             return RowsBody.held(columns, rows, menu);
@@ -484,7 +487,7 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
             public static final int MAX_LABEL = 80;
 
             public MenuItem {
-                Objects.requireNonNull(label, "label");
+                Objects.requireNonNull(label, LABEL_PARAMETER);
                 if (label.isBlank() || label.length() > MAX_LABEL) {
                     throw new IllegalArgumentException("a menu entry's label is not blank and at most " + MAX_LABEL
                             + " characters");
@@ -512,7 +515,7 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          *                                  too many nodes or edges, or the body passes {@value #MAX_CONTENT}
          *                                  characters
          */
-        public static ActionResult graph(String summary, List<Node> nodes, List<Edge> edges) {
+        public static ActionResult ofGraph(String summary, List<Node> nodes, List<Edge> edges) {
             return new ActionResult(summary, GRAPH, GraphBody.write(nodes, edges), false, null);
         }
 
@@ -576,7 +579,7 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
             public Edge {
                 Objects.requireNonNull(from, "from");
                 Objects.requireNonNull(to, "to");
-                Objects.requireNonNull(label, "label");
+                Objects.requireNonNull(label, LABEL_PARAMETER);
                 if (label.length() > Column.MAX_NAME) {
                     throw new IllegalArgumentException("an edge's label is at most " + Column.MAX_NAME
                             + " characters");

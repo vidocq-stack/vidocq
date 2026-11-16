@@ -62,14 +62,15 @@ action's form (Explore to JPQL, the way a replay cell already fills a form)".
 - Create: `vidocq-runtime-devconsole-spi/src/main/java/io/vidocq/runtime/spi/devconsole/GraphBody.java`
 - Create: `vidocq-runtime-devconsole-spi/src/main/java/io/vidocq/runtime/spi/devconsole/JsonText.java`. It holds
   `static void quote(String, StringBuilder)`, moved out of `RowsBody` so that both writers share it.
-- Modify: `PanelAction.java` (`ActionResult`: the `GRAPH` constant, the content type check, `graph(...)`, records
+- Modify: `PanelAction.java` (`ActionResult`: the `GRAPH` constant, the content type check, `ofGraph(...)`, records
   `Node`, `Fact`, `Edge`), `RowsBody.java` (uses `JsonText.quote`)
 - Test: `vidocq-runtime-devconsole-spi/src/test/java/io/vidocq/runtime/spi/devconsole/GraphResultTest.java`
 
 **Interfaces:**
 - Produces:
   - `ActionResult.GRAPH = "application/x-graph+json"`;
-  - `ActionResult.graph(String summary, List<Node> nodes, List<Edge> edges)`;
+  - `ActionResult.ofGraph(String summary, List<Node> nodes, List<Edge> edges)` (not `graph`: SonarQube S1845
+    refuses a method named like the `GRAPH` constant);
   - `record Node(String id, String label, String kind, List<Fact> facts)`, with `kind` possibly empty;
   - `record Fact(String name, String value)`;
   - `record Edge(String from, String to, String label, boolean arrow, boolean dashed)`, with `label` possibly empty;
@@ -92,7 +93,8 @@ action's form (Explore to JPQL, the way a replay cell already fills a form)".
 **Files:**
 - Modify: `PanelAction.java`:
   - `record MenuItem(String label, String action, String arguments)`;
-  - the overloads `rows(summary, columns, rows, more, List<MenuItem> menu)` and
+  - `rowsWithMenu(summary, columns, rows, more, List<MenuItem> menu)` (not a `rows` overload, for S1845) and the
+    overload
     `rowsHeld(columns, rows, List<MenuItem> menu)`;
   - the four-argument forms delegate with `List.of()`.
 - Modify: `RowsBody.java`. It writes `"menu":[{"label","action","arguments":<the object as given>}…]` between
@@ -222,7 +224,7 @@ action's form (Explore to JPQL, the way a replay cell already fills a form)".
 
 **Files:**
 - Modify: `docs/en/modules/ROOT/pages/dev-console-panels.adoc`, with `[#graph-result]` and `[#row-menu]` after
-  `#action-result`. Each gets a short Java example (`ActionResult.graph`, then `rows(..., menu)` with
+  `#action-result`. Each gets a short Java example (`ActionResult.ofGraph`, then `rowsWithMenu(..., menu)` with
   `"DELETE FROM Note e WHERE e.id IN (${id})"`), and its limits.
 - Modify: `whats-new.adoc`, two entries under *Dev console*.
 

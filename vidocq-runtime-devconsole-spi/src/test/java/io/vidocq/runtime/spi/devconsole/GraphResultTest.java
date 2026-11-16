@@ -41,7 +41,7 @@ class GraphResultTest {
 
     @Test
     void aGraphWritesItsNodesAndEdgesInOrder() {
-        ActionResult result = ActionResult.graph("2 entities", List.of(NOTE, AUTHOR),
+        ActionResult result = ActionResult.ofGraph("2 entities", List.of(NOTE, AUTHOR),
                 List.of(new Edge("Note", "Author", "author *..1", true, false)));
 
         assertEquals("{\"nodes\":[{\"id\":\"Note\",\"label\":\"Note\",\"kind\":\"entity\",\"facts\":[[\"table\","
@@ -54,32 +54,40 @@ class GraphResultTest {
     @Test
     void theContentTypeIsGraph() {
         assertEquals("application/x-graph+json", ActionResult.GRAPH);
-        assertEquals(ActionResult.GRAPH, ActionResult.graph(null, List.of(AUTHOR), List.of()).contentType());
+        assertEquals(ActionResult.GRAPH, ActionResult.ofGraph(null, List.of(AUTHOR), List.of()).contentType());
         assertEquals(ActionResult.GRAPH, new ActionResult("ok", ActionResult.GRAPH, "{}", false, null).contentType(),
                 "a graph is one of the content types a result takes");
     }
 
     @Test
     void anEdgeToAnUnknownNodeIsRefused() {
+        List<Node> nodes = List.of(NOTE);
+        List<Edge> edges = List.of(new Edge("Note", "Author", "", true, false));
+
         IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-                () -> ActionResult.graph(null, List.of(NOTE), List.of(new Edge("Note", "Author", "", true, false))));
+                () -> ActionResult.ofGraph(null, nodes, edges));
 
         assertTrue(refused.getMessage().contains("Author"), refused.getMessage());
     }
 
     @Test
     void aNodeIdSeenTwiceIsRefused() {
-        assertThrows(IllegalArgumentException.class, () -> ActionResult.graph(null, List.of(NOTE, NOTE), List.of()));
+        List<Node> twice = List.of(NOTE, NOTE);
+        List<Edge> none = List.of();
+
+        assertThrows(IllegalArgumentException.class, () -> ActionResult.ofGraph(null, twice, none));
     }
 
     @Test
     void pastFiveHundredNodesIsRefused() {
         List<Node> nodes = IntStream.rangeClosed(0, ActionResult.MAX_NODES)
                 .mapToObj(i -> new Node("n" + i, "n" + i, "", List.of())).toList();
+        List<Edge> none = List.of();
 
         assertEquals(500, ActionResult.MAX_NODES);
-        assertThrows(IllegalArgumentException.class, () -> ActionResult.graph(null, nodes, List.of()));
-        ActionResult.graph(null, nodes.subList(0, ActionResult.MAX_NODES), List.of());
+        assertThrows(IllegalArgumentException.class, () -> ActionResult.ofGraph(null, nodes, none));
+        assertEquals(ActionResult.GRAPH,
+                ActionResult.ofGraph(null, nodes.subList(0, ActionResult.MAX_NODES), none).contentType());
     }
 
     @Test
@@ -87,8 +95,10 @@ class GraphResultTest {
         List<Edge> edges = IntStream.rangeClosed(0, ActionResult.MAX_EDGES)
                 .mapToObj(i -> new Edge("Note", "Author", "", false, false)).toList();
 
+        List<Node> nodes = List.of(NOTE, AUTHOR);
+
         assertEquals(2000, ActionResult.MAX_EDGES);
-        assertThrows(IllegalArgumentException.class, () -> ActionResult.graph(null, List.of(NOTE, AUTHOR), edges));
+        assertThrows(IllegalArgumentException.class, () -> ActionResult.ofGraph(null, nodes, edges));
     }
 
     @Test
@@ -96,20 +106,25 @@ class GraphResultTest {
         Fact big = new Fact("comment", "x".repeat(PanelAction.MAX_DESCRIPTION));
         List<Node> nodes = IntStream.range(0, 140)
                 .mapToObj(i -> new Node("n" + i, "n" + i, "", List.of(big))).toList();
+        List<Edge> none = List.of();
 
         IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-                () -> ActionResult.graph(null, nodes, List.of()));
+                () -> ActionResult.ofGraph(null, nodes, none));
         assertTrue(refused.getMessage().contains(String.valueOf(ActionResult.MAX_CONTENT)), refused.getMessage());
     }
 
     @Test
     void aBlankIdOrLabelIsRefused() {
-        assertThrows(IllegalArgumentException.class, () -> new Node(" ", "Note", "", List.of()));
-        assertThrows(IllegalArgumentException.class, () -> new Node("Note", "", "", List.of()));
-        assertThrows(IllegalArgumentException.class, () -> new Node("Note", "Note", "k".repeat(41), List.of()));
+        List<Fact> none = List.of();
+        String longKind = "k".repeat(41);
+        String longValue = "x".repeat(PanelAction.MAX_DESCRIPTION + 1);
+        String longLabel = "l".repeat(201);
+
+        assertThrows(IllegalArgumentException.class, () -> new Node(" ", "Note", "", none));
+        assertThrows(IllegalArgumentException.class, () -> new Node("Note", "", "", none));
+        assertThrows(IllegalArgumentException.class, () -> new Node("Note", "Note", longKind, none));
         assertThrows(IllegalArgumentException.class, () -> new Fact("", "NOTE"));
-        assertThrows(IllegalArgumentException.class,
-                () -> new Fact("table", "x".repeat(PanelAction.MAX_DESCRIPTION + 1)));
-        assertThrows(IllegalArgumentException.class, () -> new Edge("Note", "Author", "l".repeat(201), true, false));
+        assertThrows(IllegalArgumentException.class, () -> new Fact("table", longValue));
+        assertThrows(IllegalArgumentException.class, () -> new Edge("Note", "Author", longLabel, true, false));
     }
 }

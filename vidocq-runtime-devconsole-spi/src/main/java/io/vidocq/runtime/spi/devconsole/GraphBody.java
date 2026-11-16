@@ -52,39 +52,15 @@ final class GraphBody {
             if (!ids.add(node.id())) {
                 throw new IllegalArgumentException("node '" + node.id() + "' is in the graph twice");
             }
-            out.append(i == 0 ? "{\"id\":" : ",{\"id\":");
-            JsonText.quote(node.id(), out);
-            out.append(",\"label\":");
-            JsonText.quote(node.label(), out);
-            out.append(",\"kind\":");
-            JsonText.quote(node.kind(), out);
-            out.append(",\"facts\":[");
-            for (int f = 0; f < node.facts().size(); f++) {
-                Fact fact = node.facts().get(f);
-                out.append(f == 0 ? "[" : ",[");
-                JsonText.quote(fact.name(), out);
-                out.append(',');
-                JsonText.quote(fact.value(), out);
-                out.append(']');
-            }
-            out.append("]}");
+            out.append(i == 0 ? "" : ",");
+            writeNode(node, out);
         }
         out.append("],\"edges\":[");
         for (int i = 0; i < edges.size(); i++) {
             Edge edge = Objects.requireNonNull(edges.get(i), "edge");
-            for (String end : List.of(edge.from(), edge.to())) {
-                if (!ids.contains(end)) {
-                    throw new IllegalArgumentException("edge " + edge.from() + " -> " + edge.to() + " names node '"
-                            + end + "', which is not in the graph");
-                }
-            }
-            out.append(i == 0 ? "{\"from\":" : ",{\"from\":");
-            JsonText.quote(edge.from(), out);
-            out.append(",\"to\":");
-            JsonText.quote(edge.to(), out);
-            out.append(",\"label\":");
-            JsonText.quote(edge.label(), out);
-            out.append(",\"arrow\":").append(edge.arrow()).append(",\"dashed\":").append(edge.dashed()).append('}');
+            requireEnds(edge, ids);
+            out.append(i == 0 ? "" : ",");
+            writeEdge(edge, out);
         }
         out.append("]}");
         if (out.length() > ActionResult.MAX_CONTENT) {
@@ -92,5 +68,44 @@ final class GraphBody {
                     + out.length());
         }
         return out.toString();
+    }
+
+    private static void writeNode(Node node, StringBuilder out) {
+        out.append("{\"id\":");
+        JsonText.quote(node.id(), out);
+        out.append(",\"label\":");
+        JsonText.quote(node.label(), out);
+        out.append(",\"kind\":");
+        JsonText.quote(node.kind(), out);
+        out.append(",\"facts\":[");
+        for (int f = 0; f < node.facts().size(); f++) {
+            Fact fact = node.facts().get(f);
+            out.append(f == 0 ? "[" : ",[");
+            JsonText.quote(fact.name(), out);
+            out.append(',');
+            JsonText.quote(fact.value(), out);
+            out.append(']');
+        }
+        out.append("]}");
+    }
+
+    /** Refuses an edge that names a node the graph does not have. */
+    private static void requireEnds(Edge edge, Set<String> ids) {
+        for (String end : List.of(edge.from(), edge.to())) {
+            if (!ids.contains(end)) {
+                throw new IllegalArgumentException("edge " + edge.from() + " -> " + edge.to() + " names node '"
+                        + end + "', which is not in the graph");
+            }
+        }
+    }
+
+    private static void writeEdge(Edge edge, StringBuilder out) {
+        out.append("{\"from\":");
+        JsonText.quote(edge.from(), out);
+        out.append(",\"to\":");
+        JsonText.quote(edge.to(), out);
+        out.append(",\"label\":");
+        JsonText.quote(edge.label(), out);
+        out.append(",\"arrow\":").append(edge.arrow()).append(",\"dashed\":").append(edge.dashed()).append('}');
     }
 }

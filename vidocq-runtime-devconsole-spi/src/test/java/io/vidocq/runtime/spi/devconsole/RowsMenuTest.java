@@ -42,7 +42,7 @@ class RowsMenuTest {
 
     @Test
     void aMenuIsWrittenBetweenColumnsAndRows() {
-        ActionResult result = ActionResult.rows("2 rows", COLUMNS, ROWS, false, List.of(DELETE));
+        ActionResult result = ActionResult.rowsWithMenu("2 rows", COLUMNS, ROWS, false, List.of(DELETE));
 
         assertEquals("{\"columns\":[{\"name\":\"id\",\"type\":\"BIGINT\"},{\"name\":\"title\",\"type\":\"\"}],"
                 + "\"menu\":[{\"label\":\"Delete these rows\",\"action\":\"jpql\",\"arguments\":{\"request\":"
@@ -54,14 +54,16 @@ class RowsMenuTest {
     @Test
     void noMenuWritesTheBodyOfToday() {
         assertEquals(ActionResult.rows("2 rows", COLUMNS, ROWS, true).body(),
-                ActionResult.rows("2 rows", COLUMNS, ROWS, true, List.of()).body());
+                ActionResult.rowsWithMenu("2 rows", COLUMNS, ROWS, true, List.of()).body());
     }
 
     @Test
     void anEntryWhoseActionBreaksTheKeyRuleIsRefused() {
         assertThrows(IllegalArgumentException.class, () -> new MenuItem("Delete", "Run JPQL", "{}"));
         assertThrows(IllegalArgumentException.class, () -> new MenuItem(" ", "jpql", "{}"));
-        assertThrows(IllegalArgumentException.class, () -> new MenuItem("d".repeat(81), "jpql", "{}"));
+        String longLabel = "d".repeat(81);
+
+        assertThrows(IllegalArgumentException.class, () -> new MenuItem(longLabel, "jpql", "{}"));
     }
 
     @Test
@@ -86,7 +88,7 @@ class RowsMenuTest {
                 .mapToObj(i -> new MenuItem("Entry " + i, "jpql", "{}")).toList();
 
         assertEquals(16, ActionResult.MAX_MENU);
-        assertThrows(IllegalArgumentException.class, () -> ActionResult.rows(null, COLUMNS, ROWS, false, menu));
+        assertThrows(IllegalArgumentException.class, () -> ActionResult.rowsWithMenu(null, COLUMNS, ROWS, false, menu));
     }
 
     @Test
@@ -101,7 +103,7 @@ class RowsMenuTest {
         int without = ActionResult.rowsHeld(COLUMNS, rows);
         int with = ActionResult.rowsHeld(COLUMNS, rows, menu);
         assertTrue(with < without, with + " rows with the menu, " + without + " without");
-        String body = ActionResult.rows(null, COLUMNS, rows, false, menu).body();
+        String body = ActionResult.rowsWithMenu(null, COLUMNS, rows, false, menu).body();
         assertTrue(body.length() <= ActionResult.MAX_CONTENT && body.endsWith("],\"more\":true}"), "never cut");
     }
 }

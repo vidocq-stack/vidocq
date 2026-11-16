@@ -555,7 +555,7 @@ starts each row with a box to tick:
   it, as after a replay.
 * *What is kept.* The ticked rows stay ticked while the page polls, and a new result starts with none.
 
-A panel writes the menu with `ActionResult.rows(summary, columns, rows, more, menu)`:
+A panel writes the menu with `ActionResult.rowsWithMenu(summary, columns, rows, more, menu)`:
 xref:dev-console-panels.adoc#row-menu[A menu on the selected rows].
 
 [#graph-view]
@@ -576,7 +576,7 @@ boxes and lines:
   <<json-viewer,JSON viewer>>.
 * *What is kept.* The view and the chosen box stay while the page polls.
 
-A panel answers a graph with `ActionResult.graph(summary, nodes, edges)`:
+A panel answers a graph with `ActionResult.ofGraph(summary, nodes, edges)`:
 xref:dev-console-panels.adoc#graph-result[A graph result].
 
 [#json-editor]
