@@ -47,7 +47,11 @@ class AppLayerDevIT {
             Fixture.awaitLog(mvn, log, FOUND);
             Fixture.awaitLog(mvn, log, "SQL-OK");
             Path probe = project.resolve("app/src/main/java/acme/app/Probe.java");
-            Files.writeString(probe, Files.readString(probe) + "\n// changed by AppLayerDevIT\n");
+            // A comment alone compiles to the same class and reloads nothing: a new method swaps the layer.
+            String source = Files.readString(probe);
+            Files.writeString(probe, source.substring(0, source.lastIndexOf('}'))
+                    + "    void changedByAppLayerDevIT() {\n    }\n}\n");
+            Fixture.awaitLog(mvn, log, "layer swap: Probe gained a method changedByAppLayerDevIT");
             Fixture.awaitLog(mvn, log, "acme-pages-poller");
             long deadline = System.currentTimeMillis() + Fixture.TIMEOUT.toMillis();
             while (Fixture.occurrences(log, FOUND) < 2) {
