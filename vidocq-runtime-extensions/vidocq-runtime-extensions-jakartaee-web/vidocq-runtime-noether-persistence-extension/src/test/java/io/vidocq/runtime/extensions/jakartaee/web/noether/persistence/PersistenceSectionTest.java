@@ -70,9 +70,9 @@ class PersistenceSectionTest {
         PersistenceSection.write(List.of(ARCHIVE, LEDGER), LaunchMode.DEV, Verbosity.SUMMARY, section);
 
         assertEquals(Map.of(
-                "unit archive", "JTA on pool archive, schema action create, 3 entities, 1 embeddable, 2 named queries,"
+                "archive", "JTA on pool archive, schema action create, 3 entities, 1 embeddable, 2 named queries,"
                         + " 4 indexes",
-                "unit ledger", "RESOURCE_LOCAL on the default pool, schema action none, 1 entity, 0 embeddables,"
+                "ledger", "RESOURCE_LOCAL on the default pool, schema action none, 1 entity, 0 embeddables,"
                         + " 1 named query, 1 index"), section.rows);
     }
 

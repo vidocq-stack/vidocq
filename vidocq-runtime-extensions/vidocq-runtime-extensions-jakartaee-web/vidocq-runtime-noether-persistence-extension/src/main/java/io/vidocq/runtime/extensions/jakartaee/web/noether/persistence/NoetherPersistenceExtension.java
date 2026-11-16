@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.jakartaee.web.noether.persistence;
 
 import io.vidocq.noether.jpa.core.spi.PersistenceDescriptors;
 import io.vidocq.noether.jpa.core.spi.UnitDescription;
+import io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.live.NoetherPersistenceLive;
 import io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.units.VidocqPersistenceUnits;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
@@ -93,6 +94,7 @@ public final class NoetherPersistenceExtension implements VidocqExtension, Start
 
     @Override
     public void onStop() {
+        NoetherPersistenceLive.clear();
         VidocqPersistenceUnits.stop();
     }
 
@@ -113,10 +115,15 @@ public final class NoetherPersistenceExtension implements VidocqExtension, Start
             units.putIfAbsent(factory.getName(), factory);
         }
         List<UnitFacts> facts = new ArrayList<>();
+        List<NoetherPersistenceLive.Unit> live = new ArrayList<>();
         ClassLoader loader = VidocqPersistenceUnitBootstrap.loader();
-        units.forEach((name, factory) -> PersistenceDescriptors.transactions(name, loader).ifPresent(declared ->
-                facts.add(UnitFacts.of(factory.unwrap(UnitDescription.class), declared, factory.getProperties()))));
+        units.forEach((name, factory) -> PersistenceDescriptors.transactions(name, loader).ifPresent(declared -> {
+            UnitFacts unit = UnitFacts.of(factory.unwrap(UnitDescription.class), declared, factory.getProperties());
+            facts.add(unit);
+            live.add(new NoetherPersistenceLive.Unit(name, unit.jta(), unit.pool(), unit.schemaAction(), factory));
+        }));
         started.set(List.copyOf(facts));
+        NoetherPersistenceLive.publish(live);
         if (units.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "Noether Persistence: no persistence unit is injected");
         } else {

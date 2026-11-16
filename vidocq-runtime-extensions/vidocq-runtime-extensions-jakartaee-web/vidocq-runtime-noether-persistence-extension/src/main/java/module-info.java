@@ -37,6 +37,10 @@ module io.vidocq.runtime.extensions.jakartaee.web.noether.persistence {
     requires jakarta.transaction;
     requires java.sql;
 
+    // The units of the boot, for the dev console panel of vidocq-runtime-noether-persistence-extension-dev alone.
+    exports io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.live
+            to io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.dev;
+
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.NoetherPersistenceExtension;
 

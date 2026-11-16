@@ -44,7 +44,7 @@ final class PersistenceSection {
             return;
         }
         for (UnitFacts unit : units) {
-            section.row("unit " + unit.name(), (unit.jta() ? "JTA" : "RESOURCE_LOCAL")
+            section.row(unit.name(), (unit.jta() ? "JTA" : "RESOURCE_LOCAL")
                     + (unit.pool() == null ? " on the default pool" : " on pool " + unit.pool())
                     + ", schema action " + unit.schemaAction()
                     + ", " + count(unit.entities(), "entity", "entities")
