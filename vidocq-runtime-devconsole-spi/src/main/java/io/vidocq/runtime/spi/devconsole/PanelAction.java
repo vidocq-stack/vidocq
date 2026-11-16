@@ -348,6 +348,8 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          * per column, a value {@code null}, a boolean, a number or a string; {@link #rows} writes it. A body of
          * another shape is shown as any other JSON. A column named {@link PanelSample#REPLAY_COLUMN replay} holds
          * replays, as a sample table's does: each is a button, named after its action, that fills that action's form.
+         * A body may also carry, between its columns and its rows, {@code "menu": [{"label", "action",
+         * "arguments"}…]}: the entries of a right-click menu on the selected rows (see {@link MenuItem}).
          */
         public static final String ROWS = "application/x-rows+json";
         /** What ends a body or details that was truncated. */
@@ -360,6 +362,9 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          * "arrow", "dashed"}…]}}; {@link #graph} writes it. A body of another shape is shown as any other JSON.
          */
         public static final String GRAPH = "application/x-graph+json";
+
+        /** The most entries of the menu a {@link #ROWS} result offers on its selected rows. */
+        public static final int MAX_MENU = 16;
 
         /** The most nodes a {@link #graph} holds. */
         public static final int MAX_NODES = 500;
@@ -409,7 +414,27 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          */
         public static ActionResult rows(String summary, List<Column> columns, List<? extends List<?>> rows,
                                         boolean more) {
-            return new ActionResult(summary, ROWS, RowsBody.write(columns, rows, more), false, null);
+            return rows(summary, columns, rows, more, List.of());
+        }
+
+        /**
+         * A {@link #ROWS} result whose table offers {@code menu} on its selected rows: the page adds a box to tick on
+         * each row, and a right-click menu whose entries fill another action's form, as a replay does. Nothing is
+         * sent: the user still submits.
+         *
+         * @param summary the line, or {@code null} for {@code done}
+         * @param columns the columns, in order
+         * @param rows    the rows, in order, as {@link #rows(String, List, List, boolean)} takes them
+         * @param more    whether there are rows past those given
+         * @param menu    the entries, at most {@value #MAX_MENU}, in order; empty for none, which writes the body of
+         *                {@link #rows(String, List, List, boolean)}
+         * @return the result
+         * @throws IllegalArgumentException as {@link #rows(String, List, List, boolean)} does, or when there are more
+         *                                  than {@value #MAX_MENU} entries
+         */
+        public static ActionResult rows(String summary, List<Column> columns, List<? extends List<?>> rows,
+                                        boolean more, List<MenuItem> menu) {
+            return new ActionResult(summary, ROWS, RowsBody.write(columns, rows, more, menu), false, null);
         }
 
         /**
@@ -422,7 +447,56 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          * @throws IllegalArgumentException as {@link #rows} does
          */
         public static int rowsHeld(List<Column> columns, List<? extends List<?>> rows) {
-            return RowsBody.held(columns, rows);
+            return rowsHeld(columns, rows, List.of());
+        }
+
+        /**
+         * How many of the leading {@code rows} the body of {@link #rows(String, List, List, boolean, List)} holds
+         * with {@code menu}, which takes room from the rows.
+         *
+         * @param columns the columns, in order
+         * @param rows    the rows, in order
+         * @param menu    the menu entries
+         * @return how many rows the body holds
+         * @throws IllegalArgumentException as {@link #rows(String, List, List, boolean, List)} does
+         */
+        public static int rowsHeld(List<Column> columns, List<? extends List<?>> rows, List<MenuItem> menu) {
+            return RowsBody.held(columns, rows, menu);
+        }
+
+        /**
+         * An entry of the menu a {@link #ROWS} result offers on its selected rows, such as <i>Delete these rows</i>.
+         * Clicking it fills the form of {@code action} with {@code arguments}, where each {@code ${name}} inside one
+         * of their strings, {@code name} a column of the result, becomes the selected rows' values of that column,
+         * written as query literals ({@code 'it''s'}, {@code 42}, {@code TRUE}, {@code NULL}) and joined with
+         * {@code ", "}: {@code "DELETE FROM Note e WHERE e.id IN (${id})"} becomes
+         * {@code "DELETE FROM Note e WHERE e.id IN (1, 3)"}. The page sends nothing: the user reviews and submits.
+         *
+         * @param label     what the menu shows, not blank, at most {@value #MAX_LABEL} characters
+         * @param action    the id of an action of the same panel, by the key rule; the page leaves out an entry whose
+         *                  action the panel does not have
+         * @param arguments a JSON object of that action's arguments by name, as a replay cell carries them, at most
+         *                  {@value PanelSample#MAX_REPLAY_CELL} characters
+         */
+        public record MenuItem(String label, String action, String arguments) {
+
+            /** The longest label of an entry. */
+            public static final int MAX_LABEL = 80;
+
+            public MenuItem {
+                Objects.requireNonNull(label, "label");
+                if (label.isBlank() || label.length() > MAX_LABEL) {
+                    throw new IllegalArgumentException("a menu entry's label is not blank and at most " + MAX_LABEL
+                            + " characters");
+                }
+                PanelSample.requireKey(action);
+                Objects.requireNonNull(arguments, "arguments");
+                if (arguments.length() > PanelSample.MAX_REPLAY_CELL
+                        || !JsonCheck.isObject(arguments, Argument.MAX_JSON_DEPTH)) {
+                    throw new IllegalArgumentException("the arguments of menu entry '" + label + "' are not one JSON "
+                            + "object of at most " + PanelSample.MAX_REPLAY_CELL + " characters");
+                }
+            }
         }
 
         /**

@@ -21,6 +21,7 @@ package io.vidocq.runtime.spi.devconsole;
 
 import io.vidocq.runtime.spi.devconsole.PanelAction.ActionResult;
 import io.vidocq.runtime.spi.devconsole.PanelAction.ActionResult.Column;
+import io.vidocq.runtime.spi.devconsole.PanelAction.ActionResult.MenuItem;
 
 import java.util.List;
 import java.util.Objects;
@@ -42,21 +43,27 @@ final class RowsBody {
 
     private RowsBody() {}
 
-    static String write(List<Column> columns, List<? extends List<?>> rows, boolean more) {
-        return build(columns, rows, more).body();
+    static String write(List<Column> columns, List<? extends List<?>> rows, boolean more, List<MenuItem> menu) {
+        return build(columns, rows, more, menu).body();
     }
 
     /** How many leading rows {@link #write} keeps: all of them unless the body would pass the limit. */
-    static int held(List<Column> columns, List<? extends List<?>> rows) {
-        return build(columns, rows, false).kept();
+    static int held(List<Column> columns, List<? extends List<?>> rows, List<MenuItem> menu) {
+        return build(columns, rows, false, menu).kept();
     }
 
     /** A body and how many of the rows given it holds. */
     private record Built(String body, int kept) {}
 
-    private static Built build(List<Column> columns, List<? extends List<?>> rows, boolean more) {
+    private static Built build(List<Column> columns, List<? extends List<?>> rows, boolean more,
+                               List<MenuItem> menu) {
         Objects.requireNonNull(columns, "columns");
         Objects.requireNonNull(rows, "rows");
+        Objects.requireNonNull(menu, "menu");
+        if (menu.size() > ActionResult.MAX_MENU) {
+            throw new IllegalArgumentException("a rows result offers at most " + ActionResult.MAX_MENU
+                    + " menu entries");
+        }
         int width = columns.size();
         for (int r = 0; r < rows.size(); r++) {
             int values = Objects.requireNonNull(rows.get(r), "row").size();
@@ -66,8 +73,10 @@ final class RowsBody {
             }
         }
         StringBuilder out = columns(columns);
+        menu(menu, out);
+        out.append(",\"rows\":[");
         if (out.length() + MORE.length() > ActionResult.MAX_CONTENT) {
-            throw new IllegalArgumentException("the columns of a result pass " + ActionResult.MAX_CONTENT
+            throw new IllegalArgumentException("the columns and menu of a result pass " + ActionResult.MAX_CONTENT
                     + " characters");
         }
         boolean cut = false;
@@ -86,7 +95,7 @@ final class RowsBody {
         return new Built(out.append(cut || more ? MORE : ALL).toString(), kept);
     }
 
-    /** The body up to the opening of its rows: the columns, each with its name and type. */
+    /** The body up to its columns, each with its name and type. */
     private static StringBuilder columns(List<Column> columns) {
         StringBuilder out = new StringBuilder("{\"columns\":[");
         for (int i = 0; i < columns.size(); i++) {
@@ -97,7 +106,27 @@ final class RowsBody {
             JsonText.quote(column.type(), out);
             out.append('}');
         }
-        return out.append("],\"rows\":[");
+        return out.append(']');
+    }
+
+    /**
+     * Appends the menu, when it has an entry: each entry's arguments as given, a JSON object its record checked, so
+     * that a body without a menu is the same as before menus.
+     */
+    private static void menu(List<MenuItem> menu, StringBuilder out) {
+        if (menu.isEmpty()) {
+            return;
+        }
+        out.append(",\"menu\":[");
+        for (int i = 0; i < menu.size(); i++) {
+            MenuItem item = Objects.requireNonNull(menu.get(i), "menu item");
+            out.append(i == 0 ? "{\"label\":" : ",{\"label\":");
+            JsonText.quote(item.label(), out);
+            out.append(",\"action\":");
+            JsonText.quote(item.action(), out);
+            out.append(",\"arguments\":").append(item.arguments()).append('}');
+        }
+        out.append(']');
     }
 
     /** Appends the values of one row, as a JSON array, to {@code row}. */
