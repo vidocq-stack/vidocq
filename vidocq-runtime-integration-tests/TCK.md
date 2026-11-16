@@ -230,11 +230,11 @@ of Kerckhoffs (`kerckhoffs-tck/BASELINE.md`).
 | `app-custom-authentication-mechanism-handler` | 4/4 |
 | `app-custom-authentication-mechanism-handler2` | 3/3 |
 | `app-custom-rememberme` | 25/25 |
+| `app-mem-policy` | 4/4 |
+| `app-mem-policy2` | 5/5 |
 | `app-mem-form` | `AppMemFormIT` 4/4; `AppMemFormImmediateIT` refused (`@LoginToContinue` expressions) |
 | `app-mem-basic-decorate` | 1/2 (a CDI decorator on the mechanism) |
 | `app-jaxrs` | 4/8 (the caller is not authenticated in the REST endpoints; no cause established yet) |
-| `app-mem-policy` | 4/4 |
-| `app-mem-policy2` | 5/5 |
 | `app-securitycontext` | deployment refused (an EJB) |
 
 The default set is the twelve first lines, 73 tests; the first seven applications give the same counts as on the
