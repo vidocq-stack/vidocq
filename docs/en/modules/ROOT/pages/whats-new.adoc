@@ -67,6 +67,7 @@ New in the `{project-version}` development line — everything listed here lande
 
 == Dev console
 
+* xref:dev-console-panels.adoc#action-result[A SQL result] [.tag-new]#NEW# — an action can answer `ActionResult.SQL`, `application/sql`: the page shows the script as text with a *Download* button, which saves it as a `.sql` file without a request.
 * xref:dev-console.adoc#graph-view[A graph result] [.tag-new]#NEW# — an action can answer `ActionResult.ofGraph(summary, nodes, edges)`, which the page lays out as boxes and lines, with a parent above its subclass and a box's facts listed on a click.
 * xref:dev-console.adoc#rows-menu[A menu on the selected rows] [.tag-new]#NEW# — a result of rows can offer entries that fill another action's form with the ticked rows' values, such as `DELETE FROM Note e WHERE e.id IN (1, 3)`. A right-click opens them at the pointer, and nothing is sent until you submit.
 * xref:dev-console-panels.adoc#selector[One choice above a panel's sub-tabs] [.tag-new]#NEW# — a panel that writes one group per item, such as a persistence unit, can return a `PanelSelector` from `selector()`. The page then draws a dropdown of the groups above the panel's sub-tabs, shows the chosen group alone in *Monitoring*, and sends the choice to every action that declares the selector's argument, in place of a form field.

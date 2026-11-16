@@ -592,7 +592,9 @@ The 7-argument constructor, `PanelAction(id, label, confirmation, arguments, cal
   `application/json`, the page showing JSON in its xref:dev-console.adoc#json-viewer[JSON viewer], or
   `ActionResult.CSV`, `text/csv`, which the page shows as text with a *Download* button: the body
   saved by the browser as `<action id>-<yyyyMMdd-HHmmss>.csv` (the id's characters outside `[A-Za-z0-9._-]` replaced
-  by `-`), without a request. The Mansart Data panel's *Export CSV* answers so.
+  by `-`), without a request. The Mansart Data panel's *Export CSV* answers so. `ActionResult.SQL`,
+  `application/sql` [.tag-new]#NEW#, is a script shown the same way and saved as `<action id>-<yyyyMMdd-HHmmss>.sql`,
+  such as the DDL of the Noether Persistence panel.
 * `error` is `true` when the call went through but its outcome is an error of the action's target, such as a tool
   returning `isError`; it is distinct from an exception `call` throws, which stays the usual `500` with the
   exception's simple class name, never its message.

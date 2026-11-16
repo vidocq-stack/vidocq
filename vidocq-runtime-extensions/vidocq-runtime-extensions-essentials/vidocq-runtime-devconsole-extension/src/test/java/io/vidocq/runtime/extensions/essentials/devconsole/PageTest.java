@@ -498,19 +498,19 @@ class PageTest {
     }
 
     @Test
-    void aCsvResultIsTextWithADownloadThatSendsNoRequest() {
+    void aCsvOrSqlResultIsTextWithADownloadThatSendsNoRequest() {
         String script = file("console.js");
 
-        assertTrue(script.contains(
-                "const isCsvType = (type) => typeof type === \"string\" && type.startsWith(\"text/csv\");"),
-                "PanelAction.ActionResult.CSV");
+        assertTrue(script.contains("import { downloadOf, downloadName } from \"./editor.js\";"),
+                "which types download, and the file's name, come from the pure half");
+        assertTrue(script.contains("const download = downloadOf(answer.contentType);"),
+                "PanelAction.ActionResult.CSV and SQL");
         assertTrue(script.contains("return { view: el(\"pre\", \"result-body\", answer.body), "
-                + "tools: downloadTools(answer.body, actionId) };"), "shown as text, with Download");
-        assertTrue(script.contains("new Blob([text], { type: \"text/csv;charset=utf-8\" })"),
+                + "tools: downloadTools(answer.body, actionId, download) };"), "shown as text, with Download");
+        assertTrue(script.contains("new Blob([text], { type: download.blob })"),
                 "saved as the browser holds it, in UTF-8");
-        assertTrue(script.contains("String(actionId).replace(/[^A-Za-z0-9._-]/g, \"-\")"),
-                "the action id, kept to the characters of a file name");
-        assertTrue(script.contains("+ \"-\" + stamp + \".csv\""), "<action id>-<yyyyMMdd-HHmmss>.csv");
+        assertTrue(script.contains("link.download = downloadName(actionId, new Date(), download);"),
+                "<action id>-<yyyyMMdd-HHmmss>.<csv or sql>");
         assertTrue(script.contains("URL.revokeObjectURL(url)"), "the Blob is released");
         String download = script.substring(script.indexOf("function downloadTools("),
                 script.indexOf("function answerBody("));

@@ -65,8 +65,19 @@ class ActionResultTest {
         assertEquals("a,b\r\n1,2\r\n", csv.body());
         IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
                 () -> new ActionResult("ok", "text/csv;charset=utf-8", "a", false, null));
-        assertEquals("a result's content type is text/plain, application/json, text/csv, application/x-rows+json or "
-                + "application/x-graph+json", refused.getMessage());
+        assertEquals("a result's content type is text/plain, application/json, text/csv, application/x-rows+json, "
+                + "application/x-graph+json or application/sql", refused.getMessage());
+    }
+
+    @Test
+    void aBodyMayBeSqlWhichThePageOffersToDownload() {
+        assertEquals("application/sql", ActionResult.SQL);
+
+        ActionResult sql = new ActionResult("2 statements", ActionResult.SQL, "CREATE TABLE NOTE (ID BIGINT);\n", false,
+                null);
+
+        assertEquals("application/sql", sql.contentType());
+        assertEquals("CREATE TABLE NOTE (ID BIGINT);\n", sql.body());
     }
 
     @Test

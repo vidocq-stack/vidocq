@@ -365,6 +365,11 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          * "arrow", "dashed"}…]}}; {@link #ofGraph} writes it. A body of another shape is shown as any other JSON.
          */
         public static final String GRAPH = "application/x-graph+json";
+        /**
+         * A SQL script, such as the DDL a schema generation would run: the page shows it as text with a Download
+         * button that saves it in the browser as {@code <action id>-<yyyyMMdd-HHmmss>.sql}, without a request.
+         */
+        public static final String SQL = "application/sql";
 
         /** The most entries of the menu a {@link #ROWS} result offers on its selected rows. */
         public static final int MAX_MENU = 16;
@@ -378,9 +383,10 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
         public ActionResult {
             summary = summary == null ? "done" : cut(summary);
             if (contentType != null && !TEXT.equals(contentType) && !JSON.equals(contentType)
-                    && !CSV.equals(contentType) && !ROWS.equals(contentType) && !GRAPH.equals(contentType)) {
+                    && !CSV.equals(contentType) && !ROWS.equals(contentType) && !GRAPH.equals(contentType)
+                    && !SQL.equals(contentType)) {
                 throw new IllegalArgumentException("a result's content type is " + TEXT + ", " + JSON + ", " + CSV
-                        + ", " + ROWS + " or " + GRAPH);
+                        + ", " + ROWS + ", " + GRAPH + " or " + SQL);
             }
             if (body == null) {
                 contentType = null;

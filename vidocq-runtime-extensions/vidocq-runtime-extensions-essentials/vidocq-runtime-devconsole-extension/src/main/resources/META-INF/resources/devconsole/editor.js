@@ -40,6 +40,7 @@ export { readRows, rowsCsv } from "./editor-core.js";
 export { menuArguments } from "./editor-core.js";
 export { selectorOf, choicesOf, pickChoice, formArguments, takesChoice, replayChoice } from "./editor-core.js";
 export { readGraph, graphLayout } from "./editor-core.js";
+export { downloadOf, downloadName } from "./editor-core.js";
 
 /** Past this many characters, no colours and no diagnostics: the textarea alone. */
 const LIMIT = 100_000;

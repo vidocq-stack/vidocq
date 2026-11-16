@@ -67,6 +67,7 @@
 import { createEditor, jsonLanguage, queryLanguage, readRows, rowsCsv, FORMAT_EXAMPLES } from "./editor.js";
 import { selectorOf, choicesOf, pickChoice, formArguments, takesChoice, replayChoice } from "./editor.js";
 import { readGraph, graphLayout, menuArguments } from "./editor.js";
+import { downloadOf, downloadName } from "./editor.js";
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
 const WINDOW_MILLIS = 300_000;       // what a chart shows: the last five minutes
@@ -1331,30 +1332,19 @@ function viewerTools(viewer) {
 /** Whether a content type is JSON. */
 const isJsonType = (type) => typeof type === "string" && type.startsWith("application/json");
 
-/** Whether a content type is CSV: a body shown as text, with a Download button. */
-const isCsvType = (type) => typeof type === "string" && type.startsWith("text/csv");
-
-/** {@code <action id>-<yyyyMMdd-HHmmss>.csv}, the id's characters outside [A-Za-z0-9._-] replaced by "-". */
-function csvFileName(actionId, now) {
-  const two = (n) => String(n).padStart(2, "0");
-  const stamp = now.getFullYear() + two(now.getMonth() + 1) + two(now.getDate()) + "-" + two(now.getHours())
-    + two(now.getMinutes()) + two(now.getSeconds());
-  return String(actionId).replace(/[^A-Za-z0-9._-]/g, "-") + "-" + stamp + ".csv";
-}
-
 /**
- * A Download button that saves {@code text} as a CSV file: a Blob of type text/csv;charset=utf-8, named by
- * csvFileName, handed to the browser through a link it clicks. No request is sent.
+ * A Download button that saves {@code text} as the file {@code download} (downloadOf's) describes: a Blob of its type,
+ * named by downloadName, handed to the browser through a link it clicks. No request is sent.
  */
-function downloadTools(text, actionId) {
+function downloadTools(text, actionId, download) {
   const tools = el("span", "jv-tools");
   const button = el("button", null, "Download");
   button.type = "button";
   button.addEventListener("click", () => {
-    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    const url = URL.createObjectURL(new Blob([text], { type: download.blob }));
     const link = el("a");
     link.href = url;
-    link.download = csvFileName(actionId, new Date());
+    link.download = downloadName(actionId, new Date(), download);
     link.hidden = true;
     document.body.append(link);
     link.click();
@@ -1373,8 +1363,9 @@ const isRowsType = (type) => typeof type === "string" && type.startsWith("applic
  * {@code panelId} is the panel whose actions a replay cell of rows fills.
  */
 function answerBody(answer, nodes, actionId, panelId) {
-  if (isCsvType(answer.contentType)) {
-    return { view: el("pre", "result-body", answer.body), tools: downloadTools(answer.body, actionId) };
+  const download = downloadOf(answer.contentType);
+  if (download) {
+    return { view: el("pre", "result-body", answer.body), tools: downloadTools(answer.body, actionId, download) };
   }
   if (isRowsType(answer.contentType)) {
     const rows = readRows(answer.body);

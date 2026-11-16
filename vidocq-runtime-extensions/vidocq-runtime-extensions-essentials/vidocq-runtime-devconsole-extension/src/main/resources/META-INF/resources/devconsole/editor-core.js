@@ -1850,6 +1850,34 @@ export function replayChoice(values, selector, choices) {
   return choices.includes(value) ? value : null;
 }
 
+// ------------------------------------------------------------------------------------------------ a download
+
+/** The answers saved as a file, by content type: the file's extension and the type of its Blob. */
+const DOWNLOADS = new Map([
+  ["text/csv", { extension: "csv", blob: "text/csv;charset=utf-8" }],
+  ["application/sql", { extension: "sql", blob: "application/sql;charset=utf-8" }],
+]);
+
+/**
+ * The file an answer of {@code type} is saved as, { extension, blob }: CSV (PanelAction.ActionResult.CSV) and SQL
+ * (ActionResult.SQL); null for any other type, an answer the page does not offer to download.
+ */
+export function downloadOf(type) {
+  const download = DOWNLOADS.get(type);
+  return download ? { ...download } : null;
+}
+
+/**
+ * {@code <action id>-<yyyyMMdd-HHmmss>.<extension>}, at the browser's local time {@code now}, the id's characters
+ * outside [A-Za-z0-9._-] replaced by "-".
+ */
+export function downloadName(actionId, now, download) {
+  const two = (n) => String(n).padStart(2, "0");
+  const stamp = now.getFullYear() + two(now.getMonth() + 1) + two(now.getDate()) + "-" + two(now.getHours())
+    + two(now.getMinutes()) + two(now.getSeconds());
+  return String(actionId).replace(/[^A-Za-z0-9._-]/g, "-") + "-" + stamp + "." + download.extension;
+}
+
 // ------------------------------------------------------------------------------------------------ a graph
 
 /** The most characters of a label or kind a box shows; a longer one is cut with "…", whole in its title. */
