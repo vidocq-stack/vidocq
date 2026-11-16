@@ -166,6 +166,17 @@ reason. The build logs `application layer: <n> libraries, <m> kept in the parent
 
 *Enriched libraries.* `vidocq:generate` runs the brick processors (Foy's, for instance) over the dependency jars they select, so a `@WebListener` of a library works without a workaround. The `layer` headline then counts them: `, 1 enriched (Foy 1)`. See xref:modules/vidocq-runtime-maven-plugin.adoc#brick-processors[Brick processors on dependency jars].
 
+[[dev-recompile]]*Dev recompile.* At each change, `vidocq:dev` recompiles with a Maven run of its own, and says
+which:
+
+[source]
+----
+Changes detected — recompiling: ./mvnw -ntp -q process-classes -DskipTests -Dvidocq.moduleinfo.dev=true (MAVEN_ARGS: -U)
+----
+
+That run inherits the environment of `vidocq:dev`, so the `MAVEN_ARGS` it shows apply to every recompile: with
+`-U` there, each one checks the remote repositories and takes seconds more.
+
 *Dev reload.* The libraries are reloaded with the application. The JDBC drivers that the old layer defined are
 deregistered at each reload. A thread that a library leaves running keeps the old layer in memory; the reload names
 such threads in a warning, `Hot reload: N thread(s) still hold the previous application layer ...`. Virtual threads

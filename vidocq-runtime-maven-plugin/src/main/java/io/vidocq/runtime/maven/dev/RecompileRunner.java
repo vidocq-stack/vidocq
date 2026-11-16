@@ -72,6 +72,34 @@ public final class RecompileRunner {
     }
 
     /**
+     * The command line as the dev mode logs it before each recompile, with the {@code MAVEN_ARGS} of the environment
+     * the Maven run inherits: a {@code -U} there makes every recompile slow, and nothing else in the log says why.
+     */
+    public String describe() {
+        return describe(System.getenv("MAVEN_ARGS"));
+    }
+
+    /**
+     * {@link #describe()} for the given {@code MAVEN_ARGS}. A wrapper is named relative to the project, as typed at
+     * its prompt ({@code ./mvnw}, {@code ../mvnw}).
+     */
+    String describe(String mavenArgs) {
+        List<String> command = command();
+        String executable = command.getFirst();
+        Path path = Path.of(executable);
+        if (path.isAbsolute()) {
+            String relative = projectDir.toAbsolutePath().relativize(path).toString();
+            executable = relative.startsWith("..") ? relative : "." + path.getFileSystem().getSeparator() + relative;
+        }
+        StringBuilder line = new StringBuilder(executable);
+        command.subList(1, command.size()).forEach(argument -> line.append(' ').append(argument));
+        if (mavenArgs != null && !mavenArgs.isBlank()) {
+            line.append(" (MAVEN_ARGS: ").append(mavenArgs.strip()).append(')');
+        }
+        return line.toString();
+    }
+
+    /**
      * Resolve which {@code mvn} binary to invoke. Preference order matches what
      * a developer would naturally type at the prompt:
      * <ol>

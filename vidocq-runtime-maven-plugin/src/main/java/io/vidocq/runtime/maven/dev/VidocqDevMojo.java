@@ -753,7 +753,7 @@ public class VidocqDevMojo extends AbstractMojo {
             AtomicReference<ChildJvm> currentChild, Path reloadFile, boolean inJvmReload)
             throws IOException, InterruptedException {
         long t0 = System.nanoTime();
-        getLog().info("Changes detected — recompiling...");
+        getLog().info("Changes detected — recompiling: " + recompile.describe());
         int rc;
         try {
             rc = recompile.run();

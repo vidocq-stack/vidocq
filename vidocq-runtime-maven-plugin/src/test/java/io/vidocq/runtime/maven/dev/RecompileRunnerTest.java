@@ -61,6 +61,23 @@ class RecompileRunnerTest {
                 new RecompileRunner(tmp, "mvn").command());
     }
 
+    /**
+     * The dev mode says which command it recompiles with, and the {@code MAVEN_ARGS} that command inherits: a
+     * {@code -U} there makes every recompile check the remote repositories, many seconds each, with nothing else in
+     * the log to say why.
+     */
+    @Test
+    void the_recompile_names_its_command_and_the_maven_args_it_inherits(@TempDir Path tmp) {
+        String goals = " -ntp -q process-classes -DskipTests -Dvidocq.moduleinfo.dev=true";
+        Path project = tmp.resolve("app");
+
+        assertEquals("./mvnw" + goals,
+                new RecompileRunner(project, project.resolve("mvnw").toString()).describe(null));
+        assertEquals("../mvnw" + goals + " (MAVEN_ARGS: -U -Dx=1)",
+                new RecompileRunner(project, tmp.resolve("mvnw").toString()).describe(" -U -Dx=1 "));
+        assertEquals("mvn" + goals, new RecompileRunner(project, "mvn").describe("  "));
+    }
+
     @Test
     void detect_falls_back_to_path_when_no_wrapper(@TempDir Path tmp) {
         String resolved = RecompileRunner.detectMavenExecutable(tmp);
