@@ -228,11 +228,22 @@ of Kerckhoffs (`kerckhoffs-tck/BASELINE.md`).
 | `app-multiple-store-backup` | 6/6 |
 | `app-securitycontext-auth` | 5/5 |
 | `app-custom-authentication-mechanism-handler` | 4/4 |
+| `app-custom-authentication-mechanism-handler2` | 3/3 |
 | `app-custom-rememberme` | 25/25 |
+| `app-mem-form` | `AppMemFormIT` 4/4; `AppMemFormImmediateIT` refused (`@LoginToContinue` expressions) |
+| `app-mem-basic-decorate` | 1/2 (a CDI decorator on the mechanism) |
+| `app-jaxrs` | 4/8 (the caller is not authenticated in the REST endpoints; no cause established yet) |
+| `app-securitycontext`, `app-mem-policy` | deployment refused (an EJB; Jakarta Authorization) |
 
-61 tests; the first seven applications give the same counts as on the Kerckhoffs container. A local run of selected applications is a
-measurement, never a certification; the applications that need `@LoginToContinue`, JACC, a decorated mechanism or an EJB
-stay red by design (Kerckhoffs milestone K3).
+The default set is the ten first lines, 64 tests; the first seven applications give the same counts as on the
+Kerckhoffs container. A local run of selected applications is a measurement, never a certification.
+
+Scope: the Security 4.0 TCK is run **without JSF** for now. Out of scope for now: `app-mem-customform` (the only
+application that uses Jakarta Faces), `AppMemFormImmediateIT` (`@LoginToContinue`), the applications that need an EJB
+(`app-securitycontext*`, `app-db`), an LDAP directory (`app-ldap*`, `app-custom-identity-store-handler`) or an OpenID
+provider (`app-openid*`). Still to do: Jakarta Authorization (`app-mem-policy*`), the mechanism decorator
+(`app-mem-basic-decorate`) and JAX-RS (`app-jaxrs`). The reasons, application by application, are on the `tck` page of
+Kerckhoffs.
 
 Two defects in the assembly showed up while building this runner, both fixed where they live: Vauban's bean discovery
 threw `NoClassDefFoundError` on a library class whose constructor names an optional dependency (`nimbus-jose-jwt` in
