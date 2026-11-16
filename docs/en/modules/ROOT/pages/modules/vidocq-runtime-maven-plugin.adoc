@@ -1471,6 +1471,12 @@ from that named module, the one the runtime reads.
 | `true`
 | Start the child with the agent. `false`: no agent, every change swaps the application layer, and a debugger's
 breakpoints are never cleared by a redefinition.
+
+| `vidocq.dev.keepSessions`
+| `true`
+| Carry the HTTP sessions over a layer swap (xref:usage.adoc#dev-swap-sessions[HTTP sessions across a swap]).
+`false`: every swap drops them, and the log says `Hot reload - HTTP sessions not kept: vidocq.dev.keepSessions is
+false`.
 |===
 
 The agent is added only with `vidocq.dev.layer` and `vidocq.dev.hotReload` on. Otherwise, or when the agent cannot

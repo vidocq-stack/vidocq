@@ -197,9 +197,9 @@ That run inherits the environment of `vidocq:dev`, so the `MAVEN_ARGS` it shows 
 deregistered at each reload. A thread that a library leaves running keeps the old layer in memory; the reload names
 such threads in a warning, `Hot reload: N thread(s) still hold the previous application layer ...`. Virtual threads
 are not detected. A library with native code (JNI) cannot be loaded twice by the JVM: keep it in the parent layer
-with `vidocq.app.layer.keep`. Each layer swap undeploys the servlet application, which invalidates its HTTP sessions:
-the log gives their count (`Undeploying the servlet application invalidated N HTTP sessions …`), and a browser starts
-a new session on its next request. A change in method bodies only keeps them: see <<dev-hot-swap,hot swap>>.
+with `vidocq.app.layer.keep`. A layer swap carries the HTTP sessions of the servlet application over to the new
+layer, unless a rule drops them: see <<dev-swap-sessions,HTTP sessions across a swap>>. A change in method bodies only
+keeps them too: see <<dev-hot-swap,hot swap>>.
 
 [[dev-reload-reasons]]*Why a change reloads.* After each recompile, `vidocq:dev` compares the compiled output with the
 one the application runs, class by class, with the JDK's Class-File API. When nothing changed, for instance an edited
@@ -246,6 +246,41 @@ within two minutes, or a child JVM started again, makes the next one a swap: `th
 The startup log says where the start-time declarations come from: `Hot swap: start-time declarations from 4 jars`.
 With a runtime that declares none (one older than this check), the startup log says `Hot swap off: no dependency
 declares its start-time code (...)`, and every change swaps the layer, with the log lines of earlier versions.
+
+[[dev-swap-sessions]]*HTTP sessions across a swap.* [.tag-new]#NEW# A layer swap stops the application and starts it
+again on the new classes, and the HTTP sessions of the servlet application move with it: during the stop, each
+deployment writes its sessions out, and the new deployment at the same context path reads them back before it serves.
+An open page keeps its session, and its next request finds what the session held. The log gives the count:
+
+[source]
+----
+Hot reload - restarting on a fresh application layer: MainView gained a method lambda$new$1
+Hot reload - kept 1 HTTP session across the reload
+----
+
+A session moves when Foy can write each of its attributes and read it back with the new classes; it drops one that it
+cannot, with a WARNING of its own, and that client starts a new session. `vidocq:dev` drops all the sessions of a
+swap, and says why, in two cases:
+
+* a changed class gained, lost or retyped an instance field, or changed its superclass or its interfaces, so an
+  instance written before the change would not match the class after it: `Hot reload - HTTP sessions not kept: Order
+  gained a field total, so a restored instance would not match the new class`;
+* a changed class gained or lost a lambda while the code of a lambda it kept changed: the compiler numbered its
+  lambdas again, and a listener read back from the session could run the code of another one. `Hot reload - HTTP
+  sessions not kept: MainView's lambdas moved, and a restored listener could run another one's code`. A lambda added
+  after the others, a lambda body edited in place, or the last lambda removed keeps the sessions.
+
+`-Dvidocq.dev.keepSessions=false` drops them at every swap: `Hot reload - HTTP sessions not kept:
+vidocq.dev.keepSessions is false`. Dropped sessions end as before: `sessionDestroyed` fires, and the log gives their
+count, `Undeploying the servlet application invalidated 1 HTTP session: its client starts a new one on its next
+request`. The sessions are also dropped, without a line of their own, when the change is not classified (`Hot swap
+off: no dependency declares its start-time code`) and when the context path changed between the two starts. Sessions
+the new deployment cannot read are dropped with one WARNING, and it starts anyway: `Hot reload - the HTTP sessions of
+the previous deployment could not be imported, starting without them: ...`.
+
+A session that holds a `@SessionScoped` bean, the xref:modules/vidocq-runtime-extensions.adoc#servlet-built-in-beans[`@Inject
+HttpSession` bean] or a CDI client proxy does not move yet: Foy drops it at the stop, with its WARNING, and its client
+starts a new session. Plain servlet sessions and Vaadin sessions move.
 
 [[dev-hot-swap]]*Hot swap.* A change in method bodies only is applied to the running application: the JVM redefines
 the changed classes in place, through the agent `vidocq:dev` starts its child with, `vidocq-runtime-dev-agent`. The

@@ -354,10 +354,16 @@ small script to each page, which listens to an event stream at `.vidocq/dev/rede
 reload. A class that is not a component, but that a view reads in its constructor, refreshes no page: reload it by
 hand. Without the Vaadin extension, nothing refreshes by itself: reload the page, or navigate to the view.
 
-Any other change swaps the application layer and starts a new HTTP session. The new layer holds new Vaadin classes,
-so the old session and its UI cannot be carried over: the undeploy invalidates them and says so in the log,
-`Undeploying the servlet application invalidated 1 HTTP session: its client starts a new one on its next request`.
-An open page reloads on its next request, as after a session timeout, and what it held is lost.
+Any other change swaps the application layer, and the HTTP session moves to the new layer [.tag-new]#NEW#: the
+Vaadin session and its UIs are written out at the stop and read back with the new classes
+(xref:usage.adoc#dev-swap-sessions[HTTP sessions across a swap]). The log says `Hot reload - kept 1 HTTP session across
+the reload`, and the open page keeps its state. A rule of `vidocq:dev` drops the session when a class gained, lost or
+retyped an instance field, or when its lambdas moved, and says why: `Hot reload - HTTP sessions not kept: MainView's
+lambdas moved, and a restored listener could run another one's code`. `-Dvidocq.dev.keepSessions=false` drops it at
+every swap. A dropped session is invalidated, `Undeploying the servlet application invalidated 1 HTTP session: its
+client starts a new one on its next request`, and the open page reloads on its next request, as after a session
+timeout. A session that holds a `@SessionScoped` bean, the `@Inject HttpSession` bean or a CDI client proxy does not
+move yet: Foy drops it at the stop with a WARNING, and its page starts a new session.
 
 [#package]
 == `vidocq:package`
