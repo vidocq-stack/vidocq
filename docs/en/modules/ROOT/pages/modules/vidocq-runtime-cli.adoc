@@ -223,13 +223,13 @@ Run `vidocq help` for the command list, or `vidocq help <command>` for per-comma
 | `vidocq create --name <name> …`
 | Scaffold a new Vidocq Maven application (see <<create>>).
 
-| `vidocq dev [--port] [--profile] [--debug]`
+| `vidocq dev [--port] [--profile] [--debug] [--maven-profile]`
 | Run the project in dev mode with live reload, `mvn vidocq:dev` (see <<dev>>).
 
-| `vidocq start [--port] [--config] [--debug]`
+| `vidocq start [--port] [--config] [--debug] [--maven-profile]`
 | Build and run the project's application, `mvn vidocq:run` (see <<start>>).
 
-| `vidocq test [--once]`
+| `vidocq test [--once] [--maven-profile]`
 | Run the tests on every change, without the application, `mvn vidocq:test`; `--once` runs them once and exits (see <<test>>).
 
 | `vidocq idea [--check\|--strict] [--kind <kind>]`
@@ -428,9 +428,23 @@ its settings (continuous testing, dev services, …).
 | Option | Description
 
 | `--port, -p <n>` | HTTP listening port, passed as `vidocq.chappe.listener.default.port` so it outranks the project's own `vidocq.http.port`.
-| `--profile, -P <name>` | Config profile to activate (`-Dvidocq.profile`, default `dev`).
+| `--profile, -P <name>` | Vidocq config profile to activate (`-Dvidocq.profile`, default `dev`): the `%<name>.` keys of `vidocq.properties`. Not a Maven profile, unlike Maven's own `-P`.
 | `--debug` | Force the debug agent on (`-Dvidocq.dev.debug=true`); dev mode opens it by default, on this machine only.
+| `--maven-profile <ids>` | Maven profiles to activate, given to Maven as `-P<ids>`. See <<maven-profile>>.
 |===
+
+[#maven-profile]
+*Maven profiles.* `--maven-profile <ids>` activates Maven profiles of the project's pom, on every command that runs
+its build: `dev`, `start`, `test`, `build` and `clean`. The ids are comma-separated and the option repeatable, and
+Maven gets them as one `-P<ids>` before the goals, so `!id` deactivates one as Maven's `-P` does. `-P` stays the Vidocq
+config profile of `vidocq dev`: `vidocq dev -P staging --maven-profile h2` runs the `%staging.` keys of
+`vidocq.properties` with the `h2` profile of the pom.
+
+[source,bash]
+----
+vidocq dev --maven-profile h2                      # ./mvnw -Ph2 process-classes vidocq:dev …
+vidocq build jlink --maven-profile jlink -- -X     # ./mvnw -Pjlink package vidocq:jlink -X
+----
 
 Ctrl+C stops Maven and the application; the CLI returns once both are down. `vidocq dev` and `vidocq start`
 used to boot the runtime inside the CLI's own JVM, which holds neither the project's classes nor its
@@ -449,6 +463,7 @@ project and starts the application with its dependencies and extensions on the m
 | `--port, -p <n>` | HTTP listening port, over the project's own setting.
 | `--config, -c <file>` | Path to an external `vidocq.properties` file.
 | `--debug` | Open a debug agent on port `5005` (`-Dvidocq.run.debug=true`).
+| `--maven-profile <ids>` | Maven profiles to activate, given to Maven as `-P<ids>` (see <<maven-profile>>).
 |===
 
 [#test]
@@ -467,6 +482,8 @@ otherwise (`mvn process-classes vidocq:test -Dvidocq.test.once=true`).
 vidocq test            # watch: every test, then again on each change
 vidocq test --once     # CI: every test once, the exit status is the verdict
 ----
+
+`--maven-profile <ids>` activates Maven profiles of the pom, as on `vidocq dev` (see <<maven-profile>>).
 
 [#idea]
 === `vidocq idea`
@@ -544,12 +561,14 @@ Shared options:
 | `--skip-tests` | Skip tests (`build` only, `-DskipTests`).
 | `--kind <jlink\|jdk>` | `build docker` only: the jlink image on a distroless base (default), or the distribution on a JDK base image, with no jlink image (`-Dvidocq.docker.kind=jdk`).
 | `--dry-run` | Print the resolved Maven command without running it.
+| `--maven-profile <ids>` | Maven profiles to activate, given to Maven as `-P<ids>` before the goals (see <<maven-profile>>).
 | `-- <args…>` | Pass everything after `--` straight through to Maven.
 |===
 
 [source,bash]
 ----
 vidocq build jlink --skip-tests
+vidocq build jlink --maven-profile jlink     # a pom whose jlink profile adds what the image needs
 vidocq clean
 vidocq build -- -Dvidocq.docker.build=true   # extra args after --
 ----

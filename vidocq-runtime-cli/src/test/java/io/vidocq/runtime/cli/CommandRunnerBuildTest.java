@@ -49,7 +49,8 @@ class CommandRunnerBuildTest {
     @Test
     void aJlinkBuildPrintsItsGoals() {
         int[] code = new int[1];
-        String out = run(new Command.Build(BuildType.JLINK, DockerKind.JLINK, false, true, true, List.of("-X")), code);
+        String out = run(new Command.Build(BuildType.JLINK, DockerKind.JLINK, false, true, true, List.of(),
+                List.of("-X")), code);
 
         assertEquals(0, code[0]);
         assertTrue(out.contains("package vidocq:jlink") && out.contains("-X") && out.contains("dry run"), out);
@@ -59,7 +60,8 @@ class CommandRunnerBuildTest {
     @Test
     void aDockerBuildPrintsItsGoals() {
         int[] code = new int[1];
-        String out = run(new Command.Build(BuildType.DOCKER, DockerKind.JLINK, false, false, true, List.of()), code);
+        String out = run(new Command.Build(BuildType.DOCKER, DockerKind.JLINK, false, false, true, List.of(),
+                List.of()), code);
 
         assertEquals(0, code[0]);
         assertTrue(out.contains("package vidocq:jlink vidocq:docker") && out.contains("dry run"), out);
@@ -68,7 +70,8 @@ class CommandRunnerBuildTest {
     @Test
     void aJdkDockerBuildSkipsJlink() {
         int[] code = new int[1];
-        String out = run(new Command.Build(BuildType.DOCKER, DockerKind.JDK, false, false, true, List.of()), code);
+        String out = run(new Command.Build(BuildType.DOCKER, DockerKind.JDK, false, false, true, List.of(),
+                List.of()), code);
 
         assertEquals(0, code[0]);
         assertTrue(out.contains("package vidocq:docker") && !out.contains("vidocq:jlink")
@@ -78,9 +81,29 @@ class CommandRunnerBuildTest {
     @Test
     void aCleanPrintsItsGoal() {
         int[] code = new int[1];
-        String out = run(new Command.Clean(false, true, List.of()), code);
+        String out = run(new Command.Clean(false, true, List.of(), List.of()), code);
 
         assertEquals(0, code[0]);
         assertTrue(out.contains("clean") && out.contains("dry run"), out);
+    }
+
+    /** {@code vidocq build jlink --maven-profile jlink -- -X}: Maven gets the profile and the pass-through. */
+    @Test
+    void theMavenProfilesAndThePassThroughReachMavenTogether() {
+        int[] code = new int[1];
+        String out = run(CliParser.parse(new String[]{"build", "jlink", "--maven-profile", "jlink,native", "--dry-run",
+                "--", "-X"}), code);
+
+        assertEquals(0, code[0]);
+        assertTrue(out.contains(" -Pjlink,native package vidocq:jlink -X"), out);
+    }
+
+    @Test
+    void aCleanTakesTheMavenProfilesToo() {
+        int[] code = new int[1];
+        String out = run(CliParser.parse(new String[]{"clean", "--maven-profile", "jlink", "--dry-run"}), code);
+
+        assertEquals(0, code[0]);
+        assertTrue(out.contains(" -Pjlink clean"), out);
     }
 }

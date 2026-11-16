@@ -77,11 +77,13 @@ public final class CompletionSpec {
     private static final String CHECK = "--check";
     private static final String PORT = "--port";
     private static final String KIND = "--kind";
+    private static final String MAVEN_PROFILE = "--maven-profile";
 
     /** Offered anywhere after the context. */
     static final Map<String, List<String>> ARGUMENTS = ordered(
-            "start", List.of(PORT, "--config", "--debug"),
-            "dev", List.of(PORT, "--profile", "--debug"),
+            "start", List.of(PORT, "--config", "--debug", MAVEN_PROFILE),
+            "dev", List.of(PORT, "--profile", "--debug", MAVEN_PROFILE),
+            "test", List.of("--once", MAVEN_PROFILE),
             "doctor", List.of("--fix", "--verbose"),
             "idea", List.of(CHECK, "--strict", KIND),
             "vscode", List.of(CHECK),
@@ -90,8 +92,8 @@ public final class CompletionSpec {
                     "--main", "--open-module"),
             "pom convert", List.of("--to", CHECK),
             "pom upgrade", List.of("--to", "--release", "--snapshot", CHECK),
-            "build", List.of("--offline", "--skip-tests", "--dry-run", KIND),
-            "clean", List.of("--offline", "--dry-run"),
+            "build", List.of("--offline", "--skip-tests", "--dry-run", KIND, MAVEN_PROFILE),
+            "clean", List.of("--offline", "--dry-run", MAVEN_PROFILE),
             "update", List.of(CHECK, "--release", "--snapshot"),
             "extension list", List.of("--installed", "--available", "--all", "--refresh"),
             "extension add", List.of(ADDABLE_EXTENSIONS),
@@ -110,7 +112,7 @@ public final class CompletionSpec {
     static final Set<String> VALUE_OPTIONS = Set.of(
             PORT, "-p", "--config", "-c", "--profile", "-P", "--name", "-n",
             "--group-id", "-g", "--package", "--extension", "-x", "--vidocq-version", "--parent-version", KIND,
-            "--to");
+            "--to", MAVEN_PROFILE);
 
     private CompletionSpec() {}
 

@@ -83,8 +83,8 @@ public final class CommandRunner {
             case Command.Start s               -> runStart(s);
             case Command.Dev d                 -> runDev(d);
             case Command.Doctor doc            -> runDoctor(doc);
-            case Command.ContinuousTest(boolean once) -> runMaven(RunGoals.test(once), MavenInvocation.Options.none(),
-                    false, testBanner(once));
+            case Command.ContinuousTest(boolean once, List<String> mavenProfiles) -> runMaven(RunGoals.test(once),
+                    MavenInvocation.Options.withProfiles(mavenProfiles), false, testBanner(once));
             case Command.Idea(String check, String kind) -> runMaven(RunGoals.idea(check, kind),
                     MavenInvocation.Options.none(), false,
                     progress(check != null, "the IntelliJ run configurations"));
@@ -216,13 +216,13 @@ public final class CommandRunner {
     private static int runStart(Command.Start start) {
         Path config = start.configFile() == null ? null : start.configFile().toAbsolutePath();
         return runMaven(RunGoals.start(start.portExplicit(), start.port(), config, start.debug()),
-                MavenInvocation.Options.none(), false,
+                MavenInvocation.Options.withProfiles(start.mavenProfiles()), false,
                 "Starting the application" + (start.portExplicit() ? " on port " + start.port() : "") + "…");
     }
 
     private static int runDev(Command.Dev dev) {
         return runMaven(RunGoals.dev(dev.profile(), dev.portExplicit(), dev.port(), dev.debug()),
-                MavenInvocation.Options.none(), false,
+                MavenInvocation.Options.withProfiles(dev.mavenProfiles()), false,
                 "Starting " + CliOutput.bold("dev mode") + " (profile: " + dev.profile() + ")…");
     }
 
@@ -440,7 +440,8 @@ public final class CommandRunner {
         // vidocq build docker builds the image when Docker answers, and says it did not otherwise (BUG-20261030-17).
         var plan = DockerBuild.plan(build.type(), build.dockerKind(),
                 build.type() == BuildType.DOCKER && DockerBuild.available(), build.passthrough());
-        MavenInvocation.Options opts = new MavenInvocation.Options(build.offline(), build.skipTests(), plan.passthrough());
+        MavenInvocation.Options opts = new MavenInvocation.Options(build.offline(), build.skipTests(),
+                build.mavenProfiles(), plan.passthrough());
         int code = runMaven(DockerBuild.goals(build.type(), build.dockerKind()), opts, build.dryRun(),
                 "Building " + CliOutput.bold(build.type().label()) + "…", plan.done());
         if (code == 0 && plan.done() == null && !build.dryRun()) {
@@ -451,7 +452,7 @@ public final class CommandRunner {
 
     private static int runClean(Command.Clean clean) {
         MavenInvocation.Options opts = new MavenInvocation.Options(
-                clean.offline(), false, clean.passthrough());
+                clean.offline(), false, clean.mavenProfiles(), clean.passthrough());
         return runMaven(List.of("clean"), opts, clean.dryRun(), "Cleaning build output…");
     }
 

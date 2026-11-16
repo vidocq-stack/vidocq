@@ -66,6 +66,12 @@ public final class CliParser {
     private static final String DRY_RUN = "--dry-run";
     private static final String PORT = "--port";
     private static final String KIND = "--kind";
+    private static final String MAVEN_PROFILE = "--maven-profile";
+    private static final String PASS_THROUGH = "--";
+    private static final String MAVEN_PROFILE_NAME = MAVEN_PROFILE + " <ids>";
+    private static final String MAVEN_PROFILE_HELP = "Maven profiles to activate (-P<ids>), comma-separated, repeatable";
+    private static final String PASS_THROUGH_NAME = PASS_THROUGH + " <args...>";
+    private static final String PASS_THROUGH_HELP = "Pass everything after -- straight to Maven";
     private static final String EXAMPLES = "Examples:";
 
     private CliParser() {}
@@ -110,7 +116,7 @@ public final class CliParser {
 
     /** Whether {@code --help} or {@code -h} comes after the command, before {@code --}. */
     private static boolean asksForHelp(String[] args) {
-        for (int i = 1; i < args.length && !"--".equals(args[i]); i++) {
+        for (int i = 1; i < args.length && !PASS_THROUGH.equals(args[i]); i++) {
             if ("--help".equals(args[i]) || "-h".equals(args[i])) {
                 return true;
             }
@@ -127,6 +133,7 @@ public final class CliParser {
         boolean portExplicit = false;
         Path config = null;
         boolean debug = false;
+        List<String> mavenProfiles = new ArrayList<>();
         Iterator<String> it = tokens(args, from);
         while (it.hasNext()) {
             String arg = it.next();
@@ -134,10 +141,11 @@ public final class CliParser {
                 case PORT, "-p"       -> { port = parseInt(next(it, PORT), PORT); portExplicit = true; }
                 case "--config", "-c" -> config = Path.of(next(it, "--config"));
                 case DEBUG        -> debug  = true;
+                case MAVEN_PROFILE    -> mavenProfiles.addAll(mavenProfiles(it));
                 default               -> unknownOpt(arg, START);
             }
         }
-        return new Command.Start(port, portExplicit, config, debug);
+        return new Command.Start(port, portExplicit, config, debug, List.copyOf(mavenProfiles));
     }
 
     private static Command.Dev parseDev(String[] args, int from) {
@@ -145,6 +153,7 @@ public final class CliParser {
         boolean portExplicit = false;
         String profile = "dev";
         boolean debug = false;
+        List<String> mavenProfiles = new ArrayList<>();
         Iterator<String> it = tokens(args, from);
         while (it.hasNext()) {
             String arg = it.next();
@@ -152,22 +161,26 @@ public final class CliParser {
                 case PORT, "-p"        -> { port = parseInt(next(it, PORT), PORT); portExplicit = true; }
                 case "--profile", "-P" -> profile = next(it, "--profile");
                 case DEBUG         -> debug   = true;
+                case MAVEN_PROFILE     -> mavenProfiles.addAll(mavenProfiles(it));
                 default                -> unknownOpt(arg, "dev");
             }
         }
-        return new Command.Dev(port, portExplicit, profile, debug);
+        return new Command.Dev(port, portExplicit, profile, debug, List.copyOf(mavenProfiles));
     }
 
     private static Command.ContinuousTest parseTest(String[] args, int from) {
         boolean once = false;
-        for (String arg : Arrays.asList(args).subList(from, args.length)) {
-            if (ONCE.equals(arg)) {
-                once = true;
-            } else {
-                unknownOpt(arg, "test");
+        List<String> mavenProfiles = new ArrayList<>();
+        Iterator<String> it = tokens(args, from);
+        while (it.hasNext()) {
+            String arg = it.next();
+            switch (arg) {
+                case ONCE          -> once = true;
+                case MAVEN_PROFILE -> mavenProfiles.addAll(mavenProfiles(it));
+                default            -> unknownOpt(arg, "test");
             }
         }
-        return new Command.ContinuousTest(once);
+        return new Command.ContinuousTest(once, List.copyOf(mavenProfiles));
     }
 
     private static Command.Vscode parseVscode(String[] args, int from) {
@@ -214,6 +227,20 @@ public final class CliParser {
     private static String next(Iterator<String> it, String opt) {
         if (!it.hasNext()) throw new CliException("Option " + opt + " requires a value.");
         return it.next();
+    }
+
+    /**
+     * The Maven profile ids of the {@code --maven-profile} value read from {@code it}: comma-separated, as Maven's own
+     * {@code -P} reads them, so {@code !id} still deactivates one. An empty id is refused.
+     */
+    private static List<String> mavenProfiles(Iterator<String> it) {
+        String value = next(it, MAVEN_PROFILE);
+        List<String> ids = Arrays.stream(value.split(",", -1)).map(String::strip).toList();
+        if (ids.contains("")) {
+            throw new CliException("Option " + MAVEN_PROFILE + " expects Maven profile ids separated by commas, got: '"
+                    + value + "'");
+        }
+        return ids;
     }
 
     private static Command.Doctor parseDoctor(String[] args, int from) {
@@ -329,6 +356,7 @@ public final class CliParser {
         boolean skipTests = false;
         boolean dryRun = false;
         DockerKind kind = null;
+        List<String> mavenProfiles = new ArrayList<>();
         List<String> passthrough = new ArrayList<>();
         int first = from;
         // An optional leading non-flag token selects the build flavour.
@@ -352,7 +380,8 @@ public final class CliParser {
                     kind = DockerKind.of(value).orElseThrow(() -> new CliException(
                             "Option --kind expects jlink or jdk, got: " + value));
                 }
-                case "--"              -> it.forEachRemaining(passthrough::add);
+                case MAVEN_PROFILE     -> mavenProfiles.addAll(mavenProfiles(it));
+                case PASS_THROUGH      -> it.forEachRemaining(passthrough::add);
                 default                -> unknownOpt(arg, BUILD);
             }
         }
@@ -360,12 +389,13 @@ public final class CliParser {
             throw new CliException("Option --kind applies to vidocq build docker only.");
         }
         return new Command.Build(type, kind == null ? DockerKind.JLINK : kind, offline, skipTests, dryRun,
-                List.copyOf(passthrough));
+                List.copyOf(mavenProfiles), List.copyOf(passthrough));
     }
 
     private static Command.Clean parseClean(String[] args, int from) {
         boolean offline = false;
         boolean dryRun = false;
+        List<String> mavenProfiles = new ArrayList<>();
         List<String> passthrough = new ArrayList<>();
         Iterator<String> it = tokens(args, from);
         while (it.hasNext()) {
@@ -373,11 +403,12 @@ public final class CliParser {
             switch (arg) {
                 case "--offline", "-o" -> offline = true;
                 case DRY_RUN       -> dryRun  = true;
-                case "--"              -> it.forEachRemaining(passthrough::add);
+                case MAVEN_PROFILE     -> mavenProfiles.addAll(mavenProfiles(it));
+                case PASS_THROUGH      -> it.forEachRemaining(passthrough::add);
                 default                -> unknownOpt(arg, CLEAN);
             }
         }
-        return new Command.Clean(offline, dryRun, List.copyOf(passthrough));
+        return new Command.Clean(offline, dryRun, List.copyOf(mavenProfiles), List.copyOf(passthrough));
     }
 
     private static List<String> rest(String[] args, int from) {
@@ -529,7 +560,8 @@ public final class CliParser {
                         "starts it with its dependencies and extensions on the module path.");
                 options("--port, -p <n>",      "HTTP listening port, over the project's own setting",
                         "--config, -c <file>", "Path to an external vidocq.properties file",
-                        DEBUG,             "Open a debug agent on port 5005");
+                        DEBUG,             "Open a debug agent on port 5005",
+                        MAVEN_PROFILE_NAME, MAVEN_PROFILE_HELP);
             }
             case "dev" -> {
                 topic("dev", "Development mode",
@@ -537,15 +569,17 @@ public final class CliParser {
                         "the application starts with its dependencies and extensions, the dev console",
                         "and the debug agent (port 5005), and restarts on every source change.");
                 options("--port, -p <n>",       "HTTP listening port, over the project's own setting",
-                        "--profile, -P <name>", "Config profile to activate (default: dev)",
-                        DEBUG,              "Force the debug agent on (it is on by default in dev)");
+                        "--profile, -P <name>", "Vidocq config profile to activate (default: dev), not a Maven one",
+                        DEBUG,              "Force the debug agent on (it is on by default in dev)",
+                        MAVEN_PROFILE_NAME, MAVEN_PROFILE_HELP);
             }
             case "test" -> {
                 topic("test", "Continuous testing",
                         "Runs 'mvn vidocq:test' in the project (./mvnw when present): every test, then",
                         "again on each change of the main or test sources, without the application.",
                         "Keys: r runs every test, f the failed ones, q quits.");
-                options(ONCE, "Run every test once and exit, with status 1 when one fails (for CI and scripts)");
+                options(ONCE, "Run every test once and exit, with status 1 when one fails (for CI and scripts)",
+                        MAVEN_PROFILE_NAME, MAVEN_PROFILE_HELP);
             }
             case "idea" -> {
                 topic("idea", "IntelliJ run configurations (experimental)",
@@ -619,10 +653,12 @@ public final class CliParser {
                 opt("--skip-tests",   "Skip tests (-DskipTests)");
                 opt(DRY_RUN,      "Print the Maven command without running it");
                 opt("--kind <jlink|jdk>", "docker only: the jlink image (default), or the distribution on a JDK");
-                opt("-- <args...>",   "Pass everything after -- straight to Maven");
+                opt(MAVEN_PROFILE_NAME, MAVEN_PROFILE_HELP);
+                opt(PASS_THROUGH_NAME, PASS_THROUGH_HELP);
                 CliOutput.println();
-                CliOutput.println("Example:");
+                CliOutput.println(EXAMPLES);
                 CliOutput.println("  " + CliOutput.cyan("vidocq build jlink --skip-tests"));
+                CliOutput.println("  " + CliOutput.cyan("vidocq build jlink --maven-profile jlink -- -X"));
             }
             case CLEAN -> {
                 CliOutput.println(CliOutput.bold("vidocq clean") + " — Remove build output");
@@ -632,7 +668,8 @@ public final class CliParser {
                 CliOutput.println(OPTIONS);
                 opt("--offline, -o", "Run Maven offline (-o)");
                 opt(DRY_RUN,     "Print the Maven command without running it");
-                opt("-- <args...>",  "Pass everything after -- straight to Maven");
+                opt(MAVEN_PROFILE_NAME, MAVEN_PROFILE_HELP);
+                opt(PASS_THROUGH_NAME, PASS_THROUGH_HELP);
             }
             case POM -> {
                 topic("pom upgrade", "Move the pom to another Vidocq version",

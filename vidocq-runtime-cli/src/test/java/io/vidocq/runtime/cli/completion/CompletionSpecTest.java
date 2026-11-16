@@ -108,7 +108,7 @@ class CompletionSpecTest {
         assertTrue(after().contains("eclipse"));
         assertEquals(List.of("--check"), after("vscode"));
         assertEquals(List.of("--check"), after("eclipse"));
-        assertEquals(List.of(), after("test"));
+        assertEquals(List.of("--once", "--maven-profile"), after("test"));
     }
 
     @Test

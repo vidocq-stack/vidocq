@@ -33,22 +33,31 @@ public final class MavenInvocation {
 
     private MavenInvocation() {}
 
-    /** Toggles that influence the generated Maven command line. */
-    public record Options(boolean offline, boolean skipTests, List<String> passthrough) {
+    /**
+     * Toggles that influence the generated Maven command line. {@code profiles} are the ids of the Maven profiles to
+     * activate, given as one {@code -P<id>,<id>}.
+     */
+    public record Options(boolean offline, boolean skipTests, List<String> profiles, List<String> passthrough) {
 
         public Options {
+            profiles = profiles == null ? List.of() : List.copyOf(profiles);
             passthrough = passthrough == null ? List.of() : List.copyOf(passthrough);
         }
 
         /** No flags, no extra arguments. */
         public static Options none() {
-            return new Options(false, false, List.of());
+            return withProfiles(List.of());
+        }
+
+        /** The Maven profiles {@code profiles} alone. */
+        public static Options withProfiles(List<String> profiles) {
+            return new Options(false, false, profiles, List.of());
         }
     }
 
     /**
      * Build the full command line: {@code <executable> [-o] [-DskipTests]
-     * <goals...> [passthrough...]}.
+     * [-P<profiles>] <goals...> [passthrough...]}.
      *
      * @param executable the Maven executable (a {@code mvnw} path or {@code mvn})
      * @param goals      the lifecycle phases / plugin goals to run, in order
@@ -71,6 +80,9 @@ public final class MavenInvocation {
         }
         if (opts.skipTests()) {
             cmd.add("-DskipTests");
+        }
+        if (!opts.profiles().isEmpty()) {
+            cmd.add("-P" + String.join(",", opts.profiles()));
         }
         cmd.addAll(goals);
         cmd.addAll(opts.passthrough());

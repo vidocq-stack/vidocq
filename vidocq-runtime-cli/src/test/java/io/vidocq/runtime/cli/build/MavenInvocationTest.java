@@ -39,7 +39,7 @@ class MavenInvocationTest {
     void offlinePrependsFlagBeforeGoals() {
         List<String> cmd = MavenInvocation.command(
                 "mvn", List.of("package"),
-                new MavenInvocation.Options(true, false, List.of()));
+                new MavenInvocation.Options(true, false, List.of(), List.of()));
         assertEquals(List.of("mvn", "-o", "package"), cmd);
     }
 
@@ -47,7 +47,7 @@ class MavenInvocationTest {
     void skipTestsAddsSystemProperty() {
         List<String> cmd = MavenInvocation.command(
                 "mvn", List.of("package"),
-                new MavenInvocation.Options(false, true, List.of()));
+                new MavenInvocation.Options(false, true, List.of(), List.of()));
         assertEquals(List.of("mvn", "-DskipTests", "package"), cmd);
     }
 
@@ -55,11 +55,27 @@ class MavenInvocationTest {
     void jlinkWithAllFlagsAndPassthrough() {
         List<String> cmd = MavenInvocation.command(
                 "/abs/mvnw", BuildType.JLINK.goals(),
-                new MavenInvocation.Options(true, true, List.of("-X", "-Dfoo=bar")));
+                new MavenInvocation.Options(true, true, List.of(), List.of("-X", "-Dfoo=bar")));
         assertEquals(List.of(
                 "/abs/mvnw", "-o", "-DskipTests",
                 "package", "vidocq:jlink",
                 "-X", "-Dfoo=bar"), cmd);
+    }
+
+    @Test
+    void theMavenProfilesComeBeforeTheGoalsAndThePassThroughAfter() {
+        List<String> cmd = MavenInvocation.command(
+                "./mvnw", BuildType.JLINK.goals(),
+                new MavenInvocation.Options(false, true, List.of("jlink", "native"), List.of("-X")));
+        assertEquals(List.of("./mvnw", "-DskipTests", "-Pjlink,native", "package", "vidocq:jlink", "-X"), cmd);
+    }
+
+    @Test
+    void withProfilesAsksForTheProfilesAlone() {
+        List<String> cmd = MavenInvocation.command(
+                "mvn", List.of("vidocq:run"), MavenInvocation.Options.withProfiles(List.of("jlink")));
+        assertEquals(List.of("mvn", "-Pjlink", "vidocq:run"), cmd);
+        assertEquals(MavenInvocation.Options.none(), MavenInvocation.Options.withProfiles(List.of()));
     }
 
     @Test
@@ -93,7 +109,7 @@ class MavenInvocationTest {
     @Test
     void passthroughDefensivelyCopied() {
         var passthrough = new java.util.ArrayList<>(List.of("-X"));
-        MavenInvocation.Options opts = new MavenInvocation.Options(false, false, passthrough);
+        MavenInvocation.Options opts = new MavenInvocation.Options(false, false, List.of(), passthrough);
         passthrough.add("-mutated");
         assertEquals(List.of("-X"), opts.passthrough());
     }

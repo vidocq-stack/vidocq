@@ -43,21 +43,28 @@ public sealed interface Command {
      * runner override the port the application configured for itself — publishing the default on
      * every run would make {@code vidocq start} silently outrank the project's own
      * {@code vidocq.properties}.
+     * <p>{@code mavenProfiles} are the ids of {@code --maven-profile}, which Maven gets as {@code -P<ids>}; here and on
+     * every command that runs the project's build.
      */
-    record Start(int port, boolean portExplicit, Path configFile, boolean debug) implements Command {
-        static Start defaults() { return new Start(8080, false, null, false); }
+    record Start(int port, boolean portExplicit, Path configFile, boolean debug, List<String> mavenProfiles)
+            implements Command {
+        static Start defaults() { return new Start(8080, false, null, false, List.of()); }
     }
 
-    /** See {@link Start} for the meaning of {@code portExplicit}. */
-    record Dev(int port, boolean portExplicit, String profile, boolean debug) implements Command {
-        static Dev defaults() { return new Dev(8080, false, "dev", false); }
+    /**
+     * See {@link Start} for the meaning of {@code portExplicit} and {@code mavenProfiles}. {@code profile} is the
+     * Vidocq configuration profile of {@code -P}, not a Maven one.
+     */
+    record Dev(int port, boolean portExplicit, String profile, boolean debug, List<String> mavenProfiles)
+            implements Command {
+        static Dev defaults() { return new Dev(8080, false, "dev", false, List.of()); }
     }
 
     /**
      * {@code vidocq test}: the tests on every change, without the application ({@code mvn vidocq:test}); {@code once}
      * runs every test once and exits, for CI and scripts.
      */
-    record ContinuousTest(boolean once) implements Command {}
+    record ContinuousTest(boolean once, List<String> mavenProfiles) implements Command {}
 
     /**
      * {@code vidocq idea}: the IntelliJ run configurations ({@code mvn vidocq:idea}).
@@ -131,12 +138,14 @@ public sealed interface Command {
             boolean offline,
             boolean skipTests,
             boolean dryRun,
+            List<String> mavenProfiles,
             List<String> passthrough
     ) implements Command {}
 
     record Clean(
             boolean offline,
             boolean dryRun,
+            List<String> mavenProfiles,
             List<String> passthrough
     ) implements Command {}
 

@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -34,8 +35,8 @@ class CliParserTestIdeaTest {
 
     @Test
     void testWatchesByDefaultAndTakesOnlyOnce() {
-        assertEquals(new Command.ContinuousTest(false), CliParser.parse(new String[]{"test"}));
-        assertEquals(new Command.ContinuousTest(true), CliParser.parse(new String[]{"test", "--once"}));
+        assertEquals(new Command.ContinuousTest(false, List.of()), CliParser.parse(new String[]{"test"}));
+        assertEquals(new Command.ContinuousTest(true, List.of()), CliParser.parse(new String[]{"test", "--once"}));
         CliException ex = assertThrows(CliException.class, () -> CliParser.parse(new String[]{"test", "--bogus"}));
         assertTrue(ex.getMessage().contains("test"), ex.getMessage());
     }
@@ -83,6 +84,16 @@ class CliParserTestIdeaTest {
         assertTrue(help("start").contains("--config, -c <file>"), help("start"));
         assertTrue(help("dev").contains("restarts on every source change."), help("dev"));
         assertTrue(help("doctor").contains("--verbose, -v"), help("doctor"));
+    }
+
+    /** {@code -P} of dev is the Vidocq configuration profile; the Maven one is {@code --maven-profile}, everywhere. */
+    @Test
+    void theHelpTellsTheConfigProfileFromTheMavenOnes() {
+        for (String command : List.of("start", "dev", "test", "build", "clean")) {
+            assertTrue(help(command).contains("--maven-profile <ids>"), command + ": " + help(command));
+        }
+        assertTrue(help("dev").contains("Vidocq config profile to activate (default: dev), not a Maven one"),
+                help("dev"));
     }
 
     private static String help(String command) {
