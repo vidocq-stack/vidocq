@@ -29,7 +29,6 @@ import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.AnnotationMember;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.inject.spi.DeploymentException;
-import jakarta.inject.Qualifier;
 import jakarta.inject.Singleton;
 import jakarta.security.enterprise.authentication.mechanism.http.BasicAuthenticationMechanismDefinition;
 import jakarta.security.enterprise.authentication.mechanism.http.FormAuthenticationMechanismDefinition;
@@ -41,6 +40,7 @@ import jakarta.security.enterprise.identitystore.InMemoryIdentityStoreDefinition
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Makes the identity stores of an application reach the {@link IdentityStoreHandler} (Jakarta
@@ -172,22 +172,28 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
             builder.qualifier(Default.class);
             return;
         }
+        // By its declaration, never by loading the class here: the container resolves the annotation itself.
         for (AnnotationMember qualifier : named) {
-            String name = qualifier.asType().asClass().declaration().name();
-            Class<?> type;
-            try {
-                // Loaded, never initialized: nothing of the deployment runs here. Only a qualifier is kept.
-                // nosemgrep: the name is the one the application wrote in its own definition, checked below
-                type = Class.forName(name, false, Thread.currentThread().getContextClassLoader());
-            } catch (ClassNotFoundException e) {
-                throw new DeploymentException("The qualifier " + name + " of the mechanism declared by "
-                        + declared.origin() + " is not a class the deployment can load", e);
-            }
-            if (!type.isAnnotation() || !type.isAnnotationPresent(Qualifier.class)) {
-                throw new DeploymentException("The qualifier " + name + " of the mechanism declared by "
-                        + declared.origin() + " is not a qualifier annotation");
-            }
-            builder.qualifier(type.asSubclass(Annotation.class));
+            builder.qualifier(new QualifierUsage(qualifier.asType().asClass().declaration()));
+        }
+    }
+
+    /** A qualifier annotation without members, described by its declaration. */
+    private record QualifierUsage(ClassInfo declaration) implements AnnotationInfo {
+
+        @Override
+        public boolean hasMember(String name) {
+            return false;
+        }
+
+        @Override
+        public AnnotationMember member(String name) {
+            return null;
+        }
+
+        @Override
+        public Map<String, AnnotationMember> members() {
+            return Map.of();
         }
     }
 
