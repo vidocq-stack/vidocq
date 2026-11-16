@@ -23,31 +23,36 @@ import com.vaadin.flow.component.ComponentUtil;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.server.ServiceInitEvent;
+import com.vaadin.flow.server.UIInitEvent;
 import com.vaadin.flow.server.VaadinServletService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DevServiceInitTest {
 
     @Test
-    void eachStartedUiIsKeptAndEachPageGetsTheScript() {
-        var service = new VaadinServletService(null, null);
-        var event = new ServiceInitEvent(service);
+    void eachPageGetsTheScript() {
+        var event = new ServiceInitEvent(new VaadinServletService(null, null));
 
         new DevServiceInit().serviceInit(event);
-        var ui = new UI();
-        service.fireUIInitListeners(ui);
 
-        try {
-            assertTrue(OpenUis.INSTANCE.all().contains(ui));
-            assertEquals(List.of(RefreshScript.class),
-                    event.getAddedIndexHtmlRequestListeners().map(Object::getClass).toList());
-        } finally {
-            ComponentUtil.fireEvent(ui, new DetachEvent(ui));
-        }
+        assertEquals(List.of(RefreshScript.class),
+                event.getAddedIndexHtmlRequestListeners().map(Object::getClass).toList());
+    }
+
+    @Test
+    void eachStartedUiIsKeptUntilItDetaches() {
+        var ui = new UI();
+
+        new DevServiceInit().uiInit(new UIInitEvent(ui, new VaadinServletService(null, null)));
+
+        assertTrue(DevServiceInit.OPEN_UIS.all().contains(ui));
+        ComponentUtil.fireEvent(ui, new DetachEvent(ui));
+        assertFalse(DevServiceInit.OPEN_UIS.all().contains(ui));
     }
 }

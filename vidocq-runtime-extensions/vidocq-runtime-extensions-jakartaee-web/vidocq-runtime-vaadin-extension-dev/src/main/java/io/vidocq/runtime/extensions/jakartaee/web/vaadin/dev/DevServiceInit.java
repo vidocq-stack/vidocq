@@ -20,19 +20,32 @@
 package io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev;
 
 import com.vaadin.flow.server.ServiceInitEvent;
+import com.vaadin.flow.server.UIInitEvent;
+import com.vaadin.flow.server.UIInitListener;
 import com.vaadin.flow.server.VaadinServiceInitListener;
 
 import java.io.Serial;
 
 /** Keeps track of the open pages, and gives each one the script that lets a page without push refresh. */
-public final class DevServiceInit implements VaadinServiceInitListener {
+public final class DevServiceInit implements VaadinServiceInitListener, UIInitListener {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
+    /**
+     * The open pages of this application layer. Vaadin creates this listener, and {@code ServiceLoader} the
+     * {@link VaadinRedefinitionListener} of each redefinition: the module is what they share.
+     */
+    static final OpenUis OPEN_UIS = new OpenUis();
+
     @Override
     public void serviceInit(ServiceInitEvent event) {
-        event.getSource().addUIInitListener(started -> OpenUis.INSTANCE.opened(started.getUI()));
+        event.getSource().addUIInitListener(this);
         event.addIndexHtmlRequestListener(new RefreshScript());
+    }
+
+    @Override
+    public void uiInit(UIInitEvent event) {
+        OPEN_UIS.opened(event.getUI());
     }
 }

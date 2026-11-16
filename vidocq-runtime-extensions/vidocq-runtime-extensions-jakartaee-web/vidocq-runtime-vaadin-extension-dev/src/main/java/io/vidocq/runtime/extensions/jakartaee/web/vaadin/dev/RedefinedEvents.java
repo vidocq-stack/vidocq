@@ -44,7 +44,11 @@ public final class RedefinedEvents extends HttpServlet {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** The servlet's path, under the context of the application. */
+    /**
+     * The servlet's path, under the context of the application: the contract between {@link RefreshScript} and this
+     * servlet, both in this module, not a setting of the deployment.
+     */
+    @SuppressWarnings("java:S1075")
     static final String PATH = "/.vidocq/dev/redefined";
 
     private static final long KEEP_ALIVE_SECONDS = 15;

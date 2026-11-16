@@ -35,7 +35,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -47,9 +50,17 @@ class RedefinedEventsServletTest {
     @Test
     void theStreamSendsEachEventUntilTheApplicationStops() throws Exception {
         var body = new StringWriter();
+        var opened = new CountDownLatch(1);
+        var out = new PrintWriter(body) {
+            @Override
+            public void flush() {
+                super.flush();
+                opened.countDown();
+            }
+        };
         var servlet = new RedefinedEvents();
-        Thread reader = Thread.ofVirtual().start(() -> get(servlet, new PrintWriter(body)));
-        awaitOpen(body);
+        Thread reader = Thread.ofVirtual().start(() -> get(servlet, out));
+        assertTrue(opened.await(5, TimeUnit.SECONDS), "the stream opens");
 
         RedefinedEvents.publish("MainView");
         servlet.destroy();
@@ -110,7 +121,7 @@ class RedefinedEventsServletTest {
     void aServletOfThatNameAlreadyThereIsLeftAlone() {
         var context = stub(ServletContext.class, (name, args) -> null);
 
-        new RedefinedEvents.Initializer().onStartup(Set.of(), context);
+        assertDoesNotThrow(() -> new RedefinedEvents.Initializer().onStartup(Set.of(), context));
     }
 
     private void get(RedefinedEvents servlet, PrintWriter out) {
@@ -122,13 +133,6 @@ class RedefinedEventsServletTest {
             default -> null;
         });
         servlet.doGet(request, response);
-    }
-
-    private static void awaitOpen(StringWriter body) throws InterruptedException {
-        long end = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while (!body.toString().startsWith(": open") && System.nanoTime() < end) {
-            Thread.sleep(10);
-        }
     }
 
     @FunctionalInterface

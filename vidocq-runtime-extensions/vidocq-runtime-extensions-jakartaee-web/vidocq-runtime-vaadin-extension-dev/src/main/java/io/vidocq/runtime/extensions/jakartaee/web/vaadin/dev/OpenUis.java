@@ -27,12 +27,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The open pages of the application: the Vaadin service adds each UI as it starts ({@link DevServiceInit}), and a UI
- * leaves when it detaches. It lives in the application layer, so a layer swap drops it with the pages it held.
+ * leaves when it detaches. The one of the application is {@link DevServiceInit#OPEN_UIS}, in the application layer,
+ * so a layer swap drops it with the pages it held.
  */
 final class OpenUis {
-
-    /** The registry of this application layer. */
-    static final OpenUis INSTANCE = new OpenUis();
 
     private final Set<UI> open = ConcurrentHashMap.newKeySet();
 

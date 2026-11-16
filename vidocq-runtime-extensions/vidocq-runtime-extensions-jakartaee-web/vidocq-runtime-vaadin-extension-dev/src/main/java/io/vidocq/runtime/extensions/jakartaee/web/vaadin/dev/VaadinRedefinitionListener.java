@@ -60,7 +60,7 @@ public final class VaadinRedefinitionListener implements RedefinitionListener {
 
     /** The listener {@code ServiceLoader} creates for each redefinition. */
     public VaadinRedefinitionListener() {
-        this(OpenUis.INSTANCE, (ui, task) -> ui.access(task::run), ui -> ui.getPage().reload(),
+        this(DevServiceInit.OPEN_UIS, (ui, task) -> ui.access(task::run), ui -> ui.getPage().reload(),
                 RedefinedEvents::publish, line -> LOG.log(System.Logger.Level.INFO, line));
     }
 
