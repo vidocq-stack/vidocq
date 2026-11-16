@@ -44,7 +44,7 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-[ ${#apps[@]} -gt 0 ] || apps=(app-mem app-mem-basic app-custom app-custom-session app-multiple-store app-multiple-store-backup app-securitycontext-auth)
+[ ${#apps[@]} -gt 0 ] || apps=(app-mem app-mem-basic app-custom app-custom-session app-multiple-store app-multiple-store-backup app-securitycontext-auth app-custom-authentication-mechanism-handler)
 
 # shellcheck disable=SC2206
 mvn_extra=(${MVN_EXTRA:-})

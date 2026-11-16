@@ -227,8 +227,9 @@ of Kerckhoffs (`kerckhoffs-tck/BASELINE.md`).
 | `app-multiple-store` | 4/4 |
 | `app-multiple-store-backup` | 6/6 |
 | `app-securitycontext-auth` | 5/5 |
+| `app-custom-authentication-mechanism-handler` | 4/4 |
 
-32 tests, the same set and the same counts as on the Kerckhoffs container. A local run of selected applications is a
+36 tests; the first seven applications give the same counts as on the Kerckhoffs container. A local run of selected applications is a
 measurement, never a certification; the applications that need Expression Language, JACC, Remember Me or the handler
 beans stay red by design (Kerckhoffs milestone K3).
 

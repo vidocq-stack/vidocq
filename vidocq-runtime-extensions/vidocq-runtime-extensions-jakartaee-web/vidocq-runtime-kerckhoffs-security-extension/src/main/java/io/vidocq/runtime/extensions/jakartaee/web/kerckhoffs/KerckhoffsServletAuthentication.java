@@ -24,7 +24,13 @@ import io.vidocq.kerckhoffs.foy.MechanismRequestAuthentication;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletAuthentication;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.security.enterprise.AuthenticationException;
+import jakarta.security.enterprise.AuthenticationStatus;
 import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanism;
+import jakarta.security.enterprise.authentication.mechanism.http.HttpAuthenticationMechanismHandler;
+import jakarta.security.enterprise.authentication.mechanism.http.HttpMessageContext;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -43,18 +49,51 @@ public final class KerckhoffsServletAuthentication implements ServletAuthenticat
 
     @Override
     public Optional<RequestAuthentication> requestAuthentication(BeanManager beanManager) {
-        if (beanManager == null || beanManager.getBeans(HttpAuthenticationMechanism.class).isEmpty()) {
+        if (beanManager == null || beanManager.getBeans(HttpAuthenticationMechanism.class).isEmpty()
+                && beanManager.getBeans(HttpAuthenticationMechanismHandler.class).isEmpty()) {
             return Optional.empty();
         }
         return Optional.of(new MechanismRequestAuthentication(mechanism(beanManager)));
     }
 
-    /** The mechanism of the application, resolved by the container each time it is asked. */
+    /**
+     * The mechanism of the application, resolved by the container each time it is asked. A handler of the
+     * application, which chooses among several mechanisms (section 3.8.3), prevails: it is no
+     * {@link HttpAuthenticationMechanism} itself, so it is put in front of the request as one.
+     */
     static Supplier<HttpAuthenticationMechanism> mechanism(BeanManager beanManager) {
         return () -> {
-            Bean<?> bean = beanManager.resolve(beanManager.getBeans(HttpAuthenticationMechanism.class));
-            return (HttpAuthenticationMechanism) beanManager.getReference(bean, HttpAuthenticationMechanism.class,
-                    beanManager.createCreationalContext(bean));
+            if (!beanManager.getBeans(HttpAuthenticationMechanismHandler.class).isEmpty()) {
+                return asMechanism(reference(beanManager, HttpAuthenticationMechanismHandler.class));
+            }
+            return reference(beanManager, HttpAuthenticationMechanism.class);
+        };
+    }
+
+    private static <T> T reference(BeanManager beanManager, Class<T> type) {
+        Bean<?> bean = beanManager.resolve(beanManager.getBeans(type));
+        return type.cast(beanManager.getReference(bean, type, beanManager.createCreationalContext(bean)));
+    }
+
+    private static HttpAuthenticationMechanism asMechanism(HttpAuthenticationMechanismHandler handler) {
+        return new HttpAuthenticationMechanism() {
+            @Override
+            public AuthenticationStatus validateRequest(HttpServletRequest request, HttpServletResponse response,
+                                                        HttpMessageContext context) throws AuthenticationException {
+                return handler.validateRequest(request, response, context);
+            }
+
+            @Override
+            public AuthenticationStatus secureResponse(HttpServletRequest request, HttpServletResponse response,
+                                                       HttpMessageContext context) throws AuthenticationException {
+                return handler.secureResponse(request, response, context);
+            }
+
+            @Override
+            public void cleanSubject(HttpServletRequest request, HttpServletResponse response,
+                                     HttpMessageContext context) {
+                handler.cleanSubject(request, response, context);
+            }
         };
     }
 }
