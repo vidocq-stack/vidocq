@@ -1331,6 +1331,15 @@ A name no pool answers fails the start, naming the key to set (`vidocq.pool.<nam
 
 *The application module.* Noether's processor generates, per package of entities, an accessor (`_NoetherJpaAccess`) that Noether calls instead of reflecting: the package needs no `opens`, and `vidocq:check-module-info` does not ask for one. The accessor implements Noether's SPI, so the module needs `requires io.vidocq.noether.jpa.core;`, which `vidocq extension add noether-persistence` writes with the `requires` of the extension. The processor lists the accessor in `META-INF/services`, and the layer `Vidocq.run` creates for the application turns that file into the `provides` of its module; a test that boots Vidocq without that layer declares it in its `module-info.java`: `provides io.vidocq.noether.jpa.core.spi.ManagedAccessProvider with com.acme.ledger._NoetherJpaAccess;`.
 
+[#noether-persistence-report]
+*In the startup report* [.tag-new]#NEW#. The extension writes the section `noether-persistence`, *Noether Persistence*, of the xref:modules/vidocq-runtime-core.adoc#startup-report[startup report]. Its summary counts the units the application injects and their entities, `3 persistence units, 3 entities`, or says `no persistence unit is injected`. In a dev boot, or at `vidocq.startup.report=detailed`, a row per unit gives:
+
+* its transaction type and its pool: `JTA on pool notes`, or `on the default pool` when the unit names none;
+* its schema action, `jakarta.persistence.schema-generation.database.action`, or `none` when it sets none;
+* how many entities, embeddables, named queries and indexes it declares, a unique constraint counting as an index.
+
+The counts come from the unit's description (xref:dev@noether::reference.adoc#tools[Describing a unit for tools]), read once at start, without opening a connection.
+
 [#langchain4j-cdi-mcp]
 == langchain4j-cdi MCP server
 

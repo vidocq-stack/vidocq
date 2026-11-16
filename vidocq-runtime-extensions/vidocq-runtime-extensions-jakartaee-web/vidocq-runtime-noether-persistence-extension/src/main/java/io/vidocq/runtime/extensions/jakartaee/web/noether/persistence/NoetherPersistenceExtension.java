@@ -19,20 +19,28 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.noether.persistence;
 
+import io.vidocq.noether.jpa.core.spi.PersistenceDescriptors;
+import io.vidocq.noether.jpa.core.spi.UnitDescription;
 import io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.units.VidocqPersistenceUnits;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
+import io.vidocq.runtime.spi.report.StartupReportContext;
+import io.vidocq.runtime.spi.report.StartupReportContributor;
+import io.vidocq.runtime.spi.report.StartupReportSection;
 import io.vidocq.vauban.api.ClientProxies;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
+import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Jakarta Persistence 3.2 on Vidocq, with Noether.
@@ -54,10 +62,13 @@ import java.util.TreeSet;
  * <p>Priority 350: after the pool (200), the transaction manager (250) and Mansart Data (300).
  */
 @ClientProxies({EntityManager.class, EntityManagerFactory.class})
-public final class NoetherPersistenceExtension implements VidocqExtension {
+public final class NoetherPersistenceExtension implements VidocqExtension, StartupReportContributor {
 
     private static final System.Logger LOG = System.getLogger(NoetherPersistenceExtension.class.getName());
     private static final String KEYS = "vidocq.persistence.";
+
+    /** The boot facts of the units {@link #onStart} started, for the report. */
+    private final AtomicReference<List<UnitFacts>> started = new AtomicReference<>(List.of());
 
     @Override
     public String name() {
@@ -95,16 +106,37 @@ public final class NoetherPersistenceExtension implements VidocqExtension {
         BeanManager beans = context.beanManager();
         // Each unit once, by name: noether-jpa-cdi gives a unit two factory beans, the injectable one and the one
         // its persistence contexts share, both on the unit's one factory.
-        Set<String> units = new TreeSet<>();
+        Map<String, EntityManagerFactory> units = new TreeMap<>();
         for (Bean<?> bean : beans.getBeans(EntityManagerFactory.class, Any.Literal.INSTANCE)) {
             EntityManagerFactory factory = (EntityManagerFactory) beans.getReference(bean,
                     EntityManagerFactory.class, beans.createCreationalContext(bean));
-            units.add(factory.getName());
+            units.putIfAbsent(factory.getName(), factory);
         }
+        List<UnitFacts> facts = new ArrayList<>();
+        ClassLoader loader = VidocqPersistenceUnitBootstrap.loader();
+        units.forEach((name, factory) -> PersistenceDescriptors.transactions(name, loader).ifPresent(declared ->
+                facts.add(UnitFacts.of(factory.unwrap(UnitDescription.class), declared, factory.getProperties()))));
+        started.set(List.copyOf(facts));
         if (units.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "Noether Persistence: no persistence unit is injected");
         } else {
-            LOG.log(System.Logger.Level.INFO, "Noether Persistence: persistence units " + units + " started");
+            LOG.log(System.Logger.Level.INFO, "Noether Persistence: persistence units " + units.keySet() + " started");
         }
+    }
+
+    @Override
+    public String id() {
+        return name();
+    }
+
+    @Override
+    public String title() {
+        return "Noether Persistence";
+    }
+
+    /** The units this boot started: a summary, and in a {@code dev} boot or a detailed report a row per unit. */
+    @Override
+    public void contribute(StartupReportContext context, StartupReportSection section) {
+        PersistenceSection.write(started.get(), context.launchMode(), context.verbosity(), section);
     }
 }

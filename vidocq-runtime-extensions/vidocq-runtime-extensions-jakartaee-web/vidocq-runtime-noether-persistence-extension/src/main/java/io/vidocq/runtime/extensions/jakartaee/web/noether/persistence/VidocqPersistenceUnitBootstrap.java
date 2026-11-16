@@ -94,7 +94,8 @@ public class VidocqPersistenceUnitBootstrap implements PersistenceUnitBootstrap 
         return beans.get();
     }
 
-    private static ClassLoader loader() {
+    /** The loader the units are declared in: the thread context loader, or this module's. */
+    static ClassLoader loader() {
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
         return loader != null ? loader : VidocqPersistenceUnitBootstrap.class.getClassLoader();
     }
