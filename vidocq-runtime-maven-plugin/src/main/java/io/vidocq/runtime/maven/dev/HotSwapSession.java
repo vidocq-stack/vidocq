@@ -52,7 +52,7 @@ final class HotSwapSession {
     private ClassesSnapshot pending;
     private boolean lost;
     /** The outputs of the requests not acknowledged since {@link #base}: the child may run any of them. */
-    private final List<ClassesSnapshot> unconfirmed = new ArrayList<>();
+    private final List<ClassesSnapshot> unacknowledged = new ArrayList<>();
 
     private HotSwapSession(List<Path> classRoots, List<Path> projectSourceRoots,
             StartTimeDeclarations dependencyDeclarations, List<Path> dependencyJars, String redefinitionOff,
@@ -122,14 +122,14 @@ final class HotSwapSession {
             base = pending;
             pending = null;
         }
-        unconfirmed.clear();
+        unacknowledged.clear();
         lost = false;
     }
 
     /** The last request was not acknowledged, or the child was started again: the next request is a swap. */
     void lost() {
         if (pending != null) {
-            unconfirmed.add(pending);
+            unacknowledged.add(pending);
         }
         pending = null;
         lost = true;
@@ -142,13 +142,13 @@ final class HotSwapSession {
     void respawned() {
         base = ClassesSnapshot.take(classRoots, latest);
         latest = base;
-        unconfirmed.clear();
+        unacknowledged.clear();
         pending = null;
         lost = true;
     }
 
     private Optional<String> dropReason(ClassesSnapshot next) {
-        return Stream.concat(Stream.of(base), unconfirmed.stream())
+        return Stream.concat(Stream.of(base), unacknowledged.stream())
                 .map(output -> SessionVerdict.dropReason(output, next, supertypes, keepSessions))
                 .flatMap(Optional::stream).findFirst();
     }
