@@ -36,7 +36,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The event stream of the redefinitions, at {@value #PATH}: one event for each redefinition that changed more than
- * lambda bodies, read by {@link RefreshScript}. A comment line every {@value #KEEP_ALIVE_SECONDS} seconds keeps the
+ * lambda bodies, read by {@link RefreshScript}. It is also the first request of a page that a swap restored with its
+ * HTTP session, whose UIs then open ({@link OpenUis#restored}). A comment line every {@value #KEEP_ALIVE_SECONDS} seconds keeps the
  * connection open and finds a closed one.
  */
 public final class RedefinedEvents extends HttpServlet {
@@ -81,6 +82,7 @@ public final class RedefinedEvents extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+        DevServiceInit.OPEN_UIS.restored(request);
         response.setContentType("text/event-stream");
         response.setCharacterEncoding("UTF-8");
         response.setHeader("Cache-Control", "no-cache");

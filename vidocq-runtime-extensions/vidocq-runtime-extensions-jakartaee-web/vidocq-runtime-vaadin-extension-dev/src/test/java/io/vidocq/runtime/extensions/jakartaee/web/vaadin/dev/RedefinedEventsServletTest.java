@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev;
 
+import com.vaadin.flow.component.UI;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletRegistration;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.Writer;
-import java.lang.reflect.Proxy;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev.Stubs.stub;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -97,6 +98,28 @@ class RedefinedEventsServletTest {
         assertEquals(": open\n\n", body.toString());
     }
 
+    /** After a swap that kept the HTTP sessions, the stream is the first request a restored page sends. */
+    @Test
+    void theStreamOfARestoredPageOpensItsUis() throws Exception {
+        var ui = new UI();
+        DevServiceInit.OPEN_UIS.serving(new RestoredSessions.Service(new RestoredSessions.Session(ui)));
+        var opened = new CountDownLatch(1);
+        var out = new PrintWriter(Writer.nullWriter()) {
+            @Override
+            public void flush() {
+                opened.countDown();
+            }
+        };
+        HttpServletRequest restored = RestoredSessions.request(Map.of(RestoredSessions.ATTRIBUTE, "restored"));
+        Thread reader = Thread.ofVirtual().start(() -> get(new RedefinedEvents(), restored, out));
+        assertTrue(opened.await(5, TimeUnit.SECONDS), "the stream opens");
+
+        RedefinedEvents.endAll();
+        reader.join(Duration.ofSeconds(5));
+
+        assertTrue(DevServiceInit.OPEN_UIS.all().contains(ui));
+    }
+
     @Test
     void aClosedConnectionEndsTheStream() throws Exception {
         var closed = new PrintWriter(Writer.nullWriter()) {
@@ -151,7 +174,10 @@ class RedefinedEventsServletTest {
     }
 
     private void get(RedefinedEvents servlet, PrintWriter out) {
-        var request = stub(HttpServletRequest.class, (name, args) -> null);
+        get(servlet, RestoredSessions.request(null), out);
+    }
+
+    private void get(RedefinedEvents servlet, HttpServletRequest request, PrintWriter out) {
         var response = stub(HttpServletResponse.class, (name, args) -> switch (name) {
             case "getWriter" -> out;
             case "setContentType" -> headers.put("contentType", args[0]);
@@ -159,15 +185,5 @@ class RedefinedEventsServletTest {
             default -> null;
         });
         servlet.doGet(request, response);
-    }
-
-    @FunctionalInterface
-    private interface Answer {
-        Object answer(String method, Object[] args);
-    }
-
-    private static <T> T stub(Class<T> type, Answer answer) {
-        return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type},
-                (proxy, method, args) -> answer.answer(method.getName(), args == null ? new Object[0] : args)));
     }
 }

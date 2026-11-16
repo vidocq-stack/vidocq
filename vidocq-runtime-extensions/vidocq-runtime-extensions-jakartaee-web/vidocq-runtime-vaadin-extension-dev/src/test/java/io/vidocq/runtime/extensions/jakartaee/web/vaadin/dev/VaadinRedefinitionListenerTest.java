@@ -20,8 +20,6 @@
 package io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev;
 
 import com.vaadin.flow.component.Component;
-import com.vaadin.flow.component.ComponentUtil;
-import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.HasComponents;
 import com.vaadin.flow.component.Tag;
 import com.vaadin.flow.component.UI;
@@ -129,15 +127,6 @@ class VaadinRedefinitionListenerTest {
         queued.forEach(Runnable::run);
 
         assertEquals(List.of("Hot reload - Vaadin: refreshed 2 open pages showing MainView"), lines);
-    }
-
-    @Test
-    void aDetachedUiLeavesTheRegistry() {
-        UI ui = showing(new MainView());
-
-        ComponentUtil.fireEvent(ui, new DetachEvent(ui));
-
-        assertEquals(List.of(), uis.all());
     }
 
     private UI showing(Component view) {

@@ -19,8 +19,6 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev;
 
-import com.vaadin.flow.component.ComponentUtil;
-import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.UIInitEvent;
@@ -28,6 +26,7 @@ import com.vaadin.flow.server.VaadinServletService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -37,7 +36,8 @@ class DevServiceInitTest {
 
     @Test
     void eachPageGetsTheScript() {
-        var event = new ServiceInitEvent(new VaadinServletService(null, null));
+        // The service joins the application's registry: one that cannot name itself would break the others.
+        var event = new ServiceInitEvent(new RestoredSessions.Service(null));
 
         new DevServiceInit().serviceInit(event);
 
@@ -46,13 +46,24 @@ class DevServiceInitTest {
     }
 
     @Test
-    void eachStartedUiIsKeptUntilItDetaches() {
+    void theRestoredPagesAreReadThroughTheServiceOfTheApplication() {
+        var ui = new UI();
+
+        new DevServiceInit().serviceInit(
+                new ServiceInitEvent(new RestoredSessions.Service(new RestoredSessions.Session(ui))));
+        DevServiceInit.OPEN_UIS.restored(RestoredSessions.request(Map.of(RestoredSessions.ATTRIBUTE, "restored")));
+
+        assertTrue(DevServiceInit.OPEN_UIS.all().contains(ui));
+    }
+
+    @Test
+    void eachStartedUiIsKeptUntilItCloses() {
         var ui = new UI();
 
         new DevServiceInit().uiInit(new UIInitEvent(ui, new VaadinServletService(null, null)));
 
         assertTrue(DevServiceInit.OPEN_UIS.all().contains(ui));
-        ComponentUtil.fireEvent(ui, new DetachEvent(ui));
+        ui.close();
         assertFalse(DevServiceInit.OPEN_UIS.all().contains(ui));
     }
 }

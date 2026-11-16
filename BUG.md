@@ -38,6 +38,26 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   or nothing beyond not merging in two repositories in the same minute. Two runners skip the container test, so what
   a build of `main` proves depends on the runner that takes it: the runners are Vidocq/ci#121.
 
+## BUG-20261116-09 — A swap cannot keep the HTTP session of an open Vaadin page: the Vaadin dev companion is not serializable
+
+- **Date**: 2026-11-16
+- **Status**: FIXED on `feat/dev-session-handover`
+- **Module**: `vidocq-runtime-vaadin-extension-dev` (`OpenUis`, `DevServiceInit`, `RedefinedEvents`)
+- **Symptom**: found while replaying the session handover on VidocqTools/vaadin-on-vidocq. A swap the plugin vouched
+  for (`MainView` gained a lambda) keeps no session: Foy logs `HTTP session ... cannot move to the new deployment: its
+  attribute com.vaadin.flow.server.VaadinSession.com.vaadin.flow.server.startup.ServletDeployer, of class
+  com.vaadin.flow.server.VaadinSession, cannot be written (java.io.NotSerializableException:
+  io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev.OpenUis). The session ends here.`
+- **Repro**: `vidocq:dev` on vaadin-on-vidocq with the Vaadin `-dev` companion, open the page, append a listener to
+  `MainView`.
+- **Cause**: `OpenUis.opened` added a detach listener to each UI, a lambda that captured the `OpenUis`: the UI, and so
+  the Vaadin session, held an object of the companion that cannot be written. A second gap stood behind it: a page the
+  swap restored never runs `uiInit` in the new layer, so a later redefinition would not have refreshed it.
+- **Fix**: the UI holds no listener of the companion. `OpenUis` keeps the UIs weakly and leaves out the closing ones;
+  it reads a restored page's Vaadin session through the application's Vaadin service (`findVaadinSession`, only when
+  the HTTP session holds it, so none is created) when the page opens its event stream again, its first request to the
+  new deployment (`OpenUisTest`, `DevServiceInitTest`, `RedefinedEventsServletTest.theStreamOfARestoredPageOpensItsUis`).
+
 ## BUG-20261116-08 — Every start of `vidocq:dev` on a Vaadin application warns that the event stream is resolved by reflection
 
 - **Date**: 2026-11-16

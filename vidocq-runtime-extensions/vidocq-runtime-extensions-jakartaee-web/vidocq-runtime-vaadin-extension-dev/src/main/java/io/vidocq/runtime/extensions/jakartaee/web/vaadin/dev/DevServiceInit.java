@@ -23,6 +23,7 @@ import com.vaadin.flow.server.ServiceInitEvent;
 import com.vaadin.flow.server.UIInitEvent;
 import com.vaadin.flow.server.UIInitListener;
 import com.vaadin.flow.server.VaadinServiceInitListener;
+import com.vaadin.flow.server.VaadinServletService;
 
 import java.io.Serial;
 
@@ -41,6 +42,9 @@ public final class DevServiceInit implements VaadinServiceInitListener, UIInitLi
     @Override
     public void serviceInit(ServiceInitEvent event) {
         event.getSource().addUIInitListener(this);
+        if (event.getSource() instanceof VaadinServletService service) {
+            OPEN_UIS.serving(service);
+        }
         event.addIndexHtmlRequestListener(new RefreshScript());
     }
 
