@@ -540,6 +540,45 @@ column, `null`, a `Boolean`, a `Number` or a `String`, anything else written as 
 rows)` says how many rows the body holds, which a summary that counts rows says, never the number read. A body of
 another shape is shown as any other JSON.
 
+[#rows-menu]
+=== A menu on the selected rows [.tag-new]#NEW#
+
+A result of rows can offer a menu on its rows, such as *Delete these rows* in a page of entities. The table then
+starts each row with a box to tick:
+
+* *Ticking.* Shift ticks every row since the last one ticked, and the box of the header ticks every row or none.
+* *Opening the menu.* A right-click on a row opens the menu at the pointer. On a row that was not ticked, it ticks
+  that row alone first. The *N selected* button of the result's bar opens the same menu from the keyboard: the
+  arrows move through it, and Escape closes it.
+* *What an entry does.* An entry fills the form of another action of the panel with the ticked rows' values, such
+  as `DELETE FROM Note e WHERE e.id IN (1, 3)`, and opens its tab. Nothing is sent: you read the form, then submit
+  it, as after a replay.
+* *What is kept.* The ticked rows stay ticked while the page polls, and a new result starts with none.
+
+A panel writes the menu with `ActionResult.rows(summary, columns, rows, more, menu)`:
+xref:dev-console-panels.adoc#row-menu[A menu on the selected rows].
+
+[#graph-view]
+== A graph [.tag-new]#NEW#
+
+A result can be a graph, such as the entities of a persistence unit and their relations. The page lays it out as
+boxes and lines:
+
+* *The layout.* Each set of linked boxes is laid out in layers, starting from its most linked box. A parent sits
+  above its subclass, and the sets stand side by side. A line ends with an arrow or is dashed, as the panel says, and
+  a box linked to itself gets a loop.
+* *Labels.* A line's label sits at its middle, moved off the other labels and off the boxes. A box shows its label
+  and, dimmed under it, its kind, each cut at 40 characters.
+* *Facts.* Clicking a box, or pressing Enter or Space on it, lists its facts beside the drawing, such as its table
+  and its columns, and marks its lines.
+* *Size.* A large graph scrolls inside the result.
+* *Switching views.* The result's bar adds *Graph* and *JSON*, which shows the same body in the
+  <<json-viewer,JSON viewer>>.
+* *What is kept.* The view and the chosen box stay while the page polls.
+
+A panel answers a graph with `ActionResult.graph(summary, nodes, edges)`:
+xref:dev-console-panels.adoc#graph-result[A graph result].
+
 [#json-editor]
 == JSON editor
 

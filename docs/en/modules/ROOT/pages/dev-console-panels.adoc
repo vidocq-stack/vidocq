@@ -614,6 +614,66 @@ reflection over the record components, written against the old records must be u
 internal `call`, and each constructor wraps an old `run` anew, so two actions built from the same `run` are no
 longer equal.
 
+[#graph-result]
+=== A graph result [.tag-new]#NEW#
+
+`ActionResult.graph(summary, nodes, edges)` answers a graph, of type `application/x-graph+json`
+(`ActionResult.GRAPH`). The page draws it as boxes and lines, and lists a box's facts on a click
+(xref:dev-console.adoc#graph-view[A graph]):
+
+[source,java]
+----
+List<Node> nodes = List.of(
+        new Node("Note", "Note", "entity", List.of(new Fact("table", "NOTE"), new Fact("title", "TITLE VARCHAR(200)"))),
+        new Node("Base", "Base", "mapped superclass", List.of()),
+        new Node("Author", "Author", "entity", List.of()));
+List<Edge> edges = List.of(
+        new Edge("Note", "Base", "extends", true, false),       // an arrow, not dashed: Base above Note
+        new Edge("Note", "Author", "author *..1", false, false));
+return ActionResult.graph("3 entities", nodes, edges);
+----
+
+* *A node.* `Node(id, label, kind, facts)` has an id and a label, neither blank, of 200 characters at most. Its kind
+  is shown dimmed under the label, 40 characters at most, empty for none. Its facts are `Fact(name, value)` pairs,
+  listed in order when the box is clicked: a name of 200 characters at most and a value of 2,000.
+* *An edge.* `Edge(from, to, label, arrow, dashed)` names two nodes of the graph, or the same one twice for a loop.
+  Its label is 200 characters at most, empty for none. An edge with an arrow that is not dashed places `to` above
+  `from`, as a superclass above its subclass.
+* *The limits.* A graph holds 500 nodes (`MAX_NODES`) and 2,000 edges (`MAX_EDGES`) at most, each id once. It is
+  never cut, since half a graph means nothing: an edge to an unknown node, an id given twice, too many nodes or edges,
+  or a body past 256 KiB throws an `IllegalArgumentException`.
+
+[#row-menu]
+=== A menu on the selected rows [.tag-new]#NEW#
+
+`ActionResult.rows(summary, columns, rows, more, menu)` gives a result of rows a menu on its ticked rows
+(xref:dev-console.adoc#rows-menu[A menu on the selected rows]). Each `MenuItem(label, action, arguments)` names an
+action of the same panel and a JSON object of its arguments, as a <<replay-column,replay cell>> does. Inside the
+strings of those arguments, `${column}`, for a column of the result, becomes that column's values for the ticked
+rows, in the rows' order, joined with `", "`, and written as query literals:
+
+* a string as `'O''Brien'`;
+* a number with the exact digits of the body;
+* `TRUE`, `FALSE` or `NULL`.
+
+A `${name}` that names no column stays as it is.
+
+[source,java]
+----
+List<MenuItem> menu = List.of(new MenuItem("Delete these rows", "jpql",
+        "{\"query\":\"DELETE FROM Note e WHERE e.id IN (${id})\"}"));
+return ActionResult.rows("20 rows", columns, rows, more, menu);
+----
+
+* *Nothing is sent.* The entry fills the form of `jpql` and opens its tab: the user reads the query, then submits it.
+* *A missing action.* The page leaves out an entry whose action the panel does not have, such as one a dev reload
+  removed. With no entry left, the table has no box to tick.
+* *The limits.* A menu has 16 entries at most (`MAX_MENU`). A label is not blank and 80 characters at most, and an
+  entry's arguments are one JSON object of 4,096 characters at most.
+* *The body.* It carries `"menu"` between `"columns"` and `"rows"`, only when the menu has an entry, so a result
+  without a menu is unchanged. `ActionResult.rowsHeld(columns, rows, menu)` counts the rows that still fit with the
+  menu.
+
 [#action-groups]
 === Groups and descriptions
 
