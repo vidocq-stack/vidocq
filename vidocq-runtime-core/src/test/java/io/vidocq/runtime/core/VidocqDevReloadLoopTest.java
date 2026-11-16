@@ -72,6 +72,7 @@ class VidocqDevReloadLoopTest {
     @Test
     void aDroppedSwapSaysWhyAndDoesNotExport() {
         var store = new DevHandoverStore();
+        store.take(SESSIONS); // the deployment of the running boot asked for its sessions
         List<Boolean> exportingDuringStop = new ArrayList<>();
         List<String> info = new ArrayList<>();
 
@@ -81,6 +82,17 @@ class VidocqDevReloadLoopTest {
 
         assertEquals(List.of("Hot reload - HTTP sessions not kept: vidocq.dev.keepSessions is false"), info);
         assertEquals(List.of(false), exportingDuringStop);
+    }
+
+    @Test
+    void withoutAnExtensionThatAskedForStateADropSaysNothing() {
+        List<String> info = new ArrayList<>();
+
+        VidocqDevReloadLoop.stopForSwap(new ReloadRequest.Swap("A changed",
+                Optional.of("A gained a field total, so a restored instance would not match the new class")),
+                new DevHandoverStore(), () -> {}, info::add);
+
+        assertEquals(List.of(), info);
     }
 
     @Test

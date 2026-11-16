@@ -44,6 +44,15 @@ class DevHandoverStoreTest {
     }
 
     @Test
+    void askedIsTrueOnceABootAskedForAKeyEvenAMissingOne() {
+        assertFalse(store.asked());
+
+        store.take("servlet:sessions:/");
+
+        assertTrue(store.asked());
+    }
+
+    @Test
     void takeRemovesTheKey() {
         store.beginExport();
         store.put(KEY, new byte[] {1, 2});

@@ -149,14 +149,14 @@ final class VidocqDevReloadLoop {
     /**
      * Stops the running boot for {@code swap} (session handover design §2): its extensions hand state over during
      * the stop when the request kept the HTTP sessions; otherwise the reason they are dropped is logged, unless the
-     * request gave none.
+     * request gave none or no extension ever asked the store for state (an application without HTTP sessions).
      */
     static void stopForSwap(ReloadRequest.Swap swap, DevHandoverStore store, Runnable shutdown,
             Consumer<String> info) {
         String drop = swap.dropSessions().orElse(null);
         if (drop == null) {
             store.beginExport();
-        } else if (!drop.isBlank()) {
+        } else if (!drop.isBlank() && store.asked()) {
             info.accept("Hot reload - HTTP sessions not kept: " + drop);
         }
         try {

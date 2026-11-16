@@ -42,8 +42,8 @@ import java.util.function.Supplier;
  * @param startupReport the startup report of this boot, read-only: empty until the bootstrap has written it, and
  *                      again once it stops; {@code null} reads as always empty
  * @param suspendables  what a process snapshot must let go of, in start order
- * @param devHandover   the handover store of the reload loop of {@code vidocq:dev}, empty in any other boot;
- *                      {@code null} reads as empty
+ * @param devHandover   the handover store of the reload loop of {@code vidocq:dev}, empty in any other boot; never
+ *                      {@code null}
  */
 record ExtensionContextImpl(
         VaubanContainer container,

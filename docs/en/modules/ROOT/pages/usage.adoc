@@ -262,21 +262,28 @@ Hot reload - kept 1 HTTP session across the reload
 
 A session moves when Foy can write each of its attributes and read it back with the new classes; it drops one that it
 cannot, with a WARNING of its own, and that client starts a new session. `vidocq:dev` drops all the sessions of a
-swap, and says why, in two cases:
+swap, and says why, in three cases. Each looks only at what a session can hold, what Java serialization writes:
+serializable classes, serializable lambdas such as Vaadin's listeners, serializable anonymous classes. A field added
+to a REST resource or to a service keeps the sessions.
 
-* a changed class gained, lost or retyped an instance field, or changed its superclass or its interfaces, so an
-  instance written before the change would not match the class after it: `Hot reload - HTTP sessions not kept: Order
-  gained a field total, so a restored instance would not match the new class`;
-* a changed class gained or lost a lambda while the code of a lambda it kept changed: the compiler numbered its
-  lambdas again, and a listener read back from the session could run the code of another one. `Hot reload - HTTP
+* a changed serializable class gained, lost or retyped an instance field, or changed its superclass or its
+  interfaces, so an instance written before the change would not match the class after it: `Hot reload - HTTP
+  sessions not kept: Order gained a field total, so a restored instance would not match the new class`;
+* a changed class gained or lost a serializable lambda while the code of one it kept changed: the compiler numbered
+  its lambdas again, and a listener read back from the session could run the code of another one. `Hot reload - HTTP
   sessions not kept: MainView's lambdas moved, and a restored listener could run another one's code`. A lambda added
-  after the others, a lambda body edited in place, or the last lambda removed keeps the sessions.
+  after the others, a lambda body edited in place, or the last lambda removed keeps the sessions;
+* a class gained or lost an anonymous class while a serializable one it kept changed, for the same reason: the
+  compiler numbers them `MainView$1`, `MainView$2`, ... in source order. `Hot reload - HTTP sessions not kept:
+  MainView's anonymous classes moved, and a restored listener could run another one's code`.
 
 `-Dvidocq.dev.keepSessions=false` drops them at every swap: `Hot reload - HTTP sessions not kept:
 vidocq.dev.keepSessions is false`. Dropped sessions end as before: `sessionDestroyed` fires, and the log gives their
 count, `Undeploying the servlet application invalidated 1 HTTP session: its client starts a new one on its next
 request`. The sessions are also dropped, without a line of their own, when the change is not classified (`Hot swap
-off: no dependency declares its start-time code`) and when the context path changed between the two starts. Sessions
+off: no dependency declares its start-time code`), when the JVM refused a redefinition and the layer is swapped
+instead, and when the context path changed between the two starts. An application without a servlet deployment gets no
+line at all. Sessions
 the new deployment cannot read are dropped with one WARNING, and it starts anyway: `Hot reload - the HTTP sessions of
 the previous deployment could not be imported, starting without them: ...`.
 

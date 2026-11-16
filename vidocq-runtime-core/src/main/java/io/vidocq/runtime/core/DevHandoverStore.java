@@ -36,6 +36,7 @@ final class DevHandoverStore implements DevHandover {
 
     private final Map<String, byte[]> values = new HashMap<>();
     private boolean exporting;
+    private boolean asked;
 
     /** The stop that starts hands state over: {@link #put} accepts it until {@link #endExport()}. */
     synchronized void beginExport() {
@@ -72,8 +73,14 @@ final class DevHandoverStore implements DevHandover {
         values.put(key, value.clone());
     }
 
+    /** Whether a boot asked for state: an extension that hands it over runs in the application. */
+    synchronized boolean asked() {
+        return asked;
+    }
+
     @Override
     public synchronized Optional<byte[]> take(String key) {
+        asked = true;
         return Optional.ofNullable(values.remove(key));
     }
 }
