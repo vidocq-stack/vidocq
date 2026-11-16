@@ -42,10 +42,12 @@ import java.util.stream.Collectors;
  * @param entity  the entity's name
  * @param paths   the path of each column, in order
  * @param joins   the joins the paths need, {@code LEFT JOIN e.author j1}
- * @param columns the columns, named by the attribute, {@code author} or {@code address.city}
+ * @param columns the columns, named by the attribute, {@code title}, {@code author.id} or {@code address.city}
  * @param idPath  the path of the entity's id, {@code e.id}; {@code null} when its id is composite
+ * @param idPaths the paths of the values of its id, which sort a page; empty when an embedded id has no known values
  */
-record Projection(String entity, List<String> paths, List<String> joins, List<Column> columns, String idPath) {
+record Projection(String entity, List<String> paths, List<String> joins, List<Column> columns, String idPath,
+                  List<String> idPaths) {
 
     /** The entity's identification variable. */
     static final String ALIAS = "e";
@@ -58,6 +60,7 @@ record Projection(String entity, List<String> paths, List<String> joins, List<Co
         paths = List.copyOf(paths);
         joins = List.copyOf(joins);
         columns = List.copyOf(columns);
+        idPaths = List.copyOf(idPaths);
     }
 
     /** The projection of {@code entity}, an entity of {@code unit}. */
@@ -68,11 +71,23 @@ record Projection(String entity, List<String> paths, List<String> joins, List<Co
                 .collect(Collectors.toMap(Embeddable::className, Function.identity(), (a, b) -> a));
         Builder builder = new Builder(embeddables);
         String idPath = simpleId(entity).map(id -> ALIAS + "." + id.name()).orElse(null);
+        List<String> idPaths = new ArrayList<>();
         for (Attribute attribute : entity.attributes()) {
             String path = ALIAS + "." + attribute.name();
             switch (attribute.kind()) {
-                case ID, VERSION, BASIC -> builder.add(path, attribute.name(), JavaTypes.column(attribute.javaType()));
-                case EMBEDDED, EMBEDDED_ID -> builder.embedded(path, attribute.name(), attribute, 0);
+                case ID -> {
+                    builder.add(path, attribute.name(), JavaTypes.column(attribute.javaType()));
+                    idPaths.add(path);
+                }
+                case VERSION, BASIC -> builder.add(path, attribute.name(), JavaTypes.column(attribute.javaType()));
+                case EMBEDDED -> builder.embedded(path, attribute.name(), attribute, 0);
+                case EMBEDDED_ID -> {
+                    int first = builder.paths.size();
+                    builder.embedded(path, attribute.name(), attribute, 0);
+                    if (embeddables.containsKey(attribute.target())) {
+                        idPaths.addAll(builder.paths.subList(first, builder.paths.size()));
+                    }
+                }
                 case MANY_TO_ONE, ONE_TO_ONE -> {
                     Entity target = entities.get(attribute.target());
                     Optional<Attribute> id = target == null ? Optional.empty() : simpleId(target);
@@ -83,7 +98,7 @@ record Projection(String entity, List<String> paths, List<String> joins, List<Co
                 }
             }
         }
-        return new Projection(entity.name(), builder.paths, builder.joins, builder.columns, idPath);
+        return new Projection(entity.name(), builder.paths, builder.joins, builder.columns, idPath, idPaths);
     }
 
     /** The id of {@code entity} when it is one basic attribute; empty for an embedded or a composite id. */
@@ -147,7 +162,7 @@ record Projection(String entity, List<String> paths, List<String> joins, List<Co
         void joined(String path, String name, Attribute targetId) {
             String variable = "j" + (joins.size() + 1);
             joins.add("LEFT JOIN " + path + " " + variable);
-            add(variable + "." + targetId.name(), name, JavaTypes.column(targetId.javaType()));
+            add(variable + "." + targetId.name(), name + "." + targetId.name(), JavaTypes.column(targetId.javaType()));
         }
     }
 }

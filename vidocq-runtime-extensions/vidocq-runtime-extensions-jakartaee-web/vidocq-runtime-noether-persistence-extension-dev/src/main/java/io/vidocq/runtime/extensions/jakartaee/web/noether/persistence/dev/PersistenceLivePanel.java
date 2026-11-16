@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.dev;
 
 import io.vidocq.noether.jpa.core.spi.UnitDescription;
+import io.vidocq.noether.jpa.core.spi.UnitDescription.Entity;
 import io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.live.NoetherPersistenceLive;
 import io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.live.NoetherPersistenceLive.Unit;
 import io.vidocq.runtime.spi.ExtensionContext;
@@ -60,17 +61,22 @@ public final class PersistenceLivePanel implements LivePanel {
     private final Supplier<List<Unit>> units;
     private final AtomicReference<BeanManager> beans = new AtomicReference<>();
     private final JpqlActions jpql;
+    private final ExploreActions explore;
 
     /** The panel of the running boot's units, its transactions those of the application's transaction manager. */
     public PersistenceLivePanel() {
         this.units = NoetherPersistenceLive::units;
-        this.jpql = new JpqlActions(new UnitWork(this::transactionManager));
+        UnitWork work = new UnitWork(this::transactionManager);
+        this.jpql = new JpqlActions(work);
+        this.explore = new ExploreActions(work);
     }
 
     /** A panel of {@code units}, whose JTA work runs in the transactions of {@code transactions}. */
     PersistenceLivePanel(Supplier<List<Unit>> units, Supplier<TransactionManager> transactions) {
         this.units = units;
-        this.jpql = new JpqlActions(new UnitWork(transactions));
+        UnitWork work = new UnitWork(transactions);
+        this.jpql = new JpqlActions(work);
+        this.explore = new ExploreActions(work);
     }
 
     @Override
@@ -136,7 +142,13 @@ public final class PersistenceLivePanel implements LivePanel {
                 onUnit((found, given) -> ModelGraph.of(describe(found))), "Model",
                 "The unit's entities, embeddables and mapped superclasses, their relations and their inheritance, "
                         + "read from memory. Click a box to list its table and its attributes."));
-        actions.addAll(jpql.actions(unit, this::onUnit, JpqlActions.example(descriptions(started))));
+        List<UnitDescription> described = descriptions(started);
+        actions.addAll(jpql.actions(unit, this::onUnit, JpqlActions.example(described)));
+        List<String> entities = described.stream().flatMap(d -> d.entities().stream()).map(Entity::name).distinct()
+                .sorted().toList();
+        if (!entities.isEmpty()) {
+            actions.addAll(explore.actions(unit, entities, this::onUnit));
+        }
         return actions;
     }
 

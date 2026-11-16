@@ -56,6 +56,9 @@ final class ResultRows {
     private static final Pattern ALIASED = Pattern.compile("(?is).*\\S\\s+AS\\s+([\\p{L}_][\\p{L}\\p{N}_]*)");
     private static final Pattern NAMED = Pattern.compile("\\S+\\s+([\\p{L}_][\\p{L}\\p{N}_]*)");
 
+    /** The id of an entity, for a table that holds none. */
+    private static final Function<Object, Object> NO_ENTITY = item -> null;
+
     /**
      * A table.
      *
@@ -97,6 +100,14 @@ final class ResultRows {
             }
         }
         return new Table(columns(names, rows), rows);
+    }
+
+    /** The table of {@code found}, the rows of {@code projection}'s query. */
+    static Table projected(Projection projection, List<?> found) {
+        int width = projection.columns().size();
+        List<List<Object>> rows = found.stream().map(row -> cells(row instanceof Object[] array ? array
+                : new Object[] {row}, width, Map.of(), NO_ENTITY)).toList();
+        return new Table(projection.columns(), rows);
     }
 
     /** The answer of a query: at most {@value #MAX_ROWS} rows of {@code table}, run in {@code millis}. */
@@ -220,16 +231,16 @@ final class ResultRows {
     private static Table expanded(List<?> found, Projection projection, EntityManager em,
                                   Function<Object, Object> ids) {
         List<Object> keys = found.stream().map(ids).toList();
-        Map<Object, List<Object>> byId = new HashMap<>();
+        // keyed by text: a cell writes a UUID id as text, and a number id the same whatever its type
+        Map<String, List<Object>> byId = new HashMap<>();
         String jpql = projection.select() + " WHERE " + projection.idPath() + " IN :ids";
         for (int from = 0; from < keys.size(); from += CHUNK) {
             List<Object> chunk = List.copyOf(keys.subList(from, Math.min(keys.size(), from + CHUNK)));
-            for (Object row : em.createQuery(jpql).setParameter("ids", chunk).getResultList()) {
-                Object[] values = row instanceof Object[] array ? array : new Object[] {row};
-                byId.put(values[projection.idColumn()], cells(values, values.length, Map.of(), ids));
-            }
+            Table chunked = projected(projection, em.createQuery(jpql).setParameter("ids", chunk).getResultList());
+            chunked.rows().forEach(row -> byId.put(String.valueOf(row.get(projection.idColumn())), row));
         }
-        List<List<Object>> rows = keys.stream().map(byId::get).filter(Objects::nonNull).toList();
+        List<List<Object>> rows = keys.stream().map(key -> byId.get(String.valueOf(key))).filter(Objects::nonNull)
+                .toList();
         return new Table(projection.columns(), rows);
     }
 

@@ -47,10 +47,11 @@ class ProjectionTest {
         assertEquals("SELECT e.id, e.title, j1.id, e.address.street, e.address.city FROM Note e"
                 + " LEFT JOIN e.author j1", note.select());
         assertEquals(List.of(new Column("id", "integer"), new Column("title", "string"),
-                new Column("author", "integer"), new Column("address.street", "string"),
+                new Column("author.id", "integer"), new Column("address.street", "string"),
                 new Column("address.city", "string")), note.columns());
         assertEquals("e.id", note.idPath());
         assertEquals(0, note.idColumn());
+        assertEquals(List.of("e.id"), note.idPaths());
     }
 
     @Test
@@ -80,5 +81,17 @@ class ProjectionTest {
         assertEquals(List.of(new Column("key", "string"), new Column("amount", "number")), projection.columns());
         assertNull(projection.idPath());
         assertEquals(-1, projection.idColumn());
+        assertEquals(List.of(), projection.idPaths(), "an embedded id whose embeddable is unknown sorts nothing");
+    }
+
+    @Test
+    void aKnownEmbeddedIdIsAColumnPerValueAndSortsThePage() {
+        UnitDescription unit = ExploreActionsTest.LINES;
+
+        Projection projection = Projection.of(unit.entities().getFirst(), unit);
+
+        assertEquals("SELECT e.key.orderId, e.key.no, e.amount FROM Line e", projection.select());
+        assertEquals(List.of("e.key.orderId", "e.key.no"), projection.idPaths());
+        assertNull(projection.idPath());
     }
 }
