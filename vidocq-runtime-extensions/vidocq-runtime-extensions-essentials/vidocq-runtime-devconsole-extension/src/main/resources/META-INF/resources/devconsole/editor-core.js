@@ -1867,6 +1867,8 @@ const CHAR_WIDTH = 7.2;
 /** How far right of its box a self-edge's loop reaches, and how far apart edges between the same boxes run. */
 const LOOP = 22;
 const PARALLEL = 12;
+/** How far under its layer the first lane runs of a line between two boxes of that layer that are not side by side. */
+const DETOUR = 12;
 /** The width of a character of an edge's label, at the page's 11 px, and the height of its line. */
 const LABEL_CHAR = 6.6;
 const LABEL_HEIGHT = 13;
@@ -1962,8 +1964,34 @@ function partLayers(members, around, nodes) {
   return layers;
 }
 
+/**
+ * Links slots {@code a} and {@code b} for the sweeps: when their layers are more than one apart, through a new
+ * waypoint in each layer between them, a slot as narrow as a line that keeps the line off the boxes of that layer.
+ * Answers the waypoints, from a to b.
+ */
+function link(a, b, where, slots, near) {
+  const { layers, l: from } = where[a];
+  const to = where[b].l;
+  const step = Math.sign(to - from);
+  const passed = [];
+  let previous = a;
+  for (let l = from + step; l !== to; l += step) {
+    const w = slots.length;
+    slots.push({ x: 0, y: 0, w: 0, h: BOX_HEIGHT });
+    near.push([]);
+    layers[l].push(w);
+    near[previous].push(w);
+    near[w].push(previous);
+    passed.push(w);
+    previous = w;
+  }
+  near[previous].push(b);
+  near[b].push(previous);
+  return passed;
+}
+
 /** Orders each layer by the mean position of its neighbours in the layer {@code step} away, keeping ties in order. */
-function sweep(layers, around, step) {
+function sweep(layers, near, step) {
   const position = new Map();
   layers.forEach((row) => row.forEach((v, i) => position.set(v, i)));
   const range = step > 0 ? [...layers.keys()].slice(1) : [...layers.keys()].reverse().slice(1);
@@ -1973,8 +2001,8 @@ function sweep(layers, around, step) {
     const row = layers[l];
     const weight = new Map();
     for (const v of row) {
-      const near = around[v].filter(([u]) => inOther.has(u)).map(([u]) => position.get(u));
-      weight.set(v, near.length ? near.reduce((a, b) => a + b, 0) / near.length
+      const close = near[v].filter((u) => inOther.has(u)).map((u) => position.get(u));
+      weight.set(v, close.length ? close.reduce((a, b) => a + b, 0) / close.length
         : position.get(v) * (other.length - 1) / Math.max(1, row.length - 1));
     }
     row.sort((a, b) => weight.get(a) - weight.get(b) || position.get(a) - position.get(b));
@@ -1982,34 +2010,111 @@ function sweep(layers, around, step) {
   }
 }
 
-const round = (v) => Math.round(v * 10) / 10;
-
-/** Where a line from {@code p}, inside {@code box}, along {@code d} leaves the box. */
-function exit(p, d, box) {
-  let t = Infinity;
-  if (d.x > 0) t = Math.min(t, (box.x + box.w - p.x) / d.x);
-  if (d.x < 0) t = Math.min(t, (box.x - p.x) / d.x);
-  if (d.y > 0) t = Math.min(t, (box.y + box.h - p.y) / d.y);
-  if (d.y < 0) t = Math.min(t, (box.y - p.y) / d.y);
-  return Number.isFinite(t) ? { x: p.x + t * d.x, y: p.y + t * d.y } : { x: p.x, y: p.y };
+/** The room right of each box that its loops and their labels take: LOOP, and PARALLEL more for each further loop. */
+function loopRooms(edges, index, count) {
+  const room = new Array(count).fill(0);
+  const loops = new Array(count).fill(0);
+  for (const e of edges) {
+    const a = index.get(e.from);
+    if (a === index.get(e.to)) {
+      room[a] = Math.max(room[a], LOOP + loops[a] * PARALLEL + 4 + Math.round(LABEL_CHAR * e.label.length));
+      loops[a] += 1;
+    }
+  }
+  return room;
 }
 
-/** The line of {@code edge}, the {@code k}-th of {@code n} between the same two boxes, ends on their borders. */
-function edgeLine(edge, a, b, k, n, canonical) {
-  const ca = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
-  const cb = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
-  const d = { x: cb.x - ca.x, y: cb.y - ca.y };
-  const length = Math.hypot(d.x, d.y) || 1;
-  // the same side for both directions: the normal of the line from the first box to the second, in input order
-  const sign = canonical ? 1 : -1;
-  const normal = { x: sign * -d.y / length, y: sign * d.x / length };
-  const shift = Math.max(-(a.h / 2 - 2), Math.min(a.h / 2 - 2, (k - (n - 1) / 2) * PARALLEL));
-  const start = exit({ x: ca.x + shift * normal.x, y: ca.y + shift * normal.y }, d, a);
-  const end = exit({ x: cb.x + shift * normal.x, y: cb.y + shift * normal.y }, { x: -d.x, y: -d.y }, b);
-  const lx = round((start.x + end.x) / 2);
+/**
+ * Puts the slots of one part's layers, boxes and waypoints, in rows from {@code left}, each row centred and each
+ * box followed by the room of its loops, and notes in {@code before} how many boxes are left of each box in its row.
+ * Answers the part's width.
+ */
+function placePart(layers, slots, room, before, left) {
+  const span = (v) => slots[v].w + (v < room.length ? room[v] : 0);
+  const widths = layers.map((row) => row.reduce((sum, v) => sum + span(v), 0) + BOX_GAP * (row.length - 1));
+  const width = Math.max(...widths);
+  layers.forEach((row, l) => {
+    let x = left + Math.round((width - widths[l]) / 2);
+    let boxes = 0;
+    for (const v of row) {
+      slots[v].x = x;
+      slots[v].y = MARGIN + l * (BOX_HEIGHT + LAYER_GAP);
+      if (v < before.length) {
+        before[v] = boxes;
+        boxes += 1;
+      }
+      x += span(v) + BOX_GAP;
+    }
+  });
+  return width;
+}
+
+const round = (v) => Math.round(v * 10) / 10;
+const middle = (box) => box.x + box.w / 2;
+/** The border of {@code box} that faces a slot whose top is at {@code y}: its bottom for a slot below, else its top. */
+const facing = (box, y) => (y > box.y ? box.y + box.h : box.y);
+/** How far off the middle of a side {@code size} long the {@code k}-th of {@code n} lines between two boxes runs. */
+const offset = (k, n, size) => Math.max(-(size / 2 - 2), Math.min(size / 2 - 2, (k - (n - 1) / 2) * PARALLEL));
+
+/**
+ * {@code edge} drawn along {@code points}, from a border of its first box to one of its second, its label at the middle
+ * of piece {@code at}.
+ */
+function polyline(edge, points, at) {
+  const p = points[at];
+  const q = points[at + 1];
+  const first = points[0];
+  const last = points.at(-1);
+  const lx = round((p.x + q.x) / 2);
   return { from: edge.from, to: edge.to, label: edge.label, arrow: edge.arrow, dashed: edge.dashed,
-    x1: round(start.x), y1: round(start.y), x2: round(end.x), y2: round(end.y), cx: lx,
-    lx, ly: round((start.y + end.y) / 2 + 4), lw: Math.round(LABEL_CHAR * edge.label.length), loop: false };
+    x1: round(first.x), y1: round(first.y), x2: round(last.x), y2: round(last.y),
+    points: points.slice(1, -1).map((m) => ({ x: round(m.x), y: round(m.y) })), cx: lx, lx,
+    ly: round((p.y + q.y) / 2 + 4), lw: Math.round(LABEL_CHAR * edge.label.length), loop: false };
+}
+
+/** The {@code k}-th of {@code n} lines between boxes of adjacent layers: from the upper's bottom to the lower's top. */
+function layerLine(edge, a, b, k, n) {
+  const shift = offset(k, n, Math.min(a.w, b.w));
+  return polyline(edge, [{ x: middle(a) + shift, y: facing(a, b.y) }, { x: middle(b) + shift, y: facing(b, a.y) }],
+    0);
+}
+
+/** The {@code k}-th of {@code n} lines between two boxes side by side in a layer: across the room between them. */
+function sideLine(edge, a, b, k, n) {
+  const y = a.y + a.h / 2 + offset(k, n, a.h);
+  return polyline(edge, a.x < b.x ? [{ x: a.x + a.w, y }, { x: b.x, y }] : [{ x: a.x, y }, { x: b.x + b.w, y }], 0);
+}
+
+/** A line between two boxes of a layer with boxes between them: down from each, along lane {@code lane} under it. */
+function detourLine(edge, a, b, lane) {
+  const y = a.y + a.h + DETOUR + lane * PARALLEL;
+  return polyline(edge, [{ x: middle(a), y: a.y + a.h }, { x: middle(a), y }, { x: middle(b), y },
+    { x: middle(b), y: b.y + b.h }], 1);
+}
+
+/**
+ * A line through the waypoints {@code passed}: from a's border to the near end of the first waypoint, along each
+ * waypoint across its layer, from one to the next, and to b's border, every slanted piece between two layers. Its
+ * label is at the middle of the middle slanted piece.
+ */
+function routedLine(edge, a, b, passed) {
+  const points = [{ x: middle(a), y: facing(a, passed[0].y) }];
+  let previous = a;
+  passed.forEach((w, i) => {
+    const next = passed[i + 1] || b;
+    points.push({ x: w.x, y: facing(w, previous.y) }, { x: w.x, y: facing(w, next.y) });
+    previous = w;
+  });
+  points.push({ x: middle(b), y: facing(b, previous.y) });
+  return polyline(edge, points, 2 * Math.floor(passed.length / 2));
+}
+
+/** The {@code k}-th loop of box {@code a}: right of it, PARALLEL further than the loop before, its label beside it. */
+function loopLine(edge, a, k) {
+  const cx = a.x + a.w + LOOP + k * PARALLEL;
+  return { from: edge.from, to: edge.to, label: edge.label, arrow: edge.arrow, dashed: edge.dashed,
+    x1: a.x + a.w, y1: round(a.y + a.h * 0.3), x2: a.x + a.w, y2: round(a.y + a.h * 0.7), points: [], cx,
+    lx: cx + 4, ly: round(a.y + a.h / 2 + 4), lw: Math.round(LABEL_CHAR * edge.label.length), loop: true };
 }
 
 /** The room an edge's label takes: centred on (lx, ly), its baseline, or starting there for a loop's. */
@@ -2064,14 +2169,46 @@ function roomGrid() {
 }
 
 /**
+ * The line of each edge, in the graph's order, once the boxes are placed: a loop, a line through the waypoints
+ * {@code via} gives it, a line between adjacent layers, one between boxes side by side ({@code before} tells), or a
+ * detour under the layer of two boxes with boxes between them, the detours of a layer on three lanes in turn.
+ */
+function edgeLines(edges, index, boxes, via, before) {
+  const between = new Map();          // the edges between the same two boxes, by the pair, in order
+  const pairOf = (e) => {
+    const a = index.get(e.from);
+    const b = index.get(e.to);
+    return Math.min(a, b) + " " + Math.max(a, b);
+  };
+  for (const e of edges) (between.get(pairOf(e)) || between.set(pairOf(e), []).get(pairOf(e))).push(e);
+  const lanes = new Map();            // the next lane under each layer, by its top
+  return edges.map((e) => {
+    const a = boxes[index.get(e.from)];
+    const b = boxes[index.get(e.to)];
+    const same = between.get(pairOf(e));
+    const k = same.indexOf(e);
+    if (a === b) return loopLine(e, a, k);
+    if (via.get(e).length) return routedLine(e, a, b, via.get(e));
+    if (a.y !== b.y) return layerLine(e, a, b, k, same.length);
+    if (Math.abs(before[index.get(e.from)] - before[index.get(e.to)]) === 1) return sideLine(e, a, b, k, same.length);
+    const lane = lanes.get(a.y) || 0;
+    lanes.set(a.y, lane + 1);
+    return detourLine(e, a, b, lane % 3);
+  });
+}
+
+/**
  * Where the boxes and lines of {@code graph} (readGraph's) go: {width, height, nodes: [{id, x, y, w, h, text, sub}],
- * edges: [{from, to, label, arrow, dashed, x1, y1, x2, y2, cx, lx, ly, lw, loop}]}, both in the graph's order: (lx, ly)
- * is the baseline of an edge's label, lw its width, and cx the reach of a loop. The same graph
- * always gets the same layout. Each part of the graph, the nodes linked to one another, is laid out in layers (see
- * partLayers), ordered down, up and down again by the positions of their neighbours, centred, and the parts are put
- * side by side. A line ends on the borders of its boxes, its label at its middle; lines between the same two boxes
- * run PARALLEL apart; a self-edge is a loop right of its box. Labels move off one another and off the boxes
- * (spreadLabels), and the drawing grows to hold them. A box shows its label and kind cut to BOX_CHARS.
+ * edges: [{from, to, label, arrow, dashed, x1, y1, points: [{x, y}], x2, y2, cx, lx, ly, lw, loop}]}, both in the
+ * graph's order: a line runs from (x1, y1) through its points to (x2, y2), (lx, ly) is the baseline of its label, lw
+ * the label's width, and cx the reach of a loop. The same graph always gets the same layout. Each part of the graph,
+ * the nodes linked to one another, is laid out in layers (see partLayers); a line between boxes more than one layer
+ * apart passes a waypoint in each layer between them (link); the boxes and waypoints of each layer are ordered down,
+ * up and down again by the positions of their neighbours and centred, and the parts are put side by side. No line
+ * runs through a box: a line ends on the borders of its boxes, crosses a layer only at a waypoint, and runs between
+ * two boxes of a layer only when they are side by side, else under the layer. Lines between the same two boxes run
+ * PARALLEL apart; a self-edge is a loop right of its box, which keeps room for it. Labels move off one another and
+ * off the boxes (spreadLabels), and the drawing grows to hold them. A box shows its label and kind cut to BOX_CHARS.
  */
 export function graphLayout(graph) {
   const nodes = graph.nodes;
@@ -2080,9 +2217,10 @@ export function graphLayout(graph) {
   for (const e of graph.edges) {
     const a = index.get(e.from);
     const b = index.get(e.to);
-    if (a === b) continue;
-    around[a].push([b, e]);
-    around[b].push([a, e]);
+    if (a !== b) {
+      around[a].push([b, e]);
+      around[b].push([a, e]);
+    }
   }
   const boxes = nodes.map((n) => {
     const text = boxText(n.label);
@@ -2090,48 +2228,35 @@ export function graphLayout(graph) {
     return { id: n.id, x: 0, y: 0, w: Math.max(60, Math.round(16 + CHAR_WIDTH * Math.max(text.length, sub.length))),
       h: BOX_HEIGHT, text, sub };
   });
-  let left = MARGIN;
-  let height = 0;
-  for (const members of graphParts(nodes.length, around)) {
-    const layers = partLayers(members, around, nodes);
-    sweep(layers, around, 1);
-    sweep(layers, around, -1);
-    sweep(layers, around, 1);
-    const widths = layers.map((row) => row.reduce((sum, v) => sum + boxes[v].w, 0) + BOX_GAP * (row.length - 1));
-    const width = Math.max(...widths);
-    layers.forEach((row, l) => {
-      let x = left + Math.round((width - widths[l]) / 2);
-      for (const v of row) {
-        boxes[v].x = x;
-        boxes[v].y = MARGIN + l * (BOX_HEIGHT + LAYER_GAP);
-        x += boxes[v].w + BOX_GAP;
-      }
-    });
-    height = Math.max(height, layers.length * BOX_HEIGHT + (layers.length - 1) * LAYER_GAP);
-    left += width + PART_GAP;
-  }
-  const between = new Map();          // the edges between the same two boxes, by the pair, in order
-  const pairOf = (e) => {
+  const parts = graphParts(nodes.length, around).map((members) => partLayers(members, around, nodes));
+  const where = [];                   // the layers of each node's part, and its layer there
+  parts.forEach((layers) => layers.forEach((row, l) => row.forEach((v) => {
+    where[v] = { layers, l };
+  })));
+  const slots = [...boxes];           // the boxes, then the waypoints
+  const near = boxes.map(() => []);
+  const via = new Map();              // the waypoints of each edge, by the edge
+  for (const e of graph.edges) {
     const a = index.get(e.from);
     const b = index.get(e.to);
-    return Math.min(a, b) + " " + Math.max(a, b);
-  };
-  for (const e of graph.edges) (between.get(pairOf(e)) || between.set(pairOf(e), []).get(pairOf(e))).push(e);
-  const edges = graph.edges.map((e) => {
-    const a = boxes[index.get(e.from)];
-    const b = boxes[index.get(e.to)];
-    if (a === b) {
-      return { from: e.from, to: e.to, label: e.label, arrow: e.arrow, dashed: e.dashed,
-        x1: a.x + a.w, y1: round(a.y + a.h * 0.3), x2: a.x + a.w, y2: round(a.y + a.h * 0.7), cx: a.x + a.w + LOOP,
-        lx: a.x + a.w + LOOP + 4, ly: round(a.y + a.h / 2 + 4), lw: Math.round(LABEL_CHAR * e.label.length),
-        loop: true };
-    }
-    const same = between.get(pairOf(e));
-    return edgeLine(e, a, b, same.indexOf(e), same.length, index.get(e.from) < index.get(e.to));
-  });
+    if (a !== b) via.set(e, link(a, b, where, slots, near).map((w) => slots[w]));
+  }
+  const room = loopRooms(graph.edges, index, nodes.length);
+  const before = new Array(nodes.length).fill(0);
+  let left = MARGIN;
+  let height = 0;
+  for (const layers of parts) {
+    sweep(layers, near, 1);
+    sweep(layers, near, -1);
+    sweep(layers, near, 1);
+    left += placePart(layers, slots, room, before, left) + PART_GAP;
+    height = Math.max(height, layers.length * BOX_HEIGHT + (layers.length - 1) * LAYER_GAP);
+  }
+  const edges = edgeLines(graph.edges, index, boxes, via, before);
   const labels = spreadLabels(edges, boxes);
   const right = Math.max(0, ...labels.map((b) => b.x + b.w + 8));
-  const bottom = Math.max(0, ...labels.map((b) => b.y + b.h + 8));
+  const bottom = edges.reduce((most, e) => e.points.reduce((m, p) => Math.max(m, p.y + 8), most),
+    Math.max(0, ...labels.map((b) => b.y + b.h + 8)));
   return { width: Math.ceil(Math.max(nodes.length ? left - PART_GAP + MARGIN : 2 * MARGIN, right)),
     height: Math.ceil(Math.max(height + 2 * MARGIN, bottom)), nodes: boxes, edges };
 }

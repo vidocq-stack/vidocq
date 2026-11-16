@@ -1707,12 +1707,13 @@ function graphDrawing(graph, nodes) {
     const d = e.loop
       ? "M " + e.x1 + " " + e.y1 + " C " + e.cx + " " + (e.y1 - 14) + ", " + e.cx + " " + (e.y2 + 14) + ", " + e.x2
         + " " + e.y2
-      : "M " + e.x1 + " " + e.y1 + " L " + e.x2 + " " + e.y2;
+      : "M " + e.x1 + " " + e.y1 + e.points.map((p) => " L " + p.x + " " + p.y).join("") + " L " + e.x2 + " " + e.y2;
     const title = svgEl("title");
     title.textContent = e.from + " → " + e.to + (e.label ? ": " + e.label : "");
     line.append(title, svgEl("path", { d }));
     if (e.arrow) {
-      const from = e.loop ? [e.cx, e.y2 + 14] : [e.x1, e.y1];
+      const tail = e.points.at(-1) || { x: e.x1, y: e.y1 };
+      const from = e.loop ? [e.cx, e.y2 + 14] : [tail.x, tail.y];
       line.append(svgEl("polygon", { points: arrowHead(from[0], from[1], e.x2, e.y2) }, "graph-arrow"));
     }
     if (e.label) {

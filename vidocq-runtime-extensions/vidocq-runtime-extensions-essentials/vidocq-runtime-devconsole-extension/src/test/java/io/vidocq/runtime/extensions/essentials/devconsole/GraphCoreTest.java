@@ -54,7 +54,77 @@ class GraphCoreTest {
             + "for (let j = i + 1; j < n.length; j++) { const a = n[i], b = n[j]; if (a.x < b.x + b.w && b.x < a.x + a.w "
             + "&& a.y < b.y + b.h && b.y < a.y + a.h) return a.id + ' over ' + b.id; } return ''; }";
 
+    /**
+     * The notes model of the demonstration application: Note, Author and Tag extend the mapped superclass Base, Note
+     * refers to the two others and embeds an Address, and an author's mentor is an author.
+     */
+    private static final String NOTES = "{\"nodes\":[" + node("Note", "entity") + "," + node("Author", "entity") + ","
+            + node("Tag", "entity") + "," + node("Address", "embeddable") + "," + node("Base", "mapped superclass")
+            + "],\"edges\":[" + edge("Note", "Base", "extends", true, false) + ","
+            + edge("Author", "Base", "extends", true, false) + "," + edge("Tag", "Base", "extends", true, false) + ","
+            + edge("Note", "Author", "author *..1 / notes", false, false) + ","
+            + edge("Note", "Tag", "tags *..*", false, false) + "," + edge("Note", "Address", "place", false, true) + ","
+            + edge("Author", "Author", "mentor *..1", false, false) + "]}";
+
+    /**
+     * The lines of a layout that run through a box other than their two, as "from-to through id": each piece of a
+     * line, from (x1, y1) through its points to (x2, y2), is clipped to the inside of every other box.
+     */
+    private static final String THROUGH = """
+            (l) => {
+              const hits = (p, q, b) => {
+                let t0 = 0;
+                let t1 = 1;
+                const dx = q.x - p.x;
+                const dy = q.y - p.y;
+                for (const [d, room] of [[-dx, p.x - b.x - 1], [dx, b.x + b.w - 1 - p.x],
+                    [-dy, p.y - b.y - 1], [dy, b.y + b.h - 1 - p.y]]) {
+                  if (d === 0) {
+                    if (room < 0) return false;
+                  } else if (d < 0) {
+                    t0 = Math.max(t0, room / d);
+                  } else {
+                    t1 = Math.min(t1, room / d);
+                  }
+                }
+                return t0 <= t1;
+              };
+              const out = [];
+              for (const e of l.edges.filter((f) => !f.loop)) {
+                const points = [{ x: e.x1, y: e.y1 }, ...(e.points || []), { x: e.x2, y: e.y2 }];
+                for (const n of l.nodes.filter((m) => m.id !== e.from && m.id !== e.to)) {
+                  if (points.some((p, i) => i > 0 && hits(points[i - 1], p, n))) {
+                    out.push(e.from + '-' + e.to + ' through ' + n.id);
+                  }
+                }
+              }
+              return out.join(', ');
+            }""";
+
     private static PageCore core;
+
+    private static String node(String id, String kind) {
+        return "{\"id\":\"" + id + "\",\"label\":\"" + id + "\",\"kind\":\"" + kind + "\",\"facts\":[]}";
+    }
+
+    private static String edge(String from, String to, String label, boolean arrow, boolean dashed) {
+        return "{\"from\":\"" + from + "\",\"to\":\"" + to + "\",\"label\":\"" + label + "\",\"arrow\":" + arrow
+                + ",\"dashed\":" + dashed + "}";
+    }
+
+    /** A graph of {@code count} nodes and {@code links} edges spread over them, every tenth an arrow to a parent. */
+    private static String generated(int count, int links) {
+        StringBuilder graph = new StringBuilder("{\"nodes\":[");
+        for (int i = 0; i < count; i++) {
+            graph.append(i == 0 ? "" : ",").append(node("n" + i, "entity"));
+        }
+        graph.append("],\"edges\":[");
+        for (int i = 0; i < links; i++) {
+            graph.append(i == 0 ? "" : ",").append(edge("n" + i % count, "n" + (i * 7 + 3) % count, "r", i % 10 == 0,
+                    false));
+        }
+        return graph.append("]}").toString();
+    }
 
     @BeforeAll
     static void loadTheModule() {
@@ -141,6 +211,37 @@ class GraphCoreTest {
     }
 
     @Test
+    void noLineRunsThroughABoxItDoesNotEnd() {
+        assertEquals("", core.eval(THROUGH, layout(GRAPH)).asString(), "the test graph");
+        assertEquals("", core.eval(THROUGH, layout(NOTES)).asString(), "Tag and Author extend Base over Note");
+        assertEquals("", core.eval(THROUGH, layout(generated(40, 100))).asString(), "40 nodes, 100 edges");
+    }
+
+    @Test
+    void aLoopsLabelSitsBesideItsLoopThoughABoxFollowsInItsLayer() {
+        Value layout = layout("{\"nodes\":[" + node("Root", "entity") + "," + node("A", "entity") + ","
+                + node("B", "entity") + "],\"edges\":[" + edge("Root", "A", "a", false, false) + ","
+                + edge("Root", "B", "b", false, false) + "," + edge("A", "A", "mentor *..1", false, false) + "]}");
+        Value loop = core.eval("(l) => l.edges.find((e) => e.loop)", layout);
+        Value a = box(layout, "A");
+
+        assertTrue(box(layout, "B").getMember("x").asDouble() > a.getMember("x").asDouble(), "B follows A");
+        assertEquals(loop.getMember("cx").asDouble() + 4, loop.getMember("lx").asDouble(), 0.5, "beside its loop");
+        assertEquals(a.getMember("y").asDouble() + a.getMember("h").asDouble() / 2 + 4,
+                loop.getMember("ly").asDouble(), 13, "at most a line off the middle of its box");
+    }
+
+    @Test
+    void twoLoopsOfTheSameBoxReachApart() {
+        Value layout = layout("{\"nodes\":[" + node("Employee", "entity") + "],\"edges\":["
+                + edge("Employee", "Employee", "manager", false, false) + ","
+                + edge("Employee", "Employee", "mentor", false, false) + "]}");
+
+        assertEquals("", core.eval("(l) => l.edges[0].cx === l.edges[1].cx ? 'one loop over the other' : ''",
+                layout).asString());
+    }
+
+    @Test
     void twoEdgesBetweenTheSameBoxesAreDrawnApart() {
         Value layout = layout(GRAPH);
         Value there = core.eval("(l) => l.edges.find((e) => e.from === 'Note' && e.to === 'Author')", layout);
@@ -178,17 +279,7 @@ class GraphCoreTest {
 
     @Test
     void fiveHundredNodesLayOutUnderOneSecond() {
-        StringBuilder graph = new StringBuilder("{\"nodes\":[");
-        for (int i = 0; i < 500; i++) {
-            graph.append(i == 0 ? "" : ",").append("{\"id\":\"n").append(i).append("\",\"label\":\"Entity")
-                    .append(i).append("\",\"kind\":\"entity\",\"facts\":[]}");
-        }
-        graph.append("],\"edges\":[");
-        for (int i = 0; i < 1500; i++) {
-            graph.append(i == 0 ? "" : ",").append("{\"from\":\"n").append(i % 500).append("\",\"to\":\"n")
-                    .append((i * 7 + 3) % 500).append("\",\"label\":\"r\",\"arrow\":false,\"dashed\":false}");
-        }
-        String text = graph.append("]}").toString();
+        String text = generated(500, 1500);
         layout(text);
 
         long start = System.nanoTime();

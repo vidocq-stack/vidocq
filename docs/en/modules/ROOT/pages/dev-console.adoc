@@ -566,7 +566,9 @@ boxes and lines:
 
 * *The layout.* Each set of linked boxes is laid out in layers, starting from its most linked box. A parent sits
   above its subclass, and the sets stand side by side. A line ends with an arrow or is dashed, as the panel says, and
-  a box linked to itself gets a loop.
+  a box linked to itself gets a loop, with room beside it.
+* *Lines.* No line runs through a box. A line between layers that are not adjacent bends through a gap in each layer
+  it crosses. A line between two boxes of a layer runs under that layer when other boxes stand between them.
 * *Labels.* A line's label sits at its middle, moved off the other labels and off the boxes. A box shows its label
   and, dimmed under it, its kind, each cut at 40 characters.
 * *Facts.* Clicking a box, or pressing Enter or Space on it, lists its facts beside the drawing, such as its table
