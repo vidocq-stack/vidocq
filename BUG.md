@@ -5,6 +5,24 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261116-04 — The 500-node graph layout test fails on a CI runner: 3.2 s for a one-second bound
+
+- **Date**: 2026-11-16
+- **Status**: FIXED on `feat/noether-persistence-dev` (Vidocq/vidocq#625)
+- **Module**: `vidocq-runtime-devconsole-extension` (`GraphCoreTest.fiveHundredNodesLayOutUnderOneSecond`)
+- **Symptom**: the `sonar` job of #625 (run 4745, runner Villejuif-runner1) failed on
+  `fiveHundredNodesLayOutUnderOneSecond`: 3.2 s for the test, whose bound is one second for the measured layout. The
+  `producer` job of the same commit passed it, and so do local builds: 0.23 s without the coverage agent, 0.55 s with
+  it.
+- **Repro**: run `GraphCoreTest` under `-Pquality` on a loaded, slower machine; the time scales with the machine.
+- **Cause**: the test bounds a wall-clock time. It runs the page's script in GraalJS's interpreter, under the JaCoCo
+  agent in the quality profile, on shared runners: a time that depends on the machine. The layout itself grows in
+  proportion to the graph (50, 100, 250 and 500 nodes with three edges each: 6, 13, 32 and 63 ms locally, 11, 21, 60
+  and 120 ms under JaCoCo).
+- **Fix**: `theLayoutTimeGrowsInProportionToTheGraph` replaces it. Five times the nodes and edges, 500 against 100,
+  must cost less than ten times as much, best of three runs each. A layout quadratic in them fails it: a loop over
+  every pair of edges added to `graphLayout` gave 33 ms against 566 ms, 17 times.
+
 ## BUG-20261116-03 — A distribution unpacked by one user is not usable by another: rewritten jars `rw-------`, launcher `rwxr--r--`
 
 - **Date**: 2026-11-16

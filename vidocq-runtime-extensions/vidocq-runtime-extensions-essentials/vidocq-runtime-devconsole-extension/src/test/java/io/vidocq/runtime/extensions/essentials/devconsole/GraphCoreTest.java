@@ -296,16 +296,35 @@ class GraphCoreTest {
         assertTrue(a.getMember("w").asDouble() < 320, a.toString());
     }
 
+    /**
+     * The layout's time grows in proportion to the graph: five times the nodes and edges cost less than ten times as
+     * much, where a layout quadratic in them would cost 25 times. A ratio, not a time: the test runs the page's
+     * script in GraalJS's interpreter, under the coverage agent of the quality profile, on shared runners, where a
+     * time bound fails on a slow machine (3.2 s on a CI runner for what takes 120 ms here).
+     */
     @Test
-    void fiveHundredNodesLayOutUnderOneSecond() {
-        String text = generated(500, 1500);
-        layout(text);
+    void theLayoutTimeGrowsInProportionToTheGraph() {
+        String small = generated(100, 300);
+        String large = generated(500, 1500);
+        Value layout = layout(large);
+        layout(small);
 
-        long start = System.nanoTime();
-        Value layout = layout(text);
-        long millis = (System.nanoTime() - start) / 1_000_000;
+        long smallNanos = Long.MAX_VALUE;
+        long largeNanos = Long.MAX_VALUE;
+        for (int round = 0; round < 3; round++) {
+            smallNanos = Math.min(smallNanos, nanos(small));
+            largeNanos = Math.min(largeNanos, nanos(large));
+        }
 
         assertEquals(500, layout.getMember("nodes").getArraySize());
-        assertTrue(millis < 1000, millis + " ms");
+        assertTrue(largeNanos < 10 * smallNanos, "100 nodes in " + smallNanos / 1_000_000 + " ms, 500 in "
+                + largeNanos / 1_000_000 + " ms");
+    }
+
+    /** The time one layout of {@code text} takes, in nanoseconds. */
+    private static long nanos(String text) {
+        long start = System.nanoTime();
+        layout(text);
+        return System.nanoTime() - start;
     }
 }
