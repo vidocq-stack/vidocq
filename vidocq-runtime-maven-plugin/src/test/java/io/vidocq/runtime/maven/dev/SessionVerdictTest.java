@@ -32,14 +32,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class SessionVerdictTest {
 
     private static final String ORDER = "package app; class Order implements java.io.Serializable { %s }";
+    /** A view whose listeners, an {@code Action}, are serializable, as Vaadin's are. */
     private static final String VIEW = """
             package app;
-            class MainView {
-                java.util.List<java.util.function.Supplier<String>> actions = new java.util.ArrayList<>();
+            class MainView implements java.io.Serializable {
+                interface Action extends java.util.function.Supplier<String>, java.io.Serializable {}
+                java.util.List<Action> actions = new java.util.ArrayList<>();
+                java.util.List<java.util.function.Supplier<String>> plain = new java.util.ArrayList<>();
                 MainView() { %s }
             }
             """;
     private static final String SAVE_CANCEL = "actions.add(() -> \"save\"); actions.add(() -> \"cancel\");";
+    private static final String ANONYMOUS = "actions.add(new Action() { public String get() { return \"%s\"; } });";
+    private static final String MOVED = "MainView's %s moved, and a restored listener could run another one's code";
 
     @TempDir
     Path dir;
@@ -50,7 +55,8 @@ class SessionVerdictTest {
         var base = project.apply(build().source("app/Order.java", ORDER.formatted("int count;")));
         var next = project.apply(build().source("app/Order.java", ORDER.formatted("int count; int total;")));
 
-        assertEquals(Optional.of("vidocq.dev.keepSessions is false"), SessionVerdict.dropReason(base, next, false));
+        assertEquals(Optional.of("vidocq.dev.keepSessions is false"), SessionVerdict.dropReason(base, next,
+                SupertypeIndex.of(next, List.of(), _ -> { }), false));
     }
 
     @Test
@@ -69,8 +75,50 @@ class SessionVerdictTest {
         var next = project.apply(build().source("app/MainView.java",
                 VIEW.formatted("actions.add(() -> \"reset\"); " + SAVE_CANCEL)));
 
-        assertEquals(Optional.of("MainView's lambdas moved, and a restored listener could run another one's code"),
-                SessionVerdict.dropReason(base, next, true));
+        assertEquals(Optional.of(MOVED.formatted("lambdas")), dropReason(base, next));
+    }
+
+    @Test
+    void lambdasNoSessionCanHoldKeepWhenOneIsInsertedFirst() {
+        String plain = "plain.add(() -> \"save\"); plain.add(() -> \"cancel\");";
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/MainView.java", VIEW.formatted(plain)));
+        var next = project.apply(build().source("app/MainView.java",
+                VIEW.formatted("plain.add(() -> \"reset\"); " + plain)));
+
+        assertEquals(Optional.empty(), dropReason(base, next));
+    }
+
+    @Test
+    void anAnonymousClassInsertedFirstDrops() {
+        String saveCancel = ANONYMOUS.formatted("save") + ANONYMOUS.formatted("cancel");
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/MainView.java", VIEW.formatted(saveCancel)));
+        var next = project.apply(build().source("app/MainView.java",
+                VIEW.formatted(ANONYMOUS.formatted("reset") + saveCancel)));
+
+        assertEquals(Optional.of(MOVED.formatted("anonymous classes")), dropReason(base, next));
+    }
+
+    @Test
+    void anAnonymousClassAppendedKeeps() {
+        String saveCancel = ANONYMOUS.formatted("save") + ANONYMOUS.formatted("cancel");
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/MainView.java", VIEW.formatted(saveCancel)));
+        var next = project.apply(build().source("app/MainView.java",
+                VIEW.formatted(saveCancel + ANONYMOUS.formatted("reset"))));
+
+        assertEquals(Optional.empty(), dropReason(base, next));
+    }
+
+    @Test
+    void aFieldAddedToAClassNoSessionCanHoldKeeps() {
+        String resource = "package app; class Resource { %s }";
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/Resource.java", resource.formatted("int count;")));
+        var next = project.apply(build().source("app/Resource.java", resource.formatted("int count; int total;")));
+
+        assertEquals(Optional.empty(), dropReason(base, next));
     }
 
     @Test
@@ -80,7 +128,7 @@ class SessionVerdictTest {
         var next = project.apply(build().source("app/MainView.java",
                 VIEW.formatted(SAVE_CANCEL + " actions.add(() -> \"reset\");")));
 
-        assertEquals(Optional.empty(), SessionVerdict.dropReason(base, next, true));
+        assertEquals(Optional.empty(), dropReason(base, next));
     }
 
     @Test
@@ -90,7 +138,7 @@ class SessionVerdictTest {
         var next = project.apply(build().source("app/Order.java", ORDER.formatted("int count;"))
                 .source("app/Line.java", "package app; class Line implements java.io.Serializable { int total; }"));
 
-        assertEquals(Optional.empty(), SessionVerdict.dropReason(base, next, true));
+        assertEquals(Optional.empty(), dropReason(base, next));
     }
 
     private Optional<String> fieldAdded(String name, String serialVersionUid) {
@@ -98,6 +146,10 @@ class SessionVerdictTest {
         var base = project.apply(build().source("app/Order.java", ORDER.formatted(serialVersionUid + "int count;")));
         var next = project.apply(build().source("app/Order.java",
                 ORDER.formatted(serialVersionUid + "int count; int total;")));
-        return SessionVerdict.dropReason(base, next, true);
+        return dropReason(base, next);
+    }
+
+    private static Optional<String> dropReason(ClassesSnapshot base, ClassesSnapshot next) {
+        return SessionVerdict.dropReason(base, next, SupertypeIndex.of(next, List.of(), _ -> { }), true);
     }
 }

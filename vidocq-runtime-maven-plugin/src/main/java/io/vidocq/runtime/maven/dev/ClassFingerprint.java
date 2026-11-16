@@ -103,6 +103,7 @@ final class ClassFingerprint {
     private static final String INIT = "<init>";
     private static final String CLINIT = "<clinit>";
     private static final String LAMBDA = "lambda$";
+    private static final String DESERIALIZE_LAMBDA = "$deserializeLambda$";
 
     /** A field or a method: its modifiers and descriptor, and its attributes by name. */
     private record Member(String name, String descriptor, int flags, SequencedMap<String, String> attributes) {}
@@ -117,6 +118,7 @@ final class ClassFingerprint {
     private final List<Member> fields;
     private final Map<String, Member> methods;
     private final SequencedMap<String, String> codeByMethod;
+    private final Set<String> serializableLambdas;
 
     private ClassFingerprint(ClassModel model) {
         this.model = model;
@@ -131,13 +133,18 @@ final class ClassFingerprint {
                 f.fieldType().stringValue(), f.flags().flagsMask(), attributes(f.attributes(), null))).toList();
         var byKey = new TreeMap<String, Member>();
         var code = new LinkedHashMap<String, String>();
+        var serializable = new LinkedHashSet<String>();
         for (MethodModel m : model.methods()) {
             String name = m.methodName().stringValue();
             String descriptor = m.methodType().stringValue();
             byKey.put(name + descriptor, new Member(name, descriptor, m.flags().flagsMask(),
                     attributes(m.attributes(), null)));
             code.put(name + descriptor, m.code().map(ClassFingerprint::code).orElse(""));
+            if (name.equals(DESERIALIZE_LAMBDA)) {
+                m.code().ifPresent(body -> serializable.addAll(lambdaNames(body)));
+            }
         }
+        this.serializableLambdas = Collections.unmodifiableSet(serializable);
         this.methods = Collections.unmodifiableMap(byKey);
         this.codeByMethod = Collections.unmodifiableSequencedMap(code);
     }
@@ -231,14 +238,15 @@ final class ClassFingerprint {
     }
 
     /**
-     * Whether the lambdas of this class moved since {@code previous}: it gained or lost a {@code lambda$} method while
-     * the code of one it kept changed, as when a lambda is inserted before the others and javac numbers them again. A
-     * listener restored from a session would then run another lambda's code. Lambdas appended, the last one removed,
-     * or a body edited in place did not move.
+     * Whether the serializable lambdas of this class moved since {@code previous}: it gained or lost one while the code
+     * of one it kept changed, as when a lambda is inserted before the others and javac numbers them again. A listener
+     * restored from a session would then run another lambda's code. Lambdas appended, the last one removed, or a body
+     * edited in place did not move. Only the lambdas {@code $deserializeLambda$} names count: no other can be read
+     * back from a session.
      */
     boolean lambdasMoved(ClassFingerprint previous) {
-        Set<String> now = lambdas(codeByMethod.keySet());
-        Set<String> before = lambdas(previous.codeByMethod.keySet());
+        Set<String> now = lambdas(codeByMethod.keySet(), serializableLambdas);
+        Set<String> before = lambdas(previous.codeByMethod.keySet(), previous.serializableLambdas);
         return !now.equals(before) && now.stream().filter(before::contains)
                 .anyMatch(key -> !codeByMethod.get(key).equals(previous.codeByMethod.get(key)));
     }
@@ -366,9 +374,22 @@ final class ClassFingerprint {
         return fields.stream().filter(field -> (field.flags() & ClassFile.ACC_STATIC) == 0).toList();
     }
 
-    private static Set<String> lambdas(Set<String> methodKeys) {
-        return methodKeys.stream().filter(key -> key.startsWith(LAMBDA))
+    private static Set<String> lambdas(Set<String> methodKeys, Set<String> names) {
+        return methodKeys.stream().filter(key -> key.startsWith(LAMBDA) && names.contains(key.substring(0,
+                key.indexOf('('))))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /** The lambda method names a {@code $deserializeLambda$} compares the serialized form with. */
+    private static Set<String> lambdaNames(CodeModel code) {
+        Set<String> names = new LinkedHashSet<>();
+        for (CodeElement element : code) {
+            if (element instanceof ConstantInstruction constant && constant.constantValue() instanceof String name
+                    && name.startsWith(LAMBDA)) {
+                names.add(name);
+            }
+        }
+        return names;
     }
 
     private static SequencedMap<String, Member> byName(List<Member> members) {

@@ -243,10 +243,13 @@ class ClassFingerprintTest {
     }
 
     private static final String ORDER = "package app; class Order implements java.io.Serializable { %s }";
+    /** Serializable listeners, as Vaadin's: the only lambdas a session can hold. */
     private static final String VIEW = """
             package app;
             class MainView {
-                java.util.List<java.util.function.Supplier<String>> actions = new java.util.ArrayList<>();
+                interface Action extends java.util.function.Supplier<String>, java.io.Serializable {}
+                java.util.List<Action> actions = new java.util.ArrayList<>();
+                java.util.List<java.util.function.Supplier<String>> plain = new java.util.ArrayList<>();
                 MainView() { %s }
             }
             """;
@@ -296,6 +299,16 @@ class ClassFingerprintTest {
                 "actions.add(() -> \"reset\"); actions.add(() -> \"save\"); actions.add(() -> \"cancel\");"));
 
         assertTrue(v2.lambdasMoved(v1));
+    }
+
+    @Test
+    void aLambdaNoSessionCanHoldInsertedFirstDoesNotMoveThem(@TempDir Path dir) {
+        var v1 = fingerprint(dir, "v1", "app.MainView", VIEW.formatted(
+                "plain.add(() -> \"save\"); plain.add(() -> \"cancel\");"));
+        var v2 = fingerprint(dir, "v2", "app.MainView", VIEW.formatted(
+                "plain.add(() -> \"reset\"); plain.add(() -> \"save\"); plain.add(() -> \"cancel\");"));
+
+        assertFalse(v2.lambdasMoved(v1));
     }
 
     /** A lambda appended last, a body edited in place, the last lambda removed: each keeps its name. */

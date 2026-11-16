@@ -40,9 +40,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class HotSwapSessionTest {
 
     private static final String A = "package app; class A { int a() { return %s; } int b() { return %s; } }";
-    private static final String LISTENERS = "package app; class A { java.util.List<Runnable> listeners = "
+    private static final String LISTENERS = "package app; class A implements java.io.Serializable { "
+            + "java.util.List<Runnable> listeners = "
             + "new java.util.ArrayList<>(); %s A() { %s } }";
     private static final Optional<String> KEEP = Optional.empty();
+    /** A view whose listeners are serializable lambdas, numbered by javac in source order. */
+    private static final String VIEW = "package app; class V implements java.io.Serializable { "
+            + "interface L extends Runnable, java.io.Serializable {} "
+            + "java.util.List<L> listeners = new java.util.ArrayList<>(); V() { %s } }";
+    private static final String SAVE = "listeners.add(() -> System.out.println(\"save\")); ";
+    private static final String CANCEL = "listeners.add(() -> System.out.println(\"cancel\")); ";
+    private static final Optional<String> MOVED =
+            Optional.of("V's lambdas moved, and a restored listener could run another one's code");
 
     @TempDir
     Path dir;
@@ -234,6 +243,35 @@ class HotSwapSessionTest {
 
         assertEquals(Optional.of(new ReloadRequest.Swap("the previous reload was not confirmed",
                 Optional.of("A gained a field total, so a restored instance would not match the new class"))),
+                session.next());
+    }
+
+    @Test
+    void anUnconfirmedRequestIsAlsoCheckedAgainstTheOutputTheChildMayRun() {
+        var project = new HotSwapProject(dir, List.of());
+        project.apply(build().source("app/V.java", VIEW.formatted(SAVE + CANCEL)));
+        var session = open(project);
+        project.apply(build().source("app/V.java", VIEW.formatted(CANCEL)));
+        session.next();
+        session.lost();
+
+        project.apply(build().source("app/V.java", VIEW.formatted(SAVE + CANCEL)));
+
+        assertEquals(Optional.of(new ReloadRequest.Swap("the previous reload was not confirmed", MOVED)),
+                session.next());
+    }
+
+    @Test
+    void afterARespawnTheNextSwapIsCheckedAgainstTheOutputItLoaded() {
+        var project = new HotSwapProject(dir, List.of());
+        project.apply(build().source("app/V.java", VIEW.formatted(SAVE + CANCEL)));
+        var session = open(project);
+        project.apply(build().source("app/V.java", VIEW.formatted(CANCEL)));
+        session.respawned();
+
+        project.apply(build().source("app/V.java", VIEW.formatted(SAVE + CANCEL)));
+
+        assertEquals(Optional.of(new ReloadRequest.Swap("the previous reload was not confirmed", MOVED)),
                 session.next());
     }
 

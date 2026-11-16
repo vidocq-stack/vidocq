@@ -22,11 +22,13 @@ package io.vidocq.runtime.maven.dev;
 import io.vidocq.runtime.core.ReloadRequest;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * The hot swap side of one {@code vidocq:dev} session (design §2): the snapshot of the output the child runs, and
@@ -49,6 +51,8 @@ final class HotSwapSession {
     private ClassesSnapshot latest;
     private ClassesSnapshot pending;
     private boolean lost;
+    /** The outputs of the requests not acknowledged since {@link #base}: the child may run any of them. */
+    private final List<ClassesSnapshot> unconfirmed = new ArrayList<>();
 
     private HotSwapSession(List<Path> classRoots, List<Path> projectSourceRoots,
             StartTimeDeclarations dependencyDeclarations, List<Path> dependencyJars, String redefinitionOff,
@@ -104,9 +108,9 @@ final class HotSwapSession {
             request = new HotSwapClassifier(projectSourceRoots, declarations).classify(base, snapshot, supertypes)
                     .map(this::available);
         }
-        // Every swap says whether the HTTP sessions move: judged against the output the child runs (design §1).
+        // Every swap says whether the HTTP sessions move: judged against each output the child may run (design §1).
         request = request.map(found -> found instanceof ReloadRequest.Swap swap
-                ? new ReloadRequest.Swap(swap.reason(), SessionVerdict.dropReason(base, snapshot, keepSessions))
+                ? new ReloadRequest.Swap(swap.reason(), dropReason(snapshot))
                 : found);
         pending = request.isPresent() ? snapshot : null;
         return request;
@@ -118,13 +122,35 @@ final class HotSwapSession {
             base = pending;
             pending = null;
         }
+        unconfirmed.clear();
         lost = false;
     }
 
     /** The last request was not acknowledged, or the child was started again: the next request is a swap. */
     void lost() {
+        if (pending != null) {
+            unconfirmed.add(pending);
+        }
         pending = null;
         lost = true;
+    }
+
+    /**
+     * A new child was started on the output on disk: its sessions all come from that output, the one the next swap
+     * is checked against. The next request is still a swap, as after a lost one.
+     */
+    void respawned() {
+        base = ClassesSnapshot.take(classRoots, latest);
+        latest = base;
+        unconfirmed.clear();
+        pending = null;
+        lost = true;
+    }
+
+    private Optional<String> dropReason(ClassesSnapshot next) {
+        return Stream.concat(Stream.of(base), unconfirmed.stream())
+                .map(output -> SessionVerdict.dropReason(output, next, supertypes, keepSessions))
+                .flatMap(Optional::stream).findFirst();
     }
 
     private ReloadRequest available(ReloadRequest request) {

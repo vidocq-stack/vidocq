@@ -902,8 +902,9 @@ public class VidocqDevMojo extends AbstractMojo {
             }
         }
         if (hotSwap != null) {
-            // A fresh child loads the output on disk: the next request swaps, the safe side.
-            hotSwap.lost();
+            // A fresh child loads the output on disk: the next request swaps, the safe side, and its sessions are
+            // checked against that output.
+            hotSwap.respawned();
         }
         child.stop(Duration.ofMillis(gracePeriodMillis));
         ChildJvm next = newChild(launch);
