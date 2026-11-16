@@ -1775,6 +1775,57 @@ An extension activates as soon as it is on the module-path. No `@EnableX` annota
 </dependency>
 ----
 
+[[start-time-code]]
+== Declaring start-time code [.tag-new]#NEW#
+
+`vidocq:dev` compares each recompile with the output the application runs, and swaps the application layer when a
+change touches code that ran at start: that code ran once, and will not run again until a swap
+(xref:usage.adoc#dev-reload-reasons[why a change reloads]). The plugin knows two things on its own: static
+initializers, and every application method that start-time code calls. The rest depends on the technology, and each
+extension declares it in a file of its main jar, `META-INF/vidocq/dev/start-time.properties`. Only `vidocq:dev` reads
+the file, and nothing reads it in a packaged application. A third-party jar can carry one too, and so can the
+application, under `src/main/resources`: the plugin reads it again after each recompile.
+
+[cols="1,3",options="header"]
+|===
+| Key | What it names
+| `long-lived-annotations` | Annotations of classes whose instances live from the start: their constructors, field
+initializers and initializer methods ran at start. `jakarta.enterprise.context.ApplicationScoped`.
+| `long-lived-types` | Supertypes of such classes, found through the application, its jars and the JDK.
+`jakarta.servlet.Servlet`.
+| `start-annotations` | Annotations of methods that run at start, on any class: `jakarta.annotation.PostConstruct`,
+`jakarta.enterprise.inject.Produces`.
+| `observer-annotations` | Annotations of an observer's event parameter: `jakarta.enterprise.event.Observes`.
+| `start-events` | Events fired at start, as the parameter's type or a qualifier on it:
+`jakarta.enterprise.event.Startup`, `jakarta.enterprise.context.Initialized`.
+| `start-callbacks` | Methods a container calls at start, as `owner#name(descriptor)`, matched on the classes that
+extend or implement the owner: `jakarta.servlet.Servlet#init(Ljakarta/servlet/ServletConfig;)V`.
+|===
+
+Each value is a comma-separated list; a line ends with `\` to go on. The extensions of this repository declare their
+technology:
+
+[cols="1,3",options="header"]
+|===
+| Jar | Declares
+| `vidocq-runtime-core` | CDI: `ApplicationScoped`, `SessionScoped` and `jakarta.inject.Singleton` classes;
+`VidocqExtension`; `@PostConstruct` and `@Produces` methods; observers of `Startup` and `@Initialized`.
+| `vidocq-runtime-foy-servlet-extension` | Servlet: servlets, filters, context, session and request listeners, container
+initializers; `Servlet#init(ServletConfig)`, `GenericServlet#init()`, `Filter#init(FilterConfig)`,
+`ServletContextListener#contextInitialized`, `ServletContainerInitializer#onStartup`.
+| `vidocq-runtime-cassini-rest-extension` | JAX-RS: `@Provider` classes and `Application` subclasses;
+`Application#getClasses`, `getSingletons` and `getProperties`, `Feature#configure`, `DynamicFeature#configure`.
+| `vidocq-runtime-vaadin-extension` | Vaadin: the Vaadin CDI scopes and `@PreserveOnRefresh` classes;
+`VaadinServiceInitListener#serviceInit`.
+|===
+
+The constructors of other objects, such as a Vaadin view, a `@Dependent` or `@RequestScoped` bean or a plain object,
+are not start-time: the next instance runs the new constructor. A declared type that no dependency has is never
+matched. An unknown key, or an entry that cannot be read (a callback without `#`, a bad descriptor), logs a warning
+naming the jar and the entry, `Hot swap: <jar>: ...`, and is skipped: it never fails the build or the session. A
+supertype found in no dependency warns once, and the classes that extend it count as long-lived, which is the safe
+side.
+
 == Next steps
 
 * xref:modules/vidocq-runtime-spi.adoc[SPI] — how to write a new extension

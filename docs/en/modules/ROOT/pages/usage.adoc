@@ -201,6 +201,44 @@ with `vidocq.app.layer.keep`. Each reload undeploys the servlet application, whi
 log gives their count (`Undeploying the servlet application invalidated N HTTP sessions …`), and a browser starts a
 new session on its next request.
 
+[[dev-reload-reasons]]*Why a change reloads.* After each recompile, `vidocq:dev` compares the compiled output with the
+one the application runs, class by class, with the JDK's Class-File API. When nothing changed, for instance an edited
+comment, nothing is reloaded and the tests of the change still run:
+
+[source]
+----
+Recompiled in 210 ms: the compiled output did not change, nothing reloaded.
+----
+
+Otherwise both sides of the log say why the application layer is swapped:
+
+[source]
+----
+Hot reload signalled after 1210 ms (layer swap: MainView gained a method lambda$new$1).
+Hot reload - restarting on a fresh application layer: MainView gained a method lambda$new$1
+----
+
+The reasons, in the order they are checked:
+
+* a class added or deleted: `MainView$1 is a new class`;
+* a resource or `module-info` changed: `application.properties changed`. The files of `META-INF/vidocq/build-info/`,
+  rewritten by every build, are left out;
+* a class generated rather than compiled from the project's own sources (the compile source roots outside
+  `target/`): `_VaubanComponents is not compiled from this project's sources`;
+* a change of shape, such as a field, a method, a signature, a modifier, a supertype or an annotation: `Order lost a
+  field total`, `GreetingResource changed an annotation on hello()`;
+* a change in code that ran at start: `Greeter's constructor ran at start`, `Hello.init() ran at start`. That code
+  is the static initializers, what each extension
+  xref:modules/vidocq-runtime-extensions.adoc#start-time-code[declares as start-time], and every application method
+  they call;
+* otherwise, method bodies only: `2 classes changed in method bodies only; class redefinition is not available yet`.
+
+The next recompile waits until the application has confirmed the previous reload. A reload that is not confirmed
+within two minutes, or a child JVM started again, makes the next one a swap: `the previous reload was not confirmed`.
+The startup log says where the start-time declarations come from: `Hot swap: start-time declarations from 4 jars`.
+With a runtime that declares none (one older than this check), the startup log says `Hot swap off: no dependency
+declares its start-time code (...)`, and every change swaps the layer, with the log lines of earlier versions.
+
 *Packaging.* Under `vidocq:package`, `lib/` holds the parent layer and `app/` holds the application jar and its
 libraries. Both launchers hand `app/` to the runtime through `-Dvidocq.app.path`, also for an application with a
 main class, and carry `-Dvidocq.app.layer=` with the mode the build settled on (`classes` too: a runtime that finds
