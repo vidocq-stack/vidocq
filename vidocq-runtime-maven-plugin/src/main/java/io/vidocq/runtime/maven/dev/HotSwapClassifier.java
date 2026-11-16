@@ -23,7 +23,6 @@ import io.vidocq.runtime.core.ReloadRequest;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -75,49 +74,27 @@ final class HotSwapClassifier {
     Optional<ReloadRequest> classify(ClassesSnapshot base, ClassesSnapshot next, SupertypeIndex supertypes) {
         var before = files(base);
         var after = files(next);
-        // Rule 2: a file added or removed.
-        for (File file : after.keySet()) {
-            if (!before.containsKey(file)) {
-                return swap(file.isClass() ? file.simpleName() + " is a new class" : file.path() + " was added");
-            }
-        }
-        for (File file : before.keySet()) {
-            if (!after.containsKey(file)) {
-                return swap(file.isClass() ? file.simpleName() + " was deleted" : file.path() + " was removed");
-            }
-        }
-        List<File> changed = after.keySet().stream()
+        List<File> added = after.keySet().stream().filter(file -> !before.containsKey(file)).toList();
+        List<File> removed = before.keySet().stream().filter(file -> !after.containsKey(file)).toList();
+        List<File> changed = after.keySet().stream().filter(before::containsKey)
                 .filter(file -> !after.get(file).sha256().equals(before.get(file).sha256()))
                 .toList();
-        if (changed.isEmpty()) {
+        if (added.isEmpty() && removed.isEmpty() && changed.isEmpty()) {
             return Optional.empty();
         }
-        // Rule 3: a resource or module-info.
-        for (File file : changed) {
-            if (file.path().endsWith(MODULE_INFO)) {
-                return swap("module-info changed");
-            }
-            if (!file.isClass()) {
-                return swap(file.path() + " changed");
-            }
+        // A generated class (a client proxy, a bean index) changes because a class of the project did: when one of
+        // the project's classes explains the swap, the reason names it.
+        Optional<String> ownClass = ownClassReason(added, changed, before, after);
+        Optional<String> other = addedRemovedResourceOrGenerated(added, removed, changed, before, after);
+        if (other.isPresent()) {
+            return swap(ownClass.orElseGet(other::get));
         }
-        // Rule 4: not compiled from the project's own sources.
-        var classes = new ArrayList<Change>();
-        for (File file : changed) {
-            var old = before.get(file).fingerprint();
-            var now = after.get(file).fingerprint();
-            if (old.isEmpty() || now.isEmpty() || !ownSource(now.get())) {
-                return swap(file.simpleName() + " is not compiled from this project's sources");
-            }
-            classes.add(new Change(file, old.get(), now.get()));
+        // Rule 5: shape. Every changed file is now a class compiled from the project's own sources.
+        if (ownClass.isPresent()) {
+            return swap(ownClass.get());
         }
-        // Rule 5: shape.
-        for (Change change : classes) {
-            var difference = change.now().firstShapeDifference(change.old());
-            if (difference.isPresent()) {
-                return swap(change.file().simpleName() + " " + difference.get());
-            }
-        }
+        List<Change> classes = changed.stream().map(file -> new Change(file,
+                before.get(file).fingerprint().orElseThrow(), after.get(file).fingerprint().orElseThrow())).toList();
         // Rule 6: start-time code.
         Set<String> startTime = StartTimeCode.of(next, declarations, supertypes);
         SequencedMap<String, SequencedSet<String>> methodsByClass = new LinkedHashMap<>();
@@ -136,6 +113,60 @@ final class HotSwapClassifier {
         // Rule 7: redefine; classes whose bytes differ with an equal fingerprint are left alone.
         return methodsByClass.isEmpty() ? Optional.empty()
                 : Optional.of(new ReloadRequest.Redefine(methodsByClass));
+    }
+
+    /** A class of the project's own sources that is new, or whose shape changed (rules 2 and 5). */
+    private Optional<String> ownClassReason(List<File> added, List<File> changed,
+            Map<File, ClassesSnapshot.Entry> before, Map<File, ClassesSnapshot.Entry> after) {
+        for (File file : added) {
+            if (ownClass(file, after.get(file))) {
+                return Optional.of(file.simpleName() + " is a new class");
+            }
+        }
+        for (File file : changed) {
+            var old = before.get(file).fingerprint();
+            if (old.isPresent() && ownClass(file, after.get(file))) {
+                var difference = after.get(file).fingerprint().orElseThrow().firstShapeDifference(old.get());
+                if (difference.isPresent()) {
+                    return Optional.of(file.simpleName() + " " + difference.get());
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private boolean ownClass(File file, ClassesSnapshot.Entry entry) {
+        return file.isClass() && !file.path().endsWith(MODULE_INFO)
+                && entry.fingerprint().map(this::ownSource).orElse(false);
+    }
+
+    /** Rules 2 to 4: a file added or removed, a resource or module-info changed, a class not of the project's sources. */
+    private Optional<String> addedRemovedResourceOrGenerated(List<File> added, List<File> removed, List<File> changed,
+            Map<File, ClassesSnapshot.Entry> before, Map<File, ClassesSnapshot.Entry> after) {
+        if (!added.isEmpty()) {
+            File file = added.getFirst();
+            return Optional.of(file.isClass() ? file.simpleName() + " is a new class" : file.path() + " was added");
+        }
+        if (!removed.isEmpty()) {
+            File file = removed.getFirst();
+            return Optional.of(file.isClass() ? file.simpleName() + " was deleted" : file.path() + " was removed");
+        }
+        for (File file : changed) {
+            if (file.path().endsWith(MODULE_INFO)) {
+                return Optional.of("module-info changed");
+            }
+            if (!file.isClass()) {
+                return Optional.of(file.path() + " changed");
+            }
+        }
+        for (File file : changed) {
+            var old = before.get(file).fingerprint();
+            var now = after.get(file).fingerprint();
+            if (old.isEmpty() || now.isEmpty() || !ownSource(now.get())) {
+                return Optional.of(file.simpleName() + " is not compiled from this project's sources");
+            }
+        }
+        return Optional.empty();
     }
 
     private boolean ownSource(ClassFingerprint fingerprint) {

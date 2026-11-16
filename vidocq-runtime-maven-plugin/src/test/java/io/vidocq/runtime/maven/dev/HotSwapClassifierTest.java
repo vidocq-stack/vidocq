@@ -215,6 +215,28 @@ class HotSwapClassifierTest {
         assertSwap("Lib is not compiled from this project's sources", result);
     }
 
+    /** A client proxy changes because its bean gained a method: the reason names the bean, not the proxy. */
+    @Test
+    void aGeneratedClassThatFollowsAProjectClassNamesTheProjectClass() {
+        var v1 = build().source("app/Probe.java", "package app; class Probe { void a() {} }")
+                .generated("app/Probe_ClientProxy.java", "package app; class Probe_ClientProxy { void a() {} }");
+        var v2 = build().source("app/Probe.java", "package app; class Probe { void a() {} void b() {} }")
+                .generated("app/Probe_ClientProxy.java",
+                        "package app; class Probe_ClientProxy { void a() {} void b() {} }");
+
+        assertSwap("Probe gained a method b", classify(CDI, v1, v2));
+    }
+
+    @Test
+    void aNewProjectClassBesideANewGeneratedClassIsNamed() {
+        var v1 = build().source("app/A.java", "package app; class A {}");
+        var v2 = build().source("app/A.java", "package app; class A {}")
+                .source("app/B.java", "package app; class B {}")
+                .generated("app/A_Gen.java", "package app; class A_Gen {}");
+
+        assertSwap("B is a new class", classify(CDI, v1, v2));
+    }
+
     @Test
     void aNestedClassOfAnApplicationSourceIsTheProjects() {
         var v1 = build().source("app/MainView.java",

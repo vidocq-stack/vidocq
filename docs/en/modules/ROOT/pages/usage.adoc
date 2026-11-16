@@ -233,6 +233,10 @@ The reasons, in the order they are checked:
   they call;
 * otherwise, method bodies only: `2 classes changed in method bodies only; class redefinition is not available yet`.
 
+A generated class changes because a class of the project did: a bean that gains a method changes its client proxy.
+So when a class of the project is new or changed its shape, the reason names it, `Probe gained a method refresh`,
+rather than `Probe_ClientProxy is not compiled from this project's sources`.
+
 The next recompile waits until the application has confirmed the previous reload. A reload that is not confirmed
 within two minutes, or a child JVM started again, makes the next one a swap: `the previous reload was not confirmed`.
 The startup log says where the start-time declarations come from: `Hot swap: start-time declarations from 4 jars`.
