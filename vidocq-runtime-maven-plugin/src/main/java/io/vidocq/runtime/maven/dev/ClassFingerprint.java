@@ -200,10 +200,17 @@ final class ClassFingerprint {
     /** The names of the methods whose code changed since {@code previous}, among the methods both have. */
     Set<String> methodsWithChangedCode(ClassFingerprint previous) {
         Set<String> changed = new LinkedHashSet<>();
+        methodKeysWithChangedCode(previous).forEach(key -> changed.add(methods.get(key).name()));
+        return changed;
+    }
+
+    /** As {@link #methodsWithChangedCode}, by name and descriptor ({@code greet(Ljava/lang/String;)V}). */
+    Set<String> methodKeysWithChangedCode(ClassFingerprint previous) {
+        Set<String> changed = new LinkedHashSet<>();
         codeByMethod.forEach((key, code) -> {
             String before = previous.codeByMethod.get(key);
             if (before != null && !before.equals(code)) {
-                changed.add(methods.get(key).name());
+                changed.add(key);
             }
         });
         return changed;
