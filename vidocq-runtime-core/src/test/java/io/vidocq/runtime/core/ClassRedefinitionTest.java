@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.core;
 
+import io.vidocq.runtime.dev.agent.HotSwap;
 import io.vidocq.runtime.dev.agent.RedefinitionRefused;
 import io.vidocq.vauban.classloader.VaubanClassLoader;
 import io.vidocq.vauban.classloader.spi.PluginContext;
@@ -44,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClassRedefinitionTest {
@@ -98,6 +100,29 @@ class ClassRedefinitionTest {
         var result = agent.redefine(getClass().getClassLoader(), List.of(SERVICE), _ -> new byte[0]);
 
         assertEquals(new ClassRedefinition.Refused("class redefinition failed: attempted to add a method"), result);
+    }
+
+    @Test
+    void aRedefinitionNamesTheClassesItRedefinedAndThoseNotLoaded() {
+        var agent = new AgentRedefiner((loader, names, bytes) ->
+                new HotSwap.Outcome(List.of(String.class), List.of("p.NotLoaded")));
+
+        var result = agent.redefine(getClass().getClassLoader(), List.of("java.lang.String", "p.NotLoaded"),
+                _ -> new byte[0]);
+
+        assertEquals(new ClassRedefinition.Done(List.of("java.lang.String"), List.of("p.NotLoaded")), result);
+    }
+
+    /** The default redefiner asks this JVM's agent, which a JVM started without -javaagent does not have. */
+    @Test
+    void theDefaultRedefinerAsksTheAgentOfThisJvm() {
+        var agent = new AgentRedefiner();
+        var loader = getClass().getClassLoader();
+        List<String> names = List.of(SERVICE);
+
+        var failure = assertThrows(IllegalStateException.class, () -> agent.redefine(loader, names, _ -> new byte[0]));
+
+        assertTrue(failure.getMessage().contains("-javaagent"), failure.getMessage());
     }
 
     /** This JVM started without -javaagent: whether the agent module is resolved or not, there is no agent. */
