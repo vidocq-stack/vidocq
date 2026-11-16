@@ -5,6 +5,39 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261116-10 — The build of `main` fails when the Grafana LGTM container of `OtelDevServiceTest` needs more than its three minutes
+
+- **Date**: 2026-11-16
+- **Status**: OPEN. Seen once, in the build of `main` at `d59fbac7` (run 4846); the four builds of `main` before it
+  passed.
+- **Module**: `vidocq-runtime-devservice-otel` (`OtelDevService.container`, `OtelDevServiceTest`)
+- **Symptom**: `CI / build-and-deploy (push)` fails in `vidocq-runtime-devservice-otel`, so that commit publishes no
+  SNAPSHOT: `OtelDevServiceTest.startsTheStackAndPublishesAnEndpointThatAcceptsTraces:113 » ContainerLaunch Container
+  startup failed for image grafana/otel-lgtm:0.37.0`, caused by `Timed out waiting for URL to be accessible
+  (http://172.17.0.1:33737/api/health should return HTTP [200])` and, under it, `java.net.SocketException: Unexpected
+  end of file from server`. The test class took 185.9 s.
+- **Repro**: none on demand. What the logs of the builds of `main` of 2026-11-16 say, per runner (time of the test
+  class):
+
+  | Runner | Platform | Job image | `OtelDevServiceTest` | Runs |
+  |---|---|---|---|---|
+  | `6c935f1a` | amd64 | `node:24.22.1-trixie` | 75.5 s, 92.6 s, then 185.9 s and the failure | 4740, 4698, 4846 |
+  | `0908d017` | amd64 | `node:24.22.1-trixie` | 12.9 s, 48.3 s, 63.4 s | 4762, 4730, 4659 |
+  | `f924a289` | arm64 | `node:24.22.1-trixie` | 2.9 s, 3.9 s, 4.0 s | 4715, 4675, 4812 |
+  | `ababeffb`, `9d388c1b` | amd64 | `node:20-bookworm` | one test skipped, 0.8 s to 1.3 s | 4795, 4781, 4667 |
+
+  The skipped test is the container test, the only one with an assumption: it skips when Docker is not available.
+  In run 4846 the build took 8 min 48 s from the start of the reactor to this test; runs 4740 and 4698, on the same
+  runner, took 4 min 29 s and 4 min 42 s. Two pull requests had been merged in the same minute (#630 here and
+  Vidocq/vauban#318), and their builds ran together.
+- **Cause**: `OtelDevService.container` waits three minutes for Grafana's `/api/health`
+  (`withStartupTimeout(Duration.ofMinutes(3))`). On runner `6c935f1a` the stack needs 75 s to 93 s in a quiet build;
+  in a build that ran about twice as slow, it did not answer within the wait. This is a hypothesis from the timings
+  above: the container's own log was not kept.
+- **Not decided**: a longer wait (the Keycloak dev service waits three minutes too), fewer jobs at once on that runner,
+  or nothing beyond not merging in two repositories in the same minute. Two runners skip the container test, so what
+  a build of `main` proves depends on the runner that takes it: the runners are Vidocq/ci#121.
+
 ## BUG-20261116-08 — Every start of `vidocq:dev` on a Vaadin application warns that the event stream is resolved by reflection
 
 - **Date**: 2026-11-16
