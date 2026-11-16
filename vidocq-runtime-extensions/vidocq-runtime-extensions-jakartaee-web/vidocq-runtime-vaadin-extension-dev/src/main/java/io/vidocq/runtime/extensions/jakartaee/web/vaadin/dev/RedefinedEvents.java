@@ -67,7 +67,7 @@ public final class RedefinedEvents extends HttpServlet {
 
     /** Sends {@code data} to every open stream. */
     static void publish(String data) {
-        STREAMS.forEach(stream -> stream.offer(data));
+        STREAMS.forEach(stream -> stream.add(data));
     }
 
     /** The text of one event. */
@@ -76,13 +76,13 @@ public final class RedefinedEvents extends HttpServlet {
     }
 
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         response.setContentType("text/event-stream");
         response.setCharacterEncoding("UTF-8");
         response.setHeader("Cache-Control", "no-cache");
-        PrintWriter out = response.getWriter();
         BlockingQueue<String> stream = open();
         try {
+            PrintWriter out = response.getWriter();
             out.write(": open\n\n");
             out.flush();
             String data = stream.poll(KEEP_ALIVE_SECONDS, TimeUnit.SECONDS);
@@ -91,6 +91,8 @@ public final class RedefinedEvents extends HttpServlet {
                 out.flush();
                 data = stream.poll(KEEP_ALIVE_SECONDS, TimeUnit.SECONDS);
             }
+        } catch (IOException _) {
+            // The response cannot be written: the page went away, and it opens a new stream when it comes back.
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         } finally {
@@ -100,7 +102,7 @@ public final class RedefinedEvents extends HttpServlet {
 
     @Override
     public void destroy() {
-        STREAMS.forEach(stream -> stream.offer(END));
+        STREAMS.forEach(stream -> stream.add(END));
     }
 
     /** Registers the servlet; only {@code vidocq:dev} adds this module, so only a dev deployment has it. */
