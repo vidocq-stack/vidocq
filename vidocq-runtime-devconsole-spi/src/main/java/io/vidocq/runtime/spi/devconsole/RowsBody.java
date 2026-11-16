@@ -92,9 +92,9 @@ final class RowsBody {
         for (int i = 0; i < columns.size(); i++) {
             Column column = Objects.requireNonNull(columns.get(i), "column");
             out.append(i == 0 ? "{\"name\":" : ",{\"name\":");
-            quote(column.name(), out);
+            JsonText.quote(column.name(), out);
             out.append(",\"type\":");
-            quote(column.type(), out);
+            JsonText.quote(column.type(), out);
             out.append('}');
         }
         return out.append("],\"rows\":[");
@@ -116,29 +116,7 @@ final class RowsBody {
             case null -> out.append("null");
             case Boolean flag -> out.append(flag);
             case Number number when NUMBER.matcher(number.toString()).matches() -> out.append(number);
-            default -> quote(String.valueOf(value), out);
+            default -> JsonText.quote(String.valueOf(value), out);
         }
-    }
-
-    private static void quote(String text, StringBuilder out) {
-        out.append('"');
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            switch (c) {
-                case '"' -> out.append("\\\"");
-                case '\\' -> out.append("\\\\");
-                case '\n' -> out.append("\\n");
-                case '\r' -> out.append("\\r");
-                case '\t' -> out.append("\\t");
-                default -> {
-                    if (c < 0x20) {
-                        out.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        out.append(c);
-                    }
-                }
-            }
-        }
-        out.append('"');
     }
 }

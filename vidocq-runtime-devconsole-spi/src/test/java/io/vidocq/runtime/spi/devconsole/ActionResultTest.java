@@ -65,8 +65,8 @@ class ActionResultTest {
         assertEquals("a,b\r\n1,2\r\n", csv.body());
         IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
                 () -> new ActionResult("ok", "text/csv;charset=utf-8", "a", false, null));
-        assertEquals("a result's content type is text/plain, application/json, text/csv or application/x-rows+json",
-                refused.getMessage());
+        assertEquals("a result's content type is text/plain, application/json, text/csv, application/x-rows+json or "
+                + "application/x-graph+json", refused.getMessage());
     }
 
     @Test

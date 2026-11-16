@@ -316,7 +316,8 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
      * @param summary     one line, at most {@value #MAX_SUMMARY} characters, a longer one cut with {@code ...};
      *                    {@code null} reads as {@code done}
      * @param contentType {@value #TEXT}, {@value #JSON}, which the page pretty-prints, {@value #CSV}, which it
-     *                    shows as text with a Download button, or {@value #ROWS}, which it draws as a table;
+     *                    shows as text with a Download button, {@value #ROWS}, which it draws as a table, or
+     *                    {@value #GRAPH}, which it draws as boxes and lines;
      *                    {@code null} when there is no body, {@value #TEXT} when there is one and none was given
      * @param body        what to show, or {@code null}; at most {@value #MAX_CONTENT} characters, a longer one
      *                    truncated and ending with the marker {@code … truncated at 256 KiB}
@@ -352,12 +353,26 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
         /** What ends a body or details that was truncated. */
         public static final String TRUNCATED = "\n… truncated at 256 KiB";
 
+        /**
+         * A graph of nodes and edges, such as the entities of a persistence unit and their relations: the page lays it
+         * out as boxes and lines, lists a node's facts beside it on a click, and offers its JSON viewer. The body is
+         * {@code {"nodes": [{"id", "label", "kind", "facts": [[name, value]…]}…], "edges": [{"from", "to", "label",
+         * "arrow", "dashed"}…]}}; {@link #graph} writes it. A body of another shape is shown as any other JSON.
+         */
+        public static final String GRAPH = "application/x-graph+json";
+
+        /** The most nodes a {@link #graph} holds. */
+        public static final int MAX_NODES = 500;
+
+        /** The most edges a {@link #graph} holds. */
+        public static final int MAX_EDGES = 2000;
+
         public ActionResult {
             summary = summary == null ? "done" : cut(summary);
             if (contentType != null && !TEXT.equals(contentType) && !JSON.equals(contentType)
-                    && !CSV.equals(contentType) && !ROWS.equals(contentType)) {
+                    && !CSV.equals(contentType) && !ROWS.equals(contentType) && !GRAPH.equals(contentType)) {
                 throw new IllegalArgumentException("a result's content type is " + TEXT + ", " + JSON + ", " + CSV
-                        + " or " + ROWS);
+                        + ", " + ROWS + " or " + GRAPH);
             }
             if (body == null) {
                 contentType = null;
@@ -408,6 +423,100 @@ public record PanelAction(String id, String label, String confirmation, List<Arg
          */
         public static int rowsHeld(List<Column> columns, List<? extends List<?>> rows) {
             return RowsBody.held(columns, rows);
+        }
+
+        /**
+         * A {@link #GRAPH} result: a line, and a body of these nodes and edges. A graph is never cut, half of one
+         * meaning nothing: one past {@value #MAX_CONTENT} characters is refused.
+         *
+         * @param summary the line, such as {@code 4 entities, 3 relations}, or {@code null} for {@code done}
+         * @param nodes   the nodes, at most {@value #MAX_NODES}, each id once
+         * @param edges   the edges, at most {@value #MAX_EDGES}, each between two of the nodes; an edge from a node
+         *                to itself is drawn as a loop
+         * @return the result
+         * @throws IllegalArgumentException when a node id is given twice, an edge names a node not given, there are
+         *                                  too many nodes or edges, or the body passes {@value #MAX_CONTENT}
+         *                                  characters
+         */
+        public static ActionResult graph(String summary, List<Node> nodes, List<Edge> edges) {
+            return new ActionResult(summary, GRAPH, GraphBody.write(nodes, edges), false, null);
+        }
+
+        /**
+         * A node of a {@link #GRAPH} result.
+         *
+         * @param id    what edges name it by, not blank, at most {@value Column#MAX_NAME} characters
+         * @param label what its box shows, not blank, at most {@value Column#MAX_NAME} characters
+         * @param kind  a word shown dimmed under the label, such as {@code entity}, at most {@value #MAX_KIND}
+         *              characters; empty for none
+         * @param facts what the page lists beside the graph when the node is clicked, in order; an immutable copy
+         */
+        public record Node(String id, String label, String kind, List<Fact> facts) {
+
+            /** The longest kind of a node. */
+            public static final int MAX_KIND = 40;
+
+            public Node {
+                requireName(id, "a node's id");
+                requireName(label, "a node's label");
+                Objects.requireNonNull(kind, "kind");
+                if (kind.length() > MAX_KIND) {
+                    throw new IllegalArgumentException("a node's kind is at most " + MAX_KIND + " characters");
+                }
+                facts = List.copyOf(Objects.requireNonNull(facts, "facts"));
+            }
+        }
+
+        /**
+         * A fact of a {@link Node}, such as its table, or one attribute and its column.
+         *
+         * @param name  what the fact is about, such as {@code table}, not blank, at most {@value Column#MAX_NAME}
+         *              characters
+         * @param value the fact, such as {@code NOTE}, at most {@value PanelAction#MAX_DESCRIPTION} characters
+         */
+        public record Fact(String name, String value) {
+
+            public Fact {
+                requireName(name, "a fact's name");
+                Objects.requireNonNull(value, "value");
+                if (value.length() > MAX_DESCRIPTION) {
+                    throw new IllegalArgumentException("a fact's value is at most " + MAX_DESCRIPTION
+                            + " characters");
+                }
+            }
+        }
+
+        /**
+         * An edge of a {@link #GRAPH} result.
+         *
+         * @param from   the id of the node it starts from
+         * @param to     the id of the node it goes to
+         * @param label  what the page writes at its middle, such as {@code author *..1}, at most
+         *               {@value Column#MAX_NAME} characters; empty for none
+         * @param arrow  whether it ends with an arrow at {@code to}; an arrow that is not dashed also tells the
+         *               layout to place {@code to} above {@code from}, as a parent above its subclass
+         * @param dashed whether its line is dashed, such as for an embedded value
+         */
+        public record Edge(String from, String to, String label, boolean arrow, boolean dashed) {
+
+            public Edge {
+                Objects.requireNonNull(from, "from");
+                Objects.requireNonNull(to, "to");
+                Objects.requireNonNull(label, "label");
+                if (label.length() > Column.MAX_NAME) {
+                    throw new IllegalArgumentException("an edge's label is at most " + Column.MAX_NAME
+                            + " characters");
+                }
+            }
+        }
+
+        /** Refuses a {@code null}, blank or too long name of a graph. */
+        private static void requireName(String name, String what) {
+            Objects.requireNonNull(name, what);
+            if (name.isBlank() || name.length() > Column.MAX_NAME) {
+                throw new IllegalArgumentException(what + " is not blank and at most " + Column.MAX_NAME
+                        + " characters");
+            }
         }
 
         /**
