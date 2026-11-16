@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev;
 
 import com.vaadin.flow.component.UI;
+import com.vaadin.flow.server.VaadinSession;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -30,6 +31,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class OpenUisTest {
 
@@ -81,6 +83,25 @@ class OpenUisTest {
 
         assertEquals(1, service.lookups);
         assertEquals(List.of(), uis.all());
+    }
+
+    @Test
+    void aSessionThatCannotBeReadOpensNothingAndTheStreamGoesOn() {
+        var service = new RestoredSessions.Service(null, new IllegalStateException("no lock"));
+        uis.serving(service);
+
+        assertDoesNotThrow(() -> uis.restored(RestoredSessions.request(Map.of(RestoredSessions.ATTRIBUTE, "x"))));
+
+        assertEquals(List.of(), uis.all());
+    }
+
+    @Test
+    void theLookupLeavesNoCurrentSessionOnTheStreamThread() {
+        uis.serving(new RestoredSessions.Service(new RestoredSessions.Session(ui)));
+
+        uis.restored(RestoredSessions.request(Map.of(RestoredSessions.ATTRIBUTE, "kept")));
+
+        assertNull(VaadinSession.getCurrent());
     }
 
     @Test

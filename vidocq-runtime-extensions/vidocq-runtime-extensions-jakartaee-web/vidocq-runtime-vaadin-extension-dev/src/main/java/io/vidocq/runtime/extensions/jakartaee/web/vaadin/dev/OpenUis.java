@@ -20,6 +20,7 @@
 package io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev;
 
 import com.vaadin.flow.component.UI;
+import com.vaadin.flow.internal.CurrentInstance;
 import com.vaadin.flow.server.SessionExpiredException;
 import com.vaadin.flow.server.VaadinServletRequest;
 import com.vaadin.flow.server.VaadinServletService;
@@ -44,6 +45,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * their UIs open when the page asks for the event stream ({@link #restored}).
  */
 final class OpenUis {
+
+    private static final System.Logger LOG = System.getLogger(OpenUis.class.getName());
 
     private final Set<UI> open = Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
     private final Set<VaadinServletService> services = ConcurrentHashMap.newKeySet();
@@ -74,12 +77,21 @@ final class OpenUis {
         }
     }
 
+    /**
+     * Never throws: the event stream opens whatever happens here, since a page whose stream fails does not ask again.
+     * Vaadin makes the session current on the way; this thread serves the stream, not Vaadin, so it is cleared after.
+     */
     private void open(VaadinServletService service, HttpServletRequest request) {
         try {
             VaadinSession session = service.findVaadinSession(new VaadinServletRequest(request, service));
             session.access(() -> session.getUIs().forEach(this::opened));
         } catch (SessionExpiredException _) {
             // The session ended since: no page to refresh.
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "Hot reload - Vaadin: a restored page's session could not be read,"
+                    + " the page refreshes once reloaded: " + e);
+        } finally {
+            CurrentInstance.clearAll();
         }
     }
 

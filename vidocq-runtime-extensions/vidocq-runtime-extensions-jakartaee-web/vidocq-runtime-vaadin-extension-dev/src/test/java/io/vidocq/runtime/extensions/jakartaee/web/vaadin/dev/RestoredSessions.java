@@ -56,18 +56,28 @@ final class RestoredSessions {
         return Stubs.stub(HttpServletRequest.class, (method, args) -> "getSession".equals(method) ? session : null);
     }
 
-    /** Finds {@code session} for any request, or none when it is {@code null}: the session expired. */
+    /**
+     * Finds {@code session} for any request and makes it the current one, as Vaadin's does; none when it is
+     * {@code null}: the session expired.
+     */
     static final class Service extends VaadinServletService {
 
         @Serial
         private static final long serialVersionUID = 1L;
 
         private final VaadinSession session;
+        private final RuntimeException failure;
         int lookups;
 
         Service(VaadinSession session) {
+            this(session, null);
+        }
+
+        /** A service whose lookup throws {@code failure}. */
+        Service(VaadinSession session, RuntimeException failure) {
             super(null, null);
             this.session = session;
+            this.failure = failure;
         }
 
         @Override
@@ -78,9 +88,13 @@ final class RestoredSessions {
         @Override
         public VaadinSession findVaadinSession(VaadinRequest request) throws SessionExpiredException {
             lookups++;
+            if (failure != null) {
+                throw failure;
+            }
             if (session == null) {
                 throw new SessionExpiredException();
             }
+            VaadinSession.setCurrent(session);
             return session;
         }
     }
