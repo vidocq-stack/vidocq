@@ -233,16 +233,18 @@ of Kerckhoffs (`kerckhoffs-tck/BASELINE.md`).
 | `app-mem-form` | `AppMemFormIT` 4/4; `AppMemFormImmediateIT` refused (`@LoginToContinue` expressions) |
 | `app-mem-basic-decorate` | 1/2 (a CDI decorator on the mechanism) |
 | `app-jaxrs` | 4/8 (the caller is not authenticated in the REST endpoints; no cause established yet) |
-| `app-securitycontext`, `app-mem-policy` | deployment refused (an EJB; Jakarta Authorization) |
+| `app-mem-policy` | 4/4 |
+| `app-mem-policy2` | 5/5 |
+| `app-securitycontext` | deployment refused (an EJB) |
 
-The default set is the ten first lines, 64 tests; the first seven applications give the same counts as on the
+The default set is the twelve first lines, 73 tests; the first seven applications give the same counts as on the
 Kerckhoffs container. A local run of selected applications is a measurement, never a certification.
 
 Scope: the Security 4.0 TCK is run **without JSF** for now. Out of scope for now: `app-mem-customform` (the only
 application that uses Jakarta Faces), `AppMemFormImmediateIT` (`@LoginToContinue`), the applications that need an EJB
 (`app-securitycontext*`, `app-db`), an LDAP directory (`app-ldap*`, `app-custom-identity-store-handler`) or an OpenID
-provider (`app-openid*`). Still to do: Jakarta Authorization (`app-mem-policy*`), the mechanism decorator
-(`app-mem-basic-decorate`) and JAX-RS (`app-jaxrs`). The reasons, application by application, are on the `tck` page of
+provider (`app-openid*`). Still to do: the mechanism decorator (`app-mem-basic-decorate`: Vauban applies no `@Decorator`)
+and JAX-RS (`app-jaxrs`: Cassini mounts outside Foy, so the authentication never sees its requests). The reasons, application by application, are on the `tck` page of
 Kerckhoffs.
 
 Two defects in the assembly showed up while building this runner, both fixed where they live: Vauban's bean discovery

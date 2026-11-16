@@ -124,6 +124,19 @@ class KerckhoffsServletAuthenticationTest {
     }
 
     @Test
+    void aMechanismBeanAlsoPutsThePolicyOfJakartaAuthorizationInChargeOfTheAccess() {
+        var control = new KerckhoffsServletAuthentication().accessControl(beanManager(Set.of(bean())));
+
+        assertInstanceOf(io.vidocq.kerckhoffs.foy.PolicyAccessControl.class, control.orElseThrow());
+    }
+
+    @Test
+    void withoutAMechanismTheConstraintsKeepDecidingTheAccess() {
+        assertTrue(new KerckhoffsServletAuthentication().accessControl(null).isEmpty());
+        assertTrue(new KerckhoffsServletAuthentication().accessControl(beanManager(Set.of())).isEmpty());
+    }
+
+    @Test
     void theMechanismIsAskedOfTheContainerEachTime() {
         var manager = beanManager(Set.of(bean()));
 

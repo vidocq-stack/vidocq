@@ -19,8 +19,10 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.kerckhoffs;
 
+import io.vidocq.foy.spi.security.AccessControl;
 import io.vidocq.foy.spi.security.RequestAuthentication;
 import io.vidocq.kerckhoffs.foy.MechanismRequestAuthentication;
+import io.vidocq.kerckhoffs.foy.PolicyAccessControl;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletAuthentication;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
@@ -49,11 +51,25 @@ public final class KerckhoffsServletAuthentication implements ServletAuthenticat
 
     @Override
     public Optional<RequestAuthentication> requestAuthentication(BeanManager beanManager) {
-        if (beanManager == null || beanManager.getBeans(HttpAuthenticationMechanism.class).isEmpty()
-                && beanManager.getBeans(HttpAuthenticationMechanismHandler.class).isEmpty()) {
+        if (!hasMechanism(beanManager)) {
             return Optional.empty();
         }
         return Optional.of(new MechanismRequestAuthentication(mechanism(beanManager)));
+    }
+
+    /**
+     * The access to web resources is decided by the {@code Policy} of Jakarta Authorization wherever Kerckhoffs
+     * authenticates: the default policy answers with the security constraints, a policy the application sets decides in
+     * its place.
+     */
+    @Override
+    public Optional<AccessControl> accessControl(BeanManager beanManager) {
+        return hasMechanism(beanManager) ? Optional.of(new PolicyAccessControl()) : Optional.empty();
+    }
+
+    private static boolean hasMechanism(BeanManager beanManager) {
+        return beanManager != null && (!beanManager.getBeans(HttpAuthenticationMechanism.class).isEmpty()
+                || !beanManager.getBeans(HttpAuthenticationMechanismHandler.class).isEmpty());
     }
 
     /**

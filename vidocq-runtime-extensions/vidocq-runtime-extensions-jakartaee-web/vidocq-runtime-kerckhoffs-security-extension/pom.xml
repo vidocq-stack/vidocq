@@ -60,6 +60,11 @@
         </dependency>
         <dependency>
             <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-authorization</artifactId>
+            <version>${kerckhoffs.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
             <artifactId>kerckhoffs-foy</artifactId>
             <version>${kerckhoffs.version}</version>
         </dependency>
@@ -75,6 +80,13 @@
             <groupId>jakarta.authentication</groupId>
             <artifactId>jakarta.authentication-api</artifactId>
             <version>3.1.0</version>
+        </dependency>
+        <!-- Same for the Authorization API (Jakarta Authorization 3.0), which kerckhoffs-authorization implements the
+             policy of. -->
+        <dependency>
+            <groupId>jakarta.authorization</groupId>
+            <artifactId>jakarta.authorization-api</artifactId>
+            <version>3.0.0</version>
         </dependency>
         <dependency>
             <groupId>jakarta.interceptor</groupId>

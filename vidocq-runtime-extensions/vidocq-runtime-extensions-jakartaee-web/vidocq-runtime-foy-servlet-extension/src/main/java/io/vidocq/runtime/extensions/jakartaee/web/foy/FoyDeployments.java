@@ -116,6 +116,8 @@ final class FoyDeployments {
         ServletSecurity.from(config).applyTo(builder, ServletSecurity.identityStoreBean(beanManager));
         requestAuthentication(java.util.ServiceLoader.load(ServletAuthentication.class), beanManager)
                 .ifPresent(builder::requestAuthentication);
+        accessControl(java.util.ServiceLoader.load(ServletAuthentication.class), beanManager)
+                .ifPresent(builder::accessControl);
         initParameters(initParameters, config).forEach(builder::initParameter);
         try {
             Optional<FoyChappeBoot.Mounted> mounted = builder.build();
@@ -141,6 +143,23 @@ final class FoyDeployments {
             hook = given.get();
         }
         return Optional.ofNullable(hook);
+    }
+
+    /** The access decision of the extension that takes it over; empty when none does, two fail. */
+    static Optional<io.vidocq.foy.spi.security.AccessControl> accessControl(Iterable<ServletAuthentication> providers,
+                                                                            BeanManager beanManager) {
+        io.vidocq.foy.spi.security.AccessControl control = null;
+        for (ServletAuthentication provider : providers) {
+            Optional<io.vidocq.foy.spi.security.AccessControl> given = Objects.requireNonNull(
+                    provider.accessControl(beanManager), () -> provider.getClass().getName() + " returned no answer");
+            if (given.isEmpty()) continue;
+            if (control != null) {
+                throw new IllegalStateException("Two extensions decide the access to the resources of the servlet "
+                        + "deployments: keep one");
+            }
+            control = given.get();
+        }
+        return Optional.ofNullable(control);
     }
 
     /** The init parameters of every provider; a name two providers give fails. */

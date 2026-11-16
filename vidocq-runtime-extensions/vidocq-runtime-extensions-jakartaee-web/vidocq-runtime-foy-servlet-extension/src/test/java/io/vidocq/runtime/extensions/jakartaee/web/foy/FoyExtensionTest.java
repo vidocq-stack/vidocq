@@ -335,6 +335,44 @@ class FoyExtensionTest {
         assertThrows(IllegalStateException.class, () -> FoyDeployments.requestAuthentication(both, null));
     }
 
+    private static final io.vidocq.foy.spi.security.AccessControl CONTROL = (path, method, caller, constraints) -> true;
+
+    private static ServletAuthentication controlling(io.vidocq.foy.spi.security.AccessControl control) {
+        return new ServletAuthentication() {
+            @Override public Optional<io.vidocq.foy.spi.security.RequestAuthentication> requestAuthentication(
+                    jakarta.enterprise.inject.spi.BeanManager beanManager) {
+                return Optional.empty();
+            }
+
+            @Override public Optional<io.vidocq.foy.spi.security.AccessControl> accessControl(
+                    jakarta.enterprise.inject.spi.BeanManager beanManager) {
+                return Optional.ofNullable(control);
+            }
+        };
+    }
+
+    @Test
+    void anExtensionDecidesTheAccessToEveryResource() {
+        assertEquals(Optional.of(CONTROL), FoyDeployments.accessControl(List.of(controlling(CONTROL)), null));
+    }
+
+    @Test
+    void withoutAnExtensionTheConstraintsDecideTheAccess() {
+        ServletAuthentication onlyAuthentication = beanManager -> Optional.of(HOOK);
+
+        assertEquals(Optional.empty(), FoyDeployments.accessControl(List.of(), null));
+        assertEquals(Optional.empty(), FoyDeployments.accessControl(List.of(onlyAuthentication), null),
+                "the default answer of the SPI is no decision");
+        assertEquals(Optional.empty(), FoyDeployments.accessControl(List.of(controlling(null)), null));
+    }
+
+    @Test
+    void twoExtensionsDecidingTheAccessFail() {
+        List<ServletAuthentication> both = List.of(controlling(CONTROL), controlling(CONTROL));
+
+        assertThrows(IllegalStateException.class, () -> FoyDeployments.accessControl(both, null));
+    }
+
     @Test
     void eachBootHasItsOwnDeployments() {
         Object boot = new Object();

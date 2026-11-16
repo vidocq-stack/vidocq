@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.foy.spi;
 
+import io.vidocq.foy.spi.security.AccessControl;
 import io.vidocq.foy.spi.security.RequestAuthentication;
 import jakarta.enterprise.inject.spi.BeanManager;
 
@@ -42,4 +43,17 @@ public interface ServletAuthentication {
      * @return the hook to install, or empty to leave the authentication to the container; never {@code null}
      */
     Optional<RequestAuthentication> requestAuthentication(BeanManager beanManager);
+
+    /**
+     * Called once per deployment, before it is built, to let the extension decide the access to web resources in place
+     * of the security constraints alone (a Jakarta Authorization runtime: its {@code Policy} answers the
+     * {@code WebResourcePermission} of each request). At most one extension may: two that answer fail the deployment
+     * with an {@link IllegalStateException}.
+     *
+     * @param beanManager the CDI container of the application, or {@code null} when it has none
+     * @return the decision to install, or empty to leave it to the constraints; never {@code null}
+     */
+    default Optional<AccessControl> accessControl(BeanManager beanManager) {
+        return Optional.empty();
+    }
 }
