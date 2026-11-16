@@ -70,8 +70,10 @@ class HotSwapProcessTest {
         Path refused = greeter("refused", "v3", true);
         Path agent = agentJar();
 
-        List<String> command = new ArrayList<>(List.of(
-                Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+        List<String> command = new ArrayList<>();
+        command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        command.addAll(coverageAgent());
+        command.addAll(List.of(
                 "--module-path", agent.toString(), "--add-modules", "io.vidocq.runtime.dev.agent",
                 "-javaagent:" + agent,
                 "-cp", basedir().resolve("target/test-classes").toString(),
@@ -91,6 +93,33 @@ class HotSwapProcessTest {
         output = Files.readString(out, StandardCharsets.UTF_8);
         lines = output.lines().toList();
         assertEquals(0, process.exitValue(), output);
+    }
+
+    /**
+     * The coverage agent of this test JVM, when the build runs one: the child runs the agent's code, and that run
+     * counts in the module's coverage too. Surefire may put the options in an {@code @} argument file. The agent
+     * instruments this module's package only: it does not instrument a redefinition, so a redefined class it had
+     * instrumented would lose {@code $jacocoInit}, which the JVM refuses.
+     */
+    private static List<String> coverageAgent() {
+        String[] arguments = ProcessHandle.current().info().arguments().orElse(new String[0]);
+        return Stream.of(arguments).flatMap(HotSwapProcessTest::expanded)
+                .filter(argument -> argument.startsWith("-javaagent:") && argument.contains("jacoco"))
+                .map(argument -> argument + (argument.contains("=") ? "," : "=")
+                        + "includes=" + HotSwap.class.getPackageName() + ".*")
+                .toList();
+    }
+
+    private static Stream<String> expanded(String argument) {
+        if (!argument.startsWith("@")) {
+            return Stream.of(argument);
+        }
+        try {
+            return Files.readAllLines(Path.of(argument.substring(1))).stream()
+                    .map(line -> line.strip().replace("\"", ""));
+        } catch (IOException _) {
+            return Stream.empty();
+        }
     }
 
     @Test
