@@ -29,4 +29,7 @@ module io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.dev {
     // UnitDescription and SchemaScripts, through EntityManagerFactory.unwrap (noether#94).
     requires io.vidocq.noether.jpa.core;
     requires jakarta.persistence;
+
+    provides io.vidocq.runtime.spi.devconsole.LivePanel
+            with io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.dev.PersistenceLivePanel;
 }
