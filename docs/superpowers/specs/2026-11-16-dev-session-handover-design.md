@@ -1,6 +1,6 @@
 # HTTP sessions survive a dev swap: the Vidocq half
 
-Status: draft for review (VIDOCQ, on Yann's behalf). Date: 2026-11-16. Branch: `design/dev-session-handover`.
+Status: approved by VIDOCQ on Yann's behalf, 2026-11-16, with the four calls kept. Date: 2026-11-16. Branch: `design/dev-session-handover`.
 
 Companion: the Foy half, `foy` branch `feat/session-survives-swap`,
 `docs/superpowers/specs/2026-11-16-session-survives-swap-design.md` (FOY, agreed). This document builds on its API and
@@ -119,7 +119,11 @@ New in `vidocq-runtime-spi` (extensions depend on the SPI only):
 ```java
 package io.vidocq.runtime.spi;
 
-/** State an extension hands to the next boot of the same JVM, during an in-JVM dev swap (vidocq:dev). */
+/**
+ * State an extension hands to the next boot of the same JVM, during an in-JVM dev swap. Only vidocq:dev provides
+ * it: an extension works unchanged when ExtensionContext.devHandover() is empty, as it always is in a packaged
+ * application, a test or an embedding.
+ */
 public interface DevHandover {
     /** True while the stop in progress hands state over: a dev swap whose request said `sessions keep`. */
     boolean exporting();
@@ -130,7 +134,9 @@ public interface DevHandover {
 }
 ```
 
-and on `ExtensionContext`: `default Optional<DevHandover> devHandover() { return Optional.empty(); }`.
+and on `ExtensionContext`: `default Optional<DevHandover> devHandover() { return Optional.empty(); }`. The SPI keeps
+it for good, so its Javadoc says the same: only `vidocq:dev` provides it, and an extension must work unchanged when it
+is empty.
 
 In the core, `DevHandoverStore` implements it. `VidocqDevReloadLoop` creates one store for the JVM and passes it to
 each `VidocqBootstrap` it creates (a package-private `devHandover(DevHandoverStore)` on the bootstrap), which hands it
@@ -205,6 +211,8 @@ a dev swap, answering 503 with `Retry-After` until the new handler is mounted. N
   - `take` removes the key;
   - `clear` drops the rest;
   - `endExport` runs after a shutdown that failed.
+- Core, a boot outside the reload loop (`VidocqBootstrap.create()...start()`, as a packaged application starts):
+  `devHandover()` answers empty in every extension's context.
 - Core, `VidocqDevReloadLoopTest`: the order of §2 with a recording extension:
   - `exporting()` is true during its stop and false at its start;
   - the bytes it put are the bytes the next boot takes;
@@ -218,6 +226,8 @@ a dev swap, answering 503 with `Retry-After` until the new handler is mounted. N
     time until the UI answers.
   - Insert a lambda before them: a swap with `sessions drop`, and a fresh UI.
   - Add a field: a swap with `sessions drop`, and a fresh UI.
+  - A FORM-login session: after a swap with `sessions keep`, still logged in when the Principal is serializable. A
+    re-login is forced only when it is not (Foy half).
 
 ## Delivery
 
