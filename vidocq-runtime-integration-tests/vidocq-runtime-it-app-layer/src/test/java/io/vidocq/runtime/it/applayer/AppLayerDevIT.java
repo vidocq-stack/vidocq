@@ -31,7 +31,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-/** vidocq:dev under all: the lookup works, and again after a reload, which names the library's leaked thread. */
+/**
+ * vidocq:dev under all: the lookup works, and again after a reload, which names the library's leaked thread; a change
+ * in a method body only is then redefined in place.
+ */
 class AppLayerDevIT {
 
     private static final String FOUND = "LOOKUP-FOUND";
@@ -65,6 +68,15 @@ class AppLayerDevIT {
             }
             assertEquals(0, Fixture.occurrences(log, "LOOKUP-MISSING"), Fixture.read(log));
             assertEquals(0, Fixture.occurrences(log, "TOOL-PROVIDERS 2"), Fixture.read(log));
+
+            // A method body only: the agent redefines the class in place, and the application keeps running.
+            Path tool = project.resolve("app/src/main/java/acme/app/AppTool.java");
+            Files.writeString(tool, Files.readString(tool).replace("return 0;", "return 1;"));
+            Fixture.awaitLog(mvn, log, "class redefinition: 1 class");
+            Fixture.awaitLog(mvn, log, "Hot reload - redefined 1 class in ");
+            Fixture.awaitLog(mvn, log, "the application keeps running: AppTool");
+            assertEquals(2, Fixture.occurrences(log, FOUND), () -> "the redefinition restarted the application:\n"
+                    + Fixture.read(log));
         } finally {
             Fixture.stop(mvn);
         }

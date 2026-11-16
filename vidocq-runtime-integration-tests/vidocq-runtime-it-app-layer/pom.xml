@@ -46,6 +46,13 @@
             <artifactId>vidocq-runtime-core</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- The hot swap agent vidocq:dev resolves at the core's version: an optional dependency of the core, so it
+             is not staged with it. -->
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-dev-agent</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- The JSP-only application of the fixture (vidocq#232). -->
         <dependency>
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
