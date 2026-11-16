@@ -62,6 +62,8 @@ public final class PersistenceLivePanel implements LivePanel {
     private final AtomicReference<BeanManager> beans = new AtomicReference<>();
     private final JpqlActions jpql;
     private final ExploreActions explore;
+    private final IndexActions indexes;
+    private final DdlActions ddl = new DdlActions();
 
     /** The panel of the running boot's units, its transactions those of the application's transaction manager. */
     public PersistenceLivePanel() {
@@ -69,6 +71,7 @@ public final class PersistenceLivePanel implements LivePanel {
         UnitWork work = new UnitWork(this::transactionManager);
         this.jpql = new JpqlActions(work);
         this.explore = new ExploreActions(work);
+        this.indexes = new IndexActions(work);
     }
 
     /** A panel of {@code units}, whose JTA work runs in the transactions of {@code transactions}. */
@@ -77,6 +80,7 @@ public final class PersistenceLivePanel implements LivePanel {
         UnitWork work = new UnitWork(transactions);
         this.jpql = new JpqlActions(work);
         this.explore = new ExploreActions(work);
+        this.indexes = new IndexActions(work);
     }
 
     @Override
@@ -149,6 +153,8 @@ public final class PersistenceLivePanel implements LivePanel {
         if (!entities.isEmpty()) {
             actions.addAll(explore.actions(unit, entities, this::onUnit));
         }
+        actions.addAll(indexes.actions(unit, this::onUnit));
+        actions.addAll(ddl.actions(unit, this::onUnit));
         return actions;
     }
 
