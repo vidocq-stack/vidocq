@@ -25,7 +25,9 @@ import io.vidocq.noether.jpa.core.spi.UnitDescription.NamedQuery;
 import io.vidocq.noether.jpa.core.spi.UnitDescription.Table;
 import io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.dev.RecordedSample.Absent;
 import io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.dev.RecordedSample.Gauge;
+import io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.live.NoetherPersistenceLive;
 import io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.live.NoetherPersistenceLive.Unit;
+import io.vidocq.runtime.spi.devconsole.LivePanel;
 import io.vidocq.runtime.spi.devconsole.PanelAction;
 import io.vidocq.runtime.spi.devconsole.PanelAction.ActionResult;
 import io.vidocq.runtime.spi.devconsole.PanelSelector;
@@ -34,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.ServiceLoader;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -117,6 +120,22 @@ class PersistenceLivePanelTest {
         assertEquals(ActionResult.GRAPH, drawn.contentType());
         assertTrue(drawn.body().contains("\"id\":\"entity:Note\""), drawn.body());
         assertFalse(drawn.error());
+    }
+
+    @Test
+    void theModuleProvidesThePanelOfTheUnitsTheExtensionPublished() {
+        PersistenceLivePanelTest.class.getModule().addUses(LivePanel.class);
+        LivePanel found = ServiceLoader.load(LivePanel.class).stream().map(ServiceLoader.Provider::get)
+                .filter(p -> p.id().equals(PersistenceLivePanel.ID)).findFirst()
+                .orElseThrow(() -> new AssertionError("the module provides no " + PersistenceLivePanel.ID + " panel"));
+        NoetherPersistenceLive.publish(List.of(unit("ledger", LEDGER)));
+        try {
+            assertEquals(List.of("ledger"), action((PersistenceLivePanel) found, "model").arguments().getFirst()
+                    .allowedValues());
+        } finally {
+            NoetherPersistenceLive.clear();
+        }
+        assertEquals(List.of(), found.actions());
     }
 
     @Test
