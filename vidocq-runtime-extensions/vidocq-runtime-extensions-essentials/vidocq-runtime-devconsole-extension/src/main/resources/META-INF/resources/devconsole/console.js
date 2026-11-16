@@ -57,10 +57,16 @@
 // - An application/x-rows+json answer is a table of rows (rowsBody): a header per column, its type dimmed under its
 //   name, NULL dimmed, a long value cut; Table / JSON switches to the JSON viewer of the same body, Copy as CSV copies
 //   the rows. A cell of a column named "replay" is a button named after the action it fills. A body of another shape
-//   is shown as any other JSON.
+//   is shown as any other JSON. A body whose menu names an action of the panel gets a box to tick on each row and a
+//   right-click menu, also opened by the "N selected" button, whose entries fill that action's form with the ticked
+//   rows' values (menuArguments in editor-core.js); nothing is sent until the user submits, as for a replay.
+// - An application/x-graph+json answer is a graph (graphBody): boxes and lines laid out by editor-core.js, in an SVG
+//   that scrolls inside the result; a click on a box lists its facts beside the drawing. Graph / JSON switches to the
+//   JSON viewer of the same body. A body of another shape is shown as any other JSON.
 
 import { createEditor, jsonLanguage, queryLanguage, readRows, rowsCsv, FORMAT_EXAMPLES } from "./editor.js";
 import { selectorOf, choicesOf, pickChoice, formArguments, takesChoice, replayChoice } from "./editor.js";
+import { readGraph, graphLayout, menuArguments } from "./editor.js";
 
 const HISTORY_POINTS = 300;          // five minutes at one poll per second
 const WINDOW_MILLIS = 300_000;       // what a chart shows: the last five minutes
@@ -1375,41 +1381,29 @@ function answerBody(answer, nodes, actionId, panelId) {
     // a body of another shape is shown as any other JSON (SQL spec §2.2)
     return rows ? rowsBody(rows, answer.body, nodes, panelId) : textOrJson(answer.body, true, nodes);
   }
+  if (isGraphType(answer.contentType)) {
+    const graph = readGraph(answer.body);
+    return graph ? graphBody(graph, answer.body, nodes) : textOrJson(answer.body, true, nodes);
+  }
   return textOrJson(answer.body, isJsonType(answer.contentType), nodes);
 }
 
 /** Past this many characters a cell is cut with "…", its whole value in its title (SQL spec §2.2). */
 const MAX_CELL = 200;
-/** The view of each answer of rows, "table" or "json", by the fold state of its body: a redraw keeps the choice. */
+/** The view of each answer of rows, "drawn" (the table) or "json", by the fold state of its body: a redraw keeps it. */
 const rowsViews = new WeakMap();
+
+/** The rows each answer of rows has ticked, by the fold state of its body: a redraw keeps them, a new answer starts with none. */
+const rowsPicks = new WeakMap();
 
 /**
  * A body of rows (SQL spec §2.2): the table, or the JSON viewer of the same body, with Table / JSON to switch and
- * Copy as CSV, which copies the rows as RFC 4180 CSV; a refused clipboard is said on the button, nothing more.
+ * Copy as CSV, which copies the rows as RFC 4180 CSV; a refused clipboard is said on the button, nothing more. A body
+ * whose menu names an action of the panel gets a box to tick on each row and that menu (rowsPicker).
  */
 function rowsBody(rows, text, nodes, panelId) {
-  const view = el("div", "rows-view");
-  const tools = el("span", "jv-tools");
-  const switcher = el("span", "rows-switch");
-  switcher.setAttribute("role", "group");
-  switcher.setAttribute("aria-label", "Show the rows as");
-  const asTable = el("button", null, "Table");
-  const asJson = el("button", null, "JSON");
   const copy = el("button", null, "Copy as CSV");
-  for (const b of [asTable, asJson, copy]) b.type = "button";
-  const viewerSlot = el("span", "jv-tools");      // the JSON viewer's own tools, while it shows
-  switcher.append(asTable, asJson);
-  tools.append(switcher, copy, viewerSlot);
-  const show = (mode) => {
-    rowsViews.set(nodes, mode);
-    asTable.setAttribute("aria-pressed", String(mode === "table"));
-    asJson.setAttribute("aria-pressed", String(mode === "json"));
-    const viewer = mode === "json" ? jsonViewer(text, nodes) : null;
-    view.replaceChildren(viewer ? viewer.root : rowsTable(rows, panelId));
-    viewerSlot.replaceChildren(...(viewer ? [viewerTools(viewer)] : []));
-  };
-  asTable.addEventListener("click", () => show("table"));
-  asJson.addEventListener("click", () => show("json"));
+  copy.type = "button";
   copy.addEventListener("click", async () => {
     let said;
     try {
@@ -1421,24 +1415,182 @@ function rowsBody(rows, text, nodes, panelId) {
     copy.textContent = said;
     setTimeout(() => { copy.textContent = "Copy as CSV"; }, 2000);
   });
-  show(rowsViews.get(nodes) === "json" ? "json" : "table");
-  return { view, tools };
+  const entries = rows.menu.filter((entry) => actionRows.has(actionKey(panelId, entry.action)));
+  if (entries.length && !rowsPicks.has(nodes)) rowsPicks.set(nodes, new Set());
+  const picker = entries.length ? rowsPicker(text, panelId, entries, rowsPicks.get(nodes)) : null;
+  return switchedBody("rows", "Table", text, nodes, rowsViews, () => rowsTable(rows, panelId, picker),
+    picker ? [copy, picker.button] : [copy]);
+}
+
+/**
+ * A body shown two ways, {@code drawn} (its own view, under the button {@code drawnLabel}) or the JSON viewer of its
+ * {@code text}, with the switch between them; {@code views} keeps the way chosen per answer across redraws.
+ * {@code tools} go after the switch.
+ */
+function switchedBody(what, drawnLabel, text, nodes, views, draw, tools) {
+  const view = el("div", what + "-view");
+  const bar = el("span", "jv-tools");
+  const switcher = el("span", "rows-switch");
+  switcher.setAttribute("role", "group");
+  switcher.setAttribute("aria-label", "Show the " + what + " as");
+  const asDrawn = el("button", null, drawnLabel);
+  const asJson = el("button", null, "JSON");
+  for (const b of [asDrawn, asJson]) b.type = "button";
+  const viewerSlot = el("span", "jv-tools");      // the JSON viewer's own tools, while it shows
+  switcher.append(asDrawn, asJson);
+  bar.append(switcher, ...tools, viewerSlot);
+  const show = (mode) => {
+    views.set(nodes, mode);
+    asDrawn.setAttribute("aria-pressed", String(mode !== "json"));
+    asJson.setAttribute("aria-pressed", String(mode === "json"));
+    const viewer = mode === "json" ? jsonViewer(text, nodes) : null;
+    view.replaceChildren(viewer ? viewer.root : draw());
+    viewerSlot.replaceChildren(...(viewer ? [viewerTools(viewer)] : []));
+  };
+  asDrawn.addEventListener("click", () => show("drawn"));
+  asJson.addEventListener("click", () => show("json"));
+  show(views.get(nodes) === "json" ? "json" : "drawn");
+  return { view, tools: bar };
+}
+
+/**
+ * The menu of a body of rows on its ticked rows {@code picked}: a "Selected rows" button, which opens it from the
+ * keyboard, and open(x, y), which a right-click calls. An entry fills the form of its action with the ticked rows'
+ * values (menuArguments) and sends nothing, as a replay does. Escape, a click elsewhere or a scroll closes it.
+ */
+function rowsPicker(text, panelId, entries, picked) {
+  const button = el("button", "rows-picked");
+  button.type = "button";
+  button.setAttribute("aria-haspopup", "menu");
+  let menu = null;
+  const changed = () => {
+    button.textContent = picked.size ? picked.size + " selected ▾" : "Selected rows ▾";
+    button.disabled = picked.size === 0;
+  };
+  function close() {
+    if (!menu) return;
+    menu.remove();
+    menu = null;
+    document.removeEventListener("pointerdown", outside, true);
+    document.removeEventListener("keydown", keys, true);
+    window.removeEventListener("scroll", close, true);
+  }
+  function outside(event) {
+    if (menu && !menu.contains(event.target)) close();
+  }
+  function keys(event) {
+    if (!menu) return;
+    const items = [...menu.querySelectorAll("button")];
+    const at = items.indexOf(document.activeElement);
+    if (event.key === "Escape") {
+      close();
+      button.focus();
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      items[(at + (event.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
+    } else {
+      return;
+    }
+    event.preventDefault();
+  }
+  function open(x, y) {
+    close();
+    if (!picked.size) return;
+    menu = el("ul", "row-menu");
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", picked.size + (picked.size === 1 ? " row" : " rows"));
+    const head = el("li", "row-menu-head", picked.size + (picked.size === 1 ? " row selected" : " rows selected"));
+    head.setAttribute("role", "presentation");
+    menu.append(head);
+    for (const entry of entries) {
+      const item = el("li");
+      item.setAttribute("role", "presentation");
+      const choice = el("button", null, entry.label);
+      choice.type = "button";
+      choice.setAttribute("role", "menuitem");
+      choice.addEventListener("click", () => {
+        close();
+        const row = actionRows.get(actionKey(panelId, entry.action));
+        const values = menuArguments(entry, text, [...picked]);
+        if (row && values) row.fill(values);
+      });
+      item.append(choice);
+      menu.append(item);
+    }
+    document.body.append(menu);
+    const room = menu.getBoundingClientRect();
+    menu.style.left = Math.max(4, Math.min(x, window.innerWidth - room.width - 4)) + "px";
+    menu.style.top = Math.max(4, Math.min(y, window.innerHeight - room.height - 4)) + "px";
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", keys, true);
+    window.addEventListener("scroll", close, true);
+    menu.querySelector("button").focus();
+  }
+  button.addEventListener("click", () => {
+    const at = button.getBoundingClientRect();
+    open(at.left, at.bottom + 2);
+  });
+  changed();
+  return { button, picked, open, changed };
 }
 
 /**
  * The table of {@code rows}: a header per column, its type dimmed under its name, kept in view while the rows scroll;
  * NULL dimmed, an empty string an empty cell; a value past MAX_CELL characters cut with "…", the whole of it in the
  * cell's title; "more rows not shown" under them when there are more. A cell of a REPLAY_COLUMN column that replays an
- * action of the panel is a button named after that action; its header is left blank.
+ * action of the panel is a button named after that action; its header is left blank. With a {@code picker}, each row
+ * starts with a box to tick, Shift ticking the rows since the last one ticked, the header's box all of them or none,
+ * and a right-click on a row opens the picker's menu, on that row alone when it was not ticked.
  */
-function rowsTable(rows, panelId) {
+function rowsTable(rows, panelId, picker) {
   const box = el("div", "rows-box");
   const scroll = el("div", "rows-scroll");
   const table = el("table", "rows");
   const body = el("tbody");
   const buttons = new Set();               // the columns where a cell is a replay button
-  for (const row of rows.rows) {
+  const ticks = [];                        // each row's box, when the rows can be ticked
+  const lines = [];
+  let all = null;
+  let last = null;
+  const sync = () => {
+    ticks.forEach((tick, r) => {
+      tick.checked = picker.picked.has(r);
+      lines[r].classList.toggle("picked", tick.checked);
+    });
+    all.checked = picker.picked.size > 0 && picker.picked.size === rows.rows.length;
+    all.indeterminate = picker.picked.size > 0 && !all.checked;
+    picker.changed();
+  };
+  rows.rows.forEach((row, r) => {
     const tr = el("tr");
+    lines.push(tr);
+    if (picker) {
+      const td = el("td", "pick");
+      const tick = el("input");
+      tick.type = "checkbox";
+      tick.setAttribute("aria-label", "Select row " + (r + 1));
+      tick.addEventListener("click", (event) => {
+        const from = event.shiftKey && last !== null ? Math.min(last, r) : r;
+        const to = event.shiftKey && last !== null ? Math.max(last, r) : r;
+        for (let i = from; i <= to; i++) {
+          if (tick.checked) picker.picked.add(i); else picker.picked.delete(i);
+        }
+        last = r;
+        sync();
+      });
+      ticks.push(tick);
+      td.append(tick);
+      tr.append(td);
+      tr.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        if (!picker.picked.has(r)) {
+          picker.picked.clear();
+          picker.picked.add(r);
+          last = r;
+          sync();
+        }
+        picker.open(event.clientX, event.clientY);
+      });
+    }
     row.forEach((cell, i) => {
       const td = el("td");
       const button = rows.columns[i].name === REPLAY_COLUMN ? replayButton(panelId, cell) : null;
@@ -1463,8 +1615,21 @@ function rowsTable(rows, panelId) {
       tr.append(td);
     });
     body.append(tr);
-  }
+  });
   const head = el("tr");
+  if (picker) {
+    const th = el("th", "pick");
+    all = el("input");
+    all.type = "checkbox";
+    all.setAttribute("aria-label", "Select every row");
+    all.addEventListener("change", () => {
+      picker.picked.clear();
+      if (all.checked) rows.rows.forEach((row, r) => picker.picked.add(r));
+      sync();
+    });
+    th.append(all);
+    head.append(th);
+  }
   rows.columns.forEach((column, i) => {
     const th = el("th");
     if (!buttons.has(i)) {
@@ -1479,6 +1644,7 @@ function rowsTable(rows, panelId) {
   scroll.append(table);
   box.append(scroll);
   if (rows.more) box.append(el("p", "rows-more", "more rows not shown"));
+  if (picker) sync();
   return box;
 }
 
@@ -1490,6 +1656,127 @@ function textOrJson(text, json, nodes) {
   const viewer = json ? jsonViewer(text, nodes) : null;
   if (!viewer) return { view: el("pre", "result-body", text), tools: null };
   return { view: viewer.root, tools: viewerTools(viewer) };
+}
+
+// ------------------------------------------------------------------------------------------------ a graph
+
+/** Whether a content type is a graph: PanelAction.ActionResult.GRAPH. */
+const isGraphType = (type) => typeof type === "string" && type.startsWith("application/x-graph+json");
+/** The view of each answer of a graph, "drawn" or "json", and its chosen box, by the fold state of its body. */
+const graphViews = new WeakMap();
+const graphChosen = new WeakMap();
+/** The length and half width of an arrowhead. */
+const ARROW_LENGTH = 9;
+const ARROW_HALF = 4.5;
+
+/** The points of an arrowhead whose tip is at (x, y), coming from (fromX, fromY). */
+function arrowHead(fromX, fromY, x, y) {
+  const length = Math.hypot(x - fromX, y - fromY) || 1;
+  const ux = (x - fromX) / length;
+  const uy = (y - fromY) / length;
+  const bx = x - ARROW_LENGTH * ux;
+  const by = y - ARROW_LENGTH * uy;
+  const at = (px, py) => Math.round(px * 10) / 10 + "," + Math.round(py * 10) / 10;
+  return [at(x, y), at(bx - ARROW_HALF * uy, by + ARROW_HALF * ux), at(bx + ARROW_HALF * uy, by - ARROW_HALF * ux)]
+    .join(" ");
+}
+
+/** A graph body: its drawing, or the JSON viewer of the same body, with Graph / JSON to switch. */
+function graphBody(graph, text, nodes) {
+  return switchedBody("graph", "Graph", text, nodes, graphViews, () => graphDrawing(graph, nodes), []);
+}
+
+/**
+ * The drawing of {@code graph} (readGraph's), laid out by editor-core.js: a box per node, its label and its kind,
+ * a line per edge, dashed or ending with an arrow as the edge says, its label at its middle; a self-edge is a loop.
+ * The SVG scrolls inside its box. Clicking a box, or Enter or Space on it, lists its facts beside the drawing and
+ * marks its lines; the chosen box is kept across redraws.
+ */
+function graphDrawing(graph, nodes) {
+  const layout = graphLayout(graph);
+  const root = el("div", "graph-box");
+  const scroll = el("div", "graph-scroll");
+  const svg = svgEl("svg", { width: layout.width, height: layout.height,
+    viewBox: "0 0 " + layout.width + " " + layout.height, role: "group",
+    "aria-label": graph.nodes.length + " nodes, " + graph.edges.length + " edges" }, "graph");
+  const facts = el("aside", "graph-facts");
+  facts.setAttribute("aria-live", "polite");
+  const lines = [];
+  for (const e of layout.edges) {
+    const line = svgEl("g", {}, "graph-edge" + (e.dashed ? " dashed" : ""));
+    const d = e.loop
+      ? "M " + e.x1 + " " + e.y1 + " C " + e.cx + " " + (e.y1 - 14) + ", " + e.cx + " " + (e.y2 + 14) + ", " + e.x2
+        + " " + e.y2
+      : "M " + e.x1 + " " + e.y1 + " L " + e.x2 + " " + e.y2;
+    const title = svgEl("title");
+    title.textContent = e.from + " → " + e.to + (e.label ? ": " + e.label : "");
+    line.append(title, svgEl("path", { d }));
+    if (e.arrow) {
+      const from = e.loop ? [e.cx, e.y2 + 14] : [e.x1, e.y1];
+      line.append(svgEl("polygon", { points: arrowHead(from[0], from[1], e.x2, e.y2) }, "graph-arrow"));
+    }
+    if (e.label) {
+      const text = svgEl("text", { x: e.lx, y: e.ly }, "graph-label" + (e.loop ? " loop" : ""));
+      text.textContent = e.label;
+      line.append(text);
+    }
+    svg.append(line);
+    lines.push({ edge: e, line });
+  }
+  const boxes = new Map();
+  layout.nodes.forEach((b, i) => {
+    const node = graph.nodes[i];
+    const g = svgEl("g", { tabindex: 0, role: "button",
+      "aria-label": node.label + (node.kind ? ", " + node.kind : "") }, "graph-node");
+    const title = svgEl("title");
+    title.textContent = node.label + (node.kind ? " (" + node.kind + ")" : "");
+    const name = svgEl("text", { x: b.x + b.w / 2, y: b.y + (b.sub ? 18 : 26) });
+    name.textContent = b.text;
+    g.append(title, svgEl("rect", { x: b.x, y: b.y, width: b.w, height: b.h, rx: 6 }), name);
+    if (b.sub) {
+      const kind = svgEl("text", { x: b.x + b.w / 2, y: b.y + 34 }, "graph-kind");
+      kind.textContent = b.sub;
+      g.append(kind);
+    }
+    g.addEventListener("click", () => choose(node.id));
+    g.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      choose(node.id);
+    });
+    svg.append(g);
+    boxes.set(node.id, { node, g });
+  });
+  function choose(id) {
+    graphChosen.set(nodes, id);
+    for (const [key, box] of boxes) box.g.classList.toggle("chosen", key === id);
+    for (const { edge, line } of lines) line.classList.toggle("near", edge.from === id || edge.to === id);
+    const chosen = boxes.get(id);
+    if (!chosen) {
+      facts.replaceChildren(el("p", "graph-none", "Click a box to list its facts."));
+      return;
+    }
+    const node = chosen.node;
+    facts.replaceChildren(el("h3", null, node.label));
+    if (node.kind) facts.append(el("p", "graph-kind-line", node.kind));
+    if (!node.facts.length) {
+      facts.append(el("p", "graph-none", "No facts."));
+      return;
+    }
+    const list = el("dl");
+    for (const [name, value] of node.facts) {
+      const dt = el("dt");
+      dt.textContent = name;
+      const dd = el("dd");
+      dd.textContent = value;
+      list.append(dt, dd);
+    }
+    facts.append(list);
+  }
+  choose(graphChosen.get(nodes));
+  scroll.append(svg);
+  root.append(scroll, facts);
+  return root;
 }
 
 // ------------------------------------------------------------------------------------------------ results

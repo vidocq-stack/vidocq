@@ -1867,6 +1867,9 @@ const CHAR_WIDTH = 7.2;
 /** How far right of its box a self-edge's loop reaches, and how far apart edges between the same boxes run. */
 const LOOP = 22;
 const PARALLEL = 12;
+/** The width of a character of an edge's label, at the page's 11 px, and the height of its line. */
+const LABEL_CHAR = 6.6;
+const LABEL_HEIGHT = 13;
 
 /** {@code text} cut to BOX_CHARS characters with "…", never half a character. */
 function boxText(text) {
@@ -2003,18 +2006,72 @@ function edgeLine(edge, a, b, k, n, canonical) {
   const shift = Math.max(-(a.h / 2 - 2), Math.min(a.h / 2 - 2, (k - (n - 1) / 2) * PARALLEL));
   const start = exit({ x: ca.x + shift * normal.x, y: ca.y + shift * normal.y }, d, a);
   const end = exit({ x: cb.x + shift * normal.x, y: cb.y + shift * normal.y }, { x: -d.x, y: -d.y }, b);
+  const lx = round((start.x + end.x) / 2);
   return { from: edge.from, to: edge.to, label: edge.label, arrow: edge.arrow, dashed: edge.dashed,
-    x1: round(start.x), y1: round(start.y), x2: round(end.x), y2: round(end.y),
-    lx: round((start.x + end.x) / 2), ly: round((start.y + end.y) / 2), loop: false };
+    x1: round(start.x), y1: round(start.y), x2: round(end.x), y2: round(end.y), cx: lx,
+    lx, ly: round((start.y + end.y) / 2 + 4), lw: Math.round(LABEL_CHAR * edge.label.length), loop: false };
+}
+
+/** The room an edge's label takes: centred on (lx, ly), its baseline, or starting there for a loop's. */
+function labelBox(e) {
+  return { x: e.loop ? e.lx : e.lx - e.lw / 2, y: e.ly - 10, w: e.lw, h: LABEL_HEIGHT };
+}
+
+const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+/**
+ * Moves each label, in the graph's order, off the labels already placed and off the boxes: one line down, one up,
+ * two down... three at most, and back at its place when none is free. A label never starts left of the drawing.
+ */
+function spreadLabels(edges, boxes) {
+  const taken = roomGrid();
+  boxes.forEach(taken.add);
+  const placed = [];
+  for (const e of edges) {
+    if (!e.label) continue;
+    if (labelBox(e).x < 2) e.lx = round(e.lx + 2 - labelBox(e).x);
+    const base = e.ly;
+    const free = [0, 1, -1, 2, -2, 3, -3].find((step) => {
+      e.ly = round(base + step * LABEL_HEIGHT);
+      const box = labelBox(e);
+      return box.y >= 2 && !taken.hits(box);
+    });
+    if (free === undefined) e.ly = base;
+    taken.add(labelBox(e));
+    placed.push(labelBox(e));
+  }
+  return placed;
+}
+
+/** The rectangles already placed, by the cells of a 64 × 16 px grid they cover, so that a label meets only its neighbours. */
+function roomGrid() {
+  const cells = new Map();
+  const keys = (r) => {
+    const out = [];
+    for (let gx = Math.floor(r.x / 64); gx <= Math.floor((r.x + r.w) / 64); gx++) {
+      for (let gy = Math.floor(r.y / 16); gy <= Math.floor((r.y + r.h) / 16); gy++) out.push(gx + " " + gy);
+    }
+    return out;
+  };
+  return {
+    add(r) {
+      for (const k of keys(r)) (cells.get(k) || cells.set(k, []).get(k)).push(r);
+    },
+    hits(r) {
+      return keys(r).some((k) => (cells.get(k) || []).some((o) => overlaps(r, o)));
+    },
+  };
 }
 
 /**
  * Where the boxes and lines of {@code graph} (readGraph's) go: {width, height, nodes: [{id, x, y, w, h, text, sub}],
- * edges: [{from, to, label, arrow, dashed, x1, y1, x2, y2, lx, ly, loop}]}, both in the graph's order. The same graph
+ * edges: [{from, to, label, arrow, dashed, x1, y1, x2, y2, cx, lx, ly, lw, loop}]}, both in the graph's order: (lx, ly)
+ * is the baseline of an edge's label, lw its width, and cx the reach of a loop. The same graph
  * always gets the same layout. Each part of the graph, the nodes linked to one another, is laid out in layers (see
  * partLayers), ordered down, up and down again by the positions of their neighbours, centred, and the parts are put
  * side by side. A line ends on the borders of its boxes, its label at its middle; lines between the same two boxes
- * run PARALLEL apart; a self-edge is a loop right of its box. A box shows its label and kind cut to BOX_CHARS.
+ * run PARALLEL apart; a self-edge is a loop right of its box. Labels move off one another and off the boxes
+ * (spreadLabels), and the drawing grows to hold them. A box shows its label and kind cut to BOX_CHARS.
  */
 export function graphLayout(graph) {
   const nodes = graph.nodes;
@@ -2065,12 +2122,16 @@ export function graphLayout(graph) {
     const b = boxes[index.get(e.to)];
     if (a === b) {
       return { from: e.from, to: e.to, label: e.label, arrow: e.arrow, dashed: e.dashed,
-        x1: a.x + a.w, y1: round(a.y + a.h * 0.3), x2: a.x + a.w, y2: round(a.y + a.h * 0.7),
-        lx: a.x + a.w + LOOP, ly: round(a.y + a.h / 2), loop: true };
+        x1: a.x + a.w, y1: round(a.y + a.h * 0.3), x2: a.x + a.w, y2: round(a.y + a.h * 0.7), cx: a.x + a.w + LOOP,
+        lx: a.x + a.w + LOOP + 4, ly: round(a.y + a.h / 2 + 4), lw: Math.round(LABEL_CHAR * e.label.length),
+        loop: true };
     }
     const same = between.get(pairOf(e));
     return edgeLine(e, a, b, same.indexOf(e), same.length, index.get(e.from) < index.get(e.to));
   });
-  return { width: nodes.length ? left - PART_GAP + MARGIN : 2 * MARGIN, height: height + 2 * MARGIN,
-    nodes: boxes, edges };
+  const labels = spreadLabels(edges, boxes);
+  const right = Math.max(0, ...labels.map((b) => b.x + b.w + 8));
+  const bottom = Math.max(0, ...labels.map((b) => b.y + b.h + 8));
+  return { width: Math.ceil(Math.max(nodes.length ? left - PART_GAP + MARGIN : 2 * MARGIN, right)),
+    height: Math.ceil(Math.max(height + 2 * MARGIN, bottom)), nodes: boxes, edges };
 }

@@ -152,6 +152,20 @@ class GraphCoreTest {
     }
 
     @Test
+    void noLabelSitsOnAnotherOrOnABoxAndAllFitTheDrawing() {
+        String clash = "(l) => { const boxes = l.edges.filter((e) => e.label).map((e) => ({ id: e.from + '-' + e.to, "
+                + "x: e.loop ? e.lx : e.lx - e.lw / 2, y: e.ly - 10, w: e.lw, h: 13 })); "
+                + "const over = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h; "
+                + "const out = boxes.filter((a) => !(a.w > 0)).map((a) => a.id + ' has no width'); "
+                + "boxes.forEach((a, i) => { if (a.x < 0 || a.y < 0 || a.x + a.w > l.width "
+                + "|| a.y + a.h > l.height) out.push(a.id + ' outside'); boxes.slice(i + 1).forEach((b) => { "
+                + "if (over(a, b)) out.push(a.id + ' on ' + b.id); }); l.nodes.forEach((n) => { if (over(a, n)) "
+                + "out.push(a.id + ' on box ' + n.id); }); }); return out.join(', '); }";
+
+        assertEquals("", core.eval(clash, layout(GRAPH)).asString());
+    }
+
+    @Test
     void aLongLabelIsCutInItsBox() {
         String label = "AVeryLongEntityNameThatGoesOnAndOnAndOnAndOnForever";
         Value layout = layout("{\"nodes\":[{\"id\":\"A\",\"label\":\"" + label + "\",\"kind\":\"\",\"facts\":[]}],"

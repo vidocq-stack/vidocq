@@ -466,6 +466,49 @@ table.rows td.rows-null { color: var(--faint); font-style: italic; }
 .rows-switch { display: inline-flex; gap: 2px; }
 .rows-switch button[aria-pressed="true"] { background: var(--sunk); font-weight: 600; }
 
+/* Rows that can be ticked, and the menu a right-click opens on them. */
+table.rows th.pick, table.rows td.pick { width: 1px; padding: 4px 4px 4px 10px; }
+table.rows tr.picked td { background: var(--accent-soft); }
+.rows-picked:disabled { color: var(--faint); cursor: default; }
+.row-menu { position: fixed; z-index: 50; margin: 0; padding: 4px; list-style: none; min-width: 200px;
+  max-width: min(420px, calc(100vw - 8px)); background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 6px; box-shadow: 0 6px 18px var(--shade); font-size: 13px; }
+.row-menu-head { padding: 4px 10px 6px; color: var(--faint); font-size: 12px; }
+.row-menu button { display: block; width: 100%; text-align: left; border: 0; border-radius: 4px; background: none;
+  padding: 5px 10px; color: var(--ink); }
+.row-menu button:hover, .row-menu button:focus-visible { background: var(--accent-soft); outline: none; }
+
+/* A graph: its drawing scrolls inside the result, the facts of the chosen box beside it. */
+.graph-box { display: flex; flex-wrap: wrap; gap: 12px; margin: 6px 0 0; min-width: 0; }
+.graph-scroll { flex: 1 1 420px; min-width: 0; max-height: 36em; overflow: auto; border: 1px solid var(--grid);
+  border-radius: 6px; background: var(--surface); }
+svg.graph { display: block; font-family: var(--mono); font-size: 12px; }
+.graph-node { cursor: pointer; }
+.graph-node:focus { outline: none; }
+.graph-node rect { fill: var(--surface); stroke: var(--rule); stroke-width: 1.2; }
+.graph-node text { fill: var(--ink); text-anchor: middle; }
+.graph-node text.graph-kind { fill: var(--faint); font-size: 11px; }
+.graph-node:hover rect { stroke: var(--faint); }
+.graph-node.chosen rect, .graph-node:focus-visible rect { fill: var(--accent-soft); stroke: var(--accent);
+  stroke-width: 2; }
+.graph-edge path { fill: none; stroke: var(--faint); stroke-width: 1.2; }
+.graph-edge.dashed path { stroke-dasharray: 5 4; }
+.graph-edge.near path { stroke: var(--accent); stroke-width: 2; }
+.graph-arrow { fill: var(--faint); stroke: none; }
+.graph-edge.near .graph-arrow { fill: var(--accent); }
+.graph-label { fill: var(--muted); font-size: 11px; text-anchor: middle; paint-order: stroke; stroke: var(--surface);
+  stroke-width: 4px; stroke-linejoin: round; }
+.graph-label.loop { text-anchor: start; }
+.graph-edge.near .graph-label { fill: var(--accent); }
+.graph-facts { flex: 0 1 280px; min-width: 200px; font-size: 13px; }
+.graph-facts h3 { margin: 0 0 2px; font-size: 14px; overflow-wrap: anywhere; }
+.graph-kind-line { margin: 0; color: var(--faint); font-size: 12px; }
+.graph-facts dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 8px 0 0;
+  font-family: var(--mono); font-size: 12px; }
+.graph-facts dt { color: var(--muted); }
+.graph-facts dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.graph-none { margin: 0; color: var(--faint); }
+
 /* A link the server vouched for: it opens the running application in a new tab. */
 a.link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 a.link:hover { text-decoration-thickness: 2px; }

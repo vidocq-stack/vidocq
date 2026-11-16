@@ -537,7 +537,8 @@ class PageTest {
         assertTrue(rows.contains("navigator.clipboard.writeText(rowsCsv(rows))"), "the rows as CSV, by editor-core.js");
         assertTrue(rows.contains("const viewer = mode === \"json\" ? jsonViewer(text, nodes) : null;"),
                 "JSON is the viewer of today on the same body");
-        assertTrue(rows.contains("rowsViews.set(nodes, mode);"), "a redraw of the same result keeps the view chosen");
+        assertTrue(rows.contains("switchedBody(\"rows\", \"Table\", text, nodes, rowsViews,")
+                && rows.contains("views.set(nodes, mode);"), "a redraw of the same result keeps the view chosen");
         assertTrue(rows.contains("td.textContent = \"NULL\";") && rows.contains("td.className = \"rows-null\";"),
                 "NULL, dimmed, never an empty string");
         assertTrue(script.contains("const MAX_CELL = 200;") && rows.contains("td.title = whole;"),
@@ -551,6 +552,53 @@ class PageTest {
         assertTrue(rule(style, "table.rows td.rows-null {").contains("var(--faint)"), "NULL dimmed");
         assertTrue(file("editor.js").contains("export { readRows, rowsCsv } from \"./editor-core.js\";"),
                 "editor.js passes the pure half on to console.js, its only import");
+    }
+
+    @Test
+    void aGraphAnswerIsDrawnInSvgWithItsFactsOnAClick() {
+        String script = file("console.js");
+        String style = file("console.css");
+        int start = script.indexOf("// ------------------------------------------------------------------------------"
+                + "------------------ a graph");
+        String graph = script.substring(start, script.indexOf("// ---", start + 10));
+
+        assertTrue(script.contains("const isGraphType = (type) => typeof type === \"string\""
+                + " && type.startsWith(\"application/x-graph+json\");"), "PanelAction.ActionResult.GRAPH");
+        assertTrue(script.contains("const graph = readGraph(answer.body);"), "its shape checked by editor-core.js");
+        assertTrue(script.contains("return graph ? graphBody(graph, answer.body, nodes) "
+                + ": textOrJson(answer.body, true, nodes);"), "a body of another shape is shown as any other JSON");
+        assertTrue(graph.contains("switchedBody(\"graph\", \"Graph\", text, nodes, graphViews,"),
+                "Graph / JSON, kept across redraws");
+        assertTrue(graph.contains("const layout = graphLayout(graph);"), "laid out by editor-core.js");
+        assertTrue(graph.contains("svgEl(\"svg\"") && graph.contains("tabindex: 0"),
+                "SVG boxes the keyboard reaches");
+        assertTrue(graph.contains("graphChosen.set(nodes, id);"), "the chosen box kept across redraws");
+        assertTrue(graph.contains("dd.textContent = value;") && !graph.contains("innerHTML"), "facts as text");
+        assertFalse(graph.contains("fetch("), "a graph sends no request");
+        assertTrue(rule(style, ".graph-scroll {").contains("overflow: auto"), "a large graph scrolls in its box");
+        assertTrue(rule(style, ".graph-edge.dashed path {").contains("stroke-dasharray"), "a dashed edge");
+    }
+
+    @Test
+    void aRowsMenuFillsTheTargetFormAndSendsNothing() {
+        String script = file("console.js");
+        String style = file("console.css");
+        int start = script.indexOf("function rowsBody(");
+        String rows = script.substring(start, script.indexOf("// ---", start));
+
+        assertTrue(rows.contains("rows.menu.filter((entry) => actionRows.has(actionKey(panelId, entry.action)))"),
+                "an entry whose action the panel lacks is left out");
+        assertTrue(rows.contains("const values = menuArguments(entry, text, [...picked]);")
+                && rows.contains("row.fill(values);"), "it fills the form, as a replay does");
+        assertTrue(rows.contains("addEventListener(\"contextmenu\"") && rows.contains("event.preventDefault();"),
+                "a right-click opens the menu");
+        assertTrue(rows.contains("event.key === \"Escape\""), "Escape closes it");
+        assertTrue(rows.contains("rowsPicks.get(nodes)"), "the selection is kept across redraws");
+        assertTrue(rows.contains("setAttribute(\"role\", \"menu\")")
+                && rows.contains("setAttribute(\"role\", \"menuitem\")"), "a menu to assistive technologies");
+        assertFalse(rows.contains("fetch("), "nothing is sent from the menu");
+        assertTrue(rule(style, ".row-menu {").contains("position: fixed"), "the menu opens at the pointer");
+        assertTrue(file("editor.js").contains("export { menuArguments } from \"./editor-core.js\";"));
     }
 
     @Test
