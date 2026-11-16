@@ -39,6 +39,10 @@ import java.util.stream.Collectors;
  * a column per value of its embeddable, a single-valued relation the id of its target, joined so that a relation
  * without a target still gives its row; a collection is left out.
  *
+ * <p>Every name in its JPQL, the entity's, its attributes' and its joins', comes from the unit's description, never
+ * from a request: a call names an entity, and only an entity of that description has a projection
+ * ({@link ExploreActions}, {@link ResultRows}). The values of a query are bound as parameters.
+ *
  * @param entity  the entity's name
  * @param paths   the path of each column, in order
  * @param joins   the joins the paths need, {@code LEFT JOIN e.author j1}
@@ -51,6 +55,9 @@ record Projection(String entity, List<String> paths, List<String> joins, List<Co
 
     /** The entity's identification variable. */
     static final String ALIAS = "e";
+
+    /** The parameter of {@link #byIds()}, the list of ids whose rows it reads. */
+    static final String IDS = "ids";
 
     /** How deep an embeddable within an embeddable is followed. */
     private static final int MAX_NESTING = 3;
@@ -114,6 +121,18 @@ record Projection(String entity, List<String> paths, List<String> joins, List<Co
                 .append(entity).append(' ').append(ALIAS);
         joins.forEach(join -> out.append(' ').append(join));
         return out.toString();
+    }
+
+    /**
+     * {@code SELECT <paths> FROM <entity> e <joins> WHERE e.id IN :ids}: the rows of the ids bound to {@link #IDS}.
+     *
+     * @throws IllegalStateException when the entity has no {@link #idPath}
+     */
+    String byIds() {
+        if (idPath == null) {
+            throw new IllegalStateException(entity + " has no simple id");
+        }
+        return select() + " WHERE " + idPath + " IN :" + IDS;
     }
 
     /** The index of the column of the entity's id, {@code -1} when it has no {@link #idPath}. */

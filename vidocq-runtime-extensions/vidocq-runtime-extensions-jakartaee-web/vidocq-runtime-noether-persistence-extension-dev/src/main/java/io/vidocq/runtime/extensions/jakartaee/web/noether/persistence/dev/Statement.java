@@ -85,19 +85,17 @@ record Statement(String query, Map<String, Object> params) {
      * @throws Refused naming the member that is wrong, when {@code sent} is no statement
      */
     static Statement read(String sent) throws Refused {
-        String query = null;
-        Object params = null;
-        for (Map.Entry<?, ?> member : object(ARGUMENT, parse(ARGUMENT, sent)).entrySet()) {
-            switch (String.valueOf(member.getKey())) {
-                case QUERY_MEMBER -> query = text(member.getValue());
-                case PARAMS_MEMBER -> params = member.getValue();
-                default -> throw new Refused(member.getKey() + ": unknown argument");
+        Map<?, ?> members = object(ARGUMENT, parse(ARGUMENT, sent));
+        for (Object name : members.keySet()) {
+            if (!QUERY_MEMBER.equals(name) && !PARAMS_MEMBER.equals(name)) {
+                throw new Refused(name + ": unknown argument");
             }
         }
+        String query = text(members.get(QUERY_MEMBER));
         if (query == null || query.isBlank()) {
             throw new Refused(QUERY_MEMBER + ": missing");
         }
-        return new Statement(query.strip(), params(params));
+        return new Statement(query.strip(), params(members.get(PARAMS_MEMBER)));
     }
 
     /** Whether the statement is an {@code UPDATE} or a {@code DELETE}. */

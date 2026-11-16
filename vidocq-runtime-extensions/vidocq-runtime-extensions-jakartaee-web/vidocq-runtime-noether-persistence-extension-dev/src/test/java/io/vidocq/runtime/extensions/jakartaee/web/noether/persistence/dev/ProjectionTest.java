@@ -32,6 +32,7 @@ import static io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.dev
 import static io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.dev.ModelGraphTest.attribute;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** The projection of an entity: a column per value it holds, read by JPQL without reflection. */
 class ProjectionTest {
@@ -52,6 +53,20 @@ class ProjectionTest {
         assertEquals("e.id", note.idPath());
         assertEquals(0, note.idColumn());
         assertEquals(List.of("e.id"), note.idPaths());
+    }
+
+    @Test
+    void theRowsOfSomeIdsAreTheProjectionOfTheIdsBound() {
+        assertEquals("SELECT e.id, e.title, j1.id, e.address.street, e.address.city FROM Note e"
+                + " LEFT JOIN e.author j1 WHERE e.id IN :" + Projection.IDS,
+                Projection.of(entity(UNIT, "Note"), UNIT).byIds());
+    }
+
+    @Test
+    void anEntityWithoutASimpleIdHasNoRowsByIds() {
+        Projection lines = Projection.of(ExploreActionsTest.LINES.entities().getFirst(), ExploreActionsTest.LINES);
+
+        assertEquals("Line has no simple id", assertThrows(IllegalStateException.class, lines::byIds).getMessage());
     }
 
     @Test

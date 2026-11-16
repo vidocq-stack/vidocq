@@ -233,10 +233,10 @@ final class ResultRows {
         List<Object> keys = found.stream().map(ids).toList();
         // keyed by text: a cell writes a UUID id as text, and a number id the same whatever its type
         Map<String, List<Object>> byId = new HashMap<>();
-        String jpql = projection.select() + " WHERE " + projection.idPath() + " IN :ids";
         for (int from = 0; from < keys.size(); from += CHUNK) {
             List<Object> chunk = List.copyOf(keys.subList(from, Math.min(keys.size(), from + CHUNK)));
-            Table chunked = projected(projection, em.createQuery(jpql).setParameter("ids", chunk).getResultList());
+            Table chunked = projected(projection, em.createQuery(projection.byIds())
+                    .setParameter(Projection.IDS, chunk).getResultList());
             chunked.rows().forEach(row -> byId.put(String.valueOf(row.get(projection.idColumn())), row));
         }
         List<List<Object>> rows = keys.stream().map(key -> byId.get(String.valueOf(key))).filter(Objects::nonNull)
