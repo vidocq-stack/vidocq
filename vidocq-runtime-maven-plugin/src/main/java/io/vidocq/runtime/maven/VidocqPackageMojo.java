@@ -128,6 +128,10 @@ public class VidocqPackageMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.directory}", readonly = true)
     private File buildDir;
 
+    /** The compiled classes, where an {@code @VidocqMain} class stands in for an unset {@code mainClass}. */
+    @Parameter(defaultValue = "${project.build.outputDirectory}", readonly = true)
+    private File classesDir;
+
     @javax.inject.Inject
     private MavenProjectHelper projectHelper;
 
@@ -143,6 +147,7 @@ public class VidocqPackageMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoExecutionException {
         getLog().info("Vidocq - Packaging distribution: " + distName);
+        mainClass = AnnotatedMainClass.resolve(mainClass, classesDir, getLog()::info);
 
         try {
             Path distRoot = buildDir.toPath().resolve(distName);

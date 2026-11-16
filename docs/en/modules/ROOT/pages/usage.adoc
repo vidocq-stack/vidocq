@@ -36,7 +36,9 @@ A main class of your own is worth having in two cases only:
 * **logic after boot, or an exit code**, through a `VidocqApp` passed to `Vidocq.run(Class, args)`.
 
 That main is a *trampoline*: it contains nothing but `Vidocq.run(...)`, and its module `requires
-io.vidocq.runtime.core` and `io.vidocq.runtime.spi`. Point `vidocq.mainClass` at it.
+io.vidocq.runtime.core` and `io.vidocq.runtime.spi`. Annotate it `@VidocqMain`: `vidocq:dev`, `vidocq:run` and the
+packaging goals then launch it without a setting, and say so. Set `vidocq.mainClass` only to choose among several
+annotated classes, or to launch another one.
 
 [#ide-run-twice]
 A right-click Run leaves the application on the module path, so in the JVM's boot layer, and `Vidocq.run` loads it

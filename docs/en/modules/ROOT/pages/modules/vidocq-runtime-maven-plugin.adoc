@@ -1054,10 +1054,13 @@ run always uses.
 | The Java module of the application — the same property `vidocq:generate` and `vidocq:package` read.
 
 | `vidocq.mainClass`
-| _(unset)_
-| The application main class, typically a `@VidocqMain` trampoline. Optional: without it the runtime's own main boots the
-  application, and `vidocq.mainModule` is passed as `-Dvidocq.app.module`; with it, the class is passed as
-  `-Dvidocq.app.main` and run inside the application layer. See xref:usage.adoc#entry-point[The application entry point].
+| _(the `@VidocqMain` class)_
+| The application main class, typically a `@VidocqMain` trampoline. Optional: when it is unset, the one class of
+  `target/classes` annotated `@VidocqMain` is used, and the goal says so; two annotated classes fail the goal, which
+  then asks for this property. Without either, the runtime's own main boots the
+  application, and `vidocq.mainModule` is passed as `-Dvidocq.app.module`; with one, the class is passed as
+  `-Dvidocq.app.main` and run inside the application layer. `vidocq:package`, `vidocq:jlink` and `vidocq:jpackage`
+  pick the main class the same way. See xref:usage.adoc#entry-point[The application entry point].
 
 | `vidocq.run.jvmArgs`
 | _(empty)_

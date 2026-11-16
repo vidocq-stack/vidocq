@@ -505,8 +505,10 @@
                     <editable>false</editable>
                     <description>Remote project repositories</description>
                 </parameter>
+                <parameter><name>classesDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Compiled classes directory of the project, where an @VidocqMain class stands in for an unset mainClass.</description></parameter>
             </parameters>
             <configuration>
+                <classesDir implementation="java.io.File" default-value="${project.build.outputDirectory}"/>
                 <project implementation="org.apache.maven.project.MavenProject"
                          default-value="${project}"/>
                 <mainClass implementation="java.lang.String"
@@ -758,12 +760,14 @@
                 <parameter><name>vendor</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Vendor metadata</description></parameter>
                 <parameter><name>description</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Short description</description></parameter>
                 <parameter><name>appLayer</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The mode of the application layer the image starts under, baked into its launcher as -Dvidocq.app.layer: all (default since 0.4.0) or classes.</description></parameter>
+                <parameter><name>classesDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Compiled classes directory of the project, where an @VidocqMain class stands in for an unset mainClass.</description></parameter>
             </parameters>
             <configuration>
                 <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
                 <appLayer implementation="java.lang.String">${vidocq.app.layer}</appLayer>
                 <mainModule implementation="java.lang.String">${vidocq.mainModule}</mainModule>
                 <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
+                <classesDir implementation="java.io.File" default-value="${project.build.outputDirectory}"/>
                 <appName implementation="java.lang.String" default-value="${project.artifactId}">${vidocq.appName}</appName>
                 <appVersion implementation="java.lang.String" default-value="${project.version}">${vidocq.appVersion}</appVersion>
                 <type implementation="java.lang.String" default-value="app-image">${vidocq.jpackageType}</type>

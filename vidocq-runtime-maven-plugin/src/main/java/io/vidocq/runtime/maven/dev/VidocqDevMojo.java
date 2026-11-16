@@ -26,6 +26,7 @@ import io.vidocq.runtime.devservices.host.DevServicesException;
 import io.vidocq.runtime.devservices.host.DevServicesFlag;
 import io.vidocq.runtime.devservices.host.DevServicesSession;
 import io.vidocq.runtime.devservices.host.StateFile;
+import io.vidocq.runtime.maven.AnnotatedMainClass;
 import io.vidocq.runtime.maven.ApplicationLaunch;
 import io.vidocq.runtime.maven.CompilerOutput;
 import io.vidocq.runtime.maven.ConsoleColors;
@@ -323,6 +324,7 @@ public class VidocqDevMojo extends AbstractMojo {
         Path projectDir = baseDir.toPath();
         List<Path> watch = parseDirs(projectDir, watchDirs);
         ensureCompiled(projectDir, watch);
+        mainClass = AnnotatedMainClass.resolve(mainClass, classesDir, getLog()::info);
         ApplicationLaunch.Layered layered = buildLaunch(mode);
         mode = layered.mode();
         List<Path> modulePath = layered.modulePath();

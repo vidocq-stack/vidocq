@@ -237,6 +237,7 @@ public class VidocqRunMojo extends AbstractMojo {
         // An IDE build may have compiled target/classes without the annotation processors (Vidocq/vidocq#237).
         CompilerOutput.ensureComplete(build, classes, new RecompileRunner(projectDir)::run,
                 message -> getLog().warn(PREFIX + message));
+        mainClass = AnnotatedMainClass.resolve(mainClass, classesDir, message -> getLog().info(PREFIX + message));
         // Universal-loader mode, as vidocq:dev and the production launcher use it: the application
         // classes stay off the module path and boot in a Vauban-defined module layer.
         ApplicationLaunch.Layered launch = launchPaths(project, build, classes, mode,

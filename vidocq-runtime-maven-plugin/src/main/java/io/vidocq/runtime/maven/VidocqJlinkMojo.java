@@ -190,6 +190,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
             getLog().info("Vidocq jlink — skip (vidocq.jlink.skip=true).");
             return;
         }
+        mainClass = AnnotatedMainClass.resolve(mainClass, classesDir, getLog()::info);
         try {
             // Validation only, before anything is staged: the launch that is baked needs the stage (bakedLaunch).
             ImageLaunch.of(mainModule, mainClass);

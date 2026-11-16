@@ -79,6 +79,10 @@ public class VidocqJpackageMojo extends AbstractMojo {
     @Parameter(property = "vidocq.mainClass")
     private String mainClass;
 
+    /** The compiled classes, where an {@code @VidocqMain} class stands in for an unset {@code mainClass}. */
+    @Parameter(defaultValue = "${project.build.outputDirectory}", readonly = true)
+    private File classesDir;
+
     /** Application name (binary / installer). Default: {@code project.artifactId}. */
     @Parameter(defaultValue = "${project.artifactId}", property = "vidocq.appName")
     private String appName;
@@ -167,6 +171,7 @@ public class VidocqJpackageMojo extends AbstractMojo {
      * that is not the JDK's rooted at start (BUG-20261114-05), and no application layer (Vidocq/vidocq#580).
      */
     ImageLaunch launchOf() throws MojoExecutionException {
+        mainClass = AnnotatedMainClass.resolve(mainClass, classesDir, getLog()::info);
         try {
             Path image = runtimeImage.toPath();
             List<String> modules = nonJdkModulesOf(image);
