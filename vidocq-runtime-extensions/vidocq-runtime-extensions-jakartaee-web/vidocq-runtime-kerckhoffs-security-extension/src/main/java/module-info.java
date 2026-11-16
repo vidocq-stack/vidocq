@@ -30,6 +30,8 @@ module io.vidocq.runtime.extensions.jakartaee.web.kerckhoffs {
     requires io.vidocq.kerckhoffs.cdi;
     requires io.vidocq.kerckhoffs.foy;
     requires io.vidocq.runtime.extensions.jakartaee.web.foy;
+    // The Expression Language engine of the *Expression attributes (@RememberMe): Peano, found by ServiceLoader.
+    requires io.vidocq.runtime.extensions.jakartaee.core.peano;
     requires io.vidocq.foy.api;
     requires jakarta.cdi;
     requires jakarta.inject;

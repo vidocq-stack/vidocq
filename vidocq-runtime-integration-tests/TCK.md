@@ -228,10 +228,11 @@ of Kerckhoffs (`kerckhoffs-tck/BASELINE.md`).
 | `app-multiple-store-backup` | 6/6 |
 | `app-securitycontext-auth` | 5/5 |
 | `app-custom-authentication-mechanism-handler` | 4/4 |
+| `app-custom-rememberme` | 25/25 |
 
-36 tests; the first seven applications give the same counts as on the Kerckhoffs container. A local run of selected applications is a
-measurement, never a certification; the applications that need Expression Language, JACC, Remember Me or the handler
-beans stay red by design (Kerckhoffs milestone K3).
+61 tests; the first seven applications give the same counts as on the Kerckhoffs container. A local run of selected applications is a
+measurement, never a certification; the applications that need `@LoginToContinue`, JACC, a decorated mechanism or an EJB
+stay red by design (Kerckhoffs milestone K3).
 
 Two defects in the assembly showed up while building this runner, both fixed where they live: Vauban's bean discovery
 threw `NoClassDefFoundError` on a library class whose constructor names an optional dependency (`nimbus-jose-jwt` in

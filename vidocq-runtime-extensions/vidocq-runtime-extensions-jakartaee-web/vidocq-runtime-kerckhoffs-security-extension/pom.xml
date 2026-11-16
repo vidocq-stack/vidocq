@@ -63,6 +63,12 @@
             <artifactId>kerckhoffs-foy</artifactId>
             <version>${kerckhoffs.version}</version>
         </dependency>
+        <!-- The *Expression attributes of the security annotations (@RememberMe) are Jakarta Expression Language:
+             Kerckhoffs evaluates them on the jakarta.el API alone, this extension brings the engine (Peano). -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-peano-el-extension</artifactId>
+        </dependency>
         <!-- Kerckhoffs leaves the Authentication API provided (vidocq-workspace#17): this extension brings it, as the
              Jakarta Security API requires it transitively. -->
         <dependency>

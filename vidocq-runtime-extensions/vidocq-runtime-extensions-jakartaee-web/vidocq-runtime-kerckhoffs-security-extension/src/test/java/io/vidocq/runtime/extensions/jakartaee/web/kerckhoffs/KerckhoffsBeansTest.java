@@ -68,4 +68,26 @@ class KerckhoffsBeansTest {
 
         assertEquals("proceeded", new VidocqAutoApplySessionInterceptor().intercept(invocation));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theRememberMeInterceptorLeavesTheOtherCallsOfAMechanismAlone() throws Exception {
+        var other = Object.class.getMethod("toString");
+        InvocationContext invocation = (InvocationContext) Proxy.newProxyInstance(
+                InvocationContext.class.getClassLoader(), new Class<?>[] {InvocationContext.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getParameters" -> new Object[0];
+                    case "getMethod" -> other;
+                    case "proceed" -> "proceeded";
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        Instance<jakarta.security.enterprise.identitystore.RememberMeIdentityStore> noStore =
+                (Instance<jakarta.security.enterprise.identitystore.RememberMeIdentityStore>) Proxy.newProxyInstance(
+                        Instance.class.getClassLoader(), new Class<?>[] {Instance.class},
+                        (proxy, method, args) -> {
+                            throw new UnsupportedOperationException(method.getName());
+                        });
+
+        assertEquals("proceeded", new VidocqRememberMeInterceptor(noStore).intercept(invocation));
+    }
 }
