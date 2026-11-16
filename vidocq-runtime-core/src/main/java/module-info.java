@@ -31,6 +31,9 @@ module io.vidocq.runtime.core {
     requires java.logging;
     // LayerJdbcDrivers: the helper whose bytes are defined in a closing layer references java.sql; it never runs in this module.
     requires static java.sql;
+    // The dev reload loop's class redefinition (ClassRedefinition): read only when vidocq:dev resolved the agent module
+    // into the boot layer and named it in -javaagent; no other launch has it.
+    requires static io.vidocq.runtime.dev.agent;
 
     exports io.vidocq.runtime.core;
     exports io.vidocq.runtime.core.config;

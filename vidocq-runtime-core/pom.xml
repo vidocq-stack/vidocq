@@ -33,6 +33,13 @@
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-classloader</artifactId>
         </dependency>
+        <dependency>
+            <!-- The dev reload loop redefines classes through the agent when vidocq:dev starts the child with it;
+                 optional, so no application and no binary ever gets it (ClassRedefinition). -->
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-dev-agent</artifactId>
+            <optional>true</optional>
+        </dependency>
 
         <!--
             Ravel (MicroProfile Config 3.1) is deliberately EXCLUDED from the core.

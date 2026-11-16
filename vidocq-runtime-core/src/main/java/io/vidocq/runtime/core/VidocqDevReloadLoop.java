@@ -20,10 +20,15 @@
 package io.vidocq.runtime.core;
 
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Dev-mode hot reload by <b>application-layer re-creation</b>, in the same JVM: when the
@@ -65,6 +70,12 @@ final class VidocqDevReloadLoop {
                             + " (the runtime boots directly on every cycle)");
         }
         long lastSignal = signalStamp(reloadFile);
+        ClassRedefinition.Redefiner agent = ClassRedefinition.agent().orElse(ClassRedefinition.NO_AGENT);
+        boolean jdwp = jdwp(ManagementFactory.getRuntimeMXBean().getInputArguments());
+        Function<ReloadRequest.Redefine, ClassRedefinition.Result> redefine = request -> Optional.ofNullable(
+                VidocqAppLayer.installedLoader())
+                .map(loader -> ClassRedefinition.apply(request, loader, agent))
+                .orElseGet(() -> new ClassRedefinition.Refused("no application layer is installed"));
         while (true) {
             VidocqAppLayer.installIfConfigured();
             VidocqBootstrap bootstrap = VidocqBootstrap.create().configure();
@@ -74,14 +85,21 @@ final class VidocqDevReloadLoop {
 
             acknowledge(reloadFile, lastSignal);
 
-            OptionalLong reload = awaitReloadSignal(bootstrap, reloadFile, lastSignal);
-            if (reload.isEmpty()) {
-                return; // normal shutdown (hook, or programmatic)
-            }
-            lastSignal = reload.getAsLong();
+            Answer answer;
+            do {
+                OptionalLong reload = awaitReloadSignal(bootstrap, reloadFile, lastSignal);
+                if (reload.isEmpty()) {
+                    return; // normal shutdown (hook, or programmatic)
+                }
+                lastSignal = reload.getAsLong();
+                answer = answer(request(reloadFile), redefine, jdwp);
+                LOG.log(System.Logger.Level.INFO, answer.line());
+                if (answer.keepsRunning()) {
+                    acknowledge(reloadFile, lastSignal);
+                }
+            } while (answer.keepsRunning());
 
             long t0 = System.nanoTime();
-            LOG.log(System.Logger.Level.INFO, swapLine(reloadFile));
             bootstrap.shutdown();
             VidocqAppLayer.resetForReload();
             long elapsed = (System.nanoTime() - t0) / 1_000_000;
@@ -106,23 +124,73 @@ final class VidocqDevReloadLoop {
     }
 
     /**
-     * The line of a swap, with the reason the host wrote in the request (design §3): {@code Hot reload - restarting on
-     * a fresh application layer: MainView gained a method lambda$new$1}. A file without a mode line, from an older
-     * host or one with no start-time declarations, gives today's line.
+     * What the loop does with one signal: the line it logs, and whether the application keeps running (hot swap
+     * design §4). A redefinition keeps it running; a swap request, or a redefinition that is refused, swaps the layer.
      */
-    static String swapLine(Path reloadFile) {
-        String line = "Hot reload - restarting on a fresh application layer";
-        String content;
+    record Answer(String line, boolean keepsRunning) {
+    }
+
+    private static final String SWAP = "Hot reload - restarting on a fresh application layer";
+
+    /** The request of the reload file; a file that cannot be read asks for today's swap. */
+    static ReloadRequest request(Path reloadFile) {
         try {
-            content = Files.readString(reloadFile);
+            return ReloadRequest.parse(Files.readString(reloadFile));
         } catch (IOException _) {
-            return line;
+            return new ReloadRequest.Swap("");
         }
-        String reason = switch (ReloadRequest.parse(content)) {
-            case ReloadRequest.Swap swap -> swap.reason();
-            case ReloadRequest.Redefine _ -> "this runtime cannot redefine classes";
+    }
+
+    /**
+     * The answer to {@code request}: a swap, with the reason the host wrote ({@code Hot reload - restarting on a fresh
+     * application layer: MainView gained a method lambda$new$1}, or today's line without one), or the redefinition
+     * {@code redefine} does.
+     *
+     * @param jdwp whether a JDWP agent is loaded: the JVM clears the breakpoints of a redefined class (design §7)
+     */
+    static Answer answer(ReloadRequest request, Function<ReloadRequest.Redefine, ClassRedefinition.Result> redefine,
+            boolean jdwp) {
+        return switch (request) {
+            case ReloadRequest.Swap swap -> new Answer(swap.reason().isEmpty() ? SWAP : SWAP + ": " + swap.reason(),
+                    false);
+            case ReloadRequest.Redefine redefinition -> {
+                long t0 = System.nanoTime();
+                ClassRedefinition.Result result = redefine.apply(redefinition);
+                long millis = (System.nanoTime() - t0) / 1_000_000;
+                yield switch (result) {
+                    case ClassRedefinition.Refused refused -> new Answer("Hot reload - redefinition refused ("
+                            + refused.reason() + "): restarting on a fresh application layer", false);
+                    case ClassRedefinition.Done done -> new Answer(redefinedLine(done, millis, jdwp), true);
+                };
+            }
         };
-        return reason.isEmpty() ? line : line + ": " + reason;
+    }
+
+    private static String redefinedLine(ClassRedefinition.Done done, long millis, boolean jdwp) {
+        if (done.redefined().isEmpty()) {
+            return "Hot reload - " + classes(done.notLoaded().size()) + " changed in method bodies, none of them loaded"
+                    + " yet: they load the new code when first used";
+        }
+        String names = done.redefined().stream().map(VidocqDevReloadLoop::withoutPackage)
+                .collect(Collectors.joining(", "));
+        String line = "Hot reload - redefined " + classes(done.redefined().size()) + " in " + millis
+                + " ms, the application keeps running: " + names;
+        return jdwp ? line + "; breakpoints in " + names
+                + " no longer stop: set them again, or debug with -Dvidocq.dev.hotSwap=false" : line;
+    }
+
+    private static String classes(int count) {
+        return count + (count == 1 ? " class" : " classes");
+    }
+
+    private static String withoutPackage(String binaryName) {
+        return binaryName.substring(binaryName.lastIndexOf('.') + 1);
+    }
+
+    /** Whether the JVM arguments load a JDWP agent, as {@code vidocq:dev} does by default. */
+    static boolean jdwp(List<String> inputArguments) {
+        return inputArguments.stream().anyMatch(argument -> argument.startsWith("-agentlib:jdwp")
+                || argument.startsWith("-Xrunjdwp"));
     }
 
     /** {@code <reload file>.ready}, next to it. */

@@ -58,7 +58,11 @@ final class ArchitectureRules {
             Packages.of(Jdk.RUNTIME, "io.vidocq.vauban..", "jakarta.enterprise..", "jakarta.inject..", SPI),
             "module-info.java of vidocq-runtime-spi; CLAUDE.md, zero runtime dependency");
 
-    /** Module descriptor of vidocq-runtime-core: the SPI, Vauban and the Jakarta CDI APIs, nothing else. */
+    /**
+     * Module descriptor of vidocq-runtime-core: the SPI, Vauban and the Jakarta CDI APIs, nothing else. The one
+     * exception is the dev agent, {@code requires static}: only {@code AgentRedefiner} names it, loaded once
+     * {@code vidocq:dev} started the child with the agent (hot swap design §4), and no other launch has it.
+     */
     static final ArchRule CORE_DEPENDENCIES = VidocqArchRules.dependOnlyOn(
             new String[] {CORE},
             Packages.of(
@@ -67,6 +71,7 @@ final class ArchitectureRules {
                     "jakarta.enterprise..",
                     "jakarta.inject..",
                     "jakarta.annotation..",
+                    "io.vidocq.runtime.dev.agent..",
                     SPI,
                     CORE),
             "module-info.java of vidocq-runtime-core; CLAUDE.md, zero runtime dependency in the core");
