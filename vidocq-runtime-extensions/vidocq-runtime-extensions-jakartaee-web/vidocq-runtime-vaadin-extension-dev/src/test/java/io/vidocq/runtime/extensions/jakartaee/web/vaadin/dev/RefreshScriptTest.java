@@ -19,9 +19,12 @@
  */
 package io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev;
 
+import com.vaadin.flow.server.VaadinRequest;
 import com.vaadin.flow.server.communication.IndexHtmlResponse;
 import org.jsoup.nodes.Document;
 import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Proxy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,14 +33,37 @@ class RefreshScriptTest {
 
     @Test
     void theIndexPageGetsTheScript() {
-        Document page = Document.createShell("");
+        String script = script("");
 
-        new RefreshScript().modifyIndexHtmlResponse(new IndexHtmlResponse(null, null, page));
+        assertTrue(script.contains("new EventSource('/.vidocq/dev/redefined')"), script);
+        assertTrue(script.contains("client.poll()"), script);
+    }
+
+    /** Vaadin's base is its servlet's path, which can be below the context: the stream is at the context's root. */
+    @Test
+    void theStreamIsUnderTheContextPath() {
+        String script = script("/shop");
+
+        assertTrue(script.contains("new EventSource('/shop/.vidocq/dev/redefined')"), script);
+    }
+
+    @Test
+    void aQuoteInTheContextPathCannotEndTheString() {
+        String script = script("/a'b</script>");
+
+        assertTrue(script.contains("new EventSource('/a\\'b\\u003c/script>/.vidocq/dev/redefined')"), script);
+    }
+
+    private static String script(String contextPath) {
+        Document page = Document.createShell("");
+        var request = (VaadinRequest) Proxy.newProxyInstance(VaadinRequest.class.getClassLoader(),
+                new Class<?>[] {VaadinRequest.class},
+                (proxy, method, args) -> "getContextPath".equals(method.getName()) ? contextPath : null);
+
+        new RefreshScript().modifyIndexHtmlResponse(new IndexHtmlResponse(request, null, page));
 
         var scripts = page.head().select("script#" + RefreshScript.ID);
         assertEquals(1, scripts.size());
-        String script = scripts.getFirst().data();
-        assertTrue(script.contains("new EventSource(new URL('.vidocq/dev/redefined', document.baseURI))"), script);
-        assertTrue(script.contains("client.poll()"), script);
+        return scripts.getFirst().data();
     }
 }

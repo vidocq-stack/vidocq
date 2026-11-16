@@ -40,7 +40,7 @@ final class RefreshScript implements IndexHtmlRequestListener {
 
     private static final String SCRIPT = """
             (() => {
-              const stream = new EventSource(new URL('.vidocq/dev/redefined', document.baseURI));
+              const stream = new EventSource('%s');
               stream.onmessage = () => {
                 const clients = (window.Vaadin && window.Vaadin.Flow && window.Vaadin.Flow.clients) || {};
                 Object.values(clients).forEach(client => client.poll && client.poll());
@@ -50,6 +50,14 @@ final class RefreshScript implements IndexHtmlRequestListener {
 
     @Override
     public void modifyIndexHtmlResponse(IndexHtmlResponse response) {
-        response.getDocument().head().appendElement("script").id(ID).appendChild(new DataNode(SCRIPT));
+        // Vaadin's <base> is its servlet's path, which can be below the context; the stream is at the context's root.
+        String contextPath = response.getVaadinRequest() == null ? "" : response.getVaadinRequest().getContextPath();
+        String url = inString((contextPath == null ? "" : contextPath) + RedefinedEvents.PATH);
+        response.getDocument().head().appendElement("script").id(ID).appendChild(new DataNode(SCRIPT.formatted(url)));
+    }
+
+    /** {@code text} inside a single-quoted script string that sits in a {@code <script>} element. */
+    private static String inString(String text) {
+        return text.replace("\\", "\\\\").replace("'", "\\'").replace("<", "\\u003c");
     }
 }
