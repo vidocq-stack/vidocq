@@ -335,8 +335,14 @@ Both fork a JVM with the runtime on the module path and the application, with it
 layer. `vidocq:dev` reloads the application layer in place on each change; BENCH.md (2026-10-14) records the reload
 times, Vaadin included.
 
-[[dev-reload-session]]A reload starts a new HTTP session. The new layer holds new Vaadin classes, so the old session
-and its UI cannot be carried over: the undeploy invalidates them and says so in the log,
+[[dev-reload-session]]A change in method bodies only, such as a new label or another click handler body, keeps the
+session: the JVM redefines the changed classes in place (xref:usage.adoc#dev-hot-swap[Hot swap]), and the log says
+`Hot reload - redefined 1 class in 12 ms, the application keeps running: MainView`. The open page keeps its state and
+runs the new code on its next request to the server; it does not refresh by itself, and a view built in its
+constructor shows the change only when it is built again: reload the page, or navigate to the view.
+
+Any other change swaps the application layer and starts a new HTTP session. The new layer holds new Vaadin classes,
+so the old session and its UI cannot be carried over: the undeploy invalidates them and says so in the log,
 `Undeploying the servlet application invalidated 1 HTTP session: its client starts a new one on its next request`.
 An open page reloads on its next request, as after a session timeout, and what it held is lost.
 

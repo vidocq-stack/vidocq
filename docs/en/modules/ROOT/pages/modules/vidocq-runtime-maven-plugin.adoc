@@ -1378,8 +1378,8 @@ boot facts only`). All three are warnings, never failures.
 
 **`vidocq:run`, the packaging goals, and never twice.** `vidocq:run`, `vidocq:package`, `vidocq:jlink`,
 `vidocq:jpackage` and `vidocq:docker` add none of this. They also drop every jar marked `Vidocq-Dev-Only: true`
-in its manifest from what they launch or ship — the console, every `-dev` module, and the dev services
-extension — even when the project declares one directly, at any scope but `test`. Each dropped jar logs one
+in its manifest from what they launch or ship — the console, every `-dev` module, the dev services
+extension and the hot swap agent — even when the project declares one directly, at any scope but `test`. Each dropped jar logs one
 WARNING per goal run, never fails the build:
 
 [source,text]
@@ -1403,6 +1403,37 @@ dependency.
 
 **`vidocq:idea`.** The Dev, packaged and debug configurations it writes are covered under
 <<idea,the `vidocq:idea` goal>>.
+
+[#dev-hot-swap-agent]
+=== The hot swap agent [.tag-new]#NEW#
+
+`vidocq:dev` starts its child with `io.vidocq.runtime:vidocq-runtime-dev-agent`, a `java.lang.instrument` agent: a
+change in method bodies only redefines the application's classes in place instead of swapping the application layer
+(xref:usage.adoc#dev-hot-swap[Hot swap]). The goal resolves it through Aether, in the project's and the plugin
+repositories, at the base version of the application's `vidocq-runtime-core`, then puts the same jar on the child's
+module path, in `--add-modules io.vidocq.runtime.dev.agent` and in `-javaagent:<jar>`: the JVM then runs the agent
+from that named module, the one the runtime reads.
+
+[cols="2,1,3"]
+|===
+| Property | Default | Meaning
+
+| `vidocq.dev.hotSwap`
+| `true`
+| Start the child with the agent. `false`: no agent, every change swaps the application layer, and a debugger's
+breakpoints are never cleared by a redefinition.
+|===
+
+The agent is added only with `vidocq.dev.layer` and `vidocq.dev.hotReload` on. Otherwise, or when the agent cannot
+be resolved (a runtime older than it, or offline before it was ever downloaded), one INFO line says why, never a
+failure:
+
+[source,text]
+----
+[INFO] Hot swap off: vidocq.dev.hotSwap=false, every change swaps the application layer
+[INFO] Hot swap off: vidocq-runtime-dev-agent 0.3.0 not found, every change swaps the application layer
+[INFO] Hot swap off: vidocq.dev.hotReload=false, every change restarts the application
+----
 
 [#idea]
 == `vidocq:idea` goal

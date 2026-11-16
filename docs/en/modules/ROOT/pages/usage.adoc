@@ -197,9 +197,9 @@ That run inherits the environment of `vidocq:dev`, so the `MAVEN_ARGS` it shows 
 deregistered at each reload. A thread that a library leaves running keeps the old layer in memory; the reload names
 such threads in a warning, `Hot reload: N thread(s) still hold the previous application layer ...`. Virtual threads
 are not detected. A library with native code (JNI) cannot be loaded twice by the JVM: keep it in the parent layer
-with `vidocq.app.layer.keep`. Each reload undeploys the servlet application, which invalidates its HTTP sessions: the
-log gives their count (`Undeploying the servlet application invalidated N HTTP sessions …`), and a browser starts a
-new session on its next request.
+with `vidocq.app.layer.keep`. Each layer swap undeploys the servlet application, which invalidates its HTTP sessions:
+the log gives their count (`Undeploying the servlet application invalidated N HTTP sessions …`), and a browser starts
+a new session on its next request. A change in method bodies only keeps them: see <<dev-hot-swap,hot swap>>.
 
 [[dev-reload-reasons]]*Why a change reloads.* After each recompile, `vidocq:dev` compares the compiled output with the
 one the application runs, class by class, with the JDK's Class-File API. When nothing changed, for instance an edited
@@ -210,7 +210,8 @@ comment, nothing is reloaded and the tests of the change still run:
 Recompiled in 210 ms: the compiled output did not change, nothing reloaded.
 ----
 
-Otherwise both sides of the log say why the application layer is swapped:
+When the change touches method bodies only, the application keeps running (<<dev-hot-swap,hot swap>>). Otherwise
+both sides of the log say why the application layer is swapped:
 
 [source]
 ----
@@ -231,7 +232,8 @@ The reasons, in the order they are checked:
   is the static initializers, what each extension
   xref:modules/vidocq-runtime-extensions.adoc#start-time-code[declares as start-time], and every application method
   they call;
-* otherwise, method bodies only: `2 classes changed in method bodies only; class redefinition is not available yet`.
+* otherwise, method bodies only: the classes are redefined in place, unless hot swap is off. Then the reason says
+  why: `2 classes changed in method bodies only; class redefinition is off: vidocq.dev.hotSwap=false`.
 
 A generated class changes because a class of the project did: a bean that gains a method changes its client proxy.
 So when a class of the project is new or changed its shape, the reason names it, `Probe gained a method refresh`,
@@ -242,6 +244,34 @@ within two minutes, or a child JVM started again, makes the next one a swap: `th
 The startup log says where the start-time declarations come from: `Hot swap: start-time declarations from 4 jars`.
 With a runtime that declares none (one older than this check), the startup log says `Hot swap off: no dependency
 declares its start-time code (...)`, and every change swaps the layer, with the log lines of earlier versions.
+
+[[dev-hot-swap]]*Hot swap.* A change in method bodies only is applied to the running application: the JVM redefines
+the changed classes in place, through the agent `vidocq:dev` starts its child with, `vidocq-runtime-dev-agent`. The
+application is not restarted: its beans, its HTTP sessions and the open browser pages keep their state, and the next
+call runs the new code.
+
+[source]
+----
+Hot reload signalled after 640 ms (class redefinition: 2 classes).
+Hot reload - redefined 2 classes in 14 ms, the application keeps running: MainView, MainView$Row
+----
+
+* A method that is running when the class is redefined, such as a loop, finishes with its old code; its next call
+  runs the new one.
+* A class changed before it was ever loaded loads the new code when first used: `Hot reload - 2 classes changed in
+  method bodies, none of them loaded yet: they load the new code when first used`.
+* The JVM checks the new classes against the loaded ones and redefines all of them or none. When it refuses, the
+  layer is swapped and the log gives the JVM's reason: `Hot reload - redefinition refused (... add a method ...):
+  restarting on a fresh application layer`.
+* The JVM clears the breakpoints of a class it redefines. With a debugger attached, the log says so: `...; breakpoints
+  in MainView no longer stop: set them again, or debug with -Dvidocq.dev.hotSwap=false`.
+
+The agent is a dev tool. `vidocq:dev` resolves it at the version of the application's `vidocq-runtime-core` and adds
+it to the child only, never to a package; no binary contains it. It is added only in the layer mode with the in-JVM
+reload (`vidocq.dev.layer` and `vidocq.dev.hotReload`, both on by default). `-Dvidocq.dev.hotSwap=false` starts the
+child without it, and every change swaps the layer. Without the agent, the startup log says why: `Hot swap off:
+vidocq.dev.hotSwap=false, every change swaps the application layer`, or `Hot swap off: vidocq-runtime-dev-agent 0.3.0
+not found, ...` with a runtime older than the agent.
 
 *Packaging.* Under `vidocq:package`, `lib/` holds the parent layer and `app/` holds the application jar and its
 libraries. Both launchers hand `app/` to the runtime through `-Dvidocq.app.path`, also for an application with a
