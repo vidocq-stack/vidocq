@@ -28,6 +28,7 @@
         <module>vidocq-runtime-mansart-transactions-extension-codegen</module>
         <module>vidocq-runtime-noether-persistence-units</module>
         <module>vidocq-runtime-noether-persistence-extension</module>
+        <module>vidocq-runtime-noether-persistence-extension-dev</module>
         <module>vidocq-runtime-noether-persistence-extension-codegen</module>
         <module>vidocq-runtime-kerckhoffs-security-extension</module>
         <module>vidocq-runtime-kerckhoffs-security-extension-codegen</module>
