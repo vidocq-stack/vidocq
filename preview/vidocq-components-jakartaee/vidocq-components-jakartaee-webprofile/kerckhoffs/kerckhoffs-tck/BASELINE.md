@@ -86,7 +86,7 @@ on this container and on the assembled runtime, see the `tck` page of the docume
   (`app-securitycontext`, `app-securitycontext-customprincipal`, `app-db`), the LDAP ones (`app-ldap*`,
   `app-custom-identity-store-handler`, K4) and OpenID (`app-openid*`, K5).
 - Still to do: Jakarta Authorization on the assembled runtime (green on this container), the mechanism decorator
-  (`app-mem-basic-decorate`, 1 of 2: Vauban applies no `@Decorator`, and the mechanism is a synthetic bean) and JAX-RS (`app-jaxrs`: the runtime runner has no REST extension, and Cassini mounts outside Foy, so the authentication hook never sees its requests).
+  (`app-mem-basic-decorate`, 1 of 2: Vauban applies no `@Decorator`, and the mechanism is a synthetic bean). JAX-RS (`app-jaxrs`) is green on the assembled runtime, 8 of 8, since Cassini serves its resources as a servlet of Foy (KERCK-20261116-02, fixed); the Kerckhoffs container has no Jakarta REST and does not run it.
 - `ci.tck.command` is declared (2026-11-15) on the smoke set: `app-mem`, `app-mem-basic`, `app-custom`, `app-custom-session`,
   `app-multiple-store`, `app-multiple-store-backup`, `app-securitycontext-auth`, `app-custom-authentication-mechanism-handler`, `…handler2`, `app-custom-rememberme`, `app-mem-policy`, `app-mem-policy2`. A red application leaves the smoke set
   until it is green again.

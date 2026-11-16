@@ -22,4 +22,4 @@ Entry format: `short id · date · symptom · minimal repro · cause hypothesis 
 - **Symptom:** official Security TCK `app-jaxrs` passes 4 of 8: requests to the REST resources bypass the authentication and authorization of Foy.
 - **Minimal repro:** `run-official-tck-security-4.0.sh app-jaxrs`.
 - **Cause:** Cassini mounts on Chappe outside Foy, so neither the context path nor the authentication hook sees its requests; the runtime security runner also has no REST extension.
-- **Status:** open, upstream (Cassini inside Foy, plus a REST extension in the runner).
+- **Status:** fixed 2026-11-17. Cassini serves the REST resources as a servlet of Foy (`cassini-servlet`, Vidocq/cassini#148 and #149), the Vidocq REST extension picks that mode when Foy is there (`vidocq.rest.mode`, Vidocq/vidocq#634), and the runtime security runner carries both: `app-jaxrs` passes 8 of 8.

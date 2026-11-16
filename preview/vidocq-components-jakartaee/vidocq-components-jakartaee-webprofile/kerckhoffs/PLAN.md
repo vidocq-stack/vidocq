@@ -212,7 +212,7 @@ Runner shape (copy `foy-tck` and `bodoni-tck`, not a new design):
 uses Jakarta Faces) and the `@LoginToContinue` expressions of `app-mem-form` are set aside, as are the EJB applications
 (`app-securitycontext*`, `app-db`), the LDAP ones (K4) and OpenID (K5). Twelve applications (73 tests) are green on the Kerckhoffs
 container and on the assembled runtime, `app-mem-policy*` (Jakarta Authorization) among them; still to do are the mechanism decorator
-(`app-mem-basic-decorate`, blocked on `@Decorator` support in Vauban) and JAX-RS (`app-jaxrs`, Cassini outside Foy). Per application: the `tck` page (`docs/en`) and
+(`app-mem-basic-decorate`, blocked on `@Decorator` support in Vauban); JAX-RS (`app-jaxrs`) is green on the runtime since Cassini serves its resources as a servlet of Foy (8 of 8). Per application: the `tck` page (`docs/en`) and
 `kerckhoffs-tck/BASELINE.md`.
 
 ## 8. Milestones (TDD: test or TCK scenario first, then code)

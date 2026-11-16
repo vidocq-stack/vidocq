@@ -43,9 +43,10 @@ runtime (`vidocq-runtime-tck-kerckhoffs-security`, in `Vidocq/vidocq`). A dash m
 | `app-custom-rememberme` | 25 of 25 | 25 of 25 | `@RememberMe`: cookie, flags, `*Expression` attributes through Jakarta Expression Language.
 | `app-mem-policy` | 4 of 4 | 4 of 4 | A `Policy` the application registers with the `PolicyFactory` decides the access to a web resource (`kerckhoffs-authorization`, `PolicyAccessControl`).
 | `app-mem-policy2` | 5 of 5 | 5 of 5 | The same, with the `PrincipalMapper` of the policy context (`PolicyContext.PRINCIPAL_MAPPER`).
+| `app-jaxrs` | -- | 8 of 8 | The REST endpoints are served as a servlet of Foy (`cassini-servlet`), so the authentication and the roles apply to them (KERCK-20261116-02, fixed). The Kerckhoffs container has no Jakarta REST and does not run it.
 |===
 
-These twelve are the smoke set the `ci.tck.command` gate of the pull requests runs.
+The first twelve are the smoke set the `ci.tck.command` gate of the pull requests runs; `app-jaxrs` runs on the Vidocq runtime only.
 
 === Partly green
 
@@ -54,7 +55,6 @@ These twelve are the smoke set the `ci.tck.command` gate of the pull requests ru
 | Application | Kerckhoffs container | Vidocq runtime | What is red
 | `app-mem-form` | `AppMemFormIT` 4 of 4; `AppMemFormImmediateIT` refused | same | The deployment is refused: `loginPage` and `useForwardToLoginExpression` of `@LoginToContinue` are expressions. See "Out of scope for now".
 | `app-mem-basic-decorate` | 1 of 2 | 1 of 2 | A CDI decorator on the mechanism: the decorated response header is missing. Vauban applies no `@Decorator` yet (KERCK-20261116-01, waits for CDI Full).
-| `app-jaxrs` | -- | 4 of 8 | The caller is not authenticated in the REST endpoints: Cassini mounts on Chappe, outside Foy, so the authentication hook never sees its requests (KERCK-20261116-02). To do: Cassini inside Foy as a servlet.
 |===
 
 === Out of scope for now
@@ -81,7 +81,6 @@ none of them is counted against the figures above.
 | Application | What is missing
 
 | `app-mem-basic-decorate` | The CDI decorator on a mechanism (1 of 2).
-| `app-jaxrs` | Authentication of the REST endpoints (4 of 8 on the runtime; not run on the Kerckhoffs container, which has no Jakarta REST).
 |===
 
 A result is a compatibility measurement, never a certification: the full run is milestone K7.

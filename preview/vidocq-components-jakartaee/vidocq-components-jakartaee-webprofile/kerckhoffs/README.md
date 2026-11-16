@@ -12,10 +12,10 @@ application — zero third-party dependency, strict Java Modules, build-time gen
 **Status: K0 to K3 are merged.** Identity stores and the `IdentityStoreHandler`, the built-in BASIC and FORM mechanisms and
 an application's own mechanism, `SecurityContext.authenticate`, `@RememberMe`, Jakarta Expression Language through Peano, and
 Jakarta Authorization (a `Policy` decides the access to web resources) run on Foy and on the assembled Vidocq runtime. A
-partial local run of the official Jakarta Security 4.0 TCK, never a certification, passes 12 applications (73 tests) on the
-runtime. Still to come: the custom FORM mechanism (`@CustomFormAuthenticationMechanismDefinition`),
+partial local run of the official Jakarta Security 4.0 TCK, never a certification, passes 13 applications (81 tests) on the
+runtime, among them `app-jaxrs`, whose REST endpoints are served as a servlet of Foy. Still to come: the custom FORM mechanism (`@CustomFormAuthenticationMechanismDefinition`),
 `SecurityContext.hasAccessToWebResource` and `getAllDeclaredCallerRoles`, the database and LDAP identity stores (K4),
-OpenID Connect (K5), a mechanism decorator (needs CDI Full in Vauban) and the REST endpoints (Cassini inside Foy). The design, the
+OpenID Connect (K5) and a mechanism decorator (needs CDI Full in Vauban). The design, the
 open decisions and the milestones are in [PLAN.md](PLAN.md); the TCK state is in [`kerckhoffs-tck/BASELINE.md`](kerckhoffs-tck/BASELINE.md).
 
 ## Modules
