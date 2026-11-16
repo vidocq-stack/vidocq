@@ -77,6 +77,10 @@ final class Fakes {
         boolean hasSession = true;
         /** The method of each forwarded request, in the order of the forwards. */
         final List<String> forwardedAs = new ArrayList<>();
+        /** The cookies the client sent with the request. */
+        final List<jakarta.servlet.http.Cookie> cookies = new ArrayList<>();
+        /** The cookies the response asked the client to keep, or to forget. */
+        final List<jakarta.servlet.http.Cookie> cookiesSet = new ArrayList<>();
     }
 
     /** The same, over an {@link Exchange}. */
@@ -93,6 +97,8 @@ final class Fakes {
                     case "getRequestURI" -> exchange.uri;
                     case "getQueryString" -> exchange.query;
                     case "getParameter" -> exchange.parameters.get((String) args[0]);
+                    case "getCookies" -> exchange.cookies.isEmpty() ? null
+                            : exchange.cookies.toArray(new jakarta.servlet.http.Cookie[0]);
                     case "getSession" -> session(exchange, args == null || (Boolean) args[0]);
                     case "changeSessionId" -> {
                         exchange.sessionEvents.add("changeSessionId");
@@ -127,9 +133,15 @@ final class Fakes {
 
     /** A response that records the redirects, errors and statuses it is asked for. */
     static HttpServletResponse response(List<String> sent) {
+        return response(sent, new Exchange());
+    }
+
+    /** A response that also records, in the exchange, the cookies it was asked to set. */
+    static HttpServletResponse response(List<String> sent, Exchange exchange) {
         return (HttpServletResponse) Proxy.newProxyInstance(Fakes.class.getClassLoader(),
                 new Class<?>[] {HttpServletResponse.class}, (proxy, method, args) -> {
                     switch (method.getName()) {
+                        case "addCookie" -> exchange.cookiesSet.add((jakarta.servlet.http.Cookie) args[0]);
                         case "sendRedirect" -> sent.add("redirect " + args[0]);
                         case "sendError" -> sent.add("error " + args[0]);
                         case "setStatus" -> sent.add("status " + args[0]);

@@ -77,6 +77,8 @@
         <foy.version>0.4.0-SNAPSHOT</foy.version>
         <jakarta.interceptor.version>2.2.0</jakarta.interceptor.version>
         <jakarta.el.version>6.0.1</jakarta.el.version>
+        <!-- Test scope only: the Expression Language engine the tests of the *Expression attributes run on. -->
+        <peano.version>0.4.0-SNAPSHOT</peano.version>
 
         <!-- The official TCK the pull requests are gated on: the smoke set of the runner (the applications
              that are green, see kerckhoffs-tck/BASELINE.md). A measurement, never a certification. -->
@@ -140,6 +142,12 @@
                 <artifactId>jakarta.el-api</artifactId>
                 <version>${jakarta.el.version}</version>
                 <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.peano</groupId>
+                <artifactId>peano-core</artifactId>
+                <version>${peano.version}</version>
+                <scope>test</scope>
             </dependency>
 
             <!-- Internal Kerckhoffs modules -->

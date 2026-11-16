@@ -68,7 +68,7 @@ The container installs the mechanism of the war on that hook, as the Vidocq runt
 | `app-custom-authentication-mechanism-handler` | **4 of 4 green** | the `HttpAuthenticationMechanismHandler` of the application serves the requests (`HandlerMechanism`); it is no `HttpAuthenticationMechanism` itself |
 | `app-custom-authentication-mechanism-handler2` | **3 of 3 green** | repeated `@BasicAuthenticationMechanismDefinition` with `qualifiers`, injected by qualifier into the handler |
 | `app-securitycontext-auth` | **5 of 5 green** | `SecurityContext.authenticate(...)`: the mechanism reads the parameters, the status is SUCCESS, SEND_CONTINUE or SEND_FAILURE |
-| `app-custom-rememberme` | 13 of 25 green | `@RememberMe` is not implemented (K3) |
+| `app-custom-rememberme` | **25 of 25 green** | `@RememberMe` (`RememberMeInterceptor`, `RememberMeSupport`): the cookie, its flags, the `*Expression` attributes through Jakarta Expression Language (Peano, test scope), and the logout that reaches the mechanism without a response |
 | `app-mem-policy`, `app-mem-policy2` | deployment refused | needs Jakarta Authorization (JACC `PolicyFactory`), K3 |
 | `app-securitycontext`, `app-securitycontext-customprincipal` | deployment refused | the application needs an EJB |
 
@@ -80,5 +80,5 @@ OpenID provider, and are not run yet.
 - The other applications are not run yet: they need an EJB, a `DataSource`, an embedded directory or an
   OpenID provider (PLAN.md section 7). They are added here as the platform needs are met.
 - `ci.tck.command` is declared (2026-11-15) on the smoke set: `app-mem`, `app-mem-basic`, `app-custom`, `app-custom-session`,
-  `app-multiple-store`, `app-multiple-store-backup`, `app-securitycontext-auth`, `app-custom-authentication-mechanism-handler`, `…handler2`. A red application leaves the smoke set
+  `app-multiple-store`, `app-multiple-store-backup`, `app-securitycontext-auth`, `app-custom-authentication-mechanism-handler`, `…handler2`, `app-custom-rememberme`. A red application leaves the smoke set
   until it is green again; `app-mem-form` joins it once Jakarta Expression Language is evaluated (K3).

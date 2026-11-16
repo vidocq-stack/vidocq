@@ -31,6 +31,8 @@ module io.vidocq.kerckhoffs.core {
     // transitive jakarta.security.auth.message, jakarta.servlet and jakarta.json, and
     // requires jakarta.cdi and jakarta.el.
     requires transitive jakarta.security;
+    // The *Expression attributes: the API only, the engine is found by ExpressionFactory.newInstance().
+    requires jakarta.el;
 
     // The implementations the CDI integration instantiates; nothing else reaches them.
     exports io.vidocq.kerckhoffs.core.internal.identitystore to io.vidocq.kerckhoffs.cdi;
@@ -38,6 +40,8 @@ module io.vidocq.kerckhoffs.core {
     // Authentication profile that drives them.
     exports io.vidocq.kerckhoffs.core.internal.mechanism to io.vidocq.kerckhoffs.authentication, io.vidocq.kerckhoffs.cdi,
             io.vidocq.kerckhoffs.foy;
+    // The evaluation of the *Expression attributes, asked by the CDI integration (interceptors and creators).
+    exports io.vidocq.kerckhoffs.core.internal.expression to io.vidocq.kerckhoffs.cdi, io.vidocq.kerckhoffs.foy;
     // The security context, instantiated by the extension of the web container that knows how to find the request.
     exports io.vidocq.kerckhoffs.core.internal.context to io.vidocq.kerckhoffs.foy;
 }

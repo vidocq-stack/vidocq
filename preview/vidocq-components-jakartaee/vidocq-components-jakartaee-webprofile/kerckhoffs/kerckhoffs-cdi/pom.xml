@@ -54,6 +54,11 @@
             <artifactId>vauban-classloader-spi</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>io.vidocq.peano</groupId>
+            <artifactId>peano-core</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -67,6 +72,7 @@
                         @{argLine}
                         --add-reads io.vidocq.kerckhoffs.cdi=io.vidocq.vauban.core
                         --add-opens io.vidocq.kerckhoffs.cdi/io.vidocq.kerckhoffs.cdi=io.vidocq.vauban.core
+                        --add-opens io.vidocq.kerckhoffs.cdi/io.vidocq.kerckhoffs.cdi=jakarta.el
                     </argLine>
                 </configuration>
             </plugin>

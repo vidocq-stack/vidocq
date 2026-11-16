@@ -76,6 +76,12 @@
             <version>${foy.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- The Expression Language engine of the container under test (*Expression attributes). -->
+        <dependency>
+            <groupId>io.vidocq.peano</groupId>
+            <artifactId>peano-core</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.chappe</groupId>
             <artifactId>chappe-api</artifactId>

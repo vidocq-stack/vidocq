@@ -22,6 +22,7 @@ package io.vidocq.kerckhoffs.tck.arquillian;
 import io.vidocq.foy.cdi.vauban.FoyWebExtension;
 import io.vidocq.kerckhoffs.cdi.AutoApplySessionInterceptor;
 import io.vidocq.kerckhoffs.cdi.IdentityStoreStartCheck;
+import io.vidocq.kerckhoffs.cdi.RememberMeInterceptor;
 import io.vidocq.kerckhoffs.foy.FoySecurityContextExtension;
 import io.vidocq.kerckhoffs.foy.HandlerMechanism;
 import io.vidocq.kerckhoffs.foy.MechanismRequestAuthentication;
@@ -265,6 +266,7 @@ public class KerckhoffsDeployableContainer implements DeployableContainer<Kerckh
             var builder = VaubanContainer.builder().addBeanClass(FoyWebExtension.class)
                     .addBeanClass(KerckhoffsExtension.class).addBeanClass(FoySecurityContextExtension.class)
                     .addBeanClass(AutoApplySessionInterceptor.class)
+                    .addBeanClass(RememberMeInterceptor.class)
                     .addBeanClass(IdentityStoreStartCheck.class);
             for (Class<?> type : warClasses) builder.addBeanClass(type);
             return builder.build();
