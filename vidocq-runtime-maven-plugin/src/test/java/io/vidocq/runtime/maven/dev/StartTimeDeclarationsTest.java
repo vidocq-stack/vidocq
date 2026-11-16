@@ -143,7 +143,7 @@ class StartTimeDeclarationsTest {
 
         var read = StartTimeDeclarations.read(List.of(jar), warnings::add);
 
-        assertEquals(1, warnings.size(), () -> warnings.toString());
+        assertEquals(1, warnings.size(), warnings::toString);
         assertTrue(warnings.getFirst().contains("typo.jar"), warnings::toString);
         assertTrue(warnings.getFirst().contains("long-lived-annotation"), warnings::toString);
         assertEquals(Set.of("a.Startup"), read.startEvents());
@@ -159,7 +159,7 @@ class StartTimeDeclarationsTest {
 
         assertEquals(Set.of(new StartTimeDeclarations.Callback("a.Filter", "init", "(La/FilterConfig;)V")),
                 read.startCallbacks());
-        assertEquals(2, warnings.size(), () -> warnings.toString());
+        assertEquals(2, warnings.size(), warnings::toString);
         assertTrue(warnings.get(0).contains("web.jar") && warnings.get(0).contains("a.Servlet#init"),
                 warnings::toString);
         assertTrue(warnings.get(1).contains("web.jar") && warnings.get(1).contains("a.Servlet#init(Lbad)V"),
@@ -173,7 +173,7 @@ class StartTimeDeclarationsTest {
         var read = StartTimeDeclarations.read(List.of(jar), warnings::add);
 
         assertEquals(Set.of("a.Singleton"), read.longLivedAnnotations());
-        assertEquals(1, warnings.size(), () -> warnings.toString());
+        assertEquals(1, warnings.size(), warnings::toString);
         assertTrue(warnings.getFirst().contains("odd.jar") && warnings.getFirst().contains("a/ApplicationScoped"),
                 warnings::toString);
     }
@@ -185,7 +185,7 @@ class StartTimeDeclarationsTest {
         var read = StartTimeDeclarations.read(List.of(broken), warnings::add);
 
         assertTrue(read.isEmpty());
-        assertEquals(1, warnings.size(), () -> warnings.toString());
+        assertEquals(1, warnings.size(), warnings::toString);
         assertTrue(warnings.getFirst().contains("broken.jar"), warnings::toString);
     }
 

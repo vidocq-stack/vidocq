@@ -38,7 +38,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.zip.ZipFile;
 
@@ -81,8 +80,6 @@ record StartTimeDeclarations(Set<String> longLivedAnnotations, Set<String> longL
             START_ANNOTATIONS, OBSERVER_ANNOTATIONS, START_EVENTS);
 
     private static final String IDENTIFIER = "\\p{javaJavaIdentifierStart}\\p{javaJavaIdentifierPart}*";
-    private static final Predicate<String> BINARY_NAME =
-            Pattern.compile(IDENTIFIER + "(\\." + IDENTIFIER + ")*").asMatchPredicate();
     private static final Pattern CALLBACK = Pattern.compile("([^#]+)#(" + IDENTIFIER + ")(\\(.*)");
 
     /**
@@ -172,13 +169,7 @@ record StartTimeDeclarations(Set<String> longLivedAnnotations, Set<String> longL
         for (String key : new TreeSet<>(properties.stringPropertyNames())) {
             List<String> values = values(properties.getProperty(key));
             if (names.containsKey(key)) {
-                for (String value : values) {
-                    if (BINARY_NAME.test(value)) {
-                        names.get(key).add(value);
-                    } else {
-                        warn.accept(skipped(source, key, value, "not a binary class name"));
-                    }
-                }
+                addNames(source, key, values, names.get(key), warn);
             } else if (key.equals(START_CALLBACKS)) {
                 for (String value : values) {
                     callback(value).ifPresentOrElse(callbacks::add, () -> warn.accept(
@@ -193,9 +184,31 @@ record StartTimeDeclarations(Set<String> longLivedAnnotations, Set<String> longL
                 List.of(source));
     }
 
+    private static void addNames(String source, String key, List<String> values, Set<String> names,
+            Consumer<String> warn) {
+        for (String value : values) {
+            if (binaryName(value)) {
+                names.add(value);
+            } else {
+                warn.accept(skipped(source, key, value, "not a binary class name"));
+            }
+        }
+    }
+
+    /** Dotted Java identifiers, checked without a repeated regex group (a stack overflow on a long input). */
+    static boolean binaryName(String value) {
+        for (String part : value.split("\\.", -1)) {
+            if (part.isEmpty() || !Character.isJavaIdentifierStart(part.codePointAt(0))
+                    || !part.codePoints().skip(1).allMatch(Character::isJavaIdentifierPart)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static Optional<Callback> callback(String value) {
         var matcher = CALLBACK.matcher(value);
-        if (!matcher.matches() || !BINARY_NAME.test(matcher.group(1))) {
+        if (!matcher.matches() || !binaryName(matcher.group(1))) {
             return Optional.empty();
         }
         try {
