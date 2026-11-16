@@ -170,6 +170,8 @@ public final class VidocqBootstrap {
     private List<VidocqExtension> givenExtensions;
     /** Runs when this boot stops, before any extension stops: see {@link #beforeStop(Runnable)}. */
     private Runnable beforeStop = () -> {};
+    /** The handover store of the reload loop of {@code vidocq:dev}; {@code null} in any other boot. */
+    private DevHandoverStore devHandover;
     /**
      * Top-chrono taken during the construction of the bootstrap (= just after the entry
      * from {@code Vidocq.main()} via {@link #create()}). Comparable to {@code
@@ -749,7 +751,16 @@ public final class VidocqBootstrap {
     /** The context every extension's {@code onStart} receives. */
     ExtensionContext extensionContext() {
         return new ExtensionContextImpl(container, configuration, config, launchMode(), this::publishedView,
-                suspendables());
+                suspendables(), Optional.ofNullable(devHandover));
+    }
+
+    /**
+     * Hands this boot the store of the reload loop of {@code vidocq:dev}, through which its extensions pass state to
+     * the next boot of the JVM (session handover design §2). No other boot has one.
+     */
+    VidocqBootstrap devHandover(DevHandoverStore store) {
+        this.devHandover = store;
+        return this;
     }
 
     /**

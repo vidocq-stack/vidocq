@@ -110,4 +110,17 @@ public interface ExtensionContext {
     default List<Suspendable> suspendables() {
         return List.of();
     }
+
+    /**
+     * The store through which this boot's extensions hand state to the next boot of the same JVM, during an in-JVM
+     * swap of {@code vidocq:dev}.
+     *
+     * <p>Only {@code vidocq:dev} provides it. An extension must work unchanged when it is empty, as it always is in a
+     * packaged application, a test or an embedding; this default always answers empty.
+     *
+     * @return the store, or empty outside the reload loop of {@code vidocq:dev}
+     */
+    default Optional<DevHandover> devHandover() {
+        return Optional.empty();
+    }
 }

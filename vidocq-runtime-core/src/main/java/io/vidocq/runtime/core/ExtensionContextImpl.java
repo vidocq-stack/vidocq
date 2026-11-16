@@ -20,6 +20,7 @@
 package io.vidocq.runtime.core;
 
 import io.vidocq.vauban.core.container.VaubanContainer;
+import io.vidocq.runtime.spi.DevHandover;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.Suspendable;
 import io.vidocq.runtime.spi.VidocqConfiguration;
@@ -40,6 +41,9 @@ import java.util.function.Supplier;
  * @param launchMode    the launch mode the bootstrap resolved for this boot
  * @param startupReport the startup report of this boot, read-only: empty until the bootstrap has written it, and
  *                      again once it stops; {@code null} reads as always empty
+ * @param suspendables  what a process snapshot must let go of, in start order
+ * @param devHandover   the handover store of the reload loop of {@code vidocq:dev}, empty in any other boot;
+ *                      {@code null} reads as empty
  */
 record ExtensionContextImpl(
         VaubanContainer container,
@@ -47,13 +51,21 @@ record ExtensionContextImpl(
         VidocqConfig config,
         LaunchMode launchMode,
         Supplier<Optional<StartupReportView>> startupReport,
-        List<Suspendable> suspendables
+        List<Suspendable> suspendables,
+        Optional<DevHandover> devHandover
 ) implements ExtensionContext {
 
     ExtensionContextImpl {
         // The type witness matters: without it an Eclipse (JDT) build types Optional::empty as Optional<Object>.
         suspendables = suspendables == null ? List.of() : List.copyOf(suspendables);
         startupReport = startupReport == null ? Optional::<StartupReportView>empty : startupReport;
+        devHandover = devHandover == null ? Optional.empty() : devHandover;
+    }
+
+    ExtensionContextImpl(VaubanContainer container, VidocqConfiguration configuration, VidocqConfig config,
+            LaunchMode launchMode, Supplier<Optional<StartupReportView>> startupReport,
+            List<Suspendable> suspendables) {
+        this(container, configuration, config, launchMode, startupReport, suspendables, Optional.empty());
     }
 
     ExtensionContextImpl(VaubanContainer container, VidocqConfiguration configuration, VidocqConfig config,
