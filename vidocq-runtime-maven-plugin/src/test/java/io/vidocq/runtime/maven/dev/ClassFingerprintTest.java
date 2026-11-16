@@ -298,31 +298,17 @@ class ClassFingerprintTest {
         assertTrue(v2.lambdasMoved(v1));
     }
 
-    @Test
-    void aLambdaAppendedDoesNotMoveThem(@TempDir Path dir) {
+    /** A lambda appended last, a body edited in place, the last lambda removed: each keeps its name. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            actions.add(() -> "save"); actions.add(() -> "cancel"); actions.add(() -> "reset");
+            actions.add(() -> "store"); actions.add(() -> "cancel");
+            actions.add(() -> "save");
+            """)
+    void aLambdaAppendedAnEditedBodyOrTheLastOneRemovedDoesNotMoveThem(String next, @TempDir Path dir) {
         var v1 = fingerprint(dir, "v1", "app.MainView", VIEW.formatted(
                 "actions.add(() -> \"save\"); actions.add(() -> \"cancel\");"));
-        var v2 = fingerprint(dir, "v2", "app.MainView", VIEW.formatted(
-                "actions.add(() -> \"save\"); actions.add(() -> \"cancel\"); actions.add(() -> \"reset\");"));
-
-        assertFalse(v2.lambdasMoved(v1));
-    }
-
-    @Test
-    void aLambdaBodyEditedInPlaceDoesNotMoveThem(@TempDir Path dir) {
-        var v1 = fingerprint(dir, "v1", "app.MainView", VIEW.formatted(
-                "actions.add(() -> \"save\"); actions.add(() -> \"cancel\");"));
-        var v2 = fingerprint(dir, "v2", "app.MainView", VIEW.formatted(
-                "actions.add(() -> \"store\"); actions.add(() -> \"cancel\");"));
-
-        assertFalse(v2.lambdasMoved(v1));
-    }
-
-    @Test
-    void theLastLambdaRemovedDoesNotMoveThem(@TempDir Path dir) {
-        var v1 = fingerprint(dir, "v1", "app.MainView", VIEW.formatted(
-                "actions.add(() -> \"save\"); actions.add(() -> \"cancel\");"));
-        var v2 = fingerprint(dir, "v2", "app.MainView", VIEW.formatted("actions.add(() -> \"save\");"));
+        var v2 = fingerprint(dir, "v2", "app.MainView", VIEW.formatted(next));
 
         assertFalse(v2.lambdasMoved(v1));
     }
