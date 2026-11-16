@@ -77,8 +77,15 @@ OpenID provider, and are not run yet.
 
 ## Next
 
-- The other applications are not run yet: they need an EJB, a `DataSource`, an embedded directory or an
-  OpenID provider (PLAN.md section 7). They are added here as the platform needs are met.
+Scope decision (2026-11-16): for now Kerckhoffs stays on the Jakarta Security 4.0 TCK **without JSF**. Per application,
+on this container and on the assembled runtime, see the `tck` page of the documentation (`docs/en`).
+
+- Out of scope for now: `app-mem-customform` (the only application that uses Jakarta Faces), `AppMemFormImmediateIT` of
+  `app-mem-form` (`@LoginToContinue` with `*Expression` attributes, no JSF involved), the EJB applications
+  (`app-securitycontext`, `app-securitycontext-customprincipal`, `app-db`), the LDAP ones (`app-ldap*`,
+  `app-custom-identity-store-handler`, K4) and OpenID (`app-openid*`, K5).
+- Still to do: Jakarta Authorization (`app-mem-policy`, `app-mem-policy2`), the mechanism decorator
+  (`app-mem-basic-decorate`, 1 of 2) and JAX-RS (`app-jaxrs`, 4 of 8 on the runtime).
 - `ci.tck.command` is declared (2026-11-15) on the smoke set: `app-mem`, `app-mem-basic`, `app-custom`, `app-custom-session`,
   `app-multiple-store`, `app-multiple-store-backup`, `app-securitycontext-auth`, `app-custom-authentication-mechanism-handler`, `…handler2`, `app-custom-rememberme`. A red application leaves the smoke set
-  until it is green again; `app-mem-form` joins it once Jakarta Expression Language is evaluated (K3).
+  until it is green again.

@@ -22,31 +22,65 @@ command line and none is in the TCK sources; they are listed in `kerckhoffs-tck/
 
 == Where it stands
 
-[cols="1,1,3"]
-|===
-| Run | `app-mem` | Note
+Figures of 2026-11-16, on the Kerckhoffs container (`kerckhoffs-tck`, this repository) and on the assembled Vidocq
+runtime (`vidocq-runtime-tck-kerckhoffs-security`, in `Vidocq/vidocq`). A dash means the application was not run there.
 
-| 2026-11-14 | deployment refused | Nothing implemented: no `IdentityStoreHandler`.
-| 2026-11-15 | 3 of 4 tests green | Identity stores are provided (K1). The three green tests expect an
-unauthenticated caller; `testAuthenticated` waits for the HTTP authentication mechanism (K2).
-| 2026-11-15 (K2) | 4 of 4 tests green | The mechanism of the war is placed in service through Jakarta Authentication on the Foy hook.
-|===
+=== Green
 
-[cols="1,1,3"]
+[cols="3,1,1,3"]
 |===
-| Application | Result | Note
+| Application | Kerckhoffs container | Vidocq runtime | Covers
 
-| `app-mem` | 4 of 4 green | In-memory identity store behind the mechanism of the war.
-| `app-mem-basic` | 4 of 4 green | Built-in BASIC mechanism.
-| `app-mem-form` | 4 of 4 green, one class red | Built-in FORM mechanism. `AppMemFormImmediateIT` needs Jakarta Expression Language (a CDI bean in `loginPage`), planned for K3.
-| `app-custom` | 4 of 4 green | Custom mechanism and identity store, injected `SecurityContext`.
-| `app-custom-session` | 5 of 5 green | `@AutoApplySession`.
-| `app-multiple-store` | 4 of 4 green | Several identity stores behind one handler.
-| `app-multiple-store-backup` | 6 of 6 green | Request-scoped identity stores.
-| `app-securitycontext-auth` | 5 of 5 green | Programmatic `SecurityContext.authenticate(...)`.
+| `app-mem` | 4 of 4 | 4 of 4 | In-memory identity store behind the mechanism of the war.
+| `app-mem-basic` | 4 of 4 | 4 of 4 | Built-in BASIC mechanism.
+| `app-custom` | 4 of 4 | 4 of 4 | Custom mechanism and identity store, injected `SecurityContext`.
+| `app-custom-session` | 5 of 5 | 5 of 5 | `@AutoApplySession`.
+| `app-multiple-store` | 4 of 4 | 4 of 4 | Several identity stores behind one handler.
+| `app-multiple-store-backup` | 6 of 6 | 6 of 6 | Request-scoped identity stores.
+| `app-securitycontext-auth` | 5 of 5 | 5 of 5 | Programmatic `SecurityContext.authenticate(...)`.
+| `app-custom-authentication-mechanism-handler` | 4 of 4 | 4 of 4 | An application `HttpAuthenticationMechanismHandler` serves the requests.
+| `app-custom-authentication-mechanism-handler2` | 3 of 3 | 3 of 3 | Repeated `@BasicAuthenticationMechanismDefinition` with `qualifiers`.
+| `app-custom-rememberme` | 25 of 25 | 25 of 25 | `@RememberMe`: cookie, flags, `*Expression` attributes through Jakarta Expression Language.
 |===
 
-The other applications of the TCK need an EJB, a `DataSource`, an embedded directory or an
-OpenID provider; they are added as the platform provides them. The `ci.tck.command` gate of the
-pull requests runs the smoke set: every application above that is green, `app-mem-form` excluded until
-Jakarta Expression Language is evaluated.
+These ten are the smoke set the `ci.tck.command` gate of the pull requests runs.
+
+=== Partly green
+
+[cols="3,1,1,3"]
+|===
+| Application | Kerckhoffs container | Vidocq runtime | What is red
+| `app-mem-form` | `AppMemFormIT` 4 of 4; `AppMemFormImmediateIT` refused | same | The deployment is refused: `loginPage` and `useForwardToLoginExpression` of `@LoginToContinue` are expressions. See "Out of scope for now".
+| `app-mem-basic-decorate` | 1 of 2 | 1 of 2 | A CDI decorator on the mechanism: the decorated response header is missing. To do.
+| `app-jaxrs` | -- | 4 of 8 | The caller is not authenticated in the REST endpoints. To do; no cause established yet.
+|===
+
+=== Out of scope for now
+
+The maintainer keeps the Jakarta Security 4.0 TCK *without JSF* for now. These applications are set aside, and
+none of them is counted against the figures above.
+
+[cols="3,3"]
+|===
+| Application | Why
+
+| `app-mem-customform` | The only application that uses Jakarta Faces (JSF), with `@LoginToContinue`. Kerckhoffs has no JSF.
+| `app-mem-form` (`AppMemFormImmediateIT` only) | `@LoginToContinue` with `*Expression` attributes. The interceptor is not written; no JSF is involved, the class is set aside with the annotation.
+| `app-securitycontext`, `app-securitycontext-customprincipal` | The application uses an EJB.
+| `app-db` | An EJB and a `@DataSourceDefinition` on an embedded database.
+| `app-ldap`, `app-ldap2`, `app-ldap3`, `app-custom-identity-store-handler` | An embedded LDAP directory (`@LdapIdentityStoreDefinition` is milestone K4). `app-custom-identity-store-handler` is 4 of 5 on the Kerckhoffs container: the red test reads groups from the directory.
+| `app-openid`, `app-openid2`, `app-openid3` | An OpenID Connect provider (milestone K5).
+|===
+
+=== Still to do
+
+[cols="3,3"]
+|===
+| Application | What is missing
+
+| `app-mem-policy`, `app-mem-policy2` | Jakarta Authorization: `Policy` and `PolicyFactory` (a `kerckhoffs-authorization` module, PLAN.md section 3). The deployment is refused.
+| `app-mem-basic-decorate` | The CDI decorator on a mechanism (1 of 2).
+| `app-jaxrs` | Authentication of the REST endpoints (4 of 8 on the runtime; not run on the Kerckhoffs container, which has no Jakarta REST).
+|===
+
+A result is a compatibility measurement, never a certification: the full run is milestone K7.

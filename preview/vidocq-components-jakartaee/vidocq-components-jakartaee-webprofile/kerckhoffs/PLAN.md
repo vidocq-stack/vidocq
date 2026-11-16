@@ -208,6 +208,13 @@ Runner shape (copy `foy-tck` and `bodoni-tck`, not a new design):
 5. Declare `ci.tck.command` in the root POM only once the baseline is green on the smoke set;
    until then pull requests run no TCK.
 
+**Scope and state, 2026-11-16.** The TCK is run **without JSF** for now: `app-mem-customform` (the only application that
+uses Jakarta Faces) and the `@LoginToContinue` expressions of `app-mem-form` are set aside, as are the EJB applications
+(`app-securitycontext*`, `app-db`), the LDAP ones (K4) and OpenID (K5). Ten applications are green on the Kerckhoffs
+container and on the assembled runtime; still to do are Jakarta Authorization (`app-mem-policy*`), the mechanism decorator
+(`app-mem-basic-decorate`) and JAX-RS (`app-jaxrs`). Per application: the `tck` page (`docs/en`) and
+`kerckhoffs-tck/BASELINE.md`.
+
 ## 8. Milestones (TDD: test or TCK scenario first, then code)
 
 | # | Scope | Exit criterion |
