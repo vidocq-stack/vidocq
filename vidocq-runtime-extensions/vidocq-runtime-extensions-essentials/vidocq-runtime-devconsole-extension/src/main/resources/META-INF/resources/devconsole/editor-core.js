@@ -1805,3 +1805,228 @@ export function replayChoice(values, selector, choices) {
   const value = values[selector.argument];
   return choices.includes(value) ? value : null;
 }
+
+// ------------------------------------------------------------------------------------------------ a graph
+
+/** The most characters of a label or kind a box shows; a longer one is cut with "…", whole in its title. */
+const BOX_CHARS = 40;
+/** A box's height: its label, then its kind dimmed under it. */
+const BOX_HEIGHT = 44;
+/** The room between two boxes of a layer, between two layers, and between two parts of a graph. */
+const BOX_GAP = 40;
+const LAYER_GAP = 70;
+const PART_GAP = 60;
+/** The room around the drawing, wider than a loop reaches. */
+const MARGIN = 24;
+/** The width of a character of the boxes' monospace font, at the page's 12 px. */
+const CHAR_WIDTH = 7.2;
+/** How far right of its box a self-edge's loop reaches, and how far apart edges between the same boxes run. */
+const LOOP = 22;
+const PARALLEL = 12;
+
+/** {@code text} cut to BOX_CHARS characters with "…", never half a character. */
+function boxText(text) {
+  if (text.length <= BOX_CHARS) return text;
+  const high = /[\uD800-\uDBFF]/.test(text[BOX_CHARS - 2]);
+  return text.slice(0, high ? BOX_CHARS - 2 : BOX_CHARS - 1) + "…";
+}
+
+const isFact = (f) => Array.isArray(f) && f.length === 2 && typeof f[0] === "string" && typeof f[1] === "string";
+const isNode = (n) => isObject(n) && typeof n.id === "string" && n.id !== "" && typeof n.label === "string"
+  && typeof n.kind === "string" && Array.isArray(n.facts) && n.facts.every(isFact);
+
+/**
+ * The body of a graph result (PanelAction.ActionResult.GRAPH): {nodes: [{id, label, kind, facts: [[name, value]]}],
+ * edges: [{from, to, label, arrow, dashed}]}, or null when {@code text} is not that shape, gives an id twice, or has
+ * an edge to a node it does not give: the page then shows it as any other JSON.
+ */
+export function readGraph(text) {
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch (unreadable) {
+    return null;
+  }
+  if (!isObject(body) || !Array.isArray(body.nodes) || !Array.isArray(body.edges)) return null;
+  const ids = new Set();
+  const nodes = [];
+  for (const n of body.nodes) {
+    if (!isNode(n) || ids.has(n.id)) return null;
+    ids.add(n.id);
+    nodes.push({ id: n.id, label: n.label, kind: n.kind, facts: n.facts.map((f) => [f[0], f[1]]) });
+  }
+  const edges = [];
+  for (const e of body.edges) {
+    if (!isObject(e) || !ids.has(e.from) || !ids.has(e.to) || typeof e.label !== "string"
+      || typeof e.arrow !== "boolean" || typeof e.dashed !== "boolean") return null;
+    edges.push({ from: e.from, to: e.to, label: e.label, arrow: e.arrow, dashed: e.dashed });
+  }
+  return { nodes, edges };
+}
+
+/** The node indexes of each part of the graph, the nodes linked to one another, in the order of their first node. */
+function graphParts(count, around) {
+  const part = new Array(count).fill(-1);
+  const parts = [];
+  for (let first = 0; first < count; first++) {
+    if (part[first] >= 0) continue;
+    const members = [first];
+    part[first] = parts.length;
+    for (let q = 0; q < members.length; q++) {
+      for (const [v] of around[members[q]]) {
+        if (part[v] < 0) {
+          part[v] = parts.length;
+          members.push(v);
+        }
+      }
+    }
+    parts.push(members);
+  }
+  return parts;
+}
+
+/**
+ * The layers of one part, top first, each a list of node indexes: a breadth-first walk from its most linked node
+ * (the first of them on a tie) puts each newly met node one layer below the node it was met from, except the parent
+ * of an arrow that is not dashed, which goes one layer above, as a superclass above its subclass.
+ */
+function partLayers(members, around, nodes) {
+  let root = members[0];
+  for (const m of members) {
+    if (around[m].length > around[root].length || (around[m].length === around[root].length && m < root)) root = m;
+  }
+  const layer = new Map([[root, 0]]);
+  const met = [root];
+  for (let q = 0; q < met.length; q++) {
+    const u = met[q];
+    for (const [v, e] of around[u]) {
+      if (layer.has(v)) continue;
+      const parent = e.arrow && !e.dashed && e.from === nodes[u].id && e.to === nodes[v].id;
+      layer.set(v, layer.get(u) + (parent ? -1 : 1));
+      met.push(v);
+    }
+  }
+  const top = Math.min(...layer.values());
+  const layers = [];
+  for (const v of met) {
+    const l = layer.get(v) - top;
+    (layers[l] ||= []).push(v);
+  }
+  return layers;
+}
+
+/** Orders each layer by the mean position of its neighbours in the layer {@code step} away, keeping ties in order. */
+function sweep(layers, around, step) {
+  const position = new Map();
+  layers.forEach((row) => row.forEach((v, i) => position.set(v, i)));
+  const range = step > 0 ? [...layers.keys()].slice(1) : [...layers.keys()].reverse().slice(1);
+  for (const l of range) {
+    const other = layers[l - step];
+    const inOther = new Set(other);
+    const row = layers[l];
+    const weight = new Map();
+    for (const v of row) {
+      const near = around[v].filter(([u]) => inOther.has(u)).map(([u]) => position.get(u));
+      weight.set(v, near.length ? near.reduce((a, b) => a + b, 0) / near.length
+        : position.get(v) * (other.length - 1) / Math.max(1, row.length - 1));
+    }
+    row.sort((a, b) => weight.get(a) - weight.get(b) || position.get(a) - position.get(b));
+    row.forEach((v, i) => position.set(v, i));
+  }
+}
+
+const round = (v) => Math.round(v * 10) / 10;
+
+/** Where a line from {@code p}, inside {@code box}, along {@code d} leaves the box. */
+function exit(p, d, box) {
+  let t = Infinity;
+  if (d.x > 0) t = Math.min(t, (box.x + box.w - p.x) / d.x);
+  if (d.x < 0) t = Math.min(t, (box.x - p.x) / d.x);
+  if (d.y > 0) t = Math.min(t, (box.y + box.h - p.y) / d.y);
+  if (d.y < 0) t = Math.min(t, (box.y - p.y) / d.y);
+  return Number.isFinite(t) ? { x: p.x + t * d.x, y: p.y + t * d.y } : { x: p.x, y: p.y };
+}
+
+/** The line of {@code edge}, the {@code k}-th of {@code n} between the same two boxes, ends on their borders. */
+function edgeLine(edge, a, b, k, n, canonical) {
+  const ca = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
+  const cb = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+  const d = { x: cb.x - ca.x, y: cb.y - ca.y };
+  const length = Math.hypot(d.x, d.y) || 1;
+  // the same side for both directions: the normal of the line from the first box to the second, in input order
+  const sign = canonical ? 1 : -1;
+  const normal = { x: sign * -d.y / length, y: sign * d.x / length };
+  const shift = Math.max(-(a.h / 2 - 2), Math.min(a.h / 2 - 2, (k - (n - 1) / 2) * PARALLEL));
+  const start = exit({ x: ca.x + shift * normal.x, y: ca.y + shift * normal.y }, d, a);
+  const end = exit({ x: cb.x + shift * normal.x, y: cb.y + shift * normal.y }, { x: -d.x, y: -d.y }, b);
+  return { from: edge.from, to: edge.to, label: edge.label, arrow: edge.arrow, dashed: edge.dashed,
+    x1: round(start.x), y1: round(start.y), x2: round(end.x), y2: round(end.y),
+    lx: round((start.x + end.x) / 2), ly: round((start.y + end.y) / 2), loop: false };
+}
+
+/**
+ * Where the boxes and lines of {@code graph} (readGraph's) go: {width, height, nodes: [{id, x, y, w, h, text, sub}],
+ * edges: [{from, to, label, arrow, dashed, x1, y1, x2, y2, lx, ly, loop}]}, both in the graph's order. The same graph
+ * always gets the same layout. Each part of the graph, the nodes linked to one another, is laid out in layers (see
+ * partLayers), ordered down, up and down again by the positions of their neighbours, centred, and the parts are put
+ * side by side. A line ends on the borders of its boxes, its label at its middle; lines between the same two boxes
+ * run PARALLEL apart; a self-edge is a loop right of its box. A box shows its label and kind cut to BOX_CHARS.
+ */
+export function graphLayout(graph) {
+  const nodes = graph.nodes;
+  const index = new Map(nodes.map((n, i) => [n.id, i]));
+  const around = nodes.map(() => []);
+  for (const e of graph.edges) {
+    const a = index.get(e.from);
+    const b = index.get(e.to);
+    if (a === b) continue;
+    around[a].push([b, e]);
+    around[b].push([a, e]);
+  }
+  const boxes = nodes.map((n) => {
+    const text = boxText(n.label);
+    const sub = boxText(n.kind);
+    return { id: n.id, x: 0, y: 0, w: Math.max(60, Math.round(16 + CHAR_WIDTH * Math.max(text.length, sub.length))),
+      h: BOX_HEIGHT, text, sub };
+  });
+  let left = MARGIN;
+  let height = 0;
+  for (const members of graphParts(nodes.length, around)) {
+    const layers = partLayers(members, around, nodes);
+    sweep(layers, around, 1);
+    sweep(layers, around, -1);
+    sweep(layers, around, 1);
+    const widths = layers.map((row) => row.reduce((sum, v) => sum + boxes[v].w, 0) + BOX_GAP * (row.length - 1));
+    const width = Math.max(...widths);
+    layers.forEach((row, l) => {
+      let x = left + Math.round((width - widths[l]) / 2);
+      for (const v of row) {
+        boxes[v].x = x;
+        boxes[v].y = MARGIN + l * (BOX_HEIGHT + LAYER_GAP);
+        x += boxes[v].w + BOX_GAP;
+      }
+    });
+    height = Math.max(height, layers.length * BOX_HEIGHT + (layers.length - 1) * LAYER_GAP);
+    left += width + PART_GAP;
+  }
+  const between = new Map();          // the edges between the same two boxes, by the pair, in order
+  const pairOf = (e) => {
+    const a = index.get(e.from);
+    const b = index.get(e.to);
+    return Math.min(a, b) + " " + Math.max(a, b);
+  };
+  for (const e of graph.edges) (between.get(pairOf(e)) || between.set(pairOf(e), []).get(pairOf(e))).push(e);
+  const edges = graph.edges.map((e) => {
+    const a = boxes[index.get(e.from)];
+    const b = boxes[index.get(e.to)];
+    if (a === b) {
+      return { from: e.from, to: e.to, label: e.label, arrow: e.arrow, dashed: e.dashed,
+        x1: a.x + a.w, y1: round(a.y + a.h * 0.3), x2: a.x + a.w, y2: round(a.y + a.h * 0.7),
+        lx: a.x + a.w + LOOP, ly: round(a.y + a.h / 2), loop: true };
+    }
+    const same = between.get(pairOf(e));
+    return edgeLine(e, a, b, same.indexOf(e), same.length, index.get(e.from) < index.get(e.to));
+  });
+  return { width: nodes.length ? left - PART_GAP + MARGIN : 2 * MARGIN, height: height + 2 * MARGIN,
+    nodes: boxes, edges };
+}

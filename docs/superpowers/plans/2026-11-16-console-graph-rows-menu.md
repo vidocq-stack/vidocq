@@ -127,7 +127,8 @@ action's form (Explore to JPQL, the way a replay cell already fills a form)".
   2. In each component, take the node with the most edges (ties: the first) as the root. Lay out layers by
      breadth-first search, except that the `to` of an `arrow && !dashed` edge sits one layer above its `from` when
      both are unplaced.
-  3. Order each layer twice by the barycentre of its neighbours in the layer above, keeping the input order on ties.
+  3. Order the layers three times, keeping the current order on ties: by the barycentre of each node's neighbours
+     in the layer above, then in the layer below, then above again.
   4. Size the boxes: `w = 16 + 7.2 × max(label, kind) length`, `h = 40`. Leave 40 px between boxes and 70 px between
      layers, and centre each layer.
   5. Place the components side by side, 60 px apart.
