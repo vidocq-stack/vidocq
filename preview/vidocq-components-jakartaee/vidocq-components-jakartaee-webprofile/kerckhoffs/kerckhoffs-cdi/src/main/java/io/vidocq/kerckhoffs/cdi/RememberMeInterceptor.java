@@ -59,8 +59,13 @@ public class RememberMeInterceptor implements Serializable {
     public RememberMeInterceptor() {
     }
 
-    /** For the tests: the store is given. */
-    RememberMeInterceptor(Supplier<RememberMeIdentityStore> store) {
+    /**
+     * For a runtime that weaves the interceptor as a bean of its own (the Vidocq runtime extension): the store is
+     * looked up by the caller, at each use.
+     *
+     * @param store where the store of the application is found
+     */
+    public RememberMeInterceptor(Supplier<RememberMeIdentityStore> store) {
         this.store = store;
     }
 
