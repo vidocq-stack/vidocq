@@ -146,6 +146,28 @@ class SelectorCoreTest {
     }
 
     @Test
+    void anActionIsOfferedUnderTheChoicesItsArgumentAllows() {
+        String forLedger = "{\"id\":\"explore.page.1\",\"arguments\":[{\"name\":\"unit\",\"label\":\"Unit\","
+                + "\"allowed\":[\"ledger\"]},{\"name\":\"entity\",\"label\":\"Entity\",\"allowed\":[\"Entry\"]}]}";
+
+        assertEquals("true", call("offersChoice", forLedger, UNIT, "\"ledger\""));
+        assertEquals("false", call("offersChoice", forLedger, UNIT, "\"archive\""));
+    }
+
+    @Test
+    void anActionThatTakesAnyValueOrNoChoiceIsOfferedUnderEveryChoice() {
+        String free = "{\"id\":\"jpql\",\"arguments\":[{\"name\":\"unit\",\"label\":\"Unit\"}]}";
+        String other = "{\"id\":\"ping\",\"arguments\":[{\"name\":\"level\",\"label\":\"Level\",\"allowed\":[\"a\"]}]}";
+        String forLedger = "{\"id\":\"model\",\"arguments\":[{\"name\":\"unit\",\"label\":\"Unit\","
+                + "\"allowed\":[\"ledger\"]}]}";
+
+        assertEquals("true", call("offersChoice", free, UNIT, "\"archive\""), "a field of any value");
+        assertEquals("true", call("offersChoice", other, UNIT, "\"archive\""), "no such argument");
+        assertEquals("true", call("offersChoice", forLedger, "null", "null"), "no selector");
+        assertEquals("true", call("offersChoice", forLedger, UNIT, "null"), "no choice");
+    }
+
+    @Test
     void aReplayOfAChoiceSwitchesToIt() {
         assertEquals("\"archive\"", call("replayChoice", "{\"unit\":\"archive\",\"query\":\"SELECT 1\"}", UNIT,
                 "[\"ledger\",\"archive\"]"));

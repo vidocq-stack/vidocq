@@ -65,7 +65,8 @@
 //   JSON viewer of the same body. A body of another shape is shown as any other JSON.
 
 import { createEditor, jsonLanguage, queryLanguage, readRows, rowsCsv, FORMAT_EXAMPLES } from "./editor.js";
-import { selectorOf, choicesOf, pickChoice, formArguments, takesChoice, replayChoice } from "./editor.js";
+import { selectorOf, choicesOf, pickChoice, formArguments, takesChoice, offersChoice, replayChoice }
+  from "./editor.js";
 import { readGraph, graphLayout, menuArguments } from "./editor.js";
 import { downloadOf, downloadName } from "./editor.js";
 
@@ -657,9 +658,17 @@ const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
  * actions, one form each, a text filter above them past FILTER_FROM. A confirmation is asked inline, never with the
  * browser's blocking dialog. The request is a same-origin fetch with the token of the boot.
  */
-function actionsBar(rows) {
+/**
+ * The bar of the actions of no group, {bar, apply}: it shows the rows {@code offered} keeps whose text holds the
+ * filter's words, and apply shows them again after the panel's choice changed.
+ */
+function actionsBar(rows, offered) {
   if (!rows.length) return null;
   const bar = el("div", "actions");
+  let words = "";
+  const apply = () => {
+    for (const row of rows) row.root.hidden = !offered(row) || (words !== "" && !row.text.includes(words));
+  };
   if (rows.length > FILTER_FROM) {
     const filter = el("input", "action-filter");
     filter.type = "search";
@@ -667,13 +676,14 @@ function actionsBar(rows) {
     filter.autocomplete = "off";
     filter.spellcheck = false;
     filter.addEventListener("input", () => {
-      const words = filter.value.trim().toLowerCase();
-      for (const row of rows) row.root.hidden = words !== "" && !row.text.includes(words);
+      words = filter.value.trim().toLowerCase();
+      apply();
     });
     bar.append(filter);
   }
   bar.append(...rows.map((row) => row.root));
-  return bar;
+  apply();
+  return { bar, apply };
 }
 
 /** A string argument: a list when the server named the values it accepts, a text field otherwise. */
@@ -1970,6 +1980,8 @@ function actionRow(panelId, action, outlet, selection) {
     root,
     /** Shows the form; whoever lays the row out may replace it, as a group tab does to pick it in its combo. */
     reveal() { root.hidden = false; },
+    /** Whether the action is offered while {@code choice} is the panel's choice (offersChoice). */
+    offers(choice) { return offersChoice(action, selection ? selection.selector : null, choice); },
     /** Fills the form with a replayed call's arguments, by name; sends nothing. */
     fill(values) {
       const choice = selection ? replayChoice(values, selection.selector, selection.choices) : null;
@@ -2088,16 +2100,16 @@ function groupTab(panelId, name, rows, state, open) {
   const byId = new Map(rows.map((row) => [row.id, row]));
   let selected = byId.has(state.chosen.get(name)) ? state.chosen.get(name) : rows[0].id;
 
-  /** Lists the rows whose text holds {@code words} in the combo, and returns them. */
+  /** Lists the rows offered under the panel's choice whose text holds {@code words} in the combo, and returns them. */
   function options(words) {
-    const shown = words === "" ? rows : rows.filter((row) => row.text.includes(words));
+    const shown = rows.filter((row) => row.offers(state.choice) && (words === "" || row.text.includes(words)));
     combo.replaceChildren(...shown.map((row) => {
       const option = el("option", null, row.label);
       option.value = row.id;
       return option;
     }));
     if (!shown.length) {
-      const none = el("option", null, "no action matches");
+      const none = el("option", null, words === "" ? "no action for this choice" : "no action matches");
       none.value = "";
       none.disabled = true;
       combo.append(none);
@@ -2112,6 +2124,20 @@ function groupTab(panelId, name, rows, state, open) {
     combo.value = id;
     formSlot.replaceChildren(byId.get(id).root);
     showResult();
+  }
+  /**
+   * Shows an offered row of {@code shown}: the selected one, else the one of the same label, as the same action of
+   * another item of the panel's choice, else the first; nothing when none is offered.
+   */
+  function settle(shown) {
+    const label = byId.get(selected).label;
+    const next = shown.find((row) => row.id === selected) || shown.find((row) => row.label === label) || shown[0];
+    if (next) {
+      choose(next.id);
+    } else {
+      formSlot.replaceChildren();
+      resultSlot.replaceChildren();
+    }
   }
 
   combo.addEventListener("change", () => { if (byId.has(combo.value)) choose(combo.value); });
@@ -2129,11 +2155,12 @@ function groupTab(panelId, name, rows, state, open) {
       choose(row.id);
     };
   }
-  options("");
-  choose(selected);
+  settle(options(""));
 
   return {
     root,
+    /** Lists the actions offered under the panel's choice again, after it changed. */
+    offer() { settle(options(filter ? filter.value.trim().toLowerCase() : "")); },
     /** Redraws the result block when {@code actionId} is the action on screen. */
     changed(actionId) { if (actionId === selected) showResult(); },
     /**
@@ -2384,12 +2411,17 @@ function panelView(panel, snapshot) {
   const selector = selectorOf(panel);
   const choices = selector ? choicesOf(panel) : [];
   const cards = new Map();                // the group cards, by name, which the choice shows or hides
+  const groupTabs = new Map();
+  let loose = null;                       // the bar of the actions of no group
   let picker = null;
+  // a change of the choice lists again the actions each tab and the bar offer (offersChoice)
   const choose = (value) => {
     state.choice = value;
     store(CHOICE_KEY + panel.id, value);
     if (picker) picker.value = value;
     for (const [name, card] of cards) card.hidden = name !== value;
+    for (const tab of groupTabs.values()) tab.offer();
+    if (loose) loose.apply();
   };
   const selection = choices.length ? { selector, choices, current: () => state.choice, choose } : null;
   if (selection) {
@@ -2408,7 +2440,6 @@ function panelView(panel, snapshot) {
     bar.append(label);
     panelArea.append(bar);
   }
-  const groupTabs = new Map();
   for (const key of [...actionRows.keys()]) if (key.startsWith(panel.id + "\u0000")) actionRows.delete(key);
   const rows = actions.map((action) => {
     const group = groupName(action);
@@ -2482,8 +2513,8 @@ function panelView(panel, snapshot) {
   if (panel.summary) box.append(el("p", "summary", panel.summary));
   const opens = openButtons(panel.lines);
   if (opens) box.append(opens);
-  const bar = actionsBar(rows.filter((row) => !row.group));
-  if (bar) box.append(bar);
+  loose = actionsBar(rows.filter((row) => !row.group), (row) => row.offers(state.choice));
+  if (loose) box.append(loose.bar);
   const anomalies = anomaliesOf(panel.id, snapshot);
   if (anomalies.length) {
     const list = el("div", "anoms");

@@ -1841,6 +1841,16 @@ export function takesChoice(action, selector) {
 }
 
 /**
+ * Whether {@code action} is offered while {@code choice} is selected: always, unless it declares the argument
+ * {@code selector} fills with allowed values that leave the choice out, as an action a panel gives one item only.
+ */
+export function offersChoice(action, selector, choice) {
+  if (!selector || choice === null || !Array.isArray(action.arguments)) return true;
+  const argument = action.arguments.find((a) => isObject(a) && a.name === selector.argument);
+  return !argument || !Array.isArray(argument.allowed) || argument.allowed.includes(choice);
+}
+
+/**
  * The choice a replay of {@code values}, an action's arguments by name, switches the dropdown to: the value of the
  * selector's argument when it is one of {@code choices}; null otherwise, the dropdown staying as it is.
  */

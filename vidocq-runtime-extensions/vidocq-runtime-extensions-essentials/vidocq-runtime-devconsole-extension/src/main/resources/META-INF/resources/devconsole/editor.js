@@ -38,7 +38,8 @@ export { jsonLanguage, queryLanguage, FORMAT_EXAMPLES };
 /** A result's rows, read from its body and written as CSV: console.js draws them, editor-core.js reads them. */
 export { readRows, rowsCsv } from "./editor-core.js";
 export { menuArguments } from "./editor-core.js";
-export { selectorOf, choicesOf, pickChoice, formArguments, takesChoice, replayChoice } from "./editor-core.js";
+export { selectorOf, choicesOf, pickChoice, formArguments, takesChoice, offersChoice, replayChoice }
+  from "./editor-core.js";
 export { readGraph, graphLayout } from "./editor-core.js";
 export { downloadOf, downloadName } from "./editor-core.js";
 

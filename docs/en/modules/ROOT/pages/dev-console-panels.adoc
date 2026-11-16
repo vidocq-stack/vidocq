@@ -740,6 +740,11 @@ public void sample(PanelSample out) {
 * *The forms.* Every action that declares an argument named `unit` loses that field. The page sends the choice in
   its place, and the action checks it as it checks any argument: the console only carries it. An action without
   such an argument keeps its form as it is.
+* *An action for one item.* An action whose `unit` argument allows a list of values is offered only while one of
+  them is chosen. A panel gives an item actions of its own this way, as the Persistence panel gives each unit a JPQL
+  tab whose editor completes that unit's entities: one action per unit, `jpql.query.1`, `jpql.query.2`, each
+  allowing its unit alone. When the choice changes, each tab lists the actions of the new choice and keeps the action
+  of the same label. A tab with no action for the choice says so.
 * *A replay.* A <<replay-column,Replay>> button whose arguments give `unit` one of the choices switches the dropdown
   to it before it fills the form. With any other value, the dropdown stays where it is.
 * *What is kept.* The page keeps the choice per panel in the browser's local storage. A choice that a dev reload
