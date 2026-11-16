@@ -156,8 +156,10 @@ final class SharedResources {
         }
         rewrite(stage.resolve(owner), Set.of(), moved, pkg);
         int count = moved.size();
+        // The clause after the colon settles the warning vauban:modularize prints about the same directory.
         return "merged " + s.directory() + " into " + owner + " (" + count + (count == 1 ? " file" : " files")
-                + " from " + String.join(", ", donors) + ")";
+                + " from " + String.join(", ", donors)
+                + "): one module holds the directory now, jlink accepts these jars";
     }
 
     /**

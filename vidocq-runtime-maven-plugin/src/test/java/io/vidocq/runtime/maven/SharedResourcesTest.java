@@ -147,8 +147,9 @@ class SharedResourcesTest {
         assertNotNull(entry(react, "com/vaadin/react/React.class"), "only the shared directory moves");
         ModuleDescriptor md = ModuleFinder.of(server).findAll().iterator().next().descriptor();
         assertEquals(Set.of("com.vaadin.server", "com.vaadin.frontend"), md.packages());
-        assertEquals(List.of("merged com/vaadin/frontend/ into flow-server-1.0.jar (1 file from flow-react-1.0.jar)"),
-                log);
+        // The line closes the warning vauban:modularize printed earlier about the same directory.
+        assertEquals(List.of("merged com/vaadin/frontend/ into flow-server-1.0.jar (1 file from flow-react-1.0.jar):"
+                + " one module holds the directory now, jlink accepts these jars"), log);
         assertTrue(SharedResources.find(stage).isEmpty(), "nothing is shared any more");
     }
 
