@@ -1,6 +1,7 @@
 # Dev reload: redefine method bodies in place, swap the layer otherwise
 
-Date: 2026-11-16. Status: design, for review (item 6b of the Vaadin replay papercuts). Part c (sessions across a
+Date: 2026-11-16, revised the same day (start-time declarations, redefinition listeners). Status: design, for
+review (item 6b of the Vaadin replay papercuts). Part c (sessions across a
 swap) gets its own design after this one.
 
 ## Why
@@ -32,6 +33,10 @@ when its result is the same as a swap's.
 - Every other change goes through the layer swap, exactly as today.
 - The dev log says which path ran and, for a swap, why.
 - The redefined code is live at the next call. That is the only promise the fast path makes, and it must be true.
+- The plugin names no technology. Each extension declares what runs once at start for its own (Servlet, JAX-RS,
+  Vaadin), and so can a third-party jar or the application (§2.1).
+- An extension can react to a redefinition through a dev-only hook. The first one refreshes the open Vaadin pages that
+  show a redefined view (§5).
 
 ## Non-goals
 
@@ -39,7 +44,6 @@ when its result is the same as a swap's.
   Runtime with HotswapAgent) and framework plugins; plain JDK only here.
 - Re-running code that already ran: constructors, static initializers, start-time callbacks.
 - Packaged applications. Nothing of this runs or ships outside `vidocq:dev`.
-- Telling Vaadin to refresh the browser (its `Hotswapper` exists only in Vaadin dev mode). Possible later.
 - Sessions across a swap: part c.
 
 ## Anti-goals
@@ -164,36 +168,80 @@ decides:
 5. A changed class whose shape differs: **swap**, naming the first difference (`MainView gained a method
    lambda$new$1`, `Order lost a field total`, `GreetingResource changed an annotation on hello()`).
 6. A changed class whose code differs in a *start-time method*: **swap**. A start-time method ran once, before the
-   change, and will not run again until a swap. The set below, as proposed (decision 1):
-   - static initializers (`<clinit>`), always;
-   - the constructors, initializer methods (`@PostConstruct`) and field initializers of *long-lived* objects. These
-     are classes with a long-lived scope annotation: `jakarta.enterprise.context.ApplicationScoped` and
-     `SessionScoped`, `jakarta.inject.Singleton`, and Vaadin's `UIScoped`, `VaadinSessionScoped` and `RouteScoped`.
-     Also servlets, filters and listeners, by their `jakarta.servlet` supertypes or annotations;
-   - producer methods (`jakarta.enterprise.inject.Produces`), and observers (a parameter annotated with
-     `jakarta.enterprise.event.Observes` or `ObservesAsync`) of `jakarta.enterprise.event.Startup` or of an
-     `@Initialized` event;
-   - the start callbacks, by name and descriptor: `init(ServletConfig)` and `init()` of a servlet,
-     `init(FilterConfig)` of a filter, `contextInitialized(ServletContextEvent)`,
-     `onStartup(Set, ServletContext)`, `serviceInit(ServiceInitEvent)`, and JAX-RS `Application.getClasses()`,
-     `getSingletons()` and `Feature.configure(FeatureContext)`;
-   - every application method these call, directly or through other application methods: a call graph over the
-     classes of `target/classes`, built from the snapshot's parsed classes. An `invokevirtual` or `invokeinterface`
-     reaches the target and its overrides in the application. A lambda created in such a method is not reached:
-     creating it does not run it, and a listener lambda is the most common edit.
+   change, and will not run again until a swap (decision 1). The classifier knows two things on its own. Static
+   initializers (`<clinit>`) are always start-time. And so is every application method a start-time method calls,
+   directly or through other application methods: a call graph over the classes of `target/classes`, built from
+   the snapshot's parsed classes. An `invokevirtual` or `invokeinterface` reaches the target and its overrides in
+   the application. A lambda created in a start-time method is not reached: creating it does not run it, and a
+   listener lambda is the most common edit.
+
+   Everything else comes from the extensions, which declare what is start-time for their technology (§2.1):
+   - the constructors, initializer methods and field initializers of *long-lived* objects, which are classes with a
+     declared long-lived annotation (`ApplicationScoped`, `UIScoped`, `@Provider`, ...) or supertype (a servlet, a
+     filter, a JAX-RS `Application`, ...). The initializer methods are the declared start annotations, such as
+     `@PostConstruct`;
+   - methods with a declared start annotation (`@Produces`), and observers of a declared start event (`Startup`);
+   - declared start callbacks, by owner type, name and descriptor (`Servlet.init(ServletConfig)`,
+     `VaadinServiceInitListener.serviceInit(ServiceInitEvent)`).
 
    It is conservative on purpose. A method called both at start and per request swaps: a needless swap costs about
    0.2 s and a session, while a wrongly redefined change is a broken promise. The constructors of other objects (a
    Vaadin view, a `@Dependent` or `@RequestScoped` bean, a plain object) are not start-time. The next instance runs
    the new constructor: the trial's F5 case, with the session kept. The log says so: `new instances use it`.
-
-   The annotation and callback lists are constants of the classifier, with a test per entry.
 7. Otherwise: **redefine** the changed classes whose code differs. Classes whose bytes differ but whose fingerprint
    is equal are left alone.
 
 A bean's `$$Intercepted` subclass and its client proxy are generated from its shape. A body-only change leaves them
 byte-identical, and they call the redefined method, so interception and proxies keep working. A change that alters
 them alters the shape, and rule 4 or 5 swaps.
+
+### 2.1 Start-time declarations: each extension says what runs once
+
+The plugin names no technology: no Servlet, JAX-RS, Vaadin or CDI type is written in its code. Each jar that brings
+a technology ships `META-INF/vidocq/dev/start-time.properties`. It is a properties file, one key per kind of
+declaration, the values separated by commas, `#` for comments:
+
+```properties
+# Classes carrying one of these annotations are long-lived: their constructors, field initializers and initializer
+# methods are start-time.
+long-lived-annotations = jakarta.enterprise.context.ApplicationScoped, jakarta.enterprise.context.SessionScoped, \
+    jakarta.inject.Singleton
+# Classes that extend or implement one of these types are long-lived.
+long-lived-types = io.vidocq.runtime.spi.VidocqExtension
+# Methods carrying one of these annotations are start-time (and, on a long-lived class, its initializer methods).
+start-annotations = jakarta.annotation.PostConstruct, jakarta.enterprise.inject.Produces
+# A parameter carrying one of these annotations makes its method an observer...
+observer-annotations = jakarta.enterprise.event.Observes, jakarta.enterprise.event.ObservesAsync
+# ...and an observer is start-time when its event type, or a qualifier on that parameter, is one of these.
+start-events = jakarta.enterprise.event.Startup, jakarta.enterprise.context.Initialized
+# <owner type>#<method name><descriptor>: that method of a class extending or implementing the owner is start-time.
+start-callbacks = jakarta.servlet.Servlet#init(Ljakarta/servlet/ServletConfig;)V
+```
+
+Who declares what:
+
+| Jar | Declares |
+|---|---|
+| `vidocq-runtime-core` | CDI and the runtime: `ApplicationScoped`, `SessionScoped`, `jakarta.inject.Singleton`; `VidocqExtension`; `@PostConstruct`, `@Produces`; `@Observes`/`@ObservesAsync` of `Startup` and `@Initialized`. |
+| Foy's Vidocq extension | Servlet: `Servlet`, `Filter`, `ServletContextListener`, `HttpSessionListener`, `ServletRequestListener`, `ServletContainerInitializer` as long-lived types; `Servlet#init(ServletConfig)`, `GenericServlet#init()`, `Filter#init(FilterConfig)`, `ServletContextListener#contextInitialized`, `ServletContainerInitializer#onStartup`. |
+| Cassini's Vidocq extension | JAX-RS: `@Provider` as a long-lived annotation, `Application` as a long-lived type; `Application#getClasses`, `#getSingletons`, `#getProperties`, `Feature#configure`, `DynamicFeature#configure`. |
+| Vidocq's Vaadin extension | Vaadin: the Vaadin CDI scopes of `com.vaadin.cdi.annotation` (`UIScoped`, `NormalUIScoped`, `VaadinSessionScoped`, `RouteScoped`, `NormalRouteScoped`, `VaadinServiceScoped`) and `com.vaadin.flow.router.PreserveOnRefresh` as long-lived annotations; `VaadinServiceInitListener#serviceInit`. |
+| any other jar, or the application | its own, in the same file. |
+
+`<clinit>` and the call graph need no declaration.
+
+The mojo reads the file from every jar of the application's resolved runtime dependencies, and from the
+application's own `target/classes` again after every recompile. It merges them all. The startup log says
+`Hot swap: start-time declarations from 4 jars`. An unknown key, or an entry it cannot parse (a callback without
+`#` or with a bad descriptor), logs a warning naming the jar and the entry, and is skipped, never failing the build
+or the session. A declared type that no dependency has is simply never matched.
+
+To tell whether a class extends or implements a declared type, the classifier walks its supertypes: through the
+application's parsed classes, then through the class files of the dependency jars, read on demand and cached for
+the session.
+
+The file is data: nothing reads it outside `vidocq:dev`, so it stays in the extensions' main jars. That way an
+extension that has no `-dev` companion can declare too, and so can a third-party jar.
 
 ### 3. The reload request: one file, as today
 
@@ -204,8 +252,12 @@ back. The first line stays the `System.nanoTime()` it is today, which nothing re
 ```
 <nanoTime>
 redefine
-io.vidocq.tools.vaadin.MainView
+io.vidocq.tools.vaadin.MainView <init> lambda$new$0
+io.vidocq.tools.vaadin.GreetingService greet
 ```
+
+One line per class: its binary name, then the methods whose code changed. The child uses the class names. The
+method names go to the post-redefinition hooks (§5).
 
 or
 
@@ -226,7 +278,8 @@ With the agent off it keeps today's line.
 - `redefine` with the agent installed: for each listed class, the bytes come from the new Vauban method below and go
   to `HotSwap.redefine` with the layer's loader. The loop does not shut down. It writes the acknowledgement and logs
   `Hot reload - redefined 1 class in 7 ms, the application keeps running: MainView`. If no listed class is loaded yet,
-  it logs `… none of them loaded yet: they load the new code when first used`.
+  it logs `… none of them loaded yet: they load the new code when first used`. Then it hands the redefined classes to
+  the post-redefinition hooks (§5) without waiting for them.
 - `redefine` that fails (agent missing, a class whose bytes cannot be read, `RedefinitionRefused`): the loop logs
   `Hot reload - redefinition refused (<JVM reason>): restarting on a fresh application layer` and swaps. Nothing was
   redefined, since the JVM applies all or nothing.
@@ -242,8 +295,81 @@ public Optional<byte[]> VaubanClassLoader.definitionBytes(String binaryName)
 
 It reuses `classIndex`, `readClass` and `applyTransformers`, without defining anything. A Vauban test checks that it
 reads the archive again (a directory archive changed on disk returns the new bytes) and applies the transformers.
+Opened as Vidocq/vauban#317.
 
-### 5. Start-time caches
+### 5. After a redefinition: hooks in the `-dev` companions
+
+An extension can react to a redefinition. Today's case is Vaadin: a redefined view constructor shows only after
+F5. The hook is a service of the dev SPI, next to `LivePanel` in `vidocq-runtime-devconsole-spi`:
+
+```java
+/** Told after each successful redefinition of vidocq:dev; never present outside it. */
+public interface RedefinitionListener {
+    void redefined(Redefinition redefinition);
+}
+
+/** The loaded classes a redefinition changed, each with the methods whose code changed. */
+public record Redefinition(List<RedefinedClass> classes) {}
+public record RedefinedClass(Class<?> type, Set<String> methods) {}
+```
+
+**Who provides one**: a `-dev` companion only (`provides ...RedefinitionListener with ...`), the same modules as the
+live panels. No binary ever contains them, so no packaged application has a listener.
+
+**Who calls it**: `VidocqDevReloadLoop`, after a successful redefinition in which at least one listed class was
+loaded. Never after a swap or a refused redefinition. The core reaches the SPI with `requires static
+io.vidocq.runtime.spi.devconsole` and `uses ...RedefinitionListener`. It calls the listeners only when the SPI module
+is in the boot layer, the same guard as the agent's (§1). It loads the listeners at each redefinition with
+`ServiceLoader.load(appLayer, RedefinitionListener.class)`, from the current application layer. That finds the
+companions of the boot layer and those that ride in the application layer, and never a listener of a dropped layer.
+
+**On which thread**: the loop hands the redefinition to one virtual thread for the listeners and goes back to
+polling. It has already written the acknowledgement. The listeners run one after the other, one redefinition after
+the other, in order.
+
+**What a listener may do**: read the redefined classes and their method names; act on the running application
+through its framework's own API (Vaadin's `UI.access`); log.
+
+**What it may not do**, stated in the SPI's Javadoc and the panels page:
+- change the shape of a class, or redefine anything. It gets no `Instrumentation`, and the classifier has already
+  checked that only method bodies changed;
+- block. A slow listener delays only the listeners after it, never the reload loop or the next redefinition's
+  acknowledgement. It must still return quickly: `UI.access` queues, it does not wait;
+- expect to run before the new code. A request can run the redefined method before the listener is called;
+- keep state across a swap. A listener instance is created for each redefinition; state it needs (the open UIs)
+  lives in its module, in the application layer, and goes with it.
+
+An exception from a listener is logged, `Hot reload - the redefinition listener <class> failed: <exception>`, and
+ignored. The next listeners still run.
+
+**Placement of a companion that reads the application's framework.** The `-dev` companions go on the child's module
+path today, into the boot layer. A companion that reads Vaadin cannot: Vaadin rides in the application layer, with
+the Vaadin extension, which carries `Vidocq-Application-Layer: true`. So `vidocq:dev` puts a companion that carries
+that attribute on the application path instead, as the layer split does with the extension itself. The other
+companions stay where they are.
+
+**The Vaadin refresh**, in a new `vidocq-runtime-vaadin-extension-dev` (dev-only, `Vidocq-Application-Layer: true`,
+named in the Vaadin extension's `META-INF/vidocq/dev-module`):
+
+- Vaadin's own browser refresh (`BrowserLiveReload`) is only an interface in `flow-server`. Its implementation is in
+  `vaadin-dev-server`, which a production-mode application, as on Vidocq, does not have. So the companion does it
+  itself.
+- It keeps track of the open UIs: a `VaadinServiceInitListener` adds a `UIInitListener`, and each UI leaves the
+  registry when it detaches.
+- On `redefined`: when every changed method is a lambda body (`lambda$...`), it does nothing. The next event runs
+  the new code, and a refresh would lose what the page holds, such as a text field's value (the trial's first case).
+  Otherwise, it refreshes each open UI that shows a component of a redefined class (a walk of the UI's component
+  tree): `ui.access(() -> ui.getPage().reload())`.
+- With push on, `ui.access` reaches the browser at once. Without push, a small dev script delivers it. The companion
+  adds the script to the index page with an `IndexHtmlRequestListener`, and serves an event stream at
+  `/.vidocq/dev/redefined` from a servlet it registers with a `ServletContainerInitializer`. On each event, the
+  script asks the Flow client for a round trip, and the queued reload comes back with it.
+- It logs `Hot reload - Vaadin: refreshed 1 open page showing MainView`.
+
+A change to a class that is not a component, but that a view reads in its constructor, does not refresh the page.
+It shows after F5, as today. The docs say so.
+
+### 6. Start-time caches
 
 - **Vaadin.** The route registry, the `@Route`/`@PageTitle` metadata and the reflection caches (bean property sets,
   `@ClientCallable`, `@EventHandler`) are built from annotations and signatures. Any change to them alters the shape,
@@ -261,7 +387,7 @@ reads the archive again (a directory archive changed on disk returns the new byt
   memoized result, a cached template, a scheduled task) stays as computed. The swap remains one save away. The dev
   console could later offer a "swap now" action.
 
-### 6. The debugger: a redefinition clears the breakpoints of the class
+### 7. The debugger: a redefinition clears the breakpoints of the class
 
 `vidocq:dev` opens a JDWP agent by default. A trial on 2026-11-16 (Temurin 25) checked what happens to a breakpoint
 when the application redefines the class itself through `Instrumentation`. A JDI debugger set a breakpoint in
@@ -275,11 +401,14 @@ JDWP agent is loaded (the child's input arguments), the redefinition line adds `
 stop: set them again, or debug with -Dvidocq.dev.hotSwap=false`, and the debugging docs say the same. A layer swap
 keeps them working, since the new classes are new classes and the debugger sets its breakpoints again when they load.
 
-### 7. Documentation
+### 8. Documentation
 
 The usage page's "Dev reload" section gets the two paths, the rules in short, the log lines and
-`vidocq.dev.hotSwap`. The Vaadin guide's `dev-reload-session` section says that a body-only change keeps the session.
-The plugin reference lists `vidocq.dev.hotSwap` and the agent artifact.
+`vidocq.dev.hotSwap`. The Vaadin guide's `dev-reload-session` section says that a body-only change keeps the session,
+and when the open page refreshes by itself. The plugin reference lists `vidocq.dev.hotSwap` and the agent artifact.
+The extension author's pages get two sections: "Declaring start-time code" (the file of §2.1, with the core, Foy,
+Cassini and Vaadin files as examples), and, on the dev console panels page next to `LivePanel`, "Reacting to a
+redefinition" (§5, with what a listener may and may not do).
 
 ## Tests (TDD, red first)
 
@@ -292,10 +421,13 @@ The plugin reference lists `vidocq.dev.hotSwap` and the agent artifact.
     lines (redefine, for the debugger);
   - swap, for structure: a new lambda; a new or removed method or field; a changed signature or modifier; an
     annotation added or changed on the class, a method, a field or a parameter; a new superclass or interface;
-  - swap, for start-time code: a static initializer; the constructor, a field initializer and a `@PostConstruct` of
-    each long-lived scope; each entry of the annotation and callback tables; a private helper called from a
+  - swap, for start-time code: a static initializer, with no declaration at all; the constructor, a field
+    initializer and an initializer method of a class with a declared long-lived annotation, and of one extending a
+    declared long-lived type through an application superclass and through a dependency's; a method with a declared
+    start annotation; an observer of a declared start event; a declared callback; a private helper called from a
     constructor of a long-lived bean; a method of another application class called from it; an override reached
     through `invokevirtual`;
+  - the same class with no declaration: redefine. The classifier knows no technology by itself;
   - redefine, not start-time: the constructor of a class without a long-lived scope (a Vaadin view); the body of a
     lambda created in a long-lived bean's constructor;
   - swap, for files: an added, removed or anonymous class; a changed resource; `module-info`; a generated class with
@@ -303,15 +435,34 @@ The plugin reference lists `vidocq.dev.hotSwap` and the agent artifact.
   - not a change: the files of `META-INF/vidocq/build-info/` alone, which means nothing to reload;
   - nothing: identical output;
   - the reasons: `gained a method lambda$new$1` and the others.
+- **Declarations** (plugin, `StartTimeDeclarationsTest`): the file is read from a jar and from a directory; files from
+  several jars merge; an unknown key and a malformed callback each give a warning naming the jar and the entry, and the
+  other entries still apply; a jar without the file adds nothing; the startup line counts the declaring jars.
+- **Each declaring extension** (a test in its module, on its real `start-time.properties`): the file parses with no
+  warning, and a fixture class of its technology classifies as start-time through it. Core: an
+  `@ApplicationScoped` constructor and a `Startup` observer. Foy: a servlet's `init(ServletConfig)` and a listener's
+  `contextInitialized`. Cassini: `Application.getClasses()` and a `@Provider` constructor. Vaadin: a `@UIScoped`
+  constructor and `serviceInit`.
+- **A third-party jar**: a jar built in the test, declaring its own annotation and callback, makes the matching
+  application classes start-time; the application's own `target/classes` file does too.
 - **Snapshot and base**: only moved files are parsed again; a failed recompile keeps the base; the base moves only
   on an acknowledgement; the next recompile waits for the acknowledgement; a timeout or a dead child makes the next
   request a swap.
-- **Mojo**: the request content for each plan; the child's command line has the agent on both paths and in
-  `--add-modules` only when the layer mode, the hot reload and `vidocq.dev.hotSwap` are on and the agent resolved;
-  the "Hot swap off" line otherwise; the host log lines.
+- **Mojo**: the request content for each plan, with the changed methods per class; the child's command line has the
+  agent on both paths and in `--add-modules` only when the layer mode, the hot reload and `vidocq.dev.hotSwap` are on
+  and the agent resolved; the "Hot swap off" line otherwise; the host log lines; a `-dev` companion carrying
+  `Vidocq-Application-Layer: true` goes on the application path, the others on the module path.
 - **Core** (`VidocqDevReloadLoopTest`, with a stand-in redefiner): a redefine request redefines and does not shut the
   bootstrap down; a refusal swaps; no agent swaps; a request without a mode line swaps; the acknowledgement is written
   on every path; the log lines, with the breakpoint sentence only when a JDWP agent is in the input arguments.
+- **Listeners** (core): called after a redefinition with the loaded classes and their methods; not called after a
+  swap, a refusal, or a redefinition of classes none of which is loaded; a listener that throws is logged and the
+  next one runs; a listener blocked on a latch does not delay the acknowledgement nor the next redefinition; two
+  redefinitions reach the listeners in order; no SPI module in the boot layer means no listener and no failure.
+- **Vaadin `-dev` companion**: changes to lambda bodies only refresh nothing; a redefined view constructor queues a
+  reload on each UI that shows the view, and on no other; a detached UI leaves the registry; the index page gets the
+  script; the event stream sends one event per redefinition. Then, in a browser, by hand: with push and without it,
+  the open page refreshes and shows the new constructor's output, same JSESSIONID.
 - **Agent**: a test forks a JVM with a stand-in jar built in the test from the agent's classes (as
   `ConsoleLoggingProcessTest` builds its stand-in IntelliJ agent). It checks that `premain` runs in the named module,
   that a body change of a class of a child layer is redefined and live, and that an added method is refused with
@@ -323,11 +474,19 @@ The plugin reference lists `vidocq.dev.hotSwap` and the agent artifact.
 
 ## Delivery
 
-1. Vauban: `definitionBytes` (one pull request), merged and published.
-2. Vidocq: the agent module, the core changes, the classifier, the mojo and the docs, in one pull request on
-   `feat/dev-hotswap`. The usual gates apply: quality profile and integration tests on the whole reactor, then the
-   local Sonar analysis before the push.
-3. Replay on vaadin-on-vidocq.
+1. Vauban: `definitionBytes` (Vidocq/vauban#317), merged and published.
+2. Vidocq, three pull requests in order, each with the usual gates (quality profile and integration tests on the
+   whole reactor, then the local Sonar analysis before the push):
+   1. **Declarations and classifier**: the `start-time.properties` of the core, Foy, Cassini and Vaadin
+      extensions; their reader; the snapshot, the classifier and the base; the mojo waiting for the acknowledgement;
+      the request file with its mode line. Without the agent, every request is still a swap, now with its reason in
+      the log, and an unchanged output reloads nothing.
+   2. **Agent and redefinition**: the agent module, the child's command line, the redefinition in the reload loop,
+      the debugger warning, the docs of the two paths.
+   3. **Listeners and the Vaadin refresh**: `RedefinitionListener` in the dev SPI, its call in the loop, the
+      application-layer placement of a companion, `vidocq-runtime-vaadin-extension-dev`, the docs.
+3. Replay on vaadin-on-vidocq after each Vidocq merge, with the published snapshots. The application needs the Vaadin
+   extension as a dependency for the Vaadin declarations and the refresh.
 
 ## Decisions (Yann, 2026-11-16)
 
@@ -336,8 +495,13 @@ The plugin reference lists `vidocq.dev.hotSwap` and the agent artifact.
    from all of these. Edits to a Vaadin view's constructor are redefined and visible after F5 with the session kept.
    The stricter alternative, every constructor swaps, is not taken.
 2. **Breakpoints**: a redefinition silently clears the breakpoints of the redefined class, and that is acceptable. The
-   log and the docs warn about it (§6), and `-Dvidocq.dev.hotSwap=false` is the way to debug without it. The fast
+   log and the docs warn about it (§7), and `-Dvidocq.dev.hotSwap=false` is the way to debug without it. The fast
    path stays on while the JDWP agent is on.
+3. **Start-time lists come from the extensions** (§2.1): each extension jar declares the long-lived annotations and
+   types and the start callbacks of its technology. The core declares CDI, `<clinit>` needs no declaration, and the
+   plugin names no Servlet, JAX-RS or Vaadin type. An unknown or malformed entry is a warning naming the jar.
+4. **Post-redefinition hooks** (§5): a service of the `-dev` companions, called in the child after a successful
+   redefinition, never present outside `vidocq:dev`. The first one is Vaadin's refresh of the open pages.
 
 ## Calls made in this design (to check)
 
@@ -350,9 +514,25 @@ The plugin reference lists `vidocq.dev.hotSwap` and the agent artifact.
   artifact but leaves a dormant `Premain-Class` in every packaged core.
 - The definition bytes come from a new additive Vauban method, not from the raw file.
 - The fast path is on by default (`vidocq.dev.hotSwap=true`).
+- The declarations are a properties file in the extensions' main jars, not in their `-dev` companions. It is data
+  nothing reads outside `vidocq:dev`, and that way an extension without a companion, a third-party jar or the
+  application can declare too.
+- The listener SPI is in `vidocq-runtime-devconsole-spi`, next to `LivePanel`. The core reaches it with `requires
+  static`, as it reaches the agent.
+- The listeners run on one virtual thread, in order, after the acknowledgement.
+- A `-dev` companion that carries `Vidocq-Application-Layer: true` goes on the application path.
+- The request file lists the changed methods of each class, for the listeners.
+- The Vaadin refresh: nothing when only lambda bodies changed; otherwise a reload of the UIs that show a component of
+  a redefined class, queued with `UI.access`, reaching the browser through push or, without push, through a dev
+  script and an event stream served by the companion.
 
 ## Left to the builder
 
 - The names of the classes inside the plugin, and how the snapshot is stored in memory.
 - How instructions are rendered for the comparison, provided operands are compared resolved.
 - The exact wording of the log lines, within the shapes above.
+- How the dev script asks the Flow client for a round trip. To check on Vaadin 25 in production mode: the client's
+  `poll()` in `Vaadin.Flow.clients`. If it is missing there, the event names the UIs to reload, and the script
+  reloads the page itself.
+- How the Vaadin companion's `VaadinServiceInitListener` and `ServletContainerInitializer` are found from the
+  application layer, given the Vaadin extension's own lookup.
