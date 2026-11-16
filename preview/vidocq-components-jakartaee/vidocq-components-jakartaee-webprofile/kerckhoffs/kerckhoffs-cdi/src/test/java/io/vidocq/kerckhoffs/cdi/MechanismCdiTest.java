@@ -74,6 +74,11 @@ class MechanismCdiTest {
     }
 
     @Test
+    void aQualifierThatIsNotOneIsRefusedNotIgnored() {
+        assertThrows(RuntimeException.class, () -> start(MemoryApplication.class, NotAQualifierApplication.class));
+    }
+
+    @Test
     void anExpressionForTheForwardFlagIsRefusedNotIgnored() {
         assertThrows(RuntimeException.class, () -> start(ExpressionFormApplication.class));
     }

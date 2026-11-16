@@ -29,6 +29,7 @@ import jakarta.enterprise.lang.model.AnnotationInfo;
 import jakarta.enterprise.lang.model.AnnotationMember;
 import jakarta.enterprise.lang.model.declarations.ClassInfo;
 import jakarta.enterprise.inject.spi.DeploymentException;
+import jakarta.inject.Qualifier;
 import jakarta.inject.Singleton;
 import jakarta.security.enterprise.authentication.mechanism.http.BasicAuthenticationMechanismDefinition;
 import jakarta.security.enterprise.authentication.mechanism.http.FormAuthenticationMechanismDefinition;
@@ -173,13 +174,20 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
         }
         for (AnnotationMember qualifier : named) {
             String name = qualifier.asType().asClass().declaration().name();
+            Class<?> type;
             try {
-                builder.qualifier(Class.forName(name, false, Thread.currentThread().getContextClassLoader())
-                        .asSubclass(Annotation.class));
-            } catch (ClassNotFoundException | ClassCastException e) {
+                // Loaded, never initialized: nothing of the deployment runs here. Only a qualifier is kept.
+                // nosemgrep: the name is the one the application wrote in its own definition, checked below
+                type = Class.forName(name, false, Thread.currentThread().getContextClassLoader());
+            } catch (ClassNotFoundException e) {
                 throw new DeploymentException("The qualifier " + name + " of the mechanism declared by "
-                        + declared.origin() + " is not an annotation the deployment can load", e);
+                        + declared.origin() + " is not a class the deployment can load", e);
             }
+            if (!type.isAnnotation() || !type.isAnnotationPresent(Qualifier.class)) {
+                throw new DeploymentException("The qualifier " + name + " of the mechanism declared by "
+                        + declared.origin() + " is not a qualifier annotation");
+            }
+            builder.qualifier(type.asSubclass(Annotation.class));
         }
     }
 
