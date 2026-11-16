@@ -79,4 +79,30 @@ class VidocqDevReloadLoopTest {
             bootstrap.shutdown();
         }
     }
+    @Test
+    void theSwapLineCarriesTheReason(@TempDir Path dir) throws Exception {
+        Path reload = Files.writeString(dir.resolve(".vidocq-dev-reload"),
+                "42\nswap MainView gained a method lambda$new$1\n");
+
+        assertEquals("Hot reload - restarting on a fresh application layer: MainView gained a method lambda$new$1",
+                VidocqDevReloadLoop.swapLine(reload));
+    }
+
+    /** A host plugin older than the hot swap writes the nanoTime alone, and one without declarations does too. */
+    @Test
+    void aFileWithoutAModeLineKeepsTodaysLine(@TempDir Path dir) throws Exception {
+        Path reload = Files.writeString(dir.resolve(".vidocq-dev-reload"), "42\n");
+
+        assertEquals("Hot reload - restarting on a fresh application layer", VidocqDevReloadLoop.swapLine(reload));
+        assertEquals("Hot reload - restarting on a fresh application layer",
+                VidocqDevReloadLoop.swapLine(dir.resolve("absent")));
+    }
+
+    @Test
+    void aRedefineRequestSwapsInThisRuntime(@TempDir Path dir) throws Exception {
+        Path reload = Files.writeString(dir.resolve(".vidocq-dev-reload"), "42\nredefine\napp.MainView greet\n");
+
+        assertEquals("Hot reload - restarting on a fresh application layer: this runtime cannot redefine classes",
+                VidocqDevReloadLoop.swapLine(reload));
+    }
 }

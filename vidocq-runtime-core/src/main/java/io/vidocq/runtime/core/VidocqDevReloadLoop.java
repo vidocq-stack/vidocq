@@ -81,8 +81,7 @@ final class VidocqDevReloadLoop {
             lastSignal = reload.getAsLong();
 
             long t0 = System.nanoTime();
-            LOG.log(System.Logger.Level.INFO,
-                    "Hot reload - restarting on a fresh application layer");
+            LOG.log(System.Logger.Level.INFO, swapLine(reloadFile));
             bootstrap.shutdown();
             VidocqAppLayer.resetForReload();
             long elapsed = (System.nanoTime() - t0) / 1_000_000;
@@ -104,6 +103,26 @@ final class VidocqDevReloadLoop {
             }
         }
         return OptionalLong.empty();
+    }
+
+    /**
+     * The line of a swap, with the reason the host wrote in the request (design §3): {@code Hot reload - restarting on
+     * a fresh application layer: MainView gained a method lambda$new$1}. A file without a mode line, from an older
+     * host or one with no start-time declarations, gives today's line.
+     */
+    static String swapLine(Path reloadFile) {
+        String line = "Hot reload - restarting on a fresh application layer";
+        String content;
+        try {
+            content = Files.readString(reloadFile);
+        } catch (IOException _) {
+            return line;
+        }
+        String reason = switch (ReloadRequest.parse(content)) {
+            case ReloadRequest.Swap swap -> swap.reason();
+            case ReloadRequest.Redefine _ -> "this runtime cannot redefine classes";
+        };
+        return reason.isEmpty() ? line : line + ": " + reason;
     }
 
     /** {@code <reload file>.ready}, next to it. */
