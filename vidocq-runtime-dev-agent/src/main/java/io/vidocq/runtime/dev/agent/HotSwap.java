@@ -28,6 +28,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 /**
@@ -39,19 +40,23 @@ import java.util.function.Function;
  */
 public final class HotSwap {
 
-    private static volatile Instrumentation instrumentation;
+    private static final AtomicReference<Instrumentation> INSTRUMENTATION = new AtomicReference<>();
 
     private HotSwap() {
     }
 
-    /** Called by the JVM before {@code main}: keeps its {@code Instrumentation}. */
+    /**
+     * Called by the JVM before {@code main}: keeps its {@code Instrumentation}. The JVM looks for this signature, so
+     * {@code args} stays, unused: the agent takes no option.
+     */
+    @SuppressWarnings("java:S1172")
     public static void premain(String args, Instrumentation instrumentation) {
-        HotSwap.instrumentation = instrumentation;
+        INSTRUMENTATION.set(instrumentation);
     }
 
     /** Whether the JVM started with this agent and can redefine classes. */
     public static boolean installed() {
-        Instrumentation current = instrumentation;
+        Instrumentation current = INSTRUMENTATION.get();
         return current != null && current.isRedefineClassesSupported();
     }
 
@@ -65,7 +70,7 @@ public final class HotSwap {
      */
     public static Outcome redefine(ClassLoader loader, Collection<String> names, Function<String, byte[]> bytes)
             throws RedefinitionRefused {
-        Instrumentation current = instrumentation;
+        Instrumentation current = INSTRUMENTATION.get();
         if (current == null) {
             throw new IllegalStateException("the hot swap agent is not installed: the JVM started without -javaagent");
         }

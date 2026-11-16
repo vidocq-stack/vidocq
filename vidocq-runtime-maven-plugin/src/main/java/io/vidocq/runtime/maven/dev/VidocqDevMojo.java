@@ -1098,8 +1098,11 @@ public class VidocqDevMojo extends AbstractMojo {
 
         /** The startup line without an agent: {@code Hot swap off: vidocq.dev.hotSwap=false, every change ...}. */
         Optional<String> offLine(boolean inJvmReload) {
-            return jar != null ? Optional.empty() : Optional.of("Hot swap off: " + off + ", every change "
-                    + (inJvmReload ? "swaps the application layer" : "restarts the application"));
+            if (jar != null) {
+                return Optional.empty();
+            }
+            String change = inJvmReload ? "swaps the application layer" : "restarts the application";
+            return Optional.of("Hot swap off: " + off + ", every change " + change);
         }
     }
 

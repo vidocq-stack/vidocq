@@ -57,7 +57,7 @@ public final class HotSwapChildMain {
         ClassLoader loader = layer.findLoader("greeter");
         @SuppressWarnings("unchecked")
         Supplier<String> greeter = ServiceLoader.load(layer, Supplier.class).stream()
-                .filter(provider -> provider.type().getName().equals("p.Greeter"))
+                .filter(provider -> layer.modules().contains(provider.type().getModule()))
                 .map(provider -> (Supplier<String>) provider.get())
                 .findFirst().orElseThrow();
         System.out.println("BEFORE " + greeter.get());

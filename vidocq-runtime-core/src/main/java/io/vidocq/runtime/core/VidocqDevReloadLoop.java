@@ -158,8 +158,8 @@ final class VidocqDevReloadLoop {
                 ClassRedefinition.Result result = redefine.apply(redefinition);
                 long millis = (System.nanoTime() - t0) / 1_000_000;
                 yield switch (result) {
-                    case ClassRedefinition.Refused refused -> new Answer("Hot reload - redefinition refused ("
-                            + refused.reason() + "): restarting on a fresh application layer", false);
+                    case ClassRedefinition.Refused(String reason) -> new Answer("Hot reload - redefinition refused ("
+                            + reason + "): restarting on a fresh application layer", false);
                     case ClassRedefinition.Done done -> new Answer(redefinedLine(done, millis, jdwp), true);
                 };
             }
