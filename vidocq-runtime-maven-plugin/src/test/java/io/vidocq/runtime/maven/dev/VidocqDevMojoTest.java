@@ -785,6 +785,67 @@ class VidocqDevMojoTest {
                         dir.resolve("src/extra/java").toString()), build));
     }
 
+    // The hot swap agent (design §1, "Version" and "Opt-out")
+
+    private static final Path AGENT_JAR = Path.of("/repo/vidocq-runtime-dev-agent-0.4.0.jar");
+
+    @Test
+    void theAgentIsOnBothPathsOnlyWhenLayerHotReloadAndHotSwapAreOn() {
+        var choice = VidocqDevMojo.agentChoice(true, true, true, "0.4.0", _ -> Optional.of(AGENT_JAR));
+        List<Path> modulePath = new ArrayList<>(List.of(Path.of("/repo/core.jar")));
+        List<String> jvmArgs = new ArrayList<>(List.of("-Xmx1g"));
+
+        VidocqDevMojo.addAgent(choice, modulePath, jvmArgs);
+
+        assertEquals(new VidocqDevMojo.AgentChoice(AGENT_JAR, null), choice);
+        assertEquals(List.of(Path.of("/repo/core.jar"), AGENT_JAR), modulePath);
+        assertEquals(List.of("-Xmx1g", "--add-modules", "io.vidocq.runtime.dev.agent", "-javaagent:" + AGENT_JAR),
+                jvmArgs);
+    }
+
+    @Test
+    void hotSwapOffSaysWhy() {
+        Function<String, Optional<Path>> found = _ -> Optional.of(AGENT_JAR);
+        assertEquals(new VidocqDevMojo.AgentChoice(null, "vidocq.dev.hotSwap=false"),
+                VidocqDevMojo.agentChoice(true, true, false, "0.4.0", found));
+        assertEquals(new VidocqDevMojo.AgentChoice(null, "vidocq.dev.layer=false"),
+                VidocqDevMojo.agentChoice(false, true, true, "0.4.0", found));
+        assertEquals(new VidocqDevMojo.AgentChoice(null, "vidocq.dev.hotReload=false"),
+                VidocqDevMojo.agentChoice(true, false, true, "0.4.0", found));
+        assertEquals(new VidocqDevMojo.AgentChoice(null, "vidocq-runtime-dev-agent 0.3.0 not found"),
+                VidocqDevMojo.agentChoice(true, true, true, "0.3.0", _ -> Optional.empty()));
+    }
+
+    @Test
+    void theOffLineSaysWhatEachChangeDoes() {
+        assertEquals("Hot swap off: vidocq.dev.hotSwap=false, every change swaps the application layer",
+                new VidocqDevMojo.AgentChoice(null, "vidocq.dev.hotSwap=false").offLine(true).orElseThrow());
+        assertEquals("Hot swap off: vidocq.dev.hotReload=false, every change restarts the application",
+                new VidocqDevMojo.AgentChoice(null, "vidocq.dev.hotReload=false").offLine(false).orElseThrow());
+        assertTrue(new VidocqDevMojo.AgentChoice(AGENT_JAR, null).offLine(true).isEmpty());
+    }
+
+    @Test
+    void theAgentFollowsTheApplicationsCoreVersion() {
+        var core = new org.apache.maven.artifact.DefaultArtifact("io.vidocq.runtime", "vidocq-runtime-core",
+                "0.4.0-20261116.152407-61", "compile", "jar", "",
+                new org.apache.maven.artifact.handler.DefaultArtifactHandler("jar"));
+
+        assertEquals("0.4.0-SNAPSHOT", VidocqDevMojo.coreVersion(List.of(core), "0.5.0"));
+        assertEquals("0.5.0", VidocqDevMojo.coreVersion(List.of(), "0.5.0"));
+    }
+
+    @Test
+    void withoutTheAgentNothingIsAdded() {
+        List<Path> modulePath = new ArrayList<>();
+        List<String> jvmArgs = new ArrayList<>();
+
+        VidocqDevMojo.addAgent(new VidocqDevMojo.AgentChoice(null, "vidocq.dev.hotSwap=false"), modulePath, jvmArgs);
+
+        assertEquals(List.of(), modulePath);
+        assertEquals(List.of(), jvmArgs);
+    }
+
     /** Without Chappe there is no console, so vidocq:dev adds no dev tool at all, not even a companion. */
     @Test
     void withoutChappeNoDevToolIsAdded(@TempDir Path dir) throws Exception {

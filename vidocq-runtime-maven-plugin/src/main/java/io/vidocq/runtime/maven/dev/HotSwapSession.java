@@ -41,7 +41,7 @@ final class HotSwapSession {
     private final List<Path> classRoots;
     private final List<Path> projectSourceRoots;
     private final StartTimeDeclarations dependencyDeclarations;
-    private final boolean redefineAvailable;
+    private final String redefinitionOff;
     private final Consumer<String> warn;
     private SupertypeIndex supertypes;
     private ClassesSnapshot base;
@@ -50,12 +50,12 @@ final class HotSwapSession {
     private boolean lost;
 
     private HotSwapSession(List<Path> classRoots, List<Path> projectSourceRoots,
-            StartTimeDeclarations dependencyDeclarations, List<Path> dependencyJars, boolean redefineAvailable,
+            StartTimeDeclarations dependencyDeclarations, List<Path> dependencyJars, String redefinitionOff,
             Consumer<String> warn) {
         this.classRoots = List.copyOf(classRoots);
         this.projectSourceRoots = List.copyOf(projectSourceRoots);
         this.dependencyDeclarations = dependencyDeclarations;
-        this.redefineAvailable = redefineAvailable;
+        this.redefinitionOff = redefinitionOff;
         this.warn = warn;
         this.base = ClassesSnapshot.take(this.classRoots, ClassesSnapshot.EMPTY);
         this.latest = base;
@@ -65,12 +65,13 @@ final class HotSwapSession {
     /**
      * Opens the session on the output of the first build.
      *
-     * @param redefineAvailable {@code false} while the child cannot redefine classes: a body-only change then swaps,
-     *                          saying so
+     * @param redefinitionOff {@code null} when the child redefines classes; otherwise why it cannot, such as
+     *                        {@code class redefinition is off: vidocq.dev.hotSwap=false}: a body-only change then
+     *                        swaps, saying so
      * @return empty when no jar and no class root declares anything: today's reload, byte for byte
      */
     static Optional<HotSwapSession> open(List<Path> classRoots, List<Path> projectSourceRoots,
-            List<Path> dependencyJars, boolean redefineAvailable, Consumer<String> info, Consumer<String> warn) {
+            List<Path> dependencyJars, String redefinitionOff, Consumer<String> info, Consumer<String> warn) {
         Consumer<String> once = once(warn);
         var fromJars = StartTimeDeclarations.read(dependencyJars, once);
         var fromApplication = StartTimeDeclarations.read(classRoots, once);
@@ -83,7 +84,7 @@ final class HotSwapSession {
         info.accept("Hot swap: start-time declarations from " + jars + (jars == 1 ? " jar" : " jars")
                 + (fromApplication.isEmpty() ? "" : " and the application"));
         return Optional.of(new HotSwapSession(classRoots, projectSourceRoots, fromJars, dependencyJars,
-                redefineAvailable, once));
+                redefinitionOff, once));
     }
 
     /** After a successful recompile: what the child should do. Empty: nothing to reload. */
@@ -119,12 +120,12 @@ final class HotSwapSession {
     }
 
     private ReloadRequest available(ReloadRequest request) {
-        if (redefineAvailable || !(request instanceof ReloadRequest.Redefine redefine)) {
+        if (redefinitionOff == null || !(request instanceof ReloadRequest.Redefine redefine)) {
             return request;
         }
         int classes = redefine.methodsByClass().size();
         return new ReloadRequest.Swap(classes + (classes == 1 ? " class" : " classes")
-                + " changed in method bodies only; class redefinition is not available yet");
+                + " changed in method bodies only; " + redefinitionOff);
     }
 
     /** The same warning once per session: the application's own file is read again after each recompile. */

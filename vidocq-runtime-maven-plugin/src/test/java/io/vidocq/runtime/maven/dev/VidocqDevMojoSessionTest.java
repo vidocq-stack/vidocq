@@ -100,6 +100,8 @@ class VidocqDevMojoSessionTest {
         mojo.setAppLayer("classes");
         mojo.setLayerMode(true);
         mojo.setHotReload(true);
+        // No repository system here to resolve the hot swap agent: theAgentIsOnBothPaths... covers the launch.
+        mojo.setHotSwap(false);
         mojo.setProfile("dev");
         mojo.setDevServices(false);
         mojo.setContinuousTesting(continuousTesting);

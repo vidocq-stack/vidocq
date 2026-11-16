@@ -314,6 +314,14 @@ public class VidocqDevMojo extends AbstractMojo {
     @Parameter(defaultValue = "${plugin.version}", readonly = true, required = true)
     private String pluginVersion;
 
+    /**
+     * Redefines the application's classes in place when a change touches method bodies only: the child starts with
+     * the {@code vidocq-runtime-dev-agent} agent (hot swap design §1). {@code false}: no agent, every change swaps the
+     * application layer, and the breakpoints of a debugger keep working.
+     */
+    @Parameter(property = "vidocq.dev.hotSwap", defaultValue = "true")
+    private boolean hotSwapEnabled = true;
+
     /** The port of an unset {@link #debugPort}: {@link JdwpAgent#DEFAULT_PORT}, another one in the unit tests only. */
     private int defaultDebugPort = JdwpAgent.DEFAULT_PORT;
 
@@ -350,13 +358,19 @@ public class VidocqDevMojo extends AbstractMojo {
         // application layer when we touch it (after a successful recompile).
         boolean inJvmReload = layerMode && hotReload;
         Path reloadFile = buildDir.toPath().resolve(".vidocq-dev-reload");
+        AgentChoice agent = agentChoice(layerMode, hotReload, hotSwapEnabled,
+                coreVersion(project.getArtifacts(), pluginVersion), this::resolveAgent);
+        agent.offLine(inJvmReload).ifPresent(getLog()::info);
         if (inJvmReload) {
             createReloadSignal(reloadFile, sysProps);
             hotSwap = HotSwapSession.open(classRoots(layered.appPath()),
                     projectSourceRoots(project.getCompileSourceRoots(), buildDirPath()),
-                    dependencyJars(modulePath, layered.appPath()), false, getLog()::info, getLog()::warn)
+                    dependencyJars(modulePath, layered.appPath()),
+                    agent.jar() != null ? null : "class redefinition is off: " + agent.off(),
+                    getLog()::info, getLog()::warn)
                     .orElse(null);
         }
+        addAgent(agent, modulePath, jvmArgs);
         jvmArgs = withPatchModuleArgs(jvmArgs);
         logStartup(watch, modulePath);
 
@@ -1069,6 +1083,80 @@ public class VidocqDevMojo extends AbstractMojo {
         }
     }
 
+    /** The module of the hot swap agent, {@code vidocq-runtime-dev-agent}. */
+    static final String AGENT_MODULE = "io.vidocq.runtime.dev.agent";
+
+    private static final String AGENT_ARTIFACT = "vidocq-runtime-dev-agent";
+
+    /**
+     * The hot swap agent of the child, or why it runs without one.
+     *
+     * @param jar the agent's jar, {@code null} without it
+     * @param off why there is no agent, such as {@code vidocq.dev.hotSwap=false}; {@code null} with it
+     */
+    record AgentChoice(Path jar, String off) {
+
+        /** The startup line without an agent: {@code Hot swap off: vidocq.dev.hotSwap=false, every change ...}. */
+        Optional<String> offLine(boolean inJvmReload) {
+            return jar != null ? Optional.empty() : Optional.of("Hot swap off: " + off + ", every change "
+                    + (inJvmReload ? "swaps the application layer" : "restarts the application"));
+        }
+    }
+
+    /**
+     * The agent only with the layer mode, the in-JVM reload and {@code vidocq.dev.hotSwap} on, and when
+     * {@code resolve} finds it at {@code version}: a runtime older than the agent has none (design §1).
+     */
+    static AgentChoice agentChoice(boolean layerMode, boolean hotReload, boolean hotSwap, String version,
+            Function<String, Optional<Path>> resolve) {
+        if (!layerMode) {
+            return new AgentChoice(null, "vidocq.dev.layer=false");
+        }
+        if (!hotReload) {
+            return new AgentChoice(null, "vidocq.dev.hotReload=false");
+        }
+        if (!hotSwap) {
+            return new AgentChoice(null, "vidocq.dev.hotSwap=false");
+        }
+        return resolve.apply(version).map(jar -> new AgentChoice(jar, null))
+                .orElseGet(() -> new AgentChoice(null, AGENT_ARTIFACT + " " + version + " not found"));
+    }
+
+    /**
+     * Puts the agent on the child's module path, resolves its module and names its jar in {@code -javaagent}: the JVM
+     * then loads {@code premain} from the named module, the one the core reads (design §1).
+     */
+    static void addAgent(AgentChoice agent, List<Path> modulePath, List<String> jvmArgs) {
+        if (agent.jar() == null) {
+            return;
+        }
+        modulePath.add(agent.jar());
+        jvmArgs.addAll(List.of("--add-modules", AGENT_MODULE, "-javaagent:" + agent.jar()));
+    }
+
+    /**
+     * The base version of the application's {@code vidocq-runtime-core}, which the agent follows; {@code fallback}
+     * without it.
+     */
+    static String coreVersion(Collection<Artifact> projectArtifacts, String fallback) {
+        return projectArtifacts.stream()
+                .filter(artifact -> "io.vidocq.runtime".equals(artifact.getGroupId())
+                        && "vidocq-runtime-core".equals(artifact.getArtifactId()))
+                .map(Artifact::getBaseVersion).findFirst().orElse(fallback);
+    }
+
+    /** The agent's jar at {@code version}, from the project's and the plugin repositories; empty when not found. */
+    private Optional<Path> resolveAgent(String version) {
+        ArtifactRequest request = new ArtifactRequest();
+        request.setArtifact(new DefaultArtifact("io.vidocq.runtime", AGENT_ARTIFACT, "jar", version));
+        request.setRepositories(DevConsoleJars.repositories(remoteRepos, pluginRepos));
+        try {
+            return Optional.of(repoSystem.resolveArtifact(repoSession, request).getArtifact().getFile().toPath());
+        } catch (ArtifactResolutionException _) {
+            return Optional.empty();
+        }
+    }
+
     /**
      * {@code coordinates} and the runtime dependencies it needs, through Maven's own resolution and repositories: not
      * its optional ones ({@link DevModules#WITHOUT_OPTIONAL}).
@@ -1274,5 +1362,6 @@ public class VidocqDevMojo extends AbstractMojo {
     void setWatchDirs(String watchDirs) { this.watchDirs = watchDirs; }
     void setTestWatchDirs(String testWatchDirs) { this.testWatchDirs = testWatchDirs; }
     void setHotReload(boolean hotReload) { this.hotReload = hotReload; }
+    void setHotSwap(boolean hotSwap) { this.hotSwapEnabled = hotSwap; }
     List<String> debugJvmArgs() { return buildJvmArgs(); }
 }

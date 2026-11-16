@@ -51,7 +51,7 @@ class HotSwapSessionTest {
         var project = new HotSwapProject(dir, List.of());
         project.apply(build().source("app/A.java", A.formatted("1", "1")));
 
-        var session = HotSwapSession.open(List.of(project.classes), List.of(project.src), List.of(plainJar()), true,
+        var session = HotSwapSession.open(List.of(project.classes), List.of(project.src), List.of(plainJar()), null,
                 info::add, warnings::add);
 
         assertTrue(session.isEmpty());
@@ -65,7 +65,7 @@ class HotSwapSessionTest {
         project.apply(build().source("app/A.java", A.formatted("1", "1")));
 
         HotSwapSession.open(List.of(project.classes), List.of(project.src),
-                List.of(declaringJar("one"), plainJar(), declaringJar("two")), true, info::add, warnings::add);
+                List.of(declaringJar("one"), plainJar(), declaringJar("two")), null, info::add, warnings::add);
 
         assertEquals(List.of("Hot swap: start-time declarations from 2 jars"), info);
     }
@@ -76,7 +76,7 @@ class HotSwapSessionTest {
         project.apply(build().source("app/A.java", A.formatted("1", "1"))
                 .resource(StartTimeDeclarations.FILE, "long-lived-annotations = app.Keep\n"));
 
-        HotSwapSession.open(List.of(project.classes), List.of(project.src), List.of(declaringJar("one")), true,
+        HotSwapSession.open(List.of(project.classes), List.of(project.src), List.of(declaringJar("one")), null,
                 info::add, warnings::add);
 
         assertEquals(List.of("Hot swap: start-time declarations from 1 jar and the application"), info);
@@ -162,13 +162,15 @@ class HotSwapSessionTest {
         project.apply(build().source("app/A.java", A.formatted("1", "1"))
                 .source("app/B.java", A.replace("class A", "class B").formatted("1", "1")));
         var session = HotSwapSession.open(List.of(project.classes), List.of(project.src),
-                List.of(declaringJar("one")), false, info::add, warnings::add).orElseThrow();
+                List.of(declaringJar("one")), "class redefinition is off: vidocq.dev.hotSwap=false", info::add,
+                warnings::add).orElseThrow();
 
         project.apply(build().source("app/A.java", A.formatted("2", "1"))
                 .source("app/B.java", A.replace("class A", "class B").formatted("2", "1")));
 
         assertEquals(Optional.of(new ReloadRequest.Swap(
-                "2 classes changed in method bodies only; class redefinition is not available yet")), session.next());
+                "2 classes changed in method bodies only; class redefinition is off: vidocq.dev.hotSwap=false")),
+                session.next());
     }
 
     @Test
@@ -192,7 +194,7 @@ class HotSwapSessionTest {
     }
 
     private HotSwapSession open(HotSwapProject project) {
-        return HotSwapSession.open(List.of(project.classes), List.of(project.src), List.of(declaringJar("one")), true,
+        return HotSwapSession.open(List.of(project.classes), List.of(project.src), List.of(declaringJar("one")), null,
                 info::add, warnings::add).orElseThrow();
     }
 
