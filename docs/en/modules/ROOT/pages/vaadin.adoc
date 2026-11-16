@@ -360,8 +360,9 @@ Vaadin session and its UIs are written out at the stop and read back with the ne
 the reload`, and the open page keeps its state. It keeps the view the old code built, too: a listener that the
 view's constructor now adds is not on it, and shows once the page reloads, which builds the view again in the same
 session. The page opens its event stream again on the new layer once the
-browser's retry delay passed, a few seconds; from then on a redefinition refreshes it as before. A rule of `vidocq:dev` drops the session when a class gained, lost or
-retyped an instance field, or when its lambdas moved, and says why: `Hot reload - HTTP sessions not kept: MainView's
+browser's retry delay passed, a few seconds; from then on a redefinition refreshes it as before. A rule of
+`vidocq:dev` drops the session when a serializable class, a view for instance, gained, lost or retyped an instance
+field, or when its listeners moved, lambdas or anonymous classes, and says why: `Hot reload - HTTP sessions not kept: MainView's
 lambdas moved, and a restored listener could run another one's code`. `-Dvidocq.dev.keepSessions=false` drops it at
 every swap. A dropped session is invalidated, `Undeploying the servlet application invalidated 1 HTTP session: its
 client starts a new one on its next request`, and the open page reloads on its next request, as after a session
