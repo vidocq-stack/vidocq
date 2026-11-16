@@ -29,6 +29,8 @@ module io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev {
     // The document of IndexHtmlResponse.
     requires org.jsoup;
     requires jakarta.servlet;
+    // The components foy-processor generates for the event stream; Foy brings the module at run time.
+    requires static io.vidocq.foy.api;
     requires io.vidocq.runtime.spi.devconsole;
 
     provides io.vidocq.runtime.spi.devconsole.RedefinitionListener

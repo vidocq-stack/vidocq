@@ -38,6 +38,12 @@
             <artifactId>jakarta.servlet-api</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- The interface of the components foy-processor generates; Foy brings it at run time. -->
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -66,6 +72,16 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Foy creates the event stream's servlet and its initializer through the components
+                         foy-processor generates, not by reflection (a warning at every start otherwise). -->
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.foy</groupId>
+                            <artifactId>foy-processor</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
                 <executions>
                     <!-- module-info.java requires flow-server under both of its names, static, as the Vaadin
                          extension does: the extension's empty stand-in, never packaged, is com.vaadin.flow.server. -->
