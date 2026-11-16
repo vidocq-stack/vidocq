@@ -203,7 +203,7 @@ public final class CliParser {
             switch (arg) {
                 case CHECK      -> check = "true";
                 case "--strict" -> check = "strict";
-                case "--kind"   -> kind  = next(it, "--kind");
+                case KIND       -> kind  = next(it, KIND);
                 default         -> unknownOpt(arg, "idea");
             }
         }
