@@ -156,7 +156,56 @@ class FoyExtensionTest {
 
     @Test
     void aFailureClosingTheDeploymentsIsLoggedAsAnErrorNamingTheExtension() {
-        Logger logger = Logger.getLogger(FoyExtension.class.getName());
+        List<LogRecord> records = logsOf(FoyExtension.class, FoyExtension.failureLogged(() -> {
+            throw new IllegalStateException("boom");
+        }));
+
+        assertEquals(1, records.size());
+        assertEquals(Level.SEVERE, records.getFirst().getLevel());
+        assertTrue(records.getFirst().getMessage().contains("servlet-foy"));
+        assertEquals("boom", records.getFirst().getThrown().getMessage());
+    }
+
+    /**
+     * An undeploy invalidates the sessions of the application: under {@code vidocq:dev}, each in-JVM reload does, and an
+     * open page then starts a new session (a Vaadin UI reloads). The log says so, with the count, instead of leaving
+     * the user to guess why the page lost its state.
+     */
+    @Test
+    void closingTheDeploymentsSaysHowManySessionsItInvalidated(@TempDir Path root) throws Exception {
+        FoyDeployments deployments = new FoyDeployments();
+        FoyChappeBoot.Mounted mounted = FoyDeployments.deploy(null, loaderWith(root, WEB_XML), null,
+                1800, "UTF-8", config(Map.of())).orElseThrow();
+        deployments.register("vidocq.servlet", "default", mounted);
+        mounted.deployment().sessionManager().createNew();
+        mounted.deployment().sessionManager().createNew();
+        int[] invalidated = new int[1];
+
+        List<LogRecord> records = logsOf(FoyDeployments.class, () -> invalidated[0] = deployments.closeAll());
+
+        assertEquals(2, invalidated[0]);
+        assertEquals(1, records.size(), records.toString());
+        assertEquals(Level.INFO, records.getFirst().getLevel());
+        assertEquals("Undeploying the servlet application invalidated 2 HTTP sessions: their clients start new ones "
+                + "on their next request", records.getFirst().getMessage());
+    }
+
+    @Test
+    void anUndeployWithoutSessionsSaysNothingAboutThem(@TempDir Path root) throws Exception {
+        FoyDeployments deployments = new FoyDeployments();
+        deployments.register("vidocq.servlet", "default", FoyDeployments.deploy(null, loaderWith(root, WEB_XML), null,
+                1800, "UTF-8", config(Map.of())).orElseThrow());
+        int[] invalidated = {-1};
+
+        List<LogRecord> records = logsOf(FoyDeployments.class, () -> invalidated[0] = deployments.closeAll());
+
+        assertEquals(0, invalidated[0]);
+        assertEquals(List.of(), records);
+    }
+
+    /** The records {@code type}'s logger publishes while {@code action} runs. */
+    private static List<LogRecord> logsOf(Class<?> type, Runnable action) {
+        Logger logger = Logger.getLogger(type.getName());
         List<LogRecord> records = new ArrayList<>();
         java.util.logging.Handler handler = new java.util.logging.Handler() {
             @Override
@@ -178,19 +227,12 @@ class FoyExtensionTest {
         logger.setUseParentHandlers(false);
         logger.addHandler(handler);
         try {
-            Runnable hook = FoyExtension.failureLogged(() -> {
-                throw new IllegalStateException("boom");
-            });
-            hook.run();
+            action.run();
         } finally {
             logger.removeHandler(handler);
             logger.setUseParentHandlers(parents);
         }
-
-        assertEquals(1, records.size());
-        assertEquals(Level.SEVERE, records.getFirst().getLevel());
-        assertTrue(records.getFirst().getMessage().contains("servlet-foy"));
-        assertEquals("boom", records.getFirst().getThrown().getMessage());
+        return records;
     }
 
     @Test

@@ -52,6 +52,7 @@ final class FoyDeployments {
     record Live(String name, String listener, FoyChappeBoot.Mounted mounted) {}
 
     private static final Map<Object, FoyDeployments> BY_BOOT = new IdentityHashMap<>();
+    private static final System.Logger LOG = System.getLogger(FoyDeployments.class.getName());
 
     private final List<Live> live = new ArrayList<>();
     /** The boot's container, under which the mounts are published for the dev panel; null in tests. */
@@ -179,17 +180,31 @@ final class FoyDeployments {
         return List.copyOf(live);
     }
 
-    /** Closes every deployment of this boot, the last mounted first. */
-    synchronized void closeAll() {
+    /**
+     * Closes every deployment of this boot, the last mounted first. Closing invalidates the sessions of each, and the
+     * log says how many when there were some: under {@code vidocq:dev} every in-JVM reload undeploys, and an open page
+     * then starts a new session (a Vaadin UI reloads).
+     *
+     * @return the number of HTTP sessions the close invalidated
+     */
+    synchronized int closeAll() {
         RuntimeException failure = null;
+        int sessions = 0;
         for (Live l : live.reversed()) {
             try {
+                sessions += l.mounted().activeSessions();
                 l.mounted().close();
             } catch (RuntimeException e) {
                 if (failure == null) failure = e; else failure.addSuppressed(e);
             }
         }
         live.clear();
+        if (sessions > 0) {
+            LOG.log(System.Logger.Level.INFO, "Undeploying the servlet application invalidated "
+                    + (sessions == 1 ? "1 HTTP session: its client starts a new one on its next request"
+                    : sessions + " HTTP sessions: their clients start new ones on their next request"));
+        }
         if (failure != null) throw failure;
+        return sessions;
     }
 }

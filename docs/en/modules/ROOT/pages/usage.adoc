@@ -181,7 +181,9 @@ That run inherits the environment of `vidocq:dev`, so the `MAVEN_ARGS` it shows 
 deregistered at each reload. A thread that a library leaves running keeps the old layer in memory; the reload names
 such threads in a warning, `Hot reload: N thread(s) still hold the previous application layer ...`. Virtual threads
 are not detected. A library with native code (JNI) cannot be loaded twice by the JVM: keep it in the parent layer
-with `vidocq.app.layer.keep`.
+with `vidocq.app.layer.keep`. Each reload undeploys the servlet application, which invalidates its HTTP sessions: the
+log gives their count (`Undeploying the servlet application invalidated N HTTP sessions …`), and a browser starts a
+new session on its next request.
 
 *Packaging.* Under `vidocq:package`, `lib/` holds the parent layer and `app/` holds the application jar and its
 libraries. Both launchers hand `app/` to the runtime through `-Dvidocq.app.path`, also for an application with a

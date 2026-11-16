@@ -335,6 +335,11 @@ Both fork a JVM with the runtime on the module path and the application, with it
 layer. `vidocq:dev` reloads the application layer in place on each change; BENCH.md (2026-10-14) records the reload
 times, Vaadin included.
 
+[[dev-reload-session]]A reload starts a new HTTP session. The new layer holds new Vaadin classes, so the old session
+and its UI cannot be carried over: the undeploy invalidates them and says so in the log,
+`Undeploying the servlet application invalidated 1 HTTP session: its client starts a new one on its next request`.
+An open page reloads on its next request, as after a session timeout, and what it held is lost.
+
 [#package]
 == `vidocq:package`
 
