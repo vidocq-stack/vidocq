@@ -9,17 +9,23 @@ application — zero third-party dependency, strict Java Modules, build-time gen
 
 **Kerckhoffs names this repository, not only Security:** it is planned to carry Jakarta Security 4.0 and, as separate modules, the Jakarta Authentication 3.1 and Authorization 3.0 it stands on (PLAN.md §3).
 
-**Status: scaffold.** Nothing is implemented and no TCK has run. The design, the open
-decisions and the milestones are in [PLAN.md](PLAN.md).
+**Status: K0 to K3 are merged.** Identity stores and the `IdentityStoreHandler`, the built-in BASIC and FORM mechanisms and
+an application's own mechanism, `SecurityContext.authenticate`, `@RememberMe`, Jakarta Expression Language through Peano, and
+Jakarta Authorization (a `Policy` decides the access to web resources) run on Foy and on the assembled Vidocq runtime. A
+partial local run of the official Jakarta Security 4.0 TCK, never a certification, passes 12 applications (73 tests) on the
+runtime. Still to come: the custom FORM mechanism (`@CustomFormAuthenticationMechanismDefinition`),
+`SecurityContext.hasAccessToWebResource` and `getAllDeclaredCallerRoles`, the database and LDAP identity stores (K4),
+OpenID Connect (K5), a mechanism decorator (needs CDI Full in Vauban) and the REST endpoints (Cassini inside Foy). The design, the
+open decisions and the milestones are in [PLAN.md](PLAN.md); the TCK state is in [`kerckhoffs-tck/BASELINE.md`](kerckhoffs-tck/BASELINE.md).
 
 ## Modules
 
 | Module | Role | State |
 |---|---|---|
-| `kerckhoffs-core` | Identity stores, mechanisms, `SecurityContext` | empty module descriptor |
-| `kerckhoffs-authentication` | Jakarta Authentication 3.1 (planned, K2) | not created |
-| `kerckhoffs-authorization` | Jakarta Authorization 3.0 (planned, K3) | not created |
-| `kerckhoffs-tck` | Runner of the official Jakarta Security 4.0 TCK (`-Ptck`, never published) | empty |
+| `kerckhoffs-core` | Identity stores, mechanisms, `SecurityContext` | merged (K1 to K3) |
+| `kerckhoffs-authentication` | Jakarta Authentication 3.1: the Servlet Container Profile minimum | merged (K2) |
+| `kerckhoffs-authorization` | Jakarta Authorization 3.0: a `Policy` decides the access to web resources | merged (K3) |
+| `kerckhoffs-tck` | Runner of the official Jakarta Security 4.0 TCK (`-Ptck`, never published) | runs the smoke set |
 
 ## Prerequisites
 

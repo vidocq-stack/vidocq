@@ -41,8 +41,8 @@ runtime (`vidocq-runtime-tck-kerckhoffs-security`, in `Vidocq/vidocq`). A dash m
 | `app-custom-authentication-mechanism-handler` | 4 of 4 | 4 of 4 | An application `HttpAuthenticationMechanismHandler` serves the requests.
 | `app-custom-authentication-mechanism-handler2` | 3 of 3 | 3 of 3 | Repeated `@BasicAuthenticationMechanismDefinition` with `qualifiers`.
 | `app-custom-rememberme` | 25 of 25 | 25 of 25 | `@RememberMe`: cookie, flags, `*Expression` attributes through Jakarta Expression Language.
-| `app-mem-policy` | 4 of 4 | not wired yet | A `Policy` the application registers with the `PolicyFactory` decides the access to a web resource (`kerckhoffs-authorization`, `PolicyAccessControl`).
-| `app-mem-policy2` | 5 of 5 | not wired yet | The same, with the `PrincipalMapper` of the policy context (`PolicyContext.PRINCIPAL_MAPPER`).
+| `app-mem-policy` | 4 of 4 | 4 of 4 | A `Policy` the application registers with the `PolicyFactory` decides the access to a web resource (`kerckhoffs-authorization`, `PolicyAccessControl`).
+| `app-mem-policy2` | 5 of 5 | 5 of 5 | The same, with the `PrincipalMapper` of the policy context (`PolicyContext.PRINCIPAL_MAPPER`).
 |===
 
 These twelve are the smoke set the `ci.tck.command` gate of the pull requests runs.
@@ -53,8 +53,8 @@ These twelve are the smoke set the `ci.tck.command` gate of the pull requests ru
 |===
 | Application | Kerckhoffs container | Vidocq runtime | What is red
 | `app-mem-form` | `AppMemFormIT` 4 of 4; `AppMemFormImmediateIT` refused | same | The deployment is refused: `loginPage` and `useForwardToLoginExpression` of `@LoginToContinue` are expressions. See "Out of scope for now".
-| `app-mem-basic-decorate` | 1 of 2 | 1 of 2 | A CDI decorator on the mechanism: the decorated response header is missing. To do.
-| `app-jaxrs` | -- | 4 of 8 | The caller is not authenticated in the REST endpoints. To do; no cause established yet.
+| `app-mem-basic-decorate` | 1 of 2 | 1 of 2 | A CDI decorator on the mechanism: the decorated response header is missing. Vauban applies no `@Decorator` yet (KERCK-20261116-01, waits for CDI Full).
+| `app-jaxrs` | -- | 4 of 8 | The caller is not authenticated in the REST endpoints: Cassini mounts on Chappe, outside Foy, so the authentication hook never sees its requests (KERCK-20261116-02). To do: Cassini inside Foy as a servlet.
 |===
 
 === Out of scope for now

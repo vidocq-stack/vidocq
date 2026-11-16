@@ -210,8 +210,8 @@ Runner shape (copy `foy-tck` and `bodoni-tck`, not a new design):
 
 **Scope and state, 2026-11-16.** The TCK is run **without JSF** for now: `app-mem-customform` (the only application that
 uses Jakarta Faces) and the `@LoginToContinue` expressions of `app-mem-form` are set aside, as are the EJB applications
-(`app-securitycontext*`, `app-db`), the LDAP ones (K4) and OpenID (K5). Ten applications are green on the Kerckhoffs
-container and on the assembled runtime; `app-mem-policy*` (Jakarta Authorization) is green on the Kerckhoffs container; still to do are its wiring on the runtime, the mechanism decorator
+(`app-securitycontext*`, `app-db`), the LDAP ones (K4) and OpenID (K5). Twelve applications (73 tests) are green on the Kerckhoffs
+container and on the assembled runtime, `app-mem-policy*` (Jakarta Authorization) among them; still to do are the mechanism decorator
 (`app-mem-basic-decorate`, blocked on `@Decorator` support in Vauban) and JAX-RS (`app-jaxrs`, Cassini outside Foy). Per application: the `tck` page (`docs/en`) and
 `kerckhoffs-tck/BASELINE.md`.
 
