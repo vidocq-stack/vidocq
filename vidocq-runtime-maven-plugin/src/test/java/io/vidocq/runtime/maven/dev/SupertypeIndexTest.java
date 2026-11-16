@@ -96,4 +96,27 @@ class SupertypeIndexTest {
         assertEquals(1, warnings.size(), warnings::toString);
         assertTrue(warnings.getFirst().contains("jakarta.servlet.GenericServlet"), warnings::toString);
     }
+
+    @Test
+    void theNextRecompileKeepsWhatWasReadOfTheJars(@TempDir Path dir) {
+        Path api = servletApi(dir);
+        Path missing = HotSwapFixtures.jar(dir, "missing", Map.of("other/Base.java",
+                "package other; public class Base {}"), List.of());
+        String sources = "package app; class %s extends jakarta.servlet.GenericServlet {}";
+        String lost = "package app; class Lost extends other.Base {}";
+        Path first = HotSwapFixtures.compile(dir, "first", Map.of("app/One.java", sources.formatted("One"),
+                "app/Lost.java", lost), List.of(api, missing));
+        var index = SupertypeIndex.of(ClassesSnapshot.take(List.of(first), ClassesSnapshot.EMPTY), List.of(api),
+                warnings::add);
+        assertTrue(index.isA("app.One", "jakarta.servlet.Servlet"));
+        assertTrue(index.unresolved("app.Lost"));
+        Path second = HotSwapFixtures.compile(dir, "second", Map.of("app/Two.java", sources.formatted("Two"),
+                "app/Lost.java", lost), List.of(api, missing));
+
+        var next = index.withApplication(ClassesSnapshot.take(List.of(second), ClassesSnapshot.EMPTY));
+
+        assertTrue(next.isA("app.Two", "jakarta.servlet.Servlet"));
+        assertTrue(next.unresolved("app.Lost"));
+        assertEquals(1, warnings.size(), "the missing class is warned about once per session: " + warnings);
+    }
 }

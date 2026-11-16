@@ -44,20 +44,20 @@ import java.util.zip.ZipFile;
 final class SupertypeIndex {
 
     private final Map<String, ClassFingerprint> application;
-    private final List<Path> jars;
-    private final Consumer<String> warn;
-    private final Map<String, Optional<List<String>>> supertypes = new HashMap<>();
-    private final Set<String> warned = new HashSet<>();
-    private Map<String, Path> jarByEntry;
+    private final Dependencies dependencies;
 
-    private SupertypeIndex(Map<String, ClassFingerprint> application, List<Path> jars, Consumer<String> warn) {
+    private SupertypeIndex(Map<String, ClassFingerprint> application, Dependencies dependencies) {
         this.application = application;
-        this.jars = List.copyOf(jars);
-        this.warn = warn;
+        this.dependencies = dependencies;
     }
 
     static SupertypeIndex of(ClassesSnapshot application, List<Path> dependencyJars, Consumer<String> warn) {
-        return new SupertypeIndex(application.classes(), dependencyJars, warn);
+        return new SupertypeIndex(application.classes(), new Dependencies(dependencyJars, warn));
+    }
+
+    /** The index of a new compiled output, keeping what was read of the jars and the JDK, and what was warned. */
+    SupertypeIndex withApplication(ClassesSnapshot application) {
+        return new SupertypeIndex(application.classes(), dependencies);
     }
 
     /** {@code true} when {@code binaryName} is {@code type}, or extends or implements it, directly or not. */
@@ -96,67 +96,8 @@ final class SupertypeIndex {
     }
 
     private Optional<List<String>> supertypes(String name) {
-        return supertypes.computeIfAbsent(name, this::read);
-    }
-
-    private Optional<List<String>> read(String name) {
         ClassFingerprint own = application.get(name);
-        if (own != null) {
-            return Optional.of(supers(own.superclass(), own.interfaces()));
-        }
-        try {
-            Optional<byte[]> bytes = fromJars(name).or(() -> fromJdk(name));
-            if (bytes.isPresent()) {
-                ClassModel model = ClassFile.of().parse(bytes.get());
-                return Optional.of(supers(model.superclass().map(e -> e.asInternalName().replace('/', '.'))
-                                .orElse(null),
-                        model.interfaces().stream().map(e -> e.asInternalName().replace('/', '.')).toList()));
-            }
-        } catch (IOException | IllegalArgumentException e) {
-            warnOnce(name, " (" + e.getMessage() + ")");
-            return Optional.empty();
-        }
-        warnOnce(name, "");
-        return Optional.empty();
-    }
-
-    private void warnOnce(String name, String why) {
-        if (warned.add(name)) {
-            warn.accept("Hot swap: the class " + name + " is in no dependency" + why
-                    + ": the classes extending it count as start-time");
-        }
-    }
-
-    private Optional<byte[]> fromJars(String name) throws IOException {
-        if (jarByEntry == null) {
-            jarByEntry = new HashMap<>();
-            for (Path jar : jars) {
-                try (var zip = new ZipFile(jar.toFile())) {
-                    zip.stream().forEach(e -> jarByEntry.putIfAbsent(e.getName(), jar));
-                } catch (IOException e) {
-                    warn.accept("Hot swap: cannot read " + jar.getFileName() + " (" + e.getMessage() + ")");
-                }
-            }
-        }
-        String entry = name.replace('.', '/') + ".class";
-        Path jar = jarByEntry.get(entry);
-        if (jar == null) {
-            return Optional.empty();
-        }
-        try (var zip = new ZipFile(jar.toFile()); InputStream in = zip.getInputStream(zip.getEntry(entry))) {
-            return Optional.of(in.readAllBytes());
-        }
-    }
-
-    private static Optional<byte[]> fromJdk(String name) {
-        if (!(name.startsWith("java.") || name.startsWith("javax.") || name.startsWith("jdk."))) {
-            return Optional.empty();
-        }
-        try (InputStream in = Object.class.getResourceAsStream("/" + name.replace('.', '/') + ".class")) {
-            return in == null ? Optional.empty() : Optional.of(in.readAllBytes());
-        } catch (IOException _) {
-            return Optional.empty();
-        }
+        return own != null ? Optional.of(supers(own.superclass(), own.interfaces())) : dependencies.supertypes(name);
     }
 
     private static List<String> supers(String superclass, List<String> interfaces) {
@@ -166,5 +107,80 @@ final class SupertypeIndex {
         }
         all.addAll(interfaces);
         return all;
+    }
+
+    /** What the session read of the dependency jars and of the JDK, and what it warned about. */
+    private static final class Dependencies {
+
+        private final List<Path> jars;
+        private final Consumer<String> warn;
+        private final Map<String, Optional<List<String>>> supertypes = new HashMap<>();
+        private final Set<String> warned = new HashSet<>();
+        private Map<String, Path> jarByEntry;
+
+        Dependencies(List<Path> jars, Consumer<String> warn) {
+            this.jars = List.copyOf(jars);
+            this.warn = warn;
+        }
+
+        Optional<List<String>> supertypes(String name) {
+            return supertypes.computeIfAbsent(name, this::read);
+        }
+
+        private Optional<List<String>> read(String name) {
+            try {
+                Optional<byte[]> bytes = fromJars(name).or(() -> fromJdk(name));
+                if (bytes.isPresent()) {
+                    ClassModel model = ClassFile.of().parse(bytes.get());
+                    return Optional.of(supers(model.superclass().map(e -> e.asInternalName().replace('/', '.'))
+                                    .orElse(null),
+                            model.interfaces().stream().map(e -> e.asInternalName().replace('/', '.')).toList()));
+                }
+            } catch (IOException | IllegalArgumentException e) {
+                warnOnce(name, " (" + e.getMessage() + ")");
+                return Optional.empty();
+            }
+            warnOnce(name, "");
+            return Optional.empty();
+        }
+
+        private void warnOnce(String name, String why) {
+            if (warned.add(name)) {
+                warn.accept("Hot swap: the class " + name + " is in no dependency" + why
+                        + ": the classes extending it count as start-time");
+            }
+        }
+
+        private Optional<byte[]> fromJars(String name) throws IOException {
+            if (jarByEntry == null) {
+                jarByEntry = new HashMap<>();
+                for (Path jar : jars) {
+                    try (var zip = new ZipFile(jar.toFile())) {
+                        zip.stream().forEach(e -> jarByEntry.putIfAbsent(e.getName(), jar));
+                    } catch (IOException e) {
+                        warn.accept("Hot swap: cannot read " + jar.getFileName() + " (" + e.getMessage() + ")");
+                    }
+                }
+            }
+            String entry = name.replace('.', '/') + ".class";
+            Path jar = jarByEntry.get(entry);
+            if (jar == null) {
+                return Optional.empty();
+            }
+            try (var zip = new ZipFile(jar.toFile()); InputStream in = zip.getInputStream(zip.getEntry(entry))) {
+                return Optional.of(in.readAllBytes());
+            }
+        }
+
+        private static Optional<byte[]> fromJdk(String name) {
+            if (!(name.startsWith("java.") || name.startsWith("javax.") || name.startsWith("jdk."))) {
+                return Optional.empty();
+            }
+            try (InputStream in = Object.class.getResourceAsStream("/" + name.replace('.', '/') + ".class")) {
+                return in == null ? Optional.empty() : Optional.of(in.readAllBytes());
+            } catch (IOException _) {
+                return Optional.empty();
+            }
+        }
     }
 }

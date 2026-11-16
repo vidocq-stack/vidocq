@@ -20,6 +20,7 @@
 package io.vidocq.runtime.maven.dev;
 
 import io.vidocq.runtime.core.LayerSplit;
+import io.vidocq.runtime.core.ReloadRequest;
 import io.vidocq.runtime.devservices.host.ApplicationClasspath;
 import io.vidocq.runtime.devservices.host.ApplicationFiles;
 import io.vidocq.runtime.devservices.host.DevServicesException;
@@ -71,6 +72,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -318,6 +320,12 @@ public class VidocqDevMojo extends AbstractMojo {
     /** The agent {@link #checkDebugPort} settled on, {@code null} before it ran or without an agent. */
     private JdwpAgent checkedAgent;
 
+    /** The classification of each recompile (design §2); {@code null}: today's reload, every change swaps. */
+    private HotSwapSession hotSwap;
+
+    /** The stamp of the last request of {@link #hotSwap} not acknowledged yet. */
+    private OptionalLong pendingStamp = OptionalLong.empty();
+
     @Override
     public void execute() throws MojoExecutionException {
         checkDebugPort();
@@ -344,6 +352,10 @@ public class VidocqDevMojo extends AbstractMojo {
         Path reloadFile = buildDir.toPath().resolve(".vidocq-dev-reload");
         if (inJvmReload) {
             createReloadSignal(reloadFile, sysProps);
+            hotSwap = HotSwapSession.open(classRoots(layered.appPath()),
+                    projectSourceRoots(project.getCompileSourceRoots(), buildDirPath()),
+                    dependencyJars(modulePath, layered.appPath()), false, getLog()::info, getLog()::warn)
+                    .orElse(null);
         }
         jvmArgs = withPatchModuleArgs(jvmArgs);
         logStartup(watch, modulePath);
@@ -720,15 +732,73 @@ public class VidocqDevMojo extends AbstractMojo {
     }
 
     /**
+     * What one successful recompile writes to the reload file, and what the host line says of it.
+     *
+     * @param note the parenthesis of {@link #hostLine}: {@code in-JVM layer swap}, {@code layer swap: <reason>}
+     */
+    record Signal(String content, String note) {}
+
+    /**
+     * The signal of a successful recompile; empty when the compiled output did not change. Without a hot swap
+     * session it is today's, byte for byte: the {@code nanoTime} alone, and every recompile reloads.
+     *
+     * @param session {@code null} when no dependency declares its start-time code
+     */
+    static Optional<Signal> signalFor(HotSwapSession session, long nanoTime) {
+        if (session == null) {
+            return Optional.of(new Signal(nanoTime + "\n", "in-JVM layer swap"));
+        }
+        return session.next().map(request -> signal(request, nanoTime));
+    }
+
+    static Signal signal(ReloadRequest request, long nanoTime) {
+        return new Signal(request.format(nanoTime), switch (request) {
+            case ReloadRequest.Swap swap -> "layer swap: " + swap.reason();
+            case ReloadRequest.Redefine redefine -> {
+                int classes = redefine.methodsByClass().size();
+                yield "class redefinition: " + classes + (classes == 1 ? " class" : " classes");
+            }
+        });
+    }
+
+    static String hostLine(long millis, Signal signal) {
+        return "Hot reload signalled after " + millis + " ms (" + signal.note() + ").";
+    }
+
+    /** A recompile whose output did not change: the child keeps running, the tests of the change run at once. */
+    static Optional<TestControl.ReadyGate> nothingReloaded(long millis, Consumer<String> info) {
+        info.accept("Recompiled in " + millis + " ms: the compiled output did not change, nothing reloaded.");
+        return Optional.of(TestControl.ReadyGate.NOW);
+    }
+
+    /** The class roots of the hot swap snapshot: the directories of the application path (Review Focus 1). */
+    static List<Path> classRoots(List<Path> appPath) {
+        return appPath.stream().filter(Files::isDirectory).toList();
+    }
+
+    /** The jars the start-time declarations and the supertypes are read from, each once. */
+    static List<Path> dependencyJars(List<Path> modulePath, List<Path> appPath) {
+        return java.util.stream.Stream.concat(modulePath.stream(), appPath.stream())
+                .filter(Files::isRegularFile).distinct().toList();
+    }
+
+    /** The compile source roots outside the build directory: what "the project's own sources" means (rule 4). */
+    static List<Path> projectSourceRoots(List<String> compileSourceRoots, Path buildDir) {
+        Path build = buildDir.toAbsolutePath().normalize();
+        return compileSourceRoots.stream().map(Path::of)
+                .filter(root -> !root.toAbsolutePath().normalize().startsWith(build)).toList();
+    }
+
+    /**
      * Signals a hot reload: the gate the tests of this change wait for, or empty when the signal could not be written,
      * in which case the caller respawns the child. Once written, the child reloads whatever happens next: a stamp
      * that cannot be read then only costs the wait for the reload, the tests starting at once, never a second reload
      * by a respawn (#138).
      */
-    static Optional<TestControl.ReadyGate> signalHotReload(Path reloadFile, StampReader stamps,
+    static Optional<TestControl.ReadyGate> signalHotReload(Path reloadFile, String content, StampReader stamps,
             BooleanSupplier childAlive, Consumer<String> warn) {
         try {
-            Files.writeString(reloadFile, System.nanoTime() + "\n");
+            Files.writeString(reloadFile, content);
         } catch (IOException e) {
             warn.accept("Cannot signal hot reload (" + e.getMessage() + ") — falling back to a respawn.");
             return Optional.empty();
@@ -776,6 +846,7 @@ public class VidocqDevMojo extends AbstractMojo {
     private Optional<TestControl.ReadyGate> recompileAndReload(RecompileRunner recompile, ChildLaunch launch,
             AtomicReference<ChildJvm> currentChild, Path reloadFile, boolean inJvmReload)
             throws IOException, InterruptedException {
+        settlePreviousRequest(reloadFile, currentChild.get());
         long t0 = System.nanoTime();
         getLog().info("Changes detected — recompiling: " + recompile.describe());
         int rc;
@@ -792,13 +863,22 @@ public class VidocqDevMojo extends AbstractMojo {
         ChildJvm child = currentChild.get();
         if (inJvmReload && child.isAlive()) {
             // Signal the child: it re-creates its application layer in place.
+            Optional<Signal> signal = signalFor(hotSwap, System.nanoTime());
+            if (signal.isEmpty()) {
+                return nothingReloaded((System.nanoTime() - t0) / 1_000_000, getLog()::info);
+            }
             Optional<TestControl.ReadyGate> signalled =
-                    signalHotReload(reloadFile, ReloadAck::stamp, child::isAlive, getLog()::warn);
+                    signalHotReload(reloadFile, signal.get().content(), ReloadAck::stamp, child::isAlive,
+                            getLog()::warn);
             if (signalled.isPresent()) {
-                getLog().info("Hot reload signalled after " + (System.nanoTime() - t0) / 1_000_000
-                        + " ms (in-JVM layer swap).");
+                pendingStamp = pendingStamp(reloadFile);
+                getLog().info(hostLine((System.nanoTime() - t0) / 1_000_000, signal.get()));
                 return signalled;
             }
+        }
+        if (hotSwap != null) {
+            // A fresh child loads the output on disk: the next request swaps, the safe side.
+            hotSwap.lost();
         }
         child.stop(Duration.ofMillis(gracePeriodMillis));
         ChildJvm next = newChild(launch);
@@ -807,6 +887,36 @@ public class VidocqDevMojo extends AbstractMojo {
         watchChild(next, Thread.currentThread());
         getLog().info("Reloaded in " + (System.nanoTime() - t0) / 1_000_000 + " ms (pid=" + pid + ").");
         return Optional.of(TestControl.ReadyGate.NOW);
+    }
+
+    /**
+     * Before the next recompile of a hot swap session: waits for the child to acknowledge the previous request, so
+     * that the next one is classified against the output it runs (design §2).
+     */
+    private void settlePreviousRequest(Path reloadFile, ChildJvm child) throws InterruptedException {
+        if (hotSwap == null || pendingStamp.isEmpty()) {
+            return;
+        }
+        long stamp = pendingStamp.getAsLong();
+        pendingStamp = OptionalLong.empty();
+        if (ReloadAck.await(reloadFile, stamp, RELOAD_ACK_TIMEOUT, child::isAlive)) {
+            hotSwap.acknowledged();
+        } else {
+            hotSwap.lost();
+        }
+    }
+
+    /** The stamp of the request just written; empty, and the session told, when it cannot be read. */
+    private OptionalLong pendingStamp(Path reloadFile) {
+        if (hotSwap == null) {
+            return OptionalLong.empty();
+        }
+        try {
+            return OptionalLong.of(ReloadAck.stamp(reloadFile));
+        } catch (IOException _) {
+            hotSwap.lost();
+            return OptionalLong.empty();
+        }
     }
 
     /** Comma-separated directories, relative to {@code projectDir}; blanks skipped. Shared with {@code vidocq:test}. */

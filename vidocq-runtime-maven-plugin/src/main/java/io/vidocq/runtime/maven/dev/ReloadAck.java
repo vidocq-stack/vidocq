@@ -60,6 +60,24 @@ final class ReloadAck {
         }
     }
 
+    /**
+     * Waits until the child acknowledged the signal {@code stamp}: what the next recompile of a hot swap session waits
+     * for, so that the next request is classified against the output the child runs (design §2).
+     *
+     * @return {@code false} when the wait ran out or the child died first: the child's state is then unknown
+     */
+    static boolean await(Path reloadFile, long stamp, Duration timeout, BooleanSupplier childAlive)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (!acknowledged(reloadFile, stamp)) {
+            if (!childAlive.getAsBoolean() || System.nanoTime() >= deadline) {
+                return false;
+            }
+            Thread.sleep(POLL_MILLIS);
+        }
+        return true;
+    }
+
     /** The gate of the tests that follow the signal {@code stamp}. */
     static TestControl.ReadyGate gate(Path reloadFile, long stamp, Duration timeout, BooleanSupplier childAlive,
             Consumer<String> warn) {

@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.maven.dev;
 
+import io.vidocq.runtime.core.ReloadRequest;
 import io.vidocq.runtime.devservices.host.DefaultDevServiceContext;
 import io.vidocq.runtime.devservices.host.DevServiceManager;
 import io.vidocq.runtime.devservices.host.DevServicesSession;
@@ -37,6 +38,7 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -659,7 +661,7 @@ class VidocqDevMojoTest {
         Path reloadFile = dir.resolve(".vidocq-dev-reload");
         List<String> warnings = new ArrayList<>();
 
-        Optional<TestControl.ReadyGate> gate = VidocqDevMojo.signalHotReload(reloadFile, file -> {
+        Optional<TestControl.ReadyGate> gate = VidocqDevMojo.signalHotReload(reloadFile, "1\n", file -> {
             throw new java.io.IOException("no mtime");
         }, () -> true, warnings::add);
 
@@ -674,10 +676,113 @@ class VidocqDevMojoTest {
         List<String> warnings = new ArrayList<>();
 
         Optional<TestControl.ReadyGate> gate = VidocqDevMojo.signalHotReload(dir.resolve("absent/.vidocq-dev-reload"),
-                ReloadAck::stamp, () -> true, warnings::add);
+                "1\n", ReloadAck::stamp, () -> true, warnings::add);
 
         assertTrue(gate.isEmpty(), "respawn");
         assertTrue(warnings.getFirst().contains("respawn"), warnings.toString());
+    }
+
+    /** VIDOCQ, 2026-11-16: without a hot swap session, the reload file and the log line are today's, byte for byte. */
+    @Test
+    void withoutDeclarationsTheReloadFileIsTodays(@TempDir Path dir) throws Exception {
+        Path reloadFile = dir.resolve(".vidocq-dev-reload");
+        long now = System.nanoTime();
+
+        VidocqDevMojo.Signal signal = VidocqDevMojo.signalFor(null, now).orElseThrow();
+        VidocqDevMojo.signalHotReload(reloadFile, signal.content(), ReloadAck::stamp, () -> true, _ -> { });
+
+        assertEquals(now + "\n", Files.readString(reloadFile));
+        assertTrue(Files.readString(reloadFile).matches("\\d+\n"));
+        assertEquals("Hot reload signalled after 5 ms (in-JVM layer swap).", VidocqDevMojo.hostLine(5, signal));
+    }
+
+    @Test
+    void theRequestCarriesTheModeAndTheReason() {
+        VidocqDevMojo.Signal signal =
+                VidocqDevMojo.signal(new ReloadRequest.Swap("MainView gained a method lambda$new$1"), 42);
+
+        assertEquals("42\nswap MainView gained a method lambda$new$1\n", signal.content());
+    }
+
+    @Test
+    void theHostLineNamesTheReason() {
+        assertEquals("Hot reload signalled after 7 ms (layer swap: MainView gained a method lambda$new$1).",
+                VidocqDevMojo.hostLine(7,
+                        VidocqDevMojo.signal(new ReloadRequest.Swap("MainView gained a method lambda$new$1"), 1)));
+        var methods = new java.util.LinkedHashMap<String, java.util.SequencedSet<String>>();
+        methods.put("app.A", new java.util.LinkedHashSet<>(List.of("a")));
+        methods.put("app.B", new java.util.LinkedHashSet<>(List.of("b")));
+        assertEquals("Hot reload signalled after 7 ms (class redefinition: 2 classes).",
+                VidocqDevMojo.hostLine(7, VidocqDevMojo.signal(new ReloadRequest.Redefine(methods), 1)));
+    }
+
+    /** Review Focus 2: nothing to reload still runs the tests of the change, at once. */
+    @Test
+    void anUnchangedOutputReloadsNothingAndTheTestsStillRun() throws Exception {
+        Recording tests = new Recording();
+        List<String> info = new ArrayList<>();
+
+        VidocqDevMojo.onChange(new SourceWatcher.Change(true, false), tests,
+                () -> VidocqDevMojo.nothingReloaded(12, info::add));
+
+        assertEquals(List.of("interrupt", "changed change"), tests.calls);
+        assertEquals(List.of("Recompiled in 12 ms: the compiled output did not change, nothing reloaded."), info);
+        assertEquals(Optional.of(TestControl.ReadyGate.NOW), VidocqDevMojo.nothingReloaded(1, _ -> { }));
+    }
+
+    @Test
+    void theNextRecompileWaitsForTheAcknowledgement(@TempDir Path dir) throws Exception {
+        Path reloadFile = dir.resolve(".vidocq-dev-reload");
+        Files.writeString(reloadFile, "1\n");
+        long stamp = ReloadAck.stamp(reloadFile);
+        var polls = new java.util.concurrent.atomic.AtomicInteger();
+
+        boolean acknowledged = ReloadAck.await(reloadFile, stamp, Duration.ofSeconds(30), () -> {
+            if (polls.incrementAndGet() == 3) {
+                try {
+                    Files.writeString(ReloadAck.readyFile(reloadFile), stamp + "\n");
+                } catch (java.io.IOException e) {
+                    throw new java.io.UncheckedIOException(e);
+                }
+            }
+            return true;
+        });
+
+        assertTrue(acknowledged);
+        assertEquals(3, polls.get(), "the wait went on until the child wrote the stamp");
+    }
+
+    @Test
+    void aDeadChildOrATimeoutLeavesTheRequestUnacknowledged(@TempDir Path dir) throws Exception {
+        Path reloadFile = dir.resolve(".vidocq-dev-reload");
+        Files.writeString(reloadFile, "1\n");
+        long stamp = ReloadAck.stamp(reloadFile);
+
+        assertFalse(ReloadAck.await(reloadFile, stamp, Duration.ofSeconds(30), () -> false));
+        assertFalse(ReloadAck.await(reloadFile, stamp, Duration.ofMillis(250), () -> true));
+    }
+
+    /** Review Focus 1: a sibling module's classes, on the application path as a directory, are watched too. */
+    @Test
+    void theClassRootsAreEveryDirectoryOfTheApplicationPath(@TempDir Path dir) throws Exception {
+        Path classes = Files.createDirectories(dir.resolve("app/target/classes"));
+        Path sibling = Files.createDirectories(dir.resolve("lib/target/classes"));
+        Path jar = Files.writeString(dir.resolve("dep.jar"), "");
+        Path runtime = Files.writeString(dir.resolve("runtime.jar"), "");
+
+        assertEquals(List.of(classes, sibling), VidocqDevMojo.classRoots(List.of(classes, jar, sibling)));
+        assertEquals(List.of(runtime, jar),
+                VidocqDevMojo.dependencyJars(List.of(runtime, classes), List.of(classes, jar, sibling, runtime)));
+    }
+
+    @Test
+    void theProjectsOwnSourcesLeaveOutTheBuildDirectory(@TempDir Path dir) {
+        Path build = dir.resolve("target");
+
+        assertEquals(List.of(dir.resolve("src/main/java"), dir.resolve("src/extra/java")),
+                VidocqDevMojo.projectSourceRoots(List.of(dir.resolve("src/main/java").toString(),
+                        build.resolve("generated-sources/annotations").toString(),
+                        dir.resolve("src/extra/java").toString()), build));
     }
 
     /** Without Chappe there is no console, so vidocq:dev adds no dev tool at all, not even a companion. */
