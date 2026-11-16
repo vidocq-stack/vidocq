@@ -54,7 +54,7 @@ class PersistenceLivePanelTest {
     }
 
     static PersistenceLivePanel panel(Unit... units) {
-        return new PersistenceLivePanel(() -> List.of(units));
+        return new PersistenceLivePanel(() -> List.of(units), () -> null);
     }
 
     static PanelAction action(PersistenceLivePanel panel, String id) {
