@@ -49,6 +49,16 @@
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-kerckhoffs-security-extension</artifactId>
         </dependency>
+        <!-- app-jaxrs: the REST resources are served as a Servlet of Foy, so the Jakarta Security authentication
+             and authorization apply to them (RestMode picks the servlet because both are there). -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-servlet</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-core</artifactId>
@@ -91,6 +101,11 @@
                         <path>
                             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                             <artifactId>vidocq-runtime-kerckhoffs-security-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+                            <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
                             <version>${project.version}</version>
                         </path>
                     </annotationProcessorPaths>

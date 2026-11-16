@@ -699,6 +699,11 @@
                 <artifactId>cassini-chappe</artifactId>
                 <version>${cassini.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.vidocq.cassini</groupId>
+                <artifactId>cassini-servlet</artifactId>
+                <version>${cassini.version}</version>
+            </dependency>
 
             <!-- Foy: Jakarta Servlet 6.1 on Chappe (Servlet extension) -->
             <dependency>

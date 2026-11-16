@@ -82,6 +82,7 @@ public final class CassiniExtension implements VidocqExtension, StartupReportCon
 
     private String contextPath = "/";
     private String listener = ChappeListener.DEFAULT;
+    private String restMode = "";
 
     @Override
     public String name() {
@@ -97,6 +98,7 @@ public final class CassiniExtension implements VidocqExtension, StartupReportCon
     public void configure(VidocqConfiguration config) {
         this.contextPath = config.property("vidocq.rest.context-path", "/");
         this.listener = config.property("vidocq.rest.listener", ChappeListener.DEFAULT);
+        this.restMode = config.property(RestMode.PROPERTY, "");
     }
 
     @Override
@@ -110,6 +112,14 @@ public final class CassiniExtension implements VidocqExtension, StartupReportCon
             LOG.log(System.Logger.Level.INFO,
                     "A declarative vidocq.mount.<n>.type=cassini is configured — "
                             + "skipping legacy auto-mount.");
+            return;
+        }
+
+        if (RestMode.of(restMode, Thread.currentThread().getContextClassLoader()) == RestMode.SERVLET) {
+            LOG.log(System.Logger.Level.INFO,
+                    "The REST resources are served as a Servlet of the Foy deployment (cassini-servlet): "
+                            + "nothing is mounted on Chappe for them. {0}=chappe mounts them on Chappe instead.",
+                    RestMode.PROPERTY);
             return;
         }
 
