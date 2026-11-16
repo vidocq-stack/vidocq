@@ -251,6 +251,9 @@ The panels shipped today:
 | *Mansart Data*
 | The catalogue of `vidocq-runtime-mansart-data-extension`, one card per entity: its table and columns, then each of its repositories with its methods, their kind, `@Query` text, parameters and return type, and the methods inherited from Jakarta Data. Read once per boot; no connection, no query. See xref:modules/vidocq-runtime-extensions.adoc#mansart-data-catalogue[the Mansart Data catalogue].
 
+| *Noether Persistence*
+| The units of `vidocq-runtime-noether-persistence-extension`, chosen in a *Persistence unit* dropdown: their counts, a graph of their model, JPQL queries and writes, a paged view of an entity, their indexes against the database's, and their DDL scripts (xref:modules/vidocq-runtime-extensions.adoc#noether-persistence-dev[The Persistence panel in the dev console]).
+
 | *REST (Cassini)*
 | The routes of `vidocq-runtime-cassini-rest-extension`, in match order, each mount, the resource classes and the providers by contract, then live, one card per mount: requests per second, responses by status class, requests in flight, the share of time spent in handlers, and the mean and longest time to answer. See xref:modules/vidocq-runtime-extensions.adoc#cassini-rest-live[the `rest` panel].
 

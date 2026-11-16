@@ -1341,6 +1341,68 @@ A name no pool answers fails the start, naming the key to set (`vidocq.pool.<nam
 
 The counts come from the unit's description (xref:dev@noether::reference.adoc#tools[Describing a unit for tools]), read once at start, without opening a connection.
 
+[#noether-persistence-dev]
+=== The Persistence panel in the dev console [.tag-new]#NEW#
+
+Under `mvn vidocq:dev`, the *Noether Persistence* tab of the xref:dev-console.adoc[dev console] shows the units of the boot and works on them. Above its tabs, a *Persistence unit* dropdown (xref:dev-console-panels.adoc#selector[a panel selector]) chooses the unit every tab works on. The panel is `vidocq-runtime-noether-persistence-extension-dev`: `vidocq:dev` adds it next to the extension, the application declares nothing, and no package contains it (xref:dev-console-panels.adoc#dev-module[A `-dev` module, never packaged]).
+
+[cols="1,1,3"]
+|===
+| Tab | Reads | What it does
+
+| *Monitoring*
+| Memory
+| A card per unit, next to its row of the startup report: how many entities, embeddables, named queries and indexes it declares.
+
+| *Model*
+| Memory
+| *Show the model* draws the unit (xref:dev-console.adoc#graph-view[a graph]). Each entity, embeddable and mapped superclass is a box, which lists its table and the attributes its class declares, with their columns. An arrow goes from a subclass to what it extends. A relation is one line from its owning side, labelled with its attribute, its cardinality and its inverse attribute: `author *..1 / notes`. An embedded value is a dashed line.
+
+| *JPQL*
+| The database
+| *Query* runs a SELECT and shows at most 100 rows. *Update / Delete* runs an UPDATE or a DELETE, and *Export CSV* gives the rows of a SELECT as CSV, at most 10,000 rows and 256 KiB. The editor completes the entities of the units and their attributes (xref:dev-console.adoc#query-language[the query's language]).
+
+| *Explore*
+| The database
+| *Show a page* lists the rows of an entity, 20, 50 or 100 at a time, sorted by its id. *Export the page* gives the same page as CSV.
+
+| *Indexes*
+| Memory, then the database
+| *Declared indexes* lists the indexes and unique constraints of the mapping. *Compare with the database* sets each one against the database's indexes.
+
+| *DDL*
+| Memory
+| *Create script* and *Drop script* give the statements Noether writes for the unit's schema, in its dialect, to copy or download as a `.sql` file. Nothing runs against the database.
+|===
+
+*Transactions.* Every action that reads the database runs in a transaction of the unit:
+
+* a JTA unit's work runs in a transaction of the application's `TransactionManager`, and the entity manager joins it;
+* a RESOURCE_LOCAL unit's work runs in the entity manager's own transaction.
+
+A query, an export, a page and a comparison always roll their transaction back. *Update / Delete* rolls it back too, unless its *Transaction* argument is `commit`: try a statement, read how many rows it changed, then run it again to keep it. The summary says what happened: `3 rows deleted · rolled back`. JPQL has no INSERT.
+
+*A statement.* The *Statement* argument is a JSON object, `{"query": "SELECT n FROM Note n WHERE n.day > :since", "params": {"since": "2026-11-01"}}`. A named parameter takes the member of `params` of its name, converted to the type the query gives the parameter:
+
+* a number, to any numeric type;
+* ISO text, to a `LocalDate`, `LocalDateTime`, `LocalTime`, `OffsetDateTime` or `Instant`;
+* text, to a `UUID` or to the name of an `enum` constant;
+* a list, to a collection parameter, `WHERE n.id IN :ids`, element by element.
+
+A value that does not convert fails the call and names the parameter: `parameter since: "yesterday" is not a LocalDate`.
+
+*Rows.* A row of a query is a value per item of the select list, named as the list writes it, or by its `AS` alias. An entity in the results is expanded to the values it holds: its id, its basic attributes and its version, an embedded value as one column per attribute (`address.city`), and a single-valued relation as its target's id (`author.id`). A collection is left out. An entity next to other items is shown as `Note#12`. Every row is read through one more query per 500 ids.
+
+*From a page to a write.* When the entity has a simple id, its rows offer a menu (xref:dev-console.adoc#rows-menu[a menu on the selected rows]). Select rows, right-click them, and choose *Delete these rows* or *Update these rows*. The *JPQL* tab opens with the statement filled for the selected ids, `DELETE FROM Note e WHERE e.id IN (12, 15)`; an update sets the first basic attribute to itself, for you to edit. Review it, then run it. An entity with a composite id has no menu, and its page is sorted by the values of its id.
+
+*Indexes.* Each declared index gets a status:
+
+* `same`: the database has it, with the same columns and the same uniqueness;
+* `different`: the database has it with other columns, or another uniqueness;
+* `missing in the database`: the database does not have it.
+
+A database index that no declared index matches is `extra in the database`. A declared index is matched first by its name and its columns, then by its columns, then by its name. Names are compared ignoring case, since a database stores an unquoted name in its own case: H2's `IDX_NOTE_TITLE` is the mapping's `idx_note_title`. The indexes a database creates for a primary key or a foreign key are left out. The database's indexes come from the JDBC metadata of the connection (`DatabaseMetaData.getIndexInfo`).
+
 [#langchain4j-cdi-mcp]
 == langchain4j-cdi MCP server
 
