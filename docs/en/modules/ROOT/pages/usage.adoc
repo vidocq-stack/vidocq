@@ -85,6 +85,22 @@ The contract (deliberately identical to Quarkus' `@QuarkusMain`):
 `vidocq create --main` writes such a trampoline and sets `vidocq.mainClass`, see
 xref:modules/vidocq-runtime-cli.adoc#create[`vidocq create`].
 
+[#shutdown]
+=== Stopping the application from its own code
+
+An application ends itself with `Vidocq.shutdown()`, never with `System.exit`: closing the last window of a desktop
+application, a batch whose work is done. The call returns at once and the stop runs on a virtual thread of its own,
+exactly as on Ctrl+C: the extensions stop in reverse start order, the container closes and fires the CDI
+`jakarta.enterprise.event.Shutdown` event, and `Vidocq.waitForExit()` returns. It is safe from any thread, a UI
+thread, an HTTP request, a CDI observer or an extension's `onStart`; a request made during the boot is honoured once
+the boot completes. `Vidocq.shutdownAndWait()` runs the stop on the calling thread and returns once it is done, with
+the failure of the container's close if any: never call it from a thread the stop needs (a UI thread, a request
+thread, an executor of the application).
+
+`System.exit` stops the runtime from a JVM shutdown hook, where some libraries no longer work (JavaFX on macOS runs no
+`Platform.runLater` there), and ends the JVM of a test run with it. Under `vidocq:dev`, an application that stops
+itself ends the whole dev session; a crash or a failed boot keeps it waiting for a fix.
+
 === How the application modules are chosen
 
 When the application was resolved into the boot layer — a trampoline launched from the IDE, or a jlink image

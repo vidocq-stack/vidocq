@@ -138,6 +138,62 @@ public final class Vidocq {
     }
 
     /**
+     * Asks the current deployment to stop and returns at once: the programmatic counterpart of Ctrl+C or SIGTERM,
+     * without {@code System.exit}. The stop runs on a new virtual thread: the extensions stop in reverse start
+     * order, the container closes (which fires the CDI {@code Shutdown} event) and {@link #waitForExit()} returns,
+     * so the {@code main} thread can end and the JVM exits on its own. If the JVM starts exiting first, its
+     * shutdown hook waits for this stop to complete.
+     *
+     * <p>Safe to call from anywhere, a UI thread, an HTTP request thread, a CDI observer or an extension's
+     * {@code onStart} / {@code onStop}: the caller never waits for the stop, so it cannot wait for itself (an
+     * extension that hands work to its own thread and waits for it, or a server draining its requests, would
+     * otherwise deadlock on the caller). Calling it again does not repeat the stop. Does nothing when no deployment
+     * is running. A request made while the deployment boots is honoured as soon as the boot completes.
+     *
+     * <p>The caller gets no failure back: a stop that fails is logged at ERROR by the runtime. Use
+     * {@link #shutdownAndWait()} to wait for the stop and receive its failure.
+     */
+    public static void shutdown() {
+        var bootstrap = CURRENT.get();
+        if (bootstrap != null) {
+            Thread.ofVirtual().name("vidocq-shutdown-request").start(() -> {
+                try {
+                    bootstrap.shutdown();
+                } catch (RuntimeException _) {
+                    // already logged by the bootstrap; nobody is left to receive it
+                }
+            });
+        }
+    }
+
+    /**
+     * Stops the current deployment on the calling thread and returns once it is stopped, or once an already running
+     * stop (the JVM hook's, another caller's) completes. <strong>Never call it from a thread the stop needs</strong>:
+     * a UI thread, an HTTP request thread, an executor of the application. Called by the stopping thread itself, from
+     * an {@code onStop} or a {@code Shutdown} observer, it returns at once; called by the booting thread, from an
+     * {@code onStart}, it returns at once and the stop follows when the boot completes.
+     *
+     * @throws RuntimeException the container raised while closing; it is also logged at ERROR, and
+     *                          {@link #waitForExit()} is released all the same
+     */
+    public static void shutdownAndWait() {
+        var bootstrap = CURRENT.get();
+        if (bootstrap != null) {
+            bootstrap.shutdown();
+        }
+    }
+
+    /** Makes {@code bootstrap} the target of {@link #shutdown()} and {@link #waitForExit()}. */
+    static void register(VidocqBootstrap bootstrap) {
+        CURRENT.set(bootstrap);
+    }
+
+    /** Forgets the registered deployment; for tests that need a clean slate. */
+    static void unregister() {
+        CURRENT.set(null);
+    }
+
+    /**
      * The application module, or {@code null}: the module of the class that called {@link #run}, else
      * the module of {@code -Dvidocq.app.main}, else the module {@code -Dvidocq.app.module} names (in the application
      * layer, else in the boot layer), else the {@code -m} module unless it is the runtime's. Never guessed among the
@@ -213,9 +269,9 @@ public final class Vidocq {
     }
 
     private static VidocqBootstrap bootAndRegister() {
-        var bootstrap = VidocqBootstrap.create().configure().start();
-        CURRENT.set(bootstrap);
-        return bootstrap;
+        var bootstrap = VidocqBootstrap.create().configure();
+        register(bootstrap); // before the boot: an onStart may ask for the shutdown
+        return bootstrap.start();
     }
 
     /** Re-loads {@code appClass} through the layer and instantiates it there. */

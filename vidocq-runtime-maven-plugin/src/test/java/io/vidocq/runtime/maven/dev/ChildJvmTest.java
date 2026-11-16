@@ -35,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -66,8 +67,11 @@ class ChildJvmTest {
         // The child will exit on its own (unknown module) — wait for it, then
         // call stop() and verify isAlive() stays false.
         assertTrue(Poll.until(Duration.ofSeconds(20), () -> !jvm.isAlive()), "an unknown module ends the child");
+        assertNotEquals(0, jvm.onExit().get(5, TimeUnit.SECONDS), "onExit gives the child's own exit code");
+        assertFalse(jvm.stoppedByHost(), "the child ended by itself");
         jvm.stop(Duration.ofSeconds(5));
         assertFalse(jvm.isAlive(), "child JVM should have exited");
+        assertTrue(jvm.stoppedByHost());
     }
 
     @Test

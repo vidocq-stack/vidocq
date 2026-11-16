@@ -55,6 +55,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -123,6 +124,16 @@ public final class VidocqBootstrap {
 
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private Thread shutdownHook;
+    /** The thread running {@link #shutdown()}; the others wait for it, and it returns at once when re-entered. */
+    private final AtomicReference<Thread> stopper = new AtomicReference<>();
+    /** The thread inside {@link #start()}, {@code null} outside of it. */
+    private final AtomicReference<Thread> booter = new AtomicReference<>();
+    /** Completed when {@link #start()} returns or fails; {@code join} waits whatever the interrupt status. */
+    private final CompletableFuture<Void> bootFinished = new CompletableFuture<>();
+    /** Completed with {@link #shutdownLatch}, for the threads that wait for another one's stop. */
+    private final CompletableFuture<Void> stopFinished = new CompletableFuture<>();
+    /** A stop asked for by the booting thread itself, performed when its boot completes. */
+    private volatile boolean stopRequested;
 
     private VidocqConfig config;
     private VidocqConfiguration configuration;
@@ -259,6 +270,21 @@ public final class VidocqBootstrap {
      * reported, what the boot started is stopped (see the class description), and the failure is thrown as it is.
      */
     public VidocqBootstrap start() {
+        booter.set(Thread.currentThread());
+        try {
+            doStart();
+        } finally {
+            booter.set(null);
+            bootFinished.complete(null);
+        }
+        if (stopRequested) {
+            // asked for from an onStart or a Startup observer: honoured now that the boot is complete
+            shutdown();
+        }
+        return this;
+    }
+
+    private VidocqBootstrap doStart() {
         LOG.log(System.Logger.Level.INFO, "Vidocq - Starting");
         if (recorder == null) {
             recorder = new StartupRecorder();
@@ -778,10 +804,55 @@ public final class VidocqBootstrap {
         }
     }
 
+    /**
+     * Stops the extensions in reverse start order, closes the container and releases {@link #awaitShutdown()}.
+     * Idempotent and safe to race: the JVM hook, the reload loop and {@link Vidocq#shutdown()} may all call it, the
+     * first caller stops, the others wait for that stop to complete (so a JVM that exits after its hook never cuts a
+     * stop short), and a call made by the stopping thread itself, from an {@code onStop} or a {@code Shutdown}
+     * observer, returns at once. A call made by the thread that is booting (an {@code onStart}, a {@code Startup}
+     * observer) is remembered and honoured as soon as {@link #start()} completes; a call made by another thread
+     * while the boot runs waits for the boot to complete first.
+     *
+     * <p>A failure of the container's close, the only part of the stop that can throw (an extension's failing
+     * {@code onStop} is logged and the stop goes on), is logged at ERROR, releases {@link #awaitShutdown()} all the
+     * same, and reaches the caller that ran the stop; the callers that waited for it return normally.
+     */
     public void shutdown() {
         if (shutdownLatch.getCount() == 0) {
             return; // idempotent — the JVM hook and the reload loop may both call this
         }
+        Thread self = Thread.currentThread();
+        Thread booting = booter.get();
+        if (booting == self) {
+            stopRequested = true;
+            return;
+        }
+        if (booting != null) {
+            bootFinished.join();
+            if (shutdownLatch.getCount() == 0) {
+                return; // the boot failed and stopped what it started
+            }
+        }
+        if (!stopper.compareAndSet(null, self)) {
+            if (stopper.get() != self) {
+                stopFinished.join();
+            }
+            return;
+        }
+        try {
+            stop();
+            LOG.log(System.Logger.Level.INFO, "Vidocq - Stopped");
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.ERROR, "Vidocq - Stop failed", e);
+            throw e;
+        } finally {
+            // released even when the container fails to close, so nobody waits for ever
+            shutdownLatch.countDown();
+            stopFinished.complete(null);
+        }
+    }
+
+    private void stop() {
         if (shutdownHook != null) {
             try {
                 Runtime.getRuntime().removeShutdownHook(shutdownHook);
@@ -801,8 +872,5 @@ public final class VidocqBootstrap {
         if (container != null) {
             container.close();
         }
-
-        shutdownLatch.countDown();
-        LOG.log(System.Logger.Level.INFO, "Vidocq - Stopped");
     }
 }

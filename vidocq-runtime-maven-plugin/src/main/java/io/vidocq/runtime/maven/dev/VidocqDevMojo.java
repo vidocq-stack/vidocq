@@ -73,6 +73,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -595,6 +596,7 @@ public class VidocqDevMojo extends AbstractMojo {
             ChildJvm child = newChild(launch);
             long pid = child.start();
             currentChild.set(child);
+            watchChild(child, Thread.currentThread());
             getLog().info("Child JVM started, pid=" + pid + ". Listening for changes (Ctrl+C to stop).");
             startFirstTestRun(testing.testing(), child, reloadFile, inJvmReload);
 
@@ -632,6 +634,28 @@ public class VidocqDevMojo extends AbstractMojo {
             }
             closeDevServices(devs);
         }, "vidocq-dev-shutdown");
+    }
+
+    /**
+     * Ends the whole dev session when the application stops itself: {@code Vidocq.shutdown()} ends the child with exit
+     * code 0, and the session must not wait for the next change to respawn it. A non-zero exit (a failed boot, a crash)
+     * keeps today's behaviour: the session waits for a fix. A stop the host asked for ({@link ChildJvm#stop}: a respawn,
+     * Ctrl+C) is never taken for the application's own.
+     */
+    // package-private for the unit test.
+    static void endSessionWhenTheApplicationStops(CompletableFuture<Integer> exit, BooleanSupplier stoppedByHost,
+            Runnable endSession, Consumer<String> info) {
+        exit.thenAccept(code -> {
+            if (code == 0 && !stoppedByHost.getAsBoolean()) {
+                info.accept("The application stopped itself — ending dev mode.");
+                endSession.run();
+            }
+        });
+    }
+
+    private void watchChild(ChildJvm child, Thread sessionThread) {
+        endSessionWhenTheApplicationStops(child.onExit(), child::stoppedByHost, sessionThread::interrupt,
+                getLog()::info);
     }
 
     /** The first run, once the first boot completed (spec §7: the panel shows a result at once). */
@@ -780,6 +804,7 @@ public class VidocqDevMojo extends AbstractMojo {
         ChildJvm next = newChild(launch);
         long pid = next.start();
         currentChild.set(next);
+        watchChild(next, Thread.currentThread());
         getLog().info("Reloaded in " + (System.nanoTime() - t0) / 1_000_000 + " ms (pid=" + pid + ").");
         return Optional.of(TestControl.ReadyGate.NOW);
     }

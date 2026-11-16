@@ -67,9 +67,10 @@ final class VidocqDevReloadLoop {
         long lastSignal = signalStamp(reloadFile);
         while (true) {
             VidocqAppLayer.installIfConfigured();
-            VidocqBootstrap bootstrap = VidocqBootstrap.create()
-                    .configure()
-                    .start();
+            VidocqBootstrap bootstrap = VidocqBootstrap.create().configure();
+            // every cycle registers its own bootstrap: Vidocq.shutdown() must reach the running one
+            Vidocq.register(bootstrap);
+            bootstrap.start();
 
             acknowledge(reloadFile, lastSignal);
 

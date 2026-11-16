@@ -25,6 +25,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -44,6 +45,7 @@ public final class ChildJvm {
 
     private final ProcessBuilder builder;
     private Process process;
+    private volatile boolean stoppedByHost;
 
     private ChildJvm(ProcessBuilder builder) {
         this.builder = builder;
@@ -181,6 +183,7 @@ public final class ChildJvm {
      * Vidocq run — chappe's shutdown hook drains in-flight connections.
      */
     public void stop(Duration grace) throws InterruptedException {
+        stoppedByHost = true;
         if (process == null || !process.isAlive()) {
             return;
         }
@@ -198,6 +201,16 @@ public final class ChildJvm {
      */
     public int waitFor() throws InterruptedException {
         return process == null ? 0 : process.waitFor();
+    }
+
+    /** Completes with the exit code when the child ends, whoever ended it; never completes before {@link #start()}. */
+    public CompletableFuture<Integer> onExit() {
+        return process == null ? new CompletableFuture<>() : process.onExit().thenApply(Process::exitValue);
+    }
+
+    /** Whether the host asked this child to stop ({@link #stop(Duration)}), as opposed to the child ending by itself. */
+    public boolean stoppedByHost() {
+        return stoppedByHost;
     }
 
     private static String joinPath(List<Path> entries) {
