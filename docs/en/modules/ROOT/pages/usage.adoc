@@ -250,7 +250,9 @@ declares its start-time code (...)`, and every change swaps the layer, with the 
 [[dev-swap-sessions]]*HTTP sessions across a swap.* [.tag-new]#NEW# A layer swap stops the application and starts it
 again on the new classes, and the HTTP sessions of the servlet application move with it: during the stop, each
 deployment writes its sessions out, and the new deployment at the same context path reads them back before it serves.
-An open page keeps its session, and its next request finds what the session held. The log gives the count:
+An open page keeps its session, and its next request finds what the session held. An object read back keeps what the
+code that built it did: a listener that a constructor now registers is only on the objects built after the swap. The
+log gives the count:
 
 [source]
 ----
