@@ -110,6 +110,15 @@ public class VidocqJlinkMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.artifactId}", property = "vidocq.launcher")
     private String launcher;
 
+    /**
+     * JVM arguments baked into the image, the ones the {@code vidocq:package} scripts carry (for example
+     * {@code -Dvaadin.productionMode=true}): every launch of the image gets them, the launcher script,
+     * {@code bin/java}, the jpackage application and the Docker image built on it. {@code JDK_JAVA_OPTIONS} at start
+     * comes after them.
+     */
+    @Parameter(property = "vidocq.jvmArgs")
+    private String jvmArgs;
+
     /** Output directory of the jlink image (default: {@code target/dist}). */
     @Parameter(defaultValue = "${project.build.directory}/dist", property = "vidocq.distDir")
     private File distDir;
@@ -558,12 +567,20 @@ public class VidocqJlinkMojo extends AbstractMojo {
      * The {@code --launcher} of the image and the {@code --add-options} that bake the JVM options of {@code launch}
      * into the image. Every way of starting the image gets the options: the launcher script, {@code bin/java -m …},
      * the jpackage application and the Docker image built on it.
+     *
+     * @param jvmArgs the {@code vidocq.jvmArgs} of the pom, or {@code null}: put before the options of the image, as
+     *                in the {@code vidocq:package} scripts, so that for a property set twice the image's own wins
      */
-    static List<String> launcherArgs(String launcher, ImageLaunch launch) {
+    static List<String> launcherArgs(String launcher, ImageLaunch launch, String jvmArgs) {
+        List<String> options = new ArrayList<>();
+        if (isSet(jvmArgs)) {
+            options.add(jvmArgs.strip());
+        }
+        options.addAll(launch.vmOptions());
         List<String> args = new ArrayList<>();
         args.add("--launcher"); args.add(launcher + "=" + launch.entryPoint());
         // One argument: jlink refuses a separate value that starts with "--" (the --add-modules option).
-        args.add("--add-options=" + String.join(" ", launch.vmOptions()));
+        args.add("--add-options=" + String.join(" ", options));
         return args;
     }
 
@@ -574,6 +591,9 @@ public class VidocqJlinkMojo extends AbstractMojo {
         args.add("--module-path"); args.add(modulePath);
         args.add("--output"); args.add(distDir.toPath().toString());
         args.addAll(portableJlinkArgs(rootModules, launch));
+        if (isSet(jvmArgs)) {
+            getLog().info("Vidocq jlink — JVM options of vidocq.jvmArgs, baked into the image: " + jvmArgs.strip());
+        }
         return args;
     }
 
@@ -584,7 +604,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
     List<String> portableJlinkArgs(String rootModules, ImageLaunch launch) {
         List<String> args = new ArrayList<>();
         args.add("--add-modules"); args.add(rootModules);
-        args.addAll(launcherArgs(launcher, launch));
+        args.addAll(launcherArgs(launcher, launch, jvmArgs));
         args.add("--no-header-files");
         args.add("--no-man-pages");
         if (stripDebug) args.add("--strip-debug");

@@ -583,6 +583,13 @@
                     <description>Launcher script base name</description>
                 </parameter>
                 <parameter>
+                    <name>jvmArgs</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>JVM arguments baked into the image, those of the vidocq:package scripts</description>
+                </parameter>
+                <parameter>
                     <name>distDir</name>
                     <type>java.io.File</type>
                     <required>false</required>
@@ -697,6 +704,7 @@
                 <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
                 <launcher implementation="java.lang.String"
                           default-value="${project.artifactId}">${vidocq.launcher}</launcher>
+                <jvmArgs implementation="java.lang.String">${vidocq.jvmArgs}</jvmArgs>
                 <distDir implementation="java.io.File"
                          default-value="${project.build.directory}/dist">${vidocq.distDir}</distDir>
                 <modsDir implementation="java.io.File"

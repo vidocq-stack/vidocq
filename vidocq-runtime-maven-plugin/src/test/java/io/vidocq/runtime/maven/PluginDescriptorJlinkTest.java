@@ -43,6 +43,17 @@ class PluginDescriptorJlinkTest {
     }
 
     @Test
+    void theJvmArgsAreReadFromThePropertyOfThePackageScripts() throws Exception {
+        String xml = Files.readString(Path.of("target", "classes", "META-INF", "maven", "plugin.xml"));
+        int jlink = xml.indexOf("<goal>jlink</goal>");
+        assertTrue(jlink > 0, "no jlink mojo");
+        String mojo = xml.substring(jlink, xml.indexOf("</mojo>", jlink));
+
+        assertTrue(mojo.contains("<name>jvmArgs</name>"), "parameter not declared");
+        assertTrue(mojo.contains(">${vidocq.jvmArgs}</jvmArgs>"), "property not bound");
+    }
+
+    @Test
     void neitherJlinkNorJpackageRequiresAMainClass() throws Exception {
         String xml = Files.readString(Path.of("target", "classes", "META-INF", "maven", "plugin.xml"));
         for (String goal : new String[] {"jlink", "jpackage"}) {

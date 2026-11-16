@@ -270,6 +270,40 @@ class ImageLaunchMojosTest {
                 args.toString());
     }
 
+    /**
+     * {@code vidocq.jvmArgs}, which the {@code vidocq:package} scripts carry, is baked into the image too: before the
+     * options of the image, as in the scripts, so that the image's own win. The jlink run and the recipe of
+     * {@code vidocq:docker} carry them, and one line says so.
+     */
+    @Test
+    void theJvmArgsOfThePomAreBakedIntoTheImage() throws Exception {
+        var log = new Infos();
+        VidocqJlinkMojo mojo = jlink("acme.app", "acme.app.App", log);
+        set(VidocqJlinkMojo.class, mojo, "jvmArgs", "  -Dvaadin.productionMode=true -Xmx256m ");
+        ImageLaunch launch = ImageLaunch.of("acme.app", "acme.app.App", List.of("flow.push"));
+        String options = "--add-options=-Dvaadin.productionMode=true -Xmx256m --add-modules=flow.push " + NO_LAYER;
+
+        assertTrue(mojo.jlinkArgs("acme.app,flow.push", launch).contains(options), log.lines.toString());
+        assertTrue(mojo.portableJlinkArgs("acme.app,flow.push", launch).contains(options));
+        assertTrue(log.lines.contains("Vidocq jlink — JVM options of vidocq.jvmArgs, baked into the image:"
+                + " -Dvaadin.productionMode=true -Xmx256m"), log.lines.toString());
+    }
+
+    /** Without {@code vidocq.jvmArgs}, or with a blank one, the image carries its own options only. */
+    @Test
+    void aBlankJvmArgsAddsNothing() throws Exception {
+        for (String jvmArgs : new String[] {null, " "}) {
+            var log = new Infos();
+            VidocqJlinkMojo mojo = jlink("acme.app", "acme.app.App", log);
+            set(VidocqJlinkMojo.class, mojo, "jvmArgs", jvmArgs);
+
+            List<String> args = mojo.portableJlinkArgs("acme.app", ImageLaunch.of("acme.app", "acme.app.App"));
+
+            assertTrue(args.contains("--add-options=" + NO_LAYER), args.toString());
+            assertTrue(log.lines.stream().noneMatch(l -> l.contains("vidocq.jvmArgs")), log.lines.toString());
+        }
+    }
+
     private VidocqJlinkMojo jlink(String mainModule, String mainClass, Infos log) throws Exception {
         var project = new MavenProject();
         var artifact = new DefaultArtifact("acme", "app", "1.0", "compile", "jar", "", new DefaultArtifactHandler("jar"));

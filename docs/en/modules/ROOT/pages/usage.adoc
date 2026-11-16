@@ -451,11 +451,17 @@ The `distroless/base-debian12:nonroot` base image has no shell, no package manag
 [#jvm-options]
 == JVM options of each binary
 
-Each binary has its own launcher, and each launcher reads JVM options from a different place:
+Options every start needs go in the pom, as `vidocq.jvmArgs`: the build writes them into the `vidocq:package`
+launchers and bakes them into the `vidocq:jlink` image, so the `vidocq:jpackage` application and the `vidocq:docker`
+image built on it get them too (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-jvm-args[JVM arguments of the
+image]).
+
+Options for one start go in a variable, and each launcher reads a different one. An option set there wins over the
+same option of `vidocq.jvmArgs`:
 
 [cols="1,2"]
 |===
-| Binary | Where its JVM options go
+| Binary | Where its JVM options go at start
 
 | `vidocq:package` distribution
 | The `JAVA_OPTS` variable, read by `bin/<app>.sh` and `bin/<app>.bat`.

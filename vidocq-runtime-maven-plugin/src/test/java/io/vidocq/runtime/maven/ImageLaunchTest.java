@@ -97,7 +97,7 @@ class ImageLaunchTest {
                         // One argument: jlink refuses a separate value that starts with "--".
                         "--add-options=--add-modules=flow.push,io.vidocq.foy.core " + NO_LAYER),
                 VidocqJlinkMojo.launcherArgs("shop", ImageLaunch.of("com.acme.shop", "com.acme.shop.App",
-                        List.of("io.vidocq.foy.core", "flow.push"))));
+                        List.of("io.vidocq.foy.core", "flow.push")), null));
     }
 
     @Test

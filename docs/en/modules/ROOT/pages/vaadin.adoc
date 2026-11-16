@@ -109,7 +109,7 @@ xref:modules/vidocq-runtime-cli.adoc#create-snapshot[Trying a SNAPSHOT].
   <vaadin.version>25.3.2</vaadin.version>
   <!-- The application's Java module: the runtime's own main boots it, no main class needed. -->
   <vidocq.mainModule>com.example.app</vidocq.mainModule>
-  <!-- Production mode under vidocq:dev, vidocq:run and in the vidocq:package launch scripts. -->
+  <!-- Production mode under vidocq:dev, vidocq:run, in the vidocq:package launch scripts and in the jlink image. -->
   <vidocq.dev.jvmArgs>-Dvaadin.productionMode=true</vidocq.dev.jvmArgs>
   <vidocq.run.jvmArgs>-Dvaadin.productionMode=true</vidocq.run.jvmArgs>
   <vidocq.jvmArgs>-Dvaadin.productionMode=true</vidocq.jvmArgs>
@@ -301,7 +301,7 @@ every goal, and each one can also be given on the command line:
 | `vidocq:dev` | `-Dvidocq.dev.jvmArgs=-Dvaadin.productionMode=true`
 | `vidocq:run` | `-Dvidocq.run.jvmArgs=-Dvaadin.productionMode=true`
 | `vidocq:package` | `-Dvidocq.jvmArgs=-Dvaadin.productionMode=true`, written into the launch scripts
-| `vidocq:jlink` | `JDK_JAVA_OPTIONS=-Dvaadin.productionMode=true` in the environment of `bin/<app>`
+| `vidocq:jlink` | `-Dvidocq.jvmArgs=-Dvaadin.productionMode=true`, baked into the image
 |===
 
 Without it, Vaadin starts in development mode. It then looks for a development bundle and every request answers 500
@@ -382,8 +382,10 @@ Then link with two flags:
 ./mvnw clean package vidocq:jlink \
     -Dvidocq.jlink.mergeSharedResources=true \
     -Dvauban.modularize.forceExplicit=true
-JDK_JAVA_OPTIONS=-Dvaadin.productionMode=true target/dist/bin/<app>
+target/dist/bin/<app>
 ----
+
+The image carries the production mode, from the `vidocq.jvmArgs` of the <<setup,pom>>.
 
 Each flag works around a Vaadin layout that the module system does not allow. Without it, the build stops with a
 message that names the jars.

@@ -782,6 +782,18 @@ The goal bakes into the image, with jlink's `--add-options`:
 * `-Dvidocq.app.layer.off=true`: the runtime builds no application layer;
 * `--add-modules` with every module the build staged and the JDK modules it added.
 
+[[jlink-jvm-args]]It also bakes `vidocq.jvmArgs`, the JVM arguments the `vidocq:package` launchers carry
+(<<launcher-java-opts>>), before the two options above: a property the pom sets as well keeps the image's value. Every
+start of the image gets them, the launcher, `bin/java`, the `vidocq:jpackage` application and the `vidocq:docker`
+image, and the build logs them:
+
+[source]
+----
+Vidocq jlink — JVM options of vidocq.jvmArgs, baked into the image: -Dvaadin.productionMode=true
+----
+
+`JDK_JAVA_OPTIONS`, read by the image's `java` launcher, comes after them: an option set when the image starts wins.
+
 [#jlink-one-layer]
 === One layer: what stays as jars keeps the application layer, what is linked is flat
 
