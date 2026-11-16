@@ -1394,6 +1394,9 @@ ships in a binary whenever an extension that keeps the all-in-one `DevConsolePan
 . never adds a module twice: a jar the console step already put on the path is not added again by a
   companion's own transitive dependencies, and a jar the project already resolves at runtime scope — the legacy
   declaration, kept working — is left where it is, not duplicated;
+. puts a companion whose manifest says `Vidocq-Application-Layer: true` on the application path when the application
+  runs in the application layer [.tag-new]#NEW#, next to the framework it reads, such as Vaadin's
+  `vidocq-runtime-vaadin-extension-dev`; every other dev tool stays on the module path;
 . logs one INFO line naming what it added:
 +
 [source,text]

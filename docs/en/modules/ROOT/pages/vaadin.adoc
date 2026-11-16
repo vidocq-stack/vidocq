@@ -337,9 +337,22 @@ times, Vaadin included.
 
 [[dev-reload-session]]A change in method bodies only, such as a new label or another click handler body, keeps the
 session: the JVM redefines the changed classes in place (xref:usage.adoc#dev-hot-swap[Hot swap]), and the log says
-`Hot reload - redefined 1 class in 12 ms, the application keeps running: MainView`. The open page keeps its state and
-runs the new code on its next request to the server; it does not refresh by itself, and a view built in its
-constructor shows the change only when it is built again: reload the page, or navigate to the view.
+`Hot reload - redefined 1 class in 12 ms, the application keeps running: MainView`. The open page keeps its session
+and runs the new code on its next request to the server.
+
+With `vidocq-runtime-vaadin-extension`, `vidocq:dev` also adds its dev companion, `vidocq-runtime-vaadin-extension-dev`
+[.tag-new]#NEW#, which refreshes the pages a change concerns:
+
+* a change in lambda bodies only, such as a click handler, refreshes nothing: the next click runs the new code, and
+  what the page holds, such as the value of a text field, stays;
+* any other body change, such as a view's constructor, reloads each open page that shows a component of a changed
+  class, and the log says `Hot reload - Vaadin: refreshed 1 open page showing MainView`. The page is built again from
+  the new code in the same session; what its fields held is lost, as with any page reload.
+
+The reload goes through `UI.access`: with `@Push` it reaches the browser at once. Without push, the companion adds a
+small script to each page, which listens to an event stream at `.vidocq/dev/redefined` and asks the server for the
+reload. A class that is not a component, but that a view reads in its constructor, refreshes no page: reload it by
+hand. Without the Vaadin extension, nothing refreshes by itself: reload the page, or navigate to the view.
 
 Any other change swaps the application layer and starts a new HTTP session. The new layer holds new Vaadin classes,
 so the old session and its UI cannot be carried over: the undeploy invalidates them and says so in the log,

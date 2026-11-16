@@ -223,6 +223,49 @@ this repository carries (xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools
 That one entry is what `vidocq:run`, the packaging goals and `vidocq:checkpom` read: whatever the declaring
 scope, a jar that carries it never ships, and a project that declares it anyway is warned, never failed.
 
+A companion that reads a framework of the application, such as Vaadin, adds a second entry,
+`<Vidocq-Application-Layer>true</Vidocq-Application-Layer>` [.tag-new]#NEW#: `vidocq:dev` then puts it on the
+application path, in the layer it recreates on each swap, next to the framework it reads
+(xref:modules/vidocq-runtime-maven-plugin.adoc#dev-tools[Dev tools and binaries]). Without it, a companion sits on the
+module path, below the application layer, and cannot read a module of that layer.
+
+[#redefinition-listener]
+=== Reacting to a redefinition [.tag-new]#NEW#
+
+When `vidocq:dev` redefines changed method bodies in place (xref:usage.adoc#dev-hot-swap[Hot swap]), the application
+keeps running, and nothing in it learns that its code changed. A companion that needs to know, to refresh what the
+old code drew, provides an `io.vidocq.runtime.spi.devconsole.RedefinitionListener`:
+
+[source,java]
+----
+module io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev {
+    requires io.vidocq.runtime.spi.devconsole;
+    provides io.vidocq.runtime.spi.devconsole.RedefinitionListener
+            with io.vidocq.runtime.extensions.jakartaee.web.vaadin.dev.VaadinRedefinitionListener;
+    // ...
+}
+----
+
+`redefined(Redefinition)` gets each loaded class the JVM redefined, `RedefinedClass.type()`, with the names of its
+changed methods, `methods()`; `onlyLambdaBodies()` says whether every one of them is a lambda body, which the next
+event runs without any refresh.
+
+* **When.** After the application acknowledged the redefinition, on one virtual thread: the listeners one after the
+  other, the redefinitions in order. Never after a layer swap, a refused redefinition, or a redefinition of classes
+  not loaded yet. A request can run the new code before the listener is called.
+* **Where from.** The runtime loads the listeners at each redefinition from the current application layer and its
+  parents: a companion marked `Vidocq-Application-Layer` is found, and one of a dropped layer never is. An instance
+  is created for each redefinition; state it needs, such as the open pages, lives in its module, which a swap drops
+  with the layer.
+* **What it may do.** Read the classes and their method names, act on the running application through its
+  framework's API (Vaadin's `UI.access`), log. It gets no `Instrumentation` and changes no class.
+* **What it must not do.** Block: a slow listener delays the listeners after it, never the reload loop. An exception
+  it throws is logged, `Hot reload - the redefinition listener <class> failed: <exception>`, and the next listener
+  still runs.
+
+`vidocq-runtime-vaadin-extension-dev` is the shipped example: it reloads the open pages that show a redefined
+component (xref:vaadin.adoc#dev-reload-session[Vaadin]).
+
 [#where-it-lives]
 == Where the panel lives
 
