@@ -81,6 +81,8 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
 
 /**
  * Vidocq dev mode — implementation of milestone <b>M1</b> from
@@ -384,16 +386,18 @@ public class VidocqDevMojo extends AbstractMojo {
                 : DevServices.OFF;
 
         // Dev tools (Vidocq/vidocq#143): the console, then each extension's -dev companion, on the child's module
-        // path only. No binary ever contains them.
-        modulePath.addAll(devTools(project.getArtifacts(), this::resolveDevConsole, this::resolveRuntime,
-                getLog()::warn, getLog()::info, devToolsOnPath));
+        // path, or in the application layer for a companion that reads the application's framework. No binary ever
+        // contains them.
+        List<Path> appPath = new ArrayList<>(layered.appPath());
+        addDevTools(devTools(project.getArtifacts(), this::resolveDevConsole, this::resolveRuntime,
+                getLog()::warn, getLog()::info, devToolsOnPath), layerMode, modulePath, appPath);
 
         Testing testing = startContinuousTesting(projectDir, sysProps, applicationFiles, devs);
         // A library that fails to reach an application package by reflection at run time: the application names the
         // package in this file, and the line is written to module-info.java (BUG-20261031-15).
         Path opensFile = buildDir.toPath().resolve(OpensRequestFile.FILE_NAME).toAbsolutePath();
         sysProps.put(OpensRequestFile.PROPERTY, opensFile.toString());
-        ChildLaunch launch = new ChildLaunch(modulePath, layered.appPath(), jvmArgs, sysProps, projectDir);
+        ChildLaunch launch = new ChildLaunch(modulePath, appPath, jvmArgs, sysProps, projectDir);
         try (var _ = OpensRequestFile.poll(opensFile, moduleInfoSource(), getLog()::info,
                 getLog()::warn)) {
             runSession(launch, watch, testing, devs.session(), reloadFile, inJvmReload);
@@ -1018,6 +1022,30 @@ public class VidocqDevMojo extends AbstractMojo {
         List<Path> jars = new ArrayList<>(console.apply(onPath));
         jars.addAll(DevModules.collect(artifacts, resolver, warn, info, onPath));
         return jars;
+    }
+
+    /**
+     * Puts the dev tools on the child's paths: the module path, except a companion whose manifest says
+     * {@value LayerSplit#APPLICATION_LAYER_ATTRIBUTE}{@code : true}. Such a companion reads the application's
+     * framework, which rides in the application layer (Vaadin), so it rides there too, as the layer split does with
+     * its extension (hot swap design §5). The legacy launch has no application layer: everything goes on the module
+     * path.
+     */
+    static void addDevTools(List<Path> devTools, boolean layerMode, List<Path> modulePath, List<Path> appPath) {
+        for (Path jar : devTools) {
+            (layerMode && ridesInTheApplicationLayer(jar) ? appPath : modulePath).add(jar);
+        }
+    }
+
+    private static boolean ridesInTheApplicationLayer(Path jar) {
+        try (var file = new JarFile(jar.toFile())) {
+            Manifest manifest = file.getManifest();
+            return manifest != null && Boolean.parseBoolean(
+                    manifest.getMainAttributes().getValue(LayerSplit.APPLICATION_LAYER_ATTRIBUTE));
+        } catch (IOException _) {
+            // Unreadable here, unreadable for the child too: it stays where the dev tools always went.
+            return false;
+        }
     }
 
     /**
