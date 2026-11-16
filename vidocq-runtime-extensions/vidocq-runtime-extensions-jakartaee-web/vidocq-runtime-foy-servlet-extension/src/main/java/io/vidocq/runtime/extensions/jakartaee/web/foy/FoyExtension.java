@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.foy.chappe.FoyChappeBoot;
 import io.vidocq.runtime.extensions.essentials.chappe.ChappeMountPoint;
+import io.vidocq.runtime.spi.DevHandover;
 import io.vidocq.runtime.spi.ExtensionContext;
 import io.vidocq.runtime.spi.VidocqConfiguration;
 import io.vidocq.runtime.spi.VidocqExtension;
@@ -56,6 +57,8 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
     private FoyDeployments deployments;
     /** The container of the boot this extension started in: the key of its deployments. */
     private Object boot;
+    /** The handover of a {@code vidocq:dev} swap: present in the reload loop only. */
+    private Optional<DevHandover> handover = Optional.empty();
 
     public FoyExtension() {
         // Declared here, not in MountTarget: the mount point names the class that mounts in its errors.
@@ -98,19 +101,22 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
 
     @Override
     public void onStart(ExtensionContext context) {
-        begin(context.container());
+        begin(context.container(), context.devHandover());
         start(context.beanManager(), context.config(), Thread.currentThread().getContextClassLoader());
     }
 
     /**
      * Binds this extension to its boot's deployments and has them closed before any Chappe server
      * stops: the declarative mounts register into the same {@link FoyDeployments}, so one hook covers
-     * both paths. Open WebSockets then get their 1001 Close while the listeners still serve.
+     * both paths. Open WebSockets then get their 1001 Close while the listeners still serve. During the stop of a
+     * swap that keeps the HTTP sessions, the close exports them into {@code handover} instead.
      */
-    void begin(Object bootKey) {
+    void begin(Object bootKey, Optional<DevHandover> handover) {
         boot = bootKey;
-        deployments = FoyDeployments.forBoot(bootKey);
-        beforeStop.accept(failureLogged(deployments::closeAll));
+        this.handover = handover;
+        FoyDeployments ofThisBoot = FoyDeployments.forBoot(bootKey);
+        deployments = ofThisBoot;
+        beforeStop.accept(failureLogged(() -> ofThisBoot.closeAll(handover)));
     }
 
     /**
@@ -142,6 +148,7 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
         FoyChappeBoot.Mounted mounted = deployed.get();
         // Recorded before mounting: a refused mount (duplicate prefix) still leaves it to onStop.
         deployments.register(AUTO_MOUNT, settings.listener(), mounted);
+        FoyDeployments.importSessions(mounted, handover);
         target.mount(settings.listener(), mounted.mountPrefix(), mounted.handler());
         LOG.log(System.Logger.Level.INFO, "Foy Servlet extension mounted on listener={0} prefix={1}",
                 settings.listener(), mounted.mountPrefix().isEmpty() ? "/" : mounted.mountPrefix());
@@ -150,7 +157,7 @@ public final class FoyExtension implements VidocqExtension, StartupReportContrib
     @Override
     public void onStop() {
         try {
-            deployments.closeAll();
+            deployments.closeAll(handover);
         } finally {
             if (boot != null) FoyDeployments.forget(boot);
         }

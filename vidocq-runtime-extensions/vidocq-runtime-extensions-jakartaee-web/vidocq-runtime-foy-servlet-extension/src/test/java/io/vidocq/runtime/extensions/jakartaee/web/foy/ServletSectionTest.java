@@ -25,6 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -34,7 +35,7 @@ class ServletSectionTest {
 
     @AfterEach
     void forget() {
-        deployments.closeAll();
+        deployments.closeAll(Optional.empty());
     }
 
     @Test

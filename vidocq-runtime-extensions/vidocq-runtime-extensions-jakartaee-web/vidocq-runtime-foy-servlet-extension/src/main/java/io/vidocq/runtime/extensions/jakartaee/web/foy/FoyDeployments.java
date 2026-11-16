@@ -24,6 +24,7 @@ import io.vidocq.foy.spi.security.RequestAuthentication;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMount;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMounts;
 import io.vidocq.runtime.spi.ApplicationLayer;
+import io.vidocq.runtime.spi.DevHandover;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletAuthentication;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletDeploymentListener;
@@ -200,19 +201,28 @@ final class FoyDeployments {
     }
 
     /**
-     * Closes every deployment of this boot, the last mounted first. Closing invalidates the sessions of each, and the
-     * log says how many when there were some: under {@code vidocq:dev} every in-JVM reload undeploys, and an open page
-     * then starts a new session (a Vaadin UI reloads).
+     * Closes every deployment of this boot, the last mounted first.
+     * <p>
+     * During the stop of a {@code vidocq:dev} swap that keeps the HTTP sessions ({@code handover} exporting), each
+     * deployment exports its sessions into the handover, under its {@linkplain #handoverKey key}, and logs nothing: the
+     * next deployment's import gives the exact count. Otherwise closing invalidates the sessions of each, and the log
+     * says how many when there were some: an open page then starts a new session (a Vaadin UI reloads).
      *
-     * @return the number of HTTP sessions the close invalidated
+     * @return the number of HTTP sessions the close invalidated, 0 when it exported them
      */
-    synchronized int closeAll() {
+    synchronized int closeAll(Optional<DevHandover> handover) {
+        DevHandover exportTo = handover.filter(DevHandover::exporting).orElse(null);
         RuntimeException failure = null;
         int sessions = 0;
         for (Live l : live.reversed()) {
             try {
-                sessions += l.mounted().activeSessions();
-                l.mounted().close();
+                if (exportTo != null) {
+                    String key = handoverKey(l.mounted().servletContext().getContextPath());
+                    exportTo.put(key, l.mounted().closeExportingSessions());
+                } else {
+                    sessions += l.mounted().activeSessions();
+                    l.mounted().close();
+                }
             } catch (RuntimeException e) {
                 if (failure == null) failure = e; else failure.addSuppressed(e);
             }
@@ -225,5 +235,31 @@ final class FoyDeployments {
         }
         if (failure != null) throw failure;
         return sessions;
+    }
+
+    /** The key of a deployment's HTTP sessions in a dev handover: {@code servlet:sessions:} and its context path. */
+    static String handoverKey(String contextPath) {
+        return "servlet:sessions:" + (contextPath.isEmpty() ? "/" : contextPath);
+    }
+
+    /**
+     * Before the mount of {@code mounted}: the HTTP sessions the previous deployment exported under the same context
+     * path, during the {@code vidocq:dev} swap that started this boot. The import never fails the start: bytes Foy
+     * refuses are logged, and the deployment starts without them.
+     */
+    static void importSessions(FoyChappeBoot.Mounted mounted, Optional<DevHandover> handover) {
+        Optional<byte[]> exported = handover
+                .flatMap(h -> h.take(handoverKey(mounted.servletContext().getContextPath())));
+        if (exported.isEmpty()) return;
+        try {
+            int kept = mounted.importSessions(exported.get());
+            if (kept > 0) {
+                LOG.log(System.Logger.Level.INFO, "Hot reload - kept "
+                        + (kept == 1 ? "1 HTTP session" : kept + " HTTP sessions") + " across the reload");
+            }
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "Hot reload - the HTTP sessions of the previous deployment could not "
+                    + "be imported, starting without them: " + e);
+        }
     }
 }

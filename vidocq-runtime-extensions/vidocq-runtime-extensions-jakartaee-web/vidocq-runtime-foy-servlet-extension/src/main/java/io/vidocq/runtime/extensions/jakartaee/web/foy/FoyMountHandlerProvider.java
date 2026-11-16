@@ -23,9 +23,11 @@ import io.vidocq.chappe.api.Handler;
 import io.vidocq.foy.chappe.FoyChappeBoot;
 import io.vidocq.runtime.extensions.essentials.chappe.spi.MountConfig;
 import io.vidocq.runtime.extensions.essentials.chappe.spi.MountHandlerProvider;
+import io.vidocq.runtime.spi.DevHandover;
 import jakarta.enterprise.inject.spi.BeanManager;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * {@code vidocq.http.mount.<n>.type=servlet}: mounts the application's servlets on a declared
@@ -50,10 +52,12 @@ public final class FoyMountHandlerProvider implements MountHandlerProvider {
     @Override
     public Handler create(MountConfig cfg) {
         return create(cfg, FoyDeployments.forBoot(cfg.extensionContext().container()),
-                cfg.extensionContext().beanManager(), Thread.currentThread().getContextClassLoader());
+                cfg.extensionContext().beanManager(), Thread.currentThread().getContextClassLoader(),
+                cfg.extensionContext().devHandover());
     }
 
-    Handler create(MountConfig cfg, FoyDeployments deployments, BeanManager beanManager, ClassLoader loader) {
+    Handler create(MountConfig cfg, FoyDeployments deployments, BeanManager beanManager, ClassLoader loader,
+                   Optional<DevHandover> handover) {
         String key = "vidocq.http.mount." + cfg.name();
         if ("true".equalsIgnoreCase(cfg.property("strip-prefix").map(String::trim).orElse("false"))) {
             // Foy dispatches on the full path: without its context path, every request would be a 404.
@@ -79,6 +83,7 @@ public final class FoyMountHandlerProvider implements MountHandlerProvider {
                         + ".type=servlet, but the application has no servlet, filter, listener, web.xml "
                         + "nor ServletContainerInitializer"));
         deployments.register(cfg.name(), cfg.listener(), mounted);
+        FoyDeployments.importSessions(mounted, handover);
         return mounted.handler();
     }
 }

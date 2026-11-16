@@ -20,12 +20,14 @@
 package io.vidocq.runtime.extensions.jakartaee.web.foy;
 
 import io.vidocq.chappe.api.Handler;
+import io.vidocq.chappe.api.Response;
 import io.vidocq.foy.chappe.FoyChappeBoot;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMount;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletAuthentication;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletInitParameters;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.live.ServletMounts;
 import io.vidocq.runtime.extensions.jakartaee.web.foy.fixture.LifecycleListener;
+import io.vidocq.runtime.extensions.jakartaee.web.foy.fixture.SessionServlet;
 import io.vidocq.runtime.spi.config.ConfigSource;
 import io.vidocq.runtime.spi.config.VidocqConfig;
 import org.junit.jupiter.api.AfterEach;
@@ -74,6 +76,21 @@ class FoyExtensionTest {
     /** {@link #WEB_XML} with a {@code <response-character-encoding>} of ISO-8859-1. */
     static final String ISO_8859_1_WEB_XML = WEB_XML.replace("<listener>",
             "<response-character-encoding>ISO-8859-1</response-character-encoding>\n  <listener>");
+
+    /** One servlet at {@code /set} and {@code /get}, over a session ({@link SessionServlet}). */
+    static final String SESSION_WEB_XML = """
+            <web-app xmlns="https://jakarta.ee/xml/ns/jakartaee" version="6.1">
+              <servlet>
+                <servlet-name>session</servlet-name>
+                <servlet-class>io.vidocq.runtime.extensions.jakartaee.web.foy.fixture.SessionServlet</servlet-class>
+              </servlet>
+              <servlet-mapping>
+                <servlet-name>session</servlet-name>
+                <url-pattern>/set</url-pattern>
+                <url-pattern>/get</url-pattern>
+              </servlet-mapping>
+            </web-app>
+            """;
 
     private final List<Mount> mounts = new ArrayList<>();
     private final List<FoyExtension> extensions = new ArrayList<>();
@@ -141,7 +158,7 @@ class FoyExtensionTest {
     @Test
     void startRegistersABeforeStopHookThatClosesTheDeployments(@TempDir Path root) throws Exception {
         FoyExtension extension = configured(Map.of());
-        extension.begin(new Object());
+        extension.begin(new Object(), Optional.empty());
         extension.start(null, config(Map.of()), loaderWith(root, WEB_XML));
         int before = LifecycleListener.DESTROYED.get();
 
@@ -181,7 +198,7 @@ class FoyExtensionTest {
         mounted.deployment().sessionManager().createNew();
         int[] invalidated = new int[1];
 
-        List<LogRecord> records = logsOf(FoyDeployments.class, () -> invalidated[0] = deployments.closeAll());
+        List<LogRecord> records = logsOf(FoyDeployments.class, () -> invalidated[0] = deployments.closeAll(Optional.empty()));
 
         assertEquals(2, invalidated[0]);
         assertEquals(1, records.size(), records.toString());
@@ -197,10 +214,143 @@ class FoyExtensionTest {
                 1800, "UTF-8", config(Map.of())).orElseThrow());
         int[] invalidated = {-1};
 
-        List<LogRecord> records = logsOf(FoyDeployments.class, () -> invalidated[0] = deployments.closeAll());
+        List<LogRecord> records = logsOf(FoyDeployments.class, () -> invalidated[0] = deployments.closeAll(Optional.empty()));
 
         assertEquals(0, invalidated[0]);
         assertEquals(List.of(), records);
+    }
+
+    @Test
+    void aSessionAttributeSurvivesASwap(@TempDir Path a, @TempDir Path b) throws Exception {
+        var handover = new MapHandover();
+        String cookie = sessionBeforeTheSwap(a, handover);
+
+        handover.exporting = true;
+        List<LogRecord> atClose = logsOf(FoyDeployments.class, beforeStopHooks.getFirst());
+        handover.exporting = false;
+        FoyExtension next = bootOf(handover);
+        ClassLoader loader = loaderWith(b, SESSION_WEB_XML);
+        List<LogRecord> atStart = logsOf(FoyDeployments.class, () -> next.start(null, config(Map.of()), loader));
+
+        assertEquals("kept", text(get(mounts.getLast().handler(), "/get", cookie)));
+        assertEquals(List.of(), messages(atClose));
+        assertEquals(List.of("Hot reload - kept 1 HTTP session across the reload"), messages(atStart));
+    }
+
+    @Test
+    void aHandoverOutsideAnExportLeavesTheCloseAsToday(@TempDir Path root) throws Exception {
+        var handover = new MapHandover();
+        sessionBeforeTheSwap(root, handover);
+
+        List<LogRecord> records = logsOf(FoyDeployments.class, beforeStopHooks.getFirst());
+
+        assertEquals(List.of("Undeploying the servlet application invalidated 1 HTTP session: its client starts a new "
+                + "one on its next request"), messages(records));
+        assertEquals(0, handover.puts);
+    }
+
+    @Test
+    void aSecondCloseInTheSameStopKeepsTheExport(@TempDir Path a, @TempDir Path b) throws Exception {
+        var handover = new MapHandover();
+        String cookie = sessionBeforeTheSwap(a, handover);
+        FoyExtension first = extensions.getLast();
+
+        handover.exporting = true;
+        beforeStopHooks.getFirst().run();
+        first.onStop();
+        handover.exporting = false;
+        bootOf(handover).start(null, config(Map.of()), loaderWith(b, SESSION_WEB_XML));
+
+        assertEquals("kept", text(get(mounts.getLast().handler(), "/get", cookie)));
+        assertEquals(1, handover.puts);
+    }
+
+    @Test
+    void refusedBytesStartWithoutThem(@TempDir Path root) throws Exception {
+        var handover = new MapHandover();
+        handover.values.put("servlet:sessions:/", new byte[] {1, 2, 3});
+        FoyExtension extension = bootOf(handover);
+        ClassLoader loader = loaderWith(root, SESSION_WEB_XML);
+
+        List<LogRecord> records = logsOf(FoyDeployments.class, () -> extension.start(null, config(Map.of()), loader));
+
+        assertEquals(1, records.size(), records.toString());
+        assertEquals(Level.WARNING, records.getFirst().getLevel());
+        assertTrue(records.getFirst().getMessage().startsWith("Hot reload - the HTTP sessions of the previous "
+                + "deployment could not be imported, starting without them: "), records.getFirst().getMessage());
+        Response response = get(mounts.getLast().handler(), "/get", null);
+        assertEquals(200, response.status().code());
+        assertEquals("none", text(response));
+    }
+
+    @Test
+    void aChangedContextPathStartsEmpty(@TempDir Path root) throws Exception {
+        var handover = new MapHandover();
+        handover.values.put("servlet:sessions:/old", new byte[] {1, 2, 3});
+        FoyExtension extension = configured(Map.of("vidocq.servlet.context-path", "/new"));
+        extension.begin(new Object(), Optional.of(handover));
+        ClassLoader loader = loaderWith(root, SESSION_WEB_XML);
+
+        List<LogRecord> records = logsOf(FoyDeployments.class, () -> extension.start(null, config(Map.of()), loader));
+
+        assertEquals(List.of(), messages(records));
+        assertTrue(handover.values.containsKey("servlet:sessions:/old"));
+        assertEquals("none", text(get(mounts.getLast().handler(), "/new/get", null)));
+    }
+
+    @Test
+    void anEmptyExportLogsNothing(@TempDir Path a, @TempDir Path b) throws Exception {
+        var handover = new MapHandover();
+        bootOf(handover).start(null, config(Map.of()), loaderWith(a, SESSION_WEB_XML));
+
+        handover.exporting = true;
+        List<LogRecord> atClose = logsOf(FoyDeployments.class, beforeStopHooks.getFirst());
+        handover.exporting = false;
+        FoyExtension next = bootOf(handover);
+        ClassLoader loader = loaderWith(b, SESSION_WEB_XML);
+        List<LogRecord> atStart = logsOf(FoyDeployments.class, () -> next.start(null, config(Map.of()), loader));
+
+        assertEquals(1, handover.puts);
+        assertEquals(List.of(), messages(atClose));
+        assertEquals(List.of(), messages(atStart));
+    }
+
+    @Test
+    void theHandoverKeyNamesTheContextPath() {
+        assertEquals("servlet:sessions:/", FoyDeployments.handoverKey(""));
+        assertEquals("servlet:sessions:/", FoyDeployments.handoverKey("/"));
+        assertEquals("servlet:sessions:/shop", FoyDeployments.handoverKey("/shop"));
+    }
+
+    /** A boot handed {@code handover}, serving {@link #SESSION_WEB_XML} from {@code root}: the cookie of a session it opened. */
+    private String sessionBeforeTheSwap(Path root, MapHandover handover) throws Exception {
+        bootOf(handover).start(null, config(Map.of()), loaderWith(root, SESSION_WEB_XML));
+        return cookieOf(get(mounts.getLast().handler(), "/set", null));
+    }
+
+    private FoyExtension bootOf(MapHandover handover) {
+        FoyExtension extension = configured(Map.of());
+        extension.begin(new Object(), Optional.of(handover));
+        return extension;
+    }
+
+    static Response get(Handler handler, String path, String cookie) throws Exception {
+        return handler.handle(new ChappeGet(path, cookie));
+    }
+
+    /** The {@code JSESSIONID=...} pair of the response's {@code Set-Cookie}. */
+    static String cookieOf(Response response) {
+        return response.headers().first("Set-Cookie").orElseThrow().split(";", 2)[0];
+    }
+
+    static String text(Response response) throws java.io.IOException {
+        try (var in = response.body().asInputStream()) {
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+    }
+
+    private static List<String> messages(List<LogRecord> records) {
+        return records.stream().map(LogRecord::getMessage).toList();
     }
 
     /** The records {@code type}'s logger publishes while {@code action} runs. */
@@ -263,7 +413,7 @@ class FoyExtensionTest {
         assertEquals("admin", mount.listener());
         assertEquals("/shop", mount.contextPath());
         assertEquals(0, mount.activeSessions().getAsInt());
-        deployments.closeAll();
+        deployments.closeAll(Optional.empty());
         FoyDeployments.forget(boot);
         assertTrue(ServletMounts.of(boot).isEmpty());
     }
