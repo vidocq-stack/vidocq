@@ -40,6 +40,10 @@ import java.util.Map;
  *
  * <p>A super-interface whose type argument is not a class once the variables are replaced (a wildcard, a nested
  * parameterized type, a variable the repository leaves open) is left out, and so are the interfaces above it.
+ *
+ * <p>The super-interfaces are read from the loaded interface, with {@code java.lang.reflect}: at the container start
+ * the language model of the build compatible extension gives them without their type arguments
+ * ({@code ClassInfo.superInterfaces()} answers {@code CrudRepository}, not {@code CrudRepository<Author, Long>}).
  */
 final class RepositoryBeanTypes {
 
