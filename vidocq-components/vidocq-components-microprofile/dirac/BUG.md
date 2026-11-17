@@ -301,3 +301,179 @@ equal metrics never compare equal in the `ConcurrentHashMap` key sets.
 Both records override `equals`, `hashCode` and `toString` to compare and print the tags by
 content. Regression tests: `DiracExtensionTest.ingestingTheSameClassTwiceKeepsOneMetricEach`,
 `preRegisteredMetricComparesTagContents`, `resolvedGaugeComparesTagContents`.
+
+---
+
+## DRC-011 — A metric on a method inherited from a superclass outside Vauban's index is never registered
+
+- **Opening date**: 2026-11-17
+- **Status**: ✅ FIXED 2026-11-17
+
+### Symptom
+
+A bean inherits, without overriding it, a method annotated `@Counted` or `@Timed` from a superclass that is not in
+Vauban's index: a class of a dependency jar, or one not added to the deployment. The metric is never registered. The
+interceptor still runs, since CDI passes the binding of a method not overridden on to the subclass (CDI 4.1, §4.2), so
+every call to the method throws `IllegalStateException: Counter metric was removed from registry`. Both paths lose it:
+the reflective scan, and the `$$DiracMetrics` companion that `dirac-processor` generates for a bean with metrics of its
+own, the path most applications take. Live on Vauban main (455067f5) and vauban#335 (131fb3e6). Vauban
+BUG-20261117-31 (b7af3df3), which describes such a superclass from its class file, keeps it with another cause.
+
+### Minimal repro
+
+- Scan: `InheritedMethodMetricCdiIntegrationTest.aMetricOnAMethodInheritedFromASuperclassOutOfTheDeploymentIsRegistered`.
+  An `@ApplicationScoped` bean extends `UnindexedBase`, whose `ping()` carries `@Counted`, and only the bean is added
+  to the container. Before the fix, on the three Vaubans: `the counter inherited.unindexed is registered when the bean
+  is deployed ==> expected: not <null>`.
+- Companion: `DiracMetricsProcessorTest.aBeanCompiledWithTheProcessorRegistersTheMetricOfAMethodInheritedFromAnotherJar`.
+  A top-level bean, compiled with the processor and with a `@Counted` method of its own, extends a class of another jar
+  whose `ping()` carries `@Counted`; only the bean is deployed. Before the fix, on the three Vaubans, the bean's own
+  counter is registered but not the inherited one: `the inherited counter is registered when the bean is deployed ==>
+  expected: not <null>`.
+
+### Cause
+
+- The reflective scan of `DiscoveredMetrics` read the declared methods of the bean class only. An inherited metric was
+  registered only when the extension visited the superclass on its own, which it does for a class of the index alone.
+  On Vauban main the superclass has no declaration, so `namesAMetric` sent the bean class to the scan, which found
+  nothing.
+- The processor read the members the bean class declares (`type.getEnclosedElements()`) only, and `ingest` takes the
+  companion instead of the scan.
+- `namesAMetric` read the class annotations of the superclasses, but the methods of the bean class only, through
+  `ClassInfo.methods()`. The language model says `methods()` includes those of the superclasses; Vauban's leaves them
+  out (Vauban BUG-20261117-42). Once Vauban describes the superclass (BUG-20261117-31), `namesAMetric` walks into it,
+  finds no class annotation and returns `false`: the bean class is not even scanned.
+
+A superclass in the index loses nothing: the extension visits it, abstract or not, and scans it on its own (the same
+test with `IndexedBase` passes on the three Vaubans before the fix).
+
+### Fix
+
+- `namesAMetric` reads the methods of every class it walks into, up to and excluding `java.lang.Object`, from that
+  class's own declaration, and still defers to the scan when a superclass has no declaration.
+- The scan and the processor also collect the metrics of the methods the bean class inherits from its superclasses and
+  does not override (neither private nor static), named after the class that declares them, as `CountedInterceptor`
+  and `TimedInterceptor` name them and as the TCK's `InheritedTimedMethodBeanTest` expects. The processor reads a
+  superclass of another jar from its class file and drops the overridden methods with `Elements.overrides`; the scan
+  compares names and parameter types, and sees an override through a type argument by its bridge method. Both leave
+  out a method of package access from another package than the bean's: it is not inherited (JLS 8.4.8), no subclass
+  intercepts it, and its counter would never move.
+- A superclass that cannot be linked at run time (one of its methods names a type of an optional dependency or of a
+  `requires static` module) ends the inherited walk. The bean keeps its own metrics and those found below; the
+  `NoClassDefFoundError` used to leave `ingest`, and the extension skipped the whole bean. The creator of the
+  synthetic bean reports it at `WARNING`; the extension's own pass, at build time or at start, reports it at `DEBUG`,
+  and keeps the class for the creator even when the bean has no metric of its own, since the metrics it would
+  inherit cannot be read. One walk serves `@Timed` and `@Counted`. So each run of the extension gives one `WARNING`:
+  one in a deployment frozen at build or one that runs the extension at start only, two when it runs at build and at
+  start, as each run registers its own synthetic bean (BUG-20261030-27 of vidocq).
+- None of it depends on Vauban BUG-20261117-42.
+
+Regression tests: `InheritedMethodMetricCdiIntegrationTest` (a superclass in the deployment, and one outside it) and
+`DiracMetricsProcessorTest.aBeanCompiledWithTheProcessorRegistersTheMetricOfAMethodInheritedFromAnotherJar`, run on
+Vauban main, vauban#335 and BUG-31; `DiracExtensionTest.scanFindsTheMetricsOfInheritedMethodsNamedAfterTheirDeclaringClass`,
+`DiracExtensionTest.aSuperclassThatCannotBeLinkedKeepsTheBeanOwnMetrics`,
+`theCreatorReportsASuperclassThatCannotBeLinkedAtWarning` and
+`aPackagePrivateMethodOfASuperclassInAnotherPackageRegistersNoMetric`;
+`DiracMetricsProcessorTest.companionListsTheMetricsOfInheritedMethodsNamedAfterTheirDeclaringClass` and
+`companionListsNoMetricForAPackagePrivateMethodOfASuperclassInAnotherPackage`.
+
+---
+
+## DRC-012 — An interface in the deployment registers counters that never move
+
+- **Opening date**: 2026-11-17
+- **Status**: OPEN
+
+### Symptom
+
+An interface of the deployment whose methods carry `@Counted` or `@Timed` is scanned like a bean: its metrics are
+registered and show in `/metrics`, but a bean that implements it and overrides the method is not intercepted for it, so
+they never move. An interface is not a bean (CDI 4.1, §3.1.1), and the bindings of an interface method are not
+inherited (§4.2 covers superclasses).
+
+The other side of it: a default method that the bean does not override, annotated on its interface, is intercepted
+through the interface's annotation by Weld SE and by Vauban main alike. When the interface is outside the deployment,
+Dirac registers nothing for it, and every call throws `IllegalStateException: Counter metric was removed from
+registry`, on both containers. When the interface is in the deployment, the scan of the interface registers the
+counter, and the call counts.
+
+### Minimal repro
+
+- `InheritedMethodMetricCdiIntegrationTest.anInterfaceOfTheDeploymentRegistersNoMetric` (`@Disabled("DRC-012")`), on
+  Vauban main and BUG-31: `an interface is not a bean: no counter for its method ==> expected: <null> but was:
+  <io.vidocq.dirac.internal.CounterImpl@...>`.
+- The default method: a probe on Weld SE (`dirac-it-weld`) and on Vauban main, not committed, nothing pre-registered,
+  the interface outside the deployment: `threw java.lang.IllegalStateException: Counter metric was removed from
+  registry: MetricID{name='iface.default.inherited', tags=[]}` on both.
+
+### Cause hypothesis
+
+`collectMetricAnnotations` visits every type of the deployment, interfaces included, and `DiscoveredMetrics.scan`
+reads the interface's declared methods as it reads a bean class's. Nothing registers, for the bean, the metrics of the
+default methods it inherits from its interfaces.
+
+### Fix, to do
+
+The two sides together: if Dirac stops scanning interfaces alone, the calls to a default method counted through its
+interface start throwing when the interface is in the deployment too, since the containers keep intercepting them.
+Dirac skips interfaces in the extension, and the scan and the processor register, for the bean, the metrics of the
+default methods it inherits and does not override.
+
+---
+
+## DRC-013 — A `@Gauge` on a method inherited from a superclass outside the index is never registered
+
+- **Opening date**: 2026-11-17
+- **Status**: OPEN
+
+### Symptom
+
+A bean inherits a `@Gauge` method from a superclass that is not in Vauban's index: the gauge is never registered. No
+call throws: a gauge is not intercepted, so CDI 4.1, §4.2, which passes interceptor bindings on, does not apply here.
+
+### Minimal repro
+
+`InheritedMethodMetricCdiIntegrationTest.aGaugeOnAMethodInheritedFromASuperclassOutOfTheDeploymentIsRegistered`
+(`@Disabled("DRC-013")`), on Vauban main and BUG-31: `the gauge inherited.gauge is registered ==> expected: not
+<null>`.
+
+### Cause hypothesis
+
+`DiscoveredMetrics.scanGaugeMethods` and the processor's gauge loop read the declared methods of the bean class only;
+the DRC-011 fix does not touch them. A fix has a second point to settle: `DiracExtension.resolveMetricName` names a
+gauge after `method.getDeclaringClass()`, so two beans that extend the same base of a jar would register the same gauge
+name twice, one per bean. That overlaps the gauge bean lookup that `fix/bean-class-lookup` changes in
+`GaugeRegistrationBean`.
+
+---
+
+## DRC-014 — A method counted through an application interceptor binding throws on every call
+
+- **Opening date**: 2026-11-17
+- **Status**: OPEN
+
+### Symptom
+
+A method that carries `@Counted` only through an application interceptor binding (an `@InterceptorBinding` annotation
+annotated `@Counted`): the scan registers one name, `CountedInterceptor` looks up another, and every call throws
+`IllegalStateException: Counter metric was removed from registry`.
+
+- The bean's own method, with a relative name: the scan registers `<bean class>.relative`, as the "Annotated Naming
+  Convention" of Metrics 5.1 says for a method; the interceptor looks up `<package>.relative.ping`, the class-level
+  rule. Older than DRC-011.
+- An inherited method, with the default name: the scan registers `<declaring class>.ping`, the interceptor looks up
+  `<bean class>.ping`. Before DRC-011 this call threw too, as the inherited metric was not registered at all.
+
+### Minimal repro
+
+`InheritedMethodMetricCdiIntegrationTest.aMethodCountedThroughAnApplicationBindingIsNamedAsTheScanNamesIt` and
+`anInheritedMethodCountedThroughAnApplicationBindingIsNamedAsTheScanNamesIt` (`@Disabled("DRC-014")`), on Vauban main
+and BUG-31: `IllegalStateException: Counter metric was removed from registry:
+MetricID{name='io.vidocq.dirac.cdi.internal.relative.ping', tags=[]}`, and the same with the bean class's name.
+
+### Cause hypothesis
+
+`CountedInterceptor.resolveMetricName` (~282, ~294) chooses between the method-level and the class-level rules, and
+between the declaring class and the bean class, with `method.isAnnotationPresent(Counted.class)`, which is false for
+an annotation an application binding carries; the scan finds it through `findCountedOnElement` and applies the
+method-level rule. `TimedInterceptor` (~328, ~340) has the same shape (not tested).

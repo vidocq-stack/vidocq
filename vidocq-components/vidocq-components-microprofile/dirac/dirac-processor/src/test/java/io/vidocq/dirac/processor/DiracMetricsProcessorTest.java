@@ -36,6 +36,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -60,9 +61,17 @@ class DiracMetricsProcessorTest {
     }
 
     private Compilation compile(File... sources) throws Exception {
+        return compile(List.of(), "-proc:full", sources);
+    }
+
+    /**
+     * Compiles {@code sources} against the test class path and {@code libraries}; {@code proc} says whether the
+     * processors run.
+     */
+    private Compilation compile(List<File> libraries, String proc, File... sources) throws Exception {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         File outputDir = Files.createDirectories(tempDir.resolve("classes-" + System.nanoTime())).toFile();
-        List<File> cpFiles = new ArrayList<>();
+        List<File> cpFiles = new ArrayList<>(libraries);
         for (String entry : System.getProperty("java.class.path", "").split(File.pathSeparator)) {
             if (!entry.isBlank()) cpFiles.add(new File(entry));
         }
@@ -88,7 +97,7 @@ class DiracMetricsProcessorTest {
         fm.setLocation(StandardLocation.CLASS_OUTPUT, List.of(outputDir));
         fm.setLocation(StandardLocation.CLASS_PATH, dedupCp);
         fm.setLocation(StandardLocation.ANNOTATION_PROCESSOR_PATH, dedupCp);
-        boolean ok = compiler.getTask(null, fm, diags, List.of("--release", "25", "-proc:full"),
+        boolean ok = compiler.getTask(null, fm, diags, List.of("--release", "25", proc),
                 null, fm.getJavaFileObjects(sources)).call();
         if (!ok) {
             StringBuilder sb = new StringBuilder("Compilation failed:\n");
@@ -473,5 +482,173 @@ class DiracMetricsProcessorTest {
         Class<?> kept = compilation.loader().loadClass("t.Dup$$DiracMetrics");
 
         assertEquals("hand-written", kept.getField("MARKER").get(null));
+    }
+
+    /**
+     * DRC-011 on the generated path: a bean compiled with the processor, which has metrics of its own, inherits without
+     * overriding it a {@code @Counted} method of a superclass from another jar, which the container does not index.
+     * CDI 4.1, §4.2, passes the binding on; MicroProfile Metrics 5.1 ("Responsibility of the MicroProfile Metrics
+     * implementation") registers the metric at deployment, and it counts the call.
+     */
+    @Test
+    void aBeanCompiledWithTheProcessorRegistersTheMetricOfAMethodInheritedFromAnotherJar() throws Exception {
+        File library = jar(compile(List.of(), "-proc:none", writeSource("lib/lib/Base.java", """
+                package lib;
+                import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                public class Base {
+                    @Counted(name = "generated.inherited", absolute = true)
+                    public String ping() { return "pong"; }
+                }
+                """)).outputDir());
+        var application = compile(List.of(library), "-proc:full", writeSource("app/app/Svc.java", """
+                package app;
+                import jakarta.enterprise.context.ApplicationScoped;
+                import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                @ApplicationScoped
+                public class Svc extends lib.Base {
+                    @Counted(name = "generated.own", absolute = true)
+                    public void own() {}
+                }
+                """));
+        assertNotNull(application.loader().getResource("app/Svc$$DiracMetrics.class"), "the processor ran");
+        assertNull(application.loader().getResource("lib/Base.class"), "the superclass is not compiled with the bean");
+
+        try (var loader = new URLClassLoader(new java.net.URL[] {application.outputDir().toURI().toURL(),
+                library.toURI().toURL()}, getClass().getClassLoader())) {
+            Class<?> bean = loader.loadClass("app.Svc");
+            var thread = Thread.currentThread();
+            var previous = thread.getContextClassLoader();
+            thread.setContextClassLoader(loader);
+            // The superclass is not added to the deployment: only the bean is, so the container does not index it.
+            try (var container = jakarta.enterprise.inject.se.SeContainerInitializer.newInstance()
+                    .disableDiscovery()
+                    .addBeanClasses(io.vidocq.dirac.cdi.internal.DiracExtension.class,
+                            io.vidocq.dirac.cdi.internal.CountedInterceptor.class,
+                            io.vidocq.dirac.cdi.internal.MetricRegistryProducerBean.class,
+                            io.vidocq.dirac.cdi.internal.GaugeRegistrationBean.class, bean)
+                    .initialize()) {
+                var registry = container.select(org.eclipse.microprofile.metrics.MetricRegistry.class).get();
+                var counter = registry.getCounter(new org.eclipse.microprofile.metrics.MetricID("generated.inherited"));
+                assertNotNull(registry.getCounter(new org.eclipse.microprofile.metrics.MetricID("generated.own")),
+                        "the bean's own counter, from its companion, is registered");
+                assertNotNull(counter, "the inherited counter is registered when the bean is deployed");
+                // Called by name: the bean class is not visible to this test at compile time.
+                assertEquals("pong", bean.getMethod("ping").invoke(container.select(bean).get()));
+                assertEquals(1, counter.getCount(), "the inherited counter counts the call");
+            } finally {
+                thread.setContextClassLoader(previous);
+            }
+        }
+    }
+
+    /**
+     * DRC-011: the companion lists the metrics of the methods the bean inherits and does not override, named after
+     * the class that declares them, as the runtime scan does; an overridden, a private or a static method passes
+     * nothing on (CDI 4.1, §4.2). An override through a type argument has another erasure, and still overrides.
+     */
+    @Test
+    void companionListsTheMetricsOfInheritedMethodsNamedAfterTheirDeclaringClass() throws Exception {
+        var compilation = compile(
+                writeSource("t/Grand.java", """
+                        package t;
+                        import org.eclipse.microprofile.metrics.annotation.Counted;
+                        import org.eclipse.microprofile.metrics.annotation.Timed;
+
+                        public class Grand<T> {
+                            @Timed public void timedInherited() {}
+                            @Counted public void countedFromGrandparent() {}
+                            @Counted public void overriddenByTheParent() {}
+                            @Counted public void overriddenThroughATypeArgument(T value) {}
+                        }
+                        """),
+                writeSource("t/Parent.java", """
+                        package t;
+                        import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                        public class Parent extends Grand<String> {
+                            @Counted public void countedInherited() {}
+                            @Counted public void overriddenByTheChild(String value) {}
+                            @Counted private void hidden() {}
+                            @Counted public static void shared() {}
+                            @Override public void overriddenByTheParent() { hidden(); }
+                            @Override public void overriddenThroughATypeArgument(String value) {}
+                        }
+                        """),
+                writeSource("t/Child.java", """
+                        package t;
+                        import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                        public class Child extends Parent {
+                            @Counted(name = "own", absolute = true) public void own() {}
+                            @Override public void overriddenByTheChild(String value) {}
+                        }
+                        """));
+        MetricsCompanion companion = compilation.companionOf("t.Child");
+
+        assertEquals(Set.of("t.Grand.timedInherited"), names(companion.timers()));
+        assertEquals(Set.of("own", "t.Parent.countedInherited", "t.Grand.countedFromGrandparent"),
+                names(companion.counters()));
+    }
+
+    /**
+     * DRC-011: a package-private method of a superclass in another package is not inherited (JLS 8.4.8), so no
+     * subclass of the bean's package intercepts it: the companion lists no metric for it, whether the bean declares a
+     * method of the same signature or not, as the runtime scan does.
+     */
+    @Test
+    void companionListsNoMetricForAPackagePrivateMethodOfASuperclassInAnotherPackage() throws Exception {
+        var compilation = compile(
+                writeSource("pp/lib/Base.java", """
+                        package lib;
+                        import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                        public class Base {
+                            @Counted(name = "base.public", absolute = true) public void open() {}
+                            @Counted(name = "base.packagePrivate", absolute = true) void packagePrivate() {}
+                        }
+                        """),
+                writeSource("pp/app/Heir.java", """
+                        package app;
+                        import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                        public class Heir extends lib.Base {
+                            @Counted(name = "heir.own", absolute = true) public void own() {}
+                        }
+                        """),
+                writeSource("pp/app/Redeclarer.java", """
+                        package app;
+                        import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                        public class Redeclarer extends lib.Base {
+                            @Counted(name = "redeclarer.own", absolute = true) public void own() {}
+                            void packagePrivate() {}
+                        }
+                        """));
+
+        assertEquals(Set.of("heir.own", "base.public"), names(compilation.companionOf("app.Heir").counters()));
+        assertEquals(Set.of("redeclarer.own", "base.public"),
+                names(compilation.companionOf("app.Redeclarer").counters()));
+    }
+
+    private static Set<String> names(List<MetricsCompanion.MetricSpec> specs) {
+        return specs.stream().map(MetricsCompanion.MetricSpec::name).collect(java.util.stream.Collectors.toSet());
+    }
+
+    /** Packs a compiled library into a jar of its own. */
+    private File jar(File classesDir) throws Exception {
+        Path jar = tempDir.resolve("library-" + System.nanoTime() + ".jar");
+        Path root = classesDir.toPath();
+        try (var out = new java.util.jar.JarOutputStream(Files.newOutputStream(jar));
+             var files = Files.walk(root)) {
+            for (Path file : files.filter(Files::isRegularFile).toList()) {
+                out.putNextEntry(new java.util.jar.JarEntry(root.relativize(file).toString()
+                        .replace(File.separatorChar, '/')));
+                out.write(Files.readAllBytes(file));
+                out.closeEntry();
+            }
+        }
+        return jar.toFile();
     }
 }

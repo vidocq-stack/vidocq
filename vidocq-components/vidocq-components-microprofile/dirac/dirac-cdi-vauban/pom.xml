@@ -97,6 +97,21 @@
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
+                <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <!-- A test reads what DiscoveredMetrics logs through the JDK's own logging, which
+                                 the module has no reason to require. -->
+                            <compilerArgs combine.children="append">
+                                <arg>--add-modules</arg>
+                                <arg>java.logging</arg>
+                                <arg>--add-reads</arg>
+                                <arg>io.vidocq.dirac.cdi.vauban=java.logging</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <!-- Tests run on the module path: the container is booted over test beans that have no generated provider, so Vauban reaches the test package reflectively and defines interceptor subclasses that call into vauban-core (module-path wiring without opens is covered by dirac-cdi-vauban-module-it). -->
             <plugin>
@@ -108,6 +123,7 @@
                         @{argLine}
                         --add-reads io.vidocq.dirac.cdi.vauban=io.vidocq.vauban.core
                         --add-opens io.vidocq.dirac.cdi.vauban/io.vidocq.dirac.cdi.internal=io.vidocq.vauban.core
+                        --add-reads io.vidocq.dirac.cdi.vauban=java.logging
                     </argLine>
                 </configuration>
             </plugin>

@@ -30,7 +30,9 @@ import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,12 +46,18 @@ import java.util.function.Function;
  */
 public final class DiscoveredMetrics {
 
+    private static final System.Logger LOG = System.getLogger(DiscoveredMetrics.class.getName());
     private static final String BEAN_CLASS_REQUIRED = "beanClass must not be null";
     private static final String REGISTRIES_REQUIRED = "registries must not be null";
+    private static final Function<AnnotatedElement, DiracExtension.MetricAnnotation> TIMED =
+            element -> DiracExtension.MetricAnnotation.of(DiracExtension.findTimedOnElement(element));
+    private static final Function<AnnotatedElement, DiracExtension.MetricAnnotation> COUNTED =
+            element -> DiracExtension.MetricAnnotation.of(DiracExtension.findCountedOnElement(element));
 
     private final Set<DiracExtension.ResolvedGauge> gauges = ConcurrentHashMap.newKeySet();
     private final Set<DiracExtension.PreRegisteredMetric> timers = ConcurrentHashMap.newKeySet();
     private final Set<DiracExtension.PreRegisteredMetric> counters = ConcurrentHashMap.newKeySet();
+    private boolean unlinkableSuperclass;
 
     /**
      * The union of {@code runs}, each metric once. DiracExtension may run at build time, from the codegen bundle,
@@ -72,8 +80,22 @@ public final class DiscoveredMetrics {
         return merged;
     }
 
-    /** Resolves the metrics of {@code beanClass}: its compile-time companion, else its annotations. */
+    /**
+     * Resolves the metrics of {@code beanClass}: its compile-time companion, else its annotations. A superclass that
+     * cannot be linked is reported at {@code WARNING}: the creator of the synthetic bean resolves each class it lists
+     * once.
+     */
     void ingest(Class<?> beanClass) {
+        ingest(beanClass, System.Logger.Level.WARNING);
+    }
+
+    /**
+     * Resolves the metrics of {@code beanClass}, and reports a superclass that cannot be linked at
+     * {@code unlinkable}: {@link DiracExtension} resolves each bean too, at build time or at start, and passes
+     * {@code DEBUG}, so that each run of the extension gives one {@code WARNING}, from the creator of its synthetic
+     * bean.
+     */
+    void ingest(Class<?> beanClass, System.Logger.Level unlinkable) {
         // CG-05: compile-time $$DiracMetrics companion first; the reflective annotation scan stays
         // as the documented fallback for classes compiled without the dirac-processor.
         var companion = CompanionRegistry.resolve(beanClass);
@@ -83,12 +105,19 @@ public final class DiscoveredMetrics {
         }
         CompanionRegistry.noteScanFallback();
         scanGaugeMethods(beanClass);
-        scanTimedMethods(beanClass);
-        scanCountedMethods(beanClass);
+        scan(beanClass, unlinkable, new Kind(timers, TIMED), new Kind(counters, COUNTED));
     }
 
     boolean isEmpty() {
         return gauges.isEmpty() && timers.isEmpty() && counters.isEmpty();
+    }
+
+    /**
+     * Whether a scan met a superclass it could not link: the metrics the bean would inherit from there up are
+     * unknown.
+     */
+    boolean metUnlinkableSuperclass() {
+        return unlinkableSuperclass;
     }
 
     Set<DiracExtension.ResolvedGauge> gauges() {
@@ -153,23 +182,47 @@ public final class DiscoveredMetrics {
     }
 
     void scanTimedMethods(Class<?> beanClass) {
-        scan(beanClass, timers,
-                element -> DiracExtension.MetricAnnotation.of(DiracExtension.findTimedOnElement(element)));
+        scan(beanClass, System.Logger.Level.WARNING, new Kind(timers, TIMED));
     }
 
     void scanCountedMethods(Class<?> beanClass) {
-        scan(beanClass, counters,
-                element -> DiracExtension.MetricAnnotation.of(DiracExtension.findCountedOnElement(element)));
+        scan(beanClass, System.Logger.Level.WARNING, new Kind(counters, COUNTED));
+    }
+
+    private void scan(Class<?> beanClass, System.Logger.Level unlinkable, Kind... kinds) {
+        if (scanMethods(beanClass, unlinkable, kinds)) {
+            unlinkableSuperclass = true;
+        }
+    }
+
+    /** A kind of metric a method or a constructor carries: where it goes, and how its annotation is found. */
+    private record Kind(Set<DiracExtension.PreRegisteredMetric> target,
+                        Function<AnnotatedElement, DiracExtension.MetricAnnotation> finder) {
+    }
+
+    /**
+     * Collects the metrics of each kind that {@code beanClass} declares, then, in one walk of its superclasses, those
+     * of the methods it inherits.
+     *
+     * @return whether the walk met a superclass that cannot be linked
+     */
+    private static boolean scanMethods(Class<?> beanClass, System.Logger.Level unlinkable, Kind... kinds) {
+        Objects.requireNonNull(beanClass, BEAN_CLASS_REQUIRED);
+        if (beanClass.isAnnotationPresent(jakarta.interceptor.Interceptor.class)) {
+            return false;
+        }
+        for (var kind : kinds) {
+            scanDeclared(beanClass, kind.target(), kind.finder());
+        }
+        return scanInheritedMethods(beanClass, unlinkable, kinds);
     }
 
     /**
      * Collects the metrics of the methods and constructors of {@code beanClass}, the annotation
      * found by {@code finder} on a member taking precedence over the one on the class.
      */
-    private static void scan(Class<?> beanClass, Set<DiracExtension.PreRegisteredMetric> target,
-                             Function<AnnotatedElement, DiracExtension.MetricAnnotation> finder) {
-        Objects.requireNonNull(beanClass, BEAN_CLASS_REQUIRED);
-        if (beanClass.isAnnotationPresent(jakarta.interceptor.Interceptor.class)) return;
+    private static void scanDeclared(Class<?> beanClass, Set<DiracExtension.PreRegisteredMetric> target,
+                                     Function<AnnotatedElement, DiracExtension.MetricAnnotation> finder) {
         var onClass = finder.apply(beanClass);
         for (var method : beanClass.getDeclaredMethods()) {
             var metric = methodMetric(beanClass, method, onClass, finder);
@@ -183,6 +236,69 @@ public final class DiscoveredMetrics {
                 target.add(metric);
             }
         }
+    }
+
+    /**
+     * Collects the metrics of the methods {@code beanClass} inherits from its superclasses: a subclass inherits the
+     * interceptor binding of a non-static method it does not override (CDI 4.1, §4.2). Each one is named after the
+     * class that declares it, as the interceptors name it. The superclass need not be in the container's index: it
+     * may come from a dependency jar, and then the extension never visits it on its own (DRC-011).
+     *
+     * @return whether the walk met a superclass that cannot be linked
+     */
+    private static boolean scanInheritedMethods(Class<?> beanClass, System.Logger.Level unlinkable, Kind... kinds) {
+        var declaredBelow = new HashSet<String>();
+        for (var method : beanClass.getDeclaredMethods()) {
+            declaredBelow.add(signature(method));
+        }
+        // A method of package access is inherited only when every class from the bean up to its own is in the
+        // bean's package (JLS 8.4.8).
+        boolean beanPackageSoFar = true;
+        for (Class<?> type = beanClass.getSuperclass(); type != null && type != Object.class;
+             type = type.getSuperclass()) {
+            beanPackageSoFar &= type.getPackageName().equals(beanClass.getPackageName());
+            try {
+                scanSuperclassMethods(type, beanPackageSoFar, declaredBelow, kinds);
+            } catch (LinkageError unlinkableSuperclass) {
+                // A method of the superclass names a type absent at run time, from an optional dependency or a
+                // `requires static` module: neither its methods nor those further up can be read, so whether they
+                // carry metrics is unknown. The bean's own metrics and those found below stay.
+                LOG.log(unlinkable, "{0} extends {1}, which cannot be linked: the metrics of the methods it inherits"
+                                + " from {1} and above, if any, are not registered: {2}",
+                        beanClass.getName(), type.getName(), unlinkableSuperclass.toString());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void scanSuperclassMethods(Class<?> type, boolean samePackage, Set<String> declaredBelow,
+                                              Kind... kinds) {
+        for (var method : type.getDeclaredMethods()) {
+            // Overridden when a class further down declares the same signature, which then hides it further up.
+            boolean overridden = !declaredBelow.add(signature(method));
+            if (!overridden && isInheritable(method, samePackage)) {
+                for (var kind : kinds) {
+                    var metric = methodMetric(type, method, null, kind.finder());
+                    if (metric != null) {
+                        kind.target().add(metric);
+                    }
+                }
+            }
+        }
+    }
+
+    /** Neither private nor, from another package than the bean's, of package access (JLS 8.4.8). */
+    private static boolean isInheritable(Method method, boolean samePackage) {
+        int modifiers = method.getModifiers();
+        if (Modifier.isPrivate(modifiers)) {
+            return false;
+        }
+        return samePackage || Modifier.isPublic(modifiers) || Modifier.isProtected(modifiers);
+    }
+
+    private static String signature(Method method) {
+        return method.getName() + Arrays.toString(method.getParameterTypes());
     }
 
     private static DiracExtension.PreRegisteredMetric methodMetric(

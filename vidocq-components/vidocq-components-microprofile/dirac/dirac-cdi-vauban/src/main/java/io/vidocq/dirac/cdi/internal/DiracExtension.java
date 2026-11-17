@@ -71,6 +71,23 @@ public class DiracExtension implements BuildCompatibleExtension {
         meta.addInterceptorBinding(Counted.class);
     }
 
+    /**
+     * Whether the synthetic {@link DiscoveredMetrics} bean of this container lists {@code beanClass}, for its creator
+     * to resolve again: the class carries metrics, or extends a superclass that cannot be linked. Resolving them here
+     * validates them (a bad {@code @Gauge} fails the deployment). CG-05: the compile-time {@code $$DiracMetrics}
+     * companion first, the reflective scan as the documented fallback for classes compiled without
+     * {@code dirac-processor}.
+     * <p>
+     * A superclass that cannot be linked is reported at {@code DEBUG} here, and the class is kept even with no metric
+     * found: the metrics it would inherit cannot be read, and the creator reports it at {@code WARNING} at every start,
+     * a deployment frozen at build included, where this pass ran at build only. Package-private for the test.
+     */
+    static boolean keepsForTheCreator(Class<?> beanClass) {
+        var probe = new DiscoveredMetrics();
+        probe.ingest(beanClass, System.Logger.Level.DEBUG);
+        return !probe.isEmpty() || probe.metUnlinkableSuperclass();
+    }
+
     @Enhancement(types = Object.class, withSubtypes = true)
     public void collectMetricAnnotations(ClassInfo classInfo, Messages messages) {
         var beanClassName = classInfo.name();
@@ -80,14 +97,7 @@ public class DiracExtension implements BuildCompatibleExtension {
         }
         try {
             var beanClass = Class.forName(beanClassName, false, Thread.currentThread().getContextClassLoader());
-            // CG-05: compile-time $$DiracMetrics companion first; the reflective
-            // annotation scan below stays as the documented fallback for classes
-            // compiled without the dirac-processor.
-            // Resolving the metrics here validates them (a bad @Gauge fails the deployment); only the
-            // class name is kept, for the synthetic DiscoveredMetrics bean of this container.
-            var probe = new DiscoveredMetrics();
-            probe.ingest(beanClass);
-            if (!probe.isEmpty()) {
+            if (keepsForTheCreator(beanClass)) {
                 metricClasses.add(beanClassName);
             }
         } catch (ClassNotFoundException | LinkageError notVisible) {
@@ -103,37 +113,39 @@ public class DiracExtension implements BuildCompatibleExtension {
         }
     }
 
+    private static final String OBJECT = "java.lang.Object";
     private static final java.util.List<Class<? extends java.lang.annotation.Annotation>> METRIC_ANNOTATIONS =
             java.util.List.of(Timed.class, Counted.class, org.eclipse.microprofile.metrics.annotation.Gauge.class);
 
     /**
-     * Whether the declaration of a class, its superclasses (the class annotations are inherited), its methods or its
-     * constructors names a metric annotation, directly or on one of their annotations as the reflective scan reads
-     * them. A class for which this is false has no metric: it is neither loaded nor scanned. Package-private for the
-     * test.
+     * Whether the declaration of a class or of its superclasses (the class annotations and the methods not overridden
+     * are inherited), their methods or the class's constructors names a metric annotation, directly or on one of their
+     * annotations as the reflective scan reads them. A class for which this is false has no metric: it is neither
+     * loaded nor scanned. The methods of each superclass are read from its own declaration: a container may leave
+     * them out of the subclass's {@code methods()} (DRC-011). Package-private for the test.
      */
     static boolean namesAMetric(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
+        if (anyCarriesAMetric(classInfo.constructors())) {
+            return true;
+        }
         var type = classInfo;
-        while (true) {
-            if (carriesAMetric(type.annotations())) {
+        while (type != null && !OBJECT.equals(type.name())) {
+            if (carriesAMetric(type.annotations()) || anyCarriesAMetric(type.methods())) {
                 return true;
             }
             var superclass = type.superClassDeclaration();
-            if (superclass == null) {
-                if (hasUnreadableSuperclass(type)) {
-                    return true; // an inherited class annotation cannot be ruled out: the reflective scan decides
-                }
-                break;
+            if (superclass == null && hasUnreadableSuperclass(type)) {
+                return true; // an inherited annotation cannot be ruled out: the reflective scan decides
             }
             type = superclass;
         }
-        for (var method : classInfo.methods()) {
-            if (carriesAMetric(method.annotations())) {
-                return true;
-            }
-        }
-        for (var constructor : classInfo.constructors()) {
-            if (carriesAMetric(constructor.annotations())) {
+        return false;
+    }
+
+    private static boolean anyCarriesAMetric(
+            java.util.Collection<? extends jakarta.enterprise.lang.model.AnnotationTarget> declarations) {
+        for (var declaration : declarations) {
+            if (carriesAMetric(declaration.annotations())) {
                 return true;
             }
         }
@@ -143,7 +155,7 @@ public class DiracExtension implements BuildCompatibleExtension {
     /** A superclass other than {@code Object} whose declaration the container does not describe. */
     private static boolean hasUnreadableSuperclass(jakarta.enterprise.lang.model.declarations.ClassInfo type) {
         var superClass = type.superClass();
-        return superClass != null && !"java.lang.Object".equals(String.valueOf(superClass));
+        return superClass != null && !OBJECT.equals(String.valueOf(superClass));
     }
 
     private static boolean carriesAMetric(

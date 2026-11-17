@@ -33,6 +33,7 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic;
@@ -110,7 +111,8 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
     }
 
     // ------------------------------------------------------------------
-    // Model — mirrors DiracExtension scan semantics exactly
+    // Model — mirrors the DiscoveredMetrics scan: the bean's own members, then the methods it
+    // inherits from its superclasses and does not override, named after their declaring class
     // ------------------------------------------------------------------
 
     /** The names a bean class contributes to its metric names. */
@@ -163,6 +165,7 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
                 addConstructorSpec(counters, bean, Declared.counted(findCounted(ctor)), classCounted);
             }
         }
+        addInheritedMethodSpecs(type, timers, counters);
 
         if (timers.isEmpty() && counters.isEmpty() && gauges.isEmpty()) {
             return; // not a metric bean — nothing to generate, nothing to skip
@@ -171,6 +174,66 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
             throw new SkipGeneration("nested bean classes are not emitted as companions");
         }
         emit(type, bean, timers, counters, gauges);
+    }
+
+    /**
+     * The metrics of the methods {@code type} inherits from its superclasses and does not override (neither private
+     * nor static), named after the class that declares them: CDI 4.1, §4.2, passes their binding on, and the runtime
+     * scan reads them the same way (DRC-011). A superclass of another jar is read from its class file.
+     */
+    private void addInheritedMethodSpecs(TypeElement type, List<Spec> timers, List<Spec> counters)
+            throws SkipGeneration {
+        var elements = processingEnv.getElementUtils();
+        String beanPackage = elements.getPackageOf(type).getQualifiedName().toString();
+        List<ExecutableElement> declaredBelow = new ArrayList<>(ElementFilter.methodsIn(type.getEnclosedElements()));
+        // A method of package access is inherited only when every class from the bean up to its own is in the
+        // bean's package (JLS 8.4.8).
+        boolean beanPackageSoFar = true;
+        for (TypeElement superclass = superclassOf(type); superclass != null; superclass = superclassOf(superclass)) {
+            var declaring = new BeanNames(superclass.getQualifiedName().toString(),
+                    superclass.getSimpleName().toString(),
+                    elements.getPackageOf(superclass).getQualifiedName().toString());
+            beanPackageSoFar &= declaring.packageName().equals(beanPackage);
+            List<ExecutableElement> methods = ElementFilter.methodsIn(superclass.getEnclosedElements());
+            for (ExecutableElement method : methods) {
+                if (isInherited(method, beanPackageSoFar, declaredBelow, type)) {
+                    addMethodSpec(timers, declaring, method, Declared.timed(findTimed(method)), null);
+                    addMethodSpec(counters, declaring, method, Declared.counted(findCounted(method)), null);
+                }
+            }
+            declaredBelow.addAll(methods);
+        }
+    }
+
+    /**
+     * Neither private nor static, of package access only when {@code samePackage}, and overridden by no method of
+     * {@code type} or of a class in between.
+     */
+    private boolean isInherited(ExecutableElement method, boolean samePackage, List<ExecutableElement> declaredBelow,
+                                TypeElement type) {
+        Set<Modifier> modifiers = method.getModifiers();
+        if (modifiers.contains(Modifier.PRIVATE) || modifiers.contains(Modifier.STATIC)) {
+            return false;
+        }
+        if (!samePackage && !modifiers.contains(Modifier.PUBLIC) && !modifiers.contains(Modifier.PROTECTED)) {
+            return false;
+        }
+        var elements = processingEnv.getElementUtils();
+        for (ExecutableElement below : declaredBelow) {
+            if (elements.overrides(below, method, type)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** The superclass of {@code type}, or {@code null} at {@code java.lang.Object}. */
+    private static TypeElement superclassOf(TypeElement type) {
+        if (!(type.getSuperclass() instanceof DeclaredType declared)) {
+            return null;
+        }
+        var superclass = (TypeElement) declared.asElement();
+        return superclass.getQualifiedName().contentEquals("java.lang.Object") ? null : superclass;
     }
 
     /** A member annotation wins over the class one, which does not apply to private methods. */

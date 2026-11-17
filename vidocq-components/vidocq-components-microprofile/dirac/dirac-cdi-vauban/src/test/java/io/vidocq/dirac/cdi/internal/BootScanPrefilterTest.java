@@ -83,6 +83,14 @@ class BootScanPrefilterTest {
         }
     }
 
+    @ApplicationScoped
+    static class ConstructorCountedService {
+        @Counted(name = "constructed", absolute = true)
+        ConstructorCountedService() {
+            // counted at construction: the class names a metric through its constructor only
+        }
+    }
+
     /** Records, for each class the container describes, what the prefilter decides. */
     public static class Probe implements jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension {
         static final java.util.Map<String, Boolean> DECISIONS = new java.util.concurrent.ConcurrentHashMap<>();
@@ -104,7 +112,7 @@ class BootScanPrefilterTest {
                 .disableDiscovery()
                 .addBeanClasses(DiracExtension.class, Probe.class, MetricRegistryProducerBean.class,
                         GaugeRegistrationBean.class, PlainService.class, GaugedService.class, FlaggedService.class,
-                        InheritingService.class)
+                        InheritingService.class, ConstructorCountedService.class)
                 .initialize()) {
 
             assertEquals(Boolean.FALSE, Probe.DECISIONS.get(PlainService.class.getName()));
@@ -113,10 +121,12 @@ class BootScanPrefilterTest {
             assertEquals(Boolean.TRUE, Probe.DECISIONS.get(FlaggedService.class.getName()));
             assertEquals(Boolean.TRUE, Probe.DECISIONS.get(InheritingService.class.getName()),
                     "an undescribed superclass may carry an inherited metric");
+            assertEquals(Boolean.TRUE, Probe.DECISIONS.get(ConstructorCountedService.class.getName()));
             var registry = container.select(MetricRegistryProducerBean.class).get().applicationRegistry();
             assertNotNull(registry.getGauge(new MetricID("prefilter.gauge")));
             assertNotNull(registry.getCounter(new MetricID("flagged")));
             assertNotNull(registry.getCounter(new MetricID("base")));
+            assertNotNull(registry.getCounter(new MetricID("constructed")));
         }
     }
 }
