@@ -366,8 +366,9 @@ field, or when its listeners moved, lambdas or anonymous classes, and says why: 
 lambdas moved, and a restored listener could run another one's code`. `-Dvidocq.dev.keepSessions=false` drops it at
 every swap. A dropped session is invalidated, `Undeploying the servlet application invalidated 1 HTTP session: its
 client starts a new one on its next request`, and the open page reloads on its next request, as after a session
-timeout. A session that holds a `@SessionScoped` bean, the `@Inject HttpSession` bean or a CDI client proxy does not
-move yet: Foy drops it at the stop with a WARNING, and its page starts a new session.
+timeout. A session that holds `@SessionScoped` beans moves with them [.tag-new]#NEW#, with their state and the
+client proxies they hold, so a view that reads a session bean finds what it held before the swap; one that holds an
+intercepted or non-`Serializable` session bean stays behind with Foy's WARNING, and its page starts a new session.
 
 [#package]
 == `vidocq:package`

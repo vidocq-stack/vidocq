@@ -325,9 +325,14 @@ line at all. Sessions
 the new deployment cannot read are dropped with one WARNING, and it starts anyway: `Hot reload - the HTTP sessions of
 the previous deployment could not be imported, starting without them: ...`.
 
-A session that holds a `@SessionScoped` bean, the xref:modules/vidocq-runtime-extensions.adoc#servlet-built-in-beans[`@Inject
-HttpSession` bean] or a CDI client proxy does not move yet: Foy drops it at the stop, with its WARNING, and its client
-starts a new session. Plain servlet sessions and Vaadin sessions move.
+A session that holds `@SessionScoped` beans moves with them [.tag-new]#NEW#: each instance keeps its state and belongs
+to the new container, the client proxies it holds and the `Event`, `Instance`, `Provider` or `BeanManager` it injects
+read back as the new container's, and the
+xref:modules/vidocq-runtime-extensions.adoc#servlet-built-in-beans[`@Inject HttpSession` bean] gives the session
+read back. This is CDI passivation: no `@PreDestroy` runs on the old side, no `@PostConstruct` on the new one
+(xref:foy::internals.adoc#sessions-across-redeploy[Foy, Sessions across a redeploy]). A session that holds an
+intercepted `@SessionScoped` instance, or one that is not `Serializable`, stays behind whole: Foy drops it at the
+stop with its WARNING, and its client starts a new session.
 
 [[dev-hot-swap]]*Hot swap.* A change in method bodies only is applied to the running application: the JVM redefines
 the changed classes in place, through the agent `vidocq:dev` starts its child with, `vidocq-runtime-dev-agent`. The
