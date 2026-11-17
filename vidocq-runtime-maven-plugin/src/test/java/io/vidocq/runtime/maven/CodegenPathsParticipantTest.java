@@ -133,7 +133,7 @@ class CodegenPathsParticipantTest {
 
         new CodegenPathsParticipant().afterProjectsRead(session);
 
-        // The parent's five, and the build identity the parent writes with git-commit-id-maven-plugin.
+        // The parent's six, the build identity among them.
         assertEquals(6, vidocq.getExecutions().size(), vidocq.getExecutions().toString());
         assertEquals("25", model.getProperties().getProperty("maven.compiler.release"));
         // What was added is left for checkpom, which asks the pom for what an IDE reads there (the release).

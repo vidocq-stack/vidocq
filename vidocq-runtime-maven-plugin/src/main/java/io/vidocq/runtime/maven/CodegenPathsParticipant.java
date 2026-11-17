@@ -45,7 +45,7 @@ public final class CodegenPathsParticipant extends AbstractMavenLifecyclePartici
 
     private static final Logger LOG = LoggerFactory.getLogger(CodegenPathsParticipant.class);
 
-    /** The property that skips {@code git-commit-id-maven-plugin}, which writes the build identity. */
+    /** The property that skips {@code git-commit-id-maven-plugin}, which a pom may run to write the build identity. */
     static final String GIT_COMMIT_ID_SKIP = "maven.gitcommitid.skip";
 
     @Override

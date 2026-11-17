@@ -45,7 +45,7 @@ class ApplicationBuildTest {
 
     private static final String COMPILER = "org.apache.maven.plugins:maven-compiler-plugin";
     private static final String SUREFIRE = "org.apache.maven.plugins:maven-surefire-plugin";
-    /** The parent's five executions, then the build identity the parent writes with git-commit-id-maven-plugin. */
+    /** The parent's six executions, the build identity last (BUG-20261117-06). */
     private static final List<String> PARENT_EXECUTIONS = List.of(
             "vidocq-checkpom:checkpom@validate",
             "vidocq-test-path:test-path@process-test-classes",
@@ -80,8 +80,9 @@ class ApplicationBuildTest {
     }
 
     /**
-     * Vidocq/vidocq#380: the build identity comes from {@code vidocq:build-info} without the parent, and from
-     * {@code git-commit-id-maven-plugin} with it, or with a pom that runs that plugin itself: never both.
+     * Vidocq/vidocq#380: the build identity comes from {@code vidocq:build-info}, with the parent as without it
+     * (BUG-20261117-06), and from {@code git-commit-id-maven-plugin} in a pom that runs that plugin itself: never
+     * both.
      */
     @Test
     void aProjectThatRunsGitCommitIdWritesItsBuildIdentityOnceOnly() {

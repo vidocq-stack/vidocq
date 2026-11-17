@@ -40,9 +40,9 @@ import java.util.function.Predicate;
 /**
  * Gives the effective model of an application that declares the plugin with {@code <extensions>true</extensions>}
  * the build {@code vidocq-runtime-parent} carries, where the model lacks it (Vidocq/vidocq#380): the Java release,
- * the source encoding, the compiler argument that turns the Vauban provides hint off, the five executions of the
- * plugin and the build identity ({@code build-info}, where {@code git-commit-id-maven-plugin} does not write it),
- * the versions of the lifecycle plugins, the runtime path Surefire hands to the tests, and the m2e switch that runs
+ * the source encoding, the compiler argument that turns the Vauban provides hint off, the six executions of the
+ * plugin (the build identity, {@code build-info}, among them, where {@code git-commit-id-maven-plugin} does not write
+ * it), the versions of the lifecycle plugins, the runtime path Surefire hands to the tests, and the m2e switch that runs
  * the annotation processors in Eclipse. What the model has, from the parent or from the application's own pom, is
  * kept as it is: an execution is told by its goal, whatever its id and phase, and a release by the properties or the
  * compiler configuration.
@@ -82,8 +82,8 @@ final class ApplicationBuild {
     private static final String COMPILER_ARGS = "compilerArgs";
     private static final String SYSTEM_PROPERTY_VARIABLES = "systemPropertyVariables";
     /**
-     * The executions vidocq-runtime-parent binds, then the build identity, which the parent writes with
-     * git-commit-id-maven-plugin and the plugin with its own goal; a null phase is the goal's default.
+     * The executions vidocq-runtime-parent binds, the build identity last (BUG-20261117-06: the parent wrote it with
+     * git-commit-id-maven-plugin before); a null phase is the goal's default.
      */
     private static final List<Execution> EXECUTIONS = List.of(
             new Execution("vidocq-checkpom", "checkpom", "validate"),
@@ -175,7 +175,7 @@ final class ApplicationBuild {
     /**
      * Binds every goal of the parent's executions the plugin does not bind yet, under the parent's id and phase. The
      * build identity is written once: not by {@code build-info} where {@code git-commit-id-maven-plugin} runs
-     * ({@code gitCommitId}), which the parent, or the pom, binds.
+     * ({@code gitCommitId}), which the pom binds.
      */
     private static void executions(Plugin vidocq, boolean gitCommitId, List<String> added) {
         Set<String> bound = new HashSet<>();

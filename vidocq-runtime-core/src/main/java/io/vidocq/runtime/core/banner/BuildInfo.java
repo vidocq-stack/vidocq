@@ -54,7 +54,8 @@ import java.util.zip.ZipFile;
  *   <li>{@link java.lang.module.ModuleDescriptor#rawVersion()} of a named module (Maven passes
  *       {@code --module-version});</li>
  *   <li>{@code git.build.version} of {@value #BUILD_INFO_DIR}{@code <artifactId>.properties},
- *       written by {@code git-commit-id-maven-plugin} as configured in {@code vidocq-parent};</li>
+ *       written by {@code git-commit-id-maven-plugin} as {@code vidocq-parent} configures it, or, for an
+ *       application, by {@code vidocq:build-info};</li>
  *   <li>{@code version} of {@code META-INF/maven/<groupId>/<artifactId>/pom.properties}.</li>
  * </ol>
  *

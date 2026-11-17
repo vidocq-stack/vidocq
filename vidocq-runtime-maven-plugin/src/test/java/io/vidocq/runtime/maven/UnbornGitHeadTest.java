@@ -41,8 +41,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * A project in a git repository without any commit yet, the beginner's {@code vidocq create … && git init &&
  * ./mvnw package}, failed in {@code git-commit-id-maven-plugin} ("Could not get HEAD Ref"), which none of its
- * {@code failOn…} switches covers. The participant skips the plugin there; the build identity is then left out,
- * as outside a repository (BUG-20261030-01).
+ * {@code failOn…} switches covers (BUG-20261030-01). {@code vidocq-runtime-parent} no longer runs that plugin
+ * (BUG-20261117-06), but a pom may: the participant skips it there, and the build identity is left out, as outside a
+ * repository.
  */
 class UnbornGitHeadTest {
 

@@ -31,37 +31,46 @@ import java.util.Optional;
 /**
  * The identity of a build of an application, what {@code vidocq:build-info} writes into
  * {@code META-INF/vidocq/build-info/<artifactId>.properties} and the runtime's {@code BuildInfo} reads: the keys
- * {@code git-commit-id-maven-plugin} wrote under {@code vidocq-runtime-parent}, plus the full commit and the branch
- * (Vidocq/vidocq#380).
+ * {@code git-commit-id-maven-plugin} writes for the jars of {@code io.vidocq:vidocq-parent}, plus the full commit and
+ * the branch (Vidocq/vidocq#380).
  *
  * <p>Outside any git repository the build does not fail: the commit and the branch read {@value #UNVERSIONED}, and
- * the build time is still written.</p>
+ * the build time is still written. Without an answer from the {@code git} command, the dirty flag and the commit time
+ * are left out (BUG-20261117-06).</p>
  *
- * @param version the project version
- * @param commit  the full commit hash, or {@value #UNVERSIONED}
- * @param branch  the branch, {@code HEAD} when detached, or {@value #UNVERSIONED}
- * @param dirty   whether tracked files were modified, {@code null} when git could not tell
- * @param builtAt the build time, to the second
+ * @param version     the project version
+ * @param commit      the full commit hash, or {@value #UNVERSIONED}
+ * @param branch      the branch, {@code HEAD} when detached, or {@value #UNVERSIONED}
+ * @param dirty       whether tracked files were modified, {@code null} when git could not tell
+ * @param committedAt when the commit was made, {@code null} when git could not tell
+ * @param builtAt     the build time, to the second
  */
-public record BuildIdentity(String version, String commit, String branch, Boolean dirty, Instant builtAt) {
+public record BuildIdentity(String version, String commit, String branch, Boolean dirty, Instant committedAt,
+                            Instant builtAt) {
 
     /** The commit of a build no repository names; the same word the runtime shows for a version it cannot find. */
     public static final String UNVERSIONED = "unversionned";
 
-    /** The length of {@code git.commit.id.abbrev}, as vidocq-runtime-parent configures git-commit-id-maven-plugin. */
+    /** The length of {@code git.commit.id.abbrev}, as {@code io.vidocq:vidocq-parent} sets it for its jars. */
     static final int ABBREVIATION = 8;
 
     /** What {@code git rev-parse --abbrev-ref HEAD} prints for a detached HEAD. */
     private static final String DETACHED = "HEAD";
 
-    /** The identity of a build of the project in {@code dir}, built at {@code builtAt}; {@code status} tells dirty. */
-    public static BuildIdentity collect(Path dir, String version, Instant builtAt, GitStatus status) {
+    /**
+     * The identity of a build of the project in {@code dir}, built at {@code builtAt}: {@code status} tells dirty, and
+     * {@code commitTime} when the commit was made. Neither is asked outside a repository.
+     */
+    public static BuildIdentity collect(Path dir, String version, Instant builtAt, GitStatus status,
+                                        GitCommitTime commitTime) {
         Optional<GitHead> head = GitHead.read(dir);
         if (head.isEmpty()) {
-            return new BuildIdentity(version, UNVERSIONED, UNVERSIONED, null, builtAt);
+            return new BuildIdentity(version, UNVERSIONED, UNVERSIONED, null, null, builtAt);
         }
+        String commit = head.get().commit();
         String branch = head.get().branch() == null ? DETACHED : head.get().branch();
-        return new BuildIdentity(version, head.get().commit(), branch, status.dirty(dir).orElse(null), builtAt);
+        return new BuildIdentity(version, commit, branch, status.dirty(dir).orElse(null),
+                commitTime.of(dir, commit).orElse(null), builtAt);
     }
 
     /**
@@ -107,19 +116,28 @@ public record BuildIdentity(String version, String commit, String branch, Boolea
 
     /**
      * The content of the properties file: sorted keys, no comment line, so that two builds of the same commit at the
-     * same time write the same bytes. {@code git.dirty} is left out when git could not tell.
+     * same time write the same bytes. {@code git.commit.time} and {@code git.dirty} are left out when git could not
+     * tell.
      */
     public String properties() {
         StringBuilder out = new StringBuilder();
         line(out, "git.branch", branch);
-        line(out, "git.build.time", DateTimeFormatter.ISO_INSTANT.format(builtAt.truncatedTo(ChronoUnit.SECONDS)));
+        line(out, "git.build.time", instant(builtAt));
         line(out, "git.build.version", version);
         line(out, "git.commit.id.abbrev", abbreviatedCommit());
         line(out, "git.commit.id.full", commit);
+        if (committedAt != null) {
+            line(out, "git.commit.time", instant(committedAt));
+        }
         if (dirty != null) {
             line(out, "git.dirty", dirty.toString());
         }
         return out.toString();
+    }
+
+    /** An instant as both keys of a time read it, to the second: {@code 2026-11-07T17:36:03Z}. */
+    private static String instant(Instant instant) {
+        return DateTimeFormatter.ISO_INSTANT.format(instant.truncatedTo(ChronoUnit.SECONDS));
     }
 
     /** One {@code key=value} line, the value escaped as {@code java.util.Properties} reads it (ISO-8859-1). */

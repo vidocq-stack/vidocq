@@ -135,12 +135,9 @@
                     <!-- The created project's artifacts are test-scope dependencies here. -->
                     <scope>test</scope>
                     <!-- What the created project needs beyond the plugins this module runs, as it never reaches
-                         Central: the JUnit Platform provider of Surefire, and git-commit-id-maven-plugin, whose
-                         version ranges need the maven-metadata-local.xml an installation writes (see
-                         vidocq-runtime-it-continuous-testing). -->
+                         Central: the JUnit Platform provider of Surefire. -->
                     <extraArtifacts>
                         <extraArtifact>org.apache.maven.surefire:surefire-junit-platform:${maven.surefire.plugin.version}:jar</extraArtifact>
-                        <extraArtifact>io.github.git-commit-id:git-commit-id-maven-plugin:${git-commit-id.plugin.version}:maven-plugin</extraArtifact>
                     </extraArtifacts>
                 </configuration>
                 <executions>

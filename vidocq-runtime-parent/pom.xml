@@ -185,6 +185,17 @@
                                 <goal>package</goal>
                             </goals>
                         </execution>
+                        <execution>
+                            <!-- The build identity the startup banner reads
+                                 (META-INF/vidocq/build-info/<artifactId>.properties), read from .git without running
+                                 git: git-commit-id-maven-plugin, which wrote it before, named the main checkout's
+                                 commit in a linked worktree (BUG-20261117-06). -->
+                            <id>vidocq-build-info</id>
+                            <phase>initialize</phase>
+                            <goals>
+                                <goal>build-info</goal>
+                            </goals>
+                        </execution>
                     </executions>
                 </plugin>
 
@@ -214,38 +225,6 @@
                 <inherited>false</inherited>
                 <configuration>
                     <deployAtEnd>true</deployAtEnd>
-                </configuration>
-            </plugin>
-            <!-- The build identity the startup banner reads (META-INF/vidocq/build-info/<artifactId>.properties),
-                 as vidocq-parent writes it for the runtime's own jars. -->
-            <plugin>
-                <groupId>io.github.git-commit-id</groupId>
-                <artifactId>git-commit-id-maven-plugin</artifactId>
-                <version>9.2.0</version>
-                <executions>
-                    <execution>
-                        <id>vidocq-build-info</id>
-                        <phase>initialize</phase>
-                        <goals>
-                            <goal>revision</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <abbrevLength>8</abbrevLength>
-                    <dateFormat>yyyy-MM-dd'T'HH:mm:ssXXX</dateFormat>
-                    <dateFormatTimeZone>UTC</dateFormatTimeZone>
-                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
-                    <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
-                    <generateGitPropertiesFile>true</generateGitPropertiesFile>
-                    <generateGitPropertiesFilename>${project.build.outputDirectory}/META-INF/vidocq/build-info/${project.artifactId}.properties</generateGitPropertiesFilename>
-                    <includeOnlyProperties>
-                        <includeOnlyProperty>^git.build.version$</includeOnlyProperty>
-                        <includeOnlyProperty>^git.build.time$</includeOnlyProperty>
-                        <includeOnlyProperty>^git.commit.id.abbrev$</includeOnlyProperty>
-                        <includeOnlyProperty>^git.commit.time$</includeOnlyProperty>
-                        <includeOnlyProperty>^git.dirty$</includeOnlyProperty>
-                    </includeOnlyProperties>
                 </configuration>
             </plugin>
 

@@ -40,34 +40,38 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Vidocq/vidocq#380: what {@code vidocq:build-info} writes, the identity {@code git-commit-id-maven-plugin} wrote
- * under {@code vidocq-runtime-parent}, read by the runtime's {@link BuildInfo}. Without a repository the build does not
- * fail: the commit reads {@value BuildIdentity#UNVERSIONED}, and the build time is still written.
+ * Vidocq/vidocq#380: what {@code vidocq:build-info} writes, the identity {@code git-commit-id-maven-plugin} writes
+ * for the jars of {@code io.vidocq:vidocq-parent}, read by the runtime's {@link BuildInfo}. Without a repository the
+ * build does not fail: the commit reads {@value BuildIdentity#UNVERSIONED}, and the build time is still written.
  */
 class BuildIdentityTest {
 
     private static final String COMMIT = "9beafc47e1c8685e0123456789abcdef01234567";
     private static final Instant BUILT = Instant.parse("2026-11-07T10:00:00Z");
+    private static final Instant COMMITTED = Instant.parse("2026-11-06T09:30:00Z");
 
     @TempDir
     Path dir;
 
     @Test
-    void aRepositoryGivesTheCommitTheBranchAndTheDirtyFlag() throws IOException {
+    void aRepositoryGivesTheCommitItsTimeTheBranchAndTheDirtyFlag() throws IOException {
         Path repo = repository(dir.resolve("repo"), "ref: refs/heads/main\n", COMMIT);
 
-        BuildIdentity identity = BuildIdentity.collect(repo, "1.0.0-SNAPSHOT", BUILT, d -> Optional.of(true));
+        BuildIdentity identity = BuildIdentity.collect(repo, "1.0.0-SNAPSHOT", BUILT, d -> Optional.of(true),
+                (d, commit) -> COMMIT.equals(commit) ? Optional.of(COMMITTED) : Optional.empty());
 
         assertEquals(COMMIT, identity.commit());
         assertEquals("9beafc47", identity.abbreviatedCommit());
         assertEquals("main", identity.branch());
         assertEquals(Boolean.TRUE, identity.dirty());
+        assertEquals(COMMITTED, identity.committedAt());
         assertEquals("""
                 git.branch=main
                 git.build.time=2026-11-07T10:00:00Z
                 git.build.version=1.0.0-SNAPSHOT
                 git.commit.id.abbrev=9beafc47
                 git.commit.id.full=9beafc47e1c8685e0123456789abcdef01234567
+                git.commit.time=2026-11-06T09:30:00Z
                 git.dirty=true
                 """, identity.properties());
     }
@@ -78,6 +82,8 @@ class BuildIdentityTest {
 
         BuildIdentity identity = BuildIdentity.collect(plain, "1.0", BUILT, d -> {
             throw new AssertionError("git is not asked about a directory that is no repository");
+        }, (d, commit) -> {
+            throw new AssertionError("git is not asked about a directory that is no repository");
         });
 
         assertEquals("unversionned", BuildIdentity.UNVERSIONED);
@@ -85,6 +91,7 @@ class BuildIdentityTest {
         assertEquals(BuildIdentity.UNVERSIONED, identity.abbreviatedCommit());
         assertEquals(BuildIdentity.UNVERSIONED, identity.branch());
         assertNull(identity.dirty());
+        assertNull(identity.committedAt());
         assertEquals("""
                 git.branch=unversionned
                 git.build.time=2026-11-07T10:00:00Z
@@ -98,20 +105,22 @@ class BuildIdentityTest {
     void aDetachedHeadIsNamedAsGitNamesIt() throws IOException {
         Path repo = repository(dir.resolve("repo"), COMMIT + "\n", null);
 
-        BuildIdentity identity = BuildIdentity.collect(repo, "1.0", BUILT, GitStatus.NONE);
+        BuildIdentity identity = BuildIdentity.collect(repo, "1.0", BUILT, GitStatus.NONE, GitCommitTime.NONE);
 
         assertEquals(COMMIT, identity.commit());
         assertEquals("HEAD", identity.branch());
     }
 
     @Test
-    void theDirtyFlagIsLeftOutWhenGitCannotTell() throws IOException {
+    void theDirtyFlagAndTheCommitTimeAreLeftOutWhenGitCannotTell() throws IOException {
         Path repo = repository(dir.resolve("repo"), "ref: refs/heads/main\n", COMMIT);
 
-        BuildIdentity identity = BuildIdentity.collect(repo, "1.0", BUILT, GitStatus.NONE);
+        BuildIdentity identity = BuildIdentity.collect(repo, "1.0", BUILT, GitStatus.NONE, GitCommitTime.NONE);
 
         assertNull(identity.dirty());
+        assertNull(identity.committedAt());
         assertFalse(identity.properties().contains("git.dirty"), identity.properties());
+        assertFalse(identity.properties().contains("git.commit.time"), identity.properties());
     }
 
     /** Reproducible builds: {@code project.build.outputTimestamp} (ISO-8601 or epoch seconds) is the build time. */
@@ -138,7 +147,8 @@ class BuildIdentityTest {
         Path classes = dir.resolve("classes");
         Path file = classes.resolve(BuildInfo.resource("todo"));
         Files.createDirectories(file.getParent());
-        Files.writeString(file, BuildIdentity.collect(repo, "1.0.0-SNAPSHOT", BUILT, d -> Optional.of(false)).properties());
+        Files.writeString(file, BuildIdentity.collect(repo, "1.0.0-SNAPSHOT", BUILT, d -> Optional.of(false),
+                (d, commit) -> Optional.of(COMMITTED)).properties());
 
         BuildInfo read = BuildInfo.read(null, null, classes.toUri());
 
@@ -146,6 +156,7 @@ class BuildIdentityTest {
         assertEquals("9beafc47", read.commit());
         assertEquals(Boolean.FALSE, read.dirty());
         assertEquals(BUILT, read.builtAt());
+        assertEquals(COMMITTED, read.committedAt());
     }
 
     @Test
@@ -153,8 +164,8 @@ class BuildIdentityTest {
         Path classes = dir.resolve("classes");
         Path file = classes.resolve(BuildInfo.resource("todo"));
         Files.createDirectories(file.getParent());
-        Files.writeString(file, BuildIdentity.collect(dir.resolve("plain"), "1.0.0-SNAPSHOT", BUILT, GitStatus.NONE)
-                .properties());
+        Files.writeString(file, BuildIdentity.collect(dir.resolve("plain"), "1.0.0-SNAPSHOT", BUILT, GitStatus.NONE,
+                GitCommitTime.NONE).properties());
 
         BuildInfo read = BuildInfo.read(null, null, classes.toUri());
 
@@ -176,6 +187,31 @@ class BuildIdentityTest {
         assertEquals(Optional.of(false), GitStatus.running(tree -> new ProcessBuilder(clean.toString())).dirty(repo));
         assertEquals(Optional.empty(), GitStatus.running(tree -> new ProcessBuilder(failing.toString())).dirty(repo));
         assertEquals(Optional.empty(), GitStatus.running(tree -> new ProcessBuilder(dir.resolve("no-such-git").toString())).dirty(repo));
+    }
+
+    /**
+     * The commit time comes from {@code git show -s --format=%ct <commit>}, when the command is there and answers: it
+     * reads the commit object, which {@code .git} keeps compressed or packed (BUG-20261117-06).
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void theGitCommandGivesTheCommitTime() throws IOException {
+        Path repo = Files.createDirectories(dir.resolve("repo"));
+        Path answering = script(dir.resolve("git-show"), "#!/bin/sh\n[ \"$1\" = " + COMMIT + " ] && echo "
+                + COMMITTED.getEpochSecond() + " || exit 1\n");
+        Path garbled = script(dir.resolve("git-garbled"), "#!/bin/sh\necho 'not a time'\n");
+        Path failing = script(dir.resolve("git-failing"), "#!/bin/sh\necho 'fatal: bad object' >&2\nexit 128\n");
+
+        assertEquals(Optional.of(COMMITTED), GitCommitTime.running((tree, commit) ->
+                new ProcessBuilder(answering.toString(), commit)).of(repo, COMMIT));
+        assertEquals(Optional.empty(), GitCommitTime.running((tree, commit) ->
+                new ProcessBuilder(answering.toString(), commit)).of(repo, "0123456789abcdef0123456789abcdef01234567"));
+        assertEquals(Optional.empty(), GitCommitTime.running((tree, commit) ->
+                new ProcessBuilder(garbled.toString())).of(repo, COMMIT));
+        assertEquals(Optional.empty(), GitCommitTime.running((tree, commit) ->
+                new ProcessBuilder(failing.toString())).of(repo, COMMIT));
+        assertEquals(Optional.empty(), GitCommitTime.running((tree, commit) ->
+                new ProcessBuilder(dir.resolve("no-such-git").toString())).of(repo, COMMIT));
     }
 
     private static Path repository(Path root, String head, String commitOfMain) throws IOException {

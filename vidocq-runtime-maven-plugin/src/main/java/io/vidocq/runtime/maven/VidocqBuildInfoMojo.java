@@ -21,6 +21,7 @@ package io.vidocq.runtime.maven;
 
 import io.vidocq.runtime.core.banner.BuildInfo;
 import io.vidocq.runtime.maven.buildinfo.BuildIdentity;
+import io.vidocq.runtime.maven.buildinfo.GitCommitTime;
 import io.vidocq.runtime.maven.buildinfo.GitStatus;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -36,16 +37,20 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Writes the build identity the startup banner and the dev console read,
  * {@code META-INF/vidocq/build-info/<artifactId>.properties}: the commit (short and full), the branch, the dirty flag
- * when git can tell, and the build time. Under {@code vidocq-runtime-parent}, {@code git-commit-id-maven-plugin}
- * writes that file; in an application without the parent, the plugin binds this goal at {@code initialize}
- * (Vidocq/vidocq#380, {@link ApplicationBuild}).
+ * and the commit time when git can tell, and the build time. {@code vidocq-runtime-parent} binds this goal at
+ * {@code initialize}, and so does the plugin in an application without the parent (Vidocq/vidocq#380,
+ * {@link ApplicationBuild}).
  *
- * <p>The commit is read from {@code .git} without running {@code git}; without a repository the build does not fail,
- * and the commit reads {@value BuildIdentity#UNVERSIONED}. A reproducible build ({@code project.build.outputTimestamp})
+ * <p>The commit is read from {@code .git} without running {@code git}, in a linked worktree as well
+ * (BUG-20261117-06); without a repository the build does not fail, and the commit reads
+ * {@value BuildIdentity#UNVERSIONED}. The dirty flag and the commit time come from the {@code git} command: without
+ * its answer they are left out, and the log says so. A reproducible build ({@code project.build.outputTimestamp})
  * keeps that time as its build time.</p>
  */
 @Mojo(name = "build-info",
@@ -74,6 +79,9 @@ public class VidocqBuildInfoMojo extends AbstractMojo {
     /** Tells whether the working tree is dirty: the {@code git} command on the PATH; a test puts {@link GitStatus#NONE}. */
     GitStatus status = GitStatus.command();
 
+    /** Tells when the commit was made: the {@code git} command on the PATH; a test puts {@link GitCommitTime#NONE}. */
+    GitCommitTime commitTime = GitCommitTime.command();
+
     @Override
     public void execute() throws MojoExecutionException {
         if (skip) {
@@ -86,7 +94,7 @@ public class VidocqBuildInfoMojo extends AbstractMojo {
         }
         Path basedir = project.getBasedir() == null ? Path.of("").toAbsolutePath() : project.getBasedir().toPath();
         BuildIdentity identity = BuildIdentity.collect(basedir, project.getVersion(),
-                BuildIdentity.buildTime(outputTimestamp, Clock.systemUTC()), status);
+                BuildIdentity.buildTime(outputTimestamp, Clock.systemUTC()), status, commitTime);
         Path file = outputDirectory.toPath().resolve(BuildInfo.resource(project.getArtifactId()));
         try {
             Files.createDirectories(file.getParent());
@@ -97,7 +105,11 @@ public class VidocqBuildInfoMojo extends AbstractMojo {
         getLog().info(LOG_PREFIX + describe(identity));
     }
 
-    /** {@code 9beafc47 on main, dirty, built 2026-11-07T17:36:03Z}, or {@code unversionned, built …}. */
+    /**
+     * {@code 9beafc47 on main, dirty, built 2026-11-07T17:36:03Z}, or {@code unversionned (no git repository), built …};
+     * what the {@code git} command did not tell is named: {@code …, without the commit time: the git command did not
+     * answer}.
+     */
     static String describe(BuildIdentity identity) {
         if (identity.isUnversioned()) {
             return BuildIdentity.UNVERSIONED + " (no git repository), built " + identity.builtAt();
@@ -106,6 +118,17 @@ public class VidocqBuildInfoMojo extends AbstractMojo {
         if (identity.dirty() != null) {
             text.append(Boolean.TRUE.equals(identity.dirty()) ? ", dirty" : ", clean");
         }
-        return text.append(", built ").append(identity.builtAt()).toString();
+        text.append(", built ").append(identity.builtAt());
+        List<String> untold = new ArrayList<>();
+        if (identity.dirty() == null) {
+            untold.add("the dirty flag");
+        }
+        if (identity.committedAt() == null) {
+            untold.add("the commit time");
+        }
+        if (!untold.isEmpty()) {
+            text.append(", without ").append(String.join(" and ", untold)).append(": the git command did not answer");
+        }
+        return text.toString();
     }
 }

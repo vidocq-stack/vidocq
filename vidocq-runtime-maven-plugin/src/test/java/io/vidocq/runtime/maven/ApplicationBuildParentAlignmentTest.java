@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Vidocq/vidocq#380: what {@link ApplicationBuild} gives an application without {@code vidocq-runtime-parent} is what
@@ -71,21 +72,20 @@ class ApplicationBuildParentAlignmentTest {
 
         List<String> plugins = new ArrayList<>();
         for (ApplicationBuild.Execution execution : ApplicationBuild.executions()) {
-            // The parent writes the build identity with git-commit-id-maven-plugin, the plugin with its own goal.
-            if (!ApplicationBuild.BUILD_INFO_GOAL.equals(execution.goal())) {
-                plugins.add(execution.id() + ":" + execution.goal() + "@" + (execution.phase() == null ? "" : execution.phase()));
-            }
+            plugins.add(execution.id() + ":" + execution.goal() + "@" + (execution.phase() == null ? "" : execution.phase()));
         }
         assertEquals(parents, plugins);
     }
 
-    /** The parent binds {@code git-commit-id-maven-plugin}'s {@code revision}: what {@code vidocq:build-info} replaces. */
+    /**
+     * The parent writes the build identity with {@code vidocq:build-info}, as a build without it does, and not with
+     * {@code git-commit-id-maven-plugin}: that plugin names the main checkout's commit when the application is built
+     * from a linked worktree, and fails the build without a {@code git} command when told to run it (BUG-20261117-06).
+     */
     @Test
-    void theParentWritesTheBuildIdentityWithGitCommitId() throws Exception {
-        Plugin gitCommitId = parent().getBuild().getPluginsAsMap().get(ApplicationBuild.GIT_COMMIT_ID);
-
-        assertEquals(List.of("revision"), gitCommitId.getExecutions().getFirst().getGoals());
-        assertEquals("initialize", gitCommitId.getExecutions().getFirst().getPhase());
+    void theParentWritesTheBuildIdentityWithThePluginsOwnGoal() throws Exception {
+        assertNull(parent().getBuild().getPluginsAsMap().get(ApplicationBuild.GIT_COMMIT_ID),
+                "the parent still binds git-commit-id-maven-plugin");
     }
 
     @Test

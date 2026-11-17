@@ -19,12 +19,8 @@
  */
 package io.vidocq.runtime.maven.buildinfo;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 /**
@@ -38,7 +34,7 @@ public interface GitStatus {
     /** Never asks: the dirty flag is left out. */
     GitStatus NONE = dir -> Optional.empty();
 
-    /** How long the command may take before the flag is left out. */
+    /** How long a {@code git} command may take before what it tells is left out. */
     long TIMEOUT_SECONDS = 10;
 
     /** {@code true} when tracked files are modified, {@code false} when clean, empty when it cannot be told. */
@@ -55,29 +51,6 @@ public interface GitStatus {
      * clean when it writes nothing and exits with 0, nothing when it is missing, fails or does not return in time.
      */
     static GitStatus running(Function<Path, ProcessBuilder> command) {
-        return dir -> {
-            try {
-                Process process = command.apply(dir)
-                        .redirectError(ProcessBuilder.Redirect.DISCARD)
-                        .start();
-                byte[] output;
-                try (InputStream in = process.getInputStream()) {
-                    output = in.readAllBytes();
-                }
-                if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    process.destroyForcibly();
-                    return Optional.empty();
-                }
-                if (process.exitValue() != 0) {
-                    return Optional.empty();
-                }
-                return Optional.of(!new String(output, StandardCharsets.UTF_8).isBlank());
-            } catch (IOException _) {
-                return Optional.empty();
-            } catch (InterruptedException _) {
-                Thread.currentThread().interrupt();
-                return Optional.empty();
-            }
-        };
+        return dir -> GitCommand.output(command.apply(dir)).map(output -> !output.isBlank());
     }
 }

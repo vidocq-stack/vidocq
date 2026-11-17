@@ -61,7 +61,7 @@
 | Names the compile and runtime jars in `vidocq.test.runtimePath` for the application `@VidocqTest` starts, so that a driver no module requires is on its module path. Bound to `process-test-classes` by `vidocq-runtime-parent`. xref:testing.adoc#runtime-dependencies[Details].
 
 | `vidocq:build-info`
-| Writes the build identity the startup banner reads, `META-INF/vidocq/build-info/<artifactId>.properties`, from `.git` without running `git`; without a repository the commit reads `unversionned` and the build goes on. Bound to `initialize` by the plugin in an application without `vidocq-runtime-parent`, which writes the same file with `git-commit-id-maven-plugin`. See <<build-info,the `vidocq:build-info` goal>>.
+| Writes the build identity the startup banner reads, `META-INF/vidocq/build-info/<artifactId>.properties`, the commit read from `.git` without running `git`; without a repository the commit reads `unversionned` and the build goes on. Bound to `initialize` by `vidocq-runtime-parent`, and by the plugin in an application without the parent. See <<build-info,the `vidocq:build-info` goal>>.
 
 | `vidocq:idea`
 | Experimental — writes one IntelliJ IDEA shared run configuration per application of the reactor into `.run/`, or checks them in CI. See <<idea,the `vidocq:idea` goal>>.
@@ -528,14 +528,23 @@ Foy's `merge` file is also among its `markers`: a jar that already has it was bu
 
 `vidocq:build-info` writes `META-INF/vidocq/build-info/<artifactId>.properties` into `target/classes` at the
 `initialize` phase: the file the xref:vidocq-runtime-core.adoc#build-identity[startup banner] and the dev console read
-for the version, the commit and the build time of the application. Under `vidocq-runtime-parent`,
-`git-commit-id-maven-plugin` writes that file; in an application without the parent, the plugin binds this goal itself
-(Vidocq/vidocq#380), and a pom that runs `git-commit-id-maven-plugin` or binds the goal on its own is left alone.
+for the version, the commit and the build time of the application. `vidocq-runtime-parent` binds it; in an
+application without the parent, the plugin binds it itself (Vidocq/vidocq#380), and a pom that runs
+`git-commit-id-maven-plugin` or binds the goal on its own is left alone. Until BUG-20261117-06 the parent ran
+`git-commit-id-maven-plugin` instead, which names the main checkout's commit when the application is built from a
+linked worktree (`git worktree add`), with its `useNativeGit` option as well.
 
 The goal reads `.git` and runs no `git` command for the commit: `HEAD`, the loose refs and `packed-refs`, through the
 `.git` file of a linked worktree (`gitdir:` and `commondir`) or of a submodule, in a shallow clone as well. The dirty
-flag alone comes from `git status --porcelain --untracked-files=no`, when the `git` command on the PATH answers within
-ten seconds; otherwise the flag is left out.
+flag and the commit time come from the `git` command on the PATH, `git status --porcelain --untracked-files=no` and
+`git show -s --format=%ct <commit>`, when it answers within ten seconds; a command still running then is stopped.
+Otherwise, on a machine without `git` for instance, they are left out, the build goes on, and its log line names what
+is missing:
+
+[source]
+----
+[INFO] Vidocq build-info: 9beafc47 on main, built 2026-11-07T17:36:03Z, without the dirty flag and the commit time: the git command did not answer
+----
 
 [source,properties]
 ----
@@ -544,12 +553,14 @@ git.build.time=2026-11-07T17:36:03Z
 git.build.version=1.0.0-SNAPSHOT
 git.commit.id.abbrev=9beafc47
 git.commit.id.full=9beafc47e1c8685e0123456789abcdef01234567
+git.commit.time=2026-11-06T09:30:00Z
 git.dirty=false
 ----
 
 * Without a repository (a source archive, a build server without the history, a `HEAD` that names no commit yet), the
   build does not fail: `git.commit.id.abbrev`, `git.commit.id.full` and `git.branch` read `unversionned`, and the
-  banner shows `1.0.0-SNAPSHOT (unversionned, built 2026-11-07T17:36:03Z)`.
+  banner shows `1.0.0-SNAPSHOT (unversionned, built 2026-11-07T17:36:03Z)`; the log line says
+  `unversionned (no git repository)`.
 * A detached `HEAD` gives `git.branch=HEAD`, as `git rev-parse --abbrev-ref HEAD` does.
 * `git.build.time` is `project.build.outputTimestamp` when the pom sets one (an ISO-8601 date-time or epoch seconds),
   so a reproducible build stays reproducible; otherwise the time of the build, to the second. Maven 3.10 gives that

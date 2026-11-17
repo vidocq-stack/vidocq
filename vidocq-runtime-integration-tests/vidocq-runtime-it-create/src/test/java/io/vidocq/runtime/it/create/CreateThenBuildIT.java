@@ -23,13 +23,18 @@ import io.vidocq.runtime.tooling.ProjectScaffolder;
 import io.vidocq.runtime.tooling.ProjectSpec;
 import io.vidocq.runtime.tooling.Reporter;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
+import java.io.Reader;
 import java.net.CookieManager;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -37,11 +42,15 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -57,9 +66,12 @@ import java.util.spi.ToolProvider;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Vidocq/vidocq#339 (evolution 6) and #380: the project {@code vidocq create -x cassini-rest} writes passes
@@ -271,6 +283,83 @@ class CreateThenBuildIT {
 
         assertTheBuildFrozeItsExtensions(project, output);
         assertStartsOnTheFrozenExtensions(project.resolve("target/demo-app-1.0.0-SNAPSHOT/bin/demo-app.sh"));
+    }
+
+    /**
+     * BUG-20261117-06: the build identity names the commit the application is built from in a linked worktree
+     * ({@code git worktree add}), and that commit's time, with the parent as without it. Under the parent,
+     * git-commit-id-maven-plugin named the main checkout's commit there.
+     */
+    @ParameterizedTest(name = "with the parent: {0}")
+    @ValueSource(booleans = {true, false})
+    void anApplicationBuiltFromALinkedWorktreeNamesTheWorktreesCommit(boolean withParent, @TempDir Path dir)
+            throws Exception {
+        assumeTrue(gitAnswers(), "no git command on this machine");
+        Path main = committedApplication(dir.resolve("main"), withParent);
+        Path worktree = dir.resolve("worktree");
+        git(main, "worktree", "add", "-q", "-b", "ahead", worktree.toString());
+        Files.writeString(worktree.resolve("AHEAD.txt"), "one commit ahead of the main checkout\n");
+        git(worktree, "add", "AHEAD.txt");
+        git(worktree, "commit", "-q", "-m", "one commit ahead");
+
+        String output = build(worktree.resolve("demo-app"), Map.of(),
+                "linked-worktree-" + (withParent ? "parent" : "parentless") + ".log", "process-resources");
+
+        Properties identity = identity(worktree.resolve("demo-app"));
+        String mainCommit = git(main, "rev-parse", "--short=8", "HEAD");
+        assertEquals(git(worktree, "rev-parse", "--short=8", "HEAD"), identity.getProperty("git.commit.id.abbrev"),
+                () -> "the build identity names another commit than the worktree's (the main checkout's is "
+                        + mainCommit + "):\n" + output);
+        assertEquals(Instant.ofEpochSecond(Long.parseLong(git(worktree, "show", "-s", "--format=%ct", "HEAD")))
+                .toString(), identity.getProperty("git.commit.time"), () -> "the worktree commit's time:\n" + output);
+    }
+
+    /**
+     * BUG-20261117-06: on a machine without a {@code git} command the application still builds, names its commit, and
+     * says what the build identity lacks: the dirty flag and the commit time, which only the command can tell.
+     */
+    @ParameterizedTest(name = "with the parent: {0}")
+    @ValueSource(booleans = {true, false})
+    @DisabledOnOs(OS.WINDOWS)
+    void anApplicationBuiltWithoutAGitCommandNamesItsCommitAndSaysWhatItLacks(boolean withParent, @TempDir Path dir)
+            throws Exception {
+        assumeTrue(gitAnswers(), "no git command on this machine to make the repository");
+        Path repository = committedApplication(dir.resolve("repository"), withParent);
+        Path noGit = dir.resolve("no-git");
+        String output;
+        try {
+            output = build(repository.resolve("demo-app"), Map.of("PATH", pathWithoutGit(noGit)),
+                    "no-git-" + (withParent ? "parent" : "parentless") + ".log", "process-resources");
+        } finally {
+            removeLinks(noGit);
+        }
+
+        Properties identity = identity(repository.resolve("demo-app"));
+        assertEquals(git(repository, "rev-parse", "--short=8", "HEAD"), identity.getProperty("git.commit.id.abbrev"),
+                output);
+        assertNull(identity.getProperty("git.dirty"), "only the git command tells it:\n" + output);
+        assertNull(identity.getProperty("git.commit.time"), "only the git command tells it:\n" + output);
+        assertTrue(output.contains("without the dirty flag and the commit time: the git command did not answer"),
+                output);
+    }
+
+    /**
+     * BUG-20261117-06: an application built out of any repository (a source archive) builds, and its build identity
+     * says {@code unversionned}, with the parent as without it.
+     */
+    @ParameterizedTest(name = "with the parent: {0}")
+    @ValueSource(booleans = {true, false})
+    void anApplicationBuiltFromASourceArchiveIsUnversionned(boolean withParent, @TempDir Path dir) throws Exception {
+        for (Path parent = dir; parent != null; parent = parent.getParent()) {
+            assumeFalse(Files.exists(parent.resolve(".git")), "the temporary directory is inside a git repository");
+        }
+        Path archive = application(dir.resolve("archive"), withParent);
+
+        String output = build(archive.resolve("demo-app"), Map.of(),
+                "source-archive-" + (withParent ? "parent" : "parentless") + ".log", "process-resources");
+
+        assertEquals("unversionned", identity(archive.resolve("demo-app")).getProperty("git.commit.id.abbrev"), output);
+        assertTrue(output.contains("unversionned (no git repository)"), output);
     }
 
     /**
@@ -676,15 +765,32 @@ class CreateThenBuildIT {
      * @return what the build printed, once it ended with 0
      */
     private static String build(Path project, String log, String... goals) throws Exception {
+        return build(project, Map.of(), log, goals);
+    }
+
+    /**
+     * Runs {@code mvn -ntp -B goals} in the created project with {@code environment} added to this JVM's, into
+     * {@code log} under the IT logs. Maven is named by its path, found on this JVM's {@code PATH}, so that an
+     * environment's {@code PATH} needs no {@code mvn}; {@code JAVA_HOME} is this JVM's.
+     *
+     * @return what the build printed, once it ended with 0
+     */
+    private static String build(Path project, Map<String, String> environment, String log, String... goals)
+            throws Exception {
         Path file = logs().resolve(log);
-        List<String> command = new ArrayList<>(List.of("mvn", "-ntp", "-B"));
+        List<String> command = new ArrayList<>(List.of(environment.containsKey("PATH") ? onThePath("mvn") : "mvn",
+                "-ntp", "-B"));
         command.addAll(List.of(goals));
         String what = "mvn " + String.join(" ", goals);
-        Process build = new ProcessBuilder(command)
+        ProcessBuilder builder = new ProcessBuilder(command)
                 .directory(project.toFile())
                 .redirectErrorStream(true)
-                .redirectOutput(file.toFile())
-                .start();
+                .redirectOutput(file.toFile());
+        if (!environment.isEmpty()) {
+            builder.environment().put("JAVA_HOME", System.getProperty("java.home"));
+            builder.environment().putAll(environment);
+        }
+        Process build = builder.start();
         if (!build.waitFor(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
             build.destroyForcibly();
             fail(what + " did not end within " + TIMEOUT + ":\n" + read(file));
@@ -692,6 +798,114 @@ class CreateThenBuildIT {
         String output = read(file);
         assertEquals(0, build.exitValue(), () -> what + " failed:\n" + output);
         return output;
+    }
+
+    /**
+     * Runs git in {@code dir}, with a throwaway identity, no signing and no hooks: the machine's own settings (a
+     * signing key, the sign-off hooks of a workspace) are no part of the test.
+     *
+     * @return what git printed, trimmed, once it ended with 0
+     */
+    private static String git(Path dir, String... arguments) throws IOException, InterruptedException {
+        List<String> command = new ArrayList<>(List.of("git", "-C", dir.toString(), "-c", "user.name=it",
+                "-c", "user.email=it@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"));
+        command.addAll(List.of(arguments));
+        Process git = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String out = new String(git.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+        String what = "git " + String.join(" ", arguments);
+        assertTrue(git.waitFor(1, TimeUnit.MINUTES), what + " did not end");
+        assertEquals(0, git.exitValue(), () -> what + " failed:\n" + out);
+        return out;
+    }
+
+    /** A created application (REST, the parent or not) under {@code root}, with this build's artifacts. */
+    private static Path application(Path root, boolean withParent) throws IOException {
+        ProjectScaffolder.scaffold(new ProjectSpec("demo-app", "com.acme", "com.acme.demo.app",
+                Set.of("cassini-rest"), null, false, false, withParent), root, System.getProperty("it.version"), SILENT);
+        useThisBuildsArtifacts(root.resolve("demo-app"));
+        return root;
+    }
+
+    /** {@link #application} in a git repository of its own, committed on {@code main}, {@code target/} ignored. */
+    private static Path committedApplication(Path root, boolean withParent) throws IOException, InterruptedException {
+        application(root, withParent);
+        Files.writeString(root.resolve(".gitignore"), "target/\n");
+        git(root, "init", "-q", "-b", "main");
+        git(root, "add", "-A");
+        git(root, "commit", "-q", "-m", "the application");
+        return root;
+    }
+
+    /** The build identity the build wrote for the created application in {@code project}. */
+    private static Properties identity(Path project) throws IOException {
+        Properties identity = new Properties();
+        try (Reader reader = Files.newBufferedReader(
+                project.resolve("target/classes/META-INF/vidocq/build-info/demo-app.properties"))) {
+            identity.load(reader);
+        }
+        return identity;
+    }
+
+    /**
+     * A {@code PATH} of one directory, {@code dir}, with a link to every command of this JVM's {@code PATH} but
+     * {@code git} and its {@code git-*} helpers: this machine without git.
+     */
+    private static String pathWithoutGit(Path dir) throws IOException {
+        Files.createDirectories(dir);
+        for (String entry : System.getenv("PATH").split(File.pathSeparator)) {
+            Path directory = Path.of(entry.isEmpty() ? "." : entry);
+            if (!Files.isDirectory(directory)) {
+                continue;
+            }
+            try (Stream<Path> commands = Files.list(directory)) {
+                for (Path command : commands.toList()) {
+                    String name = command.getFileName().toString();
+                    Path link = dir.resolve(name);
+                    if (!name.equals("git") && !name.startsWith("git-") && Files.isExecutable(command)
+                            && !Files.exists(link, LinkOption.NOFOLLOW_LINKS)) {
+                        Files.createSymbolicLink(link, command.toAbsolutePath());
+                    }
+                }
+            }
+        }
+        return dir.toString();
+    }
+
+    /**
+     * Removes the links {@link #pathWithoutGit} made, before JUnit deletes the temporary directory: it warns about each
+     * link that leads out of it.
+     */
+    private static void removeLinks(Path dir) throws IOException {
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        try (Stream<Path> links = Files.list(dir)) {
+            for (Path link : links.toList()) {
+                Files.deleteIfExists(link);
+            }
+        }
+    }
+
+    /** The path of {@code command} on this JVM's {@code PATH}. */
+    private static String onThePath(String command) {
+        for (String entry : System.getenv("PATH").split(File.pathSeparator)) {
+            Path candidate = Path.of(entry.isEmpty() ? "." : entry, command);
+            if (Files.isExecutable(candidate)) {
+                return candidate.toAbsolutePath().toString();
+            }
+        }
+        throw new AssertionError("no " + command + " on the PATH: " + System.getenv("PATH"));
+    }
+
+    /** Whether a {@code git} command answers on this machine. */
+    private static boolean gitAnswers() throws InterruptedException {
+        try {
+            Process git = new ProcessBuilder("git", "--version").redirectErrorStream(true).start();
+            git.getInputStream().readAllBytes();
+            return git.waitFor(1, TimeUnit.MINUTES) && git.exitValue() == 0;
+        } catch (IOException _) {
+            return false;
+        }
     }
 
     /** Where the IT writes the logs of the builds and starts it runs, kept for a post-mortem. */

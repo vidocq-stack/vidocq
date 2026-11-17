@@ -1057,9 +1057,10 @@
               `mvn clean`, every build of the same commit and dirty state kept the time
               of the first one, and the startup banner said "built <earlier time>" for
               classes compiled later. Deleting the file at validate makes each build
-              write its own time. Inherited by this reactor and by the applications
-              created by `vidocq create`. Releases are unaffected: their file has no
-              git.build.time and is rewritten byte for byte.
+              write its own time. Inherited by this reactor's modules; an application
+              writes the file with vidocq:build-info, which rewrites it at every build.
+              Releases are unaffected: their file has no git.build.time and is
+              rewritten byte for byte.
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

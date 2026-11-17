@@ -170,6 +170,52 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   - a file system that keeps whole seconds: a file saved in the second the compiler wrote its list, after it, is not
     later.
 
+## BUG-20261117-06 — An application built from a linked worktree with `vidocq-runtime-parent` names the main checkout's commit in its build identity
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/build-info-linked-worktree`
+- **Module**: `vidocq-runtime-parent` (the build identity), `vidocq-runtime-maven-plugin` (`VidocqBuildInfoMojo`,
+  `buildinfo/BuildIdentity`, new `GitCommitTime` and `GitCommand`)
+- **Symptom**: under `vidocq-runtime-parent`, an application built in a linked worktree (`git worktree add`, the mani
+  layout) gets the main checkout's commit in `META-INF/vidocq/build-info/<artifactId>.properties`, with that commit's
+  time: the banner, the dev console and `vidocq info` name code the classes were not built from. Measured on a
+  `vidocq create --with-parent` application: `d3dd3c62` (the main checkout) for a worktree at `b90c0cde`. An
+  application without the parent was right: `vidocq:build-info` follows the worktree's `.git` file.
+- **Repro**: `CreateThenBuildIT#anApplicationBuiltFromALinkedWorktreeNamesTheWorktreesCommit` (with the parent):
+  commit the created application, add a worktree one commit ahead, `mvn process-resources` there, read
+  `git.commit.id.abbrev`.
+- **Cause**: the parent wrote the file with `git-commit-id-maven-plugin` 9.2.0, which resolves a worktree's `.git` file
+  to the main repository and reads `HEAD` there. `<useNativeGit>true</useNativeGit>` is no fix: it runs `git` in the
+  main checkout, so it names the same commit, fails the build on a machine without `git` (`Cannot run program "git"`),
+  and writes no commit for a source archive.
+- **Fix**: the parent binds `vidocq:build-info` at `initialize`, as the plugin does without the parent, and no longer
+  runs `git-commit-id-maven-plugin`: `ApplicationBuildParentAlignmentTest` compares all six executions. The goal now
+  also writes `git.commit.time`, which `BuildInfo.committedAt` reads (the date a release jar shows, having no build
+  time), from `git show -s --format=%ct <commit>`, as it reads the dirty flag from `git status`: without an answer from
+  the `git` command both are left out, and the log line says `…, without the dirty flag and the commit time: the git
+  command did not answer`. `vidocq-runtime-it-create` stops staging `git-commit-id-maven-plugin` for the created
+  projects. A library module of a multi-module application, which does not declare the plugin, no longer gets the
+  file, as without the parent: nothing reads it, the runtime reading the application module's and the bricks'.
+  Checked by hand on a multi-module application with the parent out of any repository (two libraries, `package`):
+  the build passes with no warning, and one `Vidocq build-info: unversionned (no git repository)` line.
+  Found on the way, and fixed since the goal now runs two `git` commands: the 10-second limit never held, on `main`
+  too. The output was read to its end before the wait, so a `git` that hung with its output open held the build
+  until it ended. `GitCommand` now reads it on a virtual thread while it waits and stops the command at the limit;
+  a process the command leaves behind holding its output stops the reading at the limit too.
+- **Tests**: `CreateThenBuildIT`, each with and without the parent: the worktree's commit and commit time; a `PATH`
+  without `git` (the commit named, no dirty flag, no commit time, the log line); a source archive (`unversionned`).
+  Red before the fix: the parent named the main checkout's commit, wrote no commit for the archive and, through JGit,
+  a commit time without `git`; without the parent, no commit time and no log line. `BuildIdentityTest` and
+  `VidocqBuildInfoMojoTest` for the commit time and the log line. `GitCommandTest`, against a 300 ms limit: a command that
+  hangs, and one that leaves a process holding its output, which must still run when the answer comes; both red
+  with `main`'s reading, which waited for the `sleep` to end. The second accepts what the command printed or nothing:
+  the JDK collects the output at the exit unless the reader already waits in `read` (Linux in CI got the output). An
+  interrupted build leaves the command out and keeps its interrupt (red without the `interrupt()` call).
+- **Not covered**: this repository's own modules and the fixtures that inherit `vidocq-runtime-build` still get the
+  file from `io.vidocq:vidocq-parent`'s `git-commit-id-maven-plugin`, so a local build from a linked worktree still
+  names the main checkout's commit there (seen on a plugin jar installed from a worktree at `c53d19a8`: `053f4e8d`).
+  `vidocq-parent` cannot bind `vidocq:build-info`, the plugin being built with it: an issue there.
+
 ## BUG-20261117-05 — A save made while `vidocq:dev` starts is not applied: the application starts without it, and nothing says so
 
 - **Date**: 2026-11-17

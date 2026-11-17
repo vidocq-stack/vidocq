@@ -20,6 +20,8 @@
 package io.vidocq.runtime.maven;
 
 import io.vidocq.runtime.core.banner.BuildInfo;
+import io.vidocq.runtime.maven.buildinfo.BuildIdentity;
+import io.vidocq.runtime.maven.buildinfo.GitCommitTime;
 import io.vidocq.runtime.maven.buildinfo.GitStatus;
 import org.apache.maven.model.Model;
 import org.apache.maven.project.MavenProject;
@@ -31,6 +33,8 @@ import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -38,11 +42,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Vidocq/vidocq#380: {@code vidocq:build-info} writes {@code META-INF/vidocq/build-info/<artifactId>.properties} into
- * the output directory, the file {@code git-commit-id-maven-plugin} wrote under the parent, from {@code .git} alone.
+ * the output directory, with or without {@code vidocq-runtime-parent}, the commit read from {@code .git} alone.
  */
 class VidocqBuildInfoMojoTest {
 
     private static final String COMMIT = "9beafc47e1c8685e0123456789abcdef01234567";
+    private static final Instant BUILT = Instant.parse("2026-11-07T10:00:00Z");
 
     @TempDir
     Path dir;
@@ -61,6 +66,7 @@ class VidocqBuildInfoMojoTest {
         assertTrue(written.contains("git.build.version=1.0.0-SNAPSHOT\n"), written);
         assertTrue(written.contains("git.build.time="), written);
         assertFalse(written.contains("git.dirty"), "no git command reachable: the flag is left out\n" + written);
+        assertFalse(written.contains("git.commit.time"), "no git command reachable: the time is left out\n" + written);
         assertEquals("9beafc47", BuildInfo.read(null, null, dir.resolve("target/classes").toUri()).commit());
     }
 
@@ -98,6 +104,26 @@ class VidocqBuildInfoMojoTest {
         assertFalse(Files.exists(dir.resolve("target/classes/META-INF")), "nothing is written");
     }
 
+    /**
+     * Without an answer from the {@code git} command the build goes on, and its log says what the file lacks
+     * (BUG-20261117-06): a machine without git, or a command that does not answer in time.
+     */
+    @Test
+    void theLogSaysWhatTheGitCommandDidNotTell() throws Exception {
+        repository(dir);
+
+        assertEquals("9beafc47 on main, built 2026-11-07T10:00:00Z, without the dirty flag and the commit time: "
+                        + "the git command did not answer",
+                VidocqBuildInfoMojo.describe(BuildIdentity.collect(dir, "1.0", BUILT, GitStatus.NONE, GitCommitTime.NONE)));
+        assertEquals("9beafc47 on main, clean, built 2026-11-07T10:00:00Z, without the commit time: "
+                        + "the git command did not answer",
+                VidocqBuildInfoMojo.describe(BuildIdentity.collect(dir, "1.0", BUILT, d -> Optional.of(false),
+                        GitCommitTime.NONE)));
+        assertEquals("9beafc47 on main, dirty, built 2026-11-07T10:00:00Z",
+                VidocqBuildInfoMojo.describe(BuildIdentity.collect(dir, "1.0", BUILT, d -> Optional.of(true),
+                        (d, commit) -> Optional.of(BUILT))));
+    }
+
     private MavenProject project(String artifactId, String version, String packaging) {
         Model model = new Model();
         model.setGroupId("com.acme");
@@ -116,6 +142,7 @@ class VidocqBuildInfoMojoTest {
         set(mojo, "outputDirectory", dir.resolve("target/classes").toFile());
         set(mojo, "outputTimestamp", outputTimestamp);
         set(mojo, "status", GitStatus.NONE);
+        set(mojo, "commitTime", GitCommitTime.NONE);
         return mojo;
     }
 

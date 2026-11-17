@@ -356,7 +356,7 @@ ${ansi.cyan}  T O D O   S E R V I C E${ansi.reset}
 [#build-identity]
 === Build identity
 
-Every jar built with `io.vidocq:vidocq-parent` (Vidocq, Vauban, Cassini, Chappe), and every application built with `vidocq-runtime-parent`, which configures the plugin the same way, carries a build identity file, `META-INF/vidocq/build-info/<artifactId>.properties`, written by `git-commit-id-maven-plugin` at the `initialize` phase. An application without the parent gets the same file from xref:vidocq-runtime-maven-plugin.adoc#build-info[`vidocq:build-info`], a goal of the Vidocq plugin that reads `.git` itself (Vidocq/vidocq#380); it adds `git.commit.id.full` and `git.branch`, and writes `unversionned` as the commit of a build made outside any repository, which the banner shows as is: `1.0.0-SNAPSHOT (unversionned, built 2026-11-07T17:36:03Z)`. A version the banner cannot find at all reads `version unversionned`.
+Every jar built with `io.vidocq:vidocq-parent` (Vidocq, Vauban, Cassini, Chappe) carries a build identity file, `META-INF/vidocq/build-info/<artifactId>.properties`, written by `git-commit-id-maven-plugin` at the `initialize` phase. Every application gets the same file from xref:vidocq-runtime-maven-plugin.adoc#build-info[`vidocq:build-info`], a goal of the Vidocq plugin that reads `.git` itself: `vidocq-runtime-parent` binds it, and so does the plugin in an application without the parent (Vidocq/vidocq#380). Until BUG-20261117-06, the parent wrote the file with `git-commit-id-maven-plugin`, which names the main checkout's commit when the application is built from a linked worktree (`git worktree add`). The goal adds `git.commit.id.full` and `git.branch`, and writes `unversionned` as the commit of a build made outside any repository, which the banner shows as is: `1.0.0-SNAPSHOT (unversionned, built 2026-11-07T17:36:03Z)`. A version the banner cannot find at all reads `version unversionned`.
 
 [source,properties]
 ----
@@ -368,11 +368,11 @@ git.commit.time=2026-09-15T14\:08\:34Z
 git.dirty=false
 ----
 
-* `git.dirty` is `true` when tracked files had uncommitted changes; untracked files do not count.
-* `git.build.time` is the time of the build that wrote the file. On its own, the plugin leaves an existing file alone when only that time would change, so a build without `mvn clean` keeps the time of the first build of the same commit and dirty state. `vidocq-runtime-parent` (the Vidocq runtime modules and the applications created by `vidocq create`) deletes the file at the `validate` phase, so every build writes its own time; for a brick built directly from `vidocq-parent`, `built` can be that first build.
+* `git.dirty` is `true` when tracked files had uncommitted changes; untracked files do not count. `git.commit.time` is when the commit was made. For an application, both come from the `git` command; on a machine where it does not answer, `vidocq:build-info` leaves them out and its log line says so.
+* `git.build.time` is the time of the build that wrote the file; `vidocq:build-info` writes it at every build. `git-commit-id-maven-plugin` leaves an existing file alone when only that time would change, so a build without `mvn clean` keeps the time of the first build of the same commit and dirty state. This repository's build (`vidocq-runtime-build`) deletes the file at the `validate` phase, so every build of the runtime modules writes its own time; for a brick built directly from `vidocq-parent`, `built` can be that first build.
 * Releases have no `git.build.time` and stay byte-for-byte reproducible (`project.build.outputTimestamp` is the commit time in the `release` profile).
 * The file name carries the artifactId: on the class path, a shared name would make every jar read the first one found. The banner reads each file inside the jar of its own module.
-* `-Dmaven.gitcommitid.skip=true` builds without it; the banner then falls back to the jar date.
+* `-Dmaven.gitcommitid.skip=true` builds a jar of `vidocq-parent` without it, and `-Dvidocq.buildInfo.skip=true` an application; the banner then falls back to the jar date.
 
 To find the commit a snapshot was built from, read the file in the jar, then look the commit up in the repository of that brick:
 
