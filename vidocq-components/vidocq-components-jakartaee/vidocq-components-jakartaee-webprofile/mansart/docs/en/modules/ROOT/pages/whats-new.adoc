@@ -26,6 +26,10 @@ New in the `{project-version}` development line — everything listed here lande
 * xref:modules/mansart-transactions.adoc#one-phase[A one-phase commit says what failed] [.tag-new]#NEW# — a commit the database rolled back is `RollbackException`, not `SystemException`, and the `XAException` is the cause (MANSART-064).
 * xref:modules/mansart-transactions.adoc#jta-datasource[One connection per transaction and data source] [.tag-new]#NEW# — a repository and a persistence unit on the same data source each enlisted a connection of their own in the same transaction: neither saw the other's uncommitted work. `JtaDataSource` and `JtaConnections` (`mansart-transactions-jdbc`) share one (MANSART-066).
 
+== Data
+
+* xref:reference.adoc#name-quoting[Mapped names are no longer quoted] [.tag-new]#NEW# — a table or column name reaches the SQL as the mapping writes it, as with Jakarta Persistence: without quotes the database folds it, with double quotes inside the value (`@Table(name = "\"Order Lines\"")`) it is delimited. A repository and a persistence unit that share an entity now name the same table. *A schema created with quoted names needs a change*: see xref:migration.adoc#mapped-names-unquoted[Upgrading from 0.3.0] (MANSART-067).
+
 == Build
 
 * xref:usage.adoc#private-repositories[A private repository is a compile error] [.tag-new]#NEW# — a `@Repository` interface that is `private`, or nested in a `private` type, fails the build with the fix in the message, instead of a compiler note and a repository served at run time, which a named module cannot do; `-Amansart.privateRepositories=warn` keeps the previous behaviour. A repository declared inside a method is refused at run time with a message (Vidocq/mansart#85).

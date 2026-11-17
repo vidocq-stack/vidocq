@@ -142,14 +142,20 @@ Mansart chooses table and column names itself; the annotations change them.
 
 IMPORTANT: The table default is **not** Jakarta Persistence's. Although entities use `@jakarta.persistence.Entity`, a Jakarta Persistence provider names the table after the entity name (`Book`), Mansart after the plural (`books`). `@Entity(name = "...")` does not change Mansart's table either: to keep a schema made for Jakarta Persistence, or created after the class name, put `@Table(name = "book")` on the entity.
 
-Mansart quotes every table and column name in its SQL, so the database must hold them in the same case. PostgreSQL stores unquoted names in lower case, which matches. H2 stores them in upper case: a migration's `CREATE TABLE books (...)` makes `BOOKS`. With H2, quote the names in the migration (`CREATE TABLE "books" (...)`) or add `DATABASE_TO_LOWER=TRUE` to the JDBC URL.
+[#name-quoting]
+[.tag-new]#NEW# Mansart writes a table or column name in its SQL as the mapping gives it, as Jakarta Persistence does:
 
-WARNING: An entity shared with a Jakarta Persistence provider (a Noether persistence unit) must map names in the case the database stores. The provider leaves `@Table(name = "ITEM")` unquoted, so PostgreSQL reads it as `item`; Mansart quotes it and looks for `ITEM`. On PostgreSQL, write the mapped names in lower case (`@Table(name = "item")`): both then name the same table (MANSART-067).
+* *Without quotes* — `@Table(name = "ITEM")`, `@Column(name = "title")`, and every default name — the name is undelimited: the database folds it to its own case, lower case on PostgreSQL, upper case on H2, exactly as it folds the names of a migration written without quotes (`CREATE TABLE books (...)`). The case written in the annotation does not matter.
+* *With double quotes inside the value* — `@Table(name = "\"Order Lines\"")`, `@Column(name = "\"Item Label\"")` — the name is delimited: it reaches the database with its quotes, so its case, its spaces, or a reserved word are kept. The table or column must have been created with the same quoted name.
+
+A name that is a reserved word of the database (`user`, `order`, `value` on some of them) must be written with quotes, in the mapping and in the migration.
+
+NOTE: An entity shared with a Jakarta Persistence provider (a Noether persistence unit) names the same table and the same columns for both: the provider follows the same rule (MANSART-067). Up to 0.4.0-RC2 Mansart put every name between quotes, so `@Table(name = "ITEM")` named `ITEM` for a repository and `item` for the persistence unit on PostgreSQL; see xref:migration.adoc#mapped-names-unquoted[Upgrading from 0.3.0].
 
 When the table does not exist, the repository's first statement fails with a `MansartDataException` that names the entity, the table it looked for, how that name was chosen, and the ways out:
 
 ----
-The table "books" of entity com.example.shelf.book.Book does not exist. Mansart names an entity's table after its
+The table books of entity com.example.shelf.book.Book does not exist. Mansart names an entity's table after its
 class, in snake_case and plural (Book → books), not after the entity name as Jakarta Persistence does by default;
 @Entity(name = …) does not change it. Create the table (with Flyway, a migration in src/main/resources/db/migration),
 or give the existing one with @Table(name = "…") on Book.
@@ -168,7 +174,7 @@ check off with -Amansart.migrationCheck=off.
 ----
 
 * It reads `db/migration` in the class output, where Maven copies `src/main/resources/db/migration` before compiling (Flyway's default location). `-Amansart.migrations=<dir>[,<dir>…]` names other directories.
-* It understands `CREATE TABLE` and `CREATE VIEW` (with `IF NOT EXISTS`, a schema prefix, quoted names) and `ALTER TABLE … RENAME TO`, comments aside. A quoted name must match exactly, an unquoted one in any case.
+* It understands `CREATE TABLE` and `CREATE VIEW` (with `IF NOT EXISTS`, a schema prefix, quoted names) and `ALTER TABLE … RENAME TO`, comments aside. A quoted name must match a mapped name written with quotes exactly; in every other case the comparison ignores case, as the database folds an unquoted name.
 * It is a warning, not an error: the database may be created elsewhere (another service, a script, Java migrations). With no SQL migration at all, there is nothing to check and nothing is said. `-Amansart.migrationCheck=off` turns it off.
 
 [#enum-storage]
