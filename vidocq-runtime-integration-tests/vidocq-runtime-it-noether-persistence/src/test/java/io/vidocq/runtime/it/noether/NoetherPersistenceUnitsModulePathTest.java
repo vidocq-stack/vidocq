@@ -21,14 +21,22 @@ package io.vidocq.runtime.it.noether;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.vidocq.runtime.core.VidocqBootstrap;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.ContextNotActiveException;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.inject.spi.CDI;
+import jakarta.enterprise.util.AnnotationLiteral;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.metamodel.Type;
+import jakarta.transaction.TransactionScoped;
+import java.lang.annotation.Annotation;
 import java.sql.SQLException;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -38,12 +46,20 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * Two units in one application module: {@code ledger} on the default pool, {@code archive} on the named pool
- * {@code notes}. Each lists its entity and excludes the unlisted ones, so neither takes the other's. The
- * {@code archive} unit names the qualifier {@link Archived}, so it is also injected with {@code @Inject}
- * (Jakarta EE 11 Platform §13.12).
+ * The units of one application module: {@code ledger} on the default pool, {@code archive} on the named pool
+ * {@code notes}, {@code catalog} on the default pool. Each lists its entity and excludes the unlisted ones, so none
+ * takes another's. The {@code archive} and {@code catalog} units name a qualifier, {@link Archived} and
+ * {@link Catalogued}, so they are also injected with {@code @Inject} (Jakarta EE 11 Platform §13.12); the
+ * {@code catalog} unit also names a scope, which its {@code EntityManager} bean takes in place of
+ * {@code @TransactionScoped} (Jakarta Persistence 3.2, §8.2.1.6).
  */
 class NoetherPersistenceUnitsModulePathTest {
+
+    private static final class ArchivedLiteral extends AnnotationLiteral<Archived> implements Archived {
+    }
+
+    private static final class CataloguedLiteral extends AnnotationLiteral<Catalogued> implements Catalogued {
+    }
 
     private static VidocqBootstrap bootstrap;
 
@@ -107,8 +123,46 @@ class NoetherPersistenceUnitsModulePathTest {
         assertTrue(beans.iterator().next().getTypes().contains(EntityManagerFactory.class));
     }
 
+    @Test
+    void the_entity_manager_of_a_unit_takes_the_scope_its_descriptor_names() {
+        assertEquals(ApplicationScoped.class, entityManager(new CataloguedLiteral()).getScope(),
+                "<scope>jakarta.enterprise.context.ApplicationScoped</scope>");
+        assertEquals(TransactionScoped.class, entityManager(new ArchivedLiteral()).getScope(),
+                "a unit that names no scope keeps the default one");
+    }
+
+    @Test
+    void an_application_scoped_entity_manager_writes_in_a_transaction_and_answers_outside_one() throws SQLException {
+        Cataloguer cataloguer = CDI.current().select(Cataloguer.class).get();
+
+        cataloguer.add("kept");
+
+        assertEquals(1, cards(CDI.current().select(DataSource.class).get(), "kept"),
+                "the transaction of the method committed the card");
+        assertEquals("kept", cataloguer.find("kept").id(), "outside any transaction, its context is active");
+        EntityManager transactionScoped = CDI.current().select(EntityManager.class, new ArchivedLiteral()).get();
+        assertThrows(ContextNotActiveException.class, () -> transactionScoped.find(Note.class, "kept"),
+                "where the entity manager of a unit without <scope> has no context outside a transaction");
+    }
+
     private static Archivist archivist() {
         return CDI.current().select(Archivist.class).get();
+    }
+
+    private static Bean<?> entityManager(Annotation qualifier) {
+        BeanManager beans = CDI.current().getBeanManager();
+        return beans.resolve(beans.getBeans(EntityManager.class, qualifier));
+    }
+
+    private static long cards(DataSource pool, String id) throws SQLException {
+        try (var connection = pool.getConnection();
+             var statement = connection.prepareStatement("SELECT COUNT(*) FROM CARD WHERE ID = ?")) {
+            statement.setString(1, id);
+            try (var rows = statement.executeQuery()) {
+                rows.next();
+                return rows.getLong(1);
+            }
+        }
     }
 
     private static Set<Class<?>> entities(EntityManagerFactory factory) {

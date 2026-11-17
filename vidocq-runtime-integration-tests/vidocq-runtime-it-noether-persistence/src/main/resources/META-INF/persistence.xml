@@ -27,4 +27,18 @@
             <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
         </properties>
     </persistence-unit>
+    <!--
+        The default pool, like `ledger`. @Inject @Catalogued reaches this unit, and its EntityManager bean is
+        application scoped in place of transaction scoped (Jakarta Persistence 3.2, §8.2.1.6), so it answers outside a
+        transaction too.
+    -->
+    <persistence-unit name="catalog" transaction-type="JTA">
+        <qualifier>io.vidocq.runtime.it.noether.Catalogued</qualifier>
+        <scope>jakarta.enterprise.context.ApplicationScoped</scope>
+        <class>io.vidocq.runtime.it.noether.Card</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+        <properties>
+            <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
+        </properties>
+    </persistence-unit>
 </persistence>

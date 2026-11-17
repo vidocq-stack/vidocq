@@ -14,7 +14,8 @@
     <name>Vidocq :: IT :: Noether Persistence</name>
     <description>The assembled runtime with the Noether Persistence extension, on the module path: a JTA persistence
         unit takes the default Mansart pool, @Transactional commits and rolls back its persistence context, and the
-        container owns the factory; a second unit takes a named pool and its own entity only</description>
+        container owns the factory; a second unit takes a named pool and its own entity only; a third one, injected with
+        @Inject under its qualifier, has the application scoped EntityManager its scope element names</description>
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>

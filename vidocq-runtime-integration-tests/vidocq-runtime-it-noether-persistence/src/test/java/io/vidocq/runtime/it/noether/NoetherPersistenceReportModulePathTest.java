@@ -93,7 +93,7 @@ class NoetherPersistenceReportModulePathTest {
 
     @Test
     void the_summary_counts_the_injected_units_and_their_entities() {
-        assertTrue(report().contains("4 persistence units, 4 entities"), report());
+        assertTrue(report().contains("5 persistence units, 5 entities"), report());
     }
 
     @Test
