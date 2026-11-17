@@ -27,7 +27,8 @@ import jakarta.transaction.Transactional;
 
 /**
  * Both sides in one {@code @Transactional} method: a container-managed persistence context of the unit
- * {@code workbench} and the repository {@link Items}, on the same default pool.
+ * {@code workbench} and the repository {@link Items}, on the same default pool; and, for a transaction on two data
+ * stores, the repository {@link AuditItems} on the pool {@code audit}.
  */
 @ApplicationScoped
 public class Workbench {
@@ -37,6 +38,9 @@ public class Workbench {
 
     @Inject
     Items items;
+
+    @Inject
+    AuditItems auditItems;
 
     /** The unit writes and flushes; the repository reads, before the transaction commits. */
     @Transactional
@@ -60,5 +64,25 @@ public class Workbench {
         entities.flush();
         items.save(new Item(repositoryId, "repository"));
         throw new IllegalStateException("refused after both writes");
+    }
+
+    /**
+     * The unit and {@link Items} write on the default pool, {@link AuditItems} on the pool {@code audit}: one
+     * transaction on two data stores. Whether the unit and {@link Items} read each other's writes before the commit.
+     */
+    @Transactional
+    public boolean threeWritersOnTwoStores(String unitId, String repositoryId, String auditId) {
+        entities.persist(new Item(unitId, "unit"));
+        entities.flush();
+        items.save(new Item(repositoryId, "repository"));
+        auditItems.save(new Item(auditId, "audit"));
+        return items.findById(unitId).isPresent() && entities.find(Item.class, repositoryId) != null;
+    }
+
+    /** The three write on the two data stores, then the method fails: the transaction rolls back on both. */
+    @Transactional
+    public void threeWritersThenFail(String unitId, String repositoryId, String auditId) {
+        threeWritersOnTwoStores(unitId, repositoryId, auditId);
+        throw new IllegalStateException("refused after the writes on both stores");
     }
 }

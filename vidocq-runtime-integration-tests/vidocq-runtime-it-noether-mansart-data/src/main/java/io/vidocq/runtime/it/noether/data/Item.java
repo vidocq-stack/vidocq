@@ -25,18 +25,20 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 /**
- * One entity for both: the persistence unit and the repository map the same table. The names are explicit and upper
- * case, so the two mappings name the same table and columns whatever each one's naming rule is.
+ * One entity for both: the persistence unit and the repository map the same table. The names are explicit, so the two
+ * mappings name the same table and columns whatever each one's naming rule is, and lower case: the repository quotes
+ * them, the unit does not, and PostgreSQL folds a name it is given unquoted to lower case. The H2 databases of
+ * {@code vidocq.properties} fold the same way ({@code DATABASE_TO_LOWER}).
  */
 @Entity
-@Table(name = "ITEM")
+@Table(name = "item")
 public class Item {
 
     @Id
-    @Column(name = "ID")
+    @Column(name = "id")
     private String id;
 
-    @Column(name = "LABEL")
+    @Column(name = "label")
     private String label;
 
     public Item() {

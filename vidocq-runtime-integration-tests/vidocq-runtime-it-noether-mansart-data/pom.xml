@@ -14,7 +14,8 @@
     <name>Vidocq :: IT :: Noether Persistence with Mansart Data</name>
     <description>The assembled runtime with the Noether Persistence and Mansart Data extensions, on the module path:
         within one JTA transaction, a persistence unit and a Jakarta Data repository on the same pool work on one
-        connection, see each other's uncommitted writes and roll back together (Vidocq/mansart#103)</description>
+        connection, see each other's uncommitted writes and roll back together (Vidocq/mansart#103); on PostgreSQL,
+        with a repository on a second XA pool, the commit prepares a branch per database, then commits both</description>
 
     <properties>
         <maven.deploy.skip>true</maven.deploy.skip>
@@ -58,9 +59,27 @@
             <version>2.3.232</version>
             <scope>runtime</scope>
         </dependency>
+        <!-- TwoPhaseCommitPostgresModulePathTest: the same application on PostgreSQL, its pools XA. -->
+        <dependency>
+            <groupId>io.vidocq.mansart</groupId>
+            <artifactId>mansart-data-dialect-postgresql</artifactId>
+            <version>${mansart.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.10</version>
+            <scope>runtime</scope>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -85,6 +104,12 @@
                         <path>
                             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                             <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                        <!-- The @Named("audit") DataSource holder of the pool `audit`. -->
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                            <artifactId>vidocq-runtime-mansart-pool-datasources-codegen</artifactId>
                             <version>${project.version}</version>
                         </path>
                     </annotationProcessorPaths>
