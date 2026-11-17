@@ -195,6 +195,11 @@ super-interfaces (`@Inject BasicRepository<AuditEntry, Long>`), whatever its dat
 repositories of the same entity are ambiguous, as two beans of one type always are: inject the repository interface
 there.
 
+For a repository on a named data store injected by a super-interface, the Vauban processor prints a warning when the
+application is compiled: `Unsatisfied dependency … resolution deferred to the runtime container`. It is not an error:
+the bean of such a repository is created at the container start, which resolves the injection. A build that fails on
+compiler warnings stops on it; inject the repository interface there.
+
 And inject the raw datasource anywhere with the generated `@Named` holder:
 
 [source,java]
