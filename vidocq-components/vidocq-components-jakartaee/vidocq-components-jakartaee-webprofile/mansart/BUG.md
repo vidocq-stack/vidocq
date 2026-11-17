@@ -46,9 +46,16 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
   - 2026-11-17: the synthetic beans are registered for every repository of the build index, so two routed
     repositories of one entity are both candidates for `BasicRepository<E, K>`: ambiguous, as two class beans are on
     the default data store. Documented in `usage.adoc`.
-  - 2026-11-17: not checked yet in Mansart: a deployment whose extensions are frozen at build. It needs
-    `vidocq:generate`, so the test belongs to Vidocq (`vidocq-runtime-it-noether-mansart-data` has a routed
-    repository).
+  - 2026-11-17, frozen extensions, a probe and not a committed test: in Vidocq's `vidocq-runtime-mansart-h2-example`
+    (Vidocq main a7e0a6cf, which runs `vidocq:generate`), a field `@Inject BasicRepository<AuditEntry, Long>` added
+    to `AuditResource`, whose `AuditEntryRepository` is on the data store `audit`. The frozen record
+    `META-INF/vauban-frozen-synthetic.properties` holds the two parameterized types of the bean
+    (`genericType.0=jakarta.data.repository.BasicRepository<…AuditEntry, java.lang.Long>`, `genericType.1=…
+    DataRepository<…>`), and the module's 11 tests pass with `vidocq.startup.require-frozen-extensions=true`.
+  - 2026-11-17, a limit seen in that probe: at compile time `vauban-processor` prints a warning for such an
+    injection point, `Unsatisfied dependency … the required type is not declared by this compilation unit;
+    resolution deferred to the runtime container`. The synthetic bean does not exist yet when the application is
+    compiled; the container start resolves it. A build with `failOnWarning` stops on it.
 
 ---
 
