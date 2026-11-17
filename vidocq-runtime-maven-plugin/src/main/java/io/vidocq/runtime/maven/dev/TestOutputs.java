@@ -29,6 +29,7 @@ import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * The output directories the runs of the tests build, and what a run that was stopped leaves in them
@@ -48,10 +49,28 @@ import java.util.List;
  *       so that the next run finds sources without a class and compiles them all.</li>
  * </ul>
  *
- * @param built the directories a run builds
+ * <p>A run that ends before the dev loop hears of a save is not stopped, and may have compiled that source from what
+ * javac read before the save: {@link #savedWhileCompiling} gives each output what tells the next run so
+ * (BUG-20261117-03).
+ *
+ * @param built the outputs a run builds
  * @param skips the switches of a run that keep it away from an output it does not build
  */
-record TestOutputs(List<Path> built, List<String> skips) {
+record TestOutputs(List<Output> built, List<String> skips) {
+
+    /**
+     * An output a run builds.
+     *
+     * @param directory   where the compiler plugin writes the classes
+     * @param sourceRoots the source roots it compiles there that are outside the build directory: the sources a
+     *                    developer saves
+     */
+    record Output(Path directory, List<Path> sourceRoots) {
+
+        Output {
+            sourceRoots = List.copyOf(sourceRoots);
+        }
+    }
 
     /**
      * How coarse the time of a file may be: a file system that keeps it to the second, or to two, gives a file
@@ -59,13 +78,16 @@ record TestOutputs(List<Path> built, List<String> skips) {
      */
     static final Duration COARSEST_FILE_TIME = Duration.ofSeconds(2);
 
+    /** What starts every line about the tests. */
+    private static final String TESTS = "Tests: ";
+
     /** {@code vidocq:test}: a run is the only build of the project, it builds the main output and the test one. */
-    static TestOutputs ofVidocqTest(Path main, Path test) {
+    static TestOutputs ofVidocqTest(Output main, Output test) {
         return new TestOutputs(List.of(main, test), List.of());
     }
 
     /** {@code vidocq:dev}: the recompile of the dev loop builds the main output, a run builds the test one. */
-    static TestOutputs ofVidocqDev(Path test) {
+    static TestOutputs ofVidocqDev(Output test) {
         return new TestOutputs(List.of(test),
                 List.of("-Dmaven.main.skip=true", "-Dmaven.resources.skip=true", "-Dvidocq.generate.skip=true"));
     }
@@ -77,11 +99,23 @@ record TestOutputs(List<Path> built, List<String> skips) {
      */
     void discard(Instant since) throws IOException {
         FileTime from = FileTime.from(since.minus(COARSEST_FILE_TIME));
-        for (Path directory : built) {
-            if (Files.isDirectory(directory)) {
-                Files.walkFileTree(directory, new DeleteModifiedFrom(from));
+        for (Output output : built) {
+            if (Files.isDirectory(output.directory())) {
+                Files.walkFileTree(output.directory(), new DeleteModifiedFrom(from));
             }
         }
+    }
+
+    /**
+     * What tells a run the saves the previous run missed, one for each output of {@link #built}: a source saved while
+     * that run compiled it, after javac read it, has a class that looks up to date, and the run that starts deletes
+     * it (BUG-20261117-03). What they say are lines of the tests.
+     */
+    List<SavedWhileCompiling> savedWhileCompiling(Consumer<String> info, Consumer<String> warn) {
+        return built.stream()
+                .map(output -> new SavedWhileCompiling(output.sourceRoots(), output.directory(), "run",
+                        line -> info.accept(TESTS + line), line -> warn.accept(TESTS + line)))
+                .toList();
     }
 
     /** Deletes the regular files it visits, at any depth, that were last modified at {@code from} or later. */

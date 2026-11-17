@@ -155,13 +155,14 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
      *
      * @param services the dev services of the runs, whose keys every run gets as {@code -D}; closed with this
      * @param outputs  the outputs the runs build
+     * @param info     gets the sources a run compiles again, saved while the previous run compiled them
      */
     static ContinuousTesting forProject(Path projectDir, Path buildDir, TestServices services, TestOutputs outputs,
-            Consumer<TestResults> onResult, Consumer<String> warn) {
+            Consumer<TestResults> onResult, Consumer<String> info, Consumer<String> warn) {
         Path logFile = buildDir.resolve(TestResultsFile.LOG_NAME);
         Path reportsDir = buildDir.resolve("surefire-reports");
         TestRunner runner = new TestRunner(projectDir, RecompileRunner.detectMavenExecutable(projectDir),
-                services, logFile, reportsDir, outputs);
+                services, logFile, reportsDir, outputs, outputs.savedWhileCompiling(info, warn));
         return new ContinuousTesting(runner, since -> SurefireReports.read(reportsDir, since),
                 () -> TestRunner.compilationFailed(logFile),
                 new Results(buildDir.resolve(TestResultsFile.FILE_NAME), shown(projectDir, logFile)), onResult, warn,

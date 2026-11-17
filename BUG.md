@@ -5,6 +5,72 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261117-03 — A source saved while a recompile or a test run compiles it is not compiled: the save shows only once another Java source is saved
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/dev-save-during-recompile`
+- **Module**: `vidocq-runtime-maven-plugin` (new `SavedWhileCompiling`; `VidocqDevMojo`, `TestRunner`, `TestOutputs`,
+  `ContinuousTesting`, `VidocqTestMojo`)
+- **Symptom**: found by the reload probe of #631 on the Bistro example (`vidocq-runtime-foy-servlet-example`). The
+  probe appends a method `saveA1` to `Menu.java`, waits for the recompile of that save to reach javac, and appends
+  `saveB1`. The dev loop logs `Hot reload signalled after 7703 ms (layer swap: Menu gained a method saveA1).`, then,
+  for the second save, `Recompiled in 2108 ms: the compiled output did not change, nothing reloaded.` The source has
+  both methods and is stamped 02:43:00.732; `Menu.class` was written at 02:43:01.198 and has `saveA1` only. No later
+  recompile compiles it: the application runs without `saveB1` until a Java source is saved again. Four rounds of
+  four lost the second save. The test runs lose a save the same way: on a small module, the fixture of
+  `ContinuousTestingDevGoalIT` with its two main classes and two test classes, two rounds of eight left
+  `GreeterTest.class` without the second method, and the next runs tested the old class. On the tests of the Bistro
+  example, whose runs take seconds more, the same probe lost none of five.
+- **Repro**: the state, without the race: build the example, append a method to `Menu.java`, then `touch` its
+  `Menu.class`, which makes the class newer than the source, as javac leaves it when it read the source before the
+  save. Run the recompile (`mvn process-classes -DskipTests -Dvidocq.moduleinfo.dev=true`): `Nothing to compile - all
+  classes are up to date.`, and `javap` shows the class without the method. The race itself: under `vidocq:dev`,
+  save a source, and save it again while the recompile of the first save runs, once javac has started.
+  `ContinuousTestingDevGoalIT` makes the state in a running `vidocq:dev`: it saves `Greeter.java` with the time of
+  the class the previous recompile left. Against the plugin of `main` the dev loop answers `Recompiled in 1433 ms:
+  the compiled output did not change, nothing reloaded.`
+- **Cause**: the compiler plugin (3.15.0) takes a source for compiled when its class is not older, in milliseconds.
+  javac reads every source first and writes the classes last, seconds later on a real module: seven seconds in the
+  round above, between the start of the recompile (02:42:54.198) and the class (02:43:01.198). A source saved in
+  between is older than the class javac writes from what it read before the save. The watcher reports the save and
+  the dev loop recompiles, but the plugin finds every class up to date and compiles nothing. Saving another Java
+  source repairs it, as the plugin then compiles the whole module.
+  - Nothing stops a recompile of the dev loop: every save made while one runs, after javac read the source, is lost.
+  - A change stops a test run, and a stopped run loses what it wrote (BUG-20261117-01), which covers the save. But a
+    run that ends before the watcher reports the save is not stopped: in the two lost rounds the log has two
+    complete runs and no `Tests: cancelled`, and the second run found the class newer than the source.
+- **Fix**: `SavedWhileCompiling`, one for each output a compile builds. It notes the time of each source of the
+  project (the compile source roots outside the build directory) when a compile starts, and the time of each class
+  when the compile ends. When the next compile starts, a source whose time changed since the previous start, and
+  whose class is the one the previous compile left, not older than the source, loses its class. The compiler plugin
+  then finds a source without a class and compiles the module, as it does for any change. An info line names the
+  sources, three at most: `Menu.java was saved since the previous recompile started and its class is not older:
+  compiling it again.`
+  - The dev loop: `VidocqDevMojo.recompile` calls it around each recompile, for the main sources.
+  - The test runs: `TestRunner.launch` calls it before the Maven of each run, and once the run ended, for the
+    outputs the runs build (`TestOutputs.Output`: the test sources under `vidocq:dev`, the main ones too under
+    `vidocq:test`). Its lines start with `Tests: `.
+  - A class written after the compile ended is another build's, an IDE that builds on save for instance: it was
+    compiled from the save, and it stays. Without that rule, every save in such an IDE would cost a compile of the
+    whole module.
+  - A compile whose end is unknown (the wait for it was interrupted, its classes could not be read) leaves every
+    class in doubt.
+  - A source saved before javac read it is compiled a second time: the output does not change and nothing reloads.
+  - A file time that cannot be read, or a class that cannot be deleted, is a warning, and the compile goes on:
+    `Cannot tell whether a source was saved since the previous recompile started (…): if a save does not show, save
+    the file again.`
+
+  Tests: `SavedWhileCompilingTest`, `VidocqDevMojoTest.aSaveMadeWhileTheRecompileRunsIsCompiledByTheNextRecompile`
+  and `TestRunnerTest.aSaveMadeWhileARunCompilesIsCompiledByTheNextRun` (a Maven that writes the class after the
+  source was saved again), `TestOutputsTest.theNextRunCompilesTheTestSourceSavedWhileARunCompiledIt` and
+  `underVidocqTestTheMainSourcesAreTheRunsToo`, the `testOutputs` tests of the two mojos, `ContinuousTestingDevGoalIT`.
+  The same probes with the fix: the dev loop loses none of four, and each round logs the line above, then `layer
+  swap: Menu gained a method saveB1`; the test runs lose none of eight: five rounds log `Tests: GreeterTest.java was
+  saved since the previous run started and its class is not older: compiling it again.`, and a change stopped the
+  run of the three others.
+- **Not covered**: a source saved while `vidocq:dev` starts, during the build that precedes the dev loop: nothing
+  noted its time, and the watcher is not there yet. Not observed. Saving a Java source repairs it.
+
 ## BUG-20261117-02 — Under `vidocq:dev`, a recompile that compiles nothing restarts an application with pages and Peano accessors: `layer swap: module-info changed`
 
 - **Date**: 2026-11-17

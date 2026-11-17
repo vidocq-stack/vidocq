@@ -1281,6 +1281,10 @@ A test run of `vidocq:dev` builds `target/test-classes` only. The recompile of t
 and the run gets `-Dmaven.main.skip=true -Dmaven.resources.skip=true -Dvidocq.generate.skip=true`: see
 xref:continuous-testing.adoc#who-builds[Who builds the classes].
 
+A source saved while a recompile or a test run compiles it is compiled again by the next one, which deletes the class
+that looks up to date and names the source: see xref:usage.adoc#dev-save-while-compiling[A save while a recompile
+runs] and xref:continuous-testing.adoc#saved-while-compiling[A save while a run compiles].
+
 [#debugger]
 == The debug agent of `vidocq:dev` and `vidocq:run`
 

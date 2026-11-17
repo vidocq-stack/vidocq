@@ -33,13 +33,17 @@ import org.apache.maven.plugin.logging.SystemStreamLog;
 import org.apache.maven.project.MavenProject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -103,12 +107,19 @@ class VidocqDevMojoTest {
     @Test
     void theTestRunsLeaveTheMainOutputToTheRecompile(@TempDir Path tmp) {
         Path testClasses = tmp.resolve("target/test-classes");
+        Path testSources = tmp.resolve("src/test/java");
         MavenProject project = new MavenProject();
         project.getBuild().setTestOutputDirectory(testClasses.toString());
+        project.addCompileSourceRoot(tmp.resolve("src/main/java").toString());
+        project.addTestCompileSourceRoot(testSources.toString());
+        project.addTestCompileSourceRoot(tmp.resolve("target/generated-test-sources/test-annotations").toString());
         VidocqDevMojo mojo = new VidocqDevMojo();
         mojo.setProject(project);
+        mojo.setBuildDir(tmp.resolve("target").toFile());
 
-        assertEquals(TestOutputs.ofVidocqDev(testClasses), mojo.testOutputs());
+        assertEquals(TestOutputs.ofVidocqDev(new TestOutputs.Output(testClasses, List.of(testSources))),
+                mojo.testOutputs(), "the test output, with the test sources a developer saves: not the generated"
+                        + " ones, not the main ones (BUG-20261117-03)");
     }
 
     /** {@code vidocq:dev} starts its dev services unless something says otherwise. */
@@ -744,6 +755,48 @@ class VidocqDevMojoTest {
         assertEquals(List.of("interrupt", "changed change"), tests.calls);
         assertEquals(List.of("Recompiled in 12 ms: the compiled output did not change, nothing reloaded."), info);
         assertEquals(Optional.of(TestControl.ReadyGate.NOW), VidocqDevMojo.nothingReloaded(1, _ -> { }));
+    }
+
+    /**
+     * BUG-20261117-03: a save made while the recompile runs, after javac read the source, is compiled by the next
+     * recompile. The Maven of this test is the compiler plugin and its javac in short: its first run writes the
+     * class after the source was saved again, and every run notes whether it found that class when it started.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    @Timeout(30)
+    void aSaveMadeWhileTheRecompileRunsIsCompiledByTheNextRecompile(@TempDir Path dir) throws Exception {
+        Path source = dir.resolve("src/main/java/acme/Menu.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, "class Menu { }\n");
+        // Saved a minute ago: the save the first run makes shows on a file system that keeps the time to the second.
+        Files.setLastModifiedTime(source, FileTime.from(Instant.now().minusSeconds(60)));
+        Path maven = dir.resolve("fake-mvn");
+        Files.writeString(maven, """
+                #!/bin/sh
+                if [ -e target/classes/acme/Menu.class ]; then echo "its class is there"; else echo "no class"; fi >> runs.txt
+                if [ ! -e compiled-once ]; then
+                  echo "// saved again, after javac read the source" >> src/main/java/acme/Menu.java
+                  mkdir -p target/classes/acme
+                  echo "the class of what javac read" > target/classes/acme/Menu.class
+                  touch compiled-once
+                fi
+                """);
+        assertTrue(maven.toFile().setExecutable(true));
+        RecompileRunner recompile = new RecompileRunner(dir, maven.toString());
+        List<String> info = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        SavedWhileCompiling saved = new SavedWhileCompiling(List.of(dir.resolve("src/main/java")),
+                dir.resolve("target/classes"), "recompile", info::add, warnings::add);
+
+        assertEquals(0, VidocqDevMojo.recompile(recompile, saved));
+        assertEquals(0, VidocqDevMojo.recompile(recompile, saved));
+
+        assertEquals(List.of("no class", "no class"), Files.readAllLines(dir.resolve("runs.txt")),
+                "what each recompile found: the second one compiles the source, as it has no class");
+        assertEquals(List.of("Menu.java was saved since the previous recompile started and its class is not older:"
+                + " compiling it again."), info);
+        assertEquals(List.of(), warnings);
     }
 
     @Test

@@ -28,7 +28,9 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -48,8 +50,9 @@ class TestRunnerTest {
     private static final TestServices NO_KEYS = TestServices.fixed(Map.of());
 
     /** The outputs of {@code vidocq:test}, whose runs build the main output too. */
-    private static final TestOutputs BOTH =
-            TestOutputs.ofVidocqTest(Path.of("target/classes"), Path.of("target/test-classes"));
+    private static final TestOutputs BOTH = TestOutputs.ofVidocqTest(
+            new TestOutputs.Output(Path.of("target/classes"), List.of()),
+            new TestOutputs.Output(Path.of("target/test-classes"), List.of()));
 
     @Test
     void allTestsRunWithoutDevServicesOfTheirOwn() {
@@ -71,7 +74,8 @@ class TestRunnerTest {
                         "-DfailIfNoTests=false", "-Dsurefire.failIfNoSpecifiedTests=false",
                         "-Dmaven.main.skip=true", "-Dmaven.resources.skip=true", "-Dvidocq.generate.skip=true",
                         "-Dtest=com.acme.ATest#x", "-Dvidocq.dev.devServices=false"),
-                TestRunner.command("mvn", TestOutputs.ofVidocqDev(Path.of("target/test-classes")),
+                TestRunner.command("mvn",
+                        TestOutputs.ofVidocqDev(new TestOutputs.Output(Path.of("target/test-classes"), List.of())),
                         List.of("com.acme.ATest#x"), Map.of(), true));
     }
 
@@ -81,11 +85,52 @@ class TestRunnerTest {
         Path testClasses = Files.createDirectories(dir.resolve("target/test-classes"));
         Path halfBuilt = Files.writeString(testClasses.resolve("ATest.class"), "half");
         TestRunner runner = new TestRunner(dir, "mvn", NO_KEYS, dir.resolve("target/t.log"),
-                dir.resolve("target/surefire-reports"), TestOutputs.ofVidocqDev(testClasses));
+                dir.resolve("target/surefire-reports"),
+                TestOutputs.ofVidocqDev(new TestOutputs.Output(testClasses, List.of())), List.of());
 
         runner.discard(Files.getLastModifiedTime(halfBuilt).toInstant());
 
         assertFalse(Files.exists(halfBuilt), "what the stopped run wrote");
+    }
+
+    /**
+     * BUG-20261117-03: a test source saved while a run compiles it, after javac read it, is compiled by the next run.
+     * The run ended before the dev loop heard of the save, so nothing stopped it. The Maven of this test is the
+     * compiler plugin and its javac in short: its first run writes the class after the source was saved again, and
+     * every run notes whether it found that class when it started.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    @Timeout(30)
+    void aSaveMadeWhileARunCompilesIsCompiledByTheNextRun(@TempDir Path dir) throws Exception {
+        Path testSources = dir.resolve("src/test/java");
+        Files.createDirectories(testSources.resolve("acme"));
+        Path source = Files.writeString(testSources.resolve("acme/MenuTest.java"), "class MenuTest { }\n");
+        // Saved a minute ago: the save the first run makes shows on a file system that keeps the time to the second.
+        Files.setLastModifiedTime(source, FileTime.from(Instant.now().minusSeconds(60)));
+        TestOutputs outputs =
+                TestOutputs.ofVidocqDev(new TestOutputs.Output(dir.resolve("target/test-classes"), List.of(testSources)));
+        List<String> info = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        TestRunner runner = new TestRunner(dir, script(dir, """
+                if [ -e target/test-classes/acme/MenuTest.class ]; then echo "its class is there"; else echo "no class"; fi >> runs.txt
+                if [ ! -e compiled-once ]; then
+                  echo "// saved again, after javac read the source" >> src/test/java/acme/MenuTest.java
+                  mkdir -p target/test-classes/acme
+                  echo "the class of what javac read" > target/test-classes/acme/MenuTest.class
+                  touch compiled-once
+                fi
+                """).toString(), NO_KEYS, dir.resolve("target/t.log"), dir.resolve("target/surefire-reports"), outputs,
+                outputs.savedWhileCompiling(info::add, warnings::add));
+
+        assertEquals(0, runner.launch(List.of()).waitFor());
+        assertEquals(0, runner.launch(List.of()).waitFor());
+
+        assertEquals(List.of("no class", "no class"), Files.readAllLines(dir.resolve("runs.txt")),
+                "what each run found: the second one compiles the source, as it has no class");
+        assertEquals(List.of("Tests: MenuTest.java was saved since the previous run started and its class is not"
+                + " older: compiling it again."), info);
+        assertEquals(List.of(), warnings);
     }
 
     /** BUG-20261106-01: the run again after an offline miss goes online, its command otherwise the same. */
@@ -159,7 +204,7 @@ class TestRunnerTest {
         };
         Path log = dir.resolve("target/vidocq-dev-tests.log");
         TestRunner runner = new TestRunner(dir, script(dir, "echo \"args: $*\"\n").toString(), services, log,
-                dir.resolve("target/surefire-reports"), BOTH);
+                dir.resolve("target/surefire-reports"), BOTH, List.of());
 
         runner.prepare();
         assertEquals(0, runner.launch(List.of()).waitFor());
@@ -186,7 +231,7 @@ class TestRunnerTest {
         Files.writeString(reports.resolve("notes.txt"), "kept");
         Path log = dir.resolve("target/vidocq-dev-tests.log");
         TestRunner runner = new TestRunner(dir, script(dir, "echo \"args: $*\"\n").toString(), NO_KEYS, log,
-                reports, BOTH);
+                reports, BOTH, List.of());
 
         assertEquals(0, runner.launch(List.of()).waitFor());
 
@@ -227,7 +272,7 @@ class TestRunnerTest {
     void aRunThatMissesAnArtifactOfflineRunsAgainOnline(@TempDir Path dir) throws Exception {
         Path log = dir.resolve("target/vidocq-dev-tests.log");
         TestRunner runner = new TestRunner(dir, missingOffline(dir).toString(), NO_KEYS, log,
-                dir.resolve("target/surefire-reports"), BOTH);
+                dir.resolve("target/surefire-reports"), BOTH, List.of());
 
         ContinuousTesting.Launched launched = runner.launch(List.of("com.acme.ATest#x"));
 
@@ -247,7 +292,7 @@ class TestRunnerTest {
     void aFailureThatIsNotAnOfflineMissDoesNotRunAgain(@TempDir Path dir) throws Exception {
         Path maven = script(dir, "echo \"args: $*\" >> calls.txt\necho '[ERROR] COMPILATION ERROR : '\nexit 1\n");
         TestRunner runner = new TestRunner(dir, maven.toString(), NO_KEYS, dir.resolve("target/t.log"),
-                dir.resolve("target/surefire-reports"), BOTH);
+                dir.resolve("target/surefire-reports"), BOTH, List.of());
 
         assertEquals(1, runner.launch(List.of()).waitFor());
 
@@ -263,7 +308,7 @@ class TestRunnerTest {
     @Timeout(30)
     void aCancelBetweenTheOfflineMissAndTheOnlineRunStopsTheRun(@TempDir Path dir) throws Exception {
         TestRunner runner = new TestRunner(dir, missingOffline(dir).toString(), NO_KEYS,
-                dir.resolve("target/t.log"), dir.resolve("target/surefire-reports"), BOTH);
+                dir.resolve("target/t.log"), dir.resolve("target/surefire-reports"), BOTH, List.of());
         ContinuousTesting.Launched launched = runner.launch(List.of());
         long offline = writtenPid(dir.resolve("offline.pid"));
         assertTrue(goneWithin(offline, Duration.ofSeconds(5)), "the offline run");
@@ -281,7 +326,7 @@ class TestRunnerTest {
     void cancellingKillsTheWholeProcessTree(@TempDir Path dir) throws Exception {
         Path maven = script(dir, "sleep 60 &\necho $! > child.pid\nwait\n");
         TestRunner runner = new TestRunner(dir, maven.toString(), NO_KEYS, dir.resolve("target/t.log"),
-                dir.resolve("target/surefire-reports"), BOTH);
+                dir.resolve("target/surefire-reports"), BOTH, List.of());
         ContinuousTesting.Launched launched = runner.launch(List.of());
         long child = writtenPid(dir.resolve("child.pid"));
 
@@ -303,7 +348,7 @@ class TestRunnerTest {
         // The child writes its own pid once its trap is set: the cancel below always meets a child ignoring TERM.
         Path maven = script(dir, "sh -c 'trap \"\" TERM; echo $$ > child.pid; while :; do sleep 0.1; done' &\nwait\n");
         TestRunner runner = new TestRunner(dir, maven.toString(), NO_KEYS, dir.resolve("target/t.log"),
-                dir.resolve("target/surefire-reports"), BOTH);
+                dir.resolve("target/surefire-reports"), BOTH, List.of());
         ContinuousTesting.Launched launched = runner.launch(List.of());
         long child = writtenPid(dir.resolve("child.pid"));
 

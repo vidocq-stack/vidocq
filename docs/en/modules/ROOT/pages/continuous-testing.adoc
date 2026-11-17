@@ -116,6 +116,22 @@ class until a source changes. Two rules keep a stopped run from leaving that beh
   deleted from the outputs it builds, `target/test-classes` and, in `vidocq:test`, `target/classes`, before the next
   run, which then compiles every source again.
 
+[[saved-while-compiling]]*A save while a run compiles.* [.tag-new]#NEW# A run that ends before `vidocq:dev` hears of
+a save is not stopped, so nothing of it is deleted. When the save came after javac read the source, the class the run
+wrote is newer than the source and compiled from what javac read: Maven takes that source for compiled, and the next
+runs test the old code. So a run notes the time of each source when it starts, and the classes it leaves when it ends.
+The next run deletes the class of a source that was saved since, when that class is the one the previous run left and
+is not older than the source. Maven then compiles the sources of that output again, and a line names the source:
+
+[source]
+----
+Tests: GreeterTest.java was saved since the previous run started and its class is not older: compiling it again.
+----
+
+In `vidocq:dev` a run does this for the test sources, and the recompile does it for the main ones: see
+xref:usage.adoc#dev-save-while-compiling[A save while a recompile runs]. In `vidocq:test` a run does it for both. A
+class written after the run ended stays: your IDE compiled it from the save.
+
 [#switch]
 == Turning it on and off
 

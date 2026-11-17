@@ -62,20 +62,23 @@ final class TestRunner implements ContinuousTesting.Launcher {
     private final Path logFile;
     private final Path reportsDir;
     private final TestOutputs outputs;
+    private final List<SavedWhileCompiling> saved;
 
     /**
      * @param maven    the Maven executable, as {@link RecompileRunner#detectMavenExecutable} finds it
      * @param services the dev services of the runs, whose keys each run gets as {@code -D}, in their order
      * @param outputs  the outputs the runs build
+     * @param saved    what tells each run the saves the previous one missed, as {@code outputs} gives it
      */
     TestRunner(Path projectDir, String maven, TestServices services, Path logFile, Path reportsDir,
-            TestOutputs outputs) {
+            TestOutputs outputs, List<SavedWhileCompiling> saved) {
         this.projectDir = projectDir;
         this.maven = maven;
         this.services = services;
         this.logFile = logFile;
         this.reportsDir = reportsDir;
         this.outputs = outputs;
+        this.saved = List.copyOf(saved);
     }
 
     /**
@@ -112,14 +115,20 @@ final class TestRunner implements ContinuousTesting.Launcher {
         services.prepare();
     }
 
-    /** The run gets the keys of its dev services as they are when it starts. */
+    /**
+     * The run gets the keys of its dev services as they are when it starts. Before its Maven starts, a source saved
+     * while the previous run compiled it loses the class that run left, so that this run compiles it; when the run
+     * ends, the classes it leaves are noted for the next one (BUG-20261117-03).
+     */
     @Override
     public ContinuousTesting.Launched launch(List<String> tests) throws IOException {
         deleteReports(reportsDir);
         Files.createDirectories(logFile.toAbsolutePath().getParent());
         Map<String, String> keys = services.keys();
+        saved.forEach(SavedWhileCompiling::compileStarts);
         Process offline = start(command(maven, outputs, tests, keys, true));
-        return new Running(offline, logFile, () -> start(command(maven, outputs, tests, keys, false)));
+        return new Running(offline, logFile, () -> start(command(maven, outputs, tests, keys, false)),
+                () -> saved.forEach(SavedWhileCompiling::compileEnds));
     }
 
     /** Deletes what the run that started at {@code since} wrote in the outputs the runs build, once it was stopped. */
@@ -221,6 +230,8 @@ final class TestRunner implements ContinuousTesting.Launcher {
 
         private final Object lock = new Object();
         private final Path logFile;
+        /** What to do once the run ended, on the thread that waited for it. */
+        private final Runnable onEnd;
         /** Guarded by lock. */
         private Process process;
         /** Guarded by lock: the online run still to start after an offline miss, {@code null} once decided. */
@@ -228,14 +239,22 @@ final class TestRunner implements ContinuousTesting.Launcher {
         /** Guarded by lock. */
         private boolean cancelled;
 
-        Running(Process offline, Path logFile, OnlineRun online) {
+        Running(Process offline, Path logFile, OnlineRun online, Runnable onEnd) {
             this.process = offline;
             this.logFile = logFile;
             this.online = online;
+            this.onEnd = onEnd;
         }
 
+        /** A wait that is interrupted says nothing of the end of the run: {@code onEnd} does not run. */
         @Override
         public int waitFor() throws InterruptedException {
+            int exit = waitForItsProcesses();
+            onEnd.run();
+            return exit;
+        }
+
+        private int waitForItsProcesses() throws InterruptedException {
             Process first;
             synchronized (lock) {
                 first = process;

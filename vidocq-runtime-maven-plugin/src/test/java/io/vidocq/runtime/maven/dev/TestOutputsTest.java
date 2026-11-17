@@ -27,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -40,22 +41,24 @@ class TestOutputsTest {
     /** When the run that was stopped started: a whole second, so that any file system keeps the times below. */
     private static final Instant STARTED = Instant.parse("2026-11-17T00:13:50Z");
 
-    private static final Path CLASSES = Path.of("target/classes");
-    private static final Path TEST_CLASSES = Path.of("target/test-classes");
+    private static final TestOutputs.Output MAIN =
+            new TestOutputs.Output(Path.of("target/classes"), List.of(Path.of("src/main/java")));
+    private static final TestOutputs.Output TEST =
+            new TestOutputs.Output(Path.of("target/test-classes"), List.of(Path.of("src/test/java")));
 
     @Test
     void underVidocqTestARunBuildsBothOutputs() {
-        TestOutputs outputs = TestOutputs.ofVidocqTest(CLASSES, TEST_CLASSES);
+        TestOutputs outputs = TestOutputs.ofVidocqTest(MAIN, TEST);
 
-        assertEquals(List.of(CLASSES, TEST_CLASSES), outputs.built());
+        assertEquals(List.of(MAIN, TEST), outputs.built());
         assertEquals(List.of(), outputs.skips(), "the run is the only build: it compiles the main sources too");
     }
 
     @Test
     void underVidocqDevARunBuildsTheTestOutputAndLeavesTheMainOneToTheRecompile() {
-        TestOutputs outputs = TestOutputs.ofVidocqDev(TEST_CLASSES);
+        TestOutputs outputs = TestOutputs.ofVidocqDev(TEST);
 
-        assertEquals(List.of(TEST_CLASSES), outputs.built());
+        assertEquals(List.of(TEST), outputs.built());
         assertEquals(List.of("-Dmaven.main.skip=true", "-Dmaven.resources.skip=true", "-Dvidocq.generate.skip=true"),
                 outputs.skips(), "no main source compiled, no main resource copied, nothing generated");
     }
@@ -66,6 +69,72 @@ class TestOutputsTest {
         Files.writeString(file, "content");
         Files.setLastModifiedTime(file, FileTime.from(time));
         return file;
+    }
+
+    /** An output whose sources do not matter to the test. */
+    private static TestOutputs.Output output(Path directory) {
+        return new TestOutputs.Output(directory, List.of());
+    }
+
+    /**
+     * BUG-20261117-03: a test source saved while a run compiled it, after javac read it. The run ended before the dev
+     * loop heard of the save, so nothing stopped it and its class stays, newer than the source. The next run deletes
+     * that class, and says so as a line of the tests.
+     */
+    @Test
+    void theNextRunCompilesTheTestSourceSavedWhileARunCompiledIt(@TempDir Path dir) throws Exception {
+        Path testSources = dir.resolve("src/test/java");
+        Path testClasses = dir.resolve("target/test-classes");
+        Path source = file(testSources.resolve("com/acme/TallyTest.java"), STARTED.minusSeconds(2));
+        Path itsClass = file(testClasses.resolve("com/acme/TallyTest.class"), STARTED.minusSeconds(60));
+        List<String> info = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        List<SavedWhileCompiling> saved =
+                TestOutputs.ofVidocqDev(new TestOutputs.Output(testClasses, List.of(testSources)))
+                        .savedWhileCompiling(info::add, warnings::add);
+        saved.forEach(SavedWhileCompiling::compileStarts);
+        Files.setLastModifiedTime(source, FileTime.from(STARTED.plusSeconds(1)));
+        Files.setLastModifiedTime(itsClass, FileTime.from(STARTED.plusSeconds(2)));
+        saved.forEach(SavedWhileCompiling::compileEnds);
+
+        saved.forEach(SavedWhileCompiling::compileStarts);
+
+        assertFalse(Files.exists(itsClass), "the next run compiles a source that has no class");
+        assertEquals(List.of("Tests: TallyTest.java was saved since the previous run started and its class is not"
+                + " older: compiling it again."), info);
+        assertEquals(List.of(), warnings);
+    }
+
+    /**
+     * A run of {@code vidocq:test} compiles the main sources too: one saved while it compiled is compiled by the next
+     * run. Under {@code vidocq:dev} the same class is the recompile's, and a run leaves it alone.
+     */
+    @Test
+    void underVidocqTestTheMainSourcesAreTheRunsToo(@TempDir Path dir) throws Exception {
+        TestOutputs.Output main =
+                new TestOutputs.Output(dir.resolve("target/classes"), List.of(dir.resolve("src/main/java")));
+        TestOutputs.Output test =
+                new TestOutputs.Output(dir.resolve("target/test-classes"), List.of(dir.resolve("src/test/java")));
+        Path source = file(dir.resolve("src/main/java/com/acme/Tally.java"), STARTED.minusSeconds(2));
+        Path itsClass = file(dir.resolve("target/classes/com/acme/Tally.class"), STARTED.minusSeconds(60));
+        List<String> info = new ArrayList<>();
+        List<SavedWhileCompiling> ofVidocqDev = TestOutputs.ofVidocqDev(test).savedWhileCompiling(info::add, info::add);
+        List<SavedWhileCompiling> ofVidocqTest =
+                TestOutputs.ofVidocqTest(main, test).savedWhileCompiling(info::add, info::add);
+        ofVidocqDev.forEach(SavedWhileCompiling::compileStarts);
+        ofVidocqTest.forEach(SavedWhileCompiling::compileStarts);
+        Files.setLastModifiedTime(source, FileTime.from(STARTED.plusSeconds(1)));
+        Files.setLastModifiedTime(itsClass, FileTime.from(STARTED.plusSeconds(2)));
+        ofVidocqDev.forEach(SavedWhileCompiling::compileEnds);
+        ofVidocqTest.forEach(SavedWhileCompiling::compileEnds);
+
+        ofVidocqDev.forEach(SavedWhileCompiling::compileStarts);
+        assertTrue(Files.exists(itsClass), "under vidocq:dev, a class of the main output");
+
+        ofVidocqTest.forEach(SavedWhileCompiling::compileStarts);
+        assertFalse(Files.exists(itsClass), "under vidocq:test, the next run compiles it");
+        assertEquals(List.of("Tests: Tally.java was saved since the previous run started and its class is not older:"
+                + " compiling it again."), info);
     }
 
     /**
@@ -83,7 +152,7 @@ class TestOutputsTest {
         Path test = file(testClasses.resolve("com/acme/TallyTest.class"), STARTED.plusSeconds(2));
         Path log = file(dir.resolve("target/vidocq-dev-tests.log"), STARTED.plusSeconds(2));
 
-        TestOutputs.ofVidocqTest(classes, testClasses).discard(STARTED);
+        TestOutputs.ofVidocqTest(output(classes), output(testClasses)).discard(STARTED);
 
         assertFalse(Files.exists(compiled), "a class the run compiled");
         assertFalse(Files.exists(copied), "a resource the run copied");
@@ -99,7 +168,7 @@ class TestOutputsTest {
         Path testClasses = dir.resolve("target/test-classes");
         Path test = file(testClasses.resolve("com/acme/TallyTest.class"), STARTED.plusSeconds(2));
 
-        TestOutputs.ofVidocqDev(testClasses).discard(STARTED);
+        TestOutputs.ofVidocqDev(output(testClasses)).discard(STARTED);
 
         assertTrue(Files.exists(recompiled), "a class the recompile wrote while the run ran");
         assertFalse(Files.exists(test), "a test class the run compiled");
@@ -115,7 +184,7 @@ class TestOutputsTest {
         Path coarse = file(testClasses.resolve("com/acme/Coarse.class"), STARTED.minusSeconds(2));
         Path earlier = file(testClasses.resolve("com/acme/Earlier.class"), STARTED.minusSeconds(3));
 
-        TestOutputs.ofVidocqDev(testClasses).discard(STARTED);
+        TestOutputs.ofVidocqDev(output(testClasses)).discard(STARTED);
 
         assertFalse(Files.exists(coarse), "stamped two seconds before the start");
         assertTrue(Files.exists(earlier), "stamped three seconds before the start");
@@ -124,7 +193,8 @@ class TestOutputsTest {
     /** A run stopped before it built anything, on a project that was never built: there is nothing to delete. */
     @Test
     void anOutputThatWasNeverBuiltIsNoError(@TempDir Path dir) {
-        TestOutputs outputs = TestOutputs.ofVidocqTest(dir.resolve("target/classes"), dir.resolve("target/test-classes"));
+        TestOutputs outputs = TestOutputs.ofVidocqTest(output(dir.resolve("target/classes")),
+                output(dir.resolve("target/test-classes")));
 
         assertDoesNotThrow(() -> outputs.discard(STARTED));
     }

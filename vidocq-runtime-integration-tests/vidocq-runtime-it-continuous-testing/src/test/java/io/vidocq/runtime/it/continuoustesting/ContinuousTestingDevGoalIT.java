@@ -98,6 +98,23 @@ class ContinuousTestingDevGoalIT {
             assertEquals(1, Fixture.occurrences(log, STARTED), "a test change never reloads the application");
             assertEquals(older, Files.getLastModifiedTime(compiled),
                     "a test run of vidocq:dev compiled the main sources: the recompile alone builds them");
+
+            // BUG-20261117-03: a source saved while the recompile compiles it, after javac read it, gets a class
+            // that is not older, and the compiler plugin takes it for compiled. A first save gives the dev loop a
+            // recompile to compare with. The second one bears the time of the class that recompile left, which
+            // is what javac leaves when it writes the class after the save.
+            Fixture.addGreeterMethod(project, "first", null);
+            Fixture.awaitLog(mvn, log, "Greeter gained a method first");
+            Fixture.awaitResults(project, r -> Fixture.is(r, "passed", "change"));
+            int before = Fixture.read(log).length();
+
+            Fixture.addGreeterMethod(project, "second", Files.getLastModifiedTime(compiled));
+            String after = Fixture.poll(Duration.ofMinutes(2), () -> Fixture.read(log).substring(before),
+                    said -> said.contains("Greeter gained a method second") || said.contains("nothing reloaded"));
+            assertTrue(after.contains("Greeter.java was saved since the previous recompile started and its class is"
+                    + " not older: compiling it again."), "the recompile names the source it compiles again:\n" + after);
+            assertTrue(after.contains("Greeter gained a method second"),
+                    "the save is compiled, and the application reloads with it:\n" + after);
         } finally {
             Fixture.stop(mvn);
         }

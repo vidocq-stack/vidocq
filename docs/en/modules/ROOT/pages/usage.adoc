@@ -193,6 +193,27 @@ Changes detected — recompiling: ./mvnw -ntp -q process-classes -DskipTests -Dv
 That run inherits the environment of `vidocq:dev`, so the `MAVEN_ARGS` it shows apply to every recompile: with
 `-U` there, each one checks the remote repositories and takes seconds more.
 
+[[dev-save-while-compiling]]*A save while a recompile runs.* [.tag-new]#NEW# The compiler reads every source, then
+writes the classes, seconds later on a real module. A source you save in between gets a class that is newer than the
+source, compiled from what the compiler read before your save, and Maven takes a source with a newer class for
+compiled. So `vidocq:dev` notes the time of each source when a recompile starts, and the classes the recompile leaves
+when it ends. The recompile that your save starts deletes the class of that source, Maven compiles the module again,
+and the log names the source:
+
+[source]
+----
+Menu.java was saved since the previous recompile started and its class is not older: compiling it again.
+----
+
+* A source saved before the compiler read it is compiled a second time. The output does not change, and nothing
+  reloads.
+* A class written after the recompile ended stays: your IDE compiled it from the save.
+* When a file time cannot be read, or a class cannot be deleted, a warning says so and the recompile goes on. If a
+  save does not show then, save the file again.
+
+The test runs do the same for the sources they compile: see
+xref:continuous-testing.adoc#saved-while-compiling[A save while a run compiles].
+
 *Dev reload.* The libraries are reloaded with the application. The JDBC drivers that the old layer defined are
 deregistered at each reload. A thread that a library leaves running keeps the old layer in memory; the reload names
 such threads in a warning, `Hot reload: N thread(s) still hold the previous application layer ...`. Virtual threads

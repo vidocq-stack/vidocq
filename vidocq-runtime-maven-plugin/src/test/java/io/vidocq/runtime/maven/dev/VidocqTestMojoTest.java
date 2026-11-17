@@ -88,13 +88,22 @@ class VidocqTestMojoTest {
     void theRunsBuildTheMainOutputAndTheTestOne(@TempDir Path dir) {
         Path classes = dir.resolve("target/classes");
         Path testClasses = dir.resolve("target/test-classes");
+        Path sources = dir.resolve("src/main/java");
+        Path testSources = dir.resolve("src/test/java");
         MavenProject project = new MavenProject();
         project.getBuild().setTestOutputDirectory(testClasses.toString());
+        project.addCompileSourceRoot(sources.toString());
+        project.addCompileSourceRoot(dir.resolve("target/generated-sources/annotations").toString());
+        project.addTestCompileSourceRoot(testSources.toString());
+        project.addTestCompileSourceRoot(dir.resolve("target/generated-test-sources/test-annotations").toString());
         VidocqTestMojo mojo = new VidocqTestMojo();
         mojo.setDirectories(dir.toFile(), classes.toFile(), dir.resolve("target").toFile());
         mojo.setProject(project);
 
-        assertEquals(TestOutputs.ofVidocqTest(classes, testClasses), mojo.testOutputs());
+        assertEquals(TestOutputs.ofVidocqTest(new TestOutputs.Output(classes, List.of(sources)),
+                        new TestOutputs.Output(testClasses, List.of(testSources))),
+                mojo.testOutputs(), "each output with the sources a developer saves: not the generated ones"
+                        + " (BUG-20261117-03)");
     }
 
     /**

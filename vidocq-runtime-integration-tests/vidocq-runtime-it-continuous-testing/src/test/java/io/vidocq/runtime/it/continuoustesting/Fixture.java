@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +56,7 @@ final class Fixture {
     /** The line the dev console prints once it listens, with the port it bound. */
     private static final Pattern CONSOLE = Pattern.compile("Vidocq dev console: (http://127\\.0\\.0\\.1:\\d+)/");
     static final String EXPECTATION = "src/test/java/io/vidocq/it/ct/ExpectationTest.java";
+    static final String GREETER = "src/main/java/io/vidocq/it/ct/Greeter.java";
 
     private Fixture() {}
 
@@ -182,6 +184,22 @@ final class Fixture {
     static void fixExpectation(Path project) throws IOException {
         Path test = project.resolve(EXPECTATION);
         Files.writeString(test, Files.readString(test).replace("\"Goodbye, Ada\"", "\"Hello, Ada\""));
+    }
+
+    /**
+     * Saves the fixture's main class with one more method, as an editor does: written beside the watched directories,
+     * then moved over the source in one step. With a {@code time}, the source bears it, so that the dev loop sees the
+     * new text and that time together.
+     */
+    static void addGreeterMethod(Path project, String method, FileTime time) throws IOException {
+        Path source = project.resolve(GREETER);
+        String text = Files.readString(source);
+        Path saved = Files.writeString(project.resolve("Greeter.saved"), text.substring(0, text.lastIndexOf('}'))
+                + "\n    public String " + method + "() {\n        return \"" + method + "\";\n    }\n}\n");
+        if (time != null) {
+            Files.setLastModifiedTime(saved, time);
+        }
+        Files.move(saved, source, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
     }
 
     static int occurrences(Path log, String text) {

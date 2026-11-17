@@ -343,6 +343,9 @@ public class VidocqDevMojo extends AbstractMojo {
     /** The stamp of the last request of {@link #hotSwap} not acknowledged yet. */
     private OptionalLong pendingStamp = OptionalLong.empty();
 
+    /** The main sources saved while a recompile ran, which the next recompile compiles (BUG-20261117-03). */
+    private SavedWhileCompiling savedWhileCompiling;
+
     @Override
     public void execute() throws MojoExecutionException {
         checkDebugPort();
@@ -583,7 +586,8 @@ public class VidocqDevMojo extends AbstractMojo {
         sysProps.put(TestResultsFile.PROPERTY, results.toAbsolutePath().toString());
         ContinuousTesting started = ContinuousTesting.forProject(projectDir, buildDirPath(),
                 testServices(devs.session(), devs.tests(), getLog()::info, getLog()::warn), testOutputs(),
-                result -> TestSummaryPrinter.lines(result, false, false).forEach(getLog()::info), getLog()::warn);
+                result -> TestSummaryPrinter.lines(result, false, false).forEach(getLog()::info), getLog()::info,
+                getLog()::warn);
         TestRequestFile requests;
         try {
             requests = TestRequestFile.poll(results.resolveSibling(TestRequestFile.FILE_NAME), trigger -> {
@@ -629,6 +633,9 @@ public class VidocqDevMojo extends AbstractMojo {
         Runtime.getRuntime().addShutdownHook(hook);
 
         RecompileRunner recompile = new RecompileRunner(launch.projectDir());
+        savedWhileCompiling = new SavedWhileCompiling(
+                projectSourceRoots(project.getCompileSourceRoots(), buildDirPath()), classesDir.toPath(),
+                "recompile", getLog()::info, getLog()::warn);
         try (SourceWatcher watcher = SourceWatcher.on(watch, testing.watch(), Duration.ofMillis(debounceMillis))) {
             ChildJvm child = newChild(launch);
             long pid = child.start();
@@ -868,6 +875,19 @@ public class VidocqDevMojo extends AbstractMojo {
         }
     }
 
+    /**
+     * Runs the recompile, between the two calls that tell which saves it missed. A source saved while it runs, after
+     * javac read it, gets a class that looks up to date: without that class, the next recompile compiles it
+     * (BUG-20261117-03). A recompile that could not start has no known end, and leaves every class in doubt.
+     */
+    static int recompile(RecompileRunner recompile, SavedWhileCompiling saved)
+            throws IOException, InterruptedException {
+        saved.compileStarts();
+        int exit = recompile.run();
+        saved.compileEnds();
+        return exit;
+    }
+
     private Optional<TestControl.ReadyGate> recompileAndReload(RecompileRunner recompile, ChildLaunch launch,
             AtomicReference<ChildJvm> currentChild, Path reloadFile, boolean inJvmReload)
             throws IOException, InterruptedException {
@@ -876,7 +896,7 @@ public class VidocqDevMojo extends AbstractMojo {
         getLog().info("Changes detected — recompiling: " + recompile.describe());
         int rc;
         try {
-            rc = recompile.run();
+            rc = recompile(recompile, savedWhileCompiling);
         } catch (IOException e) {
             getLog().warn("Recompile invocation failed: " + e.getMessage());
             return Optional.empty();
@@ -1332,11 +1352,13 @@ public class VidocqDevMojo extends AbstractMojo {
     /**
      * The outputs the test runs build: the test one. The main output is the recompile's, and a run that compiled the
      * main sources too, then was stopped by a change, left the recompile nothing to compile and a class missing
-     * (BUG-20261117-01).
+     * (BUG-20261117-01). The output comes with the test sources of the project: one saved while a run compiled it
+     * is compiled by the next run (BUG-20261117-03).
      */
     // package-private for the unit test.
     TestOutputs testOutputs() {
-        return TestOutputs.ofVidocqDev(Path.of(project.getBuild().getTestOutputDirectory()));
+        return TestOutputs.ofVidocqDev(new TestOutputs.Output(Path.of(project.getBuild().getTestOutputDirectory()),
+                projectSourceRoots(project.getTestCompileSourceRoots(), buildDirPath())));
     }
 
     /**
