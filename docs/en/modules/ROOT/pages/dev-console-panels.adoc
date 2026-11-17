@@ -252,7 +252,9 @@ event runs without any refresh.
 
 * **When.** After the application acknowledged the redefinition, on one virtual thread: the listeners one after the
   other, the redefinitions in order. Never after a layer swap, a refused redefinition, or a redefinition of classes
-  not loaded yet. A request can run the new code before the listener is called.
+  not loaded yet. `vidocq:dev` loads the classes of the application's directories when the layer starts
+  (xref:usage.adoc#dev-preload-classes[The application while a recompile runs]), so a listener also hears of a class
+  the application never used. A request can run the new code before the listener is called.
 * **Where from.** The runtime loads the listeners at each redefinition from the current application layer and its
   parents: a companion marked `Vidocq-Application-Layer` is found, and one of a dropped layer never is. An instance
   is created for each redefinition; state it needs, such as the open pages, lives in its module, which a swap drops

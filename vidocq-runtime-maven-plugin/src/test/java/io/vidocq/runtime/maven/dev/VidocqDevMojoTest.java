@@ -871,6 +871,21 @@ class VidocqDevMojoTest {
                 VidocqDevMojo.dependencyJars(List.of(runtime, classes), List.of(classes, jar, sibling, runtime)));
     }
 
+    /**
+     * BUG-20261117-09: the child loads the classes of the application's directories ahead unless it is told not to;
+     * {@code vidocq.dev.} keys are the build's and are not forwarded, so the goal tells the child itself.
+     */
+    @Test
+    void theChildIsToldOnlyWhenTheClassesAreLeftToTheirFirstUse() {
+        Map<String, String> child = new LinkedHashMap<>();
+
+        VidocqDevMojo.preloadProperty(true, child);
+        assertEquals(Map.of(), child);
+
+        VidocqDevMojo.preloadProperty(false, child);
+        assertEquals(Map.of("vidocq.dev.preloadClasses", "false"), child);
+    }
+
     @Test
     void theProjectsOwnSourcesLeaveOutTheBuildDirectory(@TempDir Path dir) {
         Path build = dir.resolve("target");

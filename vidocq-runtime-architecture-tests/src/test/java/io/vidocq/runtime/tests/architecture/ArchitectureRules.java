@@ -130,6 +130,10 @@ final class ArchitectureRules {
             Map.entry("io.vidocq.runtime.core.VidocqAppLayer", LAUNCH),
             Map.entry("io.vidocq.runtime.core.LayerJdbcDrivers", "deregisters the JDBC drivers a closing application"
                     + " layer defined, so it loads them from that layer by name"),
+            Map.entry("io.vidocq.runtime.core.ClassPreload", "vidocq:dev only: loads by name, without initialising"
+                    + " it, every class of the application's directories as soon as the dev loop installs an"
+                    + " application layer, so that none is read from the build output later (BUG-20261117-09); it"
+                    + " reads no member"),
             Map.entry("io.vidocq.runtime.core.ModuleAccessDiagnostics", "recognises the exception the JDK throws when"
                     + " a module does not open a package; it reads no member"),
             Map.entry("io.vidocq.runtime.core.banner.DevConsoleProbe", BY_NAME),

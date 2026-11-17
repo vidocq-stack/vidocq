@@ -1494,6 +1494,13 @@ breakpoints are never cleared by a redefinition.
 | Carry the HTTP sessions over a layer swap (xref:usage.adoc#dev-swap-sessions[HTTP sessions across a swap]).
 `false`: every swap drops them, and the log says `Hot reload - HTTP sessions not kept: vidocq.dev.keepSessions is
 false`.
+
+| `vidocq.dev.preloadClasses`
+| `true`
+| Load every class of the application's directories as soon as the application layer starts, so that none is missing
+while a recompile runs or while the sources do not compile
+(xref:usage.adoc#dev-preload-classes[The application while a recompile runs]). Requires `vidocq.dev.hotReload`.
+`false`: each class is read from `target/classes` when it is first used.
 |===
 
 The agent is added only with `vidocq.dev.layer` and `vidocq.dev.hotReload` on. Otherwise, or when the agent cannot

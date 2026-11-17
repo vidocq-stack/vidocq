@@ -48,6 +48,7 @@
                 <parameter><name>hotReload</name><type>boolean</type><required>false</required><editable>true</editable><description>In-JVM hot reload (default, requires layerMode): the child re-creates its application layer on a reload signal instead of being respawned.</description></parameter>
                 <parameter><name>hotSwapEnabled</name><type>boolean</type><required>false</required><editable>true</editable><description>Hot swap (default, requires hotReload): a change in method bodies only redefines the application's classes in place, through the vidocq-runtime-dev-agent agent at the version of the application's vidocq-runtime-core; false starts the child without the agent, every change swaps the application layer.</description></parameter>
                 <parameter><name>keepSessions</name><type>boolean</type><required>false</required><editable>true</editable><description>Session handover (default): a layer swap moves the HTTP sessions to the new application layer, unless a change would restore them wrong (an instance field, a superclass or interfaces changed, or lambdas moved); false starts every swap with no session.</description></parameter>
+                <parameter><name>preloadClasses</name><type>boolean</type><required>false</required><editable>true</editable><description>Class preload (default, requires hotReload): the child loads every class of the application's directories as soon as it installs the application layer, so that none is missing while a recompile runs or while the sources do not compile; false reads each class from the output when it is first used.</description></parameter>
                 <parameter><name>classesDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Compiled classes directory of the project.</description></parameter>
                 <parameter><name>baseDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Project base directory.</description></parameter>
                 <parameter><name>buildDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Build directory (hosts vidocq-patches/ for cross-module generated classes).</description></parameter>
@@ -81,6 +82,7 @@
                 <hotReload implementation="boolean" default-value="true">${vidocq.dev.hotReload}</hotReload>
                 <hotSwapEnabled implementation="boolean" default-value="true">${vidocq.dev.hotSwap}</hotSwapEnabled>
                 <keepSessions implementation="boolean" default-value="true">${vidocq.dev.keepSessions}</keepSessions>
+                <preloadClasses implementation="boolean" default-value="true">${vidocq.dev.preloadClasses}</preloadClasses>
                 <classesDir implementation="java.io.File" default-value="${project.build.outputDirectory}"/>
                 <baseDir implementation="java.io.File" default-value="${project.basedir}"/>
                 <buildDir implementation="java.io.File" default-value="${project.build.directory}"/>

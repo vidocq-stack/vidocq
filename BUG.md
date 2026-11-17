@@ -5,6 +5,106 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261117-09 — Under `vidocq:dev`, a page fails with `NoClassDefFoundError` while a recompile runs or while the sources do not compile, and may keep failing afterwards
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/dev-app-classes-loaded-first`
+- **Module**: `vidocq-runtime-core` (new `ClassPreload`; `VidocqDevReloadLoop`), `vidocq-runtime-maven-plugin`
+  (`VidocqDevMojo`: the `vidocq.dev.preloadClasses` parameter), `vidocq-runtime-dev-agent` (`HotSwap`)
+- **Symptom**: found by the probes written for the reload guard (Vidocq/vidocq#631). Under `mvn process-classes
+  vidocq:dev`, with the application started and its first page served:
+  - Bistro example (`vidocq-runtime-foy-servlet-example`), a save that does not compile. The log says `Compile failed
+    (exit 1); keeping previous JVM up.` Of the 72 class files of the output, 25 are left. `GET /`, `/basket` and
+    `/kitchen` answer 200. `GET /receipt` answers 500, `NoClassDefFoundError:
+    io/vidocq/runtime/examples/servlet/Receipt`, caused by a `ClassNotFoundException`, caused by a
+    `NoSuchFileException`. `/about.jsp`, `/specials.jsp` and `/tally.jsp` answer 500 too (`BistroFunctions`,
+    `OutTag`). Of the 71 classes of the application, the JVM had not loaded 19 after the start and the first page;
+  - Bistro example, a change in one method body, which compiles: `Receipt.class` leaves the output while the
+    recompile runs, and `GET /receipt` answers 500 during that time;
+  - REST example (`vidocq-runtime-cassini-rest-example`), a change in the body of `StatsService.report()`: `GET
+    /api/stats` answers 500 while the recompile runs. The reload is a redefinition in place, `Hot reload - redefined 1
+    class in 4 ms, the application keeps running: StatsService`. Once it is over and the class file is back, `GET
+    /api/stats` answers 500, three times of three, with `NoClassDefFoundError:
+    io/vidocq/runtime/examples/rest/StatsResource_ClientProxy`. `/api/todos` answers 200. The page stays broken until
+    a change swaps the layer.
+- **Repro**: `AppLayerBrokenSourcesIT`. Start `vidocq:dev` on an application with a REST resource and call nothing.
+  Save a source with an error and wait for `Compile failed`. Call the resource: 500. Save the source as it was: the
+  output is the one the application runs, nothing is reloaded, and the resource still answers 500.
+- **Cause**: three facts together.
+  1. The application layer reads a class from the output of the build when the application first uses it:
+     `VaubanClassLoader` lists the classes of its archives when the layer is created, and reads the bytes of each
+     one at its definition. After the start and a first page, the classes of the other pages, the client proxies of
+     the beans no request reached, and the classes used only on some paths are not loaded yet.
+  2. `maven-compiler-plugin` (3.15.0), when it finds a change, deletes every file its last compile created before it
+     compiles the module again. Javac writes them back at the end of the compile; when javac fails, they stay
+     deleted. `vidocq:dev` keeps the application running in both cases.
+  3. The JVM records a class resolution that failed (JVMS 5.4.3): the same reference fails again with the same
+     error, whether or not the class file is back. Only a new application layer forgets it. A redefinition in
+     place, or a recompile whose output did not change, keeps the layer.
+- **Fix**: `ClassPreload`. As soon as the dev loop (`VidocqDevReloadLoop`) has installed an application layer, at the
+  first start and at each layer swap, it loads every class of the directories of the application path through the
+  loader of the layer: `Class.forName(name, false, loader)`. Nothing is left to read from the output later.
+  - Loading is not initializing: no static initializer runs, and the application's code starts as before.
+  - The directories only: the same roots as the hot swap snapshot of the plugin. No build writes the jars of the
+    application path while the application runs.
+  - The client proxies the build leaves under `META-INF/vauban/placed/` are loaded too, under their own names: the
+    annotation processor writes them during the compile, so they leave the output with the classes. The layer
+    defines a placed proxy in the package of its produced type, so this holds for a type the layer defines.
+  - A class that cannot be loaded at that time is left to its first use, as before: one whose supertype comes from
+    an optional dependency that is absent, or one a recompile removed while the layer started. The pass never fails
+    a start.
+  - One pass per layer is enough: a class added or deleted swaps the layer (`Later is a new class`), so the classes
+    of a layer do not change while it runs.
+  - The logger `io.vidocq.runtime.core.VidocqDevReloadLoop` at DEBUG counts the classes and gives the time of the
+    pass. BENCH.md (2026-11-17) records what it costs at a start.
+  - `-Dvidocq.dev.preloadClasses=false` reads each class when it is first used, as before. The keys under
+    `vidocq.dev.` are the build's and are not forwarded to the child, so the goal tells the child itself.
+  - A class loaded ahead may be one the JVM cannot link, for instance a class whose verification needs a class of an
+    optional dependency that is absent. The JVM links a loaded class before it redefines it and, when it cannot,
+    answers `InternalError: class redefinition failed: invalid class`, which is no `LinkageError`. `HotSwap.redefine`
+    let it through: it ended the thread of the dev loop, and no later change was applied. It is now a refusal like
+    the others, so the layer is swapped: `Hot reload - redefinition refused (class redefinition failed: invalid
+    class): restarting on a fresh application layer`. Before this fix that error took a class the application had
+    used and failed to link; a class it had never used was only reported not loaded. The review of this fix found it.
+
+  Tests: `ClassPreloadTest` (a class loaded ahead no longer needs its file, and the control without the loading; the
+  classes of a real application layer; no class is initialized; a class that cannot be loaded is named and the
+  others are loaded; a jar and an absent directory; the order of the names; the module descriptor and `META-INF`;
+  the names of the placed client proxies, and the proxy of a type of a real layer, loaded through its loader; a
+  link to a directory; the line; the switch), three tests of `VidocqDevReloadLoopTest`,
+  `VidocqDevMojoTest.theChildIsToldOnlyWhenTheClassesAreLeftToTheirFirstUse`,
+  `PluginDescriptorDevDebugTest.preloadClassesIsABooleanReadingItsPropertyAndDefaultsToTrue`,
+  `HotSwapProcessTest.aLoadedClassTheJvmCannotLinkIsRefused` (a real JVM with the agent), and
+  `AppLayerBrokenSourcesIT`, a real `vidocq:dev`: the resource answers while the sources do not compile, on the first
+  layer and on the layer a swap started; with `-Dvidocq.dev.preloadClasses=false` it answers the 500 above, which
+  keeps the premise of the test and the switch from the goal to the application. Against the code without the fix
+  the first test fails with that 500.
+- **Alternatives not taken**:
+  - A copy of the output for the child: `vidocq:dev` would give the child a directory of its own, and copy the
+    output there after each recompile that succeeds. It covers everything the child reads, the generated resources
+    included, and a rebuild by an IDE or a `mvn clean` as well. It changes where the application runs from
+    (`vidocq.app.path`, the static mounts on the class path, the pages, what the dev console shows), and each of
+    those would need a check. To decide with the maintainer if the cases under "Not covered" matter in practice.
+  - `-Dmaven.compiler.useIncrementalCompilation=false` for the recompiles of the dev loop: the compiler plugin then
+    compiles only the sources that changed, and the annotation processors need them all.
+  - Classes put back after a compile that fails: the time of the compile itself stays uncovered, and so does the
+    resolution the JVM recorded.
+- **Not covered**:
+  - A resource that an annotation processor writes into the output is deleted with the classes, and is read from
+    the output when the application asks for it. The resources Maven copies are not deleted.
+  - A layer that starts while a recompile runs: the classes that are out at that time are left to their first use.
+    With the hot swap on, `vidocq:dev` waits for the application to acknowledge a reload before the next recompile,
+    two minutes at most, so this takes a save made while the application starts for the first time. With the hot
+    swap off (`-Dvidocq.dev.hotSwap=false`, or a start that says `Hot swap off: ...`), there is no such wait, and a
+    save made during any layer swap does it.
+  - The placed client proxy of a type the layer does not define, such as a type of a library under
+    `vidocq.app.layer=classes`: the layer cannot load it by its name, and it is left to its first use.
+  - `-Dvidocq.dev.hotReload=false` and `-Dvidocq.dev.layer=false`: the child runs without the dev loop, and each
+    change restarts the JVM. A class not loaded yet is missing while the recompile runs and while the sources do
+    not compile; the restart that follows a compile that succeeds forgets it.
+  - A build made by another tool while the application runs, such as an IDE that writes into `target/classes` or a
+    `mvn clean`: the classes already loaded stay, a class added since the layer started is not loaded.
+
 ## BUG-20261117-07 — A bare `mvn vidocq:dev` starts without what changed while it did not run, and nothing says so
 
 - **Date**: 2026-11-17

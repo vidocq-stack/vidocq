@@ -55,7 +55,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 class HotSwapProcessTest {
 
     private static final ClassDesc OTHER = ClassDesc.of("p.Other");
+    private static final ClassDesc UNLINKABLE = ClassDesc.of("p.Unlinkable");
     private static final MethodTypeDesc RETURNS_STRING = MethodTypeDesc.of(ConstantDescs.CD_String);
+    private static final MethodTypeDesc RETURNS_GONE_IMPL = MethodTypeDesc.of(ClassDesc.of("p.GoneImpl"));
 
     @TempDir
     static Path dir;
@@ -145,6 +147,17 @@ class HotSwapProcessTest {
         assertEquals("REDEFINED [p.Greeter, p.Other] NOT-LOADED [p.NeverLoaded]", line("REDEFINED "));
     }
 
+    /**
+     * The JVM links a loaded class before it redefines it. When it cannot, it answers an {@code InternalError}, which
+     * is no {@code LinkageError}: a refusal like the others, not an error that ends the caller (BUG-20261117-09).
+     */
+    @Test
+    void aLoadedClassTheJvmCannotLinkIsRefused() {
+        String refused = line("UNLINKABLE ");
+        assertTrue(refused.startsWith("UNLINKABLE refused: "), "a refusal: " + refused);
+        assertTrue(refused.contains("invalid class"), "the JVM's reason: " + refused);
+    }
+
     private static String line(String prefix) {
         return lines.stream().filter(l -> l.startsWith(prefix)).findFirst()
                 .orElseGet(() -> fail("no line " + prefix + "in:\n" + output));
@@ -153,7 +166,9 @@ class HotSwapProcessTest {
     /**
      * The module {@code greeter}: {@code p.Greeter}, a {@code Supplier} service whose {@code get()} calls
      * {@code p.Other.name()} and answers {@code text}; {@code p.Other}, which gains a method when {@code extraMethod};
-     * {@code p.NeverLoaded}, which nothing loads.
+     * {@code p.NeverLoaded}, which nothing loads; {@code p.Unlinkable}, which loads but cannot be linked: to verify
+     * that its {@code widen()} may return a {@code p.GoneImpl} as a {@code p.Gone}, the JVM needs {@code p.Gone},
+     * which no archive holds.
      */
     private static Path greeter(String name, String text, boolean extraMethod) throws IOException {
         Path root = Files.createDirectories(dir.resolve(name));
@@ -182,6 +197,15 @@ class HotSwapProcessTest {
         Files.write(p.resolve("NeverLoaded.class"), ClassFile.of().build(ClassDesc.of("p.NeverLoaded"), type -> {
             type.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER);
             constructor(type);
+        }));
+        Files.write(p.resolve("Unlinkable.class"), ClassFile.of().build(UNLINKABLE, type -> {
+            type.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER);
+            constructor(type);
+            type.withMethodBody("narrow", RETURNS_GONE_IMPL, ClassFile.ACC_PUBLIC | ClassFile.ACC_STATIC,
+                    code -> code.aconst_null().areturn());
+            type.withMethodBody("widen", MethodTypeDesc.of(ClassDesc.of("p.Gone")),
+                    ClassFile.ACC_PUBLIC | ClassFile.ACC_STATIC,
+                    code -> code.invokestatic(UNLINKABLE, "narrow", RETURNS_GONE_IMPL).areturn());
         }));
         return root;
     }

@@ -6,6 +6,20 @@
 
 ---
 
+## 2026-11-17 — `vidocq:dev`: the classes of the application loaded when the layer starts (BUG-20261117-09)
+
+- **Hardware/JVM**: Apple M5 Max (18 cores, 128 GB), macOS 27.2, Temurin 25+36, Maven 3.10.0, local repository warm, offline. Other sessions built on the machine during the runs (load average 5 to 6).
+- **Projects**: three examples of the reactor, copied out of it, listener on port 0: `vidocq-runtime-cassini-rest-example` (18 classes in `target/classes`), `vidocq-runtime-petstore-example` (51), `vidocq-runtime-foy-servlet-example` (71, the Bistro).
+- **Command**: `mvn -o -ntp -B -q process-classes` once, then each start is `mvn -o -ntp -B vidocq:dev -Dvidocq.dev.debug=false -Dvidocq.devconsole.port=0 -Dvidocq.dev.continuousTesting=false`, stopped once the application has started. *Pass* = the time in the DEBUG line of `io.vidocq.runtime.core.VidocqDevReloadLoop` (`Application layer: 71 classes of the application's directories loaded ahead of their first use (15 ms)`), three starts with `-Dvidocq.dev.jvmArgs=-Djava.util.logging.config.file=<a file that sets that logger to FINE>`. *Uptime* = the `process running for … ms` of the runtime's `Started in` line, five starts with the preload and five with `-Dvidocq.dev.preloadClasses=false`, default logging.
+
+| Example | Classes | Pass (ms) | Uptime at the start, preload on (ms) | Uptime at the start, preload off (ms) |
+|---|---|---|---|---|
+| cassini-rest | 18 | 8 / 8 / 8 | 280 / 267 / 271 / 270 / 273 | 264 / 267 / 266 / 277 / 270 |
+| petstore | 51 | 13 / 12 / 12 | 402 / 396 / 414 / 399 / 418 | 399 / 397 / 387 / 398 / 396 |
+| foy-servlet (Bistro) | 71 | 15 / 15 / 15 | 329 / 312 / 314 / 309 / 314 | 334 / 309 / 317 / 311 / 308 |
+
+- **Delta**: no previous entry for this pass. It takes 8 to 15 ms for 18 to 71 classes. The mean uptime at the start moves by 0 to 10 ms (cassini-rest 272 vs 269, petstore 406 vs 395, Bistro 316 vs 316), inside the spread of the runs: most of these classes are loaded during the start anyway, so the pass loads them earlier more than it loads more. `Started in`, which is counted after the pass, reads lower with the preload (Bistro 192 to 200 ms vs 206 to 217 ms).
+
 ## 2026-11-01 — JSON-B: generated bindings vs the reflective mapping, on a plain-POJO REST endpoint
 
 - **Hardware/JVM**: Apple M5 Max (18 cores, 128 GB), macOS, Temurin 25+36, Maven 3.9.16, local repository warm.

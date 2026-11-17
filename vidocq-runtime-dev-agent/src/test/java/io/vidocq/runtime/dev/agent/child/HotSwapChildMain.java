@@ -75,6 +75,14 @@ public final class HotSwapChildMain {
         System.out.println("REDEFINED " + outcome.redefined().stream().map(Class::getName).toList()
                 + " NOT-LOADED " + outcome.notLoaded());
         System.out.println("AFTER " + greeter.get());
+
+        Class.forName("p.Unlinkable", false, loader);
+        try {
+            HotSwap.redefine(loader, List.of("p.Unlinkable"), bytesOf(v1));
+            System.out.println("UNLINKABLE redefined");
+        } catch (RedefinitionRefused e) {
+            System.out.println("UNLINKABLE refused: " + e.getMessage());
+        }
     }
 
     private static Function<String, byte[]> bytesOf(Path root) {

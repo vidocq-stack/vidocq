@@ -22,19 +22,13 @@ package io.vidocq.runtime.it.applayer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Vidocq/vidocq#631: a hot reload releases the application layer it discards. {@code vidocq:dev} swaps the layer of
@@ -56,10 +50,6 @@ class AppLayerReloadLeakIT {
 
     /** The line the dev loop logs once it stopped a deployment to swap its layer, in the same JVM. */
     private static final String SWAPPED = "Hot reload - previous deployment stopped in";
-
-    /** The line Chappe logs once the default listener listens, with the port it bound: each boot binds its own. */
-    private static final Pattern LISTENER =
-            Pattern.compile("Chappe listener 'default' started on http://[^/\\s]+:(\\d+)/");
 
     @Test
     void theLayersOfTheReloadsAreCollected(@TempDir Path dir) throws Exception {
@@ -114,7 +104,7 @@ class AppLayerReloadLeakIT {
      * JSON; the method the reload {@code reload} added, none for the first boot; a file of the static mount.
      */
     private static void serve(HttpClient client, Path log, int reload) throws Exception {
-        String base = "http://127.0.0.1:" + port(log);
+        String base = Fixture.served(log);
         String greeting = get(client, base + "/api/greeting?name=Ada", log);
         assertTrue(greeting.contains("\"salutation\":\"Hello\"") && greeting.contains("\"name\":\"Ada\""), greeting);
         if (reload > 0) {
@@ -124,23 +114,8 @@ class AppLayerReloadLeakIT {
     }
 
     private static String get(HttpClient client, String url, Path log) throws Exception {
-        HttpResponse<String> response = client.send(
-                HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(30)).build(),
-                HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = Fixture.get(client, url);
         assertEquals(200, response.statusCode(), () -> url + ": " + response.body() + "\n" + Fixture.read(log));
         return response.body().strip();
-    }
-
-    /** The port of the last boot. */
-    private static String port(Path log) {
-        Matcher listener = LISTENER.matcher(Fixture.read(log));
-        String port = null;
-        while (listener.find()) {
-            port = listener.group(1);
-        }
-        if (port == null) {
-            fail("no start line of the default listener:\n" + Fixture.read(log));
-        }
-        return port;
     }
 }

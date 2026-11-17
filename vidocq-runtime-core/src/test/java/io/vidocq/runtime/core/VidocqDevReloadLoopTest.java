@@ -25,6 +25,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.lang.classfile.ClassFile;
 import java.lang.constant.ClassDesc;
 import java.lang.constant.ConstantDescs;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
@@ -352,6 +354,62 @@ class VidocqDevReloadLoopTest {
         VidocqDevReloadLoop.beforeStop(listeners, () -> null).run();
 
         assertEquals(List.of(), listeners.stopped);
+    }
+
+    @Test
+    void theClassesOfTheDirectoriesOfTheInstalledLayerAreLoadedAhead(@TempDir Path dir) throws Exception {
+        Path classes = Files.createDirectory(dir.resolve("classes"));
+        Path later = classFile(classes, "acme.app.Later");
+        Path jar = TestModules.automaticJar(dir, "acme-lib-1.0.jar", "acme.lib.Lib");
+        var installation = new VidocqAppLayer.Installation(VidocqAppLayer.APP_PATH_PROPERTY,
+                List.of(classes.toString(), jar.toString()), true, Map.of());
+        List<String> lines = new ArrayList<>();
+        try (URLClassLoader loader = new URLClassLoader(new URL[] {classes.toUri().toURL()}, null)) {
+            VidocqDevReloadLoop.preload(null, installation, loader, lines::add);
+            Files.delete(later);
+
+            assertEquals(1, lines.size(), lines::toString);
+            assertTrue(lines.getFirst().matches("Application layer: 1 class of the application's directories loaded"
+                    + " ahead of its first use \\(\\d+ ms\\)"), lines::getFirst);
+            assertEquals("acme.app.Later", Class.forName("acme.app.Later", false, loader).getName());
+        }
+    }
+
+    @Test
+    void withThePropertyFalseEachClassIsLeftToItsFirstUse(@TempDir Path dir) throws Exception {
+        Path later = classFile(dir, "acme.app.Later");
+        var installation = new VidocqAppLayer.Installation(VidocqAppLayer.APP_PATH_PROPERTY,
+                List.of(dir.toString()), true, Map.of());
+        List<String> lines = new ArrayList<>();
+        try (URLClassLoader loader = new URLClassLoader(new URL[] {dir.toUri().toURL()}, null)) {
+            VidocqDevReloadLoop.preload("false", installation, loader, lines::add);
+            Files.delete(later);
+
+            assertEquals(List.of(), lines);
+            assertThrows(ClassNotFoundException.class, () -> Class.forName("acme.app.Later", false, loader));
+        }
+    }
+
+    @Test
+    void withoutAnInstalledLayerNothingIsLoadedAhead(@TempDir Path dir) throws Exception {
+        classFile(dir, "acme.app.Later");
+        var installation = new VidocqAppLayer.Installation(VidocqAppLayer.APP_PATH_PROPERTY,
+                List.of(dir.toString()), true, Map.of());
+        List<String> lines = new ArrayList<>();
+        try (URLClassLoader loader = new URLClassLoader(new URL[] {dir.toUri().toURL()}, null)) {
+            VidocqDevReloadLoop.preload(null, null, loader, lines::add);
+            VidocqDevReloadLoop.preload(null, installation, null, lines::add);
+        }
+
+        assertEquals(List.of(), lines);
+    }
+
+    /** Writes an empty class named {@code name} under {@code root}; returns its file. */
+    private static Path classFile(Path root, String name) throws Exception {
+        Path file = root.resolve(name.replace('.', '/') + ".class");
+        Files.createDirectories(file.getParent());
+        return Files.write(file, ClassFile.of().build(ClassDesc.of(name),
+                builder -> builder.withSuperclass(ConstantDescs.CD_Object)));
     }
 
     /** Records the layers whose listeners were told of a stop. */

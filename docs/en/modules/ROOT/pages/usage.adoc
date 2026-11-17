@@ -251,6 +251,34 @@ Since the last build, Menu.java changed: building the project first (mvn process
 * Three changes are not seen: a change of the `pom.xml`, a file restored with an older date, and a deleted resource.
   Run `mvn process-classes vidocq:dev` then, after `mvn clean` for a deleted resource.
 
+[[dev-preload-classes]]*The application while a recompile runs.* [.tag-new]#NEW# `vidocq:dev` loads every class of
+the application's directories as soon as the application layer starts, at the first start and at each layer swap.
+The application then needs no class file from `target/classes`. It keeps running on the classes it loaded during a
+recompile, and while a save does not compile:
+
+[source]
+----
+Compile failed (exit 1); keeping previous JVM up.
+----
+
+The reason is in the compiler plugin: before it compiles the module again, it removes the classes it created. They
+are back when the recompile ends, and stay out while your sources do not compile. An application that reads a class
+when it first uses it then misses the classes no request asked for yet: the page fails with a
+`NoClassDefFoundError`, and keeps failing once the class is back, until the application layer is swapped.
+
+* Loading a class runs none of its code: a static initializer still runs when your application first uses the class.
+* The jars of the application are left alone: no build writes them while the application runs.
+* A class that cannot be loaded at that time is left to its first use, for instance one whose supertype comes from an
+  optional dependency that is absent.
+* A file that an annotation processor writes next to the classes, such as a generated resource, is still read from
+  `target/classes` when the application asks for it.
+* The logger `io.vidocq.runtime.core.VidocqDevReloadLoop` at DEBUG counts the classes and gives the time they took:
+  `Application layer: 71 classes of the application's directories loaded ahead of their first use (15 ms)`.
+* It comes with the reload inside the JVM, the default. With `-Dvidocq.dev.hotReload=false` or
+  `-Dvidocq.dev.layer=false`, a change restarts the JVM, and until then the application reads each class when it
+  first uses it.
+* `-Dvidocq.dev.preloadClasses=false` reads each class when it is first used, as before.
+
 *Dev reload.* The libraries are reloaded with the application. The JDBC drivers that the old layer defined are
 deregistered at each reload. A thread that a library leaves running keeps the old layer in memory; the reload names
 such threads in a warning, `Hot reload: N thread(s) still hold the previous application layer ...`. Virtual threads
@@ -390,10 +418,13 @@ Hot reload - redefined 2 classes in 14 ms, the application keeps running: MainVi
 * A method that is running when the class is redefined, such as a loop, finishes with its old code; its next call
   runs the new one.
 * A class changed before it was ever loaded loads the new code when first used: `Hot reload - 2 classes changed in
-  method bodies, none of them loaded yet: they load the new code when first used`.
+  method bodies, none of them loaded yet: they load the new code when first used`. The classes of the application's
+  directories are <<dev-preload-classes,loaded when the layer starts>>, so this is a class that could not be loaded
+  then, or any class under `-Dvidocq.dev.preloadClasses=false`.
 * The JVM checks the new classes against the loaded ones and redefines all of them or none. When it refuses, the
   layer is swapped and the log gives the JVM's reason: `Hot reload - redefinition refused (... add a method ...):
-  restarting on a fresh application layer`.
+  restarting on a fresh application layer`. `class redefinition failed: invalid class` is its reason for a loaded
+  class it cannot link, for instance one whose code needs a class of an optional dependency that is absent.
 * The JVM clears the breakpoints of a class it redefines. With a debugger attached, the log says so: `...; breakpoints
   in MainView no longer stop: set them again, or debug with -Dvidocq.dev.hotSwap=false`.
 

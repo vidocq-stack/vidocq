@@ -20,6 +20,10 @@
 package io.vidocq.runtime.it.applayer;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,6 +32,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,6 +43,10 @@ import static org.junit.jupiter.api.Assertions.fail;
 final class Fixture {
 
     static final Duration TIMEOUT = Duration.ofMinutes(3);
+
+    /** The line Chappe logs once the default listener listens, with the port it bound. */
+    private static final Pattern LISTENER =
+            Pattern.compile("Chappe listener 'default' started on http://[^/\\s]+:(\\d+)/");
 
     private Fixture() {}
 
@@ -131,6 +141,25 @@ final class Fixture {
                         + " times:\n" + read(log));
             }
         }
+    }
+
+    /** The address of the application that the last boot of {@code log} serves: each boot binds its own port. */
+    static String served(Path log) {
+        Matcher listener = LISTENER.matcher(read(log));
+        String port = null;
+        while (listener.find()) {
+            port = listener.group(1);
+        }
+        if (port == null) {
+            fail("no start line of the default listener:\n" + read(log));
+        }
+        return "http://127.0.0.1:" + port;
+    }
+
+    /** What the application answers to a GET of {@code url}. */
+    static HttpResponse<String> get(HttpClient client, String url) throws IOException, InterruptedException {
+        return client.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(30)).build(),
+                HttpResponse.BodyHandlers.ofString());
     }
 
     static int occurrences(Path log, String text) {

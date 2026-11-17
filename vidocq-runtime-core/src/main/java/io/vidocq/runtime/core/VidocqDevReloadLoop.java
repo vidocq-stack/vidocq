@@ -95,6 +95,8 @@ final class VidocqDevReloadLoop {
         long lastSignal = firstSignal;
         while (true) {
             VidocqAppLayer.installIfConfigured();
+            preload(System.getProperty(ClassPreload.PROPERTY), VidocqAppLayer.installation(),
+                    VidocqAppLayer.installedLoader(), line -> LOG.log(System.Logger.Level.DEBUG, line));
             VidocqBootstrap bootstrap = VidocqBootstrap.create().devHandover(store)
                     .beforeStop(beforeStop(listeners, VidocqAppLayer::installedLayer)).configure();
             // every cycle registers its own bootstrap: Vidocq.shutdown() must reach the running one
@@ -131,6 +133,22 @@ final class VidocqDevReloadLoop {
             LOG.log(System.Logger.Level.INFO,
                     "Hot reload - previous deployment stopped in " + elapsed + " ms");
         }
+    }
+
+    /**
+     * Loads the classes of the directories of the application layer just installed, unless {@code property}, the
+     * value of {@link ClassPreload#PROPERTY}, is {@code false} (BUG-20261117-09). The line that counts them, with the
+     * time it took, goes to {@code debug}. Without an installed layer there is nothing to load.
+     */
+    static void preload(String property, VidocqAppLayer.Installation installation, ClassLoader loader,
+            Consumer<String> debug) {
+        if (!ClassPreload.on(property) || installation == null || loader == null) {
+            return;
+        }
+        List<Path> appPath = installation.archives().stream().map(Path::of).toList();
+        long t0 = System.nanoTime();
+        ClassPreload.Outcome outcome = ClassPreload.load(appPath, loader);
+        debug.accept(outcome.line() + " (" + (System.nanoTime() - t0) / 1_000_000 + " ms)");
     }
 
     /**

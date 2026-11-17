@@ -96,6 +96,17 @@ class PluginDescriptorDevDebugTest {
         assertEquals("true", entry.getAttribute("default-value"));
     }
 
+    /** BUG-20261117-09: the switch of the classes the child loads when it installs the application layer. */
+    @Test
+    void preloadClassesIsABooleanReadingItsPropertyAndDefaultsToTrue() throws Exception {
+        assertEquals("boolean", text(parameter("preloadClasses"), "type"));
+        assertEquals(boolean.class, VidocqDevMojo.class.getDeclaredField("preloadClasses").getType());
+        Element entry = child(child(dev, "configuration"), "preloadClasses");
+        assertNotNull(entry, "<configuration> has no preloadClasses entry");
+        assertEquals("${vidocq.dev.preloadClasses}", entry.getTextContent().strip());
+        assertEquals("true", entry.getAttribute("default-value"));
+    }
+
     @Test
     void devServicesIsAnUnsetBooleanReadingItsProperty() throws Exception {
         assertEquals("java.lang.Boolean", text(parameter("devServices"), "type"));

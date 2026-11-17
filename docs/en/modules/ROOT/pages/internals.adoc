@@ -156,6 +156,12 @@ Key mechanics (implemented in `vauban-classloader`, consumed by
   classes and boots again (same process, warm JIT, debugger attached). Cassini's static
   discovery caches are reset between deployments
   (`io.vidocq.cassini.runtime.CassiniMaintenance`).
+* **Classes loaded when the layer starts, under `vidocq:dev`** [.tag-new]#NEW# — the layer loader reads a class from
+  its archive when the class is first used, and a recompile removes the classes of `target/classes` before it writes
+  them again. So the dev loop loads every class of the application's directories as soon as it has installed a layer,
+  without initializing them (`ClassPreload`;
+  xref:usage.adoc#dev-preload-classes[The application while a recompile runs]). Any other launch loads a class when
+  the application first uses it.
 * **Compatibility net** — a legacy main that boots the runtime without the layer still
   works: unwoven beans are handled by the Vauban load-time weaving agent (dynamic
   attach, with the JDK's warning), and the warning hints at a trampoline main that

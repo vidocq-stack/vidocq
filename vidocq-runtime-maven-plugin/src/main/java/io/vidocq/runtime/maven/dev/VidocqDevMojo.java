@@ -332,6 +332,16 @@ public class VidocqDevMojo extends AbstractMojo {
     @Parameter(property = "vidocq.dev.keepSessions", defaultValue = "true")
     private boolean keepSessions = true;
 
+    /**
+     * Loads every class of the application's directories as soon as the child installs the application layer, so
+     * that none is missing from the output when the application first uses it: the compiler plugin removes the
+     * classes it created while it compiles the module again, and leaves them out while the sources do not compile
+     * (BUG-20261117-09). Needs {@link #hotReload}. {@code false}: each class is read from the output when it is
+     * first used.
+     */
+    @Parameter(property = "vidocq.dev.preloadClasses", defaultValue = "true")
+    private boolean preloadClasses = true;
+
     /** The port of an unset {@link #debugPort}: {@link JdwpAgent#DEFAULT_PORT}, another one in the unit tests only. */
     private int defaultDebugPort = JdwpAgent.DEFAULT_PORT;
 
@@ -376,6 +386,7 @@ public class VidocqDevMojo extends AbstractMojo {
         agent.offLine(inJvmReload).ifPresent(getLog()::info);
         if (inJvmReload) {
             createReloadSignal(reloadFile, sysProps);
+            preloadProperty(preloadClasses, sysProps);
             hotSwap = HotSwapSession.open(classRoots(layered.appPath()),
                     projectSourceRoots(project.getCompileSourceRoots(), buildDirPath()),
                     dependencyJars(modulePath, layered.appPath()),
@@ -468,6 +479,17 @@ public class VidocqDevMojo extends AbstractMojo {
         getLog().info(ApplicationLaunch.layerSummary(layered.appPath().size() - 1, layered.pinned().size()));
         layered.pinned().forEach((m, why) -> getLog().info("  parent layer: " + m + " (" + why + ")"));
         sysProps.putAll(ApplicationLaunch.layerProperties(layered.pinned()));
+    }
+
+    /**
+     * Tells the child to leave each class to its first use when {@code vidocq.dev.preloadClasses} is {@code false}
+     * (BUG-20261117-09). The {@code vidocq.dev.} keys of the command line are the build's and are not forwarded, so
+     * the child would not see it otherwise.
+     */
+    static void preloadProperty(boolean preloadClasses, Map<String, String> sysProps) {
+        if (!preloadClasses) {
+            sysProps.put("vidocq.dev.preloadClasses", "false");
+        }
     }
 
     /** Writes the reload signal file the child watches, and tells the child where it is. */

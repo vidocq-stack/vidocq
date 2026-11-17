@@ -65,7 +65,8 @@ public final class HotSwap {
      * nothing: when the JVM refuses one, none is redefined. A class the loader has not loaded is left alone: it will
      * be defined from the new bytes when it is first used.
      *
-     * @throws RedefinitionRefused when the JVM refuses the redefinition, with its reason, such as an added method
+     * @throws RedefinitionRefused when the JVM refuses the redefinition, with its reason, such as an added method, or
+     *         a loaded class it cannot link
      * @throws IllegalStateException when the JVM did not start with this agent
      */
     public static Outcome redefine(ClassLoader loader, Collection<String> names, Function<String, byte[]> bytes)
@@ -97,7 +98,10 @@ public final class HotSwap {
             try {
                 current.redefineClasses(definitions.toArray(ClassDefinition[]::new));
             } catch (ClassNotFoundException | UnmodifiableClassException | UnsupportedOperationException
-                     | LinkageError e) {
+                     | LinkageError | InternalError e) {
+                // InternalError: the JVM links a loaded class before it redefines it, and answers this one, which is
+                // no LinkageError, when it cannot, for instance a class whose verification needs a class that is
+                // absent. Nothing was redefined then either.
                 throw new RedefinitionRefused(e.getMessage() == null ? e.toString() : e.getMessage(), e);
             }
         }
