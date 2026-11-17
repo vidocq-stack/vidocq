@@ -133,6 +133,49 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   - A build made by another tool while the application runs, such as an IDE that writes into `target/classes` or a
     `mvn clean`: the classes already loaded stay, a class added since the layer started is not loaded.
 
+## BUG-20261117-08 — A bare `mvn vidocq:dev` builds first and still starts on the old class of a source saved while the last build compiled it, or compiled by an IDE
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/dev-bare-start-class-in-doubt`
+- **Module**: `vidocq-runtime-maven-plugin` (`ChangedWhileStopped`, with `SavedWhileCompiling`)
+- **Symptom**: the case BUG-20261117-07 listed under "Not covered", and a second one beside it. A source is saved
+  while a Maven run compiles it, after javac read it; or an IDE saves a source and compiles it into `target/classes`.
+  The next bare `mvn vidocq:dev` sees the change, says `Since the last build, Menu.java changed: building the
+  project first (mvn process-classes).` and runs that build, which compiles nothing. In the first case the
+  application starts on the code of before the save. In the second it runs the saved code, but the annotation
+  processors did not run on it: the generated code is the one of the last build of Maven.
+- **Repro**: build a project (`mvn process-classes`), add a method to a source and give the file the time of its
+  class, run `mvn vidocq:dev`: the class the application loads has no such method.
+  `ContinuousTestingDevGoalIT.aSourceSavedWhileTheLastBuildCompiledItIsCompiledBeforeTheApplicationStarts` does so.
+- **Cause**: `maven-compiler-plugin` takes a source for compiled when its class is not older. The class javac wrote
+  from the text it read before the save, and the class an IDE compiled after the save, are both not older than the
+  source. `ChangedWhileStopped` knows from the record of the compiler that the source changed and starts the build;
+  that build then finds nothing stale.
+- **Fix**: before it starts the build, `ChangedWhileStopped` deletes the class of each source saved since the
+  compiler of the last build listed its sources, when that class is not older than the source. Without that class
+  the plugin compiles the module, with the annotation processors. It is the rule of BUG-20261117-03 inside a session
+  and of BUG-20261117-05 at the start of this Maven, and the same class applies it, `SavedWhileCompiling`: the log
+  names the sources the same way, `Menu.java was saved since the last build started and its class is not older:
+  compiling it again.`
+  - A class older than its source stays: the compiler plugin replaces it by itself.
+  - The class of a source that was not saved since the last build stays.
+  - A Maven that cannot be run once a class was deleted stops the start, since the output is no longer the one of
+    the last build: `Cannot build the project (…). The class of Menu.java was deleted to be compiled again, so the
+    output is incomplete: run "mvn process-classes", then vidocq:dev again.` When no class was deleted it stays the
+    warning of BUG-20261117-07, and the application starts on the classes of the last build.
+
+  Tests: `ChangedWhileStoppedTest` (`aSourceSavedWhileTheLastBuildCompiledItLosesItsClassBeforeTheBuild`,
+  `aSourceAnIdeCompiledSinceTheLastBuildIsBuiltFirst`, `theClassOfASourceThatDidNotChangeStays`,
+  `aMavenThatCannotRunOnceAClassWentStopsTheStart`, `aMavenThatCannotRunOnceSeveralClassesWentNamesTheirSources`),
+  `ContinuousTestingDevGoalIT.aSourceSavedWhileTheLastBuildCompiledItIsCompiledBeforeTheApplicationStarts`. With the
+  deletion switched off, that integration test fails on the content of the class.
+- **Alternatives not taken**: giving the class a time before the one of its source, so that the plugin finds the
+  source stale. The deletion is the rule `SavedWhileCompiling` already applies and tests inside a session and at the
+  start; a second way for the same case, which writes into the output a time that never was, was not added.
+- **Not covered**: a build that left no record, as one whose pom sets `useIncrementalCompilation` to `false`. Only
+  the times of the output are known then, and a class that is not older than its source is taken for compiled, as
+  before.
+
 ## BUG-20261117-07 — A bare `mvn vidocq:dev` starts without what changed while it did not run, and nothing says so
 
 - **Date**: 2026-11-17
@@ -194,7 +237,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   - a source saved while an earlier Maven run compiled it, after javac read it: its class is not older, and the
     compiler plugin takes it for compiled, in the build this fix starts too. BUG-20261117-03 covers that save inside
     a session and BUG-20261117-05 at the start of this Maven; here the save and the build are those of an earlier
-    command.
+    command. Covered since by BUG-20261117-08.
   - a file system that keeps whole seconds: a file saved in the second the compiler wrote its list, after it, is not
     later.
 

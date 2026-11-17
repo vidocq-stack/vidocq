@@ -60,6 +60,14 @@ class ChangedWhileStoppedTest {
 
     private static final String BUILDING = ": building the project first (mvn process-classes).";
 
+    /** The line that names a source whose class the last build left in doubt (BUG-20261117-08). */
+    private static final String MENU_IN_DOUBT =
+            "Menu.java was saved since the last build started and its class is not older: compiling it again.";
+
+    /** A Maven that notes whether the class of {@code Menu.java} is in the output when it runs. */
+    private static final String CLASS_SEEN_BY_THE_BUILD =
+            "if [ -e target/classes/acme/Menu.class ]; then echo class >> runs.txt; else echo 'no class' >> runs.txt; fi";
+
     @TempDir
     Path dir;
 
@@ -152,22 +160,54 @@ class ChangedWhileStoppedTest {
         assertEquals(List.of("Since the last build, Menu.java changed" + BUILDING), info);
         assertEquals(List.of(), warnings);
         assertEquals(0, changes.get(), "it built: no change to wait for");
+        assertTrue(Files.exists(classes.resolve("acme/Menu.class")),
+                "a class older than its source is the compiler's to replace");
+    }
+
+    /**
+     * BUG-20261117-08: a source saved while the last build compiled it, after javac read it. Its class was written
+     * after the save, from what javac read before it: the compiler plugin takes the source for compiled, in the
+     * build of this start too. The class goes before that build runs, and the plugin compiles the module.
+     */
+    @Test
+    void aSourceSavedWhileTheLastBuildCompiledItLosesItsClassBeforeTheBuild() throws Exception {
+        file(java.resolve("acme/Menu.java"), COMPILED.plusSeconds(1));
+
+        stopped.build(maven(CLASS_SEEN_BY_THE_BUILD), this::aChange);
+
+        assertEquals(List.of("no class"), runs());
+        assertEquals(List.of("Since the last build, Menu.java changed" + BUILDING, MENU_IN_DOUBT), info);
+        assertEquals(List.of(), warnings);
     }
 
     /**
      * An IDE compiled the source it saved, into the same output: the class is newer than the source, and yet no
      * build of Maven saw that source, so the generated code is the one of the last build. The record of the compiler
-     * tells, where the times of the output would not.
+     * tells, where the times of the output would not. That class is not older either: it goes too, and the build
+     * compiles the source with the annotation processors (BUG-20261117-08).
      */
     @Test
     void aSourceAnIdeCompiledSinceTheLastBuildIsBuiltFirst() throws Exception {
         file(java.resolve("acme/Menu.java"), COMPILED.plusSeconds(60));
         file(classes.resolve("acme/Menu.class"), COMPILED.plusSeconds(61));
 
+        stopped.build(maven(CLASS_SEEN_BY_THE_BUILD), this::aChange);
+
+        assertEquals(List.of("no class"), runs());
+        assertEquals(List.of("Since the last build, Menu.java changed" + BUILDING, MENU_IN_DOUBT), info);
+    }
+
+    /** Only the class of a source saved since the last build is in doubt: the others stay for the compiler. */
+    @Test
+    void theClassOfASourceThatDidNotChangeStays() throws Exception {
+        file(java.resolve("acme/Dish.java"), COMPILED.minusSeconds(5));
+        file(classes.resolve("acme/Dish.class"), COMPILED.plusSeconds(2));
+        file(java.resolve("acme/Menu.java"), COMPILED.plusSeconds(1));
+
         stopped.build(maven("echo run >> runs.txt"), this::aChange);
 
-        assertEquals(List.of("run"), runs());
-        assertEquals(List.of("Since the last build, Menu.java changed" + BUILDING), info);
+        assertTrue(Files.exists(classes.resolve("acme/Dish.class")), "Dish.java was not saved since the last build");
+        assertEquals(List.of("Since the last build, Menu.java changed" + BUILDING, MENU_IN_DOUBT), info);
     }
 
     /** A resource is copied by the build as a source is compiled: a new one counts as an edited one. */
@@ -348,6 +388,42 @@ class ChangedWhileStoppedTest {
         assertTrue(warnings.getFirst().endsWith("): the application starts on the classes of the last build."),
                 warnings.getFirst());
         assertEquals(0, changes.get());
+    }
+
+    /**
+     * The class of a source in doubt goes before the build runs. When the Maven of that build cannot be run, the
+     * output is no longer the one of the last build, and there is no application to start on it: the start stops,
+     * names the source and says what to run (BUG-20261117-08).
+     */
+    @Test
+    void aMavenThatCannotRunOnceAClassWentStopsTheStart() throws Exception {
+        file(java.resolve("acme/Menu.java"), COMPILED.plusSeconds(1));
+        CompilerOutput.Recompile absent = new RecompileRunner(dir, dir.resolve("no-such-mvn").toString())::run;
+
+        MojoExecutionException stop = assertThrows(MojoExecutionException.class,
+                () -> stopped.build(absent, this::aChange));
+
+        assertTrue(stop.getMessage().startsWith("Cannot build the project ("), stop.getMessage());
+        assertTrue(stop.getMessage().endsWith("). The class of Menu.java was deleted to be compiled again, so the"
+                + " output is incomplete: run \"mvn process-classes\", then vidocq:dev again."), stop.getMessage());
+        assertEquals(List.of(), warnings);
+        assertEquals(0, changes.get());
+    }
+
+    /** Several classes went before a Maven that cannot be run: the message names their sources. */
+    @Test
+    void aMavenThatCannotRunOnceSeveralClassesWentNamesTheirSources() throws Exception {
+        file(java.resolve("acme/Menu.java"), COMPILED.plusSeconds(1));
+        file(java.resolve("acme/Dish.java"), COMPILED.plusSeconds(1));
+        file(classes.resolve("acme/Dish.class"), COMPILED.plusSeconds(2));
+        CompilerOutput.Recompile absent = new RecompileRunner(dir, dir.resolve("no-such-mvn").toString())::run;
+
+        MojoExecutionException stop = assertThrows(MojoExecutionException.class,
+                () -> stopped.build(absent, this::aChange));
+
+        assertTrue(stop.getMessage().endsWith("). The classes of Dish.java, Menu.java were deleted to be compiled"
+                + " again, so the output is incomplete: run \"mvn process-classes\", then vidocq:dev again."),
+                stop.getMessage());
     }
 
     /** A directory that cannot be read: a warning says what to do, and the start goes on without a build. */

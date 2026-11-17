@@ -244,12 +244,18 @@ Since the last build, Menu.java changed: building the project first (mvn process
 * A start with no change builds nothing: `mvn vidocq:dev` stays the short way to start again.
 * The compiler keeps a record of its last run in `target/maven-status`, and `vidocq:dev` reads the time of that
   record, not the times of the classes. A class your IDE compiled from the save does not hide the change.
+* A changed source whose class looks up to date loses that class before the build, and a second line names it:
+  `Menu.java was saved since the last build started and its class is not older: compiling it again.` It is a source
+  your IDE compiled, or one you saved while the last build compiled it. Without its class, the build compiles it,
+  with the annotation processors.
 * `vidocq dev` and the IDE configurations run `mvn process-classes vidocq:dev`. The build of that command saw every
   change, and `vidocq:dev` builds nothing more.
 * When the build fails, a warning says so and `vidocq:dev` builds again at the next change. The application starts
   once the project builds.
 * Three changes are not seen: a change of the `pom.xml`, a file restored with an older date, and a deleted resource.
   Run `mvn process-classes vidocq:dev` then, after `mvn clean` for a deleted resource.
+* A pom that sets `useIncrementalCompilation` to `false` leaves no record of the compiler. `vidocq:dev` then compares
+  with the newest file of the classes, and a class that is not older than its source is taken for compiled.
 
 [[dev-preload-classes]]*The application while a recompile runs.* [.tag-new]#NEW# `vidocq:dev` loads every class of
 the application's directories as soon as the application layer starts, at the first start and at each layer swap.

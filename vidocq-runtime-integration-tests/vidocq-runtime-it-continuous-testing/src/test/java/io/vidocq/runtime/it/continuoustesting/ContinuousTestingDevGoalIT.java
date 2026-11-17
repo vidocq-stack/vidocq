@@ -190,6 +190,43 @@ class ContinuousTestingDevGoalIT {
         }
     }
 
+    /**
+     * BUG-20261117-08: a source saved while an earlier build compiled it, after javac read it. Its class was written
+     * after the save, from the text before it: the compiler plugin takes the source for compiled, in the build a bare
+     * {@code vidocq:dev} starts too. Here the source bears the time of its class, which the build wrote after the
+     * compiler listed its sources: the latest save that class could hide.
+     */
+    @Test
+    void aSourceSavedWhileTheLastBuildCompiledItIsCompiledBeforeTheApplicationStarts(@TempDir Path dir)
+            throws Exception {
+        Path project = Fixture.copy(dir);
+        Path logs = Fixture.logs();
+        Fixture.warmUp(project, logs.resolve("dev-in-doubt-warm-up.log"));
+        Path log = logs.resolve("vidocq-dev-in-doubt.log");
+        Path compiled = project.resolve("target/classes/io/vidocq/it/ct/Greeter.class");
+        Path listed = project.resolve("target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst");
+        FileTime saved = Files.getLastModifiedTime(compiled);
+        assertTrue(saved.toMillis() > Files.getLastModifiedTime(listed).toMillis(),
+                "the premise of this test: the build wrote the class after the compiler listed its sources");
+        Fixture.addGreeterMethod(project, "savedWhileBuilding", saved);
+
+        Process mvn = Fixture.start(project, log, "vidocq:dev", "-Dvidocq.dev.debug=false",
+                "-Dvidocq.chappe.listener.default.port=0", "-Dvidocq.devconsole.port=0");
+        try {
+            Fixture.awaitLog(mvn, log, STARTED);
+            String said = Fixture.read(log);
+            assertTrue(Files.readString(compiled, StandardCharsets.ISO_8859_1).contains("savedWhileBuilding"),
+                    "the class the application loads has the method that was saved:\n" + said);
+            int again = said.indexOf("Greeter.java was saved since the last build started and its class is not older:"
+                    + " compiling it again.");
+            assertTrue(again >= 0 && again < said.indexOf("Child JVM started"),
+                    "the start says which class the last build left in doubt, before the application starts:\n"
+                            + said);
+        } finally {
+            Fixture.stop(mvn);
+        }
+    }
+
     /** The snapshot, once the panel's reader thread has seen {@code failures} failures. */
     private static Map<String, Object> awaitPanelFailures(String console, int failures) throws Exception {
         Predicate<Map<String, Object>> shows = shown -> {

@@ -57,6 +57,10 @@ import java.util.function.Consumer;
  *
  * <p>{@link #build} then builds the project, before anything of the start reads the output. A command line that ran
  * the lifecycle first, as {@code vidocq dev} does, wrote the list in this very Maven: nothing is to build.
+ *
+ * <p>That build would leave out a changed source whose class is not older, the compiler plugin taking it for
+ * compiled: the class javac wrote from what it read before the save, or the one an IDE compiled. Such a class is
+ * deleted before the build runs (BUG-20261117-08).
  */
 final class ChangedWhileStopped {
 
@@ -92,16 +96,29 @@ final class ChangedWhileStopped {
      * To call when the goal starts, once the output holds a build. Builds the project when something changed since
      * that build. While the build fails, waits for the next change and builds again, as a first build that fails
      * does: there is no application to start on sources that do not build. A directory that cannot be read, or a
-     * Maven that cannot be run, is a warning, and the start goes on with the classes of the last build.
+     * Maven that cannot be run, is a warning, and the start goes on with the classes of the last build. One case
+     * stops the start instead: a Maven that cannot be run once the class of a source in doubt was deleted
+     * (BUG-20261117-08), the output being incomplete from then on.
      *
      * @param build  builds the project, and returns the exit code of its Maven
      * @param change blocks until the sources change; {@code false} once the watch ended
-     * @throws MojoExecutionException when the watch ended, or the thread was interrupted, before the project built
+     * @throws MojoExecutionException when the watch ended, or the thread was interrupted, before the project built,
+     *                                and when Maven cannot be run to compile a source whose class was deleted
      */
     void build(CompilerOutput.Recompile build, CompilerOutput.AwaitChange change) throws MojoExecutionException {
-        if (!changed()) {
+        Optional<CompilerOutput.LastCompile> compiled;
+        try {
+            compiled = CompilerOutput.lastCompile(buildDir);
+            long built = compiled.isPresent() ? compiled.get().listed().toMillis() : newestOf(output);
+            if (!changedSince(built, compiled.map(last -> last.gone(sourceRoots)).orElse(List.of()))) {
+                return;
+            }
+        } catch (IOException e) {
+            warn.accept("Cannot tell whether the sources changed since the last build (" + e
+                    + "): if a change does not show, save the file again.");
             return;
         }
+        List<Path> dropped = compiled.map(this::dropTheClassesInDoubt).orElse(List.of());
         try {
             int exit = build.run();
             while (exit != 0) {
@@ -113,6 +130,9 @@ final class ChangedWhileStopped {
                 exit = build.run();
             }
         } catch (IOException e) {
+            if (!dropped.isEmpty()) {
+                throw incomplete(e, dropped);
+            }
             warn.accept("Cannot build the project (" + e.getMessage()
                     + "): the application starts on the classes of the last build.");
         } catch (InterruptedException e) {
@@ -121,27 +141,50 @@ final class ChangedWhileStopped {
         }
     }
 
-    /** Whether something changed since the last build; says what, or why it cannot be told. */
-    private boolean changed() {
-        try {
-            Optional<CompilerOutput.LastCompile> compiled = CompilerOutput.lastCompile(buildDir);
-            long built = compiled.isPresent() ? compiled.get().listed().toMillis() : newestOf(output);
-            if (built < 0) {
-                return false; // nobody built: the first build of the goal is another check's
-            }
-            List<Path> edited = SourceWatcher.savedBetween(watch, FileTime.fromMillis(built + 1), started);
-            List<Path> gone = compiled.map(last -> last.gone(sourceRoots)).orElse(List.of());
-            if (edited.isEmpty() && gone.isEmpty()) {
-                return false;
-            }
-            info.accept("Since the last build, " + named(edited, gone)
-                    + ": building the project first (mvn process-classes).");
-            return true;
-        } catch (IOException e) {
-            warn.accept("Cannot tell whether the sources changed since the last build (" + e
-                    + "): if a change does not show, save the file again.");
+    /**
+     * Whether something changed since the last build; says what.
+     *
+     * @param built when that build compiled, in milliseconds; negative when nobody built
+     * @param gone  the sources it compiled that no longer exist
+     */
+    private boolean changedSince(long built, List<Path> gone) throws IOException {
+        if (built < 0) {
+            return false; // nobody built: the first build of the goal is another check's
+        }
+        List<Path> edited = SourceWatcher.savedBetween(watch, FileTime.fromMillis(built + 1), started);
+        if (edited.isEmpty() && gone.isEmpty()) {
             return false;
         }
+        info.accept("Since the last build, " + named(edited, gone)
+                + ": building the project first (mvn process-classes).");
+        return true;
+    }
+
+    /**
+     * Deletes the class of each source saved since the compiler of the last build listed its sources, when that
+     * class is not older than the source: the compiler plugin would take the source for compiled, in the build of
+     * this start too (BUG-20261117-08). Such a class is one javac wrote from what it read before the save, the
+     * build being still at work, or one an IDE compiled without the annotation processors. Without it, the plugin
+     * compiles the module. {@link SavedWhileCompiling} tells and names them, as it does inside a session.
+     *
+     * @return the sources whose class it deleted, in the order of their paths
+     */
+    private List<Path> dropTheClassesInDoubt(CompilerOutput.LastCompile last) {
+        SavedWhileCompiling missed = new SavedWhileCompiling(sourceRoots, output, "build", info, warn);
+        missed.anEarlierCompileStarted("the last build", last.listed());
+        return missed.compileStarts();
+    }
+
+    /**
+     * The end of a start whose Maven cannot be run once classes were deleted to be compiled again: the output is
+     * not the one of the last build any more, and nothing can complete it.
+     */
+    private static MojoExecutionException incomplete(IOException cause, List<Path> dropped) {
+        String classes = dropped.size() == 1 ? "The class of " + SavedWhileCompiling.names(dropped) + " was"
+                : "The classes of " + SavedWhileCompiling.names(dropped) + " were";
+        return new MojoExecutionException("Cannot build the project (" + cause.getMessage() + "). " + classes
+                + " deleted to be compiled again, so the output is incomplete: run \"mvn process-classes\", then"
+                + " vidocq:dev again.", cause);
     }
 
     /** What changed, each kind with its number and the names of its first files. */
