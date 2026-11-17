@@ -85,6 +85,48 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   - a file system that keeps whole seconds: a file saved in the second Maven started, after it, can bear a time
     before that start.
 
+## BUG-20261117-04 — Under `vidocq:dev`, a public method added to a view loses the HTTP session the verdict said it would keep
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/dev-verdict-serial-version-uid`, with Foy's half (Vidocq/foy#118, Foy 412ca8b6, Foy BUG-20261117-01)
+- **Module**: `vidocq-runtime-maven-plugin` (`SessionVerdict`, `ClassFingerprint`); Foy's session import
+- **Symptom**: found by the replay of the dev session handover (#635) on VidocqTools/vaadin-on-vidocq, with Vidocq
+  67e17d5a, Foy 18ff8067 and Vauban 0e39add0. A `public int count()` added to the application's `@SessionScoped`
+  `Serializable` bean, then a `public String title()` added to `MainView`: the log says `Hot reload - restarting on a
+  fresh application layer: Visits gained a method count`, no `HTTP sessions not kept` line, then `WARN ... Importing
+  the HTTP sessions dropped 1 session(s) that could not be restored, as new ones start instead; first cause: class
+  io.vidocq.tools.vaadin.Visits` (then `...MainView`). The page silently starts a new session, and the bean's counter
+  is back at 1. A listener appended in the same view (a private lambda method) keeps the session, and so did every
+  case of the earlier replay.
+- **Repro**: `class Visits implements Serializable { private int clicks; public int next() { return ++clicks; } }`,
+  then the same with `public int count() { return clicks; }`: `serialver` gives -2180439236505541769, then
+  -3816310884943761011.
+- **Cause**: neither class declares a `serialVersionUID`, and the default one Java computes hashes the non-private
+  methods and constructors. The read of the exported session refuses a stream class whose UID differs from the local
+  class's (`InvalidClassException`), and Foy drops the session. The verdict's rules looked at the fields, the
+  supertypes, the lambdas and the anonymous classes, never at the UID, and the guides did not list the case: the most
+  common change behind a swap, a method added to a view, lost the session with a WARNING that named the class alone.
+- **Fix**: two halves, agreed between the sessions.
+  - Foy's import reads a class whose UID moved with the new class's descriptor when neither version declares a
+    `serialVersionUID`, is `Externalizable` or declares `writeObject`, and the serializable fields, the nearest
+    serializable superclass and the interfaces are the same, read from the loaded classes; otherwise it drops the
+    session and its WARNING gives the reason.
+  - The verdict predicts it: `ClassFingerprint.defaultSerialVersionUid()` computes the default UID from the class file
+    (Java Object Serialization Specification §4.6), and `serialVersionUidDifference` drops, with its reason, every
+    case Foy's import would drop: `changed its serialVersionUID from 1 to 2`, `declared serialVersionUID 1, not its
+    default ...`, `no longer declares serialVersionUID 1`, `changed its default serialVersionUID and declares
+    writeObject` (or `is Externalizable`, or `has a serialVersionUID field that is not static final`). A class that
+    stopped being `Serializable` drops too (`changed its interfaces`). Records and enums are left out.
+
+  Tests: `ClassFingerprintTest.theDefaultSerialVersionUidIsTheOneJavaSerializationComputes` (ten classes against
+  `ObjectStreamClass.lookup`, among them a protected nested class, an `assert`, interfaces with and without methods
+  and a bridge method), `theUidJavaReadsIsTheDeclaredOneOrElseTheDefaultOne`, and in `SessionVerdictTest` a test per
+  reason, plus the cases that keep: a method added with or without a declared UID, a UID declared with the old
+  default value, a private method added beside `writeObject`, a record and an enum.
+- **Not covered**: a `serialPersistentFields` that changed (Foy drops the session when the UIDs differ too; the verdict
+  sees no field change); a `serialVersionUID` computed at class initialization rather than a constant (the verdict
+  cannot read its value, and takes two such declarations as equal).
+
 ## BUG-20261117-03 — A source saved while a recompile or a test run compiles it is not compiled: the save shows only once another Java source is saved
 
 - **Date**: 2026-11-17

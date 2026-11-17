@@ -363,10 +363,12 @@ session. The page opens its event stream again on the new layer once the
 browser's retry delay passed, a few seconds; from then on a redefinition refreshes it as before. A rule of
 `vidocq:dev` drops the session when a serializable class, a view for instance, gained, lost or retyped an instance
 field, or when its listeners moved, lambdas or anonymous classes, and says why: `Hot reload - HTTP sessions not kept: MainView's
-lambdas moved, and a restored listener could run another one's code`. `-Dvidocq.dev.keepSessions=false` drops it at
-every swap. A dropped session is invalidated, `Undeploying the servlet application invalidated 1 HTTP session: its
-client starts a new one on its next request`, and the open page reloads on its next request, as after a session
-timeout. A session that holds `@SessionScoped` beans moves with them [.tag-new]#NEW#, with their state and the
+lambdas moved, and a restored listener could run another one's code`. A method added to a view keeps the session,
+whether the view declares a `serialVersionUID` or not; a `serialVersionUID` declared, removed or given another value
+drops it (xref:usage.adoc#dev-swap-serial-version-uid[the `serialVersionUID` case]). `-Dvidocq.dev.keepSessions=false`
+drops it at every swap. A dropped session is invalidated, `Undeploying the servlet application invalidated 1 HTTP
+session: its client starts a new one on its next request`, and the open page reloads on its next request, as after a
+session timeout. A session that holds `@SessionScoped` beans moves with them [.tag-new]#NEW#, with their state and the
 client proxies they hold, so a view that reads a session bean finds what it held before the swap; one that holds an
 intercepted or non-`Serializable` session bean stays behind with Foy's WARNING, and its page starts a new session.
 

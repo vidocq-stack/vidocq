@@ -300,13 +300,26 @@ Hot reload - kept 1 HTTP session across the reload
 
 A session moves when Foy can write each of its attributes and read it back with the new classes; it drops one that it
 cannot, with a WARNING of its own, and that client starts a new session. `vidocq:dev` drops all the sessions of a
-swap, and says why, in three cases. Each looks only at what a session can hold, what Java serialization writes:
+swap, and says why, in four cases. Each looks only at what a session can hold, what Java serialization writes:
 serializable classes, serializable lambdas such as Vaadin's listeners, serializable anonymous classes. A field added
 to a REST resource or to a service keeps the sessions.
 
 * a changed serializable class gained, lost or retyped an instance field, or changed its superclass or its
-  interfaces, so an instance written before the change would not match the class after it: `Hot reload - HTTP
-  sessions not kept: Order gained a field total, so a restored instance would not match the new class`;
+  interfaces, stopping being serializable included, so an instance written before the change would not match the
+  class after it: `Hot reload - HTTP sessions not kept: Order gained a field total, so a restored instance would not
+  match the new class`;
+* [[dev-swap-serial-version-uid]]a changed serializable class whose `serialVersionUID` moved, where Java would refuse
+  to read it back [.tag-new]#NEW#. The UID is the one the class declares, or else the default one Java computes, a
+  hash of the class that a method or a constructor added, removed or changed moves, unless it is private: a lambda
+  does not move it. A moved default UID keeps the sessions: Foy reads them with the new class, whose fields and
+  superclass the case above found unchanged. It drops them when the class declares a `serialVersionUID`, before or
+  after the change, is `Externalizable` or declares `writeObject`, whose data Foy cannot check: `Hot reload - HTTP
+  sessions not kept: Order changed its serialVersionUID from 1 to 2, so a restored instance would not match the new
+  class`. The other reasons say `declared serialVersionUID 1, not its default -3497372159402628655`, `no longer
+  declares serialVersionUID 1`, and `changed its default serialVersionUID and declares writeObject` (or `is
+  Externalizable`). To declare a `serialVersionUID` without losing the sessions, declare the value the class had,
+  the one `serialver` gives for the class before the change. Records and enums are left out: Java ignores their
+  `serialVersionUID`;
 * a changed class gained or lost a serializable lambda while the code of one it kept changed: the compiler numbered
   its lambdas again, and a listener read back from the session could run the code of another one. `Hot reload - HTTP
   sessions not kept: MainView's lambdas moved, and a restored listener could run another one's code`. A lambda added
@@ -321,9 +334,18 @@ count, `Undeploying the servlet application invalidated 1 HTTP session: its clie
 request`. The sessions are also dropped, without a line of their own, when the change is not classified (`Hot swap
 off: no dependency declares its start-time code`), when the JVM refused a redefinition and the layer is swapped
 instead, and when the context path changed between the two starts. An application without a servlet deployment gets no
-line at all. Sessions
-the new deployment cannot read are dropped with one WARNING, and it starts anyway: `Hot reload - the HTTP sessions of
-the previous deployment could not be imported, starting without them: ...`.
+line at all. Sessions the new deployment cannot read are dropped with one WARNING, and it starts anyway: `Hot reload -
+the HTTP sessions of the previous deployment could not be imported, starting without them: ...`.
+
+A session the rules above let move but that Foy cannot read back stays behind alone, and its client starts a new
+session. Foy's WARNING names the first class it could not read, and why: a `serialPersistentFields` that changed, for
+instance, gives `Importing the HTTP sessions dropped 1 session(s) that could not be restored, as new ones start
+instead; first cause: class app.Order: its default serialVersionUID changed and its serializable fields changed`. Foy
+gives the first reason that applies, in this order: `its declared serialVersionUID changed`, then `its default
+serialVersionUID changed and` `it is Externalizable`, `it declares writeObject`, `its serializable fields changed`,
+`its serializable superclass changed`, `its interfaces changed` or `its shape could not be read`, then `the class is
+missing`, and otherwise the message of the exception the read threw (`an unreadable value: ...` when the stream fails
+before it names a class).
 
 A session that holds `@SessionScoped` beans moves with them [.tag-new]#NEW#: each instance keeps its state and belongs
 to the new container, the client proxies it holds and the `Event`, `Instance`, `Provider` or `BeanManager` it injects
