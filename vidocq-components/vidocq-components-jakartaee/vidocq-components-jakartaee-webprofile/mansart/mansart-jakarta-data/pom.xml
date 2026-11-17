@@ -84,6 +84,7 @@
         <module>mansart-data-tests</module>
         <module>mansart-data-external-lib</module>
         <module>mansart-data-external-it</module>
+        <module>mansart-data-vauban-it</module>
     </modules>
 
     <dependencyManagement>
