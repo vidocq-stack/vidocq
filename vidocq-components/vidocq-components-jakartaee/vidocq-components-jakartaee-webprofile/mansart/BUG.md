@@ -9,6 +9,35 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-067 — One `@Table(name = "ITEM")` names two tables on PostgreSQL: Mansart Data quotes it, a persistence unit does not
+
+- **Date**: 2026-11-17
+- **Status**: OPEN — the maintainer decides whether the quoting rule changes
+- **Severity**: medium (an entity shared by a repository and a persistence unit fails at the first repository call
+  when its mapped names are not lower case; documented for Mansart Data alone, not for the shared entity)
+- **Symptom**: on PostgreSQL, an entity with `@Table(name = "ITEM")` whose table comes from unquoted DDL
+  (`CREATE TABLE ITEM (...)`, stored as `item`), used by a Noether persistence unit and by a Mansart Data repository:
+  the unit works, the repository fails with `MansartDataException: The table "ITEM" of entity …Item does not exist`.
+  The same holds for a column named by `@Column(name = "NAME")`.
+- **Minimal reproduction**: none in this repository yet. Seen by NOETHER while writing
+  `TwoPhaseCommitPostgresModulePathTest` (vidocq#641, first red run), and avoided there, as in the local XA study of
+  2026-11-14, by lower-case mapped names.
+- **Cause**: Mansart Data quotes every table and column name in its SQL (`AbstractSqlDialect`, `RepositoryRuntime`,
+  `JdqlExecutor`, the dialects), so a name is case-sensitive. Jakarta Persistence leaves a mapped name undelimited
+  unless it is written with quotes or `<delimited-identifiers/>` is set, so the database folds it (lower case on
+  PostgreSQL, upper case on H2). The reference page ("Table and column names") says that Mansart quotes and that the
+  database must hold the names in the same case; it does not say that the same annotation means another table to a
+  Jakarta Persistence provider.
+- **Ways out, none chosen**: (a) follow Jakarta Persistence — emit a mapped name undelimited unless it is written
+  with quotes; this breaks schemas that rely on today's quoting (an H2 migration with quoted lower-case names, a
+  mixed-case table); (b) keep the quoting and add an option that turns it off; (c) keep the rule, and make the
+  PostgreSQL missing-table message say that a table of another case exists, as the H2 dialect does.
+- **Investigations**:
+  - 2026-11-17: read the SQL builders — every identifier is quoted, on every dialect; `PostgresqlDialect` has no
+    `undefinedTableHint`. Reference page completed with the shared-entity case.
+
+---
+
 ## MANSART-066 — A repository and a persistence unit had a connection each in the same transaction
 
 - **Date**: 2026-11-13 (reported by the maintainer the same day)
