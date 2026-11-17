@@ -9,6 +9,33 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 
 ---
 
+## MANSART-068 — A repository on a named data store cannot be injected by its parameterized supertype
+
+- **Date**: 2026-11-17
+- **Status**: OPEN — the maintainer decides whether the synthetic bean declares the parameterized supertypes
+- **Severity**: low (injecting `BasicRepository<Author, Long>` instead of the repository interface is unusual; the
+  failure is at the container start, with a clear message)
+- **Symptom**: `Authors extends BasicRepository<Author, Long>` with `@Repository(dataStore = "audit")`, and a bean
+  with `@Inject BasicRepository<Author, Long>`: the container start fails with `Unsatisfied dependency … of type
+  ParameterizedType[rawType=jakarta.data.repository.BasicRepository, typeArguments=[…Author, java.lang.Long]]`.
+  The same repository on the default data store is injected. `@Inject Authors` works in both cases.
+- **Minimal reproduction**: none committed. Run on 2026-11-17 in the test vehicle `mansart-data-vauban-it` (branch
+  `test/parameterized-repository-injection`, both processors, Vauban 0.4.0-20261117.095612-67, a start from the
+  build index as a Vidocq application does): with `Authors` routed to a named data source, only the `Author`
+  injection point is unsatisfied.
+- **Cause**: one repository has two kinds of bean. On the default data store its generated implementation is a
+  class bean (`@Singleton`), whose bean types are all its supertypes, `BasicRepository<Author, Long>` included. On a
+  named data store the implementation is vetoed (MANSART-005) and `MansartDataExtension.registerCompileTime`
+  registers a synthetic bean with `addBean(itf).type(itf)`: its types are the interface and `Object`. The same
+  holds for a repository implemented at run time (`registerRuntime`), and for a deployment that lists its bean
+  classes one by one without the build index.
+- **Recommendation**: give the synthetic bean the parameterized super-interfaces of the repository interface
+  (`BasicRepository<Author, Long>`, `CrudRepository<…>`, `DataRepository<…>`), so that a repository has the same
+  bean types whatever its data store. To check with it: no ambiguity with the implementation's class bean (it is
+  vetoed or absent whenever the synthetic bean is registered), and a deployment with frozen extensions.
+
+---
+
 ## MANSART-067 — One `@Table(name = "ITEM")` names two tables on PostgreSQL: Mansart Data quotes it, a persistence unit does not
 
 - **Date**: 2026-11-17
