@@ -5,6 +5,67 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261117-13 — An application class that has only another qualifier than `@Default` is created by its constructor
+
+- **Date**: 2026-11-17
+- **Status**: OPEN. Found while fixing BUG-20261117-11 and left as it was: that fix keeps the qualifiers of the
+  lookup. Disabled reproduction:
+  `ApplicationClassBeanTest.anApplicationClassWithAnotherQualifierIsRunWithItsInjections`.
+- **Module**: `vidocq-runtime-core` (`Vidocq.run(Class, String...)`)
+- **Symptom**: an `@ApplicationScoped` application class with a qualifier of its own is a bean, and the runtime
+  creates it with its public no-arg constructor. Its injected fields are `null` (`expected: <1> but was: <0>`), and
+  nothing says so.
+- **Repro**: the disabled test above.
+- **Cause**: `CDI.current().select(layerClass)` names no qualifier, so it asks for `@Default`, which that bean does
+  not have.
+
+## BUG-20261117-12 — The `@PreDestroy` of a `@Dependent` application class never runs
+
+- **Date**: 2026-11-17
+- **Status**: OPEN. Found while fixing BUG-20261117-11, not fixed with it. Disabled reproduction:
+  `ApplicationClassBeanTest.theInstanceOfADependentApplicationClassIsDestroyedWhenTheRuntimeStops`.
+- **Module**: `vidocq-runtime-core` (`Vidocq.run(Class, String...)`)
+- **Symptom**: an application class annotated `@Dependent` has a `@PreDestroy` method. The method does not run when
+  the runtime stops (`expected: <1> but was: <0>`).
+- **Repro**: the disabled test above.
+- **Cause hypothesis**: the runtime asks `CDI.current()` for the instance and never gives it back. A `@Dependent`
+  instance obtained from `CDI.current()` belongs to the caller, which has to destroy it (`Instance.destroy`): the
+  container does not do it when it stops. An application class with a bounded type variable, necessarily
+  `@Dependent`, is in the same case since BUG-20261117-11. Today neither instance is destroyed, so
+  `ApplicationClassBeanTest.theInstanceOfABoundedApplicationClassLivesAsLongAsTheOneOfAnyDependentApplicationClass`
+  compares 0 with 0: it fails only the day a fix destroys one and not the other. `VaubanCDI.destroy` does nothing:
+  the fix goes through the `Instance` that `select` returned, or releases the creational context of the bounded
+  path.
+
+## BUG-20261117-11 — An application class with a bounded type variable is created by its constructor, without its injections
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/bean-class-lookup`
+- **Module**: `vidocq-runtime-core` (`Vidocq.run(Class, String...)`)
+- **Symptom**: `Vidocq.run(App.class, args)` runs the application class as a CDI bean when it is one. A class
+  `App<T extends Number>` annotated `@Dependent` is one, and the runtime still creates it with its public no-arg
+  constructor: its injected fields are `null`, and nothing says so. Found by the audit of the lookups by raw class
+  made for Vidocq/vauban#335 (Vidocq/vidocq#652). The ticket expected the case once #335 is merged: it is there on
+  the Vauban of `main` (455067f5) too.
+- **Repro**: `ApplicationClassBeanTest.anApplicationClassWithABoundedTypeVariableIsRunWithItsInjections`. The
+  application returns 0, the value it gives when its constructor alone made it (`expected: <1> but was: <0>`).
+- **Cause**: `Vidocq.instantiateInLayer` asked `CDI.current().select(layerClass)`. The raw class of a bean whose
+  class has a bounded type variable is not a type that bean can be looked up by (CDI 4.1 §5.2.4). The lookup is
+  unsatisfied, and the runtime falls back to the constructor.
+- **Fix**: when the lookup by type finds no bean and the class has type variables, the runtime takes the bean of that
+  class among the container's beans that have `@Default`: the one whose bean class is the class and that has a
+  parameterized type of that class among its bean types. That type tells it from a producer the class declares
+  (`BeanContainer.getBeans`, `resolve`, `getReference`). The qualifiers of the lookup do not change. The beans are
+  walked once, when the application starts, and only for a class with type variables. The instance lives as long as
+  the one of any `@Dependent` application class (BUG-20261117-12).
+- **Also fixed, found by the review**: when the container knows the class but cannot give its bean (a
+  `@PostConstruct` or an injection that throws, an ambiguous lookup), the runtime still falls back to the
+  constructor, as before, but no longer in silence: a warning names the class and the root cause
+  (`ApplicationClassBeanTest.anApplicationClassTheContainerCannotCreateIsReportedBeforeItsConstructorRuns`). The
+  reflective reads of the bounded path are listed with their reason in `ArchitectureRules.REFLECTIVE_FALLBACKS`.
+- **Not handled**: an enabled alternative that extends a bounded application class is not chosen (the bean class must
+  be the class itself); nothing chose it before either.
+
 ## BUG-20261117-10 — On the class path, 13 runtime modules are never found: their services are in `module-info.java` only
 
 - **Date**: 2026-11-17

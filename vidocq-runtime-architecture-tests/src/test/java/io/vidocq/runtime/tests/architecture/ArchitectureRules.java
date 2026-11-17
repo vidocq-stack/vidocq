@@ -126,7 +126,9 @@ final class ArchitectureRules {
             Map.entry("io.vidocq.runtime.core.ApplicationMain", "chooses the main method of the application exactly as"
                     + " the Java SE launcher does (JEP 512: static or not, any visibility), so it reads the declared"
                     + " methods of a class known by name only"),
-            Map.entry("io.vidocq.runtime.core.Vidocq", LAUNCH),
+            Map.entry("io.vidocq.runtime.core.Vidocq", LAUNCH + "; it also reads the type variables and the bean"
+                    + " types (java.lang.reflect.Type, the currency of the CDI API) of the application class, once at"
+                    + " start, to find the bean of a class with a bounded type variable (BUG-20261117-11)"),
             Map.entry("io.vidocq.runtime.core.VidocqAppLayer", LAUNCH),
             Map.entry("io.vidocq.runtime.core.LayerJdbcDrivers", "deregisters the JDBC drivers a closing application"
                     + " layer defined, so it loads them from that layer by name"),

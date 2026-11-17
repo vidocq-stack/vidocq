@@ -21,7 +21,13 @@ package io.vidocq.runtime.core;
 
 import io.vidocq.runtime.core.console.ConsoleLogging;
 import io.vidocq.runtime.spi.VidocqApp;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanContainer;
 
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -275,18 +281,29 @@ public final class Vidocq {
     }
 
     /** Re-loads {@code appClass} through the layer and instantiates it there. */
-    private static VidocqApp instantiateInLayer(Class<? extends VidocqApp> appClass)
+    static VidocqApp instantiateInLayer(Class<? extends VidocqApp> appClass)
             throws ReflectiveOperationException {
         var tccl = Thread.currentThread().getContextClassLoader();
         Class<?> layerClass = Class.forName(appClass.getName(), true, tccl);
         // As a CDI bean when the container knows it…
         try {
-            var instance = jakarta.enterprise.inject.spi.CDI.current().select(layerClass);
+            var cdi = jakarta.enterprise.inject.spi.CDI.current();
+            var instance = cdi.select(layerClass);
             if (instance.isResolvable()) {
                 return (VidocqApp) instance.get();
             }
-        } catch (RuntimeException _) {
-            // fall through to plain instantiation
+            if (instance.isUnsatisfied()) {
+                Object bean = beanOfParameterizedClass(cdi.getBeanContainer(), layerClass);
+                if (bean != null) {
+                    return (VidocqApp) bean;
+                }
+            }
+        } catch (RuntimeException failure) {
+            // The container knows the class (or has none) but could not give its bean: the constructor still runs,
+            // and the warning is the only sign of an application without its injections.
+            LOG.log(System.Logger.Level.WARNING, () -> "The CDI container could not give the application class "
+                    + layerClass.getName() + " (" + rootCause(failure) + "): it is created by its public constructor,"
+                    + " without injection", failure);
         }
         // …otherwise through its public no-arg constructor (package exported to us
         // through the layer controller — the JDK-launcher technique).
@@ -296,6 +313,51 @@ public final class Vidocq {
             throw new IllegalStateException(problem);
         }
         return (VidocqApp) layerClass.getDeclaredConstructor().newInstance();
+    }
+
+    /**
+     * The instance of the bean of {@code layerClass} when the lookup by its raw class finds no bean, or {@code null}
+     * when the class has no such bean. A class with a bounded type variable is a bean whose only type of that class
+     * is parameterized, and the raw class does not look it up (CDI 4.1 section 5.2.4, BUG-20261117-11). The beans
+     * are those the lookup by type asks for: the ones with {@code @Default}. They are walked once, when the
+     * application starts, and only for a class with type variables. Nothing releases the instance, as for the one the
+     * lookup by type gives.
+     */
+    private static Object beanOfParameterizedClass(BeanContainer beans, Class<?> layerClass) {
+        if (layerClass.getTypeParameters().length == 0) {
+            return null;
+        }
+        Set<Bean<?>> ofThatClass = new HashSet<>();
+        for (Bean<?> bean : beans.getBeans(Object.class)) {
+            // A producer is a bean of the class that declares it too: its types tell it from the bean of the class.
+            if (bean.getBeanClass() == layerClass && typeOfClass(bean, layerClass) != null) {
+                ofThatClass.add(bean);
+            }
+        }
+        if (ofThatClass.isEmpty()) {
+            return null;
+        }
+        Bean<?> bean = beans.resolve(ofThatClass);
+        return beans.getReference(bean, typeOfClass(bean, layerClass), beans.createCreationalContext(bean));
+    }
+
+    /** The deepest cause of {@code failure}: the container wraps what the application's own code threw. */
+    private static Throwable rootCause(Throwable failure) {
+        Throwable cause = failure;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        return cause;
+    }
+
+    /** The bean type of {@code bean} whose raw class is {@code layerClass}, or {@code null} when it has none. */
+    private static Type typeOfClass(Bean<?> bean, Class<?> layerClass) {
+        for (Type type : bean.getTypes()) {
+            if (type instanceof ParameterizedType parameterized && parameterized.getRawType() == layerClass) {
+                return type;
+            }
+        }
+        return null;
     }
 
     /**
