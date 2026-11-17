@@ -20,10 +20,12 @@
 package io.vidocq.mansart.data.cdi;
 
 import jakarta.enterprise.inject.build.compatible.spi.Types;
+import jakarta.enterprise.lang.model.declarations.ClassInfo;
+import jakarta.enterprise.lang.model.types.ClassType;
+import jakarta.enterprise.lang.model.types.ParameterizedType;
 import jakarta.enterprise.lang.model.types.Type;
+import jakarta.enterprise.lang.model.types.TypeVariable;
 
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -33,18 +35,20 @@ import java.util.Map;
 /**
  * The parameterized super-interfaces of a repository interface, as bean types of its synthetic bean (MANSART-068).
  *
- * <p>For {@code Authors extends CrudRepository<Author, Long>} they are {@code CrudRepository<Author, Long>} and
- * {@code BasicRepository<Author, Long>}: a type variable of a super-interface is replaced by the class the
- * repository gives it. The types are the real parameterized ones, never raw ones: a raw bean type does not satisfy
- * a parameterized injection point (CDI 4.1 §5.2.4).
+ * <p>For {@code Authors extends CrudRepository<Author, Long>} they are {@code CrudRepository<Author, Long>},
+ * {@code BasicRepository<Author, Long>} and {@code DataRepository<Author, Long>}: a type variable of a
+ * super-interface is replaced by the class the repository gives it. The types are the real parameterized ones, never
+ * raw ones: a raw bean type does not satisfy a parameterized injection point (CDI 4.1 §5.2.4).
  *
  * <p>A super-interface whose type argument is not a class once the variables are replaced (a wildcard, a nested
  * parameterized type, a variable the repository leaves open) is left out, and so are the interfaces above it.
  *
- * <p>The super-interfaces are read from the loaded interface, with {@code java.lang.reflect}: at the container start
- * the language model of the build compatible extension gives them without their type arguments
- * ({@code ClassInfo.superInterfaces()} answers {@code CrudRepository}, not {@code CrudRepository<Author, Long>}:
- * Vauban BUG-20261117-22).
+ * <p>The interfaces are read from the language model of the build compatible extension, not by reflection, so the
+ * walk is the same at build, at the container start and on another CDI container. A type variable is matched by its
+ * name and position: two {@code TypeVariable} objects of one variable are not always equal (Vauban BUG-20261117-33).
+ * The model must give super-interfaces as declared, also for a class of a dependency jar such as
+ * {@code CrudRepository} (Vauban BUG-20261117-22 and BUG-20261117-31); on an older Vauban the walk finds nothing and
+ * the bean keeps the repository interface as its only type.
  */
 final class RepositoryBeanTypes {
 
@@ -53,52 +57,57 @@ final class RepositoryBeanTypes {
 
     static List<Type> of(Types types, Class<?> repository) {
         Map<String, Type> found = new LinkedHashMap<>();
-        collect(types, repository, Map.of(), found);
+        collect(types, types.ofClass(repository.getName()).declaration(), Map.of(), found);
         return new ArrayList<>(found.values());
     }
 
-    private static void collect(Types types, Class<?> type, Map<TypeVariable<?>, Class<?>> bound,
-            Map<String, Type> found) {
-        for (java.lang.reflect.Type parent : type.getGenericInterfaces()) {
-            if (parent instanceof Class<?> plain) {
-                collect(types, plain, Map.of(), found);
-            } else if (parent instanceof ParameterizedType parameterized
-                    && parameterized.getRawType() instanceof Class<?> raw) {
-                Class<?>[] arguments = resolve(parameterized.getActualTypeArguments(), bound);
+    private static void collect(Types types, ClassInfo type, Map<String, ClassType> bound, Map<String, Type> found) {
+        for (Type parent : type.superInterfaces()) {
+            if (parent.isClass()) {
+                collect(types, parent.asClass().declaration(), Map.of(), found);
+            } else if (parent.isParameterizedType()) {
+                ParameterizedType parameterized = parent.asParameterizedType();
+                ClassType[] arguments = resolve(parameterized.typeArguments(), bound);
                 if (arguments.length > 0) {
-                    found.putIfAbsent(parameterized(raw, arguments), types.parameterized(raw, arguments));
-                    collect(types, raw, bind(raw, arguments), found);
+                    ClassType generic = parameterized.genericClass();
+                    found.putIfAbsent(key(generic, arguments), types.parameterized(generic, arguments));
+                    collect(types, generic.declaration(), bind(generic.declaration(), arguments), found);
                 }
             }
         }
     }
 
-    /** The classes of the arguments, or an empty array when one of them is not a class. */
-    private static Class<?>[] resolve(java.lang.reflect.Type[] arguments, Map<TypeVariable<?>, Class<?>> bound) {
-        Class<?>[] classes = new Class<?>[arguments.length];
-        for (int i = 0; i < arguments.length; i++) {
-            Class<?> resolved = arguments[i] instanceof Class<?> c ? c : bound.get(arguments[i]);
+    private static ClassType[] resolve(List<Type> arguments, Map<String, ClassType> bound) {
+        ClassType[] classes = new ClassType[arguments.size()];
+        for (int i = 0; i < classes.length; i++) {
+            Type argument = arguments.get(i);
+            ClassType resolved = null;
+            if (argument.isClass()) {
+                resolved = argument.asClass();
+            } else if (argument.isTypeVariable()) {
+                resolved = bound.get(argument.asTypeVariable().name());
+            }
             if (resolved == null) {
-                return new Class<?>[0];
+                return new ClassType[0];
             }
             classes[i] = resolved;
         }
         return classes;
     }
 
-    private static Map<TypeVariable<?>, Class<?>> bind(Class<?> raw, Class<?>[] arguments) {
-        Map<TypeVariable<?>, Class<?>> bound = new HashMap<>();
-        TypeVariable<?>[] variables = raw.getTypeParameters();
-        for (int i = 0; i < variables.length; i++) {
-            bound.put(variables[i], arguments[i]);
+    private static Map<String, ClassType> bind(ClassInfo generic, ClassType[] arguments) {
+        Map<String, ClassType> bound = new HashMap<>();
+        List<TypeVariable> variables = generic.typeParameters();
+        for (int i = 0; i < variables.size() && i < arguments.length; i++) {
+            bound.put(variables.get(i).name(), arguments[i]);
         }
         return bound;
     }
 
-    private static String parameterized(Class<?> raw, Class<?>[] arguments) {
-        StringBuilder key = new StringBuilder(raw.getName());
-        for (Class<?> argument : arguments) {
-            key.append(' ').append(argument.getName());
+    private static String key(ClassType generic, ClassType[] arguments) {
+        StringBuilder key = new StringBuilder(generic.declaration().name());
+        for (ClassType argument : arguments) {
+            key.append(' ').append(argument.declaration().name());
         }
         return key.toString();
     }

@@ -39,10 +39,17 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
   BUG-20261117-16), under which a raw bean type no longer satisfies a parameterized injection point.
 - **Fix**: `RepositoryBeanTypes` gives the synthetic bean, compile-time and run-time, the parameterized
   super-interfaces of the repository interface, type variables replaced (`CrudRepository<Author, Long>`,
-  `BasicRepository<Author, Long>`, `DataRepository<Author, Long>`). It reads them by reflection on the loaded
-  interface, a documented fallback (`ArchitectureRules.REFLECTIVE_FALLBACKS`): the language model of the extension
-  gives super-interfaces without their type arguments (Vauban BUG-20261117-22).
+  `BasicRepository<Author, Long>`, `DataRepository<Author, Long>`). It reads them from the language model of the
+  build compatible extension, with no reflection. It needs a Vauban whose model gives super-interfaces as declared,
+  also for a class of a dependency jar (Vauban BUG-20261117-22 and BUG-20261117-31); on an older Vauban the walk
+  finds nothing and the bug stays.
 - **Investigations**:
+  - 2026-11-17: a first version read the super-interfaces by reflection, with an entry in
+    `ArchitectureRules.REFLECTIVE_FALLBACKS`, because Vauban's model gave them without type arguments. The
+    maintainer refused it: Vauban is fixed first, reflection stays for other containers or impossible cases. The
+    entry and the reflective code are gone.
+  - 2026-11-18: on Vauban cd2ffe5c (BUG-31 on BUG-22, built from `git archive` into a private repository), the
+    language-model walk passes the three tests of `RoutedRepositorySupertypeInjectionTest`.
   - 2026-11-17: the synthetic beans are registered for every repository of the build index, so two routed
     repositories of one entity are both candidates for `BasicRepository<E, K>`: ambiguous, as two class beans are on
     the default data store. Documented in `usage.adoc`.
