@@ -76,10 +76,10 @@ public interface Dialect {
      * (which sets every attribute), which is suboptimal — dialects should override.
      */
     default SqlFragment updateSet(EntityModel<?> model, java.util.List<Attribute<?, ?>> attributes, Where where) {
-        StringBuilder sb = new StringBuilder("UPDATE \"").append(model.tableName()).append("\" SET ");
+        StringBuilder sb = new StringBuilder("UPDATE ").append(model.tableName()).append(" SET ");
         for (int i = 0; i < attributes.size(); i++) {
             if (i > 0) sb.append(", ");
-            sb.append('"').append(attributes.get(i).columnName()).append("\" = ?");
+            sb.append(attributes.get(i).columnName()).append(" = ?");
         }
         if (!(where instanceof Where.AlwaysTrue)) {
             sb.append(" WHERE ");

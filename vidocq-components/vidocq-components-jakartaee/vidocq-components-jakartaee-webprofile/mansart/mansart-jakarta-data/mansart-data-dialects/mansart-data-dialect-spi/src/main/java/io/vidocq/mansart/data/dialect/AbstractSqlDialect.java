@@ -122,7 +122,7 @@ public abstract class AbstractSqlDialect implements Dialect {
         for (Attribute<?, ?> a : model.attributes()) {
             if (a == model.id() && model.id().generated()) continue;
             if (!first) { cols.append(", "); vals.append(", "); }
-            cols.append('"').append(a.columnName()).append('"');
+            cols.append(a.columnName());
             vals.append('?');
             first = false;
         }
@@ -143,7 +143,7 @@ public abstract class AbstractSqlDialect implements Dialect {
         for (Attribute<?, ?> a : model.attributes()) {
             if (a == model.id()) continue;
             if (!first) sb.append(", ");
-            sb.append('"').append(a.columnName()).append("\" = ?");
+            sb.append(a.columnName()).append(" = ?");
             first = false;
         }
         appendWhere(sb, where, plan);
@@ -254,15 +254,15 @@ public abstract class AbstractSqlDialect implements Dialect {
     /** The table name, schema-qualified when the model carries a schema, both quoted. */
     protected String qualified(EntityModel<?> model) {
         return (model.schema() == null || model.schema().isEmpty())
-                ? "\"" + model.tableName() + "\""
-                : "\"" + model.schema() + "\".\"" + model.tableName() + "\"";
+                ? model.tableName()
+                : model.schema() + "." + model.tableName();
     }
 
     private void appendColumnList(StringBuilder sb, EntityModel<?> model) {
         boolean first = true;
         for (Attribute<?, ?> a : model.attributes()) {
             if (!first) sb.append(", ");
-            sb.append('"').append(a.columnName()).append('"');
+            sb.append(a.columnName());
             first = false;
         }
     }
@@ -272,7 +272,7 @@ public abstract class AbstractSqlDialect implements Dialect {
         boolean first = true;
         for (Attribute<?, ?> a : model.attributes()) {
             if (!first) sb.append(", ");
-            sb.append(rootAlias).append(".\"").append(a.columnName()).append('"');
+            sb.append(rootAlias).append('.').append(a.columnName());
             first = false;
         }
     }
@@ -289,17 +289,17 @@ public abstract class AbstractSqlDialect implements Dialect {
                     : plan.aliasByPath().get(path.prefix(path.steps().size() - 1));
             var step = path.steps().get(path.steps().size() - 1);
             sb.append(" INNER JOIN ");
-            if (!step.targetSchemaName().isEmpty()) sb.append('"').append(step.targetSchemaName()).append("\".");
-            sb.append('"').append(step.targetTableName()).append("\" ").append(alias)
-              .append(" ON ").append(parentAlias).append(".\"").append(step.foreignKeyColumn()).append('"')
-              .append(" = ").append(alias).append(".\"").append(step.referencedColumn()).append('"');
+            if (!step.targetSchemaName().isEmpty()) sb.append(step.targetSchemaName()).append('.');
+            sb.append(step.targetTableName()).append(' ').append(alias)
+              .append(" ON ").append(parentAlias).append('.').append(step.foreignKeyColumn())
+              .append(" = ").append(alias).append('.').append(step.referencedColumn());
         }
     }
 
     /** M8-3 — qualify a column with its owning table alias (root if plain attr, joined alias if joined). */
     private String col(Attribute<?, ?> a, Joins.Plan plan) {
-        if (plan.isEmpty()) return "\"" + a.columnName() + "\"";
-        return plan.tableAliasFor(a) + ".\"" + a.columnName() + "\"";
+        if (plan.isEmpty()) return a.columnName();
+        return plan.tableAliasFor(a) + "." + a.columnName();
     }
 
     private void appendWhere(StringBuilder sb, Where where, Joins.Plan plan) {

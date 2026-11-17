@@ -58,7 +58,7 @@ class MissingTableTest {
         assertThatThrownBy(() -> authors.save(hugo))
                 .isInstanceOf(MansartDataException.class)
                 .hasMessageContaining(Author.class.getName())
-                .hasMessageContaining("\"authors\"")
+                .hasMessageContaining("The table authors of entity")
                 .hasMessageContaining("Author → authors")
                 .hasMessageContaining("@Table(name = ")
                 .hasMessageContaining("db/migration");
@@ -67,14 +67,14 @@ class MissingTableTest {
     @Test
     void readsAndDerivedQueriesNameTheMissingTableWhenOtherTablesExist() throws Exception {
         AuthorRepository authors = stack("mansart-missing-other",
-                "CREATE TABLE \"other\" (\"id\" BIGINT PRIMARY KEY)").repository(AuthorRepository.class);
+                "CREATE TABLE other (id BIGINT PRIMARY KEY)").repository(AuthorRepository.class);
 
         assertThatThrownBy(authors::findAll).isInstanceOf(MansartDataException.class)
-                .hasMessageContaining("\"authors\"");
+                .hasMessageContaining("The table authors of entity");
         assertThatThrownBy(authors::count).isInstanceOf(MansartDataException.class)
-                .hasMessageContaining("\"authors\"");
+                .hasMessageContaining("The table authors of entity");
         assertThatThrownBy(() -> authors.findByName("Zola")).isInstanceOf(MansartDataException.class)
-                .hasMessageContaining("\"authors\"");
+                .hasMessageContaining("The table authors of entity");
     }
 
     @Test
@@ -84,26 +84,29 @@ class MissingTableTest {
         assertThatThrownBy(() -> runtime.findAll(EntityModels.of(Crate.class)))
                 .isInstanceOf(MansartDataException.class)
                 .hasMessageContaining(Crate.class.getName())
-                .hasMessageContaining("\"jdql_crates\"")
+                .hasMessageContaining("The table jdql_crates of entity")
                 .hasMessageContaining("named by its @Table");
     }
 
-    /** H2 upper-cases an unquoted name: {@code CREATE TABLE authors} makes {@code AUTHORS}, which Mansart's quoted
-     * {@code "authors"} does not match; H2 then answers 42S03 (a table of another case exists). */
+    /** Mansart leaves the name unquoted (MANSART-067), so H2 reads {@code authors} as {@code AUTHORS}, which a table
+     * created with the quoted name {@code "authors"} does not match; H2 then answers 42S03 (a table of another case
+     * exists). */
     @Test
-    void anUnquotedH2TableOfAnotherCaseIsReportedToo() throws Exception {
+    void aQuotedH2TableOfAnotherCaseIsReportedToo() throws Exception {
         AuthorRepository authors = stack("mansart-missing-case",
-                "CREATE TABLE authors (id BIGINT PRIMARY KEY, name VARCHAR(200))").repository(AuthorRepository.class);
+                "CREATE TABLE \"authors\" (id BIGINT PRIMARY KEY, name VARCHAR(200))")
+                .repository(AuthorRepository.class);
 
         assertThatThrownBy(authors::findAll).isInstanceOf(MansartDataException.class)
-                .hasMessageContaining("\"authors\"")
+                .hasMessageContaining("The table authors of entity")
+                .hasMessageContaining("Remove the quotes in the migration")
                 .hasMessageContaining("DATABASE_TO_LOWER=TRUE");
     }
 
     @Test
     void anotherSqlErrorKeepsItsMessage() throws Exception {
         AuthorRepository authors = stack("mansart-missing-column",
-                "CREATE TABLE \"authors\" (\"id\" BIGINT PRIMARY KEY)").repository(AuthorRepository.class);
+                "CREATE TABLE authors (id BIGINT PRIMARY KEY)").repository(AuthorRepository.class);
 
         assertThatThrownBy(authors::findAll).isInstanceOf(MansartDataException.class)
                 .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage()).doesNotContain("does not exist"));

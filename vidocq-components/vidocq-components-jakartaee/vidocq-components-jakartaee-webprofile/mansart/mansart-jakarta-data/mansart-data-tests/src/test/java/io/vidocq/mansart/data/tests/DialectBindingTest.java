@@ -130,7 +130,7 @@ class DialectBindingTest {
     @Test
     void postgresqlUpsertsOnTheIdConflict() {
         assertThat(new PostgresqlDialect().merge(_Author.$MODEL).sql()).isEqualTo(
-                "INSERT INTO \"authors\" (\"id\", \"name\") VALUES (?, ?) "
-                        + "ON CONFLICT (\"id\") DO UPDATE SET \"name\" = EXCLUDED.\"name\"");
+                "INSERT INTO authors (id, name) VALUES (?, ?) "
+                        + "ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name");
     }
 }

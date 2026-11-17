@@ -45,12 +45,12 @@ public final class H2Dialect extends AbstractSqlDialect {
         boolean first = true;
         for (Attribute<?, ?> a : model.attributes()) {
             if (!first) { cols.append(", "); vals.append(", "); }
-            cols.append('"').append(a.columnName()).append('"');
+            cols.append(a.columnName());
             vals.append('?');
             first = false;
         }
         String sql = "MERGE INTO " + qualified(model)
-                + " (" + cols + ") KEY (\"" + model.id().columnName() + "\") VALUES (" + vals + ")";
+                + " (" + cols + ") KEY (" + model.id().columnName() + ") VALUES (" + vals + ")";
         return new SqlFragment(sql, java.util.List.of());
     }
 
@@ -70,9 +70,10 @@ public final class H2Dialect extends AbstractSqlDialect {
     @Override
     public String undefinedTableHint(SQLException e) {
         return OTHER_CASE.equals(e.getSQLState())
-                ? "H2 has a table of another case: an unquoted CREATE TABLE stores its name in upper case, and Mansart"
-                        + " quotes its names. Quote the name in the migration, or add DATABASE_TO_LOWER=TRUE to the JDBC"
-                        + " URL."
+                ? "H2 has a table of another case: Mansart leaves a mapped name unquoted, as Jakarta Persistence does,"
+                        + " so H2 reads it in upper case, and the existing table was created with a quoted name."
+                        + " Remove the quotes in the migration, write the mapped name with them"
+                        + " (@Table(name = \"\\\"books\\\"\")), or add DATABASE_TO_LOWER=TRUE to the JDBC URL."
                 : null;
     }
 

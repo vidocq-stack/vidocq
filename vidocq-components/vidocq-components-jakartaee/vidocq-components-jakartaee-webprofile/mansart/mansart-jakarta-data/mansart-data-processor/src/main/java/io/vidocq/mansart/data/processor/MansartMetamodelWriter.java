@@ -115,35 +115,35 @@ final class MansartMetamodelWriter {
 
         switch (a.kind()) {
             case ID -> w.println("    public static final IdAttribute<" + entityRef + ", " + boxed + "> "
-                    + a.name() + " = new IdAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + a.name() + " = new IdAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + literal(a.columnName()) + "\", "
                     + boxed + CLASS_ARG + entityRef + CLASS_ARG + a.generated() + ", "
                     + getterMh + ", " + setterMh + ");");
             case VERSION -> w.println("    public static final VersionAttribute<" + entityRef + ", " + boxed + "> "
-                    + a.name() + " = new VersionAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + a.name() + " = new VersionAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + literal(a.columnName()) + "\", "
                     + boxed + CLASS_ARG + entityRef + CLASS_ARG + getterMh + ", " + setterMh + ");");
             case TEXT -> w.println("    public static final TextAttribute<" + entityRef + "> "
-                    + a.name() + " = new TextAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + a.name() + " = new TextAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + literal(a.columnName()) + "\", "
                     + entityRef + CLASS_ARG + a.nullable() + ", " + a.unique() + ", "
                     + a.length() + ", " + getterMh + ", " + setterMh + ");");
             case NUMERIC -> w.println("    public static final NumericAttribute<" + entityRef + ", " + boxed + "> "
-                    + a.name() + " = new NumericAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + a.name() + " = new NumericAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + literal(a.columnName()) + "\", "
                     + boxed + CLASS_ARG + entityRef + CLASS_ARG + a.nullable() + ", " + a.unique()
                     + ", 0, 0, " + getterMh + ", " + setterMh + ");");
             case BOOLEAN -> w.println("    public static final BooleanAttribute<" + entityRef + "> "
-                    + a.name() + " = new BooleanAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + a.name() + " = new BooleanAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + literal(a.columnName()) + "\", "
                     + entityRef + CLASS_ARG + a.nullable() + ", " + a.unique() + ", "
                     + getterMh + ", " + setterMh + ");");
             case TEMPORAL -> w.println("    public static final TemporalAttribute<" + entityRef + ", " + boxed + "> "
-                    + a.name() + " = new TemporalAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + a.name() + " = new TemporalAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + literal(a.columnName()) + "\", "
                     + boxed + CLASS_ARG + entityRef + CLASS_ARG + a.nullable() + ", " + a.unique()
                     + ", " + getterMh + ", " + setterMh + ");");
             case REFERENCE -> w.println("    public static final ReferenceAttribute<" + entityRef + ", " + boxed + "> "
-                    + a.name() + " = new ReferenceAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", "
+                    + a.name() + " = new ReferenceAttribute<>(\"" + a.name() + QUOTED_ARG_SEPARATOR + literal(a.columnName()) + "\", "
                     + boxed + CLASS_ARG + entityRef + CLASS_ARG + a.nullable() + ", " + a.unique()
-                    + ", false, \"" + a.referencedColumn() + "\", " + getterMh + ", " + setterMh + ");");
+                    + ", false, \"" + literal(a.referencedColumn()) + "\", " + getterMh + ", " + setterMh + ");");
             case ENUM -> w.println("    @SuppressWarnings({\"rawtypes\", \"unchecked\"})\n"
                     + "    public static final EnumAttribute " + a.name() + " = new EnumAttribute(\""
-                    + a.name() + QUOTED_ARG_SEPARATOR + a.columnName() + "\", " + boxed + CLASS_ARG
+                    + a.name() + QUOTED_ARG_SEPARATOR + literal(a.columnName()) + "\", " + boxed + CLASS_ARG
                     + entityRef + CLASS_ARG + a.nullable() + ", " + a.unique()
                     + ", io.vidocq.mansart.data.dialect.attribute.EnumStorage."
                     + (a.ordinalEnum() ? "ORDINAL" : "STRING") + ", "
@@ -152,11 +152,19 @@ final class MansartMetamodelWriter {
         w.println();
     }
 
+    /**
+     * A mapped name as the content of a Java string literal: a name written with double quotes, which delimit it
+     * (MANSART-067), keeps them in the generated metamodel.
+     */
+    private static String literal(String name) {
+        return name == null ? null : name.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
     private void writeModel(PrintWriter w, String entityRef, EntityDescriptor e) {
         w.println("    public static final EntityModel<" + entityRef + "> $MODEL = new EntityModel<>(");
         w.println("        " + entityRef + ".class,");
-        w.println("        \"" + e.tableName() + "\",");
-        w.println("        \"" + e.schema() + "\",");
+        w.println("        \"" + literal(e.tableName()) + "\",");
+        w.println("        \"" + literal(e.schema()) + "\",");
         w.println("        " + e.id().name() + ",");
         if (e.version() != null) {
             w.println("        Optional.of(" + e.version().name() + "),");

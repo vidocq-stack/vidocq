@@ -141,11 +141,29 @@ class MigrationTableCheckTest {
         assertThat(warnings("")).hasSize(1);
     }
 
+    /** MANSART-067 — a mapped name written with quotes is delimited: a quoted migration name matches it exactly. */
     @Test
-    void aQuotedNameMatchesOnlyItsExactCase() throws IOException {
+    void aQuotedNameMatchesADelimitedMappedNameOnlyInItsExactCase() throws IOException {
         migration("V1__a.sql", "CREATE TABLE \"BOOKS\" (id BIGINT);");
 
-        assertThat(warnings("")).hasSize(1);
+        assertThat(warnings("@Table(name = \"\\\"books\\\"\")")).hasSize(1);
+        assertThat(warnings("@Table(name = \"\\\"BOOKS\\\"\")")).isEmpty();
+    }
+
+    /** MANSART-067 — a mapped name without quotes is folded by the database, to a case the build cannot know: no
+     * warning for a quoted migration name of another case. */
+    @Test
+    void aQuotedNameMatchesAnUndelimitedMappedNameInAnyCase() throws IOException {
+        migration("V1__a.sql", "CREATE TABLE \"BOOKS\" (id BIGINT);");
+
+        assertThat(warnings("")).isEmpty();
+    }
+
+    @Test
+    void anUnquotedNameMatchesADelimitedMappedNameInAnyCase() throws IOException {
+        migration("V1__a.sql", "CREATE TABLE books (id BIGINT);");
+
+        assertThat(warnings("@Table(name = \"\\\"BOOKS\\\"\")")).isEmpty();
     }
 
     @Test

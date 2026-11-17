@@ -77,8 +77,8 @@ class RuntimeFallbackCallSiteTest {
         JdbcDataSource ds = new JdbcDataSource();
         ds.setURL("jdbc:h2:mem:runtime-fallback-call-site;DB_CLOSE_DELAY=-1");
         try (Connection c = ds.getConnection(); Statement s = c.createStatement()) {
-            s.execute("CREATE TABLE \"items\" (\"id\" BIGINT PRIMARY KEY, \"quantity\" INT)");
-            s.execute("INSERT INTO \"items\" VALUES (1, 2)");
+            s.execute("CREATE TABLE items (id BIGINT PRIMARY KEY, quantity INT)");
+            s.execute("INSERT INTO items VALUES (1, 2)");
         }
         try (var loader = new URLClassLoader(new URL[] {result.classes().toUri().toURL()},
                 getClass().getClassLoader())) {
@@ -90,7 +90,7 @@ class RuntimeFallbackCallSiteTest {
             assertThat(restock.invoke(repository, 3, 1L)).isEqualTo(1);
         }
         try (Connection c = ds.getConnection(); Statement s = c.createStatement();
-             var rs = s.executeQuery("SELECT \"quantity\" FROM \"items\" WHERE \"id\" = 1")) {
+             var rs = s.executeQuery("SELECT quantity FROM items WHERE id = 1")) {
             rs.next();
             assertThat(rs.getInt(1)).isEqualTo(8);
         }

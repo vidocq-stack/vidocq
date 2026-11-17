@@ -47,18 +47,18 @@ public final class PostgresqlDialect extends AbstractSqlDialect {
         boolean firstSet = true;
         for (Attribute<?, ?> a : model.attributes()) {
             if (!firstCol) { cols.append(", "); vals.append(", "); }
-            cols.append('"').append(a.columnName()).append('"');
+            cols.append(a.columnName());
             vals.append('?');
             firstCol = false;
             if (a == model.id()) continue;
             if (!firstSet) set.append(", ");
-            set.append('"').append(a.columnName()).append("\" = EXCLUDED.\"")
-               .append(a.columnName()).append('"');
+            set.append(a.columnName()).append(" = EXCLUDED.")
+               .append(a.columnName());
             firstSet = false;
         }
         String sql = "INSERT INTO " + qualified(model)
                 + " (" + cols + ") VALUES (" + vals + ") "
-                + "ON CONFLICT (\"" + model.id().columnName() + "\") DO UPDATE SET " + set;
+                + "ON CONFLICT (" + model.id().columnName() + ") DO UPDATE SET " + set;
         return new SqlFragment(sql, java.util.List.of());
     }
 

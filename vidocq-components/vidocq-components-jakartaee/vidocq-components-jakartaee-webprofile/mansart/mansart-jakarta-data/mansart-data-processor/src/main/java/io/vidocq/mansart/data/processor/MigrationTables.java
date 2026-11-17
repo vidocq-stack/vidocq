@@ -42,15 +42,24 @@ import java.util.stream.Stream;
  * {@code <class output>/db/migration}; {@code -Amansart.migrations=<dir>[,<dir>…]} names others.
  *
  * <p>Only {@code CREATE TABLE}, {@code CREATE VIEW} and {@code ALTER TABLE … RENAME TO} are read, comments and string
- * literals skipped. A quoted name must match exactly, an unquoted one in any case (databases fold unquoted names).</p>
+ * literals skipped. A quoted name must match a mapped name written with quotes exactly; otherwise the comparison
+ * ignores case (databases fold unquoted names).</p>
  */
 final class MigrationTables {
 
     /** One table name as a migration spells it. */
     private record Table(String name, boolean quoted) {
 
+        /**
+         * Whether this table is the one the mapped name {@code wanted} reaches. A mapped name written with double
+         * quotes is delimited (MANSART-067): against a quoted migration name it must match exactly. In every other
+         * pairing one side is unquoted, so the database folds it, to a case that depends on the database: the
+         * comparison ignores case rather than warn about a table that exists.
+         */
         boolean matches(String wanted) {
-            return quoted ? name.equals(wanted) : name.equalsIgnoreCase(wanted);
+            boolean delimited = wanted.length() > 1 && wanted.startsWith("\"") && wanted.endsWith("\"");
+            String bare = delimited ? wanted.substring(1, wanted.length() - 1) : wanted;
+            return quoted && delimited ? name.equals(bare) : name.equalsIgnoreCase(bare);
         }
     }
 

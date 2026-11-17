@@ -453,7 +453,7 @@ public final class JdqlExecutor {
             Attribute<?, ?> a = attrIndex.get(sa.attr());
             if (a == null) throw new MansartDataException("Unknown attribute: " + sa.attr());
             if (!setSql.isEmpty()) setSql.append(", ");
-            setSql.append('"').append(a.columnName()).append("\" = ");
+            setSql.append(a.columnName()).append(" = ");
             renderExpr(setSql, sa.value(), attrIndex, args, shape, bound, a.javaType());
         }
         return new SetClause(setSql.toString(), bound);
@@ -846,7 +846,7 @@ public final class JdqlExecutor {
             case JdqlAst.ExprAttr(var name) -> {
                 Attribute<?, ?> attr = attrIndex.get(name);
                 if (attr == null) throw new MansartDataException("Unknown attribute in SET: " + name);
-                sb.append('"').append(attr.columnName()).append('"');
+                sb.append(attr.columnName());
             }
             case JdqlAst.ExprArg(var arg) -> {
                 out.values().add(resolveArg(arg, callArgs, shape, targetType));

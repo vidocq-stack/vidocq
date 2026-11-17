@@ -165,7 +165,7 @@ class ProcessorNestedRepositoryTest {
         ds.setUser("sa");
         MansartData data = MansartData.builder().dataSource(ds).build();
         try (var c = ds.getConnection(); var s = c.createStatement()) {
-            s.execute("CREATE TABLE IF NOT EXISTS \"pets\" (\"id\" BIGINT PRIMARY KEY, \"name\" VARCHAR(100))");
+            s.execute("CREATE TABLE IF NOT EXISTS pets (id BIGINT PRIMARY KEY, name VARCHAR(100))");
         } catch (java.sql.SQLException e) {
             throw new IllegalStateException(e);
         }

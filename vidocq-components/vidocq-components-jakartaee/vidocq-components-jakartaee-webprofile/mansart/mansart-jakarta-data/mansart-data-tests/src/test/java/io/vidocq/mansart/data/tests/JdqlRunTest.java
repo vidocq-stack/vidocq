@@ -67,11 +67,11 @@ class JdqlRunTest {
     @BeforeEach
     void resetRows() throws Exception {
         try (Connection c = dataSource.getConnection(); Statement s = c.createStatement()) {
-            s.execute("DROP TABLE IF EXISTS \"jdql_shipments\"");
-            s.execute("CREATE TABLE \"jdql_shipments\" (\"id\" BIGINT PRIMARY KEY, \"reference\" VARCHAR(20),"
-                    + " \"status\" VARCHAR(20), \"shipped_on\" DATE, \"logged_at\" TIMESTAMP WITH TIME ZONE,"
-                    + " \"weight\" NUMERIC(10, 2), \"parcels\" INTEGER, \"fragile\" BOOLEAN)");
-            s.execute("INSERT INTO \"jdql_shipments\" VALUES"
+            s.execute("DROP TABLE IF EXISTS jdql_shipments");
+            s.execute("CREATE TABLE jdql_shipments (id BIGINT PRIMARY KEY, reference VARCHAR(20),"
+                    + " status VARCHAR(20), shipped_on DATE, logged_at TIMESTAMP WITH TIME ZONE,"
+                    + " weight NUMERIC(10, 2), parcels INTEGER, fragile BOOLEAN)");
+            s.execute("INSERT INTO jdql_shipments VALUES"
                     + " (1, 'A-1', 'PENDING', DATE '2026-09-01',"
                     + " TIMESTAMP WITH TIME ZONE '2026-09-01 08:00:00+00', 2.50, 1, TRUE),"
                     + " (2, 'B-2', 'SHIPPED', DATE '2026-09-10',"

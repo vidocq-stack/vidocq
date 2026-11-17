@@ -68,10 +68,10 @@ class JdqlEnumLiteralTest {
     @BeforeEach
     void resetRows() throws Exception {
         try (Connection c = dataSource.getConnection(); Statement s = c.createStatement()) {
-            s.execute("DROP TABLE IF EXISTS \"jdql_crates\"");
-            s.execute("CREATE TABLE \"jdql_crates\" (\"id\" BIGINT PRIMARY KEY, \"label\" VARCHAR(60),"
-                    + " \"status\" VARCHAR(20), \"kind\" VARCHAR(20))");
-            s.execute("INSERT INTO \"jdql_crates\" VALUES"
+            s.execute("DROP TABLE IF EXISTS jdql_crates");
+            s.execute("CREATE TABLE jdql_crates (id BIGINT PRIMARY KEY, label VARCHAR(60),"
+                    + " status VARCHAR(20), kind VARCHAR(20))");
+            s.execute("INSERT INTO jdql_crates VALUES"
                     + " (1, 'com.example.payload.Gadget.RUN', 'PENDING', 'STANDARD'),"
                     + " (2, 'glass', 'SHIPPED', 'FRAGILE'),"
                     + " (3, 'books', 'DELIVERED', 'STANDARD')");

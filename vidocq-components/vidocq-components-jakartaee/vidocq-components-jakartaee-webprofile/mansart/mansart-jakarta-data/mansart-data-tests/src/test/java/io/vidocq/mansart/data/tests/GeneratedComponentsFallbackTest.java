@@ -82,7 +82,7 @@ class GeneratedComponentsFallbackTest {
         JdbcDataSource ds = new JdbcDataSource();
         ds.setURL("jdbc:h2:mem:" + name + ";DB_CLOSE_DELAY=-1");
         try (Connection c = ds.getConnection(); Statement s = c.createStatement()) {
-            s.execute("CREATE TABLE \"books\" (\"id\" BIGINT PRIMARY KEY, \"title\" VARCHAR(100))");
+            s.execute("CREATE TABLE books (id BIGINT PRIMARY KEY, title VARCHAR(100))");
         }
         return MansartData.builder().dataSource(ds).build();
     }

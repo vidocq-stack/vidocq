@@ -108,7 +108,7 @@ public final class RepositoryRuntime {
         boolean first = true;
         for (Attribute<E, ?> a : model.attributes()) {
             if (!first) sb.append(", ");
-            sb.append('"').append(a.columnName()).append("\" ")
+            sb.append(a.columnName()).append(' ')
               .append(sqlDdlType(ColumnValues.ddlType(a)));
             if (a == model.id()) sb.append(" PRIMARY KEY");
             first = false;
@@ -296,7 +296,7 @@ public final class RepositoryRuntime {
                               Class<T> resultType, Where where, Object... args) {
         // M8-3 — go through dialect.selectColumns so joined predicates lower correctly. The
         // aggregate column itself stays unjoined (M8-1 scope: aggregate over a flat attribute).
-        String aggExpr = op + "(\"" + attr.columnName() + "\")";
+        String aggExpr = op + "(" + attr.columnName() + ")";
         return scalarSelect(model, new io.vidocq.mansart.data.dialect.Dialect.ProjectedColumn.Expr(aggExpr),
                 resultType, where, args);
     }
@@ -811,7 +811,7 @@ public final class RepositoryRuntime {
 
     private String qualifiedTable(EntityModel<?> model) {
         return (model.schema() == null || model.schema().isEmpty())
-                ? "\"" + model.tableName() + "\""
-                : "\"" + model.schema() + "\".\"" + model.tableName() + "\"";
+                ? model.tableName()
+                : model.schema() + "." + model.tableName();
     }
 }

@@ -94,10 +94,10 @@ class RuntimeFindWithoutParameterNamesTest {
         JdbcDataSource ds = new JdbcDataSource();
         ds.setURL("jdbc:h2:mem:runtime-find-nameless;DB_CLOSE_DELAY=-1");
         try (Connection c = ds.getConnection(); Statement s = c.createStatement()) {
-            s.execute("CREATE TABLE IF NOT EXISTS \"books\" (\"id\" BIGINT PRIMARY KEY, \"title\" VARCHAR(200),"
-                    + " \"author\" VARCHAR(200))");
-            s.execute("DELETE FROM \"books\"");
-            s.execute("INSERT INTO \"books\" VALUES (1, 'Germinal', 'Zola'), (2, 'Nana', 'Zola'),"
+            s.execute("CREATE TABLE IF NOT EXISTS books (id BIGINT PRIMARY KEY, title VARCHAR(200),"
+                    + " author VARCHAR(200))");
+            s.execute("DELETE FROM books");
+            s.execute("INSERT INTO books VALUES (1, 'Germinal', 'Zola'), (2, 'Nana', 'Zola'),"
                     + " (3, 'Candide', 'Voltaire')");
         }
         return MansartData.builder().dataSource(ds).build().runtimeRepository(loader.loadClass(name));
