@@ -26,9 +26,9 @@ import jakarta.persistence.Table;
 
 /**
  * One entity for both: the persistence unit and the repository map the same table. The names are explicit, so the two
- * mappings name the same table and columns whatever each one's naming rule is, and lower case: the repository quotes
- * them, the unit does not, and PostgreSQL folds a name it is given unquoted to lower case. The H2 databases of
- * {@code vidocq.properties} fold the same way ({@code DATABASE_TO_LOWER}).
+ * mappings name the same table and columns whatever each one's default name is. Neither quotes them (Mansart Data
+ * follows Jakarta Persistence since MANSART-067), so the database folds them the same way for both, whatever the case
+ * written here.
  */
 @Entity
 @Table(name = "item")

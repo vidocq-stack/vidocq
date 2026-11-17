@@ -64,7 +64,7 @@ public class DatabaseInspectorResource {
         List<Map<String, Object>> rows = new ArrayList<>();
         try (Connection c = ds.getConnection();
              Statement s = c.createStatement();
-             ResultSet rs = s.executeQuery("SELECT \"id\", \"name\", \"price\" FROM \"products\" ORDER BY \"id\"")) {
+             ResultSet rs = s.executeQuery("SELECT id, name, price FROM products ORDER BY id")) {
             while (rs.next()) {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("id", rs.getLong("id"));
@@ -89,7 +89,7 @@ public class DatabaseInspectorResource {
         List<Map<String, Object>> rows = new ArrayList<>();
         try (Connection c = auditDataSource.getConnection();
              Statement s = c.createStatement();
-             ResultSet rs = s.executeQuery("SELECT \"id\", \"action\" FROM \"audit_log\" ORDER BY \"id\"")) {
+             ResultSet rs = s.executeQuery("SELECT id, action FROM audit_log ORDER BY id")) {
             while (rs.next()) {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("id", rs.getLong("id"));
