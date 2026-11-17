@@ -413,7 +413,9 @@ provider and registration fragment. Register every required provider in module-i
 that delegates every call to the contextual instance. A generated table serves it as it serves its target when a
 `io.vidocq.peano.spi.ProxyUnwrapper` service, found next to the accessor providers, names the target as the class
 the proxy stands for (`AccessorTable.serves`). Vidocq provides the unwrapper for Vauban's proxies. Without one, the
-proxy falls through to the rest of the chain, as any subclass does.
+proxy falls through to the rest of the chain, as any subclass does. An unwrapper is registered once per class and
+stays registered as long as the class loader of that class lives: one that an application jar brings leaves with the
+application layer at a hot reload of `vidocq dev`.
 
 Binary descendants are not inferred; unselected private descendants are skipped.
 This family selection depends on compilation roots and is not build-tool isolating

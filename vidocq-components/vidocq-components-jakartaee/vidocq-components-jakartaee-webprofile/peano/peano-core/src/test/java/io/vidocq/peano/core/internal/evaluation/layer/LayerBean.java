@@ -19,8 +19,11 @@
  */
 package io.vidocq.peano.core.internal.evaluation.layer;
 
-/** A class of the simulated application layer; {@code CatalogLayerLeakTest} defines it again in each layer's own loader. */
-public final class LayerBean {
+/**
+ * A class of the simulated application layer; {@code CatalogLayerLeakTest} defines it again in each layer's own loader.
+ * It is open, as a normal-scoped bean is: {@link LayerBeanProxy} extends it.
+ */
+public class LayerBean {
     /** Creates the bean. */
     public LayerBean() {
         // Instantiated reflectively by the test, once per simulated layer.

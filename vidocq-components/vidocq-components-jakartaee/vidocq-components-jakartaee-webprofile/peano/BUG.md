@@ -3,6 +3,24 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## EL-025 · 2026-11-17 · A proxy unwrapper brought by an application layer kept that layer reachable
+
+- Symptom: latent leak listed by the layer audit (Vidocq/vidocq#631). When an application jar names a
+  `ProxyUnwrapper` of its own in `META-INF/services`, each hot reload of `vidocq dev` registers the unwrapper class of
+  the new layer and the discarded layer stays reachable: one more class loader alive per reload. No application
+  measured so far brings one (the unwrapper of Vauban's proxies comes from the runtime layer), so the leak was not
+  seen in a heap dump.
+- Minimal reproduction: `CatalogLayerLeakTest.aDiscardedLayerThatBroughtAProxyUnwrapperIsCollectable` (a layer whose
+  services file names its own unwrapper, an expression evaluated on the layer's proxy under it, the layer dropped:
+  its `WeakReference<ClassLoader>` is still set after a collection loop).
+- Cause: `ProxyUnwrappers.UNWRAPPERS`, a static list of `peano-api`, held each registered unwrapper strongly and
+  nothing removes one. `peano-api` belongs to the runtime layer, which outlives every application layer.
+- Status: fixed. Each unwrapper is held by its own class, in a `ClassValue` (the idiom of EL-023 for the catalogs):
+  it lives as long as the class loader that defined it. The static list keeps weak references in registration order
+  and drops the cleared ones at the next registration.
+  `CatalogLayerLeakTest.theProxyUnwrapperOfALiveLayerOutlivesACollection` checks the other side: an unwrapper nobody
+  else holds still answers after a collection while its layer lives.
+
 ## EL-024 · 2026-11-08 · AccessorCatalogs handed its catalog to a ClassValue through a ThreadLocal
 
 - Symptom: AGENTS.md constraint 6 (no `ThreadLocal`) was broken by `AccessorCatalogs.PENDING`, found by the shared
