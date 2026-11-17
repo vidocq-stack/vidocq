@@ -119,6 +119,20 @@ final class Fixture {
         fail("no '" + text + "' within " + TIMEOUT + ":\n" + read(log));
     }
 
+    /** Polls {@code log} until it holds {@code text} {@code count} times; fails fast if the subprocess dies first. */
+    static void awaitOccurrences(Process process, Path log, String text, int count) throws Exception {
+        long deadline = System.currentTimeMillis() + TIMEOUT.toMillis();
+        while (occurrences(log, text) < count) {
+            if (System.currentTimeMillis() > deadline) {
+                fail("no '" + text + "' " + count + " times within " + TIMEOUT + ":\n" + read(log));
+            }
+            if (process.waitFor(250, TimeUnit.MILLISECONDS) && occurrences(log, text) < count) {
+                fail("the process exited with " + process.exitValue() + " before '" + text + "' was printed " + count
+                        + " times:\n" + read(log));
+            }
+        }
+    }
+
     static int occurrences(Path log, String text) {
         String all = read(log);
         int count = 0;

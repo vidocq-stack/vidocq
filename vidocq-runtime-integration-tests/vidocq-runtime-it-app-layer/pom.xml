@@ -29,6 +29,9 @@
         <it.settings>${project.build.directory}/it-settings.xml</it.settings>
         <!-- maven-invoker-plugin reads invoker.skip only; -DskipTests skips the staging too. -->
         <invoker.skip>${skipTests}</invoker.skip>
+        <!-- The extensions below are here for the staging, not compiled by this module: their codegen bundles are
+             dependencies to stage, not processor paths. -->
+        <vidocq.checkpom.skip>true</vidocq.checkpom.skip>
     </properties>
 
     <dependencies>
@@ -57,6 +60,30 @@
         <dependency>
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-ibarra-pages-extension</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- The application whose hot reloads must release their layer (vidocq#631): REST and configuration, with
+             the codegen bundle of each, a jar on the fixture's annotationProcessorPaths. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
+            <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
         <!-- A jar, as the fixture's annotationProcessorPaths entry: a pom-typed dependency stages the pom only,

@@ -68,6 +68,9 @@ class AppLayerDevIT {
             }
             assertEquals(0, Fixture.occurrences(log, "LOOKUP-MISSING"), Fixture.read(log));
             assertEquals(0, Fixture.occurrences(log, "TOOL-PROVIDERS 2"), Fixture.read(log));
+            // The control of AppLayerReloadLeakIT: the poller thread keeps the layer the reload discarded, and the
+            // count of the layer loaders reads two, the discarded layer and the one that runs.
+            assertEquals(2, LayerLoaders.settled(mvn, LayerLoaders.childPid(log), 2), () -> Fixture.read(log));
 
             // A method body only: the agent redefines the class in place, and the application keeps running.
             Path tool = project.resolve("app/src/main/java/acme/app/AppTool.java");

@@ -53,6 +53,34 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Not covered**: a Maven stopped from outside the dev loop, a Ctrl+C in the middle of a recompile or of a
   `mvn compile`, can leave the same output; `mvn clean`, or saving a Java source, repairs it.
 
+## BUG-20261116-11 — A hot reload keeps the layer of an application that served a file of a static mount on the class path
+
+- **Date**: 2026-11-16
+- **Status**: FIXED in Chappe (CHAPPE-061, Vidocq/chappe#87, in the SNAPSHOT since `0.4.0-20261116.232917-15`). Here,
+  the guard that found it: `AppLayerReloadLeakIT` (Vidocq/vidocq#631).
+- **Module**: Chappe `chappe-api` (`StaticFileHandler`); seen through `vidocq-runtime-chappe-webserver-extension`
+  (`StaticMountHandlerProvider`)
+- **Symptom**: under `vidocq:dev`, each layer swap of an application with a static mount on the class path
+  (`vidocq.http.mount.<name>.type=static`, `.classpath=...`) keeps the layer it discards, once the mount served one
+  file during that boot. After 5 reloads the child JVM holds 6 `VaubanClassLoader` where one is expected: every
+  class of the application, its beans and its generated code stay, for each reload, until the JVM stops. Nothing is
+  logged: the reset names leaked threads, and no thread is involved.
+- **Repro**: `./mvnw -Pit -pl vidocq-runtime-integration-tests/vidocq-runtime-it-app-layer verify
+  -Dit.test=AppLayerReloadLeakIT` against Chappe before the fix: `6 application layers are alive after 5 reloads,
+  one is expected`. By hand: `vidocq:dev` on the fixture `src/it/fixture/reload`, add a resource method five times,
+  load `/index.html` after each boot, then `jcmd <pid> GC.class_histogram` and read the row of
+  `io.vidocq.vauban.classloader.VaubanClassLoader`.
+- **Cause**: found by elimination, then by a test in Chappe. The same five reloads with the REST and configuration
+  requests alone leave one layer; with the static request alone, six. `StaticFileHandler` cached the index of each
+  class loader in a static map keyed by the loader (`StaticIndex.PER_LOADER`), filled at the first class path
+  lookup and never emptied; the mount is built on the context class loader, which is the application layer's.
+  The field was on the list of latent leaks of 2026-11-02 (vidocq-workspace#40, item 26), "none held a layer in the
+  applications measured": the audit application had served no static file.
+- **Fix**: in Chappe, each classpath source owns its index and no static is left (CHAPPE-061). Nothing to change in
+  the runtime. `AppLayerReloadLeakIT` stays as the guard: REST with a JSON body, a configuration value and a static
+  mount, five swaps, one layer loader alive; `AppLayerDevIT` is its control (a thread keeps the discarded layer,
+  the count reads two).
+
 ## BUG-20261116-10 — The build of `main` fails when the Grafana LGTM container of `OtelDevServiceTest` needs more than its three minutes
 
 - **Date**: 2026-11-16
