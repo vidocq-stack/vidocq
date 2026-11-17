@@ -100,7 +100,8 @@ class MissingTableTest {
         assertThatThrownBy(authors::findAll).isInstanceOf(MansartDataException.class)
                 .hasMessageContaining("The table authors of entity")
                 .hasMessageContaining("Remove the quotes in the migration")
-                .hasMessageContaining("DATABASE_TO_LOWER=TRUE");
+                .hasMessageContaining("DATABASE_TO_LOWER=TRUE")
+                .rootCause().hasMessageContaining("Table \"AUTHORS\" not found (candidates are: \"authors\")");
     }
 
     @Test
