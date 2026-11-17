@@ -84,4 +84,10 @@ class WeldPortabilityTest {
     void gaugeIsRegistered() {
         assertEquals(7L, registry().getGauge(new MetricID("orders.queue")).getValue().longValue());
     }
+
+    /** DRC-015: the raw class of a bounded generic bean is not one of its types, here as on Vauban. */
+    @Test
+    void theGaugeOfABoundedGenericBeanIsRead() {
+        assertEquals(3L, registry().getGauge(new MetricID("orders.level")).getValue().longValue());
+    }
 }

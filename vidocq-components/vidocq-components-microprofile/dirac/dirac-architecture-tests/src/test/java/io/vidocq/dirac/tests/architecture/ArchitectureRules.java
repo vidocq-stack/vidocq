@@ -158,7 +158,10 @@ final class ArchitectureRules {
             "io.vidocq.dirac.cdi.internal.TimedInterceptor",
             "internals.adoc, Counted interceptor: the same scheme for @Timed",
             "io.vidocq.dirac.cdi.internal.MetricRegistryProducerBean",
-            "internals.adoc: reads the @Metric and @RegistryScope qualifiers of the injection point");
+            "internals.adoc: reads the @Metric and @RegistryScope qualifiers of the injection point",
+            "io.vidocq.dirac.cdi.internal.GaugeRegistrationBean",
+            "internals.adoc, Startup pipeline (DRC-015): reads the bean types of a bean, a ParameterizedType and its"
+                    + " raw type, no member, to tell the bean of a generic gauge class from a producer it declares");
 
     /**
      * Workspace AGENTS.md, "Maximum static code generation", and internals.adoc: reflection remains only as the

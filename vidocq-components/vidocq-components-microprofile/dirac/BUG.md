@@ -6,6 +6,42 @@ minimal repro, cause hypothesis, status.
 
 ---
 
+## DRC-018 — The gauge of a class with a bounded type variable that also declares a producer cannot be read
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/bean-class-lookup`, with DRC-015. Test: `GaugeBeanLookupCdiIntegrationTest.theGaugeOfABoundedGenericBeanThatDeclaresAProducerIsRead` (the value is read, the producer never runs).
+- **Reported by**: the tests of DRC-015
+- **Minimal reproduction**: `@Dependent class Level<T extends Number>` with a `@Gauge` method and a `@Produces` method. Each read of the gauge failed: `DiracException: Unable to read gauge value`, caused by `AmbiguousResolutionException: Ambiguous dependency: 2 beans match` (before the first draft of DRC-015: `UnsatisfiedResolutionException`).
+- **Cause**: a producer is a bean of the class that declares it (`Bean.getBeanClass()`), so two beans of that class have `@Default`. Only their bean types tell them apart: the bean of the class has a `ParameterizedType` whose raw type is the class, a producer has none. `GaugeRegistrationBean` now keeps only the beans that have one, before `resolve` and `getReference`. Reading those types names `java.lang.reflect` types, which `ArchitectureRules.NO_REFLECTION` (the legacy form of the `vidocq-archrules` rule) allows only in a documented fallback: `GaugeRegistrationBean` is one now, with its reason, and `internals.adoc` says why. It reads no member.
+
+## DRC-017 — The gauge of a bean that has only another qualifier than `@Default` cannot be read
+
+- **Date**: 2026-11-17
+- **Status**: OPEN. Found while fixing DRC-015 and left as it was: that fix keeps the qualifiers of the lookup. Disabled reproduction: `GaugeBeanLookupCdiIntegrationTest.theGaugeOfABeanWithAnotherQualifierIsRead`.
+- **Reported by**: the tests of DRC-015
+- **Minimal reproduction**: an `@ApplicationScoped` class with a qualifier of its own and a `@Gauge` method. The container starts. Each read of the gauge fails: `DiracException: Unable to read gauge value`, caused by `UnsatisfiedResolutionException: No bean found for type: …TaggedLevel with qualifiers: [@Any, @Default]`.
+- **Cause**: `GaugeRegistrationBean` looks the bean up by its class and names no qualifier, so the lookup asks for `@Default`.
+
+## DRC-016 — A `@Dependent` bean with a `@Gauge` gets a new instance at every read of the gauge, and on Weld each one is kept until the container stops
+
+- **Date**: 2026-11-17
+- **Status**: OPEN. Found while fixing DRC-015, not fixed with it. Disabled reproduction: `GaugeBeanLookupCdiIntegrationTest.aDependentBeanIsCreatedOnceForItsGauge`.
+- **Reported by**: the tests of DRC-015
+- **Minimal reproduction**: a `@Dependent` class with a `@Gauge` method and a counter in its constructor. Read the gauge three times: three instances are created (`expected: <1> but was: <3>`, Vauban `0.4.0-SNAPSHOT` of 455067f5).
+- **What happens to those instances** (measured 2026-11-18 with a throwaway probe, not committed: 50 reads, each instance held by a `WeakReference`, ten `System.gc()`):
+  - **Weld**: a memory leak. 50 instances created, 50 still reachable while the container is open, 0 destroyed; the 50 `@PreDestroy` run when the container closes. Each instance is a dependent object of the `Instance<Object>` injected into `GaugeRegistrationBean`, an application-scoped bean: memory grows by one instance per read (one per gauge per scrape) until shutdown.
+  - **Vauban** (455067f5): no leak, but no destruction either. 50 created, 0 still reachable, 0 `@PreDestroy` while open and 0 after the close. `beans.select(beanClass)` makes a new `InstanceImpl` at each read; the instance and its `CreationalContext` go into that child's `dependentInstances` map (`InstanceImpl.get`), and the parent creational context of an `Instance` injected into a constructor is `null` (`VaubanContainer.instanceParameter`). Dirac drops the child, so the garbage collector takes the instance, and its `@PreDestroy` never runs.
+- **Cause**: `GaugeRegistrationBean` calls `Instance.get()` at each read. For a normal-scoped bean that gives the same client proxy each time. For a `@Dependent` bean each call creates an instance. A class with a bounded type variable is not concerned: since DRC-015 its instance is created once and released when the container stops.
+
+## DRC-015 — The gauge of a bean whose class has a bounded type variable cannot be read
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/bean-class-lookup`. `GaugeRegistrationBean` decides once per gauge class how its target is obtained, at the first read of one of its gauges, and keeps the decision, a failed one too. Every class is looked up by type, as before. A class with type variables that this lookup does not find is read on its own bean: among the container's beans that have `@Default` (`BeanContainer`, the standard API), the one whose bean class is that class and that has a parameterized type of it. A producer the class declares and a class whose bean types `@Typed` restricts are left out before `getReference`: a read never runs a producer, and such a gauge stays unsatisfied, as before. Dirac creates that instance once and releases it when the container stops. When the resolution or the creation fails, its creational context is released, and each read fails with that cause without trying again. A read once the container stopped creates no instance. Tests: `GaugeBeanLookupCdiIntegrationTest` on Vauban, `WeldPortabilityTest.theGaugeOfABoundedGenericBeanIsRead` and `BoundedGaugeBeanLifecycleTest` on Weld.
+- **Reported by**: the audit of the lookups by raw class made for Vidocq/vauban#335 (Vidocq/vidocq#652). The ticket expected a start that fails once #335 is merged. The tests show something else: the start succeeds and each read of the gauge fails, already on the Vauban of `main` (455067f5) and on Weld.
+- **Minimal reproduction**: `@Dependent class Level<T extends Number>` with a `@Gauge` method. Read the gauge: `DiracException: Unable to read gauge value`, caused by `UnsatisfiedResolutionException: No bean found for type: …Level with qualifiers: [@Any, @Default]` (Weld: `WELD-001334: Unsatisfied dependencies for type Level with qualifiers @Default`).
+- **Cause**: the target was `beans.select(beanClass).get()`. The raw class of a bean whose class has a bounded type variable is not a type that bean can be looked up by (CDI 4.1 §5.2.4).
+- **Not covered**: DRC-017 and DRC-016, open. DRC-018 (such a class that also declares a producer) is fixed with it.
+
 ## DRC-010 — Every bean class loaded and scanned by reflection at start-up for metric annotations
 
 - **Date**: 2026-11-02
