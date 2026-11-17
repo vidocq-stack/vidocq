@@ -32,6 +32,7 @@ import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -290,6 +291,28 @@ final class SourceWatcher implements AutoCloseable {
                 // a root we cannot read yet is not fatal: its later events still count once registered
             }
         }
+    }
+
+    /**
+     * The watched files of {@code dirs} saved since {@code since}, in milliseconds, in the order of their paths: what
+     * a watcher would have reported, had it been there from that time (BUG-20261117-05). A directory that does not
+     * exist holds no file.
+     */
+    static List<Path> savedSince(List<Path> dirs, FileTime since) throws IOException {
+        List<Path> saved = new ArrayList<>();
+        for (Path dir : dirs) {
+            if (!Files.isDirectory(dir)) {
+                continue;
+            }
+            try (Stream<Path> files = Files.find(dir, Integer.MAX_VALUE, (file, attributes) ->
+                    attributes.isRegularFile() && isWatchedExtension(file.getFileName().toString())
+                            && attributes.lastModifiedTime().toMillis() >= since.toMillis())) {
+                files.forEach(saved::add);
+            } catch (UncheckedIOException e) {   // Files.find reports an unreadable directory unchecked
+                throw e.getCause();
+            }
+        }
+        return saved.stream().sorted().toList();
     }
 
     /** Whether {@code file} lies under one of {@code roots} (absolute, normalized). */

@@ -799,6 +799,33 @@ class VidocqDevMojoTest {
         assertEquals(List.of(), warnings);
     }
 
+    /**
+     * BUG-20261117-05: what was saved while {@code vidocq:dev} started is compiled before the application starts.
+     * When the watch ends while it does not compile, there is no application to start.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    @Timeout(30)
+    void noApplicationStartsWhenTheWatchEndsWhileTheSavesOfTheStartDoNotCompile(@TempDir Path dir) throws Exception {
+        Path source = dir.resolve("src/main/java/acme/Menu.java");
+        Files.createDirectories(source.getParent());
+        Files.writeString(source, "class Menu {\n");
+        Path maven = Files.writeString(dir.resolve("fake-mvn"), "#!/bin/sh\nexit 1\n");
+        assertTrue(maven.toFile().setExecutable(true));
+        List<String> info = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        SavedWhileStarting starting = new SavedWhileStarting(List.of(dir.resolve("src/main/java")),
+                FileTime.from(Instant.now().minusSeconds(60)), info::add, warnings::add);
+        SavedWhileCompiling saved = new SavedWhileCompiling(List.of(dir.resolve("src/main/java")),
+                dir.resolve("target/classes"), "recompile", info::add, warnings::add);
+
+        assertFalse(VidocqDevMojo.compileBeforeTheStart(starting, saved, new RecompileRunner(dir, maven.toString()),
+                () -> false, null));
+
+        assertEquals(List.of("What was saved while vidocq:dev started does not compile (exit 1): fix the sources,"
+                + " vidocq dev compiles again on the next change."), warnings);
+    }
+
     @Test
     void theNextRecompileWaitsForTheAcknowledgement(@TempDir Path dir) throws Exception {
         Path reloadFile = dir.resolve(".vidocq-dev-reload");

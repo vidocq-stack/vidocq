@@ -5,6 +5,86 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261117-05 — A save made while `vidocq:dev` starts is not applied: the application starts without it, and nothing says so
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/dev-save-while-starting`
+- **Module**: `vidocq-runtime-maven-plugin` (new `SavedWhileStarting`; `SourceWatcher`, `SavedWhileCompiling`,
+  `HotSwapSession`, `VidocqDevMojo`)
+- **Symptom**: found by a probe written for the case BUG-20261117-03 left as not covered. On the Bistro example
+  (`vidocq-runtime-foy-servlet-example`) the probe starts `mvn process-classes vidocq:dev`, appends a method to
+  `Menu.java` at a chosen moment of the start, and reads `Menu.class` once the application runs. Four rounds of five
+  lost the save:
+  - saved 0.4 s after the `Compiling` line of the compiler plugin, while javac ran: the class is newer than the
+    source and has no such method; the application boots 3.6 s later, and no recompile follows;
+  - saved at the banner of the `dev` goal, 5.4 s before the application boots;
+  - saved at the `Watching:` line, 0.5 s before the application boots;
+  - under a bare `mvn vidocq:dev`, saved at the banner of the goal, 0.8 s before the application boots.
+
+  The fifth save, 1.5 s after `Compiling`, came 0.2 s before the boot, when the dev loop watched already: `Hot reload
+  signalled after 6556 ms (layer swap: Menu gained a method savedAtStart1).` A lost save shows nowhere: the
+  application runs the old code until a watched file is saved again, a Java source for the save javac missed.
+- **Repro**: the state, without the race: build the project, append a method to a source, then stamp the source and
+  its class ahead of the clock, the class last. That is what a save leaves when javac read the source before it and
+  wrote the class after it. Run `mvn vidocq:dev`: the application starts without the method.
+  `ContinuousTestingDevGoalIT.aSourceSavedWhileVidocqDevStartsIsCompiledBeforeTheApplicationStarts` does so. The race
+  itself: save a source while `mvn process-classes vidocq:dev` starts, before the line `Child JVM started`.
+- **Cause**: `VidocqDevMojo` registers its `SourceWatcher` last, in `runSession`: after the build of the command line,
+  `ensureCompiled`, the launch, the dev services, the dev tools and the setup of the tests. The line `Watching: …` is
+  printed before the dev services open, seconds before the watch on an application with containers. So a save falls
+  in one of three windows that nobody watches:
+  1. while the build compiles, the `process-classes` of the command line or the first build of `vidocq:dev`: javac
+     read the source before the save and writes the class after it. The compiler plugin takes the source for
+     compiled, as in BUG-20261117-03, and no `SavedWhileCompiling` noted that compile;
+  2. between the build and the watch: nothing compiles the save;
+  3. a resource, in either window: the build copied the file as it was.
+
+  On the Bistro example the second window alone is five seconds; dev services make it longer.
+- **Fix**: `SavedWhileStarting`. Once the watcher is registered, it looks for the watched files (the directories of
+  `vidocq.dev.watchDirs`, the extensions the watcher reports) whose time is not before the start of Maven
+  (`MavenSession.getStartTime()`), in milliseconds. When there is one, `vidocq:dev` recompiles before the application
+  starts, and names the files, three at most: `Menu.java was saved while vidocq:dev started: compiling it before the
+  application starts.`
+  - The watcher is registered first and the files are read next: a later save is the watcher's, and
+    BUG-20261117-03 covers the one made while this recompile runs.
+  - `SavedWhileCompiling.anEarlierCompileStarted` tells the tracker of the dev loop when the build started. A source
+    saved since, whose class is not older, loses its class before the recompile: `Menu.java was saved since the build
+    started and its class is not older: compiling it again.` Without it, the compiler plugin would take the source of
+    the first window for compiled once more.
+  - No margin before the start of Maven: an IDE that saves every file before it runs Maven would pay a recompile at
+    each start. A start with no save compiles nothing more.
+  - While that recompile fails, a warning says so, `What was saved while vidocq:dev started does not compile (exit
+    1): fix the sources, vidocq dev compiles again on the next change.`, and `vidocq:dev` waits for the next change,
+    as it does for a first build that fails: there is no application to keep up.
+  - `HotSwapSession.compiledAgainBeforeTheStart` moves the base of the hot swap session to the output the child
+    loads. Without it, a save taken back once the application runs would compare equal to the first build, and
+    nothing would reload.
+  - A directory that cannot be read, or a Maven that cannot run, is a warning, and the application starts.
+
+  Tests: `SavedWhileStartingTest`, `SourceWatcherTest.savedSinceListsTheWatchedFilesThatAreNotOlder`, the
+  `anEarlierCompile` tests of `SavedWhileCompilingTest`, the three tests of `HotSwapSessionTest` on an output
+  compiled before the start, `VidocqDevMojoSessionTest` (a file saved since Maven started is compiled before the
+  child; one saved before is left to the build; no child starts while the saves do not compile, and Ctrl+C ends the
+  session; the child starts once a later save compiles),
+  `VidocqDevMojoTest.noApplicationStartsWhenTheWatchEndsWhileTheSavesOfTheStartDoNotCompile`,
+  `ContinuousTestingDevGoalIT`. The same probe with the fix loses
+  none of five. The four rounds that lost the save log `Menu.java was saved while vidocq:dev started: compiling it
+  before the application starts.`, and the application boots once, with the method. The round saved while javac ran
+  logs the second line too: `Menu.java was saved since the build started and its class is not older: compiling it
+  again.`
+- **Not covered**:
+  - a source edited before Maven started and never compiled, under a bare `mvn vidocq:dev`: no phase of the
+    lifecycle runs, and `vidocq:dev` builds only when the output has no class at all. The last round of the probe
+    showed it before the fix; with the fix, the recompile that the save of that round starts compiles this source
+    too, and a start with no save still leaves it. `mvn process-classes vidocq:dev`, the command of `vidocq dev`,
+    compiles it. A bug of its own.
+  - a Maven that cannot be run for that recompile (no `mvnw` up the directories, no `mvn` on the `PATH`): the
+    warning says so and the application starts, but `SavedWhileCompiling` deleted the class of a source saved while
+    the build compiled it before Maven was tried, and that class is missing. Every recompile of such a session
+    fails the same way. To fix in `SavedWhileCompiling`: a class in doubt made older than its source, not deleted.
+  - a file system that keeps whole seconds: a file saved in the second Maven started, after it, can bear a time
+    before that start.
+
 ## BUG-20261117-03 — A source saved while a recompile or a test run compiles it is not compiled: the save shows only once another Java source is saved
 
 - **Date**: 2026-11-17
@@ -69,7 +149,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   saved since the previous run started and its class is not older: compiling it again.`, and a change stopped the
   run of the three others.
 - **Not covered**: a source saved while `vidocq:dev` starts, during the build that precedes the dev loop: nothing
-  noted its time, and the watcher is not there yet. Not observed. Saving a Java source repairs it.
+  noted its time, and the watcher is not there yet. Observed since, and fixed: BUG-20261117-05.
 
 ## BUG-20261117-02 — Under `vidocq:dev`, a recompile that compiles nothing restarts an application with pages and Peano accessors: `layer swap: module-info changed`
 

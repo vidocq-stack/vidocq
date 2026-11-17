@@ -147,6 +147,16 @@ final class HotSwapSession {
         lost = true;
     }
 
+    /**
+     * The output was compiled again before the first child started (BUG-20261117-05): the child loads the output on
+     * disk, and the first request is judged against it, as against the output of the first build. Nothing was lost:
+     * that request can redefine.
+     */
+    void compiledAgainBeforeTheStart() {
+        base = ClassesSnapshot.take(classRoots, latest);
+        latest = base;
+    }
+
     private Optional<String> dropReason(ClassesSnapshot next) {
         return Stream.concat(Stream.of(base), unacknowledged.stream())
                 .map(output -> SessionVerdict.dropReason(output, next, supertypes, keepSessions))

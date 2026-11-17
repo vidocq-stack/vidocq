@@ -431,4 +431,87 @@ class SavedWhileCompilingTest {
 
         assertEquals(List.of(), warnings, "a class deleted before the walk came to it is not a failure");
     }
+
+    /**
+     * BUG-20261117-05. The build that precedes a dev session is a compile nobody noted: of its sources, only the time
+     * it started is known. A source saved since, with a class that is not older, is one it may have read before the
+     * save.
+     */
+    @Test
+    void aSourceSavedSinceAnEarlierCompileStartedLosesItsClass() throws Exception {
+        Path source = file(sources.resolve("acme/Menu.java"), STARTED.plusSeconds(2));
+        Path itsClass = file(classes.resolve("acme/Menu.class"), STARTED.plusSeconds(3));
+        file(sources.resolve("acme/Tally.java"), STARTED.minusSeconds(1));
+        Path read = file(classes.resolve("acme/Tally.class"), STARTED.plusSeconds(3));
+        saved.anEarlierCompileStarted("the build", FileTime.from(STARTED));
+
+        assertEquals(List.of(source), saved.compileStarts());
+
+        assertFalse(Files.exists(itsClass), "saved since the build started, with a class that is not older");
+        assertTrue(Files.exists(read), "saved before the build started: the build read that save");
+        assertEquals(List.of("Menu.java was saved since the build started and its class is not older: compiling it"
+                + " again."), info);
+    }
+
+    /** The times are compared in milliseconds, as the compiler plugin reads them: the very start counts. */
+    @Test
+    void aSourceSavedTheMillisecondAnEarlierCompileStartedCounts() throws Exception {
+        Path source = file(sources.resolve("acme/Menu.java"), STARTED);
+        file(classes.resolve("acme/Menu.class"), STARTED.plusSeconds(3));
+        saved.anEarlierCompileStarted("the build", FileTime.from(STARTED));
+
+        assertEquals(List.of(source), saved.compileStarts());
+    }
+
+    /** A source newer than its class needs no help, whenever it was saved: the compiler plugin compiles it. */
+    @Test
+    void aSourceSavedAfterAnEarlierCompileWroteItsClassIsLeftToTheCompilerPlugin() throws Exception {
+        file(sources.resolve("acme/Menu.java"), STARTED.plusSeconds(5));
+        Path itsClass = file(classes.resolve("acme/Menu.class"), STARTED.plusSeconds(3));
+        saved.anEarlierCompileStarted("the build", FileTime.from(STARTED));
+
+        assertEquals(List.of(), saved.compileStarts());
+
+        assertTrue(Files.exists(itsClass));
+        assertEquals(List.of(), info);
+    }
+
+    /**
+     * The earlier compile counts once: the compile that starts notes the times of the sources, and the next one
+     * compares with them. Else every recompile of the session would compile that source again.
+     */
+    @Test
+    void theCompileAfterTheFirstOneForgetsTheEarlierCompile() throws Exception {
+        Path source = file(sources.resolve("acme/Menu.java"), STARTED.plusSeconds(2));
+        Path itsClass = file(classes.resolve("acme/Menu.class"), STARTED.plusSeconds(3));
+        saved.anEarlierCompileStarted("the build", FileTime.from(STARTED));
+        assertEquals(List.of(source), saved.compileStarts());
+        file(itsClass, STARTED.plusSeconds(9));
+        saved.compileEnds();
+        info.clear();
+
+        assertEquals(List.of(), saved.compileStarts());
+
+        assertTrue(Files.exists(itsClass), "compiled from the save by the first compile");
+        assertEquals(List.of(), info);
+    }
+
+    /** A failure names the earlier compile too. */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void aFailureAfterAnEarlierCompileNamesIt() throws Exception {
+        assumeFalse("root".equals(System.getProperty("user.name")), "root reads every directory");
+        Path closed = file(sources.resolve("acme/closed/Menu.java"), STARTED.plusSeconds(2)).getParent();
+        saved.anEarlierCompileStarted("the build", FileTime.from(STARTED));
+        Files.setPosixFilePermissions(closed, Set.of());
+        try {
+            assertEquals(List.of(), saved.compileStarts());
+        } finally {
+            Files.setPosixFilePermissions(closed, PosixFilePermissions.fromString("rwx------"));
+        }
+
+        assertEquals(1, warnings.size(), warnings.toString());
+        assertTrue(warnings.getFirst().startsWith("Cannot tell whether a source was saved since the build started"
+                + " (java.nio.file.AccessDeniedException"), warnings.getFirst());
+    }
 }

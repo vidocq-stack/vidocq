@@ -24,10 +24,12 @@ import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -115,6 +117,41 @@ class ContinuousTestingDevGoalIT {
                     + " not older: compiling it again."), "the recompile names the source it compiles again:\n" + after);
             assertTrue(after.contains("Greeter gained a method second"),
                     "the save is compiled, and the application reloads with it:\n" + after);
+        } finally {
+            Fixture.stop(mvn);
+        }
+    }
+
+    /**
+     * BUG-20261117-05: the dev loop watches the sources last, so a save made while {@code vidocq:dev} starts begins no
+     * recompile, and a source saved while the build compiled it, after javac read it, gets a class that is not older.
+     * Such a save leaves a source and a class that are not older than Maven's start: here both are stamped ahead of
+     * it, the class last.
+     */
+    @Test
+    void aSourceSavedWhileVidocqDevStartsIsCompiledBeforeTheApplicationStarts(@TempDir Path dir) throws Exception {
+        Path project = Fixture.copy(dir);
+        Path logs = Fixture.logs();
+        Fixture.warmUp(project, logs.resolve("dev-start-warm-up.log"));
+        Path log = logs.resolve("vidocq-dev-start.log");
+        Path compiled = project.resolve("target/classes/io/vidocq/it/ct/Greeter.class");
+        Instant saved = Instant.now().plus(Duration.ofMinutes(10));
+        Fixture.addGreeterMethod(project, "savedAtStart", FileTime.from(saved));
+        Files.setLastModifiedTime(compiled, FileTime.from(saved.plusSeconds(1)));
+
+        Process mvn = Fixture.start(project, log, "vidocq:dev", "-Dvidocq.dev.debug=false",
+                "-Dvidocq.chappe.listener.default.port=0", "-Dvidocq.devconsole.port=0");
+        try {
+            Fixture.awaitLog(mvn, log, STARTED);
+            String said = Fixture.read(log);
+            int compiling = said.indexOf("Greeter.java was saved while vidocq:dev started: compiling it before the"
+                    + " application starts.");
+            assertTrue(compiling >= 0 && compiling < said.indexOf("Child JVM started"),
+                    "the save is compiled before the application starts:\n" + said);
+            assertTrue(said.contains("Greeter.java was saved since the build started and its class is not older:"
+                    + " compiling it again."), "the class the build left is not taken for compiled:\n" + said);
+            assertTrue(Files.readString(compiled, StandardCharsets.ISO_8859_1).contains("savedAtStart"),
+                    "the class the application loads has the method that was saved:\n" + said);
         } finally {
             Fixture.stop(mvn);
         }

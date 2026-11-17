@@ -22,11 +22,16 @@ package io.vidocq.runtime.maven.dev;
 import io.vidocq.runtime.core.ReloadRequest;
 import io.vidocq.runtime.maven.depgen.DepgenFixtures;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -273,6 +278,68 @@ class HotSwapSessionTest {
 
         assertEquals(Optional.of(new ReloadRequest.Swap("the previous reload was not confirmed", MOVED)),
                 session.next());
+    }
+
+    /**
+     * BUG-20261117-05: what was saved while {@code vidocq:dev} started is compiled before the child starts. The
+     * child loads that output, and the first request is judged against it: a body the child runs already is not
+     * redefined, and nothing was lost, so the request is no swap.
+     */
+    @Test
+    void anOutputCompiledAgainBeforeTheStartIsTheOneTheFirstRequestIsJudgedAgainst() {
+        var project = new HotSwapProject(dir, List.of());
+        project.apply(build().source("app/A.java", A.formatted("1", "1")));
+        var session = open(project);
+        project.apply(build().source("app/A.java", A.formatted("2", "1")));
+        session.compiledAgainBeforeTheStart();
+
+        project.apply(build().source("app/A.java", A.formatted("2", "2")));
+
+        assertRedefine(session.next(), "b");
+    }
+
+    /** The save is taken back once the child runs: the output is the first build's again, the child's is not. */
+    @Test
+    void theFirstBuildsOutputIsAChangeAfterACompileBeforeTheStart() {
+        var project = new HotSwapProject(dir, List.of());
+        project.apply(build().source("app/A.java", A.formatted("1", "1")));
+        var session = open(project);
+        project.apply(build().source("app/A.java", A.formatted("2", "1")));
+        session.compiledAgainBeforeTheStart();
+
+        project.apply(build().source("app/A.java", A.formatted("1", "1")));
+
+        assertRedefine(session.next(), "a");
+    }
+
+    /**
+     * The dev loop's side of BUG-20261117-05: the session, opened on the output of the first build, follows the
+     * output that the recompile of the saves leaves before the child starts. The Maven of this test copies the
+     * classes of another build over the output.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void theSessionFollowsTheOutputCompiledBeforeTheChildStarts() throws Exception {
+        var project = new HotSwapProject(dir.resolve("application"), List.of());
+        project.apply(build().source("app/A.java", A.formatted("1", "1")));
+        var session = open(project);
+        var withTheSave = new HotSwapProject(dir.resolve("saved"), List.of());
+        withTheSave.apply(build().source("app/A.java", A.formatted("2", "1")));
+        Path maven = Files.writeString(dir.resolve("fake-mvn"),
+                "#!/bin/sh\ncp -R '" + withTheSave.classes + "/.' '" + project.classes + "'\n");
+        assertTrue(maven.toFile().setExecutable(true));
+        // The sources were written a moment ago: all of them were saved since this Maven started.
+        var starting = new SavedWhileStarting(List.of(project.src), FileTime.from(Instant.now().minusSeconds(60)),
+                info::add, warnings::add);
+        var compiling = new SavedWhileCompiling(List.of(project.src), project.classes, "recompile", info::add,
+                warnings::add);
+
+        assertTrue(VidocqDevMojo.compileBeforeTheStart(starting, compiling,
+                new RecompileRunner(dir, maven.toString()), () -> true, session));
+
+        // The save is taken back once the child runs: the first build's output again, which the child does not run.
+        project.apply(build().source("app/A.java", A.formatted("1", "1")));
+        assertRedefine(session.next(), "a");
     }
 
     private HotSwapSession open(HotSwapProject project) {

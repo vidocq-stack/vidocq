@@ -214,6 +214,23 @@ Menu.java was saved since the previous recompile started and its class is not ol
 The test runs do the same for the sources they compile: see
 xref:continuous-testing.adoc#saved-while-compiling[A save while a run compiles].
 
+[[dev-save-while-starting]]*A save while `vidocq:dev` starts.* [.tag-new]#NEW# `vidocq:dev` watches the sources last:
+after the build, the dev services and the rest of its start. A file you save before that begins no recompile, and a
+source saved while the build compiles it gets a class that looks up to date. So, once it watches, `vidocq:dev` looks
+for the watched files saved since Maven started. When there is one, it recompiles before the application starts, and
+the log names the file:
+
+[source]
+----
+Menu.java was saved while vidocq:dev started: compiling it before the application starts.
+----
+
+* A start with no save compiles nothing more: only a file that is not older than the start of Maven counts.
+* A source whose class looks up to date loses that class first, as above, and a second line names it:
+  `Menu.java was saved since the build started and its class is not older: compiling it again.`
+* When the save does not compile, a warning says so and `vidocq:dev` compiles again at the next change. The
+  application starts once the sources compile.
+
 *Dev reload.* The libraries are reloaded with the application. The JDBC drivers that the old layer defined are
 deregistered at each reload. A thread that a library leaves running keeps the old layer in memory; the reload names
 such threads in a warning, `Hot reload: N thread(s) still hold the previous application layer ...`. Virtual threads

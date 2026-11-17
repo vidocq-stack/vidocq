@@ -79,6 +79,12 @@ final class SavedWhileCompiling {
      */
     private Map<Path, FileTime> left;
 
+    /** When a compile nobody noted started; {@code null} when there was none, and once a compile started since. */
+    private FileTime earlier;
+
+    /** That compile, as the messages name it. */
+    private String earlierName;
+
     /**
      * @param sourceRoots the directories the compiler plugin compiles; one that does not exist holds no source
      * @param output      where it writes their classes
@@ -96,25 +102,41 @@ final class SavedWhileCompiling {
     }
 
     /**
+     * To call before the first {@link #compileStarts()} when a compile ran that nobody noted, the build that precedes
+     * a dev session for instance (BUG-20261117-05). Of its sources only the time it started is known: every source
+     * saved since, in milliseconds, is taken for saved while it ran, and every class is in doubt. It counts once: the
+     * compile that starts notes the times, and the next one compares with them.
+     *
+     * @param name    that compile, as the messages name it: {@code the build}
+     * @param started when it started
+     */
+    void anEarlierCompileStarted(String name, FileTime started) {
+        earlier = started;
+        earlierName = name;
+    }
+
+    /**
      * To call when a compile of the sources starts, before its Maven does. Deletes the class of each source that was
      * saved since the previous call and that the compiler plugin would skip, says so, and returns those sources, in
-     * the order of their paths. The first call has nothing to compare with: it notes the times and returns nothing.
-     * A failure does not stop the compile: it is a warning, and nothing is returned.
+     * the order of their paths. The first call has nothing to compare with, unless {@link #anEarlierCompileStarted}
+     * told of a compile before it: it notes the times and returns nothing. A failure does not stop the compile: it is
+     * a warning, and nothing is returned.
      */
     List<Path> compileStarts() {
+        String previous = earlier != null ? earlierName : "the previous " + compile;
         List<Path> skipped;
         try {
             skipped = deleteClassesInDoubt();
         } catch (IOException e) {
-            warn.accept("Cannot tell whether a source was saved since the previous " + compile + " started (" + e
+            warn.accept("Cannot tell whether a source was saved since " + previous + " started (" + e
                     + "): if a save does not show, save the file again.");
             return List.of();
         }
         if (skipped.size() == 1) {
-            info.accept(skipped.getFirst().getFileName() + " was saved since the previous " + compile
+            info.accept(skipped.getFirst().getFileName() + " was saved since " + previous
                     + " started and its class is not older: compiling it again.");
         } else if (!skipped.isEmpty()) {
-            info.accept(skipped.size() + " sources were saved since the previous " + compile
+            info.accept(skipped.size() + " sources were saved since " + previous
                     + " started and their classes are not older (" + names(skipped) + "): compiling them again.");
         }
         return skipped;
@@ -144,14 +166,26 @@ final class SavedWhileCompiling {
         List<Path> skipped = new ArrayList<>();
         eachSource((source, saved, itsClass) -> {
             times.put(source, saved);
-            if (noted != null && !saved.equals(noted.get(source)) && inDoubt(source, saved, itsClass)) {
+            if (savedSinceTheLastStart(source, saved) && inDoubt(source, saved, itsClass)) {
                 Files.deleteIfExists(itsClass);
                 skipped.add(source);
             }
         });
         noted = times;
+        earlier = null;
         left = null;
         return skipped.stream().sorted().toList();
+    }
+
+    /**
+     * Whether {@code source} was saved since the compile before this one started: its time is not the one noted
+     * then, or, for a compile nobody noted, not before that compile started.
+     */
+    private boolean savedSinceTheLastStart(Path source, FileTime saved) {
+        if (noted != null) {
+            return !saved.equals(noted.get(source));
+        }
+        return earlier != null && saved.toMillis() >= earlier.toMillis();
     }
 
     /**
@@ -176,8 +210,8 @@ final class SavedWhileCompiling {
         }
     }
 
-    /** The names of the first sources, and a mark when there are more. */
-    private static String names(List<Path> sources) {
+    /** The names of the first files, three at most, and a mark when there are more. */
+    static String names(List<Path> sources) {
         String first = sources.stream().limit(MOST_NAMED).map(source -> source.getFileName().toString())
                 .collect(Collectors.joining(", "));
         return sources.size() > MOST_NAMED ? first + ", …" : first;

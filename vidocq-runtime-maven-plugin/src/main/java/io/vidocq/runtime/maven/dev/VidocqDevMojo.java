@@ -63,6 +63,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -637,6 +638,9 @@ public class VidocqDevMojo extends AbstractMojo {
                 projectSourceRoots(project.getCompileSourceRoots(), buildDirPath()), classesDir.toPath(),
                 "recompile", getLog()::info, getLog()::warn);
         try (SourceWatcher watcher = SourceWatcher.on(watch, testing.watch(), Duration.ofMillis(debounceMillis))) {
+            if (!compiledWhatWasSavedWhileStarting(watch, recompile, watcher)) {
+                return; // watcher closed
+            }
             ChildJvm child = newChild(launch);
             long pid = child.start();
             currentChild.set(child);
@@ -660,6 +664,39 @@ public class VidocqDevMojo extends AbstractMojo {
         } finally {
             endSession(testing, currentChild, devs, hook);
         }
+    }
+
+    /**
+     * Compiles what was saved since Maven started, which no watcher saw, before the application starts
+     * (BUG-20261117-05). The watcher is there by now: a later save is its own.
+     *
+     * @return {@code false} when the watch ended while the saves did not compile: there is no application to start
+     */
+    private boolean compiledWhatWasSavedWhileStarting(List<Path> watch, RecompileRunner recompile,
+            SourceWatcher watcher) throws InterruptedException {
+        if (session == null) {
+            return true; // no Maven run, hence no start to save during: a unit test
+        }
+        SavedWhileStarting starting = new SavedWhileStarting(watch,
+                FileTime.from(session.getStartTime().toInstant()), getLog()::info, getLog()::warn);
+        return compileBeforeTheStart(starting, savedWhileCompiling, recompile, watcher::awaitChange, hotSwap);
+    }
+
+    /**
+     * Compiles the saves of the start, then tells the hot swap session, opened on the output of the first build,
+     * that the child loads the output this compile left.
+     *
+     * @param hotSwap the hot swap session; {@code null} without one
+     * @return {@code false} when the watch ended while the saves did not compile
+     */
+    static boolean compileBeforeTheStart(SavedWhileStarting starting, SavedWhileCompiling saved,
+            RecompileRunner recompile, CompilerOutput.AwaitChange change, HotSwapSession hotSwap)
+            throws InterruptedException {
+        SavedWhileStarting.Outcome outcome = starting.compile(saved, recompile, change);
+        if (outcome == SavedWhileStarting.Outcome.COMPILED && hotSwap != null) {
+            hotSwap.compiledAgainBeforeTheStart();
+        }
+        return outcome != SavedWhileStarting.Outcome.WATCH_ENDED;
     }
 
     /** What Ctrl+C runs: stops the source loop, the tests and their dev services, the child, then the dev services. */
@@ -1412,6 +1449,7 @@ public class VidocqDevMojo extends AbstractMojo {
     void setAppLayer(String appLayer) { this.appLayer = appLayer; }
     void setLayerMode(boolean layerMode) { this.layerMode = layerMode; }
     void setProject(MavenProject project) { this.project = project; }
+    void setSession(MavenSession session) { this.session = session; }
     void setMainModule(String mainModule) { this.mainModule = mainModule; }
     void setMainClass(String mainClass) { this.mainClass = mainClass; }
     void setBaseDir(File baseDir) { this.baseDir = baseDir; }

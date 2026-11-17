@@ -1285,6 +1285,10 @@ A source saved while a recompile or a test run compiles it is compiled again by 
 that looks up to date and names the source: see xref:usage.adoc#dev-save-while-compiling[A save while a recompile
 runs] and xref:continuous-testing.adoc#saved-while-compiling[A save while a run compiles].
 
+`vidocq:dev` watches these directories last, once the rest of its start is done. A file of `vidocq.dev.watchDirs`
+saved since Maven started is compiled before the application starts: see
+xref:usage.adoc#dev-save-while-starting[A save while `vidocq:dev` starts].
+
 [#debugger]
 == The debug agent of `vidocq:dev` and `vidocq:run`
 

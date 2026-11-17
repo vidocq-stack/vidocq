@@ -23,10 +23,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -263,5 +265,30 @@ class SourceWatcherTest {
                 // nothing to watch, and no exception
             }
         });
+    }
+
+    /**
+     * BUG-20261117-05: what a watcher would have reported, had it been there since a given time. The watched files
+     * of the directories whose time is not before it, in milliseconds, in the order of their paths.
+     */
+    @Test
+    void savedSinceListsTheWatchedFilesThatAreNotOlder(@TempDir Path tmp) throws Exception {
+        Instant since = Instant.parse("2026-11-17T04:23:26Z");
+        Path java = tmp.resolve("src/main/java");
+        Path resources = tmp.resolve("src/main/resources");
+        Path saved = file(java.resolve("acme/Menu.java"), since.plusSeconds(1));
+        Path savedAtOnce = file(resources.resolve("vidocq.properties"), since);
+        file(java.resolve("acme/Tally.java"), since.minusMillis(1));
+        file(resources.resolve("logo.png"), since.plusSeconds(1));
+
+        assertEquals(List.of(saved, savedAtOnce),
+                SourceWatcher.savedSince(List.of(resources, java, tmp.resolve("absent")), FileTime.from(since)));
+    }
+
+    private static Path file(Path file, Instant time) throws IOException {
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "content");
+        Files.setLastModifiedTime(file, FileTime.from(time));
+        return file;
     }
 }
