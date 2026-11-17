@@ -27,7 +27,9 @@ import jakarta.enterprise.inject.build.compatible.spi.Messages;
 import jakarta.enterprise.inject.build.compatible.spi.Registration;
 import jakarta.enterprise.inject.build.compatible.spi.ScannedClasses;
 import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
 import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
+import jakarta.enterprise.inject.build.compatible.spi.Types;
 import jakarta.enterprise.inject.build.compatible.spi.Validation;
 import jakarta.data.repository.Repository;
 import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
@@ -398,7 +400,7 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
     }
 
     @Synthesis
-    public void registerRepositories(SyntheticComponents components) {
+    public void registerRepositories(SyntheticComponents components, Types types) {
         ClassLoader cl = currentClassLoader();
 
         // The runtimes of the routed data stores are the container's own (MANSART-041): see DataStoreRuntimes.
@@ -408,10 +410,10 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
                 .createWith(DataStoreRuntimesCreator.class);
 
         // Compile-time path — APT-generated *RepositoryImpl from mansart-data-processor
-        for (RepoEntry e : entries) registerCompileTimeEntry(components, cl, e);
+        for (RepoEntry e : entries) registerCompileTimeEntry(components, types, cl, e);
 
         // Runtime path (M7-4) — @Repository interfaces with no APT-generated impl (e.g. TCK).
-        for (String fqn : runtimeRepoFqns) registerRuntimeEntry(components, cl, fqn);
+        for (String fqn : runtimeRepoFqns) registerRuntimeEntry(components, types, cl, fqn);
     }
 
     /**
@@ -423,7 +425,7 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         return registrationSeen ? managedBeanClasses.contains(impl.getName()) : isAlreadyManagedBean(impl);
     }
 
-    private void registerCompileTimeEntry(SyntheticComponents components, ClassLoader cl, RepoEntry e) {
+    private void registerCompileTimeEntry(SyntheticComponents components, Types types, ClassLoader cl, RepoEntry e) {
         Class<?> itf;
         try {
             itf = cl.loadClass(e.itfFqn());
@@ -443,7 +445,7 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
             LOG.log(System.Logger.Level.WARNING, "Repository {0} is indexed with {1}, which cannot be loaded;"
                     + " it is implemented at run time instead. Rebuild the module to regenerate it.",
                     e.itfFqn(), e.implFqn());
-            registerRuntimeEntry(components, cl, e.itfFqn());
+            registerRuntimeEntry(components, types, cl, e.itfFqn());
             return;
         }
         Repository ann = itf.getAnnotation(Repository.class);
@@ -455,10 +457,10 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         // Non-default dataStore (MANSART-005): the impl was vetoed at @Enhancement, so the
         // synthetic bean below is the only one and its creator routes via DataStoreResolver.
         if (!routed && isManagedBean(impl)) return;
-        registerCompileTime(components, itf, impl);
+        registerCompileTime(components, types, itf, impl);
     }
 
-    private void registerRuntimeEntry(SyntheticComponents components, ClassLoader cl, String fqn) {
+    private void registerRuntimeEntry(SyntheticComponents components, Types types, ClassLoader cl, String fqn) {
         Class<?> itf;
         try {
             itf = cl.loadClass(fqn);
@@ -470,7 +472,7 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
         // case where the runtime path saw a @Repository whose impl is actually APT-generated
         // and managed by CDI — happens when the bean archive contains both).
         if (hasManagedImplFor(cl, fqn)) return;
-        registerRuntime(components, itf);
+        registerRuntime(components, types, itf);
     }
 
     private static boolean isAlreadyManagedBean(Class<?> impl) {
@@ -498,11 +500,11 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void registerCompileTime(SyntheticComponents components, Class<?> itf, Class<?> impl) {
+    private static void registerCompileTime(SyntheticComponents components, Types types, Class<?> itf,
+            Class<?> impl) {
         // M9 — itfClass is forwarded so the creator can read @Repository(dataStore) and pick
         // the matching RepositoryRuntime (CDI @Named or JNDI lookup).
-        components.<Object>addBean((Class) itf)
-                .type(itf)
+        withSupertypes(components.<Object>addBean((Class) itf).type(itf), types, itf)
                 .scope(jakarta.inject.Singleton.class)
                 .withParam("implClass", impl)
                 .withParam("itfClass", itf)
@@ -510,12 +512,24 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void registerRuntime(SyntheticComponents components, Class<?> itf) {
-        components.<Object>addBean((Class) itf)
-                .type(itf)
+    private static void registerRuntime(SyntheticComponents components, Types types, Class<?> itf) {
+        withSupertypes(components.<Object>addBean((Class) itf).type(itf), types, itf)
                 .scope(jakarta.inject.Singleton.class)
                 .withParam("itfClass", itf)
                 .createWith(MansartRuntimeRepoCreator.class);
+    }
+
+    /**
+     * Gives the synthetic bean of a repository the parameterized super-interfaces of its interface
+     * ({@code BasicRepository<Author, Long>}), as the generated implementation's class bean has them: a repository
+     * is then injected by the same types whatever its data store (MANSART-068).
+     */
+    private static SyntheticBeanBuilder<Object> withSupertypes(SyntheticBeanBuilder<Object> bean, Types types,
+            Class<?> itf) {
+        for (Type supertype : RepositoryBeanTypes.of(types, itf)) {
+            bean.type(supertype);
+        }
+        return bean;
     }
 
     private static ClassLoader currentClassLoader() {
