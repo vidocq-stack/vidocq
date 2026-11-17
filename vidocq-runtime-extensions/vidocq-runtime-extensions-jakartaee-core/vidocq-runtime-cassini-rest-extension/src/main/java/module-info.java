@@ -31,6 +31,8 @@ module io.vidocq.runtime.extensions.jakartaee.core.cassini {
     requires transitive io.vidocq.champollion.jsonb;
     // Champollion's registry of the container's JSON-B adapters and serializers: brought into the module graph.
     requires io.vidocq.champollion.jsonb.cdi;
+    // Its Vauban glue, the components that run the registry without reflection: brought into the module graph.
+    requires io.vidocq.champollion.jsonb.cdi.vauban;
     // The @ApplicationPath descriptors cassini-processor generates (Vidocq/vidocq#219).
     uses io.vidocq.cassini.spi.gen.ApplicationDescriptor;
     requires io.vidocq.cassini.chappe;

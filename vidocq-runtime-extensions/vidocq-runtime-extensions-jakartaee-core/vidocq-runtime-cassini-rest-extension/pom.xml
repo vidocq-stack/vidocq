@@ -85,6 +85,14 @@
             <artifactId>champollion-jsonb-cdi</artifactId>
             <version>${champollion.version}</version>
         </dependency>
+        <!-- Its Vauban glue: champollion-jsonb-cdi is container-neutral, and this engine adapter lets Vauban create
+             the registry, call its observers and proxy it without reflection and without an opens. The extension
+             assembles the runtime, so it brings the adapter: an application declares neither. -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonb-cdi-vauban</artifactId>
+            <version>${champollion.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
