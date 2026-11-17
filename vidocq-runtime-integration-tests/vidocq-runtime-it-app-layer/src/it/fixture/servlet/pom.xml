@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- A servlet application, whose build writes META-INF/vauban-synthetic-metadata.properties: Foy's build
+         compatible extension registers a synthetic bean that lists the web components. A change of a method body
+         must be redefined in place (Vauban BUG-20261117-12). Not a module of the fixture's reactor:
+         AppLayerServletHotSwapIT builds it alone, the other ITs never do. -->
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-build</artifactId>
+        <version>@project.version@</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.vidocq.it</groupId>
+    <artifactId>app-layer-servlet</artifactId>
+
+    <properties>
+        <vidocq.mainModule>acme.servlet</vidocq.mainModule>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Under vidocq-runtime-build, as an example of the reactor: one codegen bundle per extension. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                            <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
+                            <version>@project.version@</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!-- vidocq:generate on every build, as an application has: the recompile of a reload runs it too. -->
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <version>@project.version@</version>
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

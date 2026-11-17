@@ -86,6 +86,20 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- The servlet application whose change of a method body must be redefined in place (Vauban
+             BUG-20261117-12): the Servlet extension, and its codegen bundle, a jar on the fixture's
+             annotationProcessorPaths. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-foy-servlet-extension</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-foy-servlet-extension-codegen</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <!-- A jar, as the fixture's annotationProcessorPaths entry: a pom-typed dependency stages the pom only,
              and the fixture's compiler then misses the jar in a build that installs nothing. -->
         <dependency>
