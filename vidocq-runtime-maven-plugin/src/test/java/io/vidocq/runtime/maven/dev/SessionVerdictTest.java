@@ -141,6 +141,156 @@ class SessionVerdictTest {
         assertEquals(Optional.empty(), dropReason(base, next));
     }
 
+    @Test
+    void aDeclaredSerialVersionUidThatChangedDrops() {
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/Order.java",
+                ORDER.formatted("private static final long serialVersionUID = 1L; int count;")));
+        var next = project.apply(build().source("app/Order.java",
+                ORDER.formatted("private static final long serialVersionUID = 2L; int count;")));
+
+        assertEquals(Optional.of("Order changed its serialVersionUID from 1 to 2, so a restored instance would not "
+                + "match the new class"), dropReason(base, next));
+    }
+
+    @Test
+    void aMethodAddedKeepsWithOrWithoutADeclaredSerialVersionUid() {
+        String declared = "private static final long serialVersionUID = 1L; ";
+
+        assertEquals(Optional.empty(), methodAdded("without", ""));
+        assertEquals(Optional.empty(), methodAdded("with", declared));
+    }
+
+    @Test
+    void aSerialVersionUidDeclaredInPlaceOfAnotherDefaultDrops() {
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/Order.java", ORDER.formatted("int count;")));
+        var next = project.apply(build().source("app/Order.java",
+                ORDER.formatted("private static final long serialVersionUID = 1L; int count;")));
+
+        assertEquals(Optional.of("Order declared serialVersionUID 1, not its default " + defaultUid(base, "app.Order")
+                + ", so a restored instance would not match the new class"), dropReason(base, next));
+    }
+
+    /** {@code serialver} on the old class, its value declared: the stream reads as before. */
+    @Test
+    void aSerialVersionUidDeclaredWithTheOldDefaultKeeps() {
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/Order.java", ORDER.formatted("int count;")));
+        long pinned = defaultUid(base, "app.Order");
+        var next = project.apply(build().source("app/Order.java", ORDER.formatted("private static final long "
+                + "serialVersionUID = " + pinned + "L; int count; public int count() { return count; }")));
+
+        assertEquals(Optional.empty(), dropReason(base, next));
+    }
+
+    @Test
+    void aSerialVersionUidNoLongerDeclaredDrops() {
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/Order.java",
+                ORDER.formatted("private static final long serialVersionUID = 1L; int count;")));
+        var next = project.apply(build().source("app/Order.java", ORDER.formatted("int count;")));
+
+        assertEquals(Optional.of("Order no longer declares serialVersionUID 1, so a restored instance would not "
+                + "match the new class"), dropReason(base, next));
+    }
+
+    @Test
+    void aMethodAddedToAClassThatDeclaresWriteObjectDrops() {
+        String writeObject = "int count; private void writeObject(java.io.ObjectOutputStream out) "
+                + "throws java.io.IOException { out.defaultWriteObject(); } ";
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/Order.java", ORDER.formatted(writeObject)));
+        var next = project.apply(build().source("app/Order.java",
+                ORDER.formatted(writeObject + "public int count() { return count; }")));
+
+        assertEquals(Optional.of("Order changed its default serialVersionUID and declares writeObject, so a restored "
+                + "instance would not match the new class"), dropReason(base, next));
+    }
+
+    @Test
+    void aPrivateMethodAddedToAClassThatDeclaresWriteObjectKeeps() {
+        String writeObject = "int count; private void writeObject(java.io.ObjectOutputStream out) "
+                + "throws java.io.IOException { out.defaultWriteObject(); } ";
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/Order.java", ORDER.formatted(writeObject)));
+        var next = project.apply(build().source("app/Order.java",
+                ORDER.formatted(writeObject + "private int count() { return count; }")));
+
+        assertEquals(Optional.empty(), dropReason(base, next));
+    }
+
+    @Test
+    void aMethodAddedToAnExternalizableClassDrops() {
+        String externalizable = """
+                package app;
+                public class Order implements java.io.Externalizable {
+                    public Order() { }
+                    public void writeExternal(java.io.ObjectOutput out) { }
+                    public void readExternal(java.io.ObjectInput in) { }
+                    %s
+                }
+                """;
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/Order.java", externalizable.formatted("")));
+        var next = project.apply(build().source("app/Order.java",
+                externalizable.formatted("public int count() { return 0; }")));
+
+        assertEquals(Optional.of("Order changed its default serialVersionUID and is Externalizable, so a restored "
+                + "instance would not match the new class"), dropReason(base, next));
+    }
+
+    /** Java ignores such a field, Foy's import counts it as declared: the two agree on a drop. */
+    @Test
+    void aMethodAddedToAClassWithASerialVersionUidFieldThatIsNotStaticFinalDrops() {
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/Order.java", ORDER.formatted("long serialVersionUID = 1L;")));
+        var next = project.apply(build().source("app/Order.java",
+                ORDER.formatted("long serialVersionUID = 1L; public long uid() { return serialVersionUID; }")));
+
+        assertEquals(Optional.of("Order changed its default serialVersionUID and has a serialVersionUID field that "
+                + "is not static final, so a restored instance would not match the new class"), dropReason(base, next));
+    }
+
+    @Test
+    void aClassNoLongerSerializableDrops() {
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build().source("app/Order.java", ORDER.formatted("int count;")));
+        var next = project.apply(build().source("app/Order.java", "package app; class Order { int count; }"));
+
+        assertEquals(Optional.of("Order changed its interfaces, so a restored instance would not match the new class"),
+                dropReason(base, next));
+    }
+
+    /** Java serialization waives the serialVersionUID of a record and of an enum. */
+    @Test
+    void aMethodAddedToARecordOrAnEnumKeeps() {
+        var project = new HotSwapProject(dir, List.of());
+        var base = project.apply(build()
+                .source("app/Point.java", "package app; public record Point(int x) implements java.io.Serializable {}")
+                .source("app/Size.java", "package app; public enum Size { S, M }"));
+        var next = project.apply(build()
+                .source("app/Point.java", "package app; public record Point(int x) implements java.io.Serializable { "
+                        + "public int twice() { return 2 * x; } }")
+                .source("app/Size.java", "package app; public enum Size { S, M; public int rank() { return 0; } }"));
+
+        assertEquals(Optional.empty(), dropReason(base, next));
+    }
+
+    private static long defaultUid(ClassesSnapshot snapshot, String binaryName) {
+        return snapshot.byRoot().values().stream().flatMap(files -> files.values().stream())
+                .flatMap(entry -> entry.fingerprint().stream()).filter(f -> f.binaryName().equals(binaryName))
+                .findFirst().orElseThrow().defaultSerialVersionUid();
+    }
+
+    private Optional<String> methodAdded(String name, String serialVersionUid) {
+        var project = new HotSwapProject(dir.resolve(name), List.of());
+        var base = project.apply(build().source("app/Order.java", ORDER.formatted(serialVersionUid + "int count;")));
+        var next = project.apply(build().source("app/Order.java",
+                ORDER.formatted(serialVersionUid + "int count; public int count() { return count; }")));
+        return dropReason(base, next);
+    }
+
     private Optional<String> fieldAdded(String name, String serialVersionUid) {
         var project = new HotSwapProject(dir.resolve(name), List.of());
         var base = project.apply(build().source("app/Order.java", ORDER.formatted(serialVersionUid + "int count;")));

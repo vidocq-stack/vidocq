@@ -22,11 +22,18 @@ package io.vidocq.runtime.maven.dev;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.ObjectStreamClass;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static io.vidocq.runtime.maven.dev.HotSwapFixtures.fingerprint;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -196,7 +203,7 @@ class ClassFingerprintTest {
                 @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
                 @interface Q { String value() default ""; }
                 """;
-        var v1 = ClassFingerprint.of(HotSwapFixtures.bytes(HotSwapFixtures.compile(dir, "v1", java.util.Map.of(
+        var v1 = ClassFingerprint.of(HotSwapFixtures.bytes(HotSwapFixtures.compile(dir, "v1", Map.of(
                 "app/Q.java", q,
                 "app/R.java", "package app; class R { int f; String hello(String who) { return who; } }")), "app.R"));
 
@@ -324,6 +331,119 @@ class ClassFingerprintTest {
         var v2 = fingerprint(dir, "v2", "app.MainView", VIEW.formatted(next));
 
         assertFalse(v2.lambdasMoved(v1));
+    }
+
+    /**
+     * The default serialVersionUID, from the class file alone, is the one Java serialization computes for the loaded
+     * class: each source exercises a part of the algorithm (modifiers, interfaces, fields, static initializer,
+     * constructors, methods, nested classes).
+     */
+    @ParameterizedTest
+    @MethodSource("serializableClasses")
+    void theDefaultSerialVersionUidIsTheOneJavaSerializationComputes(String binaryName, String source,
+            @TempDir Path dir) throws Exception {
+        String path = binaryName.substring(0, binaryName.indexOf('$') < 0 ? binaryName.length()
+                : binaryName.indexOf('$')).replace('.', '/') + ".java";
+        Path classes = HotSwapFixtures.compile(dir, "v1", Map.of(path, source));
+
+        assertEquals(javaSerialVersionUid(classes, binaryName),
+                ClassFingerprint.of(HotSwapFixtures.bytes(classes, binaryName)).defaultSerialVersionUid());
+    }
+
+    /** The UID Java reads is the declared one when it is a static final integral field, the default one otherwise. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            private static final long serialVersionUID = 42L;
+            static final int serialVersionUID = 7;
+            private static long serialVersionUID = 3L;
+            private final long serialVersionUID = 3L;
+            private static final String serialVersionUID = "x";
+            """)
+    void theUidJavaReadsIsTheDeclaredOneOrElseTheDefaultOne(String declaration, @TempDir Path dir) throws Exception {
+        String source = ORDER.formatted(declaration + " int count;");
+        Path classes = HotSwapFixtures.compile(dir, "v1", Map.of("app/Order.java", source));
+        var order = ClassFingerprint.of(HotSwapFixtures.bytes(classes, "app.Order"));
+
+        assertEquals(javaSerialVersionUid(classes, "app.Order"), order.declaredSerialVersionUid().map(Long::parseLong)
+                .orElseGet(order::defaultSerialVersionUid));
+    }
+
+    /** What Java serialization reads for the class, loaded from {@code classes} without initializing it. */
+    private static long javaSerialVersionUid(Path classes, String binaryName) throws Exception {
+        try (var loader = new URLClassLoader(new URL[] {classes.toUri().toURL()}, null)) {
+            return ObjectStreamClass.lookup(Class.forName(binaryName, false, loader)).getSerialVersionUID();
+        }
+    }
+
+    @Test
+    void aSerialVersionUidComputedAtInitializationIsDeclaredWithoutAValue(@TempDir Path dir) {
+        var order = fingerprint(dir, "v1", "app.Order",
+                ORDER.formatted("private static final long serialVersionUID = Long.parseLong(\"5\");"));
+
+        assertEquals(Optional.of("<clinit>"), order.declaredSerialVersionUid());
+    }
+
+    static Stream<Arguments> serializableClasses() {
+        String outer = """
+                package app;
+                public class Outer implements java.io.Serializable {
+                    private static class Nested implements java.io.Serializable { int a; }
+                    protected final class Inner implements java.io.Serializable { int b; }
+                    Object anonymous = new java.io.Serializable() { int c; };
+                    java.util.function.Supplier<String> lambda =
+                            (java.util.function.Supplier<String> & java.io.Serializable) () -> "x";
+                }
+                """;
+        return Stream.of(
+                Arguments.of("app.A",
+                        "package app; class A implements java.io.Serializable { int count; }"),
+                Arguments.of("app.A", """
+                        package app;
+                        public final class A implements java.io.Serializable, Cloneable, Comparable<A> {
+                            public static final String NAME = "a";
+                            private static final java.util.List<String> CACHE = new java.util.ArrayList<>();
+                            private static int hidden;
+                            static int counter;
+                            private transient Object scratch;
+                            protected transient int seen;
+                            volatile long stamp;
+                            private final int[] values = new int[0];
+                            String text;
+                            public A() { }
+                            private A(int x) { }
+                            protected A(String text, int... rest) { this.text = text; }
+                            public int compareTo(A other) { return 0; }
+                            private void secret() { }
+                            protected synchronized void locked() { }
+                            static native void call();
+                            public java.util.List<? extends Number> numbers(java.util.Map<String, int[][]> m) {
+                                return null;
+                            }
+                        }
+                        """),
+                Arguments.of("app.B", """
+                        package app;
+                        abstract class B implements java.io.Serializable {
+                            abstract void run();
+                            public String toString() { return "b"; }
+                        }
+                        """),
+                // assert: javac adds the synthetic static field $assertionsDisabled and a static initializer.
+                Arguments.of("app.C", """
+                        package app;
+                        class C implements java.io.Serializable {
+                            int count;
+                            void check() { assert count >= 0 : "negative"; }
+                        }
+                        """),
+                Arguments.of("app.I",
+                        "package app; public interface I extends java.io.Serializable { void run(); }"),
+                Arguments.of("app.J",
+                        "package app; interface J extends java.io.Serializable { int SIZE = 1; }"),
+                Arguments.of("app.Outer", outer),
+                Arguments.of("app.Outer$Nested", outer),
+                Arguments.of("app.Outer$Inner", outer),
+                Arguments.of("app.Outer$1", outer));
     }
 
     private static ClassFingerprint variant(Path dir, String name, String q, String source) {

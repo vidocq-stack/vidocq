@@ -34,6 +34,7 @@ import java.lang.classfile.attribute.AnnotationDefaultAttribute;
 import java.lang.classfile.attribute.ConstantValueAttribute;
 import java.lang.classfile.attribute.EnclosingMethodAttribute;
 import java.lang.classfile.attribute.ExceptionsAttribute;
+import java.lang.classfile.attribute.InnerClassInfo;
 import java.lang.classfile.attribute.InnerClassesAttribute;
 import java.lang.classfile.attribute.MethodParametersAttribute;
 import java.lang.classfile.attribute.NestHostAttribute;
@@ -69,8 +70,14 @@ import java.lang.classfile.instruction.NewReferenceArrayInstruction;
 import java.lang.classfile.instruction.StoreInstruction;
 import java.lang.classfile.instruction.TableSwitchInstruction;
 import java.lang.classfile.instruction.TypeCheckInstruction;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -104,6 +111,22 @@ final class ClassFingerprint {
     private static final String CLINIT = "<clinit>";
     private static final String LAMBDA = "lambda$";
     private static final String DESERIALIZE_LAMBDA = "$deserializeLambda$";
+    private static final String SERIAL_VERSION_UID = "serialVersionUID";
+    private static final String WRITE_OBJECT = "writeObject(Ljava/io/ObjectOutputStream;)V";
+    private static final String EXTERNALIZABLE = "java.io.Externalizable";
+    private static final String RECORD = "java.lang.Record";
+    private static final String ENUM = "java.lang.Enum";
+    private static final String CONSTANT_VALUE = "ConstantValue";
+    /** The field types {@code Field.getLong} reads, as {@code ObjectStreamClass} reads a declared UID. */
+    private static final Set<String> LONG_COMPATIBLE = Set.of("J", "I", "S", "C", "B");
+    private static final int STATIC_FINAL = ClassFile.ACC_STATIC | ClassFile.ACC_FINAL;
+    /** The field modifiers the default {@code serialVersionUID} hashes. */
+    private static final int FIELD_MODIFIERS = ClassFile.ACC_PUBLIC | ClassFile.ACC_PRIVATE | ClassFile.ACC_PROTECTED
+            | ClassFile.ACC_STATIC | ClassFile.ACC_FINAL | ClassFile.ACC_VOLATILE | ClassFile.ACC_TRANSIENT;
+    /** The constructor and method modifiers the default {@code serialVersionUID} hashes. */
+    private static final int METHOD_MODIFIERS = ClassFile.ACC_PUBLIC | ClassFile.ACC_PRIVATE | ClassFile.ACC_PROTECTED
+            | ClassFile.ACC_STATIC | ClassFile.ACC_FINAL | ClassFile.ACC_SYNCHRONIZED | ClassFile.ACC_NATIVE
+            | ClassFile.ACC_ABSTRACT | ClassFile.ACC_STRICT;
 
     /** A field or a method: its modifiers and descriptor, and its attributes by name. */
     private record Member(String name, String descriptor, int flags, SequencedMap<String, String> attributes) {}
@@ -235,6 +258,140 @@ final class ClassFingerprint {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * The {@code serialVersionUID} this class declares, as Java serialization reads it: a {@code static final} field of
+     * that name whose value fits a {@code long}. Its constant value, or {@code <clinit>} when the class computes it at
+     * initialization; empty when the class declares none, and serialization computes a default one.
+     */
+    Optional<String> declaredSerialVersionUid() {
+        return fields.stream()
+                .filter(field -> field.name().equals(SERIAL_VERSION_UID) && LONG_COMPATIBLE.contains(field.descriptor())
+                        && (field.flags() & STATIC_FINAL) == STATIC_FINAL)
+                .findFirst()
+                .map(field -> field.attributes().getOrDefault(CONSTANT_VALUE, CLINIT));
+    }
+
+    /**
+     * The {@code serialVersionUID} Java serialization computes for this class when it declares none, from the class
+     * file alone (Java Object Serialization Specification §4.6, as {@code ObjectStreamClass} computes it): the
+     * SHA-1 of the class name and modifiers, the sorted interface names, the fields but the private static and
+     * private transient ones, the static initializer, and the non-private constructors and methods. A method added
+     * that is not private changes it; a lambda, which is private, does not. The modifiers of a nested class come from
+     * its {@code InnerClasses} entry, as {@code Class.getModifiers()} reads them.
+     */
+    long defaultSerialVersionUid() {
+        var bytes = new ByteArrayOutputStream();
+        var out = new DataOutputStream(bytes);
+        try {
+            out.writeUTF(binaryName);
+            int classFlags = classModifiers() & (ClassFile.ACC_PUBLIC | ClassFile.ACC_FINAL | ClassFile.ACC_INTERFACE
+                    | ClassFile.ACC_ABSTRACT);
+            if ((classFlags & ClassFile.ACC_INTERFACE) != 0) {
+                boolean anyMethod = methods.values().stream().anyMatch(m -> !m.name().equals(CLINIT));
+                classFlags = anyMethod ? classFlags | ClassFile.ACC_ABSTRACT : classFlags & ~ClassFile.ACC_ABSTRACT;
+            }
+            out.writeInt(classFlags);
+            for (String name : interfaces.stream().sorted().toList()) {
+                out.writeUTF(name);
+            }
+            for (Member field : fields.stream().sorted(Comparator.comparing(Member::name)).toList()) {
+                int mods = field.flags() & FIELD_MODIFIERS;
+                if ((mods & ClassFile.ACC_PRIVATE) == 0
+                        || (mods & (ClassFile.ACC_STATIC | ClassFile.ACC_TRANSIENT)) == 0) {
+                    out.writeUTF(field.name());
+                    out.writeInt(mods);
+                    out.writeUTF(field.descriptor());
+                }
+            }
+            if (methods.values().stream().anyMatch(m -> m.name().equals(CLINIT))) {
+                out.writeUTF(CLINIT);
+                out.writeInt(ClassFile.ACC_STATIC);
+                out.writeUTF("()V");
+            }
+            var constructors = methods.values().stream().filter(m -> m.name().equals(INIT))
+                    .sorted(Comparator.comparing(Member::descriptor));
+            var others = methods.values().stream().filter(m -> !m.name().equals(INIT) && !m.name().equals(CLINIT))
+                    .sorted(Comparator.comparing(Member::name).thenComparing(Member::descriptor));
+            for (Member method : java.util.stream.Stream.concat(constructors, others).toList()) {
+                int mods = method.flags() & METHOD_MODIFIERS;
+                if ((mods & ClassFile.ACC_PRIVATE) == 0) {
+                    out.writeUTF(method.name());
+                    out.writeInt(mods);
+                    out.writeUTF(method.descriptor().replace('/', '.'));
+                }
+            }
+            out.flush();
+            // The serialization specification's hash, as ObjectStreamClass computes it: an identifier, no security.
+            byte[] hash = MessageDigest.getInstance("SHA").digest(bytes.toByteArray()); // NOSONAR java:S4790
+            long uid = 0;
+            for (int i = Math.min(hash.length, 8) - 1; i >= 0; i--) {
+                uid = (uid << 8) | (hash[i] & 0xFF);
+            }
+            return uid;
+        } catch (IOException | NoSuchAlgorithmException e) {
+            throw new IllegalStateException("cannot compute the default serialVersionUID of " + binaryName, e);
+        }
+    }
+
+    /** The modifiers {@code Class.getModifiers()} gives: a nested class's come from its {@code InnerClasses} entry. */
+    private int classModifiers() {
+        return model.findAttribute(java.lang.classfile.Attributes.innerClasses()).stream()
+                .flatMap(attribute -> attribute.classes().stream())
+                .filter(inner -> inner.innerClass().asInternalName().equals(model.thisClass().asInternalName()))
+                .findFirst()
+                .map(InnerClassInfo::flagsMask)
+                .orElse(flags) & ~ClassFile.ACC_SUPER;
+    }
+
+    /**
+     * How the {@code serialVersionUID} changed since {@code previous} in a way the dev handover cannot read, worded as
+     * {@link #firstShapeDifference}: {@code changed its serialVersionUID from 1 to 2}. The UID is the declared one,
+     * or the default one. Equal UIDs read as before. Different ones are read with the new class, by Foy's import, only
+     * when neither version declares a {@code serialVersionUID} field, is {@code Externalizable} or declares
+     * {@code writeObject}; the fields and the superclass are {@link #instanceShapeDifference}'s. Records and enums
+     * have none: serialization waives it.
+     *
+     * @param externalizable whether this class is {@code Externalizable}, through any of its supertypes
+     */
+    Optional<String> serialVersionUidDifference(ClassFingerprint previous, boolean externalizable) {
+        if ((flags & ClassFile.ACC_ENUM) != 0 || RECORD.equals(superclass) || ENUM.equals(superclass)) {
+            return Optional.empty();
+        }
+        var now = declaredSerialVersionUid();
+        var before = previous.declaredSerialVersionUid();
+        String uidNow = now.orElseGet(() -> Long.toString(defaultSerialVersionUid()));
+        String uidBefore = before.orElseGet(() -> Long.toString(previous.defaultSerialVersionUid()));
+        if (uidNow.equals(uidBefore)) {
+            return Optional.empty();
+        }
+        if (now.isPresent() && before.isPresent()) {
+            return Optional.of("changed its serialVersionUID from " + uidBefore + " to " + uidNow);
+        }
+        if (now.isPresent()) {
+            return Optional.of("declared serialVersionUID " + uidNow + ", not its default " + uidBefore);
+        }
+        if (before.isPresent()) {
+            return Optional.of("no longer declares serialVersionUID " + uidBefore);
+        }
+        String changed = "changed its default serialVersionUID and ";
+        if (hasSerialVersionUidField() || previous.hasSerialVersionUidField()) {
+            return Optional.of(changed + "has a serialVersionUID field that is not static final");
+        }
+        if (externalizable || previous.interfaces.contains(EXTERNALIZABLE)) {
+            return Optional.of(changed + "is Externalizable");
+        }
+        if (methods.containsKey(WRITE_OBJECT) || previous.methods.containsKey(WRITE_OBJECT)) {
+            return Optional.of(changed + "declares writeObject");
+        }
+        return Optional.empty();
+    }
+
+    /** A {@code long} field named {@code serialVersionUID}, whatever its modifiers, as Foy's import looks for one. */
+    private boolean hasSerialVersionUidField() {
+        return fields.stream().anyMatch(field -> field.name().equals(SERIAL_VERSION_UID)
+                && field.descriptor().equals("J"));
     }
 
     /**

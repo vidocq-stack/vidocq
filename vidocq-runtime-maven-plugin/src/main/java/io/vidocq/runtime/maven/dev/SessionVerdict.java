@@ -36,6 +36,7 @@ import java.util.stream.Collectors;
 final class SessionVerdict {
 
     private static final String SERIALIZABLE = "java.io.Serializable";
+    private static final String EXTERNALIZABLE = "java.io.Externalizable";
     private static final String RUNS_ANOTHER = " moved, and a restored listener could run another one's code";
     private static final Pattern ANONYMOUS = Pattern.compile("(.+)\\$\\d+");
 
@@ -63,10 +64,12 @@ final class SessionVerdict {
         }
         List<Change> changes = changes(base, next);
         for (Change change : changes) {
-            if (!serializable(change.now().binaryName(), supertypes)) {
+            if (!serializable(change.now().binaryName(), supertypes) && !wasSerializable(change.old())) {
                 continue;
             }
-            var difference = change.now().instanceShapeDifference(change.old());
+            var difference = change.now().instanceShapeDifference(change.old())
+                    .or(() -> change.now().serialVersionUidDifference(change.old(),
+                            supertypes.isA(change.now().binaryName(), EXTERNALIZABLE)));
             if (difference.isPresent()) {
                 return Optional.of(change.simpleName() + " " + difference.get()
                         + ", so a restored instance would not match the new class");
@@ -92,6 +95,14 @@ final class SessionVerdict {
     /** Whether an instance of the class can be in a session: it is serializable, or a supertype could not be read. */
     private static boolean serializable(String binaryName, SupertypeIndex supertypes) {
         return supertypes.isA(binaryName, SERIALIZABLE) || supertypes.unresolved(binaryName);
+    }
+
+    /**
+     * Whether the old version named {@code Serializable} or {@code Externalizable} among its own interfaces: a session
+     * may hold an instance of a class that is no longer serializable, and Java refuses to read it back.
+     */
+    private static boolean wasSerializable(ClassFingerprint old) {
+        return old.interfaces().contains(SERIALIZABLE) || old.interfaces().contains(EXTERNALIZABLE);
     }
 
     /** The anonymous classes of {@code outer}: {@code Outer$1}, {@code Outer$2}, ... */
