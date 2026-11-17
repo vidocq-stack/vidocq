@@ -5,6 +5,34 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261117-10 — On the class path, 13 runtime modules are never found: their services are in `module-info.java` only
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/extension-services-class-path`
+- **Module**: the extensions `noether-persistence`, `mansart-transactions`, `naming`, `peano-el`, `ibarra-pages`,
+  `bodoni-jstl`, `foy-websocket`, `migration`, `flyway-migration`, `liquibase-migration`,
+  `mansart-pool-telemetry`, `crac`, and `vaadin-extension-dev`
+- **Symptom**: found by a spike that runs the Jakarta EE 11 Platform TCK for Persistence on the assembled runtime, as
+  every `vidocq-runtime-tck-*` runner does: on the class path. The deployment of a TCK war starts 6 extensions, without
+  `mansart-transactions` and `noether-persistence`, although both jars are on the class path. The war's persistence
+  units never start, and its beans that inject an `EntityManager` are left unsatisfied. Twelve other services are
+  missing the same way: the `VidocqExtension` of `naming`, `peano-el`, `ibarra-pages`, `bodoni-jstl`,
+  `foy-websocket`, `migration` and `crac`, the `SchemaMigrator` of Flyway and Liquibase, Peano's `ProxyUnwrapper`,
+  Ibarra's `ServletDeploymentListener` and `CdiContextListeners`, Foy WebSocket's `ServletInitParameters`, the pool
+  telemetry's `JdbcConnectionDecorator`, and the Vaadin dev module's `RedefinitionListener`.
+- **Repro**: put `vidocq-runtime-noether-persistence-extension` on the class path of an Arquillian test of
+  `vidocq-runtime-arquillian` and deploy a war with a `persistence.xml`: the startup log lists the discovered
+  extensions without `noether-persistence`. `ClassPathServicesTest` (`vidocq-runtime-architecture-tests`) lists every
+  module of the runtime in the same case.
+- **Cause**: on the class path, `ServiceLoader` reads `META-INF/services` and ignores the `provides` clauses of
+  `module-info.java`. These modules declared their services in `module-info.java` alone, so they work on the module
+  path, where Vidocq runs an application, and nowhere else. Kerckhoffs' extension had the file and its own test
+  (`ClassPathServicesTest` of that module); nothing checked the others.
+- **Fix**: each module lists every service of its `module-info.java` in `src/main/resources/META-INF/services`. The
+  architecture tests gain `ClassPathServicesTest`, which reads the `module-info.class` of every `io.vidocq.runtime`
+  module on their class path and fails on a `provides` the module's services file does not list. The CRaC extension
+  builds in the `crac` profile only, outside the architecture tests: its file is added, and no test reads it.
+
 ## BUG-20261117-09 — Under `vidocq:dev`, a page fails with `NoClassDefFoundError` while a recompile runs or while the sources do not compile, and may keep failing afterwards
 
 - **Date**: 2026-11-17
