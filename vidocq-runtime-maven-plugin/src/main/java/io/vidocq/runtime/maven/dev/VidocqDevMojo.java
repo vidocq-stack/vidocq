@@ -428,16 +428,29 @@ public class VidocqDevMojo extends AbstractMojo {
         return ApplicationLaunch.effectiveMode(appLayer, layerMode, "vidocq.dev.layer", getLog()::warn);
     }
 
-    /** Builds the project when nobody did, and again when an IDE compiled it without the annotation processors. */
+    /**
+     * Builds the project when nobody did, when it changed since its last build, and again when an IDE compiled it
+     * without the annotation processors.
+     */
     private void ensureCompiled(Path projectDir, List<Path> watch) throws MojoExecutionException {
         // Nobody built the project (right after "mvn clean", or a first build that did not compile): build it, and
         // while it does not compile, wait for the next change of the sources, as a failed reload does
         // (BUG-20261030-12).
         CompilerOutput.ensureBuilt(classesDir.toPath(), new RecompileRunner(projectDir)::run, getLog()::warn,
                 () -> awaitSourceChange(watch));
+        // A bare vidocq:dev runs no phase of the lifecycle: what changed while it did not run is built first
+        // (BUG-20261117-07).
+        new ChangedWhileStopped(watch, projectSourceRoots(project.getCompileSourceRoots(), buildDirPath()),
+                classesDir.toPath(), buildDirPath(), mavenStarted(), getLog()::info, getLog()::warn)
+                .build(new RecompileRunner(projectDir)::run, () -> awaitSourceChange(watch));
         // An IDE build may have compiled target/classes without the annotation processors (Vidocq/vidocq#237).
         CompilerOutput.ensureComplete(buildDirPath(), classesDir.toPath(), new RecompileRunner(projectDir)::run,
                 getLog()::warn);
+    }
+
+    /** When the Maven of this goal started; {@code null} without a Maven session, as in a unit test. */
+    private FileTime mavenStarted() {
+        return session == null ? null : FileTime.from(session.getStartTime().toInstant());
     }
 
     /** Blocks until a file of {@code watch} changes; {@code false} when the directories cannot be watched. */
@@ -674,11 +687,11 @@ public class VidocqDevMojo extends AbstractMojo {
      */
     private boolean compiledWhatWasSavedWhileStarting(List<Path> watch, RecompileRunner recompile,
             SourceWatcher watcher) throws InterruptedException {
-        if (session == null) {
+        FileTime started = mavenStarted();
+        if (started == null) {
             return true; // no Maven run, hence no start to save during: a unit test
         }
-        SavedWhileStarting starting = new SavedWhileStarting(watch,
-                FileTime.from(session.getStartTime().toInstant()), getLog()::info, getLog()::warn);
+        SavedWhileStarting starting = new SavedWhileStarting(watch, started, getLog()::info, getLog()::warn);
         return compileBeforeTheStart(starting, savedWhileCompiling, recompile, watcher::awaitChange, hotSwap);
     }
 

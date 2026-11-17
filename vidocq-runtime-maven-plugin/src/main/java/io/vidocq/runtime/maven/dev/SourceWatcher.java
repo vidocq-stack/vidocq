@@ -299,6 +299,17 @@ final class SourceWatcher implements AutoCloseable {
      * exist holds no file.
      */
     static List<Path> savedSince(List<Path> dirs, FileTime since) throws IOException {
+        return savedBetween(dirs, since, null);
+    }
+
+    /**
+     * The watched files of {@code dirs} saved from {@code since} to {@code before}, the latter left out, in
+     * milliseconds, in the order of their paths: what changed from one time to another (BUG-20261117-07). Without a
+     * {@code before}, every file saved since {@code since}. A directory that does not exist holds no file.
+     */
+    static List<Path> savedBetween(List<Path> dirs, FileTime since, FileTime before) throws IOException {
+        long from = since.toMillis();
+        long to = before == null ? Long.MAX_VALUE : before.toMillis();
         List<Path> saved = new ArrayList<>();
         for (Path dir : dirs) {
             if (!Files.isDirectory(dir)) {
@@ -306,13 +317,17 @@ final class SourceWatcher implements AutoCloseable {
             }
             try (Stream<Path> files = Files.find(dir, Integer.MAX_VALUE, (file, attributes) ->
                     attributes.isRegularFile() && isWatchedExtension(file.getFileName().toString())
-                            && attributes.lastModifiedTime().toMillis() >= since.toMillis())) {
+                            && between(attributes.lastModifiedTime().toMillis(), from, to))) {
                 files.forEach(saved::add);
             } catch (UncheckedIOException e) {   // Files.find reports an unreadable directory unchecked
                 throw e.getCause();
             }
         }
         return saved.stream().sorted().toList();
+    }
+
+    private static boolean between(long time, long from, long to) {
+        return time >= from && time < to;
     }
 
     /** Whether {@code file} lies under one of {@code roots} (absolute, normalized). */

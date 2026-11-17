@@ -231,6 +231,26 @@ Menu.java was saved while vidocq:dev started: compiling it before the applicatio
 * When the save does not compile, a warning says so and `vidocq:dev` compiles again at the next change. The
   application starts once the sources compile.
 
+[[dev-changed-while-stopped]]*A change made while `vidocq:dev` did not run.* [.tag-new]#NEW# `mvn vidocq:dev` alone
+runs no phase of the build: the goal starts the application from the classes of the last build. So it first looks
+for what changed since that build: a watched file saved since the compiler last ran, or a source it compiled that
+is gone. When there is one, it builds the project before the application starts, and the log names the file:
+
+[source]
+----
+Since the last build, Menu.java changed: building the project first (mvn process-classes).
+----
+
+* A start with no change builds nothing: `mvn vidocq:dev` stays the short way to start again.
+* The compiler keeps a record of its last run in `target/maven-status`, and `vidocq:dev` reads the time of that
+  record, not the times of the classes. A class your IDE compiled from the save does not hide the change.
+* `vidocq dev` and the IDE configurations run `mvn process-classes vidocq:dev`. The build of that command saw every
+  change, and `vidocq:dev` builds nothing more.
+* When the build fails, a warning says so and `vidocq:dev` builds again at the next change. The application starts
+  once the project builds.
+* Three changes are not seen: a change of the `pom.xml`, a file restored with an older date, and a deleted resource.
+  Run `mvn process-classes vidocq:dev` then, after `mvn clean` for a deleted resource.
+
 *Dev reload.* The libraries are reloaded with the application. The JDBC drivers that the old layer defined are
 deregistered at each reload. A thread that a library leaves running keeps the old layer in memory; the reload names
 such threads in a warning, `Hot reload: N thread(s) still hold the previous application layer ...`. Virtual threads

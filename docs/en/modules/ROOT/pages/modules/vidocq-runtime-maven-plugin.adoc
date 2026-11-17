@@ -1289,6 +1289,10 @@ runs] and xref:continuous-testing.adoc#saved-while-compiling[A save while a run 
 saved since Maven started is compiled before the application starts: see
 xref:usage.adoc#dev-save-while-starting[A save while `vidocq:dev` starts].
 
+`vidocq:dev` runs no phase of the build itself. Run alone, it first builds the project when a file of
+`vidocq.dev.watchDirs` changed since the compiler last ran, or when a source it compiled is gone: see
+xref:usage.adoc#dev-changed-while-stopped[A change made while `vidocq:dev` did not run].
+
 [#debugger]
 == The debug agent of `vidocq:dev` and `vidocq:run`
 
@@ -1533,8 +1537,10 @@ temporary configuration, a module IntelliJ split in two — starts an applicatio
 incomplete: the server answers 404 (Vidocq/vidocq#83).
 
 A Maven run configuration has no such hole: `vidocq:run` forks the lifecycle up to `process-classes` itself,
-then forks the JVM exactly as the command line does. `vidocq:dev` starts from `target/classes` as it is, so the
-`(dev)` configuration runs `process-classes vidocq:dev`, as `vidocq dev` does(Vidocq/vidocq#237).
+then forks the JVM exactly as the command line does. `vidocq:dev` runs no phase of the build itself, and builds
+`target/classes` only when it finds
+xref:usage.adoc#dev-changed-while-stopped[a change since the last build], so the
+`(dev)` configuration runs `process-classes vidocq:dev`, as `vidocq dev` does (Vidocq/vidocq#237).
 IntelliJ also disables its own Build step for a Maven configuration. A Build that IntelliJ runs on its own, from
 the Build menu or automatically, still compiles `target/classes` without the processors of a `-codegen` bundle:
 both goals detect it and recompile, see <<compiler-output-check,an output compiled without the processors>>.
@@ -1558,8 +1564,8 @@ For an application `mcp-time-server` whose pom sets `vidocq.mainClass`, with
 
 | `.run/McpTimeServerApp (dev).run.xml`
 | A Maven run of `process-classes vidocq:dev`, the configuration a developer runs day to day.
-  `process-classes` compiles and indexes first, as `vidocq dev` does, since `vidocq:dev` starts from
-  `target/classes` as it is (Vidocq/vidocq#237).
+  `process-classes` compiles and indexes first, as `vidocq dev` does, since `vidocq:dev` runs no phase of the
+  build itself (Vidocq/vidocq#237).
 
 | `.run/McpTimeServerApp (run).run.xml`
 | A Maven run of `vidocq:run`, one run of the application as the production launcher starts it.

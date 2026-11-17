@@ -285,6 +285,26 @@ class SourceWatcherTest {
                 SourceWatcher.savedSince(List.of(resources, java, tmp.resolve("absent")), FileTime.from(since)));
     }
 
+    /**
+     * BUG-20261117-07: the same files, up to a time that is left out: what was saved from one time to another.
+     * Without an end, every later file.
+     */
+    @Test
+    void savedBetweenLeavesOutTheFilesOfTheEndAndLater(@TempDir Path tmp) throws Exception {
+        Instant since = Instant.parse("2026-11-17T04:23:26Z");
+        Instant before = since.plusSeconds(30);
+        Path java = tmp.resolve("src/main/java");
+        Path first = file(java.resolve("acme/Menu.java"), since);
+        Path last = file(java.resolve("acme/Tally.java"), before.minusMillis(1));
+        Path atTheEnd = file(java.resolve("acme/Basket.java"), before);
+        file(java.resolve("acme/Receipt.java"), since.minusMillis(1));
+
+        assertEquals(List.of(first, last),
+                SourceWatcher.savedBetween(List.of(java), FileTime.from(since), FileTime.from(before)));
+        assertEquals(List.of(atTheEnd, first, last),
+                SourceWatcher.savedBetween(List.of(java), FileTime.from(since), null));
+    }
+
     private static Path file(Path file, Instant time) throws IOException {
         Files.createDirectories(file.getParent());
         Files.writeString(file, "content");

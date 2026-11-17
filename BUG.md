@@ -5,6 +5,71 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261117-07 — A bare `mvn vidocq:dev` starts without what changed while it did not run, and nothing says so
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/dev-bare-start-builds-first`
+- **Module**: `vidocq-runtime-maven-plugin` (new `ChangedWhileStopped`; `CompilerOutput`, `SourceWatcher`,
+  `VidocqDevMojo`)
+- **Symptom**: found by the probe of BUG-20261117-05, in its round under a bare `mvn vidocq:dev`. A source edited
+  after the last build and before the command is not compiled: the application starts with the class of that build,
+  and no line says so. It runs the old code until a watched file is saved again. The same goes for a source or a
+  resource added since, and for a source deleted since, whose class stays in the output.
+  `mvn process-classes vidocq:dev`, the command of `vidocq dev` and of the IDE configurations, is not affected. The
+  documentation shows the bare command (Getting started, the dev console page, the examples).
+- **Repro**: build a project (`mvn process-classes`), append a method to a source, run `mvn vidocq:dev`: the class
+  the application loads has no such method.
+  `ContinuousTestingDevGoalIT.aSourceEditedWhileVidocqDevDidNotRunIsBuiltBeforeTheApplicationStarts` does so.
+- **Cause**: `vidocq:dev` declares no `@Execute` phase, so a bare goal runs no phase of the lifecycle.
+  `VidocqDevMojo.ensureCompiled` builds in two cases only: an output without any class (`CompilerOutput.ensureBuilt`,
+  BUG-20261030-12) and an output that lacks files the compiler created (`ensureComplete`, Vidocq/vidocq#237). An
+  output that is complete and older than the sources starts as it is. BUG-20261117-05 covers the files saved since
+  Maven started, not the ones saved before.
+- **Fix**: `ChangedWhileStopped`, which `ensureCompiled` calls between the two checks. It reads the record
+  `maven-compiler-plugin` leaves of its last run, `inputFiles.lst` under
+  `target/maven-status/maven-compiler-plugin/compile/<execution>/`: the plugin writes that list each time it runs,
+  compiling or not, after it looked for stale sources and before javac reads any. Two signs then start one
+  `mvn process-classes` before the application starts:
+  - a watched file (the directories of `vidocq.dev.watchDirs`, the extensions the watcher reports) of a later
+    millisecond than that list, saved before Maven started;
+  - a source of that list, under one of the project's own source roots, that no longer exists. The compiler plugin
+    then compiles the module again and deletes the classes it had created, the one of that source included.
+
+  The log names the files, three at most of each kind: `Since the last build, Menu.java changed: building the
+  project first (mvn process-classes).`
+  - The time of the record, not the times of the output: an IDE that compiles into `target/classes` writes a class
+    newer than the source it saved, and `vidocq:generate` did not run on that class.
+  - A file saved since Maven started is left to `SavedWhileStarting` (BUG-20261117-05): one save is built and named
+    once. Under `mvn process-classes vidocq:dev` this very Maven wrote the list: no file is in between, and nothing
+    more is built.
+  - A build that left no list, as one whose pom sets `useIncrementalCompilation` to `false`, is compared by the
+    newest file of its output, where `vidocq:generate` writes its stamp at every build.
+  - While the build fails, a warning says so, `The project does not build (exit 1): fix the sources, vidocq dev
+    builds again on the next change.`, and `vidocq:dev` waits for the next change, as it does for a first build that
+    fails. The save that fixes the sources was made since Maven started: it is compiled a second time before the
+    application starts, as a save made while the goal started (BUG-20261117-05).
+  - A directory that cannot be read, or a Maven that cannot run, is a warning, and the application starts on the
+    classes of the last build.
+
+  Tests: `ChangedWhileStoppedTest`, `CompilerOutputTest` (the last compile, and its sources that are gone),
+  `SourceWatcherTest.savedBetweenLeavesOutTheFilesOfTheEndAndLater`,
+  `VidocqDevMojoSessionTest.aSourceEditedWhileTheSessionDidNotRunIsBuiltBeforeTheChildStarts`,
+  `ContinuousTestingDevGoalIT.aSourceEditedWhileVidocqDevDidNotRunIsBuiltBeforeTheApplicationStarts`.
+- **Alternatives not taken**:
+  - `@Execute(phase = PROCESS_CLASSES)` on the goal, as `vidocq:run` has: a compile error would end Maven before the
+    goal, against BUG-20261030-12, and `mvn process-classes vidocq:dev` would run the lifecycle twice.
+  - a build at every start that ran no lifecycle: one Maven run for nothing at each start of an unchanged project.
+- **Not covered**:
+  - a change of the `pom.xml`, which is not watched: the classes are those compiled before it.
+  - a file restored with a time before the last build, and a deleted resource: Maven's own build does not see them
+    either, and the copy of the resource stays in the output until `mvn clean`.
+  - a source saved while an earlier Maven run compiled it, after javac read it: its class is not older, and the
+    compiler plugin takes it for compiled, in the build this fix starts too. BUG-20261117-03 covers that save inside
+    a session and BUG-20261117-05 at the start of this Maven; here the save and the build are those of an earlier
+    command.
+  - a file system that keeps whole seconds: a file saved in the second the compiler wrote its list, after it, is not
+    later.
+
 ## BUG-20261117-05 — A save made while `vidocq:dev` starts is not applied: the application starts without it, and nothing says so
 
 - **Date**: 2026-11-17
@@ -77,7 +142,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
     lifecycle runs, and `vidocq:dev` builds only when the output has no class at all. The last round of the probe
     showed it before the fix; with the fix, the recompile that the save of that round starts compiles this source
     too, and a start with no save still leaves it. `mvn process-classes vidocq:dev`, the command of `vidocq dev`,
-    compiles it. A bug of its own.
+    compiles it. A bug of its own: BUG-20261117-07, fixed since.
   - a Maven that cannot be run for that recompile (no `mvnw` up the directories, no `mvn` on the `PATH`): the
     warning says so and the application starts, but `SavedWhileCompiling` deleted the class of a source saved while
     the build compiled it before Maven was tried, and that class is missing. Every recompile of such a session

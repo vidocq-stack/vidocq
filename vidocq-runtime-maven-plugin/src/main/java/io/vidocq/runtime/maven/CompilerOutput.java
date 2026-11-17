@@ -24,10 +24,13 @@ import org.apache.maven.plugin.MojoExecutionException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
@@ -63,6 +66,59 @@ public final class CompilerOutput {
     }
 
     private CompilerOutput() {
+    }
+
+    /**
+     * What {@code maven-compiler-plugin} recorded of its last run: the sources it was given, in
+     * {@code inputFiles.lst}. The plugin writes that list each time it runs, compiling or not, once it has looked
+     * for stale sources and before javac reads any: its time is when the last build compiled (BUG-20261117-07).
+     *
+     * @param listed  when the plugin wrote the list
+     * @param sources the lines of the list, one source a line
+     */
+    public record LastCompile(FileTime listed, List<String> sources) {
+
+        /**
+         * The sources of the list that no longer exist, among those under one of {@code roots}, sorted. The list
+         * also names the sources the annotation processors wrote, which the build deletes and writes itself: the
+         * project's own roots leave them out. A blank line, or one that is not a path, is skipped.
+         */
+        public List<Path> gone(List<Path> roots) {
+            return sources.stream().map(String::strip).filter(line -> !line.isEmpty())
+                    .flatMap(line -> path(line).stream())
+                    .filter(source -> roots.stream().anyMatch(source::startsWith) && !Files.exists(source))
+                    .distinct().sorted().toList();
+        }
+
+        private static Optional<Path> path(String line) {
+            try {
+                return Optional.of(Path.of(line));
+            } catch (InvalidPathException _) {
+                return Optional.empty();
+            }
+        }
+    }
+
+    /**
+     * The record of the compile execution that ran last under {@code buildDir}, the newest {@code inputFiles.lst};
+     * empty when the compiler recorded none, as under {@code useIncrementalCompilation=false}.
+     */
+    public static Optional<LastCompile> lastCompile(Path buildDir) throws IOException {
+        Path state = buildDir.resolve(STATE);
+        if (!Files.isDirectory(state)) {
+            return Optional.empty();
+        }
+        Optional<Path> newest;
+        try (Stream<Path> executions = Files.list(state)) {
+            newest = executions.sorted().map(execution -> execution.resolve("inputFiles.lst"))
+                    .filter(Files::isRegularFile)
+                    .max(Comparator.comparingLong(list -> list.toFile().lastModified()));
+        }
+        if (newest.isEmpty()) {
+            return Optional.empty();
+        }
+        Path list = newest.get();
+        return Optional.of(new LastCompile(Files.getLastModifiedTime(list), Files.readAllLines(list)));
     }
 
     /**

@@ -176,6 +176,38 @@ class VidocqDevMojoSessionTest {
         assertTrue(failed >= 0 && failed < firstLine(log, STARTED), log.lines::toString);
     }
 
+    /**
+     * BUG-20261117-07: a bare {@code vidocq:dev} runs no phase of the lifecycle. A source edited while it did not
+     * run, after the last compile and before this Maven started, is built before the child starts, and once: the
+     * start has nothing more to compile.
+     */
+    @Test
+    @Timeout(60)
+    void aSourceEditedWhileTheSessionDidNotRunIsBuiltBeforeTheChildStarts(@TempDir Path projectDir) throws Exception {
+        assumeFalse(System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win"), "a POSIX mvnw");
+        Instant mavenStarted = Instant.now().truncatedTo(ChronoUnit.SECONDS).minusSeconds(30);
+        aMavenThatNotesItsRuns(projectDir);
+        theLastCompileRan(projectDir, mavenStarted.minusSeconds(120));
+        aSourceSaved(projectDir, mavenStarted.minusSeconds(60));
+
+        SessionLog log = runUntilTheChildStarted(projectDir, false, mavenStarted);
+
+        assertEquals(List.of("run"), Files.readAllLines(projectDir.resolve("runs.txt")));
+        int building = firstLine(log, "INFO Since the last build, Menu.java changed: building the project first");
+        assertTrue(building >= 0 && building < firstLine(log, STARTED), log.lines::toString);
+        assertTrue(log.lines.stream().noneMatch(l -> l.contains("was saved while vidocq:dev started")),
+                log.lines::toString);
+    }
+
+    /** The record the compiler plugin leaves of its last run: the list of its sources, written at {@code time}. */
+    private static void theLastCompileRan(Path projectDir, Instant time) throws IOException {
+        Path inputs = projectDir.resolve(
+                "target/maven-status/maven-compiler-plugin/compile/default-compile/inputFiles.lst");
+        Files.createDirectories(inputs.getParent());
+        Files.writeString(inputs, "");
+        Files.setLastModifiedTime(inputs, FileTime.from(time));
+    }
+
     /** The session's Maven: a wrapper that notes each of its runs in {@code runs.txt}. */
     private static void aMavenThatNotesItsRuns(Path projectDir) throws IOException {
         Path mvnw = Files.writeString(projectDir.resolve("mvnw"), "#!/bin/sh\necho run >> runs.txt\n");

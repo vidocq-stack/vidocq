@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -152,6 +153,38 @@ class ContinuousTestingDevGoalIT {
                     + " compiling it again."), "the class the build left is not taken for compiled:\n" + said);
             assertTrue(Files.readString(compiled, StandardCharsets.ISO_8859_1).contains("savedAtStart"),
                     "the class the application loads has the method that was saved:\n" + said);
+        } finally {
+            Fixture.stop(mvn);
+        }
+    }
+
+    /**
+     * BUG-20261117-07: a bare {@code vidocq:dev} runs no phase of the lifecycle, so nothing compiled a source edited
+     * while it did not run. That source is newer than everything the last build left: the project is built before
+     * the application starts.
+     */
+    @Test
+    void aSourceEditedWhileVidocqDevDidNotRunIsBuiltBeforeTheApplicationStarts(@TempDir Path dir) throws Exception {
+        Path project = Fixture.copy(dir);
+        Path logs = Fixture.logs();
+        Fixture.warmUp(project, logs.resolve("dev-stopped-warm-up.log"));
+        Path log = logs.resolve("vidocq-dev-stopped.log");
+        Path compiled = project.resolve("target/classes/io/vidocq/it/ct/Greeter.class");
+        Fixture.addGreeterMethod(project, "editedWhileStopped", null);
+
+        Process mvn = Fixture.start(project, log, "vidocq:dev", "-Dvidocq.dev.debug=false",
+                "-Dvidocq.chappe.listener.default.port=0", "-Dvidocq.devconsole.port=0");
+        try {
+            Fixture.awaitLog(mvn, log, STARTED);
+            String said = Fixture.read(log);
+            int building = said.indexOf("Since the last build, Greeter.java changed: building the project first"
+                    + " (mvn process-classes).");
+            assertTrue(building >= 0 && building < said.indexOf("Child JVM started"),
+                    "the project is built before the application starts:\n" + said);
+            assertFalse(said.contains("was saved while vidocq:dev started"),
+                    "edited before Maven started, and built since: the start has nothing more to compile:\n" + said);
+            assertTrue(Files.readString(compiled, StandardCharsets.ISO_8859_1).contains("editedWhileStopped"),
+                    "the class the application loads has the method that was added:\n" + said);
         } finally {
             Fixture.stop(mvn);
         }

@@ -26,11 +26,14 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -368,5 +371,58 @@ class CompilerOutputTest {
 
         assertTrue(failure.getMessage().contains("a/A$$FoyComponent.class"), failure.getMessage());
         assertTrue(failure.getMessage().contains("mvn clean"), failure.getMessage());
+    }
+
+    /** The list the compiler leaves of the sources an execution was given, written at {@code time}. */
+    private void listed(String execution, Instant time, String... sources) throws IOException {
+        Path inputs = build.resolve("maven-status/maven-compiler-plugin/compile").resolve(execution)
+                .resolve("inputFiles.lst");
+        Files.createDirectories(inputs.getParent());
+        Files.write(inputs, List.of(sources));
+        Files.setLastModifiedTime(inputs, FileTime.from(time));
+    }
+
+    /**
+     * BUG-20261117-07: the compiler plugin rewrites the list of its sources each time it runs, so the newest list is
+     * the record of the last compile: when it ran, and what it was given.
+     */
+    @Test
+    void theLastCompileIsTheNewestListOfSources() throws IOException {
+        Instant compiled = Instant.parse("2026-11-17T06:10:07Z");
+        listed("default-compile", compiled.minusSeconds(60), "/src/Old.java");
+        listed("java-25-compile", compiled, "/src/A.java", "/src/B.java");
+        Files.createDirectories(build.resolve("maven-status/maven-compiler-plugin/compile/no-list"));
+
+        CompilerOutput.LastCompile last = CompilerOutput.lastCompile(build).orElseThrow();
+
+        assertEquals(FileTime.from(compiled), last.listed());
+        assertEquals(List.of("/src/A.java", "/src/B.java"), last.sources());
+    }
+
+    @Test
+    void aBuildWithoutAListOfSourcesHasNoLastCompile() throws IOException {
+        assertEquals(Optional.empty(), CompilerOutput.lastCompile(build));
+
+        Files.createDirectories(build.resolve("maven-status/maven-compiler-plugin/compile/default-compile"));
+
+        assertEquals(Optional.empty(), CompilerOutput.lastCompile(build));
+    }
+
+    /**
+     * The sources of that list that no longer exist, among those of the given roots only: the list also names the
+     * sources the annotation processors wrote. A blank line, or one that is not a path, is skipped.
+     */
+    @Test
+    void theSourcesOfTheLastCompileThatAreGoneAreThoseOfTheGivenRoots(@TempDir Path project) throws IOException {
+        Path root = project.resolve("src/main/java");
+        Path kept = Files.writeString(Files.createDirectories(root.resolve("acme")).resolve("Menu.java"), "x");
+        Path gone = root.resolve("acme/Tally.java");
+        Path goneToo = root.resolve("acme/Basket.java");
+        Path generated = project.resolve("target/generated-sources/annotations/acme/Menu_Index.java");
+        CompilerOutput.LastCompile last = new CompilerOutput.LastCompile(FileTime.fromMillis(0), List.of(
+                kept.toString(), gone.toString(), generated.toString(), " ", "not\0a path", goneToo.toString()));
+
+        assertEquals(List.of(goneToo, gone), last.gone(List.of(root)));
+        assertEquals(List.of(), last.gone(List.of()));
     }
 }
