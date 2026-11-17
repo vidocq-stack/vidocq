@@ -12,7 +12,9 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 ## MANSART-068 — A repository on a named data store cannot be injected by its parameterized supertype
 
 - **Date**: 2026-11-17
-- **Status**: OPEN — the maintainer decides whether the synthetic bean declares the parameterized supertypes
+- **Status**: OPEN — to fix in a pull request of its own once MANSART-067 is merged (decided by the maintainer on
+  2026-11-17, relayed by the coordinating session): a red test first, no ambiguity with the generated class bean, and
+  a deployment whose extensions are frozen at build
 - **Severity**: low (injecting `BasicRepository<Author, Long>` instead of the repository interface is unusual; the
   failure is at the container start, with a clear message)
 - **Symptom**: `Authors extends BasicRepository<Author, Long>` with `@Repository(dataStore = "audit")`, and a bean
@@ -32,7 +34,9 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 - **Recommendation**: give the synthetic bean the parameterized super-interfaces of the repository interface
   (`BasicRepository<Author, Long>`, `CrudRepository<…>`, `DataRepository<…>`), so that a repository has the same
   bean types whatever its data store. To check with it: no ambiguity with the implementation's class bean (it is
-  vetoed or absent whenever the synthetic bean is registered), and a deployment with frozen extensions.
+  vetoed or absent whenever the synthetic bean is registered), and a deployment with frozen extensions. The types
+  must be the real parameterized ones, not raw ones: Vauban is moving to the strict rule of CDI 4.1 §5.2.4 (Vauban
+  BUG-20261117-16), under which a raw bean type no longer satisfies a parameterized injection point.
 
 ---
 
