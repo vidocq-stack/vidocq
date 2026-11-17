@@ -5,6 +5,35 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261117-02 — Under `vidocq:dev`, a recompile that compiles nothing restarts an application with pages and Peano accessors: `layer swap: module-info changed`
+
+- **Date**: 2026-11-17
+- **Status**: FIXED in Ibarra (IBARRA-159, Vidocq/ibarra#93, in the SNAPSHOT since `0.4.0-20261117.021301-14`). Here,
+  the guard: `IbarraPagePrecompilationTest`.
+- **Module**: Ibarra `ibarra-compiler` (the page index among the `provides` of the module descriptor); seen through
+  `vidocq-runtime-maven-plugin` (`IbarraPagePrecompilation`, `PeanoAccessorRegistration`)
+- **Symptom**: found by the save probe of BUG-20261117-01 on the Bistro example
+  (`vidocq-runtime-foy-servlet-example`: Foy, Ibarra pages, Peano accessors). The probe saves `Menu.java` twice in a
+  row. The recompile of the first save compiles both and swaps the layer (`layer swap: Menu gained a method saveA2`).
+  The recompile of the second save compiles nothing, and restarts the application all the same: `Hot reload signalled
+  after 11216 ms (layer swap: module-info changed).` Of 15 recompiles, 7 swapped the layer for that reason alone. No
+  source had changed, and the module declares the same services.
+- **Repro**: `IbarraPagePrecompilationTest.the_pages_and_the_peano_registration_run_again_leave_the_descriptor_as_it_was`:
+  a module with a page that has an EL expression and a Peano accessor provider; run the two steps of
+  `vidocq:generate` that complete the descriptor, `IbarraPagePrecompilation.apply` then
+  `PeanoAccessorRegistration.apply`, then both again, as a recompile that compiles nothing does. Against the Ibarra
+  SNAPSHOT of before the fix: `the services the module provides, in the file's order ==> expected: <[PageIndex,
+  AccessorProvider]> but was: <[AccessorProvider, PageIndex]>`.
+- **Cause**: the compiler plugin leaves `module-info.class` alone when it compiles nothing, so the steps of
+  `vidocq:generate` run again on the descriptor they completed. Ibarra's page compilation then moved the `provides` of
+  its page index to the end of the list, after the accessor provider that Peano's registration had added behind it:
+  the same module, other bytes. `vidocq:dev` compares the compiled output by content, and a `module-info.class` that
+  changed swaps the layer.
+- **Fix**: in Ibarra, the page index keeps its place among the `provides` (Vidocq/ibarra#93). Nothing changes in the
+  runtime: the test above keeps the two steps stable together, byte for byte. With the fixed compiler, the same probe
+  on the Bistro example: 20 recompiles, 9 of them compile nothing and each says `Recompiled in 2422 ms: the compiled
+  output did not change, nothing reloaded.`; no `module-info changed`.
+
 ## BUG-20261117-01 — Under `vidocq:dev`, a save just after a reload is not applied: `Missing compiled Peano accessor provider`, then every recompile fails
 
 - **Date**: 2026-11-17

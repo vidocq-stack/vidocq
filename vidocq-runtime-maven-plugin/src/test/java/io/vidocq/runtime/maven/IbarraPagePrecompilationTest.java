@@ -23,6 +23,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.lang.classfile.Attributes;
+import java.lang.classfile.ClassFile;
+import java.lang.constant.ClassDesc;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
 import java.nio.file.Files;
@@ -32,6 +35,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.jar.JarFile;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -150,6 +154,46 @@ class IbarraPagePrecompilationTest {
         PeanoAccessorRegistration.apply(classes());
 
         assertFalse(providers(descriptor(), PAGE_INDEX).isEmpty(), "the page index survives the Peano rewrite");
+    }
+
+    /**
+     * A recompile that compiles nothing runs both steps again on the descriptor they completed. It stays as it was,
+     * byte for byte: {@code vidocq:dev} compares the classes by content, and swaps the layer when the descriptor
+     * changed (BUG-20261117-02).
+     */
+    @Test
+    void the_pages_and_the_peano_registration_run_again_leave_the_descriptor_as_it_was() throws Exception {
+        module("io.vidocq.ibarra.api", "io.vidocq.peano.api");
+        resource("META-INF/resources/el.jsp", "${param.x}");
+        accessorProvider("consumer.pages.Bean__PeanoAccessors");
+        IbarraPagePrecompilation.apply(classes(), modulePath(), warnings::add);
+        assertEquals(1, PeanoAccessorRegistration.apply(classes()));
+        byte[] completed = Files.readAllBytes(classes().resolve("module-info.class"));
+
+        IbarraPagePrecompilation.apply(classes(), modulePath(), warnings::add);
+        assertEquals(0, PeanoAccessorRegistration.apply(classes()));
+
+        byte[] again = Files.readAllBytes(classes().resolve("module-info.class"));
+        assertEquals(services(completed), services(again), "the services the module provides, in the file's order");
+        assertArrayEquals(completed, again);
+    }
+
+    /** The services a compiled descriptor provides, in the order of the file. */
+    private static List<String> services(byte[] descriptor) {
+        return ClassFile.of().parse(descriptor).findAttribute(Attributes.module()).orElseThrow().provides().stream()
+                .map(provide -> provide.provides().asSymbol().displayName())
+                .toList();
+    }
+
+    /** A Peano fragment and the compiled provider it names, as Peano's annotation processor leaves them. */
+    private void accessorProvider(String provider) throws Exception {
+        resource("META-INF/peano/accessor-providers/" + provider + ".txt",
+                "provides io.vidocq.peano.spi.AccessorProvider with " + provider + ";\n");
+        Path file = classes().resolve(provider.replace('.', '/') + ".class");
+        Files.createDirectories(file.getParent());
+        Files.write(file, ClassFile.of().build(ClassDesc.of(provider), type -> type
+                .withFlags(ClassFile.ACC_PUBLIC)
+                .withInterfaceSymbols(ClassDesc.of("io.vidocq.peano.spi.AccessorProvider"))));
     }
 
     /** The explicit modules of the test class path the pages compile against. */
