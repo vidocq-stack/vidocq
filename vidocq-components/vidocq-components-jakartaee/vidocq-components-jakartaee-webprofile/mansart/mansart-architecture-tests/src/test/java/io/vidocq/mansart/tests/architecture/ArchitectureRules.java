@@ -318,7 +318,7 @@ final class ArchitectureRules {
             Map.entry("io.vidocq.mansart.data.cdi.RepositoryBeanTypes", "reads the generic super-interfaces of a"
                     + " loaded repository interface, to give its synthetic bean the parameterized bean types its"
                     + " class bean would have (MANSART-068): at the container start the language model gives the"
-                    + " super-interfaces without their type arguments (Javadoc of RepositoryBeanTypes)"),
+                    + " super-interfaces without their type arguments (Vauban BUG-20261117-22; Javadoc of RepositoryBeanTypes)"),
             Map.entry("io.vidocq.mansart.data.cdi.DataStoreResolver", "reads @Repository(dataStore) of the"
                     + " interface a synthetic bean serves, to route it to a named data store (M9)"),
             Map.entry("io.vidocq.mansart.data.cdi.JtaBridgeActivator", "probes by name whether the Transactions API"

@@ -29,6 +29,7 @@ New in the `{project-version}` development line — everything listed here lande
 == Data
 
 * xref:reference.adoc#name-quoting[Mapped names are no longer quoted] [.tag-new]#NEW# — a table or column name reaches the SQL as the mapping writes it, as with Jakarta Persistence: without quotes the database folds it, with double quotes inside the value (`@Table(name = "\"Order Lines\"")`) it is delimited. A repository and a persistence unit that share an entity now name the same table. *A schema created with quoted names needs a change*: see xref:migration.adoc#mapped-names-unquoted[Upgrading from 0.3.0] (MANSART-067).
+* xref:usage.adoc#repository-bean-types[A repository on a named data store is injected by its parameterized supertype] [.tag-new]#NEW# — `@Inject BasicRepository<AuditEntry, Long>` now finds a repository with `@Repository(dataStore = "audit")`, as it already found one on the default data store. It stopped the container start with an unsatisfied dependency (MANSART-068).
 
 == Build
 

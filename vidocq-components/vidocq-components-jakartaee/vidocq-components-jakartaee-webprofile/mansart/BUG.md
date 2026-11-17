@@ -12,16 +12,16 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
 ## MANSART-068 — A repository on a named data store cannot be injected by its parameterized supertype
 
 - **Date**: 2026-11-17
-- **Status**: OPEN — to fix in a pull request of its own once MANSART-067 is merged (decided by the maintainer on
-  2026-11-17, relayed by the coordinating session): a red test first, no ambiguity with the generated class bean, and
-  a deployment whose extensions are frozen at build
+- **Status**: FIXED on `fix/routed-repository-bean-types` (decided by the maintainer on 2026-11-17, relayed by the
+  coordinating session: a pull request of its own after MANSART-067, a red test first, no ambiguity with the
+  generated class bean, and a deployment whose extensions are frozen at build)
 - **Severity**: low (injecting `BasicRepository<Author, Long>` instead of the repository interface is unusual; the
   failure is at the container start, with a clear message)
 - **Symptom**: `Authors extends BasicRepository<Author, Long>` with `@Repository(dataStore = "audit")`, and a bean
   with `@Inject BasicRepository<Author, Long>`: the container start fails with `Unsatisfied dependency … of type
   ParameterizedType[rawType=jakarta.data.repository.BasicRepository, typeArguments=[…Author, java.lang.Long]]`.
   The same repository on the default data store is injected. `@Inject Authors` works in both cases.
-- **Minimal reproduction**: none committed. Run on 2026-11-17 in the test vehicle `mansart-data-vauban-it` (branch
+- **Minimal reproduction**: `RoutedRepositorySupertypeInjectionTest` (mansart-data-tests). First run on 2026-11-17 in the test vehicle `mansart-data-vauban-it` (branch
   `test/parameterized-repository-injection`, both processors, Vauban 0.4.0-20261117.095612-67, a start from the
   build index as a Vidocq application does): with `Authors` routed to a named data source, only the `Author`
   injection point is unsatisfied.
@@ -37,6 +37,18 @@ short id, date, symptom, minimal repro, cause hypothesis, status. Update on each
   vetoed or absent whenever the synthetic bean is registered), and a deployment with frozen extensions. The types
   must be the real parameterized ones, not raw ones: Vauban is moving to the strict rule of CDI 4.1 §5.2.4 (Vauban
   BUG-20261117-16), under which a raw bean type no longer satisfies a parameterized injection point.
+- **Fix**: `RepositoryBeanTypes` gives the synthetic bean, compile-time and run-time, the parameterized
+  super-interfaces of the repository interface, type variables replaced (`CrudRepository<Author, Long>`,
+  `BasicRepository<Author, Long>`, `DataRepository<Author, Long>`). It reads them by reflection on the loaded
+  interface, a documented fallback (`ArchitectureRules.REFLECTIVE_FALLBACKS`): the language model of the extension
+  gives super-interfaces without their type arguments (Vauban BUG-20261117-22).
+- **Investigations**:
+  - 2026-11-17: the synthetic beans are registered for every repository of the build index, so two routed
+    repositories of one entity are both candidates for `BasicRepository<E, K>`: ambiguous, as two class beans are on
+    the default data store. Documented in `usage.adoc`.
+  - 2026-11-17: not checked yet in Mansart: a deployment whose extensions are frozen at build. It needs
+    `vidocq:generate`, so the test belongs to Vidocq (`vidocq-runtime-it-noether-mansart-data` has a routed
+    repository).
 
 ---
 

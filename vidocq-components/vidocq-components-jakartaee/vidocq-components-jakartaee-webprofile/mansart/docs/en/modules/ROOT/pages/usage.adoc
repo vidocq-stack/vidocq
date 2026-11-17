@@ -189,6 +189,12 @@ Route a repository to a named datasource with the standard Jakarta Data attribut
 public interface AuditEntryRepository extends BasicRepository<AuditEntry, Long> { }
 ----
 
+[#repository-bean-types]
+A repository is injected by its interface (`@Inject AuditEntryRepository`), or by one of its parameterized
+super-interfaces (`@Inject BasicRepository<AuditEntry, Long>`), whatever its data store. With the second form, two
+repositories of the same entity are ambiguous, as two beans of one type always are: inject the repository interface
+there.
+
 And inject the raw datasource anywhere with the generated `@Named` holder:
 
 [source,java]

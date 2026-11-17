@@ -43,7 +43,8 @@ import java.util.Map;
  *
  * <p>The super-interfaces are read from the loaded interface, with {@code java.lang.reflect}: at the container start
  * the language model of the build compatible extension gives them without their type arguments
- * ({@code ClassInfo.superInterfaces()} answers {@code CrudRepository}, not {@code CrudRepository<Author, Long>}).
+ * ({@code ClassInfo.superInterfaces()} answers {@code CrudRepository}, not {@code CrudRepository<Author, Long>}:
+ * Vauban BUG-20261117-22).
  */
 final class RepositoryBeanTypes {
 
