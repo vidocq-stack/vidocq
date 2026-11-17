@@ -10,9 +10,10 @@ on their own, without the application, with a summary in the terminal.
 == What it does
 
 Every test of the application runs after every change: there is no tracking of the tests a change affects. A run is
-Surefire itself, started as `mvn test-compile surefire:test`, so the tests run exactly as `mvn test` runs them: the
-same module path, the same `argLine`, the same JUnit launcher listeners, the
-xref:dev-services.adoc#in-tests[dev services host] included. Integration tests run by Failsafe are not run.
+Surefire itself, started as `mvn process-test-classes surefire:test`, so the tests run exactly as `mvn test` runs them:
+the same module path, the same `argLine`, the same JUnit launcher listeners, the
+xref:dev-services.adoc#in-tests[dev services host] included. Integration tests run by Failsafe are not run. In
+`vidocq:dev` the run leaves the main classes to the recompile: see <<who-builds>>.
 
 [#two-goals]
 == `vidocq:dev` or `vidocq:test`
@@ -78,7 +79,7 @@ Both goals watch the main directories, `src/main/java` and `src/main/resources`,
 
 | The main directories
 | Recompile, reload the application, *then* run the tests
-| Run the tests: their `test-compile` recompiles the main sources
+| Run the tests: the run compiles the main sources itself
 
 | The test directories only
 | Run the tests; the application is *not* reloaded
@@ -97,6 +98,23 @@ One run at a time:
   starts after the recompile or the reload.
 * A request, a button of the dev console or a key of `vidocq:test`, *never cancels*: it waits for the run in flight,
   and when several arrive meanwhile, the last one wins.
+
+[#who-builds]
+== Who builds the classes
+
+A change stops the run in flight, and a Maven that is stopped while javac writes its classes leaves an output that
+looks whole: the classes of your sources are there, newer than the sources, and the ones javac writes last, of the
+sources an annotation processor generated, are missing. The next build then compiles nothing, and fails on the missing
+class until a source changes. Two rules keep a stopped run from leaving that behind [.tag-new]#NEW#:
+
+* In `vidocq:dev`, the recompile of the dev loop builds the main output, `target/classes`, and a test run does not.
+  The run gets `-Dmaven.main.skip=true -Dmaven.resources.skip=true -Dvidocq.generate.skip=true`: it compiles no main
+  source, copies no main resource and generates nothing, and it compiles the tests against the classes of the last
+  recompile, the ones the application runs. The one file it still writes there is the build information, which every
+  Maven run rewrites. In `vidocq:test`, which has no recompile, a run builds both outputs.
+* A run that a change, or the end of the goal, stopped loses what it wrote. The files modified since it started are
+  deleted from the outputs it builds, `target/test-classes` and, in `vidocq:test`, `target/classes`, before the next
+  run, which then compiles every source again.
 
 [#switch]
 == Turning it on and off

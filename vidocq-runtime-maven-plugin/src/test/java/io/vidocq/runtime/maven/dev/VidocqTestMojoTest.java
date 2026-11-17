@@ -29,6 +29,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -40,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
 class VidocqTestMojoTest {
 
@@ -75,6 +78,52 @@ class VidocqTestMojoTest {
         assertEquals(List.of(testClasses, classes), mojo.testClasspath());
         assertTrue(new ApplicationClasspath(mojo.testClasspath()).contains("org.postgresql.Driver"));
         assertEquals(List.of(), new VidocqTestMojo().testClasspath(), "no project: an empty class path");
+    }
+
+    /**
+     * BUG-20261117-01: {@code vidocq:test} has no recompile of its own. Its runs are the only build of the project:
+     * they build the main output and the test one, and skip nothing.
+     */
+    @Test
+    void theRunsBuildTheMainOutputAndTheTestOne(@TempDir Path dir) {
+        Path classes = dir.resolve("target/classes");
+        Path testClasses = dir.resolve("target/test-classes");
+        MavenProject project = new MavenProject();
+        project.getBuild().setTestOutputDirectory(testClasses.toString());
+        VidocqTestMojo mojo = new VidocqTestMojo();
+        mojo.setDirectories(dir.toFile(), classes.toFile(), dir.resolve("target").toFile());
+        mojo.setProject(project);
+
+        assertEquals(TestOutputs.ofVidocqTest(classes, testClasses), mojo.testOutputs());
+    }
+
+    /**
+     * BUG-20261117-01, as the goal wires it: the Maven of a run gets no switch that keeps it away from an output.
+     * That Maven is a wrapper here, which writes its arguments down.
+     */
+    @Test
+    @Timeout(30)
+    void theMavenOfARunIsToldToSkipNothing(@TempDir Path dir) throws Exception {
+        assumeFalse(System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win"), "a POSIX mvnw");
+        Path mvnw = Files.writeString(dir.resolve("mvnw"),
+                "#!/bin/sh\necho \"$@\" > \"$(dirname \"$0\")/arguments.txt\"\nexit 0\n");
+        assertTrue(mvnw.toFile().setExecutable(true));
+        MavenProject project = new MavenProject();
+        project.getBuild().setTestOutputDirectory(dir.resolve("target/test-classes").toString());
+        VidocqTestMojo mojo = new VidocqTestMojo();
+        mojo.setDirectories(dir.toFile(), dir.resolve("target/classes").toFile(), dir.resolve("target").toFile());
+        mojo.setProject(project);
+        CompletableFuture<TestResults> ended = new CompletableFuture<>();
+
+        try (ContinuousTesting testing = mojo.continuousTesting(dir, Map.of(), ended::complete)) {
+            testing.start();
+            testing.changed(TestResults.Trigger.RUN_ALL, TestControl.ReadyGate.NOW);
+            ended.get(20, TimeUnit.SECONDS);
+        }
+
+        String arguments = Files.readString(dir.resolve("arguments.txt"));
+        assertTrue(arguments.contains("process-test-classes surefire:test"), arguments);
+        assertFalse(arguments.contains("skip"), arguments);
     }
 
     @Test

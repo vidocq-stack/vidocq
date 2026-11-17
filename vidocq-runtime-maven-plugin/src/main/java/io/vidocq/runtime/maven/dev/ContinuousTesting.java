@@ -37,7 +37,8 @@ import java.util.function.Function;
  *
  * <ul>
  *   <li>A {@linkplain #changed change} cancels the run in flight and replaces the run waiting to start; that run
- *       starts once its {@link ReadyGate} opens, after the application reloaded.</li>
+ *       starts once its {@link ReadyGate} opens, after the application reloaded. What the cancelled run built is
+ *       {@linkplain Launcher#discard discarded} first (BUG-20261117-01).</li>
  *   <li>A {@linkplain #request request} ({@code run-all}, {@code rerun-failed}) never cancels: it waits for the run
  *       in flight, the last one wins, and it never replaces a change waiting to start, whose run covers it.</li>
  *   <li>{@code rerun-failed} runs the failures of the last complete result, which this class computes itself.</li>
@@ -60,6 +61,15 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
         }
 
         Launched launch(List<String> tests) throws IOException;
+
+        /**
+         * Deletes what the run that started at {@code since} built, once a change or a close stopped it: a run
+         * stopped while it compiles leaves an output that the next build takes for up to date (BUG-20261117-01).
+         * Called on the worker once the run is gone, before the next one starts. Nothing by default.
+         */
+        default void discard(Instant since) throws IOException {
+            // nothing built
+        }
 
         /** Stops what {@link #prepare} started, once {@link ContinuousTesting#close} ended the runs. */
         default void close() {
@@ -144,13 +154,14 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
      * TestResultsFile#FILE_NAME} and the log in {@code <buildDir>/}{@value TestResultsFile#LOG_NAME}.
      *
      * @param services the dev services of the runs, whose keys every run gets as {@code -D}; closed with this
+     * @param outputs  the outputs the runs build
      */
-    static ContinuousTesting forProject(Path projectDir, Path buildDir, TestServices services,
+    static ContinuousTesting forProject(Path projectDir, Path buildDir, TestServices services, TestOutputs outputs,
             Consumer<TestResults> onResult, Consumer<String> warn) {
         Path logFile = buildDir.resolve(TestResultsFile.LOG_NAME);
         Path reportsDir = buildDir.resolve("surefire-reports");
         TestRunner runner = new TestRunner(projectDir, RecompileRunner.detectMavenExecutable(projectDir),
-                services, logFile, reportsDir);
+                services, logFile, reportsDir, outputs);
         return new ContinuousTesting(runner, since -> SurefireReports.read(reportsDir, since),
                 () -> TestRunner.compilationFailed(logFile),
                 new Results(buildDir.resolve(TestResultsFile.FILE_NAME), shown(projectDir, logFile)), onResult, warn,
@@ -409,6 +420,9 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
             current = null;
         }
         boolean wasCancelled = launched != null && launched.cancelled();
+        if (wasCancelled) {
+            discard(startedAt);
+        }
         long duration = Duration.ofNanos(System.nanoTime() - t0).toMillis();
         TestResults result = wasCancelled
                 ? TestResults.cancelled(trigger, startedAt, duration, log, previous)
@@ -427,6 +441,19 @@ final class ContinuousTesting implements TestControl, AutoCloseable {
             // report): run them all rather than lose the failures (#138).
             warn.accept("Tests: the rerun of " + tests.size() + " failed test(s) matched no test; running every test");
             queueRunAll();
+        }
+    }
+
+    /**
+     * Has the launcher delete what the run that started at {@code startedAt} built, once a change or a close stopped
+     * it: on the worker, so before the next run starts (BUG-20261117-01). A failure is a warning, and the next run
+     * builds on what is left.
+     */
+    private void discard(Instant startedAt) {
+        try {
+            launcher.discard(startedAt);
+        } catch (IOException failed) {
+            warn.accept("Tests: cannot delete what the stopped run built: " + failed.getMessage());
         }
     }
 

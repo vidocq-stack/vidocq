@@ -5,6 +5,54 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261117-01 — Under `vidocq:dev`, a save just after a reload is not applied: `Missing compiled Peano accessor provider`, then every recompile fails
+
+- **Date**: 2026-11-17
+- **Status**: FIXED on `fix/dev-tests-leave-main-output`
+- **Module**: `vidocq-runtime-maven-plugin` (`TestRunner`, `ContinuousTesting`, `VidocqDevMojo`, `VidocqTestMojo`, new
+  `TestOutputs`)
+- **Symptom**: found by the reload probe of #631 on the Bistro example (`vidocq-runtime-foy-servlet-example`). The
+  probe appends a method to `Menu.java` as soon as each boot serves. Reloads 1 to 4 swap the layer; at the fifth the
+  dev loop logs `vidocq:generate failed: Missing compiled Peano accessor provider
+  io.vidocq.runtime.examples.servlet.Tally__PeanoAccessors`, then `Compile failed (exit 1); keeping previous JVM up.`
+  The save is not applied, and a recompile fails the same way, after a resource change for instance, until a Java
+  source is saved again. What the project held then: `target/vidocq-dev-tests.json` says
+  `{"state":"cancelled","trigger":"change","startedAt":"2026-11-16T23:13:50Z","durationMillis":1691,…}`; 37 classes
+  of `target/classes` were written two seconds after that start, by the cancelled run; `Tally__PeanoAccessors.class`
+  is missing, its source is there; the compiler plugin's `createdFiles.lst` is the recompile's of a second before.
+- **Repro**: the state, without the race: build the example, delete `Tally__PeanoAccessors.class`, run the recompile
+  (`mvn -q process-classes -DskipTests -Dvidocq.moduleinfo.dev=true`): `Nothing to compile - all classes are up to
+  date.`, then the `vidocq:generate` failure. The other half: touch a main source and run the lifecycle of a test run
+  (`mvn -o process-test-classes -Dvidocq.dev.devServices=false`): `Recompiling the module because of changed source
+  code. Compiling 23 source files`. The race itself: under `vidocq:dev` with continuous testing, save a main source
+  within about a second of the end of a reload.
+- **Cause**: a test run is `mvn process-test-classes surefire:test`, and that lifecycle compiles the main sources,
+  copies the main resources and runs `vidocq:generate`. In the dev loop the recompile has done it before each reload,
+  so a run finds nothing to do, unless a save lands between the recompile and the run: the run then compiles the main
+  sources itself. The change stops the run (`TestRunner.destroyTree`) while javac writes its classes, and javac writes
+  the classes of the sources an annotation processor generated last. The output then has the class of every
+  hand-written source, newer than its source, and not `Tally__PeanoAccessors.class`. The compiler plugin (3.15.0)
+  compiles a source when its class is missing or older: the recompile compiles nothing, and `vidocq:generate` fails on
+  the missing class. A run stopped in its test compile can leave `target/test-classes` in the same state, and so can
+  a run of `vidocq:test`, the only build of that goal, in both outputs; neither was observed.
+- **Fix**: two rules.
+  - Under `vidocq:dev` the recompile alone builds `target/classes`: a run gets `-Dmaven.main.skip=true
+    -Dmaven.resources.skip=true -Dvidocq.generate.skip=true` (`TestOutputs.ofVidocqDev`). The one file a run still
+    writes there is the build information (`META-INF/vidocq/build-info/`), which every Maven run rewrites.
+  - A run that a change or a close stopped loses what it wrote: before the next run, `ContinuousTesting` has its
+    launcher delete the files modified since the run started, two seconds earlier included for a file system with
+    coarse times, in the outputs the runs build (`TestOutputs.discard`: `target/test-classes`, and `target/classes`
+    under `vidocq:test`). The next run finds sources without a class and compiles them all.
+
+  Tests: `TestOutputsTest`, `TestRunnerTest.underVidocqDevARunLeavesTheMainOutputToTheRecompile`,
+  `ContinuousTestingTest.aRunThatAChangeStoppedIsDiscardedBeforeTheNextRunStarts` and the three beside it,
+  `VidocqTestMojoTest.theMavenOfARunIsToldToSkipNothing`, `ContinuousTestingDevGoalIT` (a main class older than its
+  source stays as it is across a test run). On the Bistro example, with the fix: eight saves, each as soon as the
+  boot serves, give eight layer swaps and no failed recompile; with every file of both outputs deleted, the worst a
+  discard can do, a run builds the same 96 and 10 files again and its 9 tests pass.
+- **Not covered**: a Maven stopped from outside the dev loop, a Ctrl+C in the middle of a recompile or of a
+  `mvn compile`, can leave the same output; `mvn clean`, or saving a Java source, repairs it.
+
 ## BUG-20261116-10 — The build of `main` fails when the Grafana LGTM container of `OtelDevServiceTest` needs more than its three minutes
 
 - **Date**: 2026-11-16

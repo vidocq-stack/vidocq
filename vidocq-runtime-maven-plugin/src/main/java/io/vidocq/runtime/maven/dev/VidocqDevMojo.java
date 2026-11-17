@@ -582,7 +582,7 @@ public class VidocqDevMojo extends AbstractMojo {
         Path results = buildDirPath().resolve(TestResultsFile.FILE_NAME);
         sysProps.put(TestResultsFile.PROPERTY, results.toAbsolutePath().toString());
         ContinuousTesting started = ContinuousTesting.forProject(projectDir, buildDirPath(),
-                testServices(devs.session(), devs.tests(), getLog()::info, getLog()::warn),
+                testServices(devs.session(), devs.tests(), getLog()::info, getLog()::warn), testOutputs(),
                 result -> TestSummaryPrinter.lines(result, false, false).forEach(getLog()::info), getLog()::warn);
         TestRequestFile requests;
         try {
@@ -1327,6 +1327,16 @@ public class VidocqDevMojo extends AbstractMojo {
         } catch (IllegalArgumentException e) {
             throw new MojoExecutionException(e.getMessage(), e);
         }
+    }
+
+    /**
+     * The outputs the test runs build: the test one. The main output is the recompile's, and a run that compiled the
+     * main sources too, then was stopped by a change, left the recompile nothing to compile and a class missing
+     * (BUG-20261117-01).
+     */
+    // package-private for the unit test.
+    TestOutputs testOutputs() {
+        return TestOutputs.ofVidocqDev(Path.of(project.getBuild().getTestOutputDirectory()));
     }
 
     /**

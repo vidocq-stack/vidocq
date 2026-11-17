@@ -91,7 +91,10 @@ class VidocqDevMojoSessionTest {
         SessionLog log = new SessionLog();
         VidocqDevMojo mojo = new VidocqDevMojo();
         mojo.setLog(log);
-        mojo.setProject(new MavenProject());
+        // As Maven hands it: a project always has a test output, the one the test runs build (BUG-20261117-01).
+        MavenProject project = new MavenProject();
+        project.getBuild().setTestOutputDirectory(projectDir.resolve("target/test-classes").toString());
+        mojo.setProject(project);
         mojo.setBaseDir(projectDir.toFile());
         mojo.setBuildDir(projectDir.resolve("target").toFile());
         mojo.setClassesDir(classes.toFile());

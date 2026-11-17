@@ -1218,8 +1218,9 @@ why, on one `-X` debug line.
 
 `vidocq:test` runs the application's tests on every change, without starting the application: no child JVM,
 no dev console, no debug agent. It opens the dev services session, runs every test, then watches the main and
-test directories and runs them again on each change. A run is `mvn test-compile surefire:test`, so a main
-change is recompiled by the run itself. See xref:continuous-testing.adoc[Continuous testing] for the whole
+test directories and runs them again on each change. A run is `mvn process-test-classes surefire:test`, so a main
+change is recompiled by the run itself, and a run that a change stopped loses what it wrote in `target/classes` and
+`target/test-classes` before the next one starts. See xref:continuous-testing.adoc[Continuous testing] for the whole
 behaviour, the results file and the dev services it shares.
 
 [source,bash]
@@ -1275,6 +1276,10 @@ its run and its dev services.
 | `src/test/java,src/test/resources`
 | The test directories to watch: a change there runs the tests without reloading the application.
 |===
+
+A test run of `vidocq:dev` builds `target/test-classes` only. The recompile of the dev loop builds `target/classes`,
+and the run gets `-Dmaven.main.skip=true -Dmaven.resources.skip=true -Dvidocq.generate.skip=true`: see
+xref:continuous-testing.adoc#who-builds[Who builds the classes].
 
 [#debugger]
 == The debug agent of `vidocq:dev` and `vidocq:run`

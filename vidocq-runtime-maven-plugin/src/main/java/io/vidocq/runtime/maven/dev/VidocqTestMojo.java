@@ -171,8 +171,17 @@ public class VidocqTestMojo extends AbstractMojo {
     // package-private for the unit test.
     ContinuousTesting continuousTesting(Path projectDir, Map<String, String> testProps,
             Consumer<TestResults> onResult) {
-        return ContinuousTesting.forProject(projectDir, buildDir.toPath(), TestServices.fixed(testProps), onResult,
-                getLog()::warn);
+        return ContinuousTesting.forProject(projectDir, buildDir.toPath(), TestServices.fixed(testProps),
+                testOutputs(), onResult, getLog()::warn);
+    }
+
+    /**
+     * The outputs the runs build: both, since the goal has no recompile of its own and a run is the only build of
+     * the project. What a run that a change stopped wrote there is deleted before the next run (BUG-20261117-01).
+     */
+    // package-private for the unit test.
+    TestOutputs testOutputs() {
+        return TestOutputs.ofVidocqTest(classesDir.toPath(), Path.of(project.getBuild().getTestOutputDirectory()));
     }
 
     /** The dev services session of the tests, or {@code null} when they are off. */

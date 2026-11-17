@@ -24,7 +24,9 @@ import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -82,10 +84,20 @@ class ContinuousTestingDevGoalIT {
                     r -> Fixture.is(r, "failed", "rerun-failed"));
             assertEquals(1, Fixture.count(rerun, "run"), "only the failed test ran");
 
+            // BUG-20261117-01: under vidocq:dev the recompile builds the main output, and a test run leaves it
+            // alone. A main class older than its source is what a run's own Maven would compile again.
+            Path source = project.resolve("src/main/java/io/vidocq/it/ct/Greeter.java");
+            Path compiled = project.resolve("target/classes/io/vidocq/it/ct/Greeter.class");
+            Files.setLastModifiedTime(compiled,
+                    FileTime.from(Files.getLastModifiedTime(source).toInstant().minus(Duration.ofHours(1))));
+            FileTime older = Files.getLastModifiedTime(compiled);
+
             Fixture.fixExpectation(project);
             Map<String, Object> green = Fixture.awaitResults(project, r -> Fixture.is(r, "passed", "test-change"));
             assertEquals(3, Fixture.count(green, "run"));
             assertEquals(1, Fixture.occurrences(log, STARTED), "a test change never reloads the application");
+            assertEquals(older, Files.getLastModifiedTime(compiled),
+                    "a test run of vidocq:dev compiled the main sources: the recompile alone builds them");
         } finally {
             Fixture.stop(mvn);
         }

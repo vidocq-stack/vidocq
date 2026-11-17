@@ -30,6 +30,7 @@ import io.vidocq.runtime.maven.ConsoleColors;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.logging.SystemStreamLog;
+import org.apache.maven.project.MavenProject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
@@ -93,6 +94,21 @@ class VidocqDevMojoTest {
         assertEquals("dev", child.get("vidocq.profile"));
         assertEquals("9000", child.get("vidocq.devconsole.port"),
                 "as in vidocq:run, a property the child already gets is not replaced by the command line");
+    }
+
+    /**
+     * BUG-20261117-01: under {@code vidocq:dev} the recompile of the dev loop builds the main output. A test run
+     * builds the test output only, with the switches that keep it away from the main one.
+     */
+    @Test
+    void theTestRunsLeaveTheMainOutputToTheRecompile(@TempDir Path tmp) {
+        Path testClasses = tmp.resolve("target/test-classes");
+        MavenProject project = new MavenProject();
+        project.getBuild().setTestOutputDirectory(testClasses.toString());
+        VidocqDevMojo mojo = new VidocqDevMojo();
+        mojo.setProject(project);
+
+        assertEquals(TestOutputs.ofVidocqDev(testClasses), mojo.testOutputs());
     }
 
     /** {@code vidocq:dev} starts its dev services unless something says otherwise. */

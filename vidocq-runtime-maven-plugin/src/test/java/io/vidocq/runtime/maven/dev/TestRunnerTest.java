@@ -47,12 +47,45 @@ class TestRunnerTest {
     /** The runs of a session without dev services. */
     private static final TestServices NO_KEYS = TestServices.fixed(Map.of());
 
+    /** The outputs of {@code vidocq:test}, whose runs build the main output too. */
+    private static final TestOutputs BOTH =
+            TestOutputs.ofVidocqTest(Path.of("target/classes"), Path.of("target/test-classes"));
+
     @Test
     void allTestsRunWithoutDevServicesOfTheirOwn() {
         assertEquals(List.of("mvn", "-ntp", "-o", "-q", "process-test-classes", "surefire:test",
                         "-DfailIfNoTests=false", "-Dsurefire.failIfNoSpecifiedTests=false",
                         "-Dvidocq.dev.devServices=false"),
-                TestRunner.command("mvn", List.of(), Map.of(), true));
+                TestRunner.command("mvn", BOTH, List.of(), Map.of(), true));
+    }
+
+    /**
+     * BUG-20261117-01: under {@code vidocq:dev} the recompile of the dev loop builds the main output. A run compiles
+     * no main source, copies no main resource and generates nothing: started just after a save, it compiled the main
+     * sources itself, the change stopped it while javac wrote, and the recompile then found every class newer than its
+     * source and failed on the classes javac had not written.
+     */
+    @Test
+    void underVidocqDevARunLeavesTheMainOutputToTheRecompile() {
+        assertEquals(List.of("mvn", "-ntp", "-o", "-q", "process-test-classes", "surefire:test",
+                        "-DfailIfNoTests=false", "-Dsurefire.failIfNoSpecifiedTests=false",
+                        "-Dmaven.main.skip=true", "-Dmaven.resources.skip=true", "-Dvidocq.generate.skip=true",
+                        "-Dtest=com.acme.ATest#x", "-Dvidocq.dev.devServices=false"),
+                TestRunner.command("mvn", TestOutputs.ofVidocqDev(Path.of("target/test-classes")),
+                        List.of("com.acme.ATest#x"), Map.of(), true));
+    }
+
+    /** BUG-20261117-01: a run that was stopped loses what it wrote in the outputs its runner builds. */
+    @Test
+    void aStoppedRunIsDiscardedFromTheOutputsOfItsRunner(@TempDir Path dir) throws Exception {
+        Path testClasses = Files.createDirectories(dir.resolve("target/test-classes"));
+        Path halfBuilt = Files.writeString(testClasses.resolve("ATest.class"), "half");
+        TestRunner runner = new TestRunner(dir, "mvn", NO_KEYS, dir.resolve("target/t.log"),
+                dir.resolve("target/surefire-reports"), TestOutputs.ofVidocqDev(testClasses));
+
+        runner.discard(Files.getLastModifiedTime(halfBuilt).toInstant());
+
+        assertFalse(Files.exists(halfBuilt), "what the stopped run wrote");
     }
 
     /** BUG-20261106-01: the run again after an offline miss goes online, its command otherwise the same. */
@@ -61,7 +94,7 @@ class TestRunnerTest {
         assertEquals(List.of("mvn", "-ntp", "-q", "process-test-classes", "surefire:test",
                         "-DfailIfNoTests=false", "-Dsurefire.failIfNoSpecifiedTests=false",
                         "-Dvidocq.dev.devServices=false"),
-                TestRunner.command("mvn", List.of(), Map.of(), false));
+                TestRunner.command("mvn", BOTH, List.of(), Map.of(), false));
     }
 
     @Test
@@ -77,7 +110,7 @@ class TestRunnerTest {
                         "-Dvidocq.pool.url=jdbc:postgresql://localhost:5432/dev",
                         "-Dvidocq.dev.provided.vidocq.pool.url=postgres",
                         "-Dvidocq.dev.devServices=false"),
-                TestRunner.command("/w/mvnw", List.of("com.acme.ATest#x", "com.acme.BTest#y"), keys, true),
+                TestRunner.command("/w/mvnw", BOTH, List.of("com.acme.ATest#x", "com.acme.BTest#y"), keys, true),
                 "a switch among the keys never reaches the tests: the plugin hosts their containers");
     }
 
@@ -126,7 +159,7 @@ class TestRunnerTest {
         };
         Path log = dir.resolve("target/vidocq-dev-tests.log");
         TestRunner runner = new TestRunner(dir, script(dir, "echo \"args: $*\"\n").toString(), services, log,
-                dir.resolve("target/surefire-reports"));
+                dir.resolve("target/surefire-reports"), BOTH);
 
         runner.prepare();
         assertEquals(0, runner.launch(List.of()).waitFor());
@@ -153,7 +186,7 @@ class TestRunnerTest {
         Files.writeString(reports.resolve("notes.txt"), "kept");
         Path log = dir.resolve("target/vidocq-dev-tests.log");
         TestRunner runner = new TestRunner(dir, script(dir, "echo \"args: $*\"\n").toString(), NO_KEYS, log,
-                reports);
+                reports, BOTH);
 
         assertEquals(0, runner.launch(List.of()).waitFor());
 
@@ -194,7 +227,7 @@ class TestRunnerTest {
     void aRunThatMissesAnArtifactOfflineRunsAgainOnline(@TempDir Path dir) throws Exception {
         Path log = dir.resolve("target/vidocq-dev-tests.log");
         TestRunner runner = new TestRunner(dir, missingOffline(dir).toString(), NO_KEYS, log,
-                dir.resolve("target/surefire-reports"));
+                dir.resolve("target/surefire-reports"), BOTH);
 
         ContinuousTesting.Launched launched = runner.launch(List.of("com.acme.ATest#x"));
 
@@ -214,7 +247,7 @@ class TestRunnerTest {
     void aFailureThatIsNotAnOfflineMissDoesNotRunAgain(@TempDir Path dir) throws Exception {
         Path maven = script(dir, "echo \"args: $*\" >> calls.txt\necho '[ERROR] COMPILATION ERROR : '\nexit 1\n");
         TestRunner runner = new TestRunner(dir, maven.toString(), NO_KEYS, dir.resolve("target/t.log"),
-                dir.resolve("target/surefire-reports"));
+                dir.resolve("target/surefire-reports"), BOTH);
 
         assertEquals(1, runner.launch(List.of()).waitFor());
 
@@ -230,7 +263,7 @@ class TestRunnerTest {
     @Timeout(30)
     void aCancelBetweenTheOfflineMissAndTheOnlineRunStopsTheRun(@TempDir Path dir) throws Exception {
         TestRunner runner = new TestRunner(dir, missingOffline(dir).toString(), NO_KEYS,
-                dir.resolve("target/t.log"), dir.resolve("target/surefire-reports"));
+                dir.resolve("target/t.log"), dir.resolve("target/surefire-reports"), BOTH);
         ContinuousTesting.Launched launched = runner.launch(List.of());
         long offline = writtenPid(dir.resolve("offline.pid"));
         assertTrue(goneWithin(offline, Duration.ofSeconds(5)), "the offline run");
@@ -248,7 +281,7 @@ class TestRunnerTest {
     void cancellingKillsTheWholeProcessTree(@TempDir Path dir) throws Exception {
         Path maven = script(dir, "sleep 60 &\necho $! > child.pid\nwait\n");
         TestRunner runner = new TestRunner(dir, maven.toString(), NO_KEYS, dir.resolve("target/t.log"),
-                dir.resolve("target/surefire-reports"));
+                dir.resolve("target/surefire-reports"), BOTH);
         ContinuousTesting.Launched launched = runner.launch(List.of());
         long child = writtenPid(dir.resolve("child.pid"));
 
@@ -270,7 +303,7 @@ class TestRunnerTest {
         // The child writes its own pid once its trap is set: the cancel below always meets a child ignoring TERM.
         Path maven = script(dir, "sh -c 'trap \"\" TERM; echo $$ > child.pid; while :; do sleep 0.1; done' &\nwait\n");
         TestRunner runner = new TestRunner(dir, maven.toString(), NO_KEYS, dir.resolve("target/t.log"),
-                dir.resolve("target/surefire-reports"));
+                dir.resolve("target/surefire-reports"), BOTH);
         ContinuousTesting.Launched launched = runner.launch(List.of());
         long child = writtenPid(dir.resolve("child.pid"));
 

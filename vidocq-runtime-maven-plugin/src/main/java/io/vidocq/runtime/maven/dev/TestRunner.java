@@ -27,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +47,9 @@ import java.util.stream.Stream;
  * <p>A run that misses an artifact offline runs again online, once, with the same tests: {@code vidocq:dev} resolves
  * only the runtime dependencies, so on a new project, or after a test dependency was added, the test-scope jars and
  * Surefire's JUnit provider may never have been downloaded (BUG-20261106-01). The log is then the online run's.
+ *
+ * <p>A run builds the outputs {@link TestOutputs} names, and no other: under {@code vidocq:dev} the main output is
+ * the recompile's (BUG-20261117-01).
  */
 final class TestRunner implements ContinuousTesting.Launcher {
 
@@ -57,31 +61,39 @@ final class TestRunner implements ContinuousTesting.Launcher {
     private final TestServices services;
     private final Path logFile;
     private final Path reportsDir;
+    private final TestOutputs outputs;
 
     /**
      * @param maven    the Maven executable, as {@link RecompileRunner#detectMavenExecutable} finds it
      * @param services the dev services of the runs, whose keys each run gets as {@code -D}, in their order
+     * @param outputs  the outputs the runs build
      */
-    TestRunner(Path projectDir, String maven, TestServices services, Path logFile, Path reportsDir) {
+    TestRunner(Path projectDir, String maven, TestServices services, Path logFile, Path reportsDir,
+            TestOutputs outputs) {
         this.projectDir = projectDir;
         this.maven = maven;
         this.services = services;
         this.logFile = logFile;
         this.reportsDir = reportsDir;
+        this.outputs = outputs;
     }
 
     /**
-     * The command (spec §2.3), offline ({@code -o}) unless it runs again after an offline miss. {@code
-     * vidocq.dev.devServices=false} comes last and a key of that name in {@code properties} is dropped: the test JVM
-     * never starts containers of its own, since the plugin JVM hosts them, once for every run (BUG-20261114-08).
+     * The command (spec §2.3), offline ({@code -o}) unless it runs again after an offline miss. It carries the
+     * switches of {@code outputs}: under {@code vidocq:dev} a run leaves the main output to the recompile
+     * (BUG-20261117-01). {@code vidocq.dev.devServices=false} comes last and a key of that name in
+     * {@code properties} is dropped: the test JVM never starts containers of its own, since the plugin JVM hosts
+     * them, once for every run (BUG-20261114-08).
      */
-    static List<String> command(String maven, List<String> tests, Map<String, String> properties, boolean offline) {
+    static List<String> command(String maven, TestOutputs outputs, List<String> tests,
+            Map<String, String> properties, boolean offline) {
         List<String> cmd = new ArrayList<>(List.of(maven, "-ntp"));
         if (offline) {
             cmd.add("-o");
         }
         cmd.addAll(List.of("-q", "process-test-classes", "surefire:test",
                 "-DfailIfNoTests=false", "-Dsurefire.failIfNoSpecifiedTests=false"));
+        cmd.addAll(outputs.skips());
         if (!tests.isEmpty()) {
             cmd.add("-Dtest=" + String.join(",", tests));
         }
@@ -106,8 +118,14 @@ final class TestRunner implements ContinuousTesting.Launcher {
         deleteReports(reportsDir);
         Files.createDirectories(logFile.toAbsolutePath().getParent());
         Map<String, String> keys = services.keys();
-        Process offline = start(command(maven, tests, keys, true));
-        return new Running(offline, logFile, () -> start(command(maven, tests, keys, false)));
+        Process offline = start(command(maven, outputs, tests, keys, true));
+        return new Running(offline, logFile, () -> start(command(maven, outputs, tests, keys, false)));
+    }
+
+    /** Deletes what the run that started at {@code since} wrote in the outputs the runs build, once it was stopped. */
+    @Override
+    public void discard(Instant since) throws IOException {
+        outputs.discard(since);
     }
 
     /** Stops the dev services of the runs, once the last run ended. */

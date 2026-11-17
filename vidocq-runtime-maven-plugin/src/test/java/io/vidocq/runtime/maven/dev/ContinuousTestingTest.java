@@ -29,10 +29,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -350,6 +352,100 @@ class ContinuousTestingTest {
         assertEquals(finished, testing.lastComplete());
         nextLaunch().finish(0);
         assertEquals(Trigger.TEST_CHANGE, nextResult().trigger());
+    }
+
+    /** A launcher that records, in order, the runs it started and the ones it was asked to discard. */
+    private final class RecordingLauncher implements ContinuousTesting.Launcher {
+        final List<String> calls = new CopyOnWriteArrayList<>();
+        /** What {@link #discard} fails with, when set. */
+        volatile IOException failure;
+
+        @Override
+        public ContinuousTesting.Launched launch(List<String> tests) {
+            calls.add("launch");
+            FakeRun run = new FakeRun(tests);
+            launches.add(run);
+            return run;
+        }
+
+        @Override
+        public void discard(Instant since) throws IOException {
+            calls.add("discard " + since);
+            if (failure != null) {
+                throw failure;
+            }
+        }
+    }
+
+    /** Replaces {@link #testing} with one on a {@link RecordingLauncher}, started. */
+    private RecordingLauncher testingWithARecordingLauncher(Path dir) {
+        testing.close();
+        RecordingLauncher launcher = new RecordingLauncher();
+        testing = new ContinuousTesting(launcher, since -> reports.get(), () -> true,
+                new ContinuousTesting.Results(dir.resolve("r.json"), "log"), results::add, warnings::add,
+                Clock.systemUTC());
+        testing.start();
+        return launcher;
+    }
+
+    /**
+     * BUG-20261117-01: a run that a change stopped may have half-built its outputs, which the next build would take
+     * for up to date. What it built since it started is discarded before the next run starts.
+     */
+    @Test
+    void aRunThatAChangeStoppedIsDiscardedBeforeTheNextRunStarts(@TempDir Path dir) throws Exception {
+        RecordingLauncher launcher = testingWithARecordingLauncher(dir);
+        testing.changed(Trigger.CHANGE, TestControl.ReadyGate.NOW);
+        nextLaunch();
+
+        testing.changed(Trigger.TEST_CHANGE, TestControl.ReadyGate.NOW);
+
+        TestResults stopped = nextResult();
+        assertEquals(State.CANCELLED, stopped.state());
+        nextLaunch().finish(0);
+        nextResult();
+        assertEquals(List.of("launch", "discard " + stopped.startedAt(), "launch"), launcher.calls);
+    }
+
+    /** BUG-20261117-01: a run that ended by itself built its outputs whole: nothing is discarded. */
+    @Test
+    void aRunThatEndedByItselfIsNotDiscarded(@TempDir Path dir) throws Exception {
+        RecordingLauncher launcher = testingWithARecordingLauncher(dir);
+        testing.changed(Trigger.RUN_ALL, TestControl.ReadyGate.NOW);
+        nextLaunch().finish(0);
+
+        assertEquals(State.PASSED, nextResult().state());
+        assertEquals(List.of("launch"), launcher.calls);
+    }
+
+    /** BUG-20261117-01: the run a close stopped is discarded too, so that the next session builds on nothing of it. */
+    @Test
+    void theRunAClosingStoppedIsDiscarded(@TempDir Path dir) throws Exception {
+        RecordingLauncher launcher = testingWithARecordingLauncher(dir);
+        testing.changed(Trigger.RUN_ALL, TestControl.ReadyGate.NOW);
+        nextLaunch();
+
+        testing.close();
+
+        TestResults stopped = nextResult();
+        assertEquals(List.of("launch", "discard " + stopped.startedAt()), launcher.calls);
+    }
+
+    /** BUG-20261117-01: a discard that fails is a warning, and the runs go on. */
+    @Test
+    void aDiscardThatFailsIsAWarningAndTheNextRunStarts(@TempDir Path dir) throws Exception {
+        RecordingLauncher launcher = testingWithARecordingLauncher(dir);
+        launcher.failure = new IOException("target/test-classes/ATest.class: Operation not permitted");
+        testing.changed(Trigger.CHANGE, TestControl.ReadyGate.NOW);
+        nextLaunch();
+
+        testing.changed(Trigger.TEST_CHANGE, TestControl.ReadyGate.NOW);
+
+        assertEquals(State.CANCELLED, nextResult().state());
+        nextLaunch().finish(0);
+        assertEquals(State.PASSED, nextResult().state());
+        assertEquals(List.of("Tests: cannot delete what the stopped run built:"
+                + " target/test-classes/ATest.class: Operation not permitted"), warnings);
     }
 
     /**
