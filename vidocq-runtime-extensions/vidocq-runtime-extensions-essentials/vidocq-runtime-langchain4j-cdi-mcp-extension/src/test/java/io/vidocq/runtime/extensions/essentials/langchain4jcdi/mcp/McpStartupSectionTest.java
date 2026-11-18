@@ -173,6 +173,11 @@ class McpStartupSectionTest {
         assertEquals("loaded twice", section.summary);
         assertEquals(List.of(McpStartupSection.CODE_TWIN), section.codes());
         assertTrue(section.rows.isEmpty() && section.lists.isEmpty(), section.everything());
+        // Vidocq/vidocq#663: vidocq.app.modules is gone; a launch written by hand that lists the jars in
+        // vidocq.app.path is what still loads the server twice.
+        String hint = section.anomalies.getFirst().hint();
+        assertTrue(hint.contains("-Dvidocq.app.path"), hint);
+        assertFalse(hint.contains("vidocq.app.modules"), hint);
     }
 
     @Test

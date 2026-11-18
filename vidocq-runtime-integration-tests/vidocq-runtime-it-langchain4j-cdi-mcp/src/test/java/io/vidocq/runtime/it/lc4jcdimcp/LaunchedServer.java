@@ -21,6 +21,8 @@ package io.vidocq.runtime.it.lc4jcdimcp;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.module.ModuleFinder;
+import java.lang.module.ModuleReference;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -111,6 +113,13 @@ final class LaunchedServer implements AutoCloseable {
         LaunchedServer server = new LaunchedServer(process, log);
         server.awaitStarted();
         return server;
+    }
+
+    /** The jar of the module {@code name} on the module path of the launches. */
+    static Path jarOf(String name) {
+        String lib = System.getProperty("it.lib");
+        return ModuleFinder.of(Path.of(lib)).find(name).flatMap(ModuleReference::location).map(Path::of)
+                .orElseThrow(() -> new AssertionError("No module " + name + " in " + lib));
     }
 
     /** The base URL of the MCP endpoint. */

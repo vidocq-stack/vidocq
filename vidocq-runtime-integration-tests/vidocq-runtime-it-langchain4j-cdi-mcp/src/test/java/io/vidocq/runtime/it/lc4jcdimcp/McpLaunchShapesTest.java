@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.File;
 import java.net.URI;
 import java.net.http.HttpResponse;
 
@@ -177,11 +178,18 @@ class McpLaunchShapesTest {
         }
     }
 
+    /**
+     * A launch written by hand that lists langchain4j-cdi's jars in {@code vidocq.app.path}, while they are on the
+     * module path too, loads the server a second time in the application layer. No launcher of the plugin writes it;
+     * {@code vidocq.app.modules}, the other way to force it, is gone (Vidocq/vidocq#663).
+     */
     @Test
-    void forcingTheServerIntoTheApplicationLayerIsReportedAndStillServes() throws Exception {
+    void aServerListedInTheApplicationPathIsReportedAndStillServes() throws Exception {
+        String appPath = String.join(File.pathSeparator, System.getProperty("it.app"),
+                LaunchedServer.jarOf("dev.langchain4j.cdi.mcp.server").toString(),
+                LaunchedServer.jarOf("dev.langchain4j.cdi.mcp.invoker.cdi41").toString());
         try (LaunchedServer server = LaunchedServer.start(LaunchedServer.Shape.FLAT, "i3-forced",
-                "-Dvidocq.app.modules=" + LaunchedServer.APP_MODULE
-                        + ",dev.langchain4j.cdi.mcp.server,dev.langchain4j.cdi.mcp.invoker.cdi41")) {
+                "-Dvidocq.app.path=" + appPath)) {
             McpCalls calls = new McpCalls(server.mcpUrl());
             calls.initialize();
             calls.runAll();

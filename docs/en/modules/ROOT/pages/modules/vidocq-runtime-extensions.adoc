@@ -1465,7 +1465,7 @@ Two classes are still generated when the application starts, and each start says
 Two hand-made layouts break this:
 
 * The langchain4j-cdi jars in the `-Dvidocq.app.path` directory, next to the application. The JVM stops before `main` with `FindException: Module dev.langchain4j.cdi.mcp.server not found, required by io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp`. `vidocq:package` never builds this layout: dependencies go to `lib/`.
-* `-Dvidocq.app.modules` naming a `dev.langchain4j.cdi.mcp.*` module. langchain4j-cdi is then loaded a second time, in the application layer. The MCP calls still work, the `mcp` section reads `loaded twice` and <<vidocq-mcp-003>> is reported.
+* The langchain4j-cdi jars in `-Dvidocq.app.path` while they are on the module path too. langchain4j-cdi is then loaded a second time, in the application layer. The MCP calls still work, the `mcp` section reads `loaded twice` and <<vidocq-mcp-003>> is reported.
 
 [#langchain4j-cdi-mcp-configuration]
 === Configuration
@@ -1665,11 +1665,11 @@ The extension is present but no `McpEndpoint` bean exists, so `/mcp` answers 404
 [#vidocq-mcp-003]
 === VIDOCQ-MCP-003 — the server is loaded twice
 
-`-Dvidocq.app.modules` put a `dev.langchain4j.cdi.mcp.*` module in the application layer, so langchain4j-cdi is loaded twice: its beans come from the application layer while the extension reads the boot-layer copy. The calls still work; the section reads `loaded twice` and shows nothing else:
+A launch written by hand listed the langchain4j-cdi jars in `-Dvidocq.app.path` while they are on the module path too, so langchain4j-cdi is loaded twice: its beans come from the application layer while the extension reads the boot-layer copy. No launcher of the plugin writes such a launch. The calls still work; the section reads `loaded twice` and shows nothing else:
 
 [source,text]
 ----
-[VIDOCQ-MCP-003] langchain4j-cdi's MCP server is loaded twice: its beans come from the application layer while this extension links to the boot-layer copy, so the mcp section is left empty. Do not list dev.langchain4j.cdi.mcp.* modules in -Dvidocq.app.modules.
+[VIDOCQ-MCP-003] langchain4j-cdi's MCP server is loaded twice: its beans come from the application layer while this extension links to the boot-layer copy, so the mcp section is left empty. Keep the langchain4j-cdi jars out of -Dvidocq.app.path: on the module path only, where the launchers of vidocq:package, vidocq:run and vidocq:dev put them.
 ----
 
 [#vidocq-mcp-004]

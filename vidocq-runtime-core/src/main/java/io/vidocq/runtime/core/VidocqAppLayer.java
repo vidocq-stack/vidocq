@@ -65,8 +65,6 @@ public final class VidocqAppLayer {
      * ({@value LayerSplit#OFF_PROPERTY}), leaves it where the JVM resolved it (Vidocq/vidocq#580).
      */
     public static final String APP_MODULE_PROPERTY = "vidocq.app.module";
-    /** For a launch from the module path: the modules to re-layer, comma separated, instead of the detection. */
-    public static final String APP_MODULES_PROPERTY = "vidocq.app.modules";
 
     private static final System.Logger LOG = System.getLogger(VidocqAppLayer.class.getName());
 
@@ -194,9 +192,6 @@ public final class VidocqAppLayer {
      * module was resolved into the boot layer together with the rest of the application.
      * This re-resolves the application archives, chosen by {@link #applicationPaths}, into a
      * fresh Vauban layer. Module names deliberately shadow their boot-layer twins.
-     *
-     * <p>{@code -Dvidocq.app.modules=<name,name>} overrides the detection with an
-     * explicit module list.
      */
     static boolean installFromBootLayer(Class<?> caller) {
         if (!installFromBootLayer(caller.getModule())) {
@@ -246,49 +241,17 @@ public final class VidocqAppLayer {
         if (!callerModule.isNamed() || callerLayer == null) {
             return false; // class-path launch — nothing to re-layer, agent net applies
         }
-        var explicit = System.getProperty(APP_MODULES_PROPERTY, "").strip();
-        var configuration = callerLayer.configuration();
         var pinned = new java.util.LinkedHashMap<String, String>();
-        var paths = explicit.isEmpty()
-                ? applicationPaths(configuration, callerModule.getName(), System.getProperty(LayerSplit.MODE_PROPERTY),
-                        LayerSplit.patterns(System.getProperty(LayerSplit.KEEP_PROPERTY)), pinned,
-                        message -> LOG.log(System.Logger.Level.WARNING, message))
-                : explicitPaths(configuration, java.util.Set.of(commaSeparated(explicit).toArray(String[]::new)));
+        var paths = applicationPaths(callerLayer.configuration(), callerModule.getName(),
+                System.getProperty(LayerSplit.MODE_PROPERTY),
+                LayerSplit.patterns(System.getProperty(LayerSplit.KEEP_PROPERTY)), pinned,
+                message -> LOG.log(System.Logger.Level.WARNING, message));
         if (paths.isEmpty()) {
             return false;
         }
         String origin = "boot-layer detection from " + callerModule.getName();
         return installLayer(paths, callerLayer, origin,
                 new Installation(origin, paths.stream().map(Path::toString).toList(), false, pinned));
-    }
-
-    /**
-     * The comma-separated items of {@code text}, the blanks around each comma dropped, and the empty items at the
-     * end too, as {@link String#split(String)} drops them.
-     */
-    static List<String> commaSeparated(String text) {
-        java.util.ArrayList<String> items = new java.util.ArrayList<>();
-        for (String item : text.split(",", -1)) {
-            items.add(item.strip());
-        }
-        while (!items.isEmpty() && items.getLast().isEmpty()) {
-            items.removeLast();
-        }
-        return List.copyOf(items);
-    }
-
-    /** The {@code file:} locations of the modules named by {@code -Dvidocq.app.modules}. */
-    private static List<Path> explicitPaths(java.lang.module.Configuration configuration,
-            java.util.Set<String> names) {
-        var paths = new java.util.LinkedHashSet<Path>();
-        for (var resolved : configuration.modules()) {
-            if (names.contains(resolved.name())) {
-                resolved.reference().location()
-                        .filter(uri -> "file".equals(uri.getScheme()))
-                        .ifPresent(uri -> paths.add(Path.of(uri)));
-            }
-        }
-        return List.copyOf(paths);
     }
 
     /**

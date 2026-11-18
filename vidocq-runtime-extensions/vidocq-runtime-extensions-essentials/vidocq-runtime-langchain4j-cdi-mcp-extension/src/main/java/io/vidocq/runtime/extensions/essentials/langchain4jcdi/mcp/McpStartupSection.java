@@ -100,7 +100,8 @@ final class McpStartupSection {
             section.anomaly(CODE_TWIN, "langchain4j-cdi's MCP server is loaded twice: its beans come from the "
                             + "application layer while this extension links to the boot-layer copy, so the mcp "
                             + "section is left empty.",
-                    "Do not list dev.langchain4j.cdi.mcp.* modules in -Dvidocq.app.modules.");
+                    "Keep the langchain4j-cdi jars out of -Dvidocq.app.path: on the module path only, where the "
+                            + "launchers of vidocq:package, vidocq:run and vidocq:dev put them.");
             return;
         }
         Optional<McpToolRegistry> tools = context.hasBeanOfType(ENDPOINT)

@@ -75,6 +75,37 @@ class VidocqAppLayerAllTest {
         assertEquals(Map.of("org.acme.ext", "vidocq.app.layer.keep"), pinned);
     }
 
+    /**
+     * {@code vidocq.app.modules} replaced the detection with a list of modules that no launcher of ours wrote
+     * (Vidocq/vidocq#663): it is gone, and a trampoline launch moves its own module and its libraries whatever the
+     * property names.
+     */
+    @Test
+    @DisplayName("vidocq.app.modules is gone: the detection moves the caller's module whatever it names")
+    void theDetectionTakesNoListOfModules(@TempDir Path dir) throws Exception {
+        var app = TestModules.explodedModule(dir, "acme.app", List.of("acme.lib"), "acme.app.Main");
+        var lib = TestModules.explodedModule(dir, "acme.lib", List.of(), "acme.lib.Lib");
+        Configuration config = ModuleLayer.boot().configuration().resolve(
+                ModuleFinder.of(app, lib), ModuleFinder.of(), Set.of("acme.app"));
+        ModuleLayer launched = ModuleLayer.boot().defineModulesWithOneLoader(config,
+                ClassLoader.getSystemClassLoader());
+        Class<?> trampoline = launched.findLoader("acme.app").loadClass("acme.app.Main");
+        String previous = System.setProperty("vidocq.app.modules", "acme.lib");
+        try {
+            assertTrue(VidocqAppLayer.installFromBootLayer(trampoline));
+
+            assertEquals(Set.of("acme.app", "acme.lib"), VidocqAppLayer.installedLayer().modules().stream()
+                    .map(Module::getName).collect(java.util.stream.Collectors.toSet()));
+        } finally {
+            VidocqAppLayer.resetForReload();
+            if (previous == null) {
+                System.clearProperty("vidocq.app.modules");
+            } else {
+                System.setProperty("vidocq.app.modules", previous);
+            }
+        }
+    }
+
     @Test
     @DisplayName("an automatic module stays in the boot layer: its twin would clash")
     void automaticModulesStay(@TempDir Path dir) throws Exception {

@@ -111,8 +111,7 @@ policy of Vauban's xref:dev@vauban::se.adoc[Java SE launcher]: every module move
 Vidocq bricks, the platform and Jakarta modules, automatic modules, modules with a `javax.`,
 `sun.` or `com.sun.` package, and what those kept modules read. The caller's module always
 moves. CDI-agnostic libraries move too, so Vauban places the client proxies that must live in
-their packages, with zero `opens`. Override with `-Dvidocq.app.modules=<name,name>` or an
-explicit `-Dvidocq.app.path=<archives>`.
+their packages, with zero `opens`.
 
 [#app-in-boot-layer]
 When the selection finds no application module to move, the application stays in the boot
