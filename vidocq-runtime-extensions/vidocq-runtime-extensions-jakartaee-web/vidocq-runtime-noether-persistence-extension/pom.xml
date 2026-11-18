@@ -31,6 +31,12 @@
             <artifactId>vauban-classloader-spi</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- The persistence references a class declares, bound under java:comp/env when the application has the
+             naming extension (PersistenceNames). -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-naming</artifactId>
+        </dependency>
         <!-- The provider, its CDI integration (@PersistenceContext, @PersistenceUnit) and its JTA bridge, which
              noether-jpa-cdi brings. Pulled transitively so the application declares this extension alone. -->
         <dependency>

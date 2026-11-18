@@ -1335,6 +1335,24 @@ EntityManagerFactory archive;
 
 See xref:dev@noether::usage.adoc#inject-units[Injecting a persistence unit with @Inject] in Noether's documentation.
 
+[#noether-persistence-references]
+*References declared on a class* [.tag-new]#NEW#. A component written for a Jakarta EE server may declare its persistence contexts and units on its class, with a name, and look them up instead of having them injected (Jakarta EE 11 Platform §5.13, §5.14). With the xref:#naming[naming extension], each name is bound under `java:comp/env`:
+
+[source,java]
+----
+@WebServlet("/orders")
+@PersistenceContext(name = "persistence/orders", unitName = "orders")
+public class OrdersServlet extends HttpServlet {
+    // (EntityManager) new InitialContext().lookup("java:comp/env/persistence/orders")
+}
+----
+
+* *A context reference* is one transaction-scoped entity manager that every lookup shares; *a unit reference* is the unit's factory, the one `@PersistenceUnit` injects. A name that starts with `java:` is bound as it is.
+* *Errors.* A reference without a name, an `EXTENDED` context declared on a class and a name two classes declare for different beans fail the start, naming the class.
+* *Without the naming extension*, nothing binds the names, and a lookup finds no initial context.
+
+See xref:dev@noether::usage.adoc#references[References declared on a class] in Noether's documentation.
+
 *Data sources.* A unit takes its connections from a Mansart pool, never from its own JDBC properties when a pool is there.
 
 * *A JTA unit* uses the pool its `jta-data-source` names, `@Named("orders")` for `<jta-data-source>orders</jta-data-source>` (`vidocq.pool.orders.url`), or the default pool (`vidocq.pool.url`) when it names none. Within a transaction, every connection the unit asks for is the one connection Mansart Transactions keeps for that transaction and that pool, enlisted in the transaction and given back to the pool once it completes: the transaction manager commits or rolls it back, and the unit cannot. The unit's non-JTA data source, which the TABLE identifier generator and schema generation use outside the transaction, is the pool its `non-jta-data-source` names, or else the same pool.

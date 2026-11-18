@@ -28,6 +28,7 @@ module io.vidocq.runtime.extensions.jakartaee.web.noether.persistence {
     // The application's entities carry @Entity, @Id, @PersistenceContext: the API reaches it through this module.
     requires transitive jakarta.persistence;
     requires io.vidocq.vauban.core;
+    requires io.vidocq.vauban.naming;
     requires io.vidocq.noether.jpa.core;
     requires io.vidocq.noether.jpa.cdi;
     requires io.vidocq.runtime.extensions.jakartaee.web.noether.persistence.units;

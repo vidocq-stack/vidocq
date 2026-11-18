@@ -27,6 +27,8 @@ module io.vidocq.runtime.it.noether {
     requires io.vidocq.runtime.extensions.jakartaee.web.noether.persistence;
     requires io.vidocq.runtime.extensions.jakartaee.web.mansart.pool;
     requires io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions;
+    requires io.vidocq.runtime.extensions.jakartaee.web.naming;
+    requires java.naming;
     // What `vidocq extension add noether-persistence` writes: the generated accessors implement Noether's SPI.
     requires io.vidocq.noether.jpa.core;
     requires io.vidocq.vauban.api;

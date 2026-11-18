@@ -142,6 +142,30 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   The foy example's 9 tests: red with the new core and the old launch (`the application did not listen`, the new
   message in its log), green with `vidocq.app.path`. The repro above now exits 1 with the message.
 
+## BUG-20261118-65 — A persistence reference declared on a class is not under `java:comp/env`
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `feat/persistence-references`, with Noether BUG-20261118-64 (same branch name).
+- **Module**: `vidocq-runtime-noether-persistence-extension` (`PersistenceNames`)
+- **Symptom**: the `pmservlet` vehicle of the Jakarta EE 11 Platform TCK for Persistence declares
+  `@PersistenceContext(name = "persistence/CTS-EM", unitName = "CTS-EM")` on its class and looks up
+  `java:comp/env/persistence/CTS-EM`: `NameNotFoundException`, with the naming extension installed.
+- **Repro**: `NoetherPersistenceReferencesModulePathTest` (`vidocq-runtime-it-noether-persistence`, with the naming
+  extension): `Shelf` declares a context and a unit reference on its class; both lookups threw
+  `NameNotFoundException: java:comp/env/persistence/ledger is bound to nothing in the running container`.
+- **Cause**: Noether read only the annotations of fields and setters (its BUG-20261118-64), and nothing in Vidocq
+  bound a name for a persistence reference.
+- **Fix**: Noether lists the references in a `PersistenceReferences` bean, each with a `@Singleton` bean; the
+  `PersistenceNames` bean of this extension, a `JndiBindings`, binds each name under `java:comp/env` (a name that
+  starts with `java:` as it is). The extension now depends on `vauban-naming`.
+- **Verification**: both tests red before, green after; `PersistenceNamesTest` (3); the extension's tests and the
+  module path ITs of `vidocq-runtime-it-noether-persistence`.
+- **Second cause (2026-11-18)**: in the Platform TCK spike the name was still bound to nothing. The container held two
+  `PersistenceReferences` beans, one for each part Noether's extension ran on (the runner's tests at build, the war
+  at start), and `PersistenceNames` bound nothing when the selection was not resolvable. It now reads every bean of
+  the type, binds each name once and refuses a name two parts give to different beans
+  (`PersistenceNamesTest`: three tests red before, six green after).
+
 ## BUG-20261118-05 — An application with the MCP extension generates two classes at each start
 
 - **Date**: 2026-11-18
