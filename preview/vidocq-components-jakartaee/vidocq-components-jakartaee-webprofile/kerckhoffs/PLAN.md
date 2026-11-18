@@ -217,14 +217,16 @@ container and on the assembled runtime, `app-mem-policy*` (Jakarta Authorization
 
 ## 8. Milestones (TDD: test or TCK scenario first, then code)
 
+**Order, decided by the maintainer on 2026-11-18: K5 comes before K4.** The need is OAuth/OpenID Connect sign-in for forge-dashboard and a few applications; the full TCK waits for the Web Profile (K7). The rows keep their numbers and are listed in the order they are built.
+
 | # | Scope | Exit criterion |
 |---|---|---|
 | **K0** | Bootstrap: repository, CI, dep-graph entry, docs component, branch protection (done at scaffold, see §10). TCK discovery: the **to verify** items of §7, Arquillian adapter, first baseline. | `./run-official-tck-security-4.0.sh` runs and reports; `BASELINE.md` committed |
 | **K1** | Identity stores: `IdentityStore` validation chain and `IdentityStoreHandler` (priorities, `ValidationType`), credentials, `@InMemoryIdentityStoreDefinition`, `PasswordHash`/`Pbkdf2PasswordHash`; `kerckhoffs-cdi` extension. Pure Java, no container yet. | Spec §3 unit tests green; extension tested at start and frozen |
 | **K2** | Foy hook (companion PR, Foy side only) + `kerckhoffs-foy` + minimal `kerckhoffs-authentication` (Servlet Container Profile slice). HTTP mechanisms on that path: `HttpAuthenticationMechanism`/`HttpMessageContext` contract, BASIC, FORM, custom FORM, `@LoginToContinue`, `@AutoApplySession`; built-in `Principal` bean; `SecurityContext` core methods. Authentication 3.1 TCK baseline taken here (§7). | Smoke set of the TCK green; Foy companion PR merged |
 | **K3** | `kerckhoffs-authorization` (Policy, web permissions); `@RememberMe` + `RememberMeIdentityStore`; `hasAccessToWebResource` through `Policy.implies`; `kerckhoffs-authentication` grown towards the full spec; `authenticate()` programmatic path; group-to-role mapping; `*Expression` attributes via EL. | Corresponding TCK classes green |
-| **K4** | `@DatabaseIdentityStoreDefinition` (JNDI `DataSource`, hashed passwords) and `@LdapIdentityStoreDefinition` (`java.naming` only, no library). | TCK `app-db-*` and LDAP fixtures green or each remaining failure filed in `BUG.md` |
 | **K5** | OpenID Connect: provider discovery, authorization-code flow, ID-token validation, `OpenIdContext`, refresh. Uses `java.net.http` on virtual threads. | Negative tests of §6 green; TCK OpenID fixtures green |
+| **K4** | `@DatabaseIdentityStoreDefinition` (JNDI `DataSource`, hashed passwords) and `@LdapIdentityStoreDefinition` (`java.naming` only, no library). | TCK `app-db-*` and LDAP fixtures green or each remaining failure filed in `BUG.md` |
 | **K6** | Vidocq runtime extension (PR in `Vidocq/vidocq`); `kerckhoffs-it-other-containers` Open Liberty WAR; Reference page "Deploying on an application server" tested by that WAR. | Same unchanged jar runs under Vidocq and in the WAR |
 | **K7** | Full TCK pass, docs (Antora, `tck` page), `CYBER_SECU.md` review, SonarQube clean, first release candidate. | 100 % PASS of the full run is the merge gate, as in Bodoni |
 
