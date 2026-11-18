@@ -416,8 +416,8 @@ class StagedProxiesTest {
     /** {@code type} declares the {@code protected synthetic (ProxyLink)} constructor the proxy chains to. */
     private static void assertMarker(Class<?> type) {
         var markers = Stream.of(type.getDeclaredConstructors())
-                .filter(constructor -> constructor.getParameterCount() == 1 && constructor.getParameterTypes()[0]
-                        .getName().equals("io.vidocq.vauban.api.ProxyLink")).toList();
+                .filter(constructor -> constructor.getParameterCount() == 1
+                        && constructor.getParameterTypes()[0] == io.vidocq.vauban.api.ProxyLink.class).toList();
         assertEquals(1, markers.size(), () -> type + " has no (ProxyLink) constructor");
         assertTrue(java.lang.reflect.Modifier.isProtected(markers.getFirst().getModifiers()), type::toString);
         assertTrue(markers.getFirst().isSynthetic(), type::toString);

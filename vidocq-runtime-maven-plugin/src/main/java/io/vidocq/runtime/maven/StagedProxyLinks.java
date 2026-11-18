@@ -97,7 +97,8 @@ final class StagedProxyLinks {
     private final Map<Path, Map<String, byte[]>> rewritten = new LinkedHashMap<>();
     /** Whether a class carries the marker once woven; {@code false} while it is being decided (a cycle). */
     private final Map<String, Boolean> decided = new HashMap<>();
-    private final Map<String, Boolean> serializable = new HashMap<>();
+    /** Whether a class is {@code Serializable}, by its internal name, through its superclasses and interfaces. */
+    private final Map<String, Boolean> serializableByName = new HashMap<>();
     private final List<String> refusals = new ArrayList<>();
 
     private StagedProxyLinks(List<Path> jars) {
@@ -206,11 +207,11 @@ final class StagedProxyLinks {
         if (SERIALIZABLE.contains(name)) {
             return true;
         }
-        Boolean known = serializable.get(name);
+        Boolean known = serializableByName.get(name);
         if (known != null) {
             return known;
         }
-        serializable.put(name, false);
+        serializableByName.put(name, false);
         Path jar = holder(rootEntry(name));
         byte[] bytes = jar != null ? read(jar, rootEntry(name)) : jdkClass(name);
         boolean result = false;
@@ -226,7 +227,7 @@ final class StagedProxyLinks {
                 }
             }
         }
-        serializable.put(name, result);
+        serializableByName.put(name, result);
         return result;
     }
 
