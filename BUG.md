@@ -26,6 +26,34 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Verification**: `LayerThreadsTest.reportsThreadsHoldingAChildOfTheLoader` (red before the fix); the IT above,
   green with the Ravel extension in the fixture, which keeps it.
 
+## BUG-20261118-93 — A thread of the common pool does not see the application under the application layer
+
+- **Date**: 2026-11-18
+- **Status**: FIXED — option 1, chosen by the maintainer on 2026-11-19: a thread factory of the common pool.
+- **Module**: `vidocq-runtime-core` (`commonpool.CommonPoolThreadFactory`, `VidocqAppLayer`), `vidocq-runtime-maven-plugin`
+  (every launcher)
+- **Symptom**: under the application layer (`vidocq:run`, `vidocq:dev`, the `vidocq:package` distribution), a task of
+  the JVM's common pool (`CompletableFuture.supplyAsync`, a parallel stream) reads `ConfigProvider.getConfig()` and
+  misses the application's `META-INF/microprofile-config.properties`; a `ServiceLoader` there misses its services. A
+  jlink image, where every module is the JVM's, is not affected.
+- **Repro**: the probe of the `app` fixture of `vidocq-runtime-it-app-layer` prints the context class loader of a
+  worker: `COMMON-POOL-LOADER jdk.internal.loader.ClassLoaders$AppClassLoader@…` under `vidocq:run` and the
+  distribution, `COMMON-POOL-LOADER application` in the image. On vidocq#669, `AppLayerDeliveryIT` read `CFG-ASYNC MISSING`
+  from the distribution.
+- **Cause**: the JDK gives each worker of the common pool the system class loader as its context class loader; an
+  application layer is a child loader the JVM does not know of.
+- **Fix**: `CommonPoolThreadFactory` gives the workers the installed layer's loader, and the system class loader
+  without one. Every launcher passes
+  `-Djava.util.concurrent.ForkJoinPool.common.threadFactory=io.vidocq.runtime.core.commonpool.CommonPoolThreadFactory`
+  (`ChildJvm` for `vidocq:run`/`vidocq:dev`, the `.sh`/`.cmd` scripts, `ImageLaunch` for jlink and jpackage); the
+  runtime sets the property itself when absent, and warns when the pool started before with the JDK's factory. A dev
+  reload moves the live workers to the new layer, and to the loader before it while there is none. The workers are a
+  documented exception of the platform-thread rule, which now sees a `ForkJoinWorkerThread` too.
+- **Verification**: `CommonPoolThreadFactoryTest` (3); the probe asserts `COMMON-POOL-LOADER application` in
+  `AppLayerRunIT` (both modes), `AppLayerPackageIT` (the three launches), `AppLayerImageIT` and `AppLayerDevIT`, twice,
+  across a reload; red before the fix under `vidocq:run` and the distribution.
+
+
 ## BUG-20261118-91 — The client proxy of a library class runs a constructor of that class in a jlink image
 
 - **Date**: 2026-11-18
