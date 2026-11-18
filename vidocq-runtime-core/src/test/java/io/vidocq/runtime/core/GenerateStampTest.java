@@ -31,10 +31,14 @@ import java.lang.constant.ClassDesc;
 import java.lang.constant.PackageDesc;
 import java.lang.classfile.attribute.ModuleAttribute;
 import java.lang.classfile.attribute.ModuleRequireInfo;
+import java.lang.classfile.constantpool.ClassEntry;
+import java.lang.classfile.constantpool.PoolEntry;
 import java.lang.constant.ModuleDesc;
 import java.lang.module.ModuleFinder;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -128,7 +132,24 @@ class GenerateStampTest {
         assertEquals("META-INF/vauban-beans.list", GenerateStamp.INDEX);
         assertEquals(GenerateStamp.content(INDEX.getBytes(UTF_8)), GenerateStamp.content(INDEX.getBytes(UTF_8)));
         assertEquals("vidocq:generate\nindex=none\n", GenerateStamp.content(null));
-        assertTrue(GenerateStamp.content(INDEX.getBytes(UTF_8)).matches("vidocq:generate\nindex=sha256:[0-9a-f]{64}\n"));
+        assertTrue(GenerateStamp.content(INDEX.getBytes(UTF_8)).matches("vidocq:generate\nindex=crc32:[0-9a-f]{8}\n"));
+    }
+
+    @Test
+    @DisplayName("the stamp check names no class of the platform's cryptography: a digest loads its providers at every start")
+    void theStampCheckLoadsNoCryptography() throws Exception {
+        byte[] bytes;
+        try (var in = GenerateStamp.class.getResourceAsStream("GenerateStamp.class")) {
+            bytes = in.readAllBytes();
+        }
+        List<String> cryptography = new ArrayList<>();
+        for (PoolEntry entry : ClassFile.of().parse(bytes).constantPool()) {
+            if (entry instanceof ClassEntry type && (type.asInternalName().startsWith("java/security/")
+                    || type.asInternalName().startsWith("javax/crypto/"))) {
+                cryptography.add(type.asInternalName());
+            }
+        }
+        assertEquals(List.of(), cryptography, "BUG-20261118-90");
     }
 
     /** An exploded module {@code acme.app} with the given index and stamp ({@code null}: none), in a layer of its own. */

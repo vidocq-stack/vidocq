@@ -22,9 +22,8 @@ package io.vidocq.runtime.core;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.zip.CRC32;
 
 /**
  * The stamp {@code vidocq:generate} writes into the application's classes, {@value #PATH}, recording the bean
@@ -50,7 +49,7 @@ public final class GenerateStamp {
      * {@code null} when it leaves none. It depends on them only, so that the build stays reproducible.
      */
     public static String content(byte[] index) {
-        return "vidocq:generate\nindex=" + (index == null ? "none" : "sha256:" + sha256(index)) + "\n";
+        return "vidocq:generate\nindex=" + (index == null ? "none" : "crc32:" + crc32(index)) + "\n";
     }
 
     /**
@@ -159,11 +158,13 @@ public final class GenerateStamp {
         }
     }
 
-    private static String sha256(byte[] bytes) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 is a mandatory JDK algorithm", e);
-        }
+    /**
+     * A CRC-32, not a digest: the stamp tells an index rewritten by an IDE, nobody forges it, and a digest of the
+     * platform loads its cryptography providers at every start (BUG-20261118-90).
+     */
+    private static String crc32(byte[] bytes) {
+        CRC32 crc = new CRC32();
+        crc.update(bytes);
+        return HexFormat.of().toHexDigits((int) crc.getValue());
     }
 }

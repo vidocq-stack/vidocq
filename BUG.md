@@ -26,6 +26,27 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Verification**: `LayerThreadsTest.reportsThreadsHoldingAChildOfTheLoader` (red before the fix); the IT above,
   green with the Ravel extension in the fixture, which keeps it.
 
+## BUG-20261118-90 — Every start of a built application loads the platform's cryptography to check the `vidocq:generate` stamp
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `perf/generate-stamp-without-jca`.
+- **Module**: `vidocq-runtime-core` (`GenerateStamp`)
+- **Symptom**: `GenerateStamp.staleIn`, called by every boot that is not embedded, recomputed the stamp of the
+  application's bean index with `MessageDigest.getInstance("SHA-256")`. That call loads the JCA (`Security`, the
+  provider list, the `SUN` provider, the SHA-2 classes) and reads the `java.security` file, in an application that
+  needs no cryptography otherwise. It showed up in the attribution of the start regression of 2026-11-18 (vauban#347).
+- **Repro**: in a fresh JVM, `-Xlog:class+load`, a probe that computes a SHA-256 of a short index loads 823 classes,
+  against 440 for a CRC32 of the same bytes and 415 for a probe that computes nothing.
+- **Cause**: the stamp only tells an index an IDE rewrote from the one `vidocq:generate` left. Nobody forges it, so it
+  needs no collision resistance.
+- **Fix**: the stamp records a CRC-32 (`index=crc32:<8 hex digits>`). `GenerateStampTest` reads the constant pool of
+  `GenerateStamp` and fails on any class of `java.security` or `javax.crypto`. The plugin writes the stamp with the
+  same method, so an application built by the matching plugin keeps a valid stamp. One stamped by an older plugin and
+  started on this runtime counts as stale until its next `vidocq:generate`: the boot scans its unindexed archives
+  and prints `VIDOCQ-GEN-001`, as for an IDE build.
+- **Verification**: `GenerateStampTest` (12) red on the two assertions before the fix, green after; the plugin's
+  `GenerateStampWriteTest`, `VidocqGenerateMojoTest`, `ChangedWhileStoppedTest` (31) green.
+
 ## BUG-20261118-80 — A transaction a request leaves active is never rolled back
 
 - **Date**: 2026-11-18
