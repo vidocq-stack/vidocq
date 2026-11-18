@@ -3,6 +3,13 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## KERCK-20261118-03 · 2026-11-18 · A BASIC mechanism's qualifiers differ from Soteria's
+
+- **Symptom:** `KerckhoffsExtension.qualify` gives a `@BasicAuthenticationMechanismDefinition` other qualifiers than Soteria 4.0.2, the reference implementation, in two cases. (1) With `qualifiers` left to its default `{BasicAuthenticationMechanism.class}`, or written out the same, the mechanism is `@BasicAuthenticationMechanism` and `@Default`; on Soteria a mechanism with a non-empty `qualifiers` has those qualifiers alone, without `@Default`. (2) With an explicit `qualifiers = {}`, the mechanism is `@BasicAuthenticationMechanism` and `@Default`; on Soteria it has no `@BasicAuthenticationMechanism`, so it is `@Default` alone.
+- **Minimal repro:** `MechanismCdiTest#aBasicDefinitionPutsTheBasicMechanismInService` and `#aBasicDefinitionThatWritesTheDefaultQualifiersStaysTheDefaultMechanism` select the mechanism by `@Default`, which Soteria would not find; a definition with `qualifiers = {}` resolves with `@BasicAuthenticationMechanism`, which Soteria would not.
+- **Cause:** `qualify` treats a `qualifiers` that names nothing, or only the declared default, as "no qualifiers", gives the fallback qualifier and adds `@Default` so that an application without a handler of its own injects its one mechanism. Jakarta Security 4.0, section 2.4, asks for the qualifiers of the attribute only.
+- **Status:** OPEN, behaviour kept (ruling of 2026-11-18: the change belongs to the brick's owner, and breaks the brick's own tests and its users). Named as a deviation in `reference.adoc`. A portable application selects it with `@BasicAuthenticationMechanism` when `qualifiers` is left to its default, with `@Default` when it writes `qualifiers = {}`, or lets the default handler find it (section 2.2.1).
+
 ## KERCK-20261118-02 · 2026-11-18 · The TCK container lacks the Authorization and Authentication APIs
 
 - **Symptom:** `./mvnw -Ptck test -pl kerckhoffs-tck`: 3 of the 4 `KerckhoffsDeployableContainerTest` tests fail with `NoClassDefFound jakarta/security/jacc/WebResourcePermission`, whatever the Vauban. Once the JACC API is there, a war that declares an HTTP mechanism fails with `NoClassDefFound jakarta/security/auth/message/AuthException`.

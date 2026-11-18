@@ -14,6 +14,18 @@
 The extension works at build and is frozen by `vidocq:generate`; the check of the definitions
 runs in an observer of `Startup`, so an invalid definition still stops a frozen application.
 
+== Deviations from the reference implementation
+
+WARNING: The qualifiers of a BASIC mechanism differ from Soteria 4.0.2's (KERCK-20261118-03).
+A `@BasicAuthenticationMechanismDefinition` whose `qualifiers` is left to its default
+`{BasicAuthenticationMechanism.class}`, or written out the same, gives a mechanism that is
+`@BasicAuthenticationMechanism` and also `@Default`; Soteria gives it its qualifiers alone, so
+the mechanism is not `@Default` there. An explicit `qualifiers = {}` gives a mechanism that is
+`@BasicAuthenticationMechanism` and `@Default`; Soteria gives it no `@BasicAuthenticationMechanism`.
+A portable application selects it with `@BasicAuthenticationMechanism` when `qualifiers` is left
+to its default, with `@Default` when it writes `qualifiers = {}`, or lets the default handler find
+it (§2.2.1).
+
 == Deploying on an application server
 
 WARNING: Kerckhoffs is not tested on an application server yet. Jakarta Security is a feature
