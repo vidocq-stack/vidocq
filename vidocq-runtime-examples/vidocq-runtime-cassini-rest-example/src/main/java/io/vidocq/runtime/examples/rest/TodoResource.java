@@ -33,6 +33,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
 import io.vidocq.runtime.examples.rest.model.Todo;
+import io.vidocq.runtime.examples.rest.model.TodoCard;
 import java.util.List;
 
 @ApplicationScoped
@@ -60,6 +61,15 @@ public class TodoResource {
     public Response get(@PathParam("id") long id) {
         return todoService.get(id)
                 .map(todo -> Response.ok(todo).build())
+                .orElse(Response.status(Response.Status.NOT_FOUND).build());
+    }
+
+    /** The item as a card, its title written by a JSON-B adapter that is a CDI bean. */
+    @GET
+    @Path("/{id}/card")
+    public Response card(@PathParam("id") long id) {
+        return todoService.get(id)
+                .map(todo -> Response.ok(TodoCard.of(todo)).build())
                 .orElse(Response.status(Response.Status.NOT_FOUND).build());
     }
 

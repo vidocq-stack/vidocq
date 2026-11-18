@@ -49,20 +49,8 @@
             <artifactId>jakarta.json.bind-api</artifactId>
             <version>3.0.1</version>
         </dependency>
-        <!-- Yasson + Parsson at runtime for the JSON-B serialization of the Todos. -->
-        <dependency>
-            <groupId>org.eclipse</groupId>
-            <artifactId>yasson</artifactId>
-            <version>3.0.4</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.eclipse.parsson</groupId>
-            <artifactId>parsson</artifactId>
-            <version>1.1.7</version>
-            <scope>runtime</scope>
-        </dependency>
-
+        <!-- No Yasson nor Parsson: the JSON-B of the Todos is Champollion, which the Cassini extension brings with
+             its CDI integration. TodoResourceTest checks that integration on the jars vidocq:generate enriched. -->
         <dependency>
             <groupId>io.vidocq.vauban</groupId>
             <artifactId>vauban-indexer</artifactId>
