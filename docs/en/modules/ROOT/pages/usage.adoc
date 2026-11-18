@@ -193,6 +193,14 @@ Changes detected — recompiling: ./mvnw -ntp -q process-classes -DskipTests -Dv
 That run inherits the environment of `vidocq:dev`, so the `MAVEN_ARGS` it shows apply to every recompile: with
 `-U` there, each one checks the remote repositories and takes seconds more.
 
+[[dev-save-seen]]*How soon a save is seen.* [.tag-new]#NEW# The JDK's file watcher of macOS looks at the directories
+every 2 seconds, so a save could wait up to 2 s before the recompile started. Where the JDK's
+watcher polls, `vidocq:dev` and `vidocq:test` read the modification time and size of the watched files themselves,
+every 200 ms by default (`vidocq.dev.watchPollMillis`; `0` keeps the JDK's watcher). The debounce
+(`vidocq.dev.debounceMillis`, 250 ms) comes after, as before. On Linux the JDK's watcher is told of each save by the
+kernel: it is kept, and the property changes nothing. The wait before the recompile starts is in no log line:
+`Hot reload signalled after … ms` counts from the start of the recompile.
+
 [[dev-save-while-compiling]]*A save while a recompile runs.* [.tag-new]#NEW# The compiler reads every source, then
 writes the classes, seconds later on a real module. A source you save in between gets a class that is newer than the
 source, compiled from what the compiler read before your save, and Maven takes a source with a newer class for

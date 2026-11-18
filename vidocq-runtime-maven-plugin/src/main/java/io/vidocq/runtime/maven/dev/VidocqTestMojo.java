@@ -85,6 +85,13 @@ public class VidocqTestMojo extends AbstractMojo {
     private long debounceMillis;
 
     /**
+     * Where the JDK's file watcher polls, as on macOS every 2 s, how often the watcher reads the file times itself,
+     * in milliseconds; {@code 0} keeps the JDK's watcher (Vidocq/vidocq#651).
+     */
+    @Parameter(property = "vidocq.dev.watchPollMillis", defaultValue = "200")
+    private long watchPollMillis;
+
+    /**
      * Provision dev-mode services for the tests, as {@code vidocq:dev} does. Unset by default: then
      * {@code vidocq.dev.devServices} in the application's files decides, else on.
      */
@@ -137,7 +144,8 @@ public class VidocqTestMojo extends AbstractMojo {
             runOnce(testing, session, hook, verdict);
             return;
         }
-        try (SourceWatcher watcher = SourceWatcher.on(mainDirs, testDirs, Duration.ofMillis(debounceMillis))) {
+        try (SourceWatcher watcher = SourceWatcher.on(mainDirs, testDirs, Duration.ofMillis(debounceMillis),
+                Duration.ofMillis(watchPollMillis))) {
             getLog().info("Vidocq test — watching " + mainDirs + " and " + testDirs
                     + (keys ? "" : "; no console, so no keys: Ctrl+C to stop"));
             testing.start();

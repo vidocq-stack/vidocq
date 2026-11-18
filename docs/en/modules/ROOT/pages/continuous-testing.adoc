@@ -164,6 +164,11 @@ The value is `true` or `false`, in any case; anything else stops the goal with a
 | `vidocq.dev.debounceMillis`
 | `250`
 | How long a burst of saves is collected into one change.
+
+| `vidocq.dev.watchPollMillis`
+| `200`
+| Where the JDK's file watcher polls, as on macOS, how often the times of the watched files are read instead, in
+milliseconds; `0` keeps the JDK's watcher. See xref:usage.adoc#dev-save-seen[How soon a save is seen].
 |===
 
 Only `.java`, `.properties`, `.xml`, `.yml` and `.yaml` files count.

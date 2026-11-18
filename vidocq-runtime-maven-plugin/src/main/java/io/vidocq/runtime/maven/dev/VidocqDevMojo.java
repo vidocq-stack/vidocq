@@ -181,6 +181,13 @@ public class VidocqDevMojo extends AbstractMojo {
     private long debounceMillis;
 
     /**
+     * Where the JDK's file watcher polls, as on macOS every 2 s, how often the watcher reads the file times itself,
+     * in milliseconds; {@code 0} keeps the JDK's watcher (Vidocq/vidocq#651).
+     */
+    @Parameter(property = "vidocq.dev.watchPollMillis", defaultValue = "200")
+    private long watchPollMillis;
+
+    /**
      * Grace period given to the child JVM after {@link Process#destroy()}
      * before {@link Process#destroyForcibly()} fires. Five seconds is plenty
      * for the screed drain in dev — production keeps the 30 s default.
@@ -466,7 +473,8 @@ public class VidocqDevMojo extends AbstractMojo {
 
     /** Blocks until a file of {@code watch} changes; {@code false} when the directories cannot be watched. */
     private boolean awaitSourceChange(List<Path> watch) throws InterruptedException {
-        try (SourceWatcher watcher = SourceWatcher.on(watch, Duration.ofMillis(debounceMillis))) {
+        try (SourceWatcher watcher = SourceWatcher.on(watch, List.of(), Duration.ofMillis(debounceMillis),
+                Duration.ofMillis(watchPollMillis))) {
             return watcher.awaitChange();
         } catch (IOException e) {
             getLog().warn("Cannot watch " + watch + ": " + e.getMessage());
@@ -672,7 +680,8 @@ public class VidocqDevMojo extends AbstractMojo {
         savedWhileCompiling = new SavedWhileCompiling(
                 projectSourceRoots(project.getCompileSourceRoots(), buildDirPath()), classesDir.toPath(),
                 "recompile", getLog()::info, getLog()::warn);
-        try (SourceWatcher watcher = SourceWatcher.on(watch, testing.watch(), Duration.ofMillis(debounceMillis))) {
+        try (SourceWatcher watcher = SourceWatcher.on(watch, testing.watch(), Duration.ofMillis(debounceMillis),
+                Duration.ofMillis(watchPollMillis))) {
             if (!compiledWhatWasSavedWhileStarting(watch, recompile, watcher)) {
                 return; // watcher closed
             }

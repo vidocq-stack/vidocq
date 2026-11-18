@@ -6,7 +6,21 @@
 
 ---
 
-## 2026-11-17 — `vidocq:dev`: the classes of the application loaded when the layer starts (BUG-20261117-09)
+## 2026-11-18 — `vidocq:dev` on macOS: from a save to the recompile, the JDK's watcher against the file times read every 200 ms (#651)
+
+- **Hardware/JVM**: Apple M5 Max (18 cores, 128 GB), macOS 27.2 (Darwin 27.2.0 arm64), Temurin 25+36, Maven 3.10.0, private local repository, offline. Other sessions ran builds on the machine at the same time.
+- **Code**: branch `feat/dev-source-poll`, commit `1eb5c873` (on `main` 2590d21d). *Before* = `-Dvidocq.dev.watchPollMillis=0`, which keeps the JDK's `sun.nio.fs.PollingWatchService` (the code path of `main`); *after* = the default, 200 ms.
+- **Project**: `vidocq-runtime-cassini-rest-example`, in the reactor; the edit changes a string literal in the method body of `StatsService.report()` (a hot swap), ten saves, each 2 to 4 s after the previous reload (random phase).
+- **Command**: `./mvnw -ntp -o -pl vidocq-runtime-examples/vidocq-runtime-cassini-rest-example io.vidocq.runtime:vidocq-runtime-maven-plugin:dev -Dvidocq.dev.watchPollMillis=<0|200> -Dvidocq.dev.debug=false -Dvidocq.dev.continuousTesting=false -Dvidocq.dev.systemProperties=vidocq.chappe.listener.default.port=18080`, driven by a throwaway Python script (not committed) that writes the file and stamps each output line as it reads it. *Detected* = from the write to the line `Changes detected — recompiling`, so it includes the 250 ms debounce; *signalled* = from the write to the line `Hot reload signalled after … ms`.
+
+| Mode | Detected, ms (10 saves) | Median | Signalled, ms (10 saves) | Median |
+|---|---|---|---|---|
+| before (JDK watcher) | 870 1090 963 1021 893 1016 666 805 922 428 | 908 | 3445 3495 3285 3253 3356 3084 2686 2783 2928 2491 | 3169 |
+| after (200 ms) | 340 419 376 358 314 446 334 284 263 421 | 349 | 2382 2843 2838 2831 2731 2720 2930 2761 2932 3080 | 2835 |
+
+### Delta vs previous run
+
+First measurement of this latency. Detected: median −559 ms (−62 %), worst −644 ms; signalled: median −334 ms (−11 %), the recompile (a whole Maven run) varies more than the saving. The before samples span 428 to 1090 ms only, not the 215 to 1902 ms of the ticket's probe: the phases of the ten saves did not cover the 2 s polling period; the after samples, 263 to 446 ms, are the debounce plus at most one 200 ms interval.
 
 - **Hardware/JVM**: Apple M5 Max (18 cores, 128 GB), macOS 27.2, Temurin 25+36, Maven 3.10.0, local repository warm, offline. Other sessions built on the machine during the runs (load average 5 to 6).
 - **Projects**: three examples of the reactor, copied out of it, listener on port 0: `vidocq-runtime-cassini-rest-example` (18 classes in `target/classes`), `vidocq-runtime-petstore-example` (51), `vidocq-runtime-foy-servlet-example` (71, the Bistro).

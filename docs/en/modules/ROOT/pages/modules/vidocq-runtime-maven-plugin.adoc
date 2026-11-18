@@ -1265,6 +1265,12 @@ its run and its dev services.
 | `250`
 | How long a burst of saves is collected into one change.
 
+| `vidocq.dev.watchPollMillis`
+| `200`
+| Where the JDK's file watcher polls, as on macOS every 2 s, how often the goal reads the times of the watched files
+itself, in milliseconds. `0` keeps the JDK's watcher. Linux's watcher does not poll and is kept: see
+xref:usage.adoc#dev-save-seen[How soon a save is seen].
+
 | `vidocq.dev.devServices`
 | _(unset)_
 | Whether the goal opens a dev services session for the tests: the explicit value, then the application's files, then on.
@@ -1287,6 +1293,9 @@ its run and its dev services.
 | `src/test/java,src/test/resources`
 | The test directories to watch: a change there runs the tests without reloading the application.
 |===
+
+Both goals read `vidocq.dev.debounceMillis` (`250`) and `vidocq.dev.watchPollMillis` (`200`): see the table above
+and xref:usage.adoc#dev-save-seen[How soon a save is seen].
 
 A test run of `vidocq:dev` builds `target/test-classes` only. The recompile of the dev loop builds `target/classes`,
 and the run gets `-Dmaven.main.skip=true -Dmaven.resources.skip=true -Dvidocq.generate.skip=true`: see

@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
@@ -54,17 +55,28 @@ import java.util.stream.Stream;
  * {@code debounce} additional millis draining any follow-up events. That way,
  * saving a file 10 times in 500 ms still triggers a single reload cycle.</p>
  *
- * <p><b>macOS caveat</b> — {@code java.nio.file.WatchService} uses polling on
- * macOS (~10 s latency). This is accepted for the MVP; a future iteration may
- * plug FSEvents natively.</p>
+ * <p><b>macOS</b> — the JDK's {@code WatchService} of macOS ({@code sun.nio.fs.PollingWatchService}) looks at the
+ * directories every 2 s on JDK 25, so a save waits up to 2 s before it is seen (Vidocq/vidocq#651). Where the
+ * JDK's watcher polls, {@link #on(List, List, Duration, Duration)} reads the modification times and sizes of the
+ * watched files itself at a shorter interval ({@link FileTimes}), and reports the changes as the JDK's watcher would,
+ * with the same debounce. Linux's watcher is told of each change by the kernel and stays.</p>
  */
 final class SourceWatcher implements AutoCloseable {
 
     private static final Set<String> WATCHED_EXTENSIONS =
             Set.of(".java", ".properties", ".xml", ".yml", ".yaml");
 
+    /** The class of the JDK's watcher that polls, as on macOS. */
+    private static final String POLLING_WATCH_SERVICE = "sun.nio.fs.PollingWatchService";
+
+    /** The JDK's watcher; {@code null} when this watcher reads the file times itself. */
     private final WatchService service;
+    /** The file times read pass after pass; {@code null} with the JDK's watcher. */
+    private final FileTimes times;
     private final long debounceMillis;
+    private final long pollMillis;
+    /** Counted down by {@link #close()}: ends the wait between two passes over the file times. */
+    private final CountDownLatch closed = new CountDownLatch(1);
     private final Set<Path> registered = new HashSet<>();
 
     /** A burst of events: whether it touched the main directories, the test directories, or both. */
@@ -77,25 +89,29 @@ final class SourceWatcher implements AutoCloseable {
     /** How often a watched root that does not exist yet is looked for. */
     static final long MISSING_ROOT_POLL_MILLIS = 1_000;
 
-    private SourceWatcher(WatchService service, long debounceMillis, List<Path> testRoots) {
+    private SourceWatcher(WatchService service, FileTimes times, long debounceMillis, long pollMillis,
+            List<Path> testRoots) {
         this.service = service;
+        this.times = times;
         this.debounceMillis = debounceMillis;
+        this.pollMillis = pollMillis;
         this.testRoots = testRoots;
     }
 
-    /** A watcher of main directories only. */
+    /** A watcher of main directories only, with the JDK's watcher. */
     static SourceWatcher on(List<Path> dirs, Duration debounce) throws IOException {
         return on(dirs, List.of(), debounce);
     }
 
     /**
-     * Registers the main and test directories (recursively). A directory that does not exist is skipped.
+     * Registers the main and test directories (recursively) with the JDK's watcher, whichever it is. A directory that
+     * does not exist is skipped.
      */
     static SourceWatcher on(List<Path> mainDirs, List<Path> testDirs, Duration debounce) throws IOException {
         List<Path> all = new ArrayList<>(mainDirs);
         all.addAll(testDirs);
         WatchService ws = (all.isEmpty() ? FileSystems.getDefault() : all.get(0).getFileSystem()).newWatchService();
-        SourceWatcher watcher = new SourceWatcher(ws, debounce.toMillis(),
+        SourceWatcher watcher = new SourceWatcher(ws, null, debounce.toMillis(), 0,
                 testDirs.stream().map(dir -> dir.toAbsolutePath().normalize()).toList());
         try {
             watcher.registerAll(all);
@@ -104,6 +120,47 @@ final class SourceWatcher implements AutoCloseable {
             throw e;
         }
         return watcher;
+    }
+
+    /**
+     * Watches the main and test directories with the JDK's watcher, unless it polls, as on macOS: then the watcher
+     * reads the file times itself every {@code poll} (Vidocq/vidocq#651). A {@code poll} of zero keeps the JDK's
+     * watcher everywhere.
+     */
+    static SourceWatcher on(List<Path> mainDirs, List<Path> testDirs, Duration debounce, Duration poll)
+            throws IOException {
+        if (poll.isPositive()) {
+            List<Path> all = new ArrayList<>(mainDirs);
+            all.addAll(testDirs);
+            boolean polls;
+            try (WatchService jdk = (all.isEmpty() ? FileSystems.getDefault() : all.get(0).getFileSystem())
+                    .newWatchService()) {
+                polls = pollsItself(jdk);
+            }
+            if (polls) {
+                return readingFileTimes(mainDirs, testDirs, debounce, poll);
+            }
+        }
+        return on(mainDirs, testDirs, debounce);
+    }
+
+    /** A watcher that reads the file times of the directories every {@code poll}, whatever the JDK's watcher. */
+    static SourceWatcher readingFileTimes(List<Path> mainDirs, List<Path> testDirs, Duration debounce, Duration poll) {
+        return new SourceWatcher(null, new FileTimes(mainDirs, testDirs), debounce.toMillis(), poll.toMillis(),
+                testDirs.stream().map(dir -> dir.toAbsolutePath().normalize()).toList());
+    }
+
+    /**
+     * Whether the JDK's watcher looks at the directories at an interval instead of being told of each change: the
+     * {@code sun.nio.fs.PollingWatchService} of macOS, which looks every 2 s. Its class name is the only sign of it.
+     */
+    static boolean pollsItself(WatchService jdk) {
+        return POLLING_WATCH_SERVICE.equals(jdk.getClass().getName());
+    }
+
+    /** Whether this watcher reads the file times itself instead of waiting for the JDK's watcher. */
+    boolean readsFileTimes() {
+        return times != null;
     }
 
     private void registerAll(List<Path> dirs) throws IOException {
@@ -156,6 +213,39 @@ final class SourceWatcher implements AutoCloseable {
      * the debounce window. Returns what the burst touched, or {@code null} once the watcher is closed.
      */
     Change awaitChanges() throws InterruptedException {
+        return times == null ? awaitEvents() : awaitFileTimes();
+    }
+
+    /**
+     * {@link #awaitChanges} by reading the file times every {@code pollMillis} on the calling thread: no thread of
+     * its own. The debounce window then collects the changes of the passes it spans.
+     */
+    private Change awaitFileTimes() throws InterruptedException {
+        while (!closed.await(pollMillis, TimeUnit.MILLISECONDS)) {
+            Change first = times.pass();
+            if (first.main() || first.test()) {
+                return debounceFileTimes(first);
+            }
+        }
+        return null;
+    }
+
+    private Change debounceFileTimes(Change first) throws InterruptedException {
+        boolean main = first.main();
+        boolean test = first.test();
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(debounceMillis);
+        long remaining;
+        while ((remaining = deadline - System.nanoTime()) > 0
+                && !closed.await(Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(pollMillis)), TimeUnit.NANOSECONDS)) {
+            Change more = times.pass();
+            main |= more.main();
+            test |= more.test();
+        }
+        return new Change(main, test);
+    }
+
+    /** {@link #awaitChanges} with the JDK's watcher. */
+    private Change awaitEvents() throws InterruptedException {
         while (true) {
             WatchKey key;
             try {
@@ -341,7 +431,7 @@ final class SourceWatcher implements AutoCloseable {
         return false;
     }
 
-    private static boolean isWatchedExtension(String name) {
+    static boolean isWatchedExtension(String name) {
         int dot = name.lastIndexOf('.');
         if (dot < 0) {
             return false;
@@ -351,6 +441,9 @@ final class SourceWatcher implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        service.close();
+        closed.countDown();
+        if (service != null) {
+            service.close();
+        }
     }
 }

@@ -21,6 +21,8 @@ package io.vidocq.runtime.maven.dev;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -40,11 +42,12 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Sanity coverage of {@link SourceWatcher}. The macOS {@code WatchService}
- * uses polling (~10 s latency) so timeouts are generous and we use a sub-dir
- * with at least one pre-existing file to avoid the first-event missed bug.
+ * Sanity coverage of {@link SourceWatcher}. The macOS {@code WatchService} polls every 2 s, so timeouts are generous
+ * and we use a sub-dir with at least one pre-existing file to avoid the first-event missed bug. The factory
+ * {@code on(dirs, debounce)} keeps the JDK's watcher, on macOS too.
  */
 class SourceWatcherTest {
 
@@ -256,6 +259,75 @@ class SourceWatcherTest {
     private static void awaitBlocked(Thread watching) throws InterruptedException {
         assertTrue(Poll.until(Duration.ofSeconds(5), () -> watching.getState() == Thread.State.WAITING
                 || watching.getState() == Thread.State.TIMED_WAITING), "the watcher waits for a change");
+    }
+
+    /**
+     * Vidocq/vidocq#651: the JDK's watcher of macOS polls every 2 s, so the watcher reads the file times itself. The
+     * interval is set by the goal; zero keeps the JDK's watcher.
+     */
+    @Test
+    @EnabledOnOs(OS.MAC)
+    void onMacOsTheWatcherReadsTheFileTimesItself(@TempDir Path tmp) throws Exception {
+        try (SourceWatcher watcher = SourceWatcher.on(List.of(tmp), List.of(), Duration.ofMillis(50),
+                Duration.ofMillis(200))) {
+            assertTrue(watcher.readsFileTimes());
+        }
+        try (SourceWatcher watcher = SourceWatcher.on(List.of(tmp), List.of(), Duration.ofMillis(50), Duration.ZERO)) {
+            assertFalse(watcher.readsFileTimes(), "zero keeps the JDK's watcher");
+        }
+    }
+
+    /** Vidocq/vidocq#651: the JDK's watcher of Linux is told of each save by the kernel, it stays. */
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void onLinuxTheWatcherKeepsTheJdkOne(@TempDir Path tmp) throws Exception {
+        try (SourceWatcher watcher = SourceWatcher.on(List.of(tmp), List.of(), Duration.ofMillis(50),
+                Duration.ofMillis(200))) {
+            assertFalse(watcher.readsFileTimes());
+        }
+    }
+
+    /** Vidocq/vidocq#651: a watcher that reads the file times reports a save, of its kind, as the JDK's one does. */
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void aWatcherReadingTheFileTimesReportsASave(@TempDir Path tmp) throws Exception {
+        Path main = Files.createDirectories(tmp.resolve("src/main/java"));
+        Path test = Files.createDirectories(tmp.resolve("src/test/java"));
+        Path testFile = Files.writeString(test.resolve("HelloTest.java"), "class HelloTest {}");
+        Files.writeString(main.resolve("Hello.java"), "class Hello {}");
+
+        try (SourceWatcher watcher = SourceWatcher.readingFileTimes(List.of(main), List.of(test),
+                Duration.ofMillis(50), Duration.ofMillis(20))) {
+            assertTrue(watcher.readsFileTimes());
+            Files.writeString(testFile, "class HelloTest { /* edit */ }");
+            Files.setLastModifiedTime(testFile,
+                    FileTime.fromMillis(Files.getLastModifiedTime(testFile).toMillis() + 2_000));
+
+            assertEquals(new SourceWatcher.Change(false, true), watcher.awaitChanges());
+        }
+    }
+
+    /** Vidocq/vidocq#651: closing a watcher that reads the file times ends its wait, as for the JDK's one. */
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS)
+    void closingAWatcherReadingTheFileTimesEndsTheWait(@TempDir Path tmp) throws Exception {
+        Files.writeString(tmp.resolve("Hello.java"), "class Hello {}");
+        SourceWatcher watcher = SourceWatcher.readingFileTimes(List.of(tmp), List.of(), Duration.ofMillis(50),
+                Duration.ofMillis(20));
+        AtomicReference<SourceWatcher.Change> change = new AtomicReference<>(new SourceWatcher.Change(true, true));
+        Thread t = Thread.ofVirtual().start(() -> {
+            try {
+                change.set(watcher.awaitChanges());
+            } catch (InterruptedException _) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        awaitBlocked(t);
+
+        watcher.close();
+
+        t.join();
+        assertNull(change.get(), "a closed watcher reports no change");
     }
 
     @Test

@@ -72,6 +72,15 @@ class PluginDescriptorContinuousTestingTest {
         assertEquals(Boolean.class, VidocqDevMojo.class.getDeclaredField("continuousTesting").getType());
     }
 
+    /** Vidocq/vidocq#651: how often the file times are read where the JDK's watcher polls; both goals read it. */
+    @Test
+    void devAndTestReadTheWatchPollInterval() throws Exception {
+        assertConfigured("dev", "watchPollMillis", "long", "${vidocq.dev.watchPollMillis}", "200");
+        assertConfigured("test", "watchPollMillis", "long", "${vidocq.dev.watchPollMillis}", "200");
+        assertEquals(long.class, VidocqDevMojo.class.getDeclaredField("watchPollMillis").getType());
+        assertEquals(long.class, VidocqTestMojo.class.getDeclaredField("watchPollMillis").getType());
+    }
+
     @Test
     void everyDevParameterIsAFieldOfTheMojo() throws Exception {
         assertParametersAreFields("dev", VidocqDevMojo.class);
