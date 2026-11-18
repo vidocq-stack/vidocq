@@ -503,12 +503,12 @@ public class CervantesJwtDeployableContainer implements DeployableContainer<Cerv
      *       See Vauban {@code InterceptorBeanWrapper.getOrCreateProxy()} for the root cause.</li>
      * </ol>
      */
-    private static final class CervantesHarnessBeanProvider
+    static final class CervantesHarnessBeanProvider
             implements io.vidocq.cassini.spi.bean.BeanProvider {
-        private final VaubanBeanProvider delegate;
+        private final io.vidocq.cassini.spi.bean.BeanProvider delegate;
         private final io.vidocq.cervantes.cdi.JsonWebTokenContext tokenContext;
 
-        CervantesHarnessBeanProvider(VaubanBeanProvider delegate,
+        CervantesHarnessBeanProvider(io.vidocq.cassini.spi.bean.BeanProvider delegate,
                                      io.vidocq.cervantes.cdi.JsonWebTokenContext tokenContext) {
             this.delegate = delegate;
             this.tokenContext = tokenContext;
@@ -541,6 +541,12 @@ public class CervantesJwtDeployableContainer implements DeployableContainer<Cerv
             // Delegates to VaubanBeanProvider to unwrap @RequestScoped resources
             // (otherwise @Context SecurityContext stays null inside the resource method).
             return delegate.contextualInstance(type, bean);
+        }
+
+        @Override
+        public <T> RequestInstance<T> getRequestBean(Class<T> type) {
+            // Delegates too, so a @Dependent resource ends with its request (CERV-013, CASSINI-062).
+            return delegate.getRequestBean(type);
         }
     }
 

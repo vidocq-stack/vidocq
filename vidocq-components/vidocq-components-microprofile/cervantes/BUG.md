@@ -416,3 +416,29 @@ reached that code. The opt-in property, `io.vidocq.cervantes.jwks.allowHttp`, wa
 `KeyResolvers.fromLocation` checks the transport (`JwksSource.checkTransport`) when it builds the lazy resolver, with
 no network access, so the start fails with a `DeploymentException` that names the location and the property. The
 fetch itself stays lazy. The reference page documents the loopback rule and the property.
+
+## CERV-013 — The TCK harness never ends a `@Dependent` resource
+
+- **Opening date**: 2026-11-18
+- **Status**: ✅ FIXED 2026-11-18 (branch `fix/vauban-bug-stack`, with Cassini's CASSINI-062 and Vidocq's
+  BUG-20261118-01 of the same branch name)
+
+### Symptom
+
+In the MicroProfile JWT TCK harness, a `@Dependent` resource is never destroyed: its `@PreDestroy` never runs, and
+each request leaves its instance with the container. The test harness only; the TCK verdicts do not change.
+
+### Minimal repro
+
+`CervantesHarnessBeanProviderTest.aResourceForARequestIsTheDelegatesWithItsRelease` (`cervantes-tck`, TestNG, under
+`-Ptck,tck-official`): before the fix the release the delegate gives is `null`.
+
+### Cause
+
+Cassini asks for a resource with `BeanProvider.getRequestBean`, which returns it with what ends it (CASSINI-062).
+`CervantesJwtDeployableContainer.CervantesHarnessBeanProvider` delegates `getBean`, `getResourceClasses` and
+`contextualInstance` only, so the SPI's default served the resource and released nothing.
+
+### Fix
+
+The harness's provider delegates `getRequestBean` too. Its delegate is typed `BeanProvider`, which the test fills.
