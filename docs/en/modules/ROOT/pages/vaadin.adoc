@@ -256,7 +256,8 @@ index.html_.
 Since Vidocq 0.4.0, `vidocq.app.layer=all` is the default: the libraries outside the runtime go in the application
 layer with the application, the way `WEB-INF/lib` works in a servlet container. You do not set anything for Vaadin.
 Do not set `vidocq.app.layer=classes` in a Vaadin project. If an older pom still sets `vidocq.app.layer=all`, delete
-the line.
+the line. The setting and where each launch reads it:
+xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[the settings of the application layer].
 
 See xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer]. Asking Vaadin to use the context
 class loader instead is tracked in Vidocq/vidocq#256.

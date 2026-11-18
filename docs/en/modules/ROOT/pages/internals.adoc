@@ -174,6 +174,51 @@ Key mechanics (implemented in `vauban-classloader`, consumed by
 The full engine documentation (source/transformer SPI, weaving tiers, diagnostics
 options) lives in the Vauban documentation, Internals → Class loading.
 
+[#launcher-contract]
+=== The launcher contract [.tag-new]#NEW#
+
+The launchers hand the application to the runtime through the system properties below. They are a contract between
+the plugin, `@VidocqTest` and the runtime, not settings: an application does not set them, and a `java` command
+written by hand follows the launchers of `vidocq:package`, which show it in full. The two settings of the application
+layer are not part of it: see
+xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[`vidocq.app.layer` and `vidocq.app.layer.keep`].
+
+[cols="2,3,3"]
+|===
+| Property | Written by | Read by
+
+| `vidocq.app.path`
+| `vidocq:run`, `vidocq:dev`, the `vidocq:package` launchers and `@VidocqTest`: the application's jars and
+  directories, which they keep off the module path.
+| `Vidocq.main` and `Vidocq.run`, which resolve them into the application layer; the reload of `vidocq:dev`, which
+  resolves them again.
+
+| `vidocq.app.main`
+| `vidocq:run`, `vidocq:dev` and the `vidocq:package` launchers, when the application declares `vidocq.mainClass`.
+| `Vidocq.main`, which runs that main inside the layer once it is installed. The reload of `vidocq:dev` ignores it.
+
+| `vidocq.app.module`
+| `@VidocqTest`; `vidocq:run`, `vidocq:dev` and the `vidocq:package` launchers without a main class; a jlink image
+  whose launcher runs the runtime's main.
+| The banner, the startup report, and the extensions that declare something for the application by default. It is a
+  name: `Vidocq.main` refuses it without `vidocq.app.path` or `vidocq.app.layer.off`
+  (xref:modules/vidocq-runtime-core.adoc#app-module-property[`vidocq.app.module`]).
+
+| `vidocq.app.layer.off`
+| The launches without a layer: `vidocq.package.layer=false`, `vidocq.dev.layer=false`, and every jlink image.
+| `Vidocq.run`, which then runs the application where the JVM resolved it; `Vidocq.main`, which then accepts
+  `vidocq.app.module` alone.
+
+| `vidocq.app.layer.pinned`
+| `vidocq:run`, `vidocq:dev`, the `vidocq:package` launchers and `@VidocqTest`, under `all`, when a pin kept a module
+  in the parent layer.
+| The startup report, which lists each pinned module with its reason.
+|===
+
+`vidocq:dev` also passes `vidocq.app.layer`, the mode it settled on: its reload reads it to word the warning about a
+thread that keeps the previous layer. The other launchers split the application themselves and pass no mode
+(Vidocq/vidocq#663).
+
 == Boot sequence diagram
 
 [mermaid]

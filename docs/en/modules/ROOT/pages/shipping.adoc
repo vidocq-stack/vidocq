@@ -104,7 +104,8 @@ Your sources, your `module-info.java` and your build do not change with the form
 * a directory of resources cannot be listed through a class loader in an image, which has no directory entry; the Flyway extension lists its migrations from the application's modules instead, and a library of your own that scans a directory does the same with `ApplicationLayer.home()` and `ApplicationLayer.list`;
 * the client proxy of a library's class that a producer returns calls a constructor of that class in an image, with default values, where the application layer runs none; a class whose constructors are all private gets no proxy in an image;
 * the context class loader is the JVM's, not Vauban's;
-* `vidocq.app.layer` and `vidocq.app.layer.keep` have no effect on an image.
+* `vidocq.app.layer` and `vidocq.app.layer.keep` have no effect on an image
+  (xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-where[where each launch reads them]).
 
 [#not-yet]
 == Not available yet

@@ -420,9 +420,10 @@ the Vauban plugin].
 == Settings of the application layer
 
 From 0.4.0 the application layer takes two settings, `vidocq.app.layer` and `vidocq.app.layer.keep`, documented in
-one place: xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[the `vidocq.app.layer` property]. The
-other `vidocq.app.*` properties are what the launchers hand the runtime, and a launch written by hand changes as
-follows (Vidocq/vidocq#663):
+one place with where each launch reads them: xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[the
+settings of the application layer]. The other `vidocq.app.*` properties are what the launchers hand the runtime
+(xref:internals.adoc#launcher-contract[the launcher contract]), and a launch written by hand changes as follows
+(Vidocq/vidocq#663):
 
 * **`-Dvidocq.app.modules` is gone.** It replaced, with a list of module names, the selection `Vidocq.run()` makes
   when a `@VidocqMain` trampoline is launched from the module path. The selection now always applies: keep a

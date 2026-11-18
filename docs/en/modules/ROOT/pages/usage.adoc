@@ -111,7 +111,9 @@ policy of Vauban's xref:dev@vauban::se.adoc[Java SE launcher]: every module move
 Vidocq bricks, the platform and Jakarta modules, automatic modules, modules with a `javax.`,
 `sun.` or `com.sun.` package, and what those kept modules read. The caller's module always
 moves. CDI-agnostic libraries move too, so Vauban places the client proxies that must live in
-their packages, with zero `opens`.
+their packages, with zero `opens`. The selection follows the `vidocq.app.layer` and `vidocq.app.layer.keep` given to
+the JVM with `-D`; the pom does not reach it
+(xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-where[where each launch reads them]).
 
 [#app-in-boot-layer]
 When the selection finds no application module to move, the application stays in the boot
@@ -145,7 +147,9 @@ project's dependencies, the way `WEB-INF/lib` works in a servlet container. A fr
 resources through its own class loader, Vaadin for instance, then sees the whole application. `vidocq:run`,
 `vidocq:dev`, an IDE launch of `Vidocq.run()` and `vidocq:package` all take this default: development and
 production behave the same way (Vidocq/vidocq#247). `-Dvidocq.app.layer=classes` is the opt-out: the layer holds
-the project's classes only, and the dependencies stay on the module path, as they did before 0.4.0.
+the project's classes only, and the dependencies stay on the module path, as they did before 0.4.0. The two settings,
+and where each launch reads them, are in
+xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[the settings of the application layer].
 
 [#app-layer-migration]
 *Migrating from 0.3.x.* The default changed from `classes` to `all`. An application that worked keeps working: where
@@ -156,9 +160,11 @@ the project's classes only, and the dependencies stay on the module path, as the
 * With the layer mode off (`vidocq.dev.layer=false`, `vidocq.package.layer=false`) the goal falls back to `classes`
   with a warning.
 * A pin that reads a module of the application falls back to `classes` with a warning that names both modules.
-* To go back for good, set `vidocq.app.layer=classes` in the POM (`<properties>` or the plugin's `<configuration>`) or
-  on the command line. An explicit `-Dvidocq.app.layer=all` keeps the strict behaviour: each of the cases above
-  fails the build.
+* To go back, set `vidocq.app.layer=classes` in the POM (`<properties>` or the plugin's `<configuration>`) or on the
+  Maven command line: `vidocq:run`, `vidocq:dev` and `vidocq:package` read it there. `@VidocqTest` and an IDE run do
+  not: set it in `@VidocqTest(properties)` and in the VM options of the run configuration too
+  (xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-where[where each launch reads it]). An explicit
+  `-Dvidocq.app.layer=all` keeps the strict behaviour: each of the cases above fails the build.
 * What to pin: a library with native code (JNI), a library that must be the same class in the runtime and in the
   application, and any library that fails to load twice (see the limits below). Use `vidocq.app.layer.keep`.
 
@@ -457,7 +463,7 @@ reads it there. `all` requires the layer mode
 (`vidocq.dev.layer`, `vidocq.package.layer`). Left to the default, a goal without the layer mode falls back to
 `classes` with a warning; asked for with `-Dvidocq.app.layer=all`, it fails. In the same way a dependency whose module
 name cannot be derived stays in the parent layer with a warning by default, and fails the build when `all` was asked
-for, with a message that names the jar: add an `Automatic-Module-Name` to it, or use `vidocq.app.layer=classes`. See xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[the plugin properties].
+for, with a message that names the jar: add an `Automatic-Module-Name` to it, or use `vidocq.app.layer=classes`. See xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[the settings of the application layer].
 
 [[app-layer-jdk-modules]]*JDK modules.*Only the boot layer can define a JDK module, so a JDK module that only an
 application module requires, such as `java.sql` for Vaadin's `flow-data`, must be resolved there. `vidocq:run`,

@@ -626,9 +626,11 @@ module declares its generated provider, `provides io.vidocq.vauban.api.VaubanCom
 that names both. An application with a trampoline main that ran in this layout through the second copy needs it now.
 
 [#app-layer-property]
-=== The `vidocq.app.layer` property
+=== The settings of the application layer: `vidocq.app.layer` and `vidocq.app.layer.keep`
 
-`vidocq:run`, `vidocq:dev` and `vidocq:package` read the same two properties (Vidocq/vidocq#247).
+`vidocq:run`, `vidocq:dev` and `vidocq:package` read the same two settings (Vidocq/vidocq#247). This section is their
+reference; the other pages link here. The other `vidocq.app.*` properties are what the launchers hand the runtime,
+not settings: see xref:internals.adoc#launcher-contract[the launcher contract].
 
 [cols="2,1,3"]
 |===
@@ -645,6 +647,33 @@ that names both. An application with a trampoline main that ran in this layout t
 | Under `all`, comma-separated patterns kept in the parent layer: a module name or `groupId:artifactId`, `*` alone
   or as a suffix.
 |===
+
+[#app-layer-where]
+*Where each launch reads them* [.tag-new]#NEW#. They are settings of the goals, not of the application: a launch that
+no goal of the plugin starts reads them somewhere else, or not at all.
+
+[cols="2,3"]
+|===
+| Launch | Where the two settings come from
+
+| `vidocq:run`, `vidocq:dev`, `vidocq:package`
+| The pom (`<properties>` or the plugin's `<configuration>`), or `-D` on the Maven command line. `vidocq:run` keeps
+  them for its split and does not forward them to the application (<<run-properties>>).
+
+| `@VidocqTest`
+| `@VidocqTest(properties = "vidocq.app.layer=classes")`, and nothing else: neither the pom nor a `-D` of the Maven
+  command line reaches it (xref:testing.adoc#application-layer[the application layer of a test]).
+
+| An IDE run of a `@VidocqMain` trampoline
+| `-D` on its JVM, the VM options of the run configuration, and nothing else: the pom does not reach it. The `(dev)`
+  and `(run)` configurations of `vidocq:idea` run the goals, which read the pom.
+
+| `vidocq:jlink`, `vidocq:jpackage`, the `vidocq:docker` image of the `jlink` kind
+| Nowhere: an image has one layer (see below).
+|===
+
+A value the pom sets therefore applies to the goals only. A project that sets `vidocq.app.layer=classes` there
+sets it in `@VidocqTest(properties)` and in the VM options of its IDE run as well.
 
 `all` is the default since 0.4.0, in `vidocq:run`, `vidocq:dev`, an IDE launch and `vidocq:package` alike, so that
 development and production behave the same way. `classes` is the opt-out. The goals make the split themselves: only
@@ -1176,7 +1205,7 @@ run always uses.
 | `all`
 | `all`: the application layer holds the project's classes and every dependency outside the runtime's closure, as
   `WEB-INF/lib` does in a servlet container. `classes`: the project's classes only. See
-  <<app-layer-property,the `vidocq.app.layer` property>>.
+  <<app-layer-property,the settings of the application layer>>.
 
 | `vidocq.app.layer.keep`
 | _(empty)_
@@ -1188,6 +1217,7 @@ run always uses.
 | Skip the goal.
 |===
 
+[#run-properties]
 === The properties the application sees
 
 The application runs in another JVM, so a `-D` of the Maven command line does not reach it by itself. The goal
