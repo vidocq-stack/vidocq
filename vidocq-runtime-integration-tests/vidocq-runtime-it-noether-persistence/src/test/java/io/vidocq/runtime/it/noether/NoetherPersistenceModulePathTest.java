@@ -80,9 +80,13 @@ class NoetherPersistenceModulePathTest {
         assertEquals(1, ledger().count("joined"));
     }
 
+    /**
+     * An application may close the factory the container injected: {@code EntityManagerFactory.close()} makes no
+     * exception for it (Noether BUG-20261118-86). Closing it here would close the unit for every other test of this
+     * class, so this test only checks which factory was injected; Noether's own tests cover the close.
+     */
     @Test
-    void the_container_owns_the_injected_factory() {
-        assertThrows(IllegalStateException.class, () -> ledger().factory().close());
+    void the_injected_factory_is_the_open_factory_of_the_unit() {
         assertTrue(ledger().factory().isOpen());
         assertEquals("ledger", ledger().factory().getName());
     }
