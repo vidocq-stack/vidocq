@@ -5,6 +5,31 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261118-80 — A transaction a request leaves active is never rolled back
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `fix/servlet-application-roots`.
+- **Module**: `vidocq-runtime-mansart-transactions-extension` (`RequestTransactions`)
+- **Symptom**: in the Jakarta EE 11 Platform TCK for Persistence, `elementcollection.Client2#elementCollectionBasicTypeXMLTest`
+  begins a transaction in the `pmservlet` vehicle, fails on `flush()` and returns without completing it. Every later
+  application whose schema generation drops `CUST_TABLE` then fails with `Timeout trying to lock table "CUST_TABLE"`:
+  33 times, in 11 test classes (`elementcollection`, `orderby`, `types.property`), two of them at deployment.
+- **Repro**: `RequestTransactionsTest#theContainerRollsBackWhatARequestLeftActiveWhenItsContextEnds`: activate a
+  request context through `RequestContextController`, as Foy does for each request, begin a transaction, deactivate
+  the context; the transaction is still associated with the thread.
+- **Cause**: nothing in the runtime ends a transaction that a web component returns with. Jakarta EE 11 Platform
+  §4.2.2: returning from `service` or `doFilter` to the network client with an active transaction context is an
+  error, and the web container detects it and aborts the transaction. The transaction stayed associated with a
+  thread that no longer ran, with its connection and the locks that connection held, beyond the application's stop.
+- **Fix**: a `@RequestScoped` bean of the transactions extension notes the transaction associated with the thread when
+  the request context starts (`@Initialized(RequestScoped.class)`), and rolls back the one still associated when the
+  context is about to end (`@BeforeDestroyed(RequestScoped.class)`), with a warning that cites §4.2.2. Foy and
+  Cassini end the context on the thread that served the request. A transaction already active when the context
+  started belongs to its owner and is left alone. Container-neutral: CDI events only, no Foy dependency.
+- **Verification**: the three rollback cases of `RequestTransactionsTest` red before (the transaction left associated),
+  green after; the two cases that leave a transaction alone, and a failing rollback that does not stop the request
+  from ending, green; the module's 11 tests.
+
 ## BUG-20261118-63 — `java:comp/UserTransaction` is bound to nothing
 
 - **Date**: 2026-11-18

@@ -43,4 +43,7 @@ module io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions {
 
     provides io.vidocq.runtime.spi.VidocqExtension
             with io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions.MansartTransactionsIntegrationExtension;
+    // Jakarta EE 11 Platform §4.2.2: RequestTransactions aborts the transaction a request leaves active.
+    provides io.vidocq.vauban.api.VaubanComponentProvider
+            with io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions._VaubanComponents;
 }

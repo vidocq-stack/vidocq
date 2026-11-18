@@ -92,7 +92,7 @@
 
 | `vidocq-runtime-mansart-transactions-extension`
 | `jakartaee-web`
-| Handles `@Transactional` via `mansart-transactions` (companion `-codegen` artefact). One dependency is enough: it also brings the JDBC-to-JTA bridge, so Mansart Data writes actually join the transaction (<<mansart-transactions-jdbc-bridge>>).
+| Handles `@Transactional` via `mansart-transactions` (companion `-codegen` artefact). One dependency is enough: it also brings the JDBC-to-JTA bridge, so Mansart Data writes actually join the transaction (<<mansart-transactions-jdbc-bridge>>). A transaction a request leaves active is rolled back when the request ends (<<mansart-transactions-request-end>>).
 
 | `vidocq-runtime-noether-persistence-extension`
 | `jakartaee-web`
@@ -1148,6 +1148,17 @@ Mansart Data's JDBC-to-JTA bridge (`io.vidocq.mansart.transactions.jdbc.Connecti
     <version>{project-version}</version>
 </dependency>
 ----
+
+[#mansart-transactions-request-end]
+== A transaction a request leaves active is rolled back
+
+A servlet, a filter or a REST resource that begins a transaction completes it before the response: Jakarta EE 11 Platform §4.2.2 calls returning to the client with an active transaction an error, which the web container detects and aborts. With `vidocq-runtime-mansart-transactions-extension`, a request that ends with the transaction it began still active has that transaction rolled back, and the log says so:
+
+----
+WARNING: A request ended with the transaction it began still active: rolled back (Jakarta EE Platform §4.2.2). Commit or roll back a transaction before the response.
+----
+
+The check runs when the CDI request context of the request ends, on the thread that served it: Foy and Cassini end it there. A transaction that was already active when the request context started, as one an `@ActivateRequestContext` method runs in, belongs to the code that began it and is left alone. Before this, the transaction stayed associated with a thread that no longer ran, and kept its connection and the locks it held until the process stopped (BUG-20261118-80).
 
 [#kerckhoffs-security]
 == Jakarta Security (Kerckhoffs) [.tag-new]#NEW#
