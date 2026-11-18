@@ -41,44 +41,76 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * {@value VidocqAppLayer#APP_MODULE_PROPERTY}: the runtime's own main, launched with the application's module in
- * the boot layer (a launch from the module path), re-layers the application as a
- * {@code @VidocqMain} trampoline does.
+ * {@value VidocqAppLayer#APP_MODULE_PROPERTY} names the application's module when the runtime's own main is launched,
+ * for the banner and the startup report. It loads nothing (Vidocq/vidocq#663): the launch hands the application over
+ * with {@value VidocqAppLayer#APP_PATH_PROPERTY}, or switches the application layer off
+ * ({@value LayerSplit#OFF_PROPERTY}), as a jlink image does. A launch with neither stops before the boot.
  */
-@DisplayName("vidocq.app.module — the runtime's main re-layers a boot-layer application")
+@DisplayName("vidocq.app.module — a name, which loads nothing")
 class VidocqAppLayerModuleTest {
 
     @TempDir
     Path dir;
 
     @Test
-    @DisplayName("without the property, nothing is installed")
-    void withoutThePropertyNothingIsInstalled() {
+    @DisplayName("without the property, the launch goes on")
+    void withoutThePropertyTheLaunchGoesOn() {
         String previous = System.clearProperty(VidocqAppLayer.APP_MODULE_PROPERTY);
         try {
-            assertFalse(VidocqAppLayer.installFromModuleIfConfigured());
+            assertDoesNotThrow(VidocqAppLayer::checkModuleLaunch);
         } finally {
-            restore(previous);
+            restore(VidocqAppLayer.APP_MODULE_PROPERTY, previous);
         }
     }
 
     @Test
-    @DisplayName("a module missing from the boot layer fails with the --add-modules that fixes it")
-    void aModuleMissingFromTheBootLayerSaysHowToResolveIt() {
-        String previous = System.setProperty(VidocqAppLayer.APP_MODULE_PROPERTY, "acme.absent");
+    @DisplayName("the name alone stops the launch, with the vidocq.app.path to pass and the switch of a one-layer run")
+    void theNameAloneStopsTheLaunch() {
+        String previous = System.setProperty(VidocqAppLayer.APP_MODULE_PROPERTY, " acme.app ");
+        String path = System.clearProperty(VidocqAppLayer.APP_PATH_PROPERTY);
+        String off = System.clearProperty(LayerSplit.OFF_PROPERTY);
         try {
-            var failure = assertThrows(IllegalStateException.class, VidocqAppLayer::installFromModuleIfConfigured);
-            assertTrue(failure.getMessage().contains("acme.absent"), failure.getMessage());
-            assertTrue(failure.getMessage().contains("--add-modules acme.absent"), failure.getMessage());
+            var failure = assertThrows(IllegalStateException.class, VidocqAppLayer::checkModuleLaunch);
+
+            assertTrue(failure.getMessage().startsWith(
+                    "Cannot create the application layer (vidocq.app.module=acme.app): "), failure.getMessage());
+            assertTrue(failure.getMessage().contains("-Dvidocq.app.path=<its jars and directories>"),
+                    failure.getMessage());
+            assertTrue(failure.getMessage().endsWith("-Dvidocq.app.layer.off=true"), failure.getMessage());
+            assertTrue(VidocqAppLayer.failureLine(failure).startsWith(
+                    "Vidocq startup failed in application layer (vidocq.app.module=acme.app)"),
+                    VidocqAppLayer.failureLine(failure));
+            assertFalse(VidocqAppLayer.alreadyInLayer());
         } finally {
-            restore(previous);
+            restore(VidocqAppLayer.APP_MODULE_PROPERTY, previous);
+            restore(VidocqAppLayer.APP_PATH_PROPERTY, path);
+            restore(LayerSplit.OFF_PROPERTY, off);
+        }
+    }
+
+    /**
+     * {@code vidocq:package}, {@code vidocq:run} and {@code @VidocqTest} name the module and hand the application over
+     * with {@value VidocqAppLayer#APP_PATH_PROPERTY}: the layer comes from the path.
+     */
+    @Test
+    @DisplayName("with vidocq.app.path, the name goes with the application the path hands over")
+    void withAPathTheLaunchGoesOn() {
+        String previous = System.setProperty(VidocqAppLayer.APP_MODULE_PROPERTY, "acme.app");
+        String path = System.setProperty(VidocqAppLayer.APP_PATH_PROPERTY, dir.toString());
+        try {
+            assertDoesNotThrow(VidocqAppLayer::checkModuleLaunch);
+        } finally {
+            restore(VidocqAppLayer.APP_MODULE_PROPERTY, previous);
+            restore(VidocqAppLayer.APP_PATH_PROPERTY, path);
         }
     }
 
@@ -90,35 +122,20 @@ class VidocqAppLayerModuleTest {
     @DisplayName("with the layer switched off, the named module stays where the JVM resolved it")
     void withTheLayerOffTheNamedModuleIsLeftInPlace() {
         String previous = System.setProperty(VidocqAppLayer.APP_MODULE_PROPERTY, "acme.absent");
+        String path = System.clearProperty(VidocqAppLayer.APP_PATH_PROPERTY);
         String off = System.setProperty(LayerSplit.OFF_PROPERTY, "true");
         try {
-            assertFalse(VidocqAppLayer.installFromModuleIfConfigured());
+            assertDoesNotThrow(VidocqAppLayer::checkModuleLaunch);
             assertFalse(VidocqAppLayer.alreadyInLayer());
         } finally {
-            restore(previous);
-            if (off == null) {
-                System.clearProperty(LayerSplit.OFF_PROPERTY);
-            } else {
-                System.setProperty(LayerSplit.OFF_PROPERTY, off);
-            }
+            restore(VidocqAppLayer.APP_MODULE_PROPERTY, previous);
+            restore(VidocqAppLayer.APP_PATH_PROPERTY, path);
+            restore(LayerSplit.OFF_PROPERTY, off);
         }
     }
 
     @Test
-    @DisplayName("a named boot-layer module without an application archive is left in place")
-    void aModuleWithoutApplicationArchiveIsLeftInPlace() {
-        // java.logging lives in the runtime image (jrt:): there is no archive to re-layer.
-        String previous = System.setProperty(VidocqAppLayer.APP_MODULE_PROPERTY, "java.logging");
-        try {
-            assertFalse(VidocqAppLayer.installFromModuleIfConfigured());
-            assertFalse(VidocqAppLayer.alreadyInLayer());
-        } finally {
-            restore(previous);
-        }
-    }
-
-    @Test
-    @DisplayName("the trampoline path detects from the caller's module as the property path does from the named one")
+    @DisplayName("a trampoline whose module has no application archive builds no layer")
     void theTrampolinePathDetectsFromTheCallerModule() {
         assertFalse(VidocqAppLayer.installFromBootLayer(java.util.logging.Logger.class));
         assertFalse(VidocqAppLayer.alreadyInLayer());
@@ -131,33 +148,39 @@ class VidocqAppLayerModuleTest {
         try {
             assertEquals("java.logging", Vidocq.applicationModule().getName());
         } finally {
-            restore(previous);
+            restore(VidocqAppLayer.APP_MODULE_PROPERTY, previous);
         }
     }
 
+    /**
+     * The launch no launcher writes: the application's module resolved into the boot layer from the module path,
+     * named by the property alone. The runtime's main loaded it a second time into an application layer, without the
+     * warning a trampoline gives (BUG-20261118-06); it now stops before the boot and says what to pass instead.
+     */
     @Test
-    @DisplayName("Vidocq.main re-layers the named boot-layer module and runs the application inside the Vauban layer")
-    void theRuntimeMainReLayersTheNamedModule() throws Exception {
+    @DisplayName("Vidocq.main stops a launch that names the module without vidocq.app.path, and says to pass it")
+    void theRuntimeMainStopsALaunchThatNamesTheModuleAlone() throws Exception {
         var marker = "STARTED-from-the-runtime-main";
         var module = application(marker);
         var run = child(module);
         var output = run.stdout() + run.stderr();
-        assertEquals(0, run.exitCode(), output);
-        assertTrue(output.contains("Application layer ready: modules [acme.app] (boot-layer detection from acme.app)"),
-                "the runtime's main did not re-layer the application: " + output);
-        assertTrue(run.stdout().contains(marker + " io.vidocq.vauban.classloader.VaubanClassLoader"),
-                "the application did not run inside the Vauban layer: " + run.stdout());
+        assertNotEquals(0, run.exitCode(), () -> "the launch went on: " + output);
+        assertTrue(output.contains("Vidocq startup failed in application layer (vidocq.app.module=acme.app)"),
+                output);
+        assertTrue(output.contains("-Dvidocq.app.path="), output);
+        assertFalse(output.contains("Application layer ready"), output);
+        assertFalse(run.stdout().contains(marker), "the application ran: " + run.stdout());
     }
 
     // ---------------------------------------------------------------- fixtures
 
     private record Run(int exitCode, String stdout, String stderr) {}
 
-    private static void restore(String previous) {
+    private static void restore(String property, String previous) {
         if (previous == null) {
-            System.clearProperty(VidocqAppLayer.APP_MODULE_PROPERTY);
+            System.clearProperty(property);
         } else {
-            System.setProperty(VidocqAppLayer.APP_MODULE_PROPERTY, previous);
+            System.setProperty(property, previous);
         }
     }
 
@@ -198,8 +221,9 @@ class VidocqAppLayerModuleTest {
     }
 
     /**
-     * Runs {@code Vidocq.main} with {@code acme.app} resolved into the boot layer, as a launch from the module path
-     * with the runtime's own main does. {@code vidocq.app.main} lets the JVM end once the application ran.
+     * Runs {@code Vidocq.main} with {@code acme.app} resolved into the boot layer from the module path and named by
+     * {@value VidocqAppLayer#APP_MODULE_PROPERTY} alone. Had the launch gone on, {@code vidocq.app.main} would have
+     * let the JVM end once the application ran.
      */
     private Run child(Path module) throws Exception {
         List<String> command = new ArrayList<>();

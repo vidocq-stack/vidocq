@@ -15,7 +15,7 @@ An application has no main class of its own by default. The runtime's main,
 
 * `vidocq:run` and the `vidocq:package` launchers hand the application to it as a path, `-Dvidocq.app.path`, and
   `vidocq:dev`'s hot-reload loop re-creates that layer at each reload;
-* a `vidocq:jlink` image, and the `vidocq:jpackage` application built on it, start it with
+* a `vidocq:jlink` image, and the `vidocq:jpackage` application built on it, start it in one layer and name it with
   `-Dvidocq.app.module`, see xref:modules/vidocq-runtime-core.adoc#app-module-property[the `vidocq.app.module`
   property] and xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[jlink without a main class];
 * `vidocq:idea` writes its `(dev)`, `(run)` and `(debug)` configurations from `vidocq.mainModule` alone, see
@@ -105,8 +105,8 @@ itself ends the whole dev session; a crash or a failed boot keeps it waiting for
 
 === How the application modules are chosen
 
-When the application was resolved into the boot layer — a trampoline launched from the IDE, or a jlink image
-started with `vidocq.app.module` — `Vidocq.run()` and the runtime's main pick its modules automatically, with the
+When a `@VidocqMain` trampoline is launched from the module path, as an IDE does, the JVM resolved the application
+into the boot layer, and `Vidocq.run()` picks the modules to move into the application layer, with the
 policy of Vauban's xref:dev@vauban::se.adoc[Java SE launcher]: every module moves except the
 Vidocq bricks, the platform and Jakarta modules, automatic modules, modules with a `javax.`,
 `sun.` or `com.sun.` package, and what those kept modules read. The caller's module always
@@ -124,8 +124,8 @@ export by itself.
 
 A legacy main that boots the runtime directly (through `VidocqBootstrap`) still works — unwoven beans are then
 covered by the load-time weaving agent (with the JDK's dynamic-agent warning), and Vauban's warning hints at a
-trampoline that re-layers the application. Delete the legacy main — the runtime's own main re-layers it too — or
-turn it into a trampoline if you need one of the two cases above.
+trampoline that re-layers the application. Delete the legacy main — the launchers then start the runtime's own main,
+which loads the application into the layer too — or turn it into a trampoline if you need one of the two cases above.
 
 One more benefit: applications never declare generated providers in
 `module-info.java`. The annotation processors emit standard `META-INF/services` files

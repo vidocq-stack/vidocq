@@ -60,9 +60,10 @@ public final class VidocqAppLayer {
     public static final String APP_MAIN_PROPERTY = "vidocq.app.main";
     /**
      * Name of the application's module when the runtime's own main was launched: the module the banner and the
-     * startup report name. A launch from the module path resolved it into the boot layer, and {@link Vidocq#main}
-     * re-layers it as a {@code @VidocqMain} trampoline would; a jlink image, which has one layer
-     * ({@value LayerSplit#OFF_PROPERTY}), leaves it where the JVM resolved it (Vidocq/vidocq#580).
+     * startup report name. A name, which loads nothing: the application comes from {@value #APP_PATH_PROPERTY}, or,
+     * in a launch with the layer switched off ({@value LayerSplit#OFF_PROPERTY}, a jlink image, Vidocq/vidocq#580),
+     * from the boot layer where the JVM resolved it. {@link Vidocq#main} refuses it with neither
+     * ({@link #checkModuleLaunch()}).
      */
     public static final String APP_MODULE_PROPERTY = "vidocq.app.module";
 
@@ -210,27 +211,28 @@ public final class VidocqAppLayer {
     }
 
     /**
-     * The runtime's own main, with {@value #APP_MODULE_PROPERTY} naming the application's module, which the launch
-     * resolved into the boot layer ({@code --add-modules}): the runtime's main re-layers it as
-     * {@link #installFromBootLayer(Class)} does from the trampoline's module. Returns {@code false} when the property
-     * is absent, when the layer is already in place, and when the launch wants no layer
-     * ({@value LayerSplit#OFF_PROPERTY}, a jlink image): the module then runs where the JVM resolved it, in one copy
-     * (BUG-20261114-11, Vidocq/vidocq#580).
+     * Checks a launch of the runtime's own main: {@value #APP_MODULE_PROPERTY} names the application's module, it does
+     * not load it. The launch hands the application over with {@value #APP_PATH_PROPERTY}, as the launchers of
+     * {@code vidocq:package}, {@code vidocq:run} and {@code @VidocqTest} do, or switches the layer off
+     * ({@value LayerSplit#OFF_PROPERTY}), as a jlink image does. A launch with the name alone resolved the module into
+     * the boot layer from the module path: the runtime's main loaded it a second time into an application layer, and
+     * the startup did not warn of it as it does for a trampoline (BUG-20261118-06, Vidocq/vidocq#663).
      *
-     * @throws IllegalStateException when the named module is not in the boot layer
+     * @throws IllegalStateException when the property names a module and the launch has neither
      */
-    static boolean installFromModuleIfConfigured() {
+    static void checkModuleLaunch() {
         var name = System.getProperty(APP_MODULE_PROPERTY, "").strip();
-        if (name.isEmpty() || alreadyInLayer() || Boolean.getBoolean(LayerSplit.OFF_PROPERTY)) {
-            return false;
+        if (name.isEmpty() || !System.getProperty(APP_PATH_PROPERTY, "").isBlank()
+                || Boolean.getBoolean(LayerSplit.OFF_PROPERTY)) {
+            return;
         }
-        var booted = ModuleLayer.boot().findModule(name);
-        if (booted.isEmpty()) {
-            throw new IllegalStateException("Cannot create the application layer: the module " + name + " named by "
-                    + APP_MODULE_PROPERTY + " is not in the boot layer. Resolve it with --add-modules " + name
-                    + " on the java command");
-        }
-        return installFromBootLayer(booted.get());
+        var failure = new IllegalStateException(LAYER_FAILURE + " (" + APP_MODULE_PROPERTY + "=" + name + "): "
+                + APP_MODULE_PROPERTY + " names the application's module, it does not load it. Hand the application"
+                + " to the runtime with -D" + APP_PATH_PROPERTY + "=<its jars and directories>, off the module path,"
+                + " as the launchers of vidocq:package and vidocq:run do, or run it in one layer with -D"
+                + LayerSplit.OFF_PROPERTY + "=true");
+        LOG.log(System.Logger.Level.WARNING, failureLine(failure));
+        throw failure;
     }
 
     private static boolean installFromBootLayer(Module callerModule) {

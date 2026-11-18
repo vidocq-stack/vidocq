@@ -75,14 +75,13 @@ public final class Vidocq {
             VidocqDevReloadLoop.run(java.nio.file.Path.of(reloadFile), args);
             return;
         }
+        // -Dvidocq.app.module=… names the application module and loads nothing: without a path, only a launch with
+        // the layer switched off (a jlink image) may pass it.
+        VidocqAppLayer.checkModuleLaunch();
         // Universal-loader mode (-Dvidocq.app.path=…): the application archives resolve
         // into a child module layer defined by the Vauban class loader. Must precede
         // everything — extensions and configuration read through the loader installed here.
-        // Without a path, -Dvidocq.app.module=… names the application module the launch resolved into the boot
-        // layer: re-layered as a trampoline would, unless the launch wants no layer (a jlink image).
-        boolean layerJustInstalled = VidocqAppLayer.installIfConfigured()
-                || VidocqAppLayer.installFromModuleIfConfigured();
-        if (layerJustInstalled && VidocqAppLayer.runAppMainIfConfigured(args)) {
+        if (VidocqAppLayer.installIfConfigured() && VidocqAppLayer.runAppMainIfConfigured(args)) {
             // The application main (inside the layer) took over; when it calls
             // Vidocq.main/run back, the layer install is a no-op and the boot proceeds.
             return;

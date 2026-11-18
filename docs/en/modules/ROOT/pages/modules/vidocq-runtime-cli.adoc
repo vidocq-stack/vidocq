@@ -117,7 +117,7 @@ the directive once the package has one.
 `--main` also writes an `@VidocqMain` trampoline, sets `vidocq.mainClass` to it and adds
 `requires io.vidocq.runtime.core;`. Ask for it when you want a right-click Run in the IDE, or
 logic after boot (a `VidocqApp`). `vidocq:jlink` and `vidocq:jpackage` do not need it: without a
-main class they launch the runtime's own main, which re-layers `vidocq.mainModule` (see
+main class they launch the runtime's own main, which boots `vidocq.mainModule` in the image's one layer (see
 xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-without-main-class[jlink without a main class]).
 The trampoline re-resolves the application into the Vauban layer, which reads
 the build-time generated code through `META-INF/services` without a `provides` in your

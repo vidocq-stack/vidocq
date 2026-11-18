@@ -5,6 +5,36 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261118-06 — The runtime's main, launched from the module path with `vidocq.app.module`, loads the application twice without a warning
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `refactor/app-layer-settings` (Vidocq/vidocq#663).
+- **Module**: `vidocq-runtime-core` (`VidocqAppLayer`, `Vidocq.main`)
+- **Symptom**: `java --module-path lib:app --add-modules ALL-MODULE-PATH -Dvidocq.app.module=<module> -m
+  io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq` starts, and the application module is in the boot layer and
+  in the application layer: `Application layer ready: modules [<module>] (boot-layer detection from <module>)`. Each
+  of its classes exists twice and a `ServiceLoader` finds each of its providers twice, as in BUG-20261114-10, but the
+  start reports no `VIDOCQ-LAY-001`, which a `@VidocqMain` trampoline launched the same way gets.
+- **Repro**: in `vidocq-runtime-it-langchain4j-cdi-mcp`, after `McpLaunchShapesTest`, the launch above with `lib` =
+  `target/it-lib`, `app` = `target/classes` and the module `io.vidocq.runtime.it.lc4jcdimcp`: the log has the line
+  above and no `VIDOCQ-LAY` line, while the trampoline launches of the same test (`i1-flat`, `i1-ide`) report
+  `VIDOCQ-LAY-001`. `VidocqAppLayerModuleTest#theRuntimeMainReLayersTheNamedModule` asserted this re-layer as intended.
+- **Cause**: without `vidocq.app.path`, `Vidocq.main` called `VidocqAppLayer.installFromModuleIfConfigured()`, which
+  re-layered the named boot-layer module through `installFromBootLayer(Module)`. That overload records no list of the
+  modules held twice; only `installFromBootLayer(Class)`, the trampoline's, computes it. The path came with jlink
+  images without a main class (651c2016, 2026-10-23). Since an image has one layer (12f4bf53, Vidocq/vidocq#580) and
+  `@VidocqTest` passes `vidocq.app.path` (07d6b10a, BUG-20261114-07), no launcher used it: only a launch written by
+  hand took it, such as the foy example's `BistroApplication`.
+- **Fix**: `vidocq.app.module` names the application and loads nothing. `installFromModuleIfConfigured` is removed,
+  and `Vidocq.main` first calls `VidocqAppLayer.checkModuleLaunch()`, which stops a launch that names the module
+  without `vidocq.app.path` and without `vidocq.app.layer.off=true`: `Vidocq startup failed in application layer
+  (vidocq.app.module=<module>): …`, naming both. `BistroApplication` hands its module over with `vidocq.app.path`.
+- **Verification**: `VidocqAppLayerModuleTest#theRuntimeMainStopsALaunchThatNamesTheModuleAlone`, a child JVM, red
+  before (exit 0 after `Application layer ready: modules [acme.app] (boot-layer detection from acme.app)`), green
+  after; unit tests of `checkModuleLaunch` with the name alone, with a path, with the layer off and without the name.
+  The foy example's 9 tests: red with the new core and the old launch (`the application did not listen`, the new
+  message in its log), green with `vidocq.app.path`. The repro above now exits 1 with the message.
+
 ## BUG-20261118-05 — An application with the MCP extension generates two classes at each start
 
 - **Date**: 2026-11-18

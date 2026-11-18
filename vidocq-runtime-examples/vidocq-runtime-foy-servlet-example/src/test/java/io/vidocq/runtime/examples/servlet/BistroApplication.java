@@ -19,7 +19,10 @@
  */
 package io.vidocq.runtime.examples.servlet;
 
+import java.io.File;
 import java.io.IOException;
+import java.lang.module.FindException;
+import java.lang.module.ModuleFinder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -32,16 +35,18 @@ import java.util.regex.Pattern;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * The Bistro, launched from the module path by the runtime's own main with {@code --add-modules <module>
- * -Dvidocq.app.module=<module>}, in a child JVM on this test's module path, listening on a port the system picks. The runtime then builds
- * the application layer from that module, which reads the providers the processors listed in
- * {@code META-INF/services}. Booted in the test's JVM, the module would stay in the boot layer, where those files
- * count for nothing.
+ * The Bistro, launched by the runtime's own main in a child JVM, listening on a port the system picks. The entry of
+ * this test's module path that holds the application module goes to {@code -Dvidocq.app.path}, the others stay on the
+ * module path, as {@code vidocq:run} splits them under {@code vidocq.app.layer=classes}. The runtime then builds the
+ * application layer from that module, which reads the providers the processors listed in {@code META-INF/services}.
+ * Booted in the test's JVM, the module would stay in the boot layer, where those files count for nothing.
  */
 final class BistroApplication {
 
     private static final String MODULE = "io.vidocq.runtime.examples.servlet";
     private static final String MAIN = "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq";
+    /** Every module of the module path is resolved, as in the launch {@code vidocq:run} writes. */
+    private static final String ALL_MODULE_PATH = "ALL-MODULE-PATH";
     /** The line Chappe logs once the default listener listens, with the port it bound. */
     private static final Pattern STARTED = Pattern.compile("Chappe listener 'default' started on http://[^/\\s]+:(\\d+)/");
 
@@ -66,8 +71,16 @@ final class BistroApplication {
                 "-Dvidocq.chappe.listener.default.host=127.0.0.1",
                 "-Dvidocq.chappe.listener.default.port=0"));
         command.addAll(List.of(systemProperties));
+        List<String> application = new ArrayList<>();
+        List<String> modulePath = new ArrayList<>();
+        for (String entry : System.getProperty("jdk.module.path").split(File.pathSeparator)) {
+            if (!entry.isBlank()) {
+                (holdsTheApplication(entry) ? application : modulePath).add(entry);
+            }
+        }
         command.addAll(List.of("-Dvidocq.app.module=" + MODULE,
-                "-p", System.getProperty("jdk.module.path"), "--add-modules", MODULE, "-m", MAIN));
+                "-Dvidocq.app.path=" + String.join(File.pathSeparator, application),
+                "-p", String.join(File.pathSeparator, modulePath), "--add-modules", ALL_MODULE_PATH, "-m", MAIN));
         Process process = new ProcessBuilder(command)
                 .redirectErrorStream(true).redirectOutput(log.toFile()).start();
         long deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos();
@@ -80,6 +93,15 @@ final class BistroApplication {
             if (process.waitFor(100, TimeUnit.MILLISECONDS) || System.nanoTime() > deadline) {
                 fail("the application did not listen:\n" + Files.readString(log));
             }
+        }
+    }
+
+    /** Whether the module path entry {@code entry} holds the application module. */
+    private static boolean holdsTheApplication(String entry) {
+        try {
+            return ModuleFinder.of(Path.of(entry)).find(MODULE).isPresent();
+        } catch (FindException _) {
+            return false; // not a module the finder can read: it stays on the module path, where the JVM reports it
         }
     }
 

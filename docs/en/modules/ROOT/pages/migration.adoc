@@ -416,6 +416,26 @@ Vauban plugin instead, renames the `vidocq.modularize.*` properties to `vauban.m
 `vidocq:package` read them. See xref:modules/vidocq-runtime-maven-plugin.adoc#modularize[`modularize` moved to
 the Vauban plugin].
 
+[#app-layer-settings]
+== Settings of the application layer
+
+From 0.4.0 the application layer takes two settings, `vidocq.app.layer` and `vidocq.app.layer.keep`, documented in
+one place: xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[the `vidocq.app.layer` property]. The
+other `vidocq.app.*` properties are what the launchers hand the runtime, and a launch written by hand changes as
+follows (Vidocq/vidocq#663):
+
+* **`-Dvidocq.app.modules` is gone.** It replaced, with a list of module names, the selection `Vidocq.run()` makes
+  when a `@VidocqMain` trampoline is launched from the module path. The selection now always applies: keep a
+  library in the parent layer with `vidocq.app.layer.keep`, or start the application with `vidocq:dev` or
+  `vidocq:run`, which hand it over without the module path.
+* **`-Dvidocq.app.module` names the application, and loads nothing.** The runtime's own main, launched from the
+  module path with the application module resolved into the boot layer and named by this property alone, loaded
+  the module a second time into an application layer, without the `VIDOCQ-LAY-001` warning (BUG-20261118-06). Such
+  a launch now stops before the boot, with a message that names `vidocq.app.path`. Hand the application's jars and
+  directories over with `-Dvidocq.app.path`, off the module path, as the launchers of `vidocq:package` and
+  `vidocq:run` do, or add `-Dvidocq.app.layer.off=true` to run it in one layer. The launchers and the images the
+  plugin builds need no change.
+
 == Next steps
 
 * xref:getting-started.adoc[Getting started]

@@ -37,13 +37,16 @@
 The entry point is the runtime's own main, `io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq`, a facade over
 `VidocqBootstrap`. User code needs no main class, no `@SpringBootApplication` and no application class:
 extensions and beans are discovered from the module path (`ServiceLoader` + the compile-time bean index).
-`Vidocq.main` finds the application in one of three ways, tried in this order:
+`Vidocq.main` finds the application in one of two ways:
 
-* `-Dvidocq.app.path=<archives>`: the archives resolve into the Vauban application layer. `vidocq:run` and the
-  `vidocq:package` launchers pass it; `vidocq:dev`'s hot-reload loop re-creates that layer at each reload;
-* `-Dvidocq.app.module=<module>`: on a module path, the module already sits in the boot layer and is re-layered
-  (<<app-module-property>>);
-* neither: the runtime boots in place, without an application layer.
+* `-Dvidocq.app.path=<archives>`: the archives resolve into the Vauban application layer. `vidocq:run`, the
+  `vidocq:package` launchers and `@VidocqTest` pass it; `vidocq:dev`'s hot-reload loop re-creates that layer at each
+  reload;
+* without it: the runtime boots in place, without an application layer, as a `vidocq:jlink` image does with
+  `-Dvidocq.app.layer.off=true`.
+
+`-Dvidocq.app.module=<module>` names the application module in both cases, and loads nothing
+(<<app-module-property>>).
 
 An application main class is optional: a `@VidocqMain` trampoline that calls `Vidocq.run(App.class, args)`, for a
 right-click Run in the IDE or a `VidocqApp` that runs after boot. `Vidocq.run` re-layers the trampoline's module the
@@ -54,9 +57,16 @@ runs the application where the JVM resolved it, without a layer. A `vidocq:jlink
 one layer, the JVM's own (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-one-layer[one layer]).
 
 [#app-module-property]
-`-Dvidocq.app.module=<module>` names the application module to the runtime's own main: the module the banner and the startup report name.
+`-Dvidocq.app.module=<module>` names the application module to the runtime's own main: the module the banner and the startup report name, and the one an extension reads to declare something for the application by default.
 
-On a module path, when the launch resolved the module into the boot layer (`--add-modules <module>`), `Vidocq.main` re-layers that module, and what it reads, exactly as `Vidocq.run` does from a trampoline. A module that is not in the boot layer fails the start with the `--add-modules` that fixes it. With `-Dvidocq.app.layer.off=true`, as in a jlink image, the module is not re-layered: it runs where the JVM resolved it.
+It is a name, and loads nothing [.tag-new]#NEW#. The application reaches the runtime through `-Dvidocq.app.path`, or, in a launch with the application layer switched off (`-Dvidocq.app.layer.off=true`, as in a jlink image), from the module path, where it runs as the JVM resolved it. A launch of the runtime's main that names the module with neither stops before the boot:
+
+[source,text]
+----
+Vidocq startup failed in application layer (vidocq.app.module=acme.app): vidocq.app.module names the application's module, it does not load it. Hand the application to the runtime with -Dvidocq.app.path=<its jars and directories>, off the module path, as the launchers of vidocq:package and vidocq:run do, or run it in one layer with -Dvidocq.app.layer.off=true
+----
+
+Such a launch used to load the module a second time, into an application layer, while the boot layer kept it too, and the start did not warn of it as it does for a trampoline (<<vidocq-lay-001>>): see xref:migration.adoc#app-layer-settings[Settings of the application layer].
 
 [#main-shapes]
 === Which main methods are accepted
