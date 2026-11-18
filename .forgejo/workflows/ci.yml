@@ -15,7 +15,9 @@ jobs:
   build-and-deploy:
     runs-on: vidocq-runner
     steps:
-      - uses: actions/checkout@v4
+      # This job holds the publishing credentials and the signing key: every action it runs is pinned
+      # to a commit (workspace CYBER_SECU.md, F-04). Bump the SHAs on purpose, never to a branch.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, the commit Vidocq/ci pins
 
       - name: Check documented version numbers stay in sync
         run: ./check-doc-versions.sh
@@ -30,9 +32,14 @@ jobs:
           set -euo pipefail
           enc_pass=$(python3 -c "import os,urllib.parse;print(urllib.parse.quote(os.environ['MIRROR_PASS'], safe=''))")
           host="${MIRROR_URL#https://}"; host="${host#http://}"; host="${host%/}"
-          git clone --depth=1 --branch main \
+          # The pinned commit of Vidocq/ci, not its branch: a mirror or a push to main cannot change
+          # what runs with the secrets of this job.
+          ci_sha=f79ddba722c722227e6d5b013d4b94a39c68009b
+          git clone --quiet --branch main \
             "https://${MIRROR_USER}:${enc_pass}@${host}/Vidocq/ci.git" \
             .ci-action
+          git -C .ci-action checkout --quiet --detach "$ci_sha"
+          test "$(git -C .ci-action rev-parse HEAD)" = "$ci_sha"
 
       - uses: ./.ci-action/setup-maven
 

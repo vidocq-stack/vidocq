@@ -115,7 +115,9 @@ jobs:
     # jdk.crac, so the release builds on it (-Pcrac) and publishes the extension with the rest.
     runs-on: crac
     steps:
-      - uses: actions/checkout@v4
+      # This job holds the release credentials, the signing keys and the bot token: every action it
+      # runs is pinned to a commit (workspace CYBER_SECU.md, F-04). Bump the SHAs on purpose, never to a branch.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, the commit Vidocq/ci pins
         with:
           fetch-depth: 0
           token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
@@ -123,7 +125,7 @@ jobs:
           # at dispatch time — ensures in-flight commits are included in the release.
           ref: ${{ github.ref_name }}
 
-      - uses: https://codefloe.com/Vidocq/ci/release-maven@main
+      - uses: https://codefloe.com/Vidocq/ci/release-maven@f79ddba722c722227e6d5b013d4b94a39c68009b
         with:
           java-setup: 'false'
           release-profile: release,crac
@@ -173,7 +175,7 @@ jobs:
 
       - name: Notify Slack — release success
         if: success()
-        uses: https://codefloe.com/Vidocq/ci/notify-slack@main
+        uses: https://codefloe.com/Vidocq/ci/notify-slack@f79ddba722c722227e6d5b013d4b94a39c68009b
         with:
           webhook-url:      ${{ secrets.SLACK_WEBHOOK_URL }}
           status:           release-success
@@ -186,7 +188,7 @@ jobs:
 
       - name: Notify Slack — release failure
         if: failure()
-        uses: https://codefloe.com/Vidocq/ci/notify-slack@main
+        uses: https://codefloe.com/Vidocq/ci/notify-slack@f79ddba722c722227e6d5b013d4b94a39c68009b
         with:
           webhook-url:      ${{ secrets.SLACK_WEBHOOK_URL }}
           status:           release-failure
