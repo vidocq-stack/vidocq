@@ -410,20 +410,7 @@ The start runs none of those extensions: the startup report has no `cdi extensio
 The record holds a fingerprint of the bean classes of that path, and a start uses it only for the same fingerprint. So the extensions run at start, as before, whenever the deployment is not the one frozen: on a test class path, after an IDE build that did not run the goal, in an embedded deployment. `vidocq:dev` keeps the record: the dev console and the `-dev` modules it adds to the path hold no bean class (the console is a Vidocq extension, the panels are `LivePanel` services), so they leave the fingerprint as it was, and each reload runs `process-classes`, this goal included, before the application restarts. The `layer` section of the startup report says which happened (xref:modules/vidocq-runtime-core.adoc#startup-report[the startup report]): `cdi extensions  10 extensions frozen at build`, or `10 extensions run at start`, and no row when the build had <<nothing-to-freeze,nothing to freeze>>. A production start that finds a record of another deployment says so as xref:modules/vidocq-runtime-core.adoc#vidocq-gen-003[`VIDOCQ-GEN-003`], naming the classes that differ from the build, and `-Dvidocq.startup.require-frozen-extensions=true` makes such a start fail.
 
 [#frozen-extensions-of-another-project]
-An extension of another project is frozen like the others. What it reads beyond the classes of the deployment while a phase runs, a configuration value or an environment variable, is then the build's. An extension that registers one bean per model class the configuration names leaves the classes of the build in the record: a class that only the configuration of the start names is not used, and nothing tells that start from another. Name such an extension in `startExtensions`: the start runs it again, and loads the others from the record.
-
-[source,xml]
-----
-<plugin>
-    <groupId>io.vidocq.runtime</groupId>
-    <artifactId>vidocq-runtime-maven-plugin</artifactId>
-    <configuration>
-        <startExtensions>
-            <startExtension>com.acme.ModelsFromConfigurationExtension</startExtension>
-        </startExtensions>
-    </configuration>
-</plugin>
-----
+An extension of another project is frozen like the others, and asks nothing of its author or of the application: a build compatible extension is written to run at build. What it reads while a phase runs, beyond the classes of the deployment, is therefore the build's, as under any container that runs the extensions at build. An extension that picks the class of a bean from a configuration key keeps the class the build saw: a new value takes a new build. What a bean reads when it is created is read at start, as before.
 
 [#frozen-extensions-library]
 A record belongs to an application. A library module that runs `vidocq:generate`, to write its bean list say, sets `<freezeExtensions>false</freezeExtensions>`: a jar that carries a record of its own gives two records to each application that depends on it, and a start that finds two uses none (xref:modules/vidocq-runtime-core.adoc#vidocq-gen-003[`VIDOCQ-GEN-003`] names both files).

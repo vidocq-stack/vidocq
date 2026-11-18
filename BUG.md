@@ -29,8 +29,8 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
      the dependency jars that the brick's hints select, and the hints of the Cassini REST codegen bundle
      (`META-INF/vidocq/dependency-codegen.properties`) select for Champollion's bindings only: nothing makes
      Cassini's processor generate the adapter of a resource class of a dependency.
-- **Leads**: for 1, the decision of Vidocq/vauban#342, or a pseudo-scope for the provider in langchain4j-cdi, which
-  needs no client proxy. For 2, two routes exist and neither covers this case:
+- **Leads**: for 1, Vidocq/vauban#342: the freeze generates the client proxies of synthetic beans (maintainer's
+  decision, 2026-11-18). For 2, Vidocq/vidocq#662; two routes exist and neither covers this case:
   - hints for Cassini's own processor in the dependency codegen, as Foy and Mansart have. `vidocq:generate` gives a
     processor the class names of a jar (`javac -proc:only`), and `CassiniResourceProcessor` has only been run over
     sources: to be shown first. A hints file names one brick, and the Cassini bundle's names Champollion;
