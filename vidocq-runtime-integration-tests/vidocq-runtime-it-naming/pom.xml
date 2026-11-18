@@ -42,6 +42,11 @@
             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
             <artifactId>vidocq-runtime-mansart-data-extension</artifactId>
         </dependency>
+        <!-- Jakarta EE 11 Platform §5.10, §5.11: java:comp/UserTransaction and java:comp/TransactionSynchronizationRegistry. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+            <artifactId>vidocq-runtime-mansart-transactions-extension</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.vidocq.mansart</groupId>
             <artifactId>mansart-data-dialect-h2</artifactId>
@@ -78,6 +83,11 @@
                         <path>
                             <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
                             <artifactId>vidocq-runtime-mansart-data-extension-codegen</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.web</groupId>
+                            <artifactId>vidocq-runtime-mansart-transactions-extension-codegen</artifactId>
                             <version>${project.version}</version>
                         </path>
                         <!-- The @Named("audit") DataSource holder. -->

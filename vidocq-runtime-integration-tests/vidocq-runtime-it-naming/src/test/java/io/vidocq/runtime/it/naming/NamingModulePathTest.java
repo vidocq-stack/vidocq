@@ -22,6 +22,8 @@ package io.vidocq.runtime.it.naming;
 import io.vidocq.runtime.core.VidocqBootstrap;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.enterprise.inject.spi.CDI;
+import jakarta.transaction.TransactionSynchronizationRegistry;
+import jakarta.transaction.UserTransaction;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -85,6 +87,18 @@ class NamingModulePathTest {
 
         assertSame(CDI.current().select(AuditClock.class, AuditClock.class.getAnnotation(Ledger.class)).get(), clock);
         assertEquals("UTC", clock.zone());
+    }
+
+    @Test
+    void the_user_transaction_of_the_platform_is_the_container_s() throws NamingException {
+        assertSame(CDI.current().select(UserTransaction.class).get(),
+                new InitialContext().lookup("java:comp/UserTransaction"));
+    }
+
+    @Test
+    void the_synchronization_registry_of_the_platform_is_the_container_s() throws NamingException {
+        assertSame(CDI.current().select(TransactionSynchronizationRegistry.class).get(),
+                new InitialContext().lookup("java:comp/TransactionSynchronizationRegistry"));
     }
 
     @Test

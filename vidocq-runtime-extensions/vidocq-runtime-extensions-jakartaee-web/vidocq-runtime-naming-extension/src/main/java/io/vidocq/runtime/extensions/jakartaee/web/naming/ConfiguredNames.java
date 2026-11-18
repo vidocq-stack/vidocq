@@ -47,6 +47,11 @@ public class ConfiguredNames implements JndiBindings {
         DECLARATIONS.set(Map.copyOf(names));
     }
 
+    /** Whether {@code vidocq.properties} declares this name, which a default of the platform then leaves to it. */
+    static boolean declares(String name) {
+        return DECLARATIONS.get().containsKey(name);
+    }
+
     @Override
     public void bind(Binder binder) {
         ClassLoader loader = Thread.currentThread().getContextClassLoader();

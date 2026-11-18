@@ -34,6 +34,8 @@ module io.vidocq.runtime.it.naming {
     requires io.vidocq.runtime.extensions.jakartaee.web.naming;
     requires io.vidocq.runtime.extensions.jakartaee.web.mansart.pool;
     requires io.vidocq.runtime.extensions.jakartaee.web.mansart.data;
+    requires io.vidocq.runtime.extensions.jakartaee.web.mansart.transactions;
+    requires jakarta.transaction;
     requires io.vidocq.mansart.data.core;
     requires io.vidocq.vauban.api;
 

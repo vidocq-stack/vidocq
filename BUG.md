@@ -5,6 +5,47 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261118-63 — `java:comp/UserTransaction` is bound to nothing
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `fix/servlet-application-roots`.
+- **Module**: `vidocq-runtime-naming-extension` (`PlatformNames`)
+- **Symptom**: the `pmservlet` vehicle of the Jakarta EE 11 Platform TCK for Persistence looks up
+  `java:comp/UserTransaction` and gets `NameNotFoundException: java:comp/UserTransaction is bound to nothing in the
+  running container`, although the transactions extension produces a `UserTransaction` bean. The same holds for
+  `java:comp/TransactionSynchronizationRegistry`.
+- **Repro**: `NamingModulePathTest#the_user_transaction_of_the_platform_is_the_container_s` and
+  `#the_synchronization_registry_of_the_platform_is_the_container_s` (`vidocq-runtime-it-naming`, with the
+  transactions extension).
+- **Cause**: the naming extension binds only the names `vidocq.properties` declares. The Jakarta EE Platform binds
+  both names for every component (§5.10, §5.11), and code written for a server looks them up without declaring them.
+- **Fix**: a `PlatformNames` bean of the naming extension binds both names to the default bean of their type, when
+  the application has the type and the container a bean of it. A name `vidocq.properties` declares is left to it. The
+  types are written as text, so the naming extension needs no transaction API.
+- **Verification**: both tests red before (`NameNotFoundException`), green after; `PlatformNamesTest` (5), the
+  module's 17 tests and the 9 tests of `vidocq-runtime-it-naming`.
+
+## BUG-20261118-61 — A persistence unit that cannot start is not named in the error
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `fix/servlet-application-roots`.
+- **Module**: `vidocq-runtime-noether-persistence-extension` (`VidocqPersistenceUnitBootstrap`)
+- **Symptom**: a TCK war declares the unit `AccountManager` on `jdbc/DB1`, and the start fails with
+  `MansartPoolExtension did not publish a DataSource: set vidocq.pool.url`, the error of the default pool. The unit
+  that failed was another one, `CTS-EM`, which the key `vidocq.persistence.CTS-EM.properties.*` of the runner's
+  `vidocq.properties` declares as documented (a JTA unit on the default pool when no `persistence.xml` declares it).
+  Nothing in the error said so.
+- **Repro**: `VidocqPersistenceUnitBootstrapTest#a_unit_that_cannot_start_is_named_with_its_pool`: the unit `ledger`
+  generates its schema at start on a default pool without database.
+- **Cause**: the default pool is a bean even without a database, and fails at its first connection, here the schema
+  generation inside `Persistence.createEntityManagerFactory`. `UnitDataSources`'s own "no default pool" refusal is
+  never reached, and the pool's error knows no unit.
+- **Fix**: a failure of `Persistence.createEntityManagerFactory` is rethrown as a `PersistenceException` that names
+  the unit, its transaction type and its pool: `Persistence unit CTS-EM (JTA, on the default pool) could not start:
+  MansartPoolExtension did not publish a DataSource ...`.
+- **Verification**: the test red before (an `IllegalStateException` without the unit), green after; the module's 26
+  tests.
+
 ## BUG-20261118-60 — A war without web.xml nor annotated component hands no class to a `@HandlesTypes` initializer
 
 - **Date**: 2026-11-18
@@ -28,26 +69,6 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Verification**: `ApplicationRootsTest` red before (`the initializer got []`), green after;
   `MaterializedDeploymentTest#theRootOfTheWebInfClassesIsTheApplicationRoot`; `ApplicationLayerTest`.
 
-## BUG-20261118-61 — A persistence unit that cannot start is not named in the error
-
-- **Date**: 2026-11-18
-- **Status**: FIXED on `fix/servlet-application-roots`.
-- **Module**: `vidocq-runtime-noether-persistence-extension` (`VidocqPersistenceUnitBootstrap`)
-- **Symptom**: a TCK war declares the unit `AccountManager` on `jdbc/DB1`, and the start fails with
-  `MansartPoolExtension did not publish a DataSource: set vidocq.pool.url`, the error of the default pool. The unit
-  that failed was another one, `CTS-EM`, which the key `vidocq.persistence.CTS-EM.properties.*` of the runner's
-  `vidocq.properties` declares as documented (a JTA unit on the default pool when no `persistence.xml` declares it).
-  Nothing in the error said so.
-- **Repro**: `VidocqPersistenceUnitBootstrapTest#a_unit_that_cannot_start_is_named_with_its_pool`: the unit `ledger`
-  generates its schema at start on a default pool without database.
-- **Cause**: the default pool is a bean even without a database, and fails at its first connection, here the schema
-  generation inside `Persistence.createEntityManagerFactory`. `UnitDataSources`'s own "no default pool" refusal is
-  never reached, and the pool's error knows no unit.
-- **Fix**: a failure of `Persistence.createEntityManagerFactory` is rethrown as a `PersistenceException` that names
-  the unit, its transaction type and its pool: `Persistence unit CTS-EM (JTA, on the default pool) could not start:
-  MansartPoolExtension did not publish a DataSource ...`.
-- **Verification**: the test red before (an `IllegalStateException` without the unit), green after; the module's 26
-  tests.
 ## BUG-20261118-07 — `GitCommandTest` fails on a loaded machine: a script that answers is cut at 300 ms
 
 - **Date**: 2026-11-18
