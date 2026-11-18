@@ -623,6 +623,13 @@ them loads it twice.
 
 A jar added to the path of a packaged application, a class replaced in it, or a build that packaged other classes than those `vidocq:generate` saw, each make another deployment. A test launch and an embedded deployment expect it, since a test or an Arquillian deployment adds its own classes, and a dev launch only loses a few milliseconds of its restart: there the note is one INFO line of `io.vidocq.runtime.core.RefusedRecord`, not an anomaly. A start with no record at all is not concerned: an application built without the goal is <<vidocq-gen-001>>'s.
 
+A second record on the path gives the same result. A deployment has one record, its application's: a start that finds two uses none, and the note names both files. The jar that carries the other one comes from a library module that ran `vidocq:generate` with the freeze on (xref:modules/vidocq-runtime-maven-plugin.adoc#frozen-extensions-library[a record belongs to an application]).
+
+[source,text]
+----
+[VIDOCQ-GEN-003] 3 build compatible extensions ran at start: 2 records of frozen extensions on the path ([jar:file:///opt/todo/lib/acme-lib-1.0.jar!/META-INF/vauban-frozen-extensions.properties, file:/opt/todo/app/META-INF/vauban-frozen-extensions.properties]): none can be told to be this deployment's. Start the application on the path its build packaged, or build it again: a jar added to the path, or a class changed since the build, makes another deployment, and its extensions run at each start.
+----
+
 `vidocq.startup.require-frozen-extensions=true` turns any of those starts into a failure, a refused record or none, whatever the launch mode: the boot stops with an `IllegalStateException` whose message, `[VIDOCQ-GEN-003] vidocq.startup.require-frozen-extensions is true and ...`, carries the same note. An extension that runs at start by design, because it asked `ExtensionPhase.isBuildTime()` or the build named it, never fails it: the record was used. Nor does a deployment with nothing to freeze: when every build compatible extension ran at compile, as in an application with the Servlet extension alone, the build writes no record and the start runs none of them (xref:modules/vidocq-runtime-maven-plugin.adoc#nothing-to-freeze[nothing to freeze]). The integration tests of the runtime that start a packaged application set it.
 
 [#vidocq-rpt-001]

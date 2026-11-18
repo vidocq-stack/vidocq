@@ -168,6 +168,10 @@
                          depends on (Champollion's JSON-B CDI registry, through the REST extension) are each
                          application's to scan, not this module's to ship. -->
                     <autoScan>false</autoScan>
+                    <!-- This module is a library, not an application: it must leave no record of frozen
+                         extensions in its jar. A deployment has one record, its application's; with this jar's
+                         as a second one the start used none and ran the extensions (BUG-20261118-04). -->
+                    <freezeExtensions>false</freezeExtensions>
                 </configuration>
                 <executions>
                     <execution>

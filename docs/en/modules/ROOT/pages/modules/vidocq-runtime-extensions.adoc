@@ -1460,6 +1460,8 @@ The extension's module, `io.vidocq.runtime.extensions.essentials.langchain4jcdi.
 
 The extension's manifest asks the application's `vidocq:generate` to scan the langchain4j-cdi jars it brings (`Vidocq-Scan-Dependencies: dev.langchain4j.cdi.mcp:*`): the server's beans run generated code — created, injected and called by a `_VaubanComponents` in their own packages, behind build-time client proxies — instead of reflection, from an enriched copy of the jars that every launch uses. The JAX-RS providers among them carry `@Provider` alone and are beans only through Cassini's build-compatible extension; `vidocq:generate` runs it too, so they are covered like the rest. See xref:modules/vidocq-runtime-maven-plugin.adoc#generate[the `vidocq:generate` goal].
 
+Two classes are still generated when the application starts, and each start says so in a `RUNTIME CODE GENERATION FALLBACK` warning: the client proxy of `McpCdi41InvokerProvider`, a synthetic bean that the CDI 4.1 invoker module registers, and Cassini's adapter of `McpEndpoint`, a resource class of a dependency jar (BUG-20261118-05). The MCP calls are not affected.
+
 Two hand-made layouts break this:
 
 * The langchain4j-cdi jars in the `-Dvidocq.app.path` directory, next to the application. The JVM stops before `main` with `FindException: Module dev.langchain4j.cdi.mcp.server not found, required by io.vidocq.runtime.extensions.essentials.langchain4jcdi.mcp`. `vidocq:package` never builds this layout: dependencies go to `lib/`.

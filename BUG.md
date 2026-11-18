@@ -5,6 +5,77 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261118-05 — An application with the MCP extension generates two classes at each start
+
+- **Date**: 2026-11-18
+- **Status**: OPEN. The MCP calls pass: it costs start time and keeps such an application out of a start ahead of
+  time.
+- **Module**: `vidocq-runtime-langchain4j-cdi-mcp-extension`, `vidocq-runtime-cassini-rest-extension-codegen`; Vauban
+  for the first class.
+- **Symptom**: every application that depends on the MCP extension prints two `RUNTIME CODE GENERATION FALLBACK`
+  warnings at start, in every launch shape, also with `cdi extensions  3 extensions frozen at build`: Vauban's, for
+  `client proxy dev.langchain4j.cdi.mcp.invoker.cdi41.McpCdi41InvokerProvider_ClientProxy`, and Cassini's, for the
+  adapter of `dev.langchain4j.cdi.mcp.server.transport.McpEndpoint`. The reference page said that the server's beans
+  run generated code, without these two.
+- **Repro**: `McpLaunchShapesTest`, then `grep -A2 "RUNTIME CODE GENERATION FALLBACK" target/it-logs/i1-*.log` in
+  `vidocq-runtime-it-langchain4j-cdi-mcp`.
+- **Cause**:
+  1. `McpCdi41InvokerProvider` is a synthetic bean of a normal scope that langchain4j-cdi's
+     `McpInvokerBuildCompatibleExtension` registers, and its bean class is a class of the invoker jar. No processor
+     sees a synthetic bean, `@ClientProxies` takes interfaces only, and the freeze records a descriptor, not a proxy
+     (Vauban BUG-20261113-19). Vauban's warning advises adding `vauban-processor` to the module that declares the
+     class, which is a jar of another project. Vidocq/vauban#342.
+  2. `McpEndpoint` is a JAX-RS resource class of a dependency jar. `vidocq:generate` runs a brick's processor over
+     the dependency jars that the brick's hints select, and the hints of the Cassini REST codegen bundle
+     (`META-INF/vidocq/dependency-codegen.properties`) select for Champollion's bindings only: nothing makes
+     Cassini's processor generate the adapter of a resource class of a dependency.
+- **Leads**: for 1, the decision of Vidocq/vauban#342, or a pseudo-scope for the provider in langchain4j-cdi, which
+  needs no client proxy. For 2, two routes exist and neither covers this case:
+  - hints for Cassini's own processor in the dependency codegen, as Foy and Mansart have. `vidocq:generate` gives a
+    processor the class names of a jar (`javac -proc:only`), and `CassiniResourceProcessor` has only been run over
+    sources: to be shown first. A hints file names one brick, and the Cassini bundle's names Champollion;
+  - Cassini's `cassini:generate` goal with `scope=dependencies` and `repackageModularDependencies=true`, which writes
+    the adapters into a copy of the jar under `target/cassini-repackaged/`. Two examples of this reactor run it for a
+    sealed copy of a brick's JAX-RS wrapper (`vidocq-runtime-knock-health-example`), and `vidocq:jlink` is the only
+    goal that reads that folder.
+- **Investigations**:
+  - 2026-11-18: found while fixing BUG-20261118-04. The logs of the three shapes, with the extensions frozen, show
+    the two warnings and nothing else generated at start.
+
+## BUG-20261118-04 — The jar of the MCP extension carries a record of frozen extensions, so its applications run theirs at each start
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `fix/mcp-extension-frozen-record`.
+- **Module**: `vidocq-runtime-langchain4j-cdi-mcp-extension` (its `pom.xml`)
+- **Symptom**: an application that depends on the MCP extension runs its build compatible extensions at every
+  start, in every launch shape, although its build froze them. The report reads `cdi extensions  3 extensions run at
+  start (the record of the build is not this deployment's)` and the start logs
+  `[VIDOCQ-GEN-003] 3 build compatible extensions ran at start: 2 records of frozen extensions on the path
+  ([jar:file:…/vidocq-runtime-langchain4j-cdi-mcp-extension-0.4.0-SNAPSHOT.jar!/META-INF/vauban-frozen-extensions.properties,
+  file:…/target/classes/META-INF/vauban-frozen-extensions.properties]): none can be told to be this deployment's.`
+  With `-Dvidocq.startup.require-frozen-extensions=true` the application does not start.
+- **Repro**: `unzip -l` of the extension's jar lists `META-INF/vauban-frozen-extensions.properties` and its two
+  companion files; `McpLaunchShapesTest#theStartLoadsTheExtensionsFrozenAtBuild` before the fix.
+- **Cause**: the extension's build runs `vidocq:generate` to write `META-INF/vauban-beans.list` from the
+  langchain4j-cdi jar. Since Vidocq/vidocq#548 (6c78bc0a, 2026-11-13) the goal also freezes the extensions, by
+  default, and nothing tells it that this project is a library: the record went into the extension's jar. Vauban
+  uses a record only when it is the only one on the path (`FrozenExtensions.find`), so the application's own record
+  was refused. No test asked the start what it did with the extensions.
+- **Scope**: the extension is left out of the releases and of the published snapshots while langchain4j-cdi is a
+  SNAPSHOT (`maven.deploy.skip`), so only local builds of this repository were affected. Vidocq/vidocq#204 ships it
+  with the release.
+- **Fix**: `<freezeExtensions>false</freezeExtensions>` on the extension's `vidocq:generate`: its jar carries no
+  record. The reference page of the plugin says that a library module sets it.
+- **Verification**: `McpLaunchShapesTest#theStartLoadsTheExtensionsFrozenAtBuild`, red before in the three shapes
+  on acfe2dae with Vauban bd38e952 (`3 extensions run at start`), green after (`3 extensions frozen at build`, no
+  `VIDOCQ-GEN-003`); the ten tests of the module pass. `NoFrozenRecordInRuntimeJarsTest`, in the architecture
+  tests, fails when a module of the runtime carries a record: red with the fix removed, naming the extension's jar,
+  green with it.
+- **Investigations**:
+  - 2026-11-18: no other module of this reactor runs `vidocq:generate` as a library. The protection stays thin:
+    any jar on an application's path that carries a record turns the freeze off for that application, and only the
+    start says so. Vidocq/vauban#341 asks Vauban to use the record whose fingerprint is the deployment's.
+
 ## BUG-20261118-03 — The dev console's CDI inventory matches a parameterized type without its owner
 
 - **Date**: 2026-11-18

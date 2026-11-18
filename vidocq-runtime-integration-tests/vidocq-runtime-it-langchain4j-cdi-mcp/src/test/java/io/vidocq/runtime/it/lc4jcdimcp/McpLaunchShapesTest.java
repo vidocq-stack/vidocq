@@ -58,6 +58,23 @@ class McpLaunchShapesTest {
         }
     }
 
+    /**
+     * BUG-20261118-04: the record of the extensions frozen at build is the application's alone. The jar of the MCP
+     * extension carried one of its own, so the start found two, used none and ran the extensions in every shape.
+     */
+    @ParameterizedTest
+    @EnumSource(LaunchedServer.Shape.class)
+    void theStartLoadsTheExtensionsFrozenAtBuild(LaunchedServer.Shape shape) throws Exception {
+        try (LaunchedServer server = LaunchedServer.start(shape, "i1-frozen-" + shape.name().toLowerCase())) {
+            new McpCalls(server.mcpUrl()).initialize();
+
+            String log = server.log();
+            assertTrue(log.lines().anyMatch(line -> line.strip()
+                    .matches("cdi extensions\\s+\\d+ extensions frozen at build")), log);
+            assertFalse(log.contains("[VIDOCQ-GEN-003]"), log);
+        }
+    }
+
     @Test
     void theServerKeysReachTheInitializeResponseAndTheSecretIsNeverPrinted() throws Exception {
         try (LaunchedServer server = LaunchedServer.start(LaunchedServer.Shape.FLAT, "i2-keys",
