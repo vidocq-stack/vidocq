@@ -6,6 +6,38 @@ minimal repro, cause hypothesis, status.
 
 ---
 
+## DRC-019 — A bean is scanned for a metric an interface names, and every superclass is read twice
+
+- **Opening date**: 2026-11-18
+- **Status**: ✅ FIXED 2026-11-18
+
+### Symptom
+
+On a Vauban whose language model gives a class the methods it inherits (Vauban BUG-20261117-42), `namesAMetric`
+says a bean names a metric when an interface it implements carries `@Counted` or `@Timed` on a method: `methods()`
+lists the interface's methods too. The bean class is loaded and scanned by reflection for nothing, the metric of an
+interface method being no metric of the bean. And the superclass walk of DRC-011 reads each superclass's methods
+again, as `methods()` already holds them.
+
+### Minimal repro
+
+`BootScanPrefilterTest.onlyTheClassesNamingAMetricAreScanned`: `ContractService implements CountedContract`, whose
+`call()` carries `@Counted`. Red on 58c4295 with Vauban's lane L2 at 9152f813 (`stack-l2d-dirac-red.log`): `a metric
+an interface method names is not the bean's: nothing to scan (DRC-019) ==> expected: <false> but was: <true>`.
+
+### Cause
+
+DRC-011 walked the superclasses and read `methods()` of each, a workaround for a Vauban that left the inherited
+methods out of `methods()`. Vauban now follows the language model: `methods()` has the methods of the superclasses
+and of the superinterfaces, and `annotations()` the `@Inherited` annotations of the superclasses.
+
+### Fix
+
+`namesAMetric` reads the class's `annotations()`, its constructors, and its `methods()` but those an interface
+declares, once; a superclass the container does not describe still sends the class to the reflective scan. The same
+test checks that a metric on a method inherited from a superclass, not overridden, is still found and registered
+(`MethodInheritingService`). Verification: the full build on the lane's Vauban, green (`stack-l2d-dirac-green.log`).
+
 ## DRC-018 — The gauge of a class with a bounded type variable that also declares a producer cannot be read
 
 - **Date**: 2026-11-17

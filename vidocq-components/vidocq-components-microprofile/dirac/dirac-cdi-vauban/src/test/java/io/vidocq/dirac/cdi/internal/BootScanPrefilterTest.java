@@ -91,6 +91,32 @@ class BootScanPrefilterTest {
         }
     }
 
+    /** An interface whose method names a metric: the bean class implementing it carries none (DRC-019). */
+    public interface CountedContract {
+        @Counted(name = "contract", absolute = true)
+        void call();
+    }
+
+    @ApplicationScoped
+    static class ContractService implements CountedContract {
+        @Override
+        public void call() {
+            // the interface's annotation is not the bean's
+        }
+    }
+
+    /** A superclass whose method names a metric, inherited by the bean, not overridden. */
+    static class MethodCountedBase {
+        @Counted(name = "inherited.method", absolute = true)
+        public void ping() {
+            // counted through the subclass
+        }
+    }
+
+    @ApplicationScoped
+    static class MethodInheritingService extends MethodCountedBase {
+    }
+
     /** Records, for each class the container describes, what the prefilter decides. */
     public static class Probe implements jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension {
         static final java.util.Map<String, Boolean> DECISIONS = new java.util.concurrent.ConcurrentHashMap<>();
@@ -112,7 +138,8 @@ class BootScanPrefilterTest {
                 .disableDiscovery()
                 .addBeanClasses(DiracExtension.class, Probe.class, MetricRegistryProducerBean.class,
                         GaugeRegistrationBean.class, PlainService.class, GaugedService.class, FlaggedService.class,
-                        InheritingService.class, ConstructorCountedService.class)
+                        InheritingService.class, ConstructorCountedService.class, ContractService.class,
+                        MethodInheritingService.class)
                 .initialize()) {
 
             assertEquals(Boolean.FALSE, Probe.DECISIONS.get(PlainService.class.getName()));
@@ -122,11 +149,16 @@ class BootScanPrefilterTest {
             assertEquals(Boolean.TRUE, Probe.DECISIONS.get(InheritingService.class.getName()),
                     "an undescribed superclass may carry an inherited metric");
             assertEquals(Boolean.TRUE, Probe.DECISIONS.get(ConstructorCountedService.class.getName()));
+            assertEquals(Boolean.FALSE, Probe.DECISIONS.get(ContractService.class.getName()),
+                    "a metric an interface method names is not the bean's: nothing to scan (DRC-019)");
+            assertEquals(Boolean.TRUE, Probe.DECISIONS.get(MethodInheritingService.class.getName()),
+                    "a metric on an inherited method");
             var registry = container.select(MetricRegistryProducerBean.class).get().applicationRegistry();
             assertNotNull(registry.getGauge(new MetricID("prefilter.gauge")));
             assertNotNull(registry.getCounter(new MetricID("flagged")));
             assertNotNull(registry.getCounter(new MetricID("base")));
             assertNotNull(registry.getCounter(new MetricID("constructed")));
+            assertNotNull(registry.getCounter(new MetricID("inherited.method")));
         }
     }
 }

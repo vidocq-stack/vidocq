@@ -118,28 +118,34 @@ public class DiracExtension implements BuildCompatibleExtension {
             java.util.List.of(Timed.class, Counted.class, org.eclipse.microprofile.metrics.annotation.Gauge.class);
 
     /**
-     * Whether the declaration of a class or of its superclasses (the class annotations and the methods not overridden
-     * are inherited), their methods or the class's constructors names a metric annotation, directly or on one of their
-     * annotations as the reflective scan reads them. A class for which this is false has no metric: it is neither
-     * loaded nor scanned. The methods of each superclass are read from its own declaration: a container may leave
-     * them out of the subclass's {@code methods()} (DRC-011). Package-private for the test.
+     * Whether a class names a metric annotation, directly or on one of its annotations as the reflective scan reads
+     * them: on its annotations, the {@code @Inherited} ones of its superclasses among them, on its constructors, or on
+     * a method it declares or inherits from a superclass. The language model gives those (Vauban BUG-20261117-42):
+     * the superclasses are not walked again (DRC-019). A method an interface declares carries no metric of the class.
+     * A superclass the container does not describe may carry one: the reflective scan decides. A class for which this
+     * is false has no metric: it is neither loaded nor scanned. Package-private for the test.
      */
     static boolean namesAMetric(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
-        if (anyCarriesAMetric(classInfo.constructors())) {
+        if (carriesAMetric(classInfo.annotations()) || anyCarriesAMetric(classInfo.constructors())) {
             return true;
         }
-        var type = classInfo;
-        while (type != null && !OBJECT.equals(type.name())) {
-            if (carriesAMetric(type.annotations()) || anyCarriesAMetric(type.methods())) {
+        for (var method : classInfo.methods()) {
+            if (!method.declaringClass().isInterface() && carriesAMetric(method.annotations())) {
                 return true;
             }
-            var superclass = type.superClassDeclaration();
-            if (superclass == null && hasUnreadableSuperclass(type)) {
-                return true; // an inherited annotation cannot be ruled out: the reflective scan decides
-            }
-            type = superclass;
         }
-        return false;
+        return hasUnreadableAncestor(classInfo);
+    }
+
+    /** Whether a superclass of {@code classInfo}, or one above it, is one the container does not describe. */
+    private static boolean hasUnreadableAncestor(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
+        var type = classInfo;
+        var superclass = type.superClassDeclaration();
+        while (superclass != null) {
+            type = superclass;
+            superclass = type.superClassDeclaration();
+        }
+        return hasUnreadableSuperclass(type);
     }
 
     private static boolean anyCarriesAMetric(
