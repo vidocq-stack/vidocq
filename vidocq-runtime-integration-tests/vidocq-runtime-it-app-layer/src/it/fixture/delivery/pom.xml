@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- The application AppLayerDeliveryIT ships in both forms from one build: a REST resource that
+         Cervantes protects with a JWT and @RolesAllowed, an interceptor that sets a response header, and the start
+         check of Cervantes, which refuses an unreadable verification key. -->
+    <parent>
+        <groupId>io.vidocq.runtime</groupId>
+        <artifactId>vidocq-runtime-build</artifactId>
+        <version>@project.version@</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.vidocq.it</groupId>
+    <artifactId>app-layer-delivery</artifactId>
+
+    <!-- No main class: the runtime's own main boots the application. -->
+    <properties>
+        <vidocq.mainModule>acme.delivery</vidocq.mainModule>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.runtime</groupId>
+            <artifactId>vidocq-runtime-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+            <artifactId>vidocq-runtime-cassini-rest-extension</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Under vidocq-runtime-build, as an example of the reactor: one codegen bundle per extension. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.jakartaee.core</groupId>
+                            <artifactId>vidocq-runtime-cassini-rest-extension-codegen</artifactId>
+                            <version>@project.version@</version>
+                        </path>
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                            <artifactId>vidocq-runtime-cervantes-jwt-extension-codegen</artifactId>
+                            <version>@project.version@</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!-- vidocq:generate freezes the build compatible extensions: both forms load the record. -->
+            <plugin>
+                <groupId>io.vidocq.runtime</groupId>
+                <artifactId>vidocq-runtime-maven-plugin</artifactId>
+                <version>@project.version@</version>
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -86,6 +86,19 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- The application AppLayerDeliveryIT ships as a distribution and as an image: JWT
+             security, and its codegen bundle. -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-cervantes-jwt-extension</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-cervantes-jwt-extension-codegen</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <!-- The servlet application whose change of a method body must be redefined in place (Vauban
              BUG-20261117-12): the Servlet extension, and its codegen bundle, a jar on the fixture's
              annotationProcessorPaths. -->
