@@ -20,15 +20,17 @@
 package io.vidocq.runtime.extensions.jakartaee.core.peano;
 
 import io.vidocq.peano.spi.ProxyUnwrapper;
+import io.vidocq.vauban.api.ClientProxyClass;
 
 /**
- * Names the bean class a Vauban client proxy stands for: Vauban generates {@code <Bean>_ClientProxy}, a subclass of
- * the bean class in its package that delegates every call to the contextual instance. With it, the accessor table
- * Peano generated for a normal-scoped {@code @Named} bean serves the proxy EL receives, so a page reads the bean
- * without reflection.
+ * Names the bean class a Vauban client proxy stands for, as {@link ClientProxyClass} reads it: Vauban generates
+ * {@code <Bean>_ClientProxy}, which delegates every call to the contextual instance. With it, the accessor table Peano
+ * generated for a normal-scoped {@code @Named} bean serves the proxy EL receives, so a page reads the bean without
+ * reflection. That table casts the proxy to the class named, so the unwrapper names it only when the proxy extends it,
+ * in its package: past a final method of the bean class, or for a final bean class, the proxy extends a class above
+ * it, and EL reads it by reflection (BUG-20261118-02).
  */
 public final class VaubanProxyUnwrapper implements ProxyUnwrapper {
-    private static final String SUFFIX = "_ClientProxy";
 
     /** Creates the unwrapper; ServiceLoader calls it. */
     public VaubanProxyUnwrapper() {
@@ -37,11 +39,9 @@ public final class VaubanProxyUnwrapper implements ProxyUnwrapper {
 
     @Override
     public Class<?> proxiedClass(Class<?> runtime) {
-        Class<?> parent = runtime.getSuperclass();
-        if (parent == null || parent == Object.class || !runtime.getName().endsWith(SUFFIX)
-                || !runtime.getPackageName().equals(parent.getPackageName())) {
-            return null;
-        }
-        return parent;
+        return ClientProxyClass.beanClassOf(runtime)
+                .filter(bean -> bean.isAssignableFrom(runtime)
+                        && bean.getPackageName().equals(runtime.getPackageName()))
+                .orElse(null);
     }
 }

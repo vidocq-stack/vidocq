@@ -24,10 +24,28 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import org.junit.jupiter.api.Test;
 
+/**
+ * The unwrapper names the class a Vauban client proxy stands for, as {@code ClientProxyClass} reads it, when the proxy
+ * is an instance of it: the accessor table of that class casts the proxy to it. Every path generates the proxy
+ * {@code final}.
+ */
 class VaubanProxyUnwrapperTest {
     static class Cart { }
-    static class Cart_ClientProxy extends Cart { }
+    static final class Cart_ClientProxy extends Cart { }
     static class Special extends Cart { }
+
+    /** Named like a proxy, but not final: a class of the application. */
+    static class Basket { }
+    static class Basket_ClientProxy extends Basket { }
+
+    /** A bean class with a final method; its proxy extends the class above it, and no instance of the bean class. */
+    static class Shelf { }
+    static class Locked extends Shelf {
+        public final String code() {
+            return "locked";
+        }
+    }
+    static final class Locked_ClientProxy extends Shelf { }
 
     private final VaubanProxyUnwrapper unwrapper = new VaubanProxyUnwrapper();
 
@@ -37,5 +55,16 @@ class VaubanProxyUnwrapperTest {
         assertNull(unwrapper.proxiedClass(Special.class), "a plain subclass is not a proxy");
         assertNull(unwrapper.proxiedClass(Cart.class));
         assertNull(unwrapper.proxiedClass(String.class));
+    }
+
+    /**
+     * BUG-20261118-02: the unwrapper named the superclass of any class named {@code *_ClientProxy}, so it named
+     * {@code Shelf} for the proxy of {@code Locked}, which stands for {@code Locked}, and {@code Basket} for a class of
+     * the application, which is no proxy.
+     */
+    @Test
+    void namesNothingForAProxyThatIsNoInstanceOfItsBeanClassNorForALookalike() {
+        assertNull(unwrapper.proxiedClass(Locked_ClientProxy.class), "the proxy of Locked stands for no Shelf");
+        assertNull(unwrapper.proxiedClass(Basket_ClientProxy.class), "a class that is not final is no proxy");
     }
 }

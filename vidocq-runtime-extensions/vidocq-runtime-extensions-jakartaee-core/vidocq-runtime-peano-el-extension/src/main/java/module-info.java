@@ -23,6 +23,7 @@ module io.vidocq.runtime.extensions.jakartaee.core.peano {
     requires io.vidocq.peano.core;
     requires io.vidocq.peano.api;
     requires io.vidocq.runtime.spi;
+    requires io.vidocq.vauban.api;
 
     provides io.vidocq.peano.spi.ProxyUnwrapper
             with io.vidocq.runtime.extensions.jakartaee.core.peano.VaubanProxyUnwrapper;

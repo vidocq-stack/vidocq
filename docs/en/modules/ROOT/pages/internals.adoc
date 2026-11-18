@@ -72,7 +72,9 @@ JSP pages are not compiled by a processor: `vidocq:generate` compiles them with 
 (xref:ibarra::internals.adoc#generated-code[Ibarra]). On the application layer, the processors' `META-INF/services`
 files become `provides` directives (<<_class_loading_the_vauban_application_layer>>), so an application never writes
 one for a generated class. `vidocq-runtime-peano-el-extension` provides the `ProxyUnwrapper` that lets a bean's
-Peano table serve its Vauban client proxy.
+Peano table serve its Vauban client proxy. It reads the bean class from Vauban's `ClientProxyClass` and names it only
+when the proxy extends it: past a `final` method of the bean class, or for a `final` bean class, the proxy extends a
+class above it, and EL reads it by reflection.
 
 === When the fallback runs
 

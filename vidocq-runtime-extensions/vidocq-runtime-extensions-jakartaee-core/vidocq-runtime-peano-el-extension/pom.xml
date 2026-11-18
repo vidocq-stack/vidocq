@@ -12,6 +12,7 @@
     <description>Jakarta Expression Language 6.0 provider and startup report through Peano</description>
     <dependencies>
         <dependency><groupId>io.vidocq.runtime</groupId><artifactId>vidocq-runtime-spi</artifactId></dependency>
+        <dependency><groupId>io.vidocq.vauban</groupId><artifactId>vauban-api</artifactId></dependency>
         <dependency><groupId>io.vidocq.peano</groupId><artifactId>peano-core</artifactId></dependency>
         <dependency><groupId>io.vidocq.peano</groupId><artifactId>peano-api</artifactId></dependency>
         <dependency><groupId>jakarta.el</groupId><artifactId>jakarta.el-api</artifactId><version>6.0.1</version></dependency>

@@ -5,6 +5,24 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261118-02 — The EL proxy unwrapper names a class a Vauban client proxy does not stand for
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `fix/vauban-bug-stack`, on Vauban's `ClientProxyClass` (BUG-20261118-20 and -21 of Vauban).
+- **Module**: `vidocq-runtime-peano-el-extension` (`VaubanProxyUnwrapper`)
+- **Symptom**: `proxiedClass` named the superclass of any class named `*_ClientProxy` in the same package. Past a
+  `final` method of the bean class, Vauban's proxy extends a class above the bean class: the unwrapper named that
+  class, which the proxy does not stand for, so EL took that class's Peano table for the bean. It also named the
+  superclass of an application class that is only named like a proxy.
+- **Repro**: `VaubanProxyUnwrapperTest#namesNothingForAProxyThatIsNoInstanceOfItsBeanClassNorForALookalike`.
+- **Cause** (proved by the repro): the unwrapper kept its own copy of the name rule, written when a proxy always
+  extended its bean class. Vauban's `ClientProxyClass` reads the bean class on every path and knows a proxy is final.
+- **Fix**: `proxiedClass` asks `ClientProxyClass.beanClassOf` and names the class only when the proxy is an instance
+  of it, in its package: Peano's table casts the proxy to it. A proxy that extends its bean class gets the same answer
+  as before; any other is read by reflection. The module requires `io.vidocq.vauban.api`.
+- **Verification**: red on 921c0573's main code (`vidocq-bug0202-red.log`, "Red run 1": `Shelf` named for the proxy
+  of `Locked`, 1 failure of 2). Green: `vidocq-bug0202-dev.log`, "Dev run 1" (the module's 5 tests).
+
 ## BUG-20261117-13 — An application class that has only another qualifier than `@Default` is created by its constructor
 
 - **Date**: 2026-11-17
