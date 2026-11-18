@@ -112,13 +112,16 @@ flowchart LR
 
 == Class loading — the Vauban application layer
 
-Vidocq does not let the application own its class loading: whatever the launch vehicle
-(the runtime's own main from `vidocq:dev`, `vidocq:run`, the packaged distribution scripts, a jlink image or
-the CLI, or an IDE right-click on an optional `@VidocqMain` trampoline), the application resolves into a **child `ModuleLayer` whose
+Vidocq does not let an application that ships as jars own its class loading: under the runtime's own main
+(`vidocq:dev`, `vidocq:run`, the packaged distribution scripts, the CLI) and under an IDE right-click on an optional
+`@VidocqMain` trampoline, the application resolves into a **child `ModuleLayer` whose
 defining loader is Vauban's `VaubanClassLoader`** — the runtime and its extensions stay
 in the boot layer, exports/opens keep being enforced, and every application class flows
 through the loader's transformer chain at definition (client-proxy weaving by the
-`cdi-proxifier`, sjar decryption by the source plugins).
+`cdi-proxifier`, sjar decryption by the source plugins). A `vidocq:jlink` image is the exception, with what is built
+on it (the `vidocq:jpackage` application, the `vidocq:docker` image of the `jlink` kind): it has one layer, the JVM's
+own, and its build does once what the layer does at load
+(xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-one-layer[one layer]).
 
 [mermaid]
 ....

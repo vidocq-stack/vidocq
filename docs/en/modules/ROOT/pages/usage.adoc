@@ -21,10 +21,12 @@ An application has no main class of its own by default. The runtime's main,
 * `vidocq:idea` writes its `(dev)`, `(run)` and `(debug)` configurations from `vidocq.mainModule` alone, see
   xref:modules/vidocq-runtime-maven-plugin.adoc#idea[the `vidocq:idea` goal].
 
-`vidocq create` writes no main class either, unless asked with `--main`. Whatever the launch, the application
-resolves into a **child module layer defined by the Vauban class loader**, where every class flows through the
-load-time transformations (client-proxy weaving…) at definition: same layer, same transformed classes, no
-instrumentation agent, no JVM warning.
+`vidocq create` writes no main class either, unless asked with `--main`. Under every launch of an application that
+ships as jars, the application resolves into a **child module layer defined by the Vauban class loader**, where every
+class flows through the load-time transformations (client-proxy weaving…) at definition: same layer, same transformed
+classes, no instrumentation agent, no JVM warning. A `vidocq:jlink` image, and what is built on it (the
+`vidocq:jpackage` application, the `vidocq:docker` image of the `jlink` kind), has one layer, the JVM's own: its build
+does once what the layer does at load (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-one-layer[one layer]).
 
 [#vidocq-main-trampoline]
 === When to add a `@VidocqMain` trampoline
