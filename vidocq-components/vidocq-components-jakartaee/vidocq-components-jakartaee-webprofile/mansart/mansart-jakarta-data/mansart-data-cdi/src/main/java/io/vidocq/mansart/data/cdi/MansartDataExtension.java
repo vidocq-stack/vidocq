@@ -198,8 +198,11 @@ public final class MansartDataExtension implements BuildCompatibleExtension {
      * {@code @Enhancement + @Vetoed} idiom as Ravel's {@code ConfigCdiExtension} (portable
      * extensions never run on CDI Lite).
      *
-     * <p>Deliberately stateless (no {@code entries} lookup): the container may run
-     * {@code @Enhancement} on a fresh extension instance (Vauban's archive-class pass does).
+     * <p>Deliberately stateless (no {@code entries} lookup): a container may run
+     * {@code @Enhancement} on an extension instance that did not see {@code @Discovery}. Vauban's
+     * archive-class pass did, until Vauban BUG-20261117-08: since that fix a start uses the
+     * {@code @Discovery} instance, once. The method stays stateless for an older Vauban and for
+     * the other containers.
      * The interface is found by reflection on the loaded class, not through the lang model —
      * index-backed {@code ClassInfo.superInterfacesDeclarations()} is empty for pre-indexed
      * application classes on the module path. Class-loading tolerance matches
