@@ -91,10 +91,9 @@ class AppLayerDeliveryIT {
             String configProbe) throws Exception {
         Path log = Fixture.logs().resolve(name + "-run.log");
         Process run = launch(command, log, key);
-        try {
+        try (HttpClient client = HttpClient.newHttpClient()) {
             Fixture.awaitLog(run, log, STARTED);
             String url = Fixture.served(log) + "/api/secured/admin";
-            HttpClient client = HttpClient.newHttpClient();
 
             assertEquals(401, call(client, url, null).statusCode(), name + ": no token");
             assertEquals(403, call(client, url, token(signer, "eve", "user")).statusCode(), name + ": no role");
