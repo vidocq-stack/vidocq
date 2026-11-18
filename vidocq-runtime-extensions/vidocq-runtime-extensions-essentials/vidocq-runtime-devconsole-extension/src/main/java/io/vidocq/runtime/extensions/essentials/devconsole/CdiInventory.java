@@ -287,7 +287,9 @@ record CdiInventory(Map<String, Integer> scopes, int beans, int applicationBeans
     static String type(TypeInfo type) {
         return switch (type) {
             case TypeInfo.ClassType(var name) -> name.simpleName();
-            case TypeInfo.ParameterizedType(var rawType, var typeArguments) -> rawType.simpleName()
+            case TypeInfo.ParameterizedType(var rawType, var typeArguments, _) when typeArguments.isEmpty() ->
+                    rawType.simpleName();
+            case TypeInfo.ParameterizedType(var rawType, var typeArguments, _) -> rawType.simpleName()
                     + typeArguments.stream().map(CdiInventory::type)
                             .collect(Collectors.joining(", ", "<", ">"));
             case TypeInfo.ArrayType(var componentType, var dimensions) -> type(componentType) + "[]".repeat(dimensions);

@@ -5,6 +5,26 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261118-03 — The dev console's CDI inventory matches a parameterized type without its owner
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `fix/vauban-bug-stack`, as the source companion of Vauban BUG-20261117-21.
+- **Module**: `vidocq-runtime-devconsole-extension` (`CdiInventory.type`)
+- **Symptom**: with Vauban BUG-20261117-21, `TypeInfo.ParameterizedType` gains a third component, `owner`. The
+  record pattern `TypeInfo.ParameterizedType(var rawType, var typeArguments)` of `CdiInventory.type` no longer
+  compiles.
+  Vauban BUG-20261118-47 also gives `Outer<String>.Plain`, a class without type parameters inside a generic class,
+  as a parameterized type with an owner and no argument: joining no argument would show it as `Plain<>`.
+- **Repro**: compile `vidocq-runtime-devconsole-extension` against a Vauban that carries BUG-20261117-21;
+  `CdiPanelTest#aMemberOfAParameterizedTypeWithoutArgumentsIsShownByItsSimpleName` for the type without argument.
+- **Cause**: a record pattern lists every component of the record. Vauban keeps the 2-argument constructor and the
+  accessors, so the change is binary compatible: a jar built before it still runs, and the tests that use the
+  2-argument constructor compile unchanged.
+- **Fix**: the pattern names the owner as `_`: the panel shows the raw type and its arguments, as before, and the
+  simple name alone for a type without argument. The owner stays out, as the panel shows simple names. The fix, and
+  the test that builds that type with the 3-argument constructor, compile only against the new Vauban.
+- **Verification**: pending, until the Vauban change is in the stack.
+
 ## BUG-20261118-02 — The EL proxy unwrapper names a class a Vauban client proxy does not stand for
 
 - **Date**: 2026-11-18

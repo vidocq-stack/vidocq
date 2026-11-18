@@ -268,6 +268,23 @@ class CdiPanelTest {
                 rows(observers));
     }
 
+    /**
+     * {@code Outer<String>.Plain}, a class without type parameters inside a generic class, is a parameterized type
+     * without arguments: the panel names it by its simple name alone, never {@code Outer$Plain<>}, and leaves its
+     * owner out, as it shows simple names (BUG-20261118-03).
+     */
+    @Test
+    void aMemberOfAParameterizedTypeWithoutArgumentsIsShownByItsSimpleName() {
+        TypeInfo outer = new TypeInfo.ParameterizedType(DotName.of("com.acme.Outer"),
+                List.of(type("java.lang.String")));
+        TypeInfo plain = new TypeInfo.ParameterizedType(DotName.of("com.acme.Outer$Plain"), List.of(), outer);
+        TypeInfo inner = new TypeInfo.ParameterizedType(DotName.of("com.acme.Outer$Inner"),
+                List.of(type("java.lang.Integer")), outer);
+
+        assertEquals("Outer$Plain", CdiInventory.type(plain));
+        assertEquals("Outer$Inner<Integer>", CdiInventory.type(inner));
+    }
+
     @Test
     void theCodegenColumnsSayWhatCoversEachRowAndTheBootFactsCountThem() {
         Map<Class<?>, CodegenCoverage.Coverage> byClass = Map.of(
