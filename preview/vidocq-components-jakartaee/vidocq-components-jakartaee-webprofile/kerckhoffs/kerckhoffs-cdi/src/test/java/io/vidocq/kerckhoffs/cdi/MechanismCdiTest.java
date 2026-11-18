@@ -61,6 +61,18 @@ class MechanismCdiTest {
         }
     }
 
+    /**
+     * A definition whose {@code qualifiers} is the declared default, written out or left to the annotation, keeps the
+     * mechanism the {@code @Default} one (KERCK-20261118-01): a language model that shows the default members, as
+     * Vauban does since BUG-20261117-55, gives the definition that member.
+     */
+    @Test
+    void aBasicDefinitionThatWritesTheDefaultQualifiersStaysTheDefaultMechanism() {
+        try (var container = start(MemoryApplication.class, ExplicitDefaultQualifierApplication.class)) {
+            assertInstanceOf(BasicAuthenticationMechanism.class, container.select(HttpAuthenticationMechanism.class));
+        }
+    }
+
     @Test
     void eachRepeatedBasicDefinitionIsAMechanismOfItsOwnQualifiers() {
         try (var container = start(MemoryApplication.class, QualifiedMechanismsApplication.class)) {

@@ -160,14 +160,16 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
     }
 
     /**
-     * Gives the mechanism the qualifiers its definition names (section 3.8.1). A definition that names none keeps
-     * {@code fallback}, and stays the {@code @Default} mechanism of the application as well.
+     * Gives the mechanism the qualifiers its definition names (section 3.8.1). A definition that names none, or only
+     * {@code fallback}, the default the annotation declares, keeps {@code fallback}, and stays the {@code @Default}
+     * mechanism of the application as well: whether the language model shows the default member or not
+     * (KERCK-20261118-01).
      */
     private static void qualify(SyntheticBeanBuilder<?> builder, Declared declared,
                                 Class<? extends Annotation> fallback) {
         List<AnnotationMember> named = declared.definition().hasMember("qualifiers")
                 ? declared.definition().member("qualifiers").asArray() : List.of();
-        if (named.isEmpty()) {
+        if (named.isEmpty() || isOnly(named, fallback)) {
             builder.qualifier(fallback);
             builder.qualifier(Default.class);
             return;
@@ -176,6 +178,12 @@ public class KerckhoffsExtension implements BuildCompatibleExtension {
         for (AnnotationMember qualifier : named) {
             builder.qualifier(new QualifierUsage(qualifier.asType().asClass().declaration()));
         }
+    }
+
+    /** Whether {@code named} holds {@code qualifier} and nothing else. */
+    private static boolean isOnly(List<AnnotationMember> named, Class<? extends Annotation> qualifier) {
+        return named.size() == 1 && named.getFirst().asType().asClass().declaration().name()
+                .equals(qualifier.getName());
     }
 
     /** A qualifier annotation without members, described by its declaration. */
