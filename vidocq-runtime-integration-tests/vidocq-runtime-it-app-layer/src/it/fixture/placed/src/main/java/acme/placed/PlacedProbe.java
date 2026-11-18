@@ -21,6 +21,7 @@ package acme.placed;
 
 import acme.gadget.Gadget;
 import acme.gadget.Gadgets;
+import acme.gadget.Strict;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.event.Startup;
@@ -33,6 +34,9 @@ public class PlacedProbe {
     @Inject
     Gadget gadget;
 
+    @Inject
+    Strict strict;
+
     void onStart(@Observes Startup startup) {
         System.out.println("GADGET-NAME " + gadget.name());
         // The library calls its package-private member on the proxy: only a proxy of the library's package
@@ -40,6 +44,8 @@ public class PlacedProbe {
         System.out.println("GADGET-LABEL " + Gadgets.labelOf(gadget, "x"));
         // One gadget was produced. A second run of a constructor is the client proxy's own.
         System.out.println("GADGET-CONSTRUCTED " + Gadget.constructed());
+        // The proxy of a class whose constructor refuses null was created, so it ran no constructor of the class.
+        System.out.println("STRICT-NAME " + strict.name() + " constructed " + Strict.constructed());
         Class<?> proxy = gadget.getClass();
         System.out.println("GADGET-PROXY " + proxy.getName() + " in " + proxy.getModule().getName());
     }

@@ -55,9 +55,10 @@ import java.util.stream.Stream;
  * the application did not start (BUG-20261116-06).
  *
  * <p>The build does the placement once, here: it adds the proxy and its provider to the staged copy of the library,
- * as {@code vauban:enhance-dependencies} does ({@link DependencyEnhancer}), then takes the type off the manifest of
- * the staged archives, where nothing is left to place at the start. Only the staged copies change. A type the build
- * cannot place stays listed: the container decides at the start, as it did before.
+ * as {@code vauban:enhance-dependencies} does ({@link DependencyEnhancer}), gives the proxy the constructor chain
+ * Vauban's class loader gives it, so that no constructor of the library runs for it ({@link StagedProxyLinks}), then
+ * takes the type off the manifest of the staged archives, where nothing is left to place at the start. Only the staged
+ * copies change. A type the build cannot place stays listed: the container decides at the start, as it did before.
  */
 final class StagedProxies {
 
@@ -95,8 +96,9 @@ final class StagedProxies {
      * Places the proxies of every type that a staged archive lists.
      *
      * @param coordinates the Maven coordinates of a staged jar, from its file name: an enhanced copy records them
+     * @throws StagedProxyLinks.Refused when a proxy would run a constructor of its library ({@link StagedProxyLinks})
      */
-    static Outcome place(Path stage, UnaryOperator<String> coordinates) throws IOException {
+    static Outcome place(Path stage, UnaryOperator<String> coordinates) throws IOException, StagedProxyLinks.Refused {
         List<Path> jars = jars(stage);
         Map<Path, List<String>> listed = new LinkedHashMap<>();
         for (Path jar : jars) {
@@ -111,6 +113,7 @@ final class StagedProxies {
         List<String> warnings = new ArrayList<>();
         Map<Path, List<String>> byLibrary = byLibrary(jars, listed.values(), warnings);
         List<Placed> placed = byLibrary.isEmpty() ? List.of() : enhance(stage, jars, byLibrary, coordinates, warnings);
+        StagedProxyLinks.weave(jars, placed);
         Set<String> placedTypes = new LinkedHashSet<>();
         placed.forEach(proxy -> placedTypes.add(proxy.type()));
         if (!placedTypes.isEmpty()) {

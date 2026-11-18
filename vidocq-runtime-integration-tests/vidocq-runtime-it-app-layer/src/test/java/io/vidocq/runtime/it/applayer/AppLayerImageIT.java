@@ -105,9 +105,9 @@ class AppLayerImageIT {
     /**
      * A producer of a third-party class in a normal scope, when that class has a package-private member: its client
      * proxy must be a class of the library's own package. An image has no application layer to define it there at
-     * each start, so the build puts it in the copy of the library it links (BUG-20261116-06, Vidocq/vidocq#580).
-     * One documented difference with the application layer: the proxy of the image runs a constructor of the
-     * library's class, which the layer's proxy does not.
+     * each start, so the build puts it in the copy of the library it links (BUG-20261116-06, Vidocq/vidocq#580),
+     * with the constructor chain the layer's loader weaves: no constructor of the library runs for the proxy, as
+     * under the application layer (BUG-20261118-91).
      */
     @Test
     void theImageHoldsTheProxyOfAThirdPartyClassInItsPackage(@TempDir Path dir) throws Exception {
@@ -118,7 +118,8 @@ class AppLayerImageIT {
             Fixture.awaitLog(run, runLog, AppLayerRunIT.PLACED_PROXY);
             String out = Fixture.read(runLog);
             AppLayerRunIT.assertPlacedProxy(out);
-            assertTrue(out.contains("GADGET-CONSTRUCTED 2"), "the proxy runs a constructor of the library:\n" + out);
+            assertTrue(out.contains("GADGET-CONSTRUCTED 1"), "no constructor of the library runs for the proxy:\n"
+                    + out);
             assertTrue(out.contains("no application layer"), "the image has one layer:\n" + out);
             assertTrue(out.contains("anomalies   none"), out);
         } finally {

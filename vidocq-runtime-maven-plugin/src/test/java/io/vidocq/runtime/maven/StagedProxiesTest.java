@@ -66,6 +66,27 @@ class StagedProxiesTest {
             }
             """;
 
+    /** The body of a class whose only constructor refuses the default values a proxy would pass, and counts. */
+    private static final String STRICT_BODY = """
+              public static int built;
+              private final String name;
+              public Gadget(String name) { this.name = java.util.Objects.requireNonNull(name); built++; }
+              public String name() { return name; }
+              String label(String suffix) { return name + suffix; }
+            """;
+
+    /** A library class with no constructor a proxy may run (BUG-20261118-91). */
+    private static final String STRICT_CLASS = "public class Gadget {\n" + STRICT_BODY + "}\n";
+
+    /** A superclass whose only constructor refuses {@code null}, and counts. */
+    private static final String STRICT_BASE = """
+            public class Base {
+              public static int built;
+              public Base(String name) { java.util.Objects.requireNonNull(name); built++; }
+              String label(String suffix) { return suffix; }
+            }
+            """;
+
     @TempDir
     Path dir;
 
@@ -227,6 +248,197 @@ class StagedProxiesTest {
         assertNoWorkDirectoryIsLeft();
     }
 
+    @Test
+    @DisplayName("the proxy runs no constructor of the library, as the proxy the application layer places")
+    void theProxyRunsNoConstructorOfTheLibrary() throws Exception {
+        Path stage = Files.createDirectories(dir.resolve("stage"));
+        Path library = library(stage, STRICT_CLASS);
+        application(stage, "app.jar", "acme.app", GADGET);
+
+        StagedProxies.Outcome outcome = StagedProxies.place(stage, jar -> jar);
+
+        assertEquals(List.of(new StagedProxies.Placed(GADGET, "gadget.jar")), outcome.placed());
+        try (URLClassLoader loader = loader(library)) {
+            Class<?> type = Class.forName(GADGET, false, loader);
+            assertMarker(type);
+            assertEquals(0, newProxy(loader), "the proxy ran a constructor of the library");
+        }
+    }
+
+    @Test
+    @DisplayName("a superclass of the library with no constructor free of side effects gets the marker too")
+    void aSuperclassOfTheLibraryGetsTheMarkerToo() throws Exception {
+        Path stage = Files.createDirectories(dir.resolve("stage"));
+        Path library = jar(stage.resolve("gadget.jar"), compile("acme.gadget", "exports acme.gadget;", Map.of(
+                "Base", STRICT_BASE,
+                "Gadget", "public class Gadget extends Base {\n" + STRICT_BODY.replace("this.name =", "super(name);"
+                        + " this.name =") + "}\n")), entry -> entry);
+        application(stage, "app.jar", "acme.app", GADGET);
+
+        StagedProxies.place(stage, jar -> jar);
+
+        try (URLClassLoader loader = loader(library)) {
+            assertMarker(Class.forName("acme.gadget.Base", false, loader));
+            assertMarker(Class.forName(GADGET, false, loader));
+            assertEquals(0, newProxy(loader), "the proxy ran a constructor of the library");
+            assertEquals(0, Class.forName("acme.gadget.Base", false, loader).getDeclaredField("built").getInt(null));
+        }
+    }
+
+    @Test
+    @DisplayName("a superclass in another staged jar gets the marker in its own jar")
+    void aSuperclassInAnotherStagedJarGetsTheMarkerInItsJar() throws Exception {
+        Path stage = Files.createDirectories(dir.resolve("stage"));
+        Path baseClasses = compile("acme.base", "exports acme.base;",
+                Map.of("Base", STRICT_BASE.replace("String label(", "protected String tag(")));
+        Path base = jar(stage.resolve("base.jar"), baseClasses, entry -> entry);
+        Path library = jar(stage.resolve("gadget.jar"), compile("acme.gadget",
+                "requires transitive acme.base; exports acme.gadget;", Map.of("Gadget",
+                        "public class Gadget extends acme.base.Base {\n" + STRICT_BODY.replace("this.name =",
+                                "super(name); this.name =") + "}\n"), List.of(baseClasses)), entry -> entry);
+        application(stage, "app.jar", "acme.app", GADGET);
+
+        StagedProxies.place(stage, jar -> jar);
+
+        try (URLClassLoader loader = new URLClassLoader(new URL[] {base.toUri().toURL(), library.toUri().toURL()},
+                getClass().getClassLoader())) {
+            assertMarker(Class.forName("acme.base.Base", false, loader));
+            assertEquals(0, newProxy(loader), "the proxy ran a constructor of the library");
+        }
+    }
+
+    @Test
+    @DisplayName("a library class that extends a JDK class with a no-arg constructor chains to it")
+    void aJdkSuperclassWithANoArgConstructorEndsTheChain() throws Exception {
+        Path stage = Files.createDirectories(dir.resolve("stage"));
+        Path library = library(stage, """
+                public class Gadget extends java.io.OutputStream {
+                  public Gadget(String name) { java.util.Objects.requireNonNull(name); }
+                  @Override public void write(int b) { }
+                  String label(String suffix) { return suffix; }
+                }
+                """);
+        application(stage, "app.jar", "acme.app", GADGET);
+
+        StagedProxies.place(stage, jar -> jar);
+
+        try (URLClassLoader loader = loader(library)) {
+            assertMarker(Class.forName(GADGET, false, loader));
+            newProxy(loader);
+        }
+    }
+
+    @Test
+    @DisplayName("a chain that must run a constructor of the JDK with made-up arguments fails the build")
+    void aChainThatCannotBeFreeOfSideEffectsFailsTheBuild() throws Exception {
+        Path stage = Files.createDirectories(dir.resolve("stage"));
+        library(stage, """
+                public class Gadget extends java.io.FilterOutputStream {
+                  public Gadget(java.io.OutputStream out) { super(java.util.Objects.requireNonNull(out)); }
+                  String label(String suffix) { return suffix; }
+                }
+                """);
+        application(stage, "app.jar", "acme.app", GADGET);
+
+        StagedProxyLinks.Refused refused = org.junit.jupiter.api.Assertions.assertThrows(
+                StagedProxyLinks.Refused.class, () -> StagedProxies.place(stage, jar -> jar));
+
+        String message = refused.getMessage();
+        assertTrue(message.contains(GADGET) && message.contains("java.io.FilterOutputStream"), message);
+        assertTrue(message.contains("interface") && message.contains("@Dependent")
+                && message.contains("@Singleton"), message);
+    }
+
+    @Test
+    @DisplayName("a Serializable class without serialVersionUID keeps the one the JVM computed before the weaving")
+    void aSerializableClassKeepsItsSerialVersionUid() throws Exception {
+        Path stage = Files.createDirectories(dir.resolve("stage"));
+        Path library = library(stage, """
+                public class Gadget implements java.io.Serializable, Comparable<Gadget> {
+                  static final java.util.List<String> NAMES = new java.util.ArrayList<>();
+                  private static int count;
+                  protected transient int cache;
+                  public volatile long stamp;
+                  private final String name;
+                  public Gadget(String name) { this.name = java.util.Objects.requireNonNull(name); count++; }
+                  Gadget(String name, int cache) { this(name); this.cache = cache; }
+                  private Gadget() { this("x"); }
+                  public String name() { return name; }
+                  String label(String suffix) { return name + suffix; }
+                  protected synchronized void touch(int[] values, Object... more) { }
+                  @Override public int compareTo(Gadget other) { return name.compareTo(other.name); }
+                  public static final class Part implements java.io.Serializable { }
+                }
+                """);
+        long before;
+        try (URLClassLoader original = loader(Files.copy(library, dir.resolve("original.jar")))) {
+            before = java.io.ObjectStreamClass.lookup(Class.forName(GADGET, false, original)).getSerialVersionUID();
+        }
+        application(stage, "app.jar", "acme.app", GADGET);
+
+        StagedProxies.place(stage, jar -> jar);
+
+        try (URLClassLoader loader = loader(library)) {
+            Class<?> woven = Class.forName(GADGET, false, loader);
+            assertMarker(woven);
+            assertEquals(before, java.io.ObjectStreamClass.lookup(woven).getSerialVersionUID());
+        }
+    }
+
+    @Test
+    @DisplayName("the default serialVersionUID read from the bytes is the one the JVM computes")
+    void theDefaultSerialVersionUidIsTheJvmOne() throws Exception {
+        Path classes = compile("acme.gadget", "exports acme.gadget;", Map.of(
+                "Gadget", """
+                        public abstract class Gadget implements java.io.Serializable, Cloneable {
+                          static { System.getProperty("x"); }
+                          private static final long LIMIT = 3;
+                          private transient Object ignored;
+                          int[][] grid;
+                          public abstract String name();
+                          private void hidden() { }
+                          protected static Gadget of(String n) { return null; }
+                          public interface Kind extends java.io.Serializable { String id(); }
+                          static class Nested implements java.io.Serializable { private int x; }
+                          public interface Empty extends java.io.Serializable { }
+                        }
+                        """));
+        try (URLClassLoader loader = new URLClassLoader(new URL[] {classes.toUri().toURL()},
+                getClass().getClassLoader())) {
+            for (String name : List.of(GADGET, GADGET + "$Kind", GADGET + "$Nested", GADGET + "$Empty")) {
+                byte[] bytes = Files.readAllBytes(classes.resolve(name.replace('.', '/') + ".class"));
+                assertEquals(java.io.ObjectStreamClass.lookup(Class.forName(name, false, loader))
+                        .getSerialVersionUID(), StagedProxyLinks.defaultSerialVersionUid(bytes), name);
+            }
+        }
+    }
+
+    /** {@code type} declares the {@code protected synthetic (ProxyLink)} constructor the proxy chains to. */
+    private static void assertMarker(Class<?> type) {
+        var markers = Stream.of(type.getDeclaredConstructors())
+                .filter(constructor -> constructor.getParameterCount() == 1 && constructor.getParameterTypes()[0]
+                        .getName().equals("io.vidocq.vauban.api.ProxyLink")).toList();
+        assertEquals(1, markers.size(), () -> type + " has no (ProxyLink) constructor");
+        assertTrue(java.lang.reflect.Modifier.isProtected(markers.getFirst().getModifiers()), type::toString);
+        assertTrue(markers.getFirst().isSynthetic(), type::toString);
+    }
+
+    /** Creates a client proxy of {@code Gadget}; returns how many times a constructor of {@code Gadget} ran. */
+    private static int newProxy(ClassLoader loader) throws Exception {
+        Class<?> proxy = Class.forName(GADGET + "_ClientProxy", false, loader);
+        var constructor = Stream.of(proxy.getDeclaredConstructors()).filter(c -> c.getParameterCount() == 1)
+                .findFirst().orElseThrow();
+        constructor.setAccessible(true);
+        constructor.newInstance((java.util.function.Supplier<Object>) () -> null);
+        Class<?> type = Class.forName(GADGET, false, loader);
+        return Stream.of(type.getDeclaredFields()).anyMatch(field -> field.getName().equals("built"))
+                ? type.getDeclaredField("built").getInt(null) : 0;
+    }
+
+    private URLClassLoader loader(Path jar) throws IOException {
+        return new URLClassLoader(new URL[] {jar.toUri().toURL()}, getClass().getClassLoader());
+    }
+
     /** The module {@code acme.gadget} of {@code stage} provides the generated components, and reads their API. */
     private static void assertTheLibraryProvidesItsProxies(Path stage) {
         ModuleDescriptor descriptor = ModuleFinder.of(stage).find("acme.gadget").orElseThrow().descriptor();
@@ -294,10 +506,20 @@ class StagedProxiesTest {
      * simple name, in the package named as the module.
      */
     private Path compile(String name, String directives, Map<String, String> classes) throws IOException {
+        return compile(name, directives, classes, List.of());
+    }
+
+    /** As {@link #compile(String, String, Map)}, with {@code modulePath} for the modules it requires. */
+    private Path compile(String name, String directives, Map<String, String> classes, List<Path> modulePath)
+            throws IOException {
         Path src = Files.createDirectories(dir.resolve("src-" + name + "-" + System.nanoTime()));
         Path out = Files.createDirectories(dir.resolve("classes-" + name + "-" + System.nanoTime()));
         Files.writeString(src.resolve("module-info.java"), "module " + name + " { " + directives + " }\n");
         List<String> args = new ArrayList<>(List.of("-d", out.toString(), src.resolve("module-info.java").toString()));
+        if (!modulePath.isEmpty()) {
+            args.addAll(List.of("-p", String.join(java.io.File.pathSeparator,
+                    modulePath.stream().map(Path::toString).toList())));
+        }
         Path packageDir = Files.createDirectories(src.resolve(name.replace('.', '/')));
         for (Map.Entry<String, String> type : classes.entrySet()) {
             Path file = packageDir.resolve(type.getKey() + ".java");

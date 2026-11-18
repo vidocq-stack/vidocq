@@ -70,6 +70,12 @@
             <artifactId>vauban-maven-plugin</artifactId>
             <version>${vauban.version}</version>
         </dependency>
+        <dependency>
+            <!-- ProxyLinkWeaver: the staged copy of a library gets the constructor chain Vauban's loader weaves. -->
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-weaver</artifactId>
+            <version>${vauban.version}</version>
+        </dependency>
 
         <!-- Maven Plugin API (provided by Maven at runtime) -->
         <dependency>

@@ -26,6 +26,48 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Verification**: `LayerThreadsTest.reportsThreadsHoldingAChildOfTheLoader` (red before the fix); the IT above,
   green with the Ravel extension in the fixture, which keeps it.
 
+## BUG-20261118-91 — The client proxy of a library class runs a constructor of that class in a jlink image
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `fix/image-proxy-link`
+- **Module**: `vidocq-runtime-maven-plugin` (`StagedProxies`, new `StagedProxyLinks`)
+- **Symptom**: a producer of a normal scope returns a class of a library that has a package-private member, so its
+  client proxy is placed in the library's package (BUG-20261116-06). Under the application layer (`vidocq:dev`,
+  `vidocq:run`, the `vidocq:package` distribution) no constructor of the library runs for the proxy. In the
+  `vidocq:jlink` image the proxy ran the constructor of the class with the fewest parameters, with `null`, `0` and
+  `false`: the fixture's `Gadget` counted two constructions where the layer counts one (`AppLayerImageIT` pinned
+  `GADGET-CONSTRUCTED 2`). A class whose only constructor refuses `null` started in every form but the image, which
+  stopped at deployment validation (`Normal-scoped bean acme.placed.GadgetProducer must have a non-private no-arg
+  constructor, or declare a non-private constructor taking io.vidocq.vauban.api.ProxyLink …`). Reported by a review
+  of Vidocq, 2026-11-18; Vauban promises the opposite (`se.adoc`, `internals.adoc`: "the third-party constructors do
+  not run for the proxy").
+- **Repro**: the `placed` module of the fixture of `vidocq-runtime-it-app-layer`, with the new library class
+  `acme.gadget.Strict` (only a `(String)` constructor that calls `requireNonNull`) produced `@ApplicationScoped`.
+  `mvn package vidocq:jlink && target/dist/bin/app-layer-placed`.
+- **Cause**: `StagedProxies` added the proxy that `DependencyEnhancer` generates to the staged copy of the library,
+  and nothing more. Under the application layer, Vauban's `CdiProxifierTransformer` also weaves a
+  `protected synthetic (ProxyLink)` constructor into the class, and into the superclasses of its chain that the
+  loader defines, and retargets the proxy onto it (`ProxyLinkWeaver`). The image had neither: the proxy kept the
+  constructor the generator picks for a class without the marker.
+- **Fix**: after the enhancement, `StagedProxyLinks` applies the same `ProxyLinkWeaver` to the staged jars, with the
+  rules of the loader: `addMarkerConstructor` on the produced class and on each superclass of its chain that a staged
+  jar holds, in the jar that holds it, root and versioned entries; the chain ends at `Object`, at a superclass with
+  the marker, or at one with a non-private no-arg constructor; `retargetProxyConstructor` on the proxy. When the chain
+  reaches a class outside the staged jars (a class of the JDK) without a no-arg constructor, the build fails before
+  linking, with the workarounds (an interface type, `@Singleton` or `@Dependent`), where the loader only warns; nothing
+  is rewritten then. A `Serializable` class without a `serialVersionUID` gets the one the JVM computed before the
+  weaving (Java Object Serialization Specification §4.6, computed from the class file and checked against
+  `ObjectStreamClass`): the added constructor is not private and would change it. Under the application layer the
+  loader weaves without pinning it: that drift is Vauban BUG-20261118-95.
+- **Verification**: `StagedProxiesTest`, 7 new tests red before (no marker, no refusal, no `serialVersionUID`), green
+  after: a strict class, a strict superclass in the same jar and in another staged jar, a JDK superclass with a no-arg
+  constructor, a JDK superclass without one (the build fails), a `Serializable` class keeps its value, the computed
+  value equals the JVM's for an abstract class, a nested class and two interfaces. ITs:
+  `AppLayerImageIT.theImageHoldsTheProxyOfAThirdPartyClassInItsPackage` now asserts `GADGET-CONSTRUCTED 1` and
+  `STRICT-NAME strict constructed 1`, red before (the validation failure above), green after;
+  `AppLayerRunIT.theApplicationLayerHoldsTheProxyOfAThirdPartyClassInItsPackage` and the new
+  `AppLayerPackageIT.theDistributionPlacesTheProxyOfAThirdPartyClass` green before and after.
+
 ## BUG-20261118-90 — Every start of a built application loads the platform's cryptography to check the `vidocq:generate` stamp
 
 - **Date**: 2026-11-18
@@ -1092,9 +1134,9 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   `<jar>: client proxy of <type> added to its package`. A type it cannot place stays listed, with a build warning
   (`client proxy left to the container at the start: …`): a class whose constructors are all private, a library that
   already holds generated Vauban components in that package, a class that refers to a type the image does not hold.
-  One difference with the application layer is left, measured by the fixture and documented (`#jlink-differences` of
-  the plugin page): the proxy of the image calls a constructor of the library's class with default values, where the
-  proxy of the layer runs none. Tests: `StagedProxiesTest`,
+  One difference with the application layer was left, measured by the fixture and documented (`#jlink-differences` of
+  the plugin page): the proxy of the image called a constructor of the library's class with default values, where the
+  proxy of the layer runs none. BUG-20261118-91 removed it. Tests: `StagedProxiesTest`,
   `VidocqJlinkMojoStagingTest.aLibraryGetsTheClientProxyOnlyItsPackageCanHold`,
   `AppLayerImageIT.theImageHoldsTheProxyOfAThirdPartyClassInItsPackage` (red before the fix: the image exits with the
   messages above) and its control under the application layer,

@@ -96,5 +96,8 @@ class AppLayerRunIT {
         assertTrue(out.contains("GADGET-LABEL placed:x"), "the proxy forwards the package-private member:\n" + out);
         assertTrue(out.contains(PLACED_PROXY + "acme.gadget.Gadget_ClientProxy in acme.gadget"),
                 "the proxy is a class of the library's package:\n" + out);
+        // A class whose only constructor refuses null: its proxy runs no constructor of it (BUG-20261118-91).
+        assertTrue(out.contains("STRICT-NAME strict constructed 1"), "the proxy runs no constructor of Strict:\n"
+                + out);
     }
 }

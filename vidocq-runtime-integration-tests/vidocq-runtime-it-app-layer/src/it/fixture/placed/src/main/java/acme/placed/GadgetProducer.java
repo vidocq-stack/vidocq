@@ -20,6 +20,7 @@
 package acme.placed;
 
 import acme.gadget.Gadget;
+import acme.gadget.Strict;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 
@@ -31,5 +32,12 @@ public class GadgetProducer {
     @ApplicationScoped
     Gadget gadget() {
         return new Gadget("placed");
+    }
+
+    /** A class whose only constructor refuses {@code null}: its proxy must run no constructor of it. */
+    @Produces
+    @ApplicationScoped
+    Strict strict() {
+        return new Strict("strict");
     }
 }

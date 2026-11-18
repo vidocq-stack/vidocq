@@ -888,10 +888,37 @@ into the staged copy of the library, for each type the application's build liste
 Vidocq jlink — acme-gadget-1.0.jar: client proxy of acme.gadget.Gadget added to its package
 ----
 
-The staged copy is no longer the published artifact. It holds the two generated classes, its `module-info.class`
-provides them and requires `io.vidocq.vauban.api`, its signature files are dropped, and its manifest names the
-artifact it comes from (`Vauban-Enhanced-From`, `Vauban-Enhanced-Digest`). The jar of your local repository is
-untouched.
+[#jlink-proxy-link]
+The proxy runs no constructor of the library, as under the application layer (BUG-20261118-91). The goal gives the
+copy what Vauban's loader gives the class at each start: a `protected` synthetic constructor that takes
+`io.vidocq.vauban.api.ProxyLink` and runs no code of the library, which the proxy calls instead of a constructor of
+the class. A superclass whose constructors all take arguments gets one too, in the staged copy of its own jar; the
+chain ends at `Object`, at a superclass that has such a constructor, or at one with a non-private constructor without
+parameters. A constructor that refuses `null`, or that opens a resource or registers a listener, so runs for the
+produced instance only, in the image as everywhere else.
+
+When the chain reaches a class outside the image's jars, a class of the JDK whose constructors all take arguments,
+no constructor can be skipped, and the goal fails before linking instead of letting the proxy call one with made-up
+arguments:
+
+----
+Vidocq jlink — a client proxy of the image would run a constructor of its library with made-up arguments, which the
+application layer never does (BUG-20261118-91):
+  acme.gadget.Gadget: its superclass java.io.FilterOutputStream is not in a jar of the image, and offers no no-arg constructor
+Produce an interface type instead of the class, or give the producer the scope @Singleton or @Dependent, which need
+no client proxy.
+----
+
+A `Serializable` class that declares no `serialVersionUID` gets the one the JVM computed for it before the change: the
+added constructor would change the computed value, and an object serialized by another form of the application
+would no longer read back.
+
+The staged copy is no longer the published artifact. It holds the two generated classes, the class of the proxy and
+the superclasses above carry the constructor for the proxy (and a `serialVersionUID` when they are `Serializable`
+without one), its `module-info.class` provides the generated classes and requires `io.vidocq.vauban.api`, its
+signature files are dropped, and its manifest names the artifact it comes from (`Vauban-Enhanced-From`,
+`Vauban-Enhanced-Digest`). The SBOM of the image lists the artifact it comes from. The jar of your local repository
+is untouched.
 
 When the goal cannot add a proxy, it warns and leaves the type to the container: the start of the image then stops
 and says what it needs.
@@ -933,13 +960,11 @@ The image links only the JDK modules the application needs, and `jdk.jfr` is not
   The Flyway extension lists the migrations from the application's modules, in an image as in the application layer
   (BUG-20261115-02). A library of your own that scans a directory needs the same: `ApplicationLayer.home()` gives the
   layer that holds the application, and `ApplicationLayer.list(layer, directory)` its files.
-* **The client proxy of a library's class that a producer returns** (<<jlink-placed-proxies>>). Under the application
-  layer, Vauban's loader gives the class a constructor for the proxy alone, and no constructor of the library runs
-  when the proxy is created. In the image, the proxy calls the constructor of the class that has the fewest
-  parameters, with default values (`null`, `0`, `false`): a constructor that refuses `null`, or that opens a
-  resource, shows it there. A class whose constructors are all private gets no proxy in the image. In both cases,
-  produce an interface type, or give the producer the `@Singleton` or `@Dependent` scope: neither needs a client
-  proxy.
+* **The client proxy of a library's class that a producer returns** (<<jlink-placed-proxies>>). It runs no
+  constructor of the library in either form (<<jlink-proxy-link>>), but a class whose constructors are all private
+  gets no proxy in the image, and a class whose chain reaches a class of the JDK without a constructor free of
+  arguments fails the build of the image. In both cases, produce an interface type, or give the producer the
+  `@Singleton` or `@Dependent` scope: neither needs a client proxy.
 * **The context class loader** is the JVM's application loader, not Vauban's.
 * **The settings of the application layer** (`vidocq.app.layer`, `vidocq.app.layer.keep`, the pins) have no effect.
 

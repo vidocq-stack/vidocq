@@ -24,6 +24,7 @@ import io.vidocq.vauban.maven.modularize.Modularizer;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -183,7 +184,7 @@ public class VidocqJlinkMojo extends AbstractMojo {
     private RepositorySystem repoSystem;
 
     @Override
-    public void execute() throws MojoExecutionException {
+    public void execute() throws MojoExecutionException, MojoFailureException {
         if (skip) {
             getLog().info("Vidocq jlink — skip (vidocq.jlink.skip=true).");
             return;
@@ -472,8 +473,13 @@ public class VidocqJlinkMojo extends AbstractMojo {
      * Adds to the staged libraries the client proxies that only a class of their own package can be
      * ({@link StagedProxies}): the image has no application layer to define them there at each start.
      */
-    void placeProxies() throws IOException {
-        StagedProxies.Outcome outcome = StagedProxies.place(modsDir.toPath(), this::coordinatesOf);
+    void placeProxies() throws IOException, MojoFailureException {
+        StagedProxies.Outcome outcome;
+        try {
+            outcome = StagedProxies.place(modsDir.toPath(), this::coordinatesOf);
+        } catch (StagedProxyLinks.Refused e) {
+            throw new MojoFailureException(e.getMessage(), e);
+        }
         outcome.placed().forEach(placed -> getLog().info("Vidocq jlink — " + placed.jar() + ": client proxy of "
                 + placed.type() + " added to its package"));
         outcome.warnings().forEach(warning -> getLog().warn(

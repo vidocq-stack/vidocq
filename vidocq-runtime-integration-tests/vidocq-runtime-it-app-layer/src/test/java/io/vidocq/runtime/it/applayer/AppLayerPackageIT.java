@@ -133,6 +133,33 @@ class AppLayerPackageIT {
         assertFalse(out.contains(TWICE_WARNING), "no layer, so nothing twice:\n" + out);
     }
 
+    /**
+     * The distribution of an application that produces third-party classes in a normal scope: the application layer
+     * places their client proxies, and runs no constructor of the library for them (BUG-20261118-91).
+     */
+    @Test
+    void theDistributionPlacesTheProxyOfAThirdPartyClass(@TempDir Path dir) throws Exception {
+        Path project = Fixture.copy(dir);
+        Fixture.install(project, Fixture.logs().resolve("package-placed-install.log"));
+        Path log = Fixture.logs().resolve("package-placed.log");
+
+        Fixture.awaitSuccess(Fixture.start(project.resolve("placed"), log, "package", "vidocq:package",
+                "-DskipTests"), log, "vidocq:package");
+
+        Path runLog = Fixture.logs().resolve("package-placed-run.log");
+        Process run = new ProcessBuilder("sh", script(project.resolve("placed/target")).toString())
+                .redirectErrorStream(true).redirectOutput(runLog.toFile()).start();
+        try {
+            Fixture.awaitLog(run, runLog, AppLayerRunIT.PLACED_PROXY);
+            String out = Fixture.read(runLog);
+            AppLayerRunIT.assertPlacedProxy(out);
+            assertTrue(out.contains("GADGET-CONSTRUCTED 1"), "no constructor of the library runs for the proxy:\n"
+                    + out);
+        } finally {
+            Fixture.stop(run);
+        }
+    }
+
     /** Launches the distribution's script until the runtime has started; returns what it printed. */
     private static String run(Path script, Path runLog) throws Exception {
         Process run = new ProcessBuilder("sh", script.toString()).redirectErrorStream(true)
