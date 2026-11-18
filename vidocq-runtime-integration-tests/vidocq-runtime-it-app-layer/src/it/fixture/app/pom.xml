@@ -32,6 +32,11 @@
             <artifactId>app-layer-pages</artifactId>
             <version>1.0</version>
         </dependency>
+        <!-- An extension that observes the boot: the dev reload must still name a leaked thread (BUG-20261118-94). -->
+        <dependency>
+            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+            <artifactId>vidocq-runtime-ravel-config-extension</artifactId>
+        </dependency>
         <!-- An explicit module that requires java.sql (vidocq#254). -->
         <dependency>
             <groupId>io.vidocq.it</groupId>
@@ -42,6 +47,20 @@
 
     <build>
         <plugins>
+            <!-- Under vidocq-runtime-build, as an example of the reactor: one codegen bundle per extension. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths combine.children="append">
+                        <path>
+                            <groupId>io.vidocq.runtime.extensions.microprofile</groupId>
+                            <artifactId>vidocq-runtime-ravel-config-extension-codegen</artifactId>
+                            <version>@project.version@</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>io.vidocq.runtime</groupId>
                 <artifactId>vidocq-runtime-maven-plugin</artifactId>

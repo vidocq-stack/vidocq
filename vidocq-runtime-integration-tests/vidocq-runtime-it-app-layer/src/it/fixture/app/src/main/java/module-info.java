@@ -23,6 +23,7 @@ module acme.app {
     requires jakarta.cdi;
     requires acme.pages;
     requires acme.sql;
+    requires org.eclipse.microprofile.config;
 
     exports acme.app;
     // The launches without a layer (vidocq.package.layer=false, vidocq.dev.layer=false) run this module from the boot

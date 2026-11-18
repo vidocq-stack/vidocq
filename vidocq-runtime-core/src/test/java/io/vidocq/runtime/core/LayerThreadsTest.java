@@ -51,6 +51,37 @@ class LayerThreadsTest {
         assertFalse(LayerThreads.holding(layerLoader).contains("acme-poller"), "a stopped thread is not reported");
     }
 
+    /**
+     * The container may run the application's start under a loader of its own built on the layer's, Vauban's
+     * {@code CompositeClassLoader}: a thread the application starts then inherits that child, which keeps the layer
+     * in memory as well (BUG-20261118-94).
+     */
+    @Test
+    @DisplayName("a thread whose context loader is a child of the layer's loader is reported too")
+    void reportsThreadsHoldingAChildOfTheLoader() throws Exception {
+        ClassLoader layerLoader = new ClassLoader(null) { };
+        ClassLoader composite = new ClassLoader(layerLoader) { };
+        ClassLoader unrelated = new ClassLoader(null) { };
+        var stop = new CountDownLatch(1);
+        Thread holder = new Thread(() -> awaitQuietly(stop), "acme-child-poller");
+        holder.setContextClassLoader(composite);
+        holder.setDaemon(true);
+        Thread other = new Thread(() -> awaitQuietly(stop), "acme-unrelated");
+        other.setContextClassLoader(unrelated);
+        other.setDaemon(true);
+        holder.start();
+        other.start();
+        try {
+            var names = LayerThreads.holding(layerLoader);
+            assertTrue(names.contains("acme-child-poller"), names.toString());
+            assertFalse(names.contains("acme-unrelated"), names.toString());
+        } finally {
+            stop.countDown();
+            holder.join();
+            other.join();
+        }
+    }
+
     private static void awaitQuietly(CountDownLatch latch) {
         try {
             latch.await();

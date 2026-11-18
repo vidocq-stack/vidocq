@@ -5,6 +5,27 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261118-94 — A dev reload no longer names a leaked thread when the application has the Ravel extension
+
+- **Date**: 2026-11-18
+- **Status**: FIXED — `LayerThreads.holding` walks the parent chain of each thread's loaders.
+- **Module**: `vidocq-runtime-core` (`LayerThreads`, read by `VidocqAppLayer.resetForReload`)
+- **Symptom**: under `vidocq:dev`, a reload that leaves a thread of the application running warns
+  `Hot reload: 1 thread(s) still hold the previous application layer after shutdown and keep it in memory:
+  acme-pages-poller. …`. Once the application depends on `vidocq-runtime-ravel-config-extension`, the same reload
+  logs no warning, though the poller thread still runs and still keeps the layer in memory.
+- **Repro**: the `app` module of the fixture of `vidocq-runtime-it-app-layer` depends on the Ravel extension.
+  `AppLayerDevIT.theLookupSurvivesAReloadAndTheLeakedThreadIsNamed` failed with
+  `no 'acme-pages-poller' within PT3M`, twice in a row; it passed without the dependency.
+- **Cause**: when the bean classes come from more than one loader (Ravel's beans outside the layer, the
+  application's inside), Vauban's `VaubanContainerBuilder` installs a `CompositeClassLoader` built on the layer's
+  loader as the context class loader of the whole build, and fires `Startup` there. The application's observer
+  started its poller under that composite, which the thread inherited. `LayerThreads.holding` compared each thread's
+  loader to the layer's by identity and missed the child. A probe printed `CompositeClassLoader`, parent
+  `VaubanClassLoader`, in both cycles.
+- **Verification**: `LayerThreadsTest.reportsThreadsHoldingAChildOfTheLoader` (red before the fix); the IT above,
+  green with the Ravel extension in the fixture, which keeps it.
+
 ## BUG-20261118-80 — A transaction a request leaves active is never rolled back
 
 - **Date**: 2026-11-18

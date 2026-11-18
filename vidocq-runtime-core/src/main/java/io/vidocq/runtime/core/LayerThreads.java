@@ -28,7 +28,8 @@ final class LayerThreads {
 
     private LayerThreads() {}
 
-    /** The names of the live threads, other than the current one, whose context or own class loader is {@code loader}.
+    /** The names of the live threads, other than the current one, whose context or own class loader is {@code loader}
+     * or a loader built on it.
      * Virtual threads are not listed: {@code Thread.getAllStackTraces()} only returns platform threads. */
     static List<String> holding(ClassLoader loader) {
         List<String> names = new ArrayList<>();
@@ -36,11 +37,24 @@ final class LayerThreads {
             if (t == Thread.currentThread() || !t.isAlive()) {
                 continue;
             }
-            if (t.getContextClassLoader() == loader || t.getClass().getClassLoader() == loader) {
+            if (holds(t.getContextClassLoader(), loader) || holds(t.getClass().getClassLoader(), loader)) {
                 names.add(t.getName());
             }
         }
         names.sort(null);
         return names;
+    }
+
+    /**
+     * Whether {@code candidate} is {@code loader} or one of its descendants: a loader built on the layer's, such as
+     * the composite loader the container runs the start under, keeps the layer in memory too (BUG-20261118-94).
+     */
+    private static boolean holds(ClassLoader candidate, ClassLoader loader) {
+        for (ClassLoader current = candidate; current != null; current = current.getParent()) {
+            if (current == loader) {
+                return true;
+            }
+        }
+        return false;
     }
 }
