@@ -42,7 +42,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisabledOnOs(OS.WINDOWS)
 class GitCommandTest {
 
+    /** The limit of a command that must be cut: it hangs. */
     private static final Duration SHORT = Duration.ofMillis(300);
+
+    /**
+     * The limit of a command that must answer. A shell script can take more than {@link #SHORT} to start on a loaded
+     * machine, and was then left out as a hanging one (BUG-20261118-07). A command that ends is answered when it
+     * exits; one that leaves a process behind holding its output, at this limit at the latest.
+     */
+    private static final Duration ANSWER = Duration.ofSeconds(2);
 
     @TempDir
     Path dir;
@@ -51,7 +59,7 @@ class GitCommandTest {
     void aCommandThatAnswersGivesWhatItPrinted() throws IOException {
         Path answering = script("git-answering", "#!/bin/sh\necho 1762421400\n");
 
-        assertEquals(Optional.of("1762421400\n"), GitCommand.output(new ProcessBuilder(answering.toString()), SHORT));
+        assertEquals(Optional.of("1762421400\n"), GitCommand.output(new ProcessBuilder(answering.toString()), ANSWER));
     }
 
     /** A command that hangs with its output open, as a git waiting on a lock would: the limit still holds. */
@@ -74,7 +82,7 @@ class GitCommandTest {
         Path pidFile = dir.resolve("leftover.pid");
         Path forking = script("git-forking", "#!/bin/sh\nsleep 60 &\necho $! > \"$1\"\necho 1762421400\nexit 0\n");
 
-        Optional<String> answer = GitCommand.output(new ProcessBuilder(forking.toString(), pidFile.toString()), SHORT);
+        Optional<String> answer = GitCommand.output(new ProcessBuilder(forking.toString(), pidFile.toString()), ANSWER);
         Optional<ProcessHandle> leftover = ProcessHandle.of(Long.parseLong(Files.readString(pidFile).strip()));
         try {
             assertTrue(leftover.map(ProcessHandle::isAlive).orElse(false),

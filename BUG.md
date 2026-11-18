@@ -5,6 +5,24 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261118-07 — `GitCommandTest` fails on a loaded machine: a script that answers is cut at 300 ms
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `refactor/app-layer-settings` (Vidocq/vidocq#663).
+- **Module**: `vidocq-runtime-maven-plugin` (tests of `buildinfo.GitCommand`)
+- **Symptom**: `aCommandThatAnswersGivesWhatItPrinted` fails with `expected: <Optional[1762421400\n]> but was:
+  <Optional.empty>`, and `aProcessTheCommandLeavesBehindDoesNotHoldTheBuild` with `NoSuchFileException …/leftover.pid`.
+  The plugin's suite failed with them under `install` while other sessions built on the same machine.
+- **Repro**: `./mvnw -o -pl vidocq-runtime-maven-plugin test -Dtest=GitCommandTest` with a load average of 9 to 13 on
+  18 cores: two runs out of three failed.
+- **Cause**: both tests gave a command that must answer the 300 ms limit of the test of a command that hangs. Under
+  load, `/bin/sh` had not run the script by then: `GitCommand` left it out as a hanging one and killed it, before it
+  printed or wrote its pid file. `GitCommand` behaves as designed; the build uses `GitStatus.TIMEOUT_SECONDS`.
+- **Fix**: the two tests take a limit of 2 s (`ANSWER`); a command that ends is answered when it exits, so they do
+  not wait it out. The two tests of a command that hangs keep 300 ms.
+- **Verification**: ten runs of `GitCommandTest` on the same loaded machine, all 4 tests green each time (five with
+  a 5 s limit, five with 2 s, 2.5 to 3 s a run).
+
 ## BUG-20261118-06 — The runtime's main, launched from the module path with `vidocq.app.module`, loads the application twice without a warning
 
 - **Date**: 2026-11-18
