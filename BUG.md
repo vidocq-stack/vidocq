@@ -43,6 +43,23 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 - **Verification**: red on 921c0573's main code (`vidocq-bug0202-red.log`, "Red run 1": `Shelf` named for the proxy
   of `Locked`, 1 failure of 2). Green: `vidocq-bug0202-dev.log`, "Dev run 1" (the module's 5 tests).
 
+## BUG-20261118-01 — A filtered REST mount never ends a `@Dependent` resource
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `fix/vauban-bug-stack`, with Cassini's companion of the same name (CASSINI-062).
+- **Module**: `vidocq-runtime-cassini-rest-extension` (`CassiniMountHandlerProvider.PackageScopedBeanProvider`)
+- **Symptom**: on a mount with `include-packages` or `exclude-packages`, a `@Dependent` resource's `@PreDestroy`
+  never runs: after two requests, two instances made, none destroyed. An unfiltered mount ends each with its request.
+- **Repro**: `PackageScopedRequestReleaseTest#aFilteredMountEndsADependentResourceWithEachRequest` and
+  `PackageScopedBeanProviderTest#aResourceForARequestIsTheDelegatesWithItsRelease`.
+- **Cause** (proved): Cassini asks for a resource with `BeanProvider.getRequestBean`, which returns it with what ends
+  it (CASSINI-062). The package filter delegates `getBean` and `contextualInstance` only, so the SPI's default
+  served it, `getBean` and nothing to release.
+- **Fix**: `PackageScopedBeanProvider` delegates `getRequestBean` too.
+- **Verification**: red on `origin/main`'s main code (`stack-l3-vidocq-red.log`, "BUG-20261118-01 red, run 3": the
+  delegate's release lost, and 2 made, 0 destroyed). Green: `stack-l3-vidocq-green.log`, "BUG-20261118-01 fix, run 2"
+  (the module's 34 tests), then the module and its dependants, `stack-l3-vidocq-amd.log`.
+
 ## BUG-20261117-13 — An application class that has only another qualifier than `@Default` is created by its constructor
 
 - **Date**: 2026-11-17

@@ -90,4 +90,36 @@ class PackageScopedBeanProviderTest {
         assertSame(bean, scoped.contextualInstance(Object.class, bean));
         assertNull(scoped.getBean(String.class));
     }
+
+    /** What ends a resource after its request is the delegate's: the filter left it out (BUG-20261118-01). */
+    @Test
+    void aResourceForARequestIsTheDelegatesWithItsRelease() {
+        Runnable release = () -> { /* ends the instance */ };
+        var instance = new BeanProvider.RequestInstance<Object>("resource", release);
+        BeanProvider scoped = new PackageScopedBeanProvider(new Releasing(ALL, instance), List.of("java.lang"),
+                List.of());
+
+        assertSame(instance, scoped.getRequestBean(Object.class));
+    }
+
+    /** A bean index that makes each resource for a request with {@code instance}. */
+    private record Releasing(Set<Class<?>> resources, BeanProvider.RequestInstance<Object> instance)
+            implements BeanProvider {
+
+        @Override
+        public <T> T getBean(Class<T> type) {
+            return null;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> RequestInstance<T> getRequestBean(Class<T> type) {
+            return (RequestInstance<T>) instance;
+        }
+
+        @Override
+        public Set<Class<?>> getResourceClasses() {
+            return resources;
+        }
+    }
 }

@@ -89,7 +89,9 @@ public final class CassiniMountHandlerProvider implements MountHandlerProvider {
      * {@link BeanProvider} decorator that restricts the discovered resource classes to a set of
      * package prefixes, so a single CDI bean index can feed several mounts at different prefixes
      * (e.g. {@code /api} for the application, {@code /health} for MicroProfile Health). Only
-     * {@link #getResourceClasses()} is filtered; bean lookup is delegated untouched.
+     * {@link #getResourceClasses()} is filtered; bean lookup is delegated untouched, the release of a resource made
+     * for a request included: without it, Cassini ended no {@code @Dependent} resource of a filtered mount
+     * (BUG-20261118-01).
      */
     record PackageScopedBeanProvider(BeanProvider delegate,
                                      List<String> include,
@@ -98,6 +100,11 @@ public final class CassiniMountHandlerProvider implements MountHandlerProvider {
         @Override
         public <T> T getBean(Class<T> type) {
             return delegate.getBean(type);
+        }
+
+        @Override
+        public <T> RequestInstance<T> getRequestBean(Class<T> type) {
+            return delegate.getRequestBean(type);
         }
 
         @Override
