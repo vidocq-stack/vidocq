@@ -106,6 +106,21 @@
             <version>6.1.0</version>
             <scope>test</scope>
         </dependency>
+        <!--
+            The container brings the platform APIs the bricks leave provided: kerckhoffs-foy answers
+            web resource permissions through Jakarta Authorization, and runs an HTTP authentication
+            mechanism through Jakarta Authentication (KERCK-20261118-02).
+        -->
+        <dependency>
+            <groupId>jakarta.authentication</groupId>
+            <artifactId>jakarta.authentication-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.authorization</groupId>
+            <artifactId>jakarta.authorization-api</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.jboss.arquillian.container</groupId>
             <artifactId>arquillian-container-spi</artifactId>

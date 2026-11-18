@@ -21,6 +21,13 @@ package io.vidocq.kerckhoffs.tck.arquillian;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.security.enterprise.authentication.mechanism.http.BasicAuthenticationMechanismDefinition;
+import jakarta.security.enterprise.credential.Credential;
+import jakarta.security.enterprise.credential.UsernamePasswordCredential;
+import jakarta.security.enterprise.identitystore.CredentialValidationResult;
+import jakarta.security.enterprise.identitystore.IdentityStore;
+import jakarta.servlet.annotation.HttpConstraint;
+import jakarta.servlet.annotation.ServletSecurity;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,10 +42,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Stage 1 of the Arquillian adapter (PLAN.md section 7): a trivial war is deployed on Foy through
@@ -74,6 +85,29 @@ class KerckhoffsDeployableContainerTest {
         protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
             response.setContentType("text/plain");
             response.getWriter().print(greeter.greet("kerckhoffs"));
+        }
+    }
+
+    /** A servlet only the role {@code user} may call, behind the BASIC mechanism of the war. */
+    @WebServlet("/secret")
+    @ServletSecurity(@HttpConstraint(rolesAllowed = "user"))
+    @BasicAuthenticationMechanismDefinition(realmName = "tck")
+    public static class SecretServlet extends HttpServlet {
+        @Override
+        protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
+            response.setContentType("text/plain");
+            response.getWriter().print("secret for " + request.getRemoteUser());
+        }
+    }
+
+    /** The identity store of the secured war: {@code reza} with the password {@code secret1}, in the role user. */
+    @ApplicationScoped
+    public static class OneUserStore implements IdentityStore {
+        @Override
+        public CredentialValidationResult validate(Credential credential) {
+            return credential instanceof UsernamePasswordCredential login && login.compareTo("reza", "secret1")
+                    ? new CredentialValidationResult("reza", Set.of("user"))
+                    : CredentialValidationResult.INVALID_RESULT;
         }
     }
 
@@ -133,6 +167,38 @@ class KerckhoffsDeployableContainerTest {
             container.undeploy(war);
 
             assertFalse(reachable(uri), "an undeployed war must not answer");
+        } finally {
+            container.stop();
+        }
+    }
+
+    /**
+     * A war that declares the BASIC mechanism, its qualifiers left to their default, is served through it
+     * ({@code KerckhoffsDeployableContainer.mechanismOf}): a call without credentials is challenged, a call with
+     * them reaches the servlet (KERCK-20261118-01).
+     */
+    @Test
+    void a_war_declaring_the_basic_mechanism_is_authenticated_by_it() throws Exception {
+        var container = started();
+        try {
+            WebArchive war = ShrinkWrap.create(WebArchive.class, "basic.war")
+                    .addClasses(SecretServlet.class, OneUserStore.class);
+            HTTPContext context = container.deploy(war).getContext(HTTPContext.class);
+            URI uri = URI.create("http://" + context.getHost() + ":" + context.getPort() + "/basic/secret");
+            var client = HttpClient.newHttpClient();
+            String login = Base64.getEncoder().encodeToString("reza:secret1".getBytes(StandardCharsets.UTF_8));
+
+            var challenged = client.send(HttpRequest.newBuilder(uri).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            var authenticated = client.send(HttpRequest.newBuilder(uri).header("Authorization", "Basic " + login)
+                    .GET().build(), HttpResponse.BodyHandlers.ofString());
+
+            assertEquals(401, challenged.statusCode());
+            assertTrue(challenged.headers().firstValue("WWW-Authenticate").orElse("").startsWith("Basic"),
+                    "the challenge of the BASIC mechanism");
+            assertEquals(200, authenticated.statusCode());
+            assertEquals("secret for reza", authenticated.body());
+            container.undeploy(war);
         } finally {
             container.stop();
         }

@@ -3,6 +3,13 @@
 Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
 Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
 
+## KERCK-20261118-02 · 2026-11-18 · The TCK container lacks the Authorization and Authentication APIs
+
+- **Symptom:** `./mvnw -Ptck test -pl kerckhoffs-tck`: 3 of the 4 `KerckhoffsDeployableContainerTest` tests fail with `NoClassDefFound jakarta/security/jacc/WebResourcePermission`, whatever the Vauban. Once the JACC API is there, a war that declares an HTTP mechanism fails with `NoClassDefFound jakarta/security/auth/message/AuthException`.
+- **Minimal repro:** `./mvnw -Ptck test -pl kerckhoffs-tck -am` on 41ac3fd (`stack-l1b-kerckhoffs-full.log` against the Vauban lane, `stack-l1b-kerckhoffs-mainvauban.log` against today's Vauban); the new `a_war_declaring_the_basic_mechanism_is_authenticated_by_it` for the Authentication API.
+- **Cause:** the parent manages `jakarta.authorization-api` and `jakarta.authentication-api` as `provided`, as platform APIs, and a `provided` dependency is not transitive: `kerckhoffs-foy` uses both (`PolicyAccessControl` since 5b11805), and `kerckhoffs-tck`, the container, never brought them. The CI did not see it: the module is built under `-Ptck` only, and `ci.tck.command` (`run-official-tck-security-4.0.sh`) runs `test-compile` on it, never its tests; the official TCK applications bring the platform APIs themselves.
+- **Status:** fixed 2026-11-18: `kerckhoffs-tck` declares both APIs at `test` scope (versions from the parent), and a test deploys a war with `@BasicAuthenticationMechanismDefinition`, which goes through `KerckhoffsDeployableContainer.mechanismOf` (`cdi.select(HttpAuthenticationMechanism.class)`). 5 of 5 against the Vauban lane (`stack-l1b-kerckhoffs-tck.log`, "GREEN (2)"); without KERCK-20261118-01 that test gets 401 where it expects 200 ("CONTROL (2)").
+
 ## KERCK-20261118-01 · 2026-11-18 · A BASIC definition loses `@Default` when the language model shows its default `qualifiers`
 
 - **Symptom:** on Vauban with BUG-20261117-55 (the language model shows an annotation's default members), a `@BasicAuthenticationMechanismDefinition` that writes no `qualifiers` gives a mechanism without `@Default`: `select(HttpAuthenticationMechanism.class)` finds nothing (`MechanismCdiTest:60`, `FrozenExtensionTest:160`, `KerckhoffsDeployableContainer:257`). On today's Vauban, a definition that writes `qualifiers = BasicAuthenticationMechanism.class` out loses it the same way.
