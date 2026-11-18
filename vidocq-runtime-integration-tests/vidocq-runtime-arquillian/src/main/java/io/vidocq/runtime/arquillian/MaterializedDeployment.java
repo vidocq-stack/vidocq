@@ -241,6 +241,15 @@ final class MaterializedDeployment implements AutoCloseable {
     }
 
     /**
+     * The root of the archive's own classes, those of {@code WEB-INF/classes} for a war: the application root Foy
+     * scans for a {@code @HandlesTypes} initializer, which it finds otherwise by a {@code web.xml} or an annotated
+     * component only (Servlet 6.1 §8.2.4). The {@code WEB-INF/lib} jars are not: each is a fragment or a library.
+     */
+    URL applicationRoot() {
+        return toUrl(root);
+    }
+
+    /**
      * Names of every class the deployment contributes as CDI bean classes:
      * classes materialized at the classpath root (originally at the archive root
      * or under {@code WEB-INF/classes/}) plus classes packaged in

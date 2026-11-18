@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.module.ModuleReader;
 import java.lang.module.ResolvedModule;
+import java.net.URL;
 import java.util.List;
 import java.util.Optional;
 import java.util.ServiceConfigurationError;
@@ -65,6 +66,18 @@ public interface ApplicationLayer {
     }
 
     /**
+     * The roots of the application's own classes, for a container that scans them, when no build-time index lists
+     * those classes: an archive deployed as it is, such as a war an Arquillian runner hands over, whose
+     * {@code WEB-INF/classes} hold neither a {@code web.xml} nor an annotated component, and still has its classes
+     * handed to a {@code @HandlesTypes} initializer (Servlet 6.1 §8.2.4).
+     *
+     * @return the directories or jars, as URLs; empty by default, for an implementation that does not know them
+     */
+    default List<URL> roots() {
+        return List.of();
+    }
+
+    /**
      * The application layer of the running Vidocq.
      *
      * @return the layer; empty when there is none, in a flat or class-path launch, and when no
@@ -83,6 +96,16 @@ public interface ApplicationLayer {
      */
     static Optional<Module> applicationModule() {
         return first(ApplicationLayer::module);
+    }
+
+    /**
+     * The roots of the application's own classes, as the first implementation that knows them gives them.
+     *
+     * @return the roots; empty when no implementation knows them, as in a build-time indexed application, and when
+     *         no runtime implements this interface
+     */
+    static List<URL> applicationRoots() {
+        return first(provider -> Optional.of(provider.roots()).filter(roots -> !roots.isEmpty())).orElse(List.of());
     }
 
     /**

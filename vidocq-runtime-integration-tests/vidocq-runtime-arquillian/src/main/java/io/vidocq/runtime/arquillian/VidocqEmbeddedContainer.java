@@ -156,6 +156,8 @@ public class VidocqEmbeddedContainer implements DeployableContainer<VidocqContai
             // properties (DefaultConfigSourceOrdinalTest's config_ordinal) and
             // breaks profile resolution (%dev. keys).
             Thread.currentThread().setContextClassLoader(materialized.classLoader());
+            // A war without web.xml nor annotated component still hands its classes to an initializer.
+            DeploymentApplicationLayer.roots(List.of(materialized.applicationRoot()));
 
             // The war's JSP pages, compiled by Ibarra when a runner puts its compiler on the class path: the
             // runtime finds Ibarra's engine and the pages in the layer DeploymentApplicationLayer gives it.

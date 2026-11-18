@@ -21,6 +21,8 @@ package io.vidocq.runtime.arquillian;
 
 import io.vidocq.runtime.spi.ApplicationLayer;
 
+import java.net.URL;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -32,6 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class DeploymentApplicationLayer implements ApplicationLayer {
 
     private static final AtomicReference<ModuleLayer> CURRENT = new AtomicReference<>();
+    private static final AtomicReference<List<URL>> ROOTS = new AtomicReference<>(List.of());
 
     /** Created by the service loader. */
     public DeploymentApplicationLayer() {
@@ -42,12 +45,23 @@ public final class DeploymentApplicationLayer implements ApplicationLayer {
         CURRENT.set(layer);
     }
 
+    /** The roots of the deployed archive's own classes, which no build-time index lists. */
+    static void roots(List<URL> roots) {
+        ROOTS.set(List.copyOf(roots));
+    }
+
     static void clear() {
         CURRENT.set(null);
+        ROOTS.set(List.of());
     }
 
     @Override
     public Optional<ModuleLayer> layer() {
         return Optional.ofNullable(CURRENT.get());
+    }
+
+    @Override
+    public List<URL> roots() {
+        return ROOTS.get();
     }
 }

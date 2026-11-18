@@ -80,6 +80,19 @@ class MaterializedDeploymentTest {
     }
 
     @Test
+    void theRootOfTheWebInfClassesIsTheApplicationRoot() throws Exception {
+        WebArchive archive = ShrinkWrap.create(WebArchive.class, "test.war")
+                .addClass(MaterializedDeploymentTest.class);
+        String classFile = MaterializedDeploymentTest.class.getName().replace('.', '/') + ".class";
+
+        try (MaterializedDeployment deployment = MaterializedDeployment.of(archive)) {
+            java.net.URL root = deployment.applicationRoot();
+            assertTrue(java.nio.file.Files.isRegularFile(java.nio.file.Path.of(root.toURI()).resolve(classFile)),
+                    "the root of the war's own classes, which Foy scans for an initializer (BUG-20261118-60): " + root);
+        }
+    }
+
+    @Test
     void webArchiveDocumentRootBecomesTheWebResourcesOfTheClasspath() throws Exception {
         // A runtime application serves its web resources from META-INF/resources/ on its class
         // path: the WAR's content goes there, as a servlet container would see it.

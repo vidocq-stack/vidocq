@@ -5,6 +5,49 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261118-60 — A war without web.xml nor annotated component hands no class to a `@HandlesTypes` initializer
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `fix/servlet-application-roots`.
+- **Module**: `vidocq-runtime-spi` (`ApplicationLayer`), `vidocq-runtime-foy-servlet-extension` (`FoyDeployments`),
+  `vidocq-runtime-arquillian` (`VidocqEmbeddedContainer`, `DeploymentApplicationLayer`, `MaterializedDeployment`)
+- **Symptom**: the Jakarta EE 11 Platform TCK for Persistence, run on the embedded container, deploys a war whose
+  `WEB-INF/classes` hold a REST `Application` and no `web.xml`: everything under `/rest` answers 404. An empty
+  `web.xml` in the war makes it pass.
+- **Repro**: `ApplicationRootsTest` (`vidocq-runtime-foy-servlet-extension`): a `@HandlesTypes(Runnable.class)`
+  initializer of a library root, and a `Runnable` class written in an application root without `web.xml`. The
+  initializer got `[]`.
+- **Cause** (proved by the repro): Servlet 6.1 §8.2.4 hands an initializer the classes of the application. Foy knows
+  a root of the application by its `web.xml` or by an annotated component only, and scans no other root; a Vidocq
+  application needs no more, as its classes are indexed at build. A war the embedded container deploys as it is has
+  no index, and Vidocq never named its root.
+- **Fix**: `ApplicationLayer.roots()` (default empty) and `ApplicationLayer.applicationRoots()` name the roots of the
+  application's own classes. The embedded container gives the materialized root of the archive, where its
+  `WEB-INF/classes` go (not the `WEB-INF/lib` jars, each a fragment or a library), and `FoyDeployments` hands them to
+  `FoyChappeBoot.Builder.applicationRoot`.
+- **Verification**: `ApplicationRootsTest` red before (`the initializer got []`), green after;
+  `MaterializedDeploymentTest#theRootOfTheWebInfClassesIsTheApplicationRoot`; `ApplicationLayerTest`.
+
+## BUG-20261118-61 — A persistence unit that cannot start is not named in the error
+
+- **Date**: 2026-11-18
+- **Status**: FIXED on `fix/servlet-application-roots`.
+- **Module**: `vidocq-runtime-noether-persistence-extension` (`VidocqPersistenceUnitBootstrap`)
+- **Symptom**: a TCK war declares the unit `AccountManager` on `jdbc/DB1`, and the start fails with
+  `MansartPoolExtension did not publish a DataSource: set vidocq.pool.url`, the error of the default pool. The unit
+  that failed was another one, `CTS-EM`, which the key `vidocq.persistence.CTS-EM.properties.*` of the runner's
+  `vidocq.properties` declares as documented (a JTA unit on the default pool when no `persistence.xml` declares it).
+  Nothing in the error said so.
+- **Repro**: `VidocqPersistenceUnitBootstrapTest#a_unit_that_cannot_start_is_named_with_its_pool`: the unit `ledger`
+  generates its schema at start on a default pool without database.
+- **Cause**: the default pool is a bean even without a database, and fails at its first connection, here the schema
+  generation inside `Persistence.createEntityManagerFactory`. `UnitDataSources`'s own "no default pool" refusal is
+  never reached, and the pool's error knows no unit.
+- **Fix**: a failure of `Persistence.createEntityManagerFactory` is rethrown as a `PersistenceException` that names
+  the unit, its transaction type and its pool: `Persistence unit CTS-EM (JTA, on the default pool) could not start:
+  MansartPoolExtension did not publish a DataSource ...`.
+- **Verification**: the test red before (an `IllegalStateException` without the unit), green after; the module's 26
+  tests.
 ## BUG-20261118-07 — `GitCommandTest` fails on a loaded machine: a script that answers is cut at 300 ms
 
 - **Date**: 2026-11-18

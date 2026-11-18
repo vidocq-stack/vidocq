@@ -80,7 +80,21 @@ public class VidocqPersistenceUnitBootstrap implements PersistenceUnitBootstrap 
         if (declared.jta()) {
             properties.put(TransactionIntegration.PROPERTY, transactions);
         }
-        return Persistence.createEntityManagerFactory(name, properties);
+        try {
+            return Persistence.createEntityManagerFactory(name, properties);
+        } catch (RuntimeException e) {
+            // The pool's error names no unit: a unit a vidocq.persistence.<unit>.* key declared, on the default pool,
+            // is otherwise hard to tell from the one the persistence.xml declares (BUG-20261118-61).
+            throw new PersistenceException("Persistence unit " + name + " (" + describe(declared)
+                    + ") could not start: " + e.getMessage(), e);
+        }
+    }
+
+    /** How the unit meets transactions and which pool it takes, as {@link UnitDataSources} picks it. */
+    static String describe(UnitTransactions declared) {
+        String pool = declared.jta() ? declared.jtaDataSourceName() : declared.nonJtaDataSourceName();
+        return (declared.jta() ? "JTA" : "RESOURCE_LOCAL") + ", on "
+                + (pool == null || pool.isBlank() ? "the default pool" : "the pool '" + pool.strip() + "'");
     }
 
     /** A bean of Mansart Transactions, which a JTA unit shares the connection of the transaction through. */

@@ -32,6 +32,7 @@ import io.vidocq.runtime.extensions.jakartaee.web.foy.spi.ServletInitParameters;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.servlet.ServletException;
 
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -103,6 +104,24 @@ final class FoyDeployments {
                                                   String contextPath, int sessionTimeoutSeconds,
                                                   String responseCharacterEncoding, VidocqConfig config,
                                                   Iterable<ServletInitParameters> initParameters) {
+        return deploy(beanManager, loader, contextPath, sessionTimeoutSeconds, responseCharacterEncoding, config,
+                new Sources(initParameters, ApplicationLayer.applicationRoots()));
+    }
+
+    /**
+     * What a deployment reads besides the configuration.
+     *
+     * @param initParameters   the contributions to the context's init parameters
+     * @param applicationRoots the roots of the application's own classes, for the initializers
+     */
+    record Sources(Iterable<ServletInitParameters> initParameters, List<URL> applicationRoots) {
+    }
+
+    /** As above, with the roots of the application given instead of asked to the runtime. */
+    static Optional<FoyChappeBoot.Mounted> deploy(BeanManager beanManager, ClassLoader loader,
+                                                  String contextPath, int sessionTimeoutSeconds,
+                                                  String responseCharacterEncoding, VidocqConfig config,
+                                                  Sources sources) {
         FoyChappeBoot.Builder builder = FoyChappeBoot.builder()
                 .beanManager(beanManager)
                 .classLoader(loader)
@@ -114,12 +133,15 @@ final class FoyDeployments {
                 // web.xml and the fragments win, and an initializer or a listener can still set another one.
                 .defaultResponseCharacterEncoding(responseCharacterEncoding);
         if (contextPath != null) builder.contextPath(contextPath);
+        // Servlet 6.1 §8.2.4: an initializer gets the classes of the application, which Foy finds by a web.xml or an
+        // annotated component only; a war without either, which Vidocq did not build, is named by the runtime.
+        builder.applicationRoot(sources.applicationRoots().toArray(URL[]::new));
         ServletSecurity.from(config).applyTo(builder, ServletSecurity.identityStoreBean(beanManager));
         requestAuthentication(java.util.ServiceLoader.load(ServletAuthentication.class), beanManager)
                 .ifPresent(builder::requestAuthentication);
         accessControl(java.util.ServiceLoader.load(ServletAuthentication.class), beanManager)
                 .ifPresent(builder::accessControl);
-        initParameters(initParameters, config).forEach(builder::initParameter);
+        initParameters(sources.initParameters(), config).forEach(builder::initParameter);
         try {
             Optional<FoyChappeBoot.Mounted> mounted = builder.build();
             mounted.ifPresent(m -> deployed(m.servletContext(), beanManager));

@@ -80,6 +80,7 @@ class ApplicationLayerTest {
         assertTrue(ApplicationLayer.current().isEmpty(), "no runtime on the path implements ApplicationLayer");
         assertTrue(ApplicationLayer.applicationModule().isEmpty(), "no runtime names the application module");
         assertTrue(ApplicationLayer.home().isEmpty(), "no runtime, so no layer that holds the application");
+        assertTrue(ApplicationLayer.applicationRoots().isEmpty(), "no runtime names the roots of the application");
     }
 
     @Test
@@ -87,6 +88,13 @@ class ApplicationLayerTest {
         ApplicationLayer withoutModule = Optional::empty;
 
         assertTrue(withoutModule.module().isEmpty());
+    }
+
+    @Test
+    void anImplementationThatKnowsNoRootsNamesNone() {
+        ApplicationLayer withoutRoots = Optional::empty;
+
+        assertTrue(withoutRoots.roots().isEmpty());
     }
 
     // ---------------------------------------------------------------- fixtures
