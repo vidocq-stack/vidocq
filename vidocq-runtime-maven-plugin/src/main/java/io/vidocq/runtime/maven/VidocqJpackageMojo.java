@@ -61,13 +61,6 @@ import java.util.stream.Stream;
       requiresDependencyResolution = ResolutionScope.RUNTIME)
 public class VidocqJpackageMojo extends AbstractMojo {
 
-    /**
-     * The mode of the application layer of {@code vidocq:package}, {@code vidocq:run} and {@code vidocq:dev}. It
-     * does not apply to an image, which has one layer (Vidocq/vidocq#580): read here only to warn when it is set.
-     */
-    @Parameter(property = "vidocq.app.layer")
-    private String appLayer;
-
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
 
@@ -178,10 +171,6 @@ public class VidocqJpackageMojo extends AbstractMojo {
             if (modules.isEmpty() && Files.isRegularFile(image.resolve(RELEASE))) {
                 getLog().warn("The release file of " + runtimeImage + " lists no " + MODULES_KEY
                         + ": nothing but the application module is started.");
-            }
-            if (appLayer != null && !appLayer.isBlank()) {
-                getLog().info("vidocq.app.layer does not apply to a jlink image or to the application jpackage"
-                        + " builds on it: the image has one layer, the JVM's own.");
             }
             return ImageLaunch.of(mainModule, mainClass, modules);
         } catch (IllegalArgumentException e) {

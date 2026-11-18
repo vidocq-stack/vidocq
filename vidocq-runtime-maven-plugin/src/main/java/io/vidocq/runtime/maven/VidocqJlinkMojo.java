@@ -81,17 +81,6 @@ import java.util.stream.Stream;
       requiresDependencyResolution = ResolutionScope.RUNTIME)
 public class VidocqJlinkMojo extends AbstractMojo {
 
-    /**
-     * The mode of the application layer of {@code vidocq:package}, {@code vidocq:run} and {@code vidocq:dev}. It
-     * does not apply to an image, which has one layer (Vidocq/vidocq#580): read here only to warn when it is set.
-     */
-    @Parameter(property = "vidocq.app.layer")
-    private String appLayer;
-
-    /** As {@link #appLayer}: the patterns of {@code vidocq.app.layer.keep} do not apply to an image. */
-    @Parameter(property = "vidocq.app.layer.keep")
-    private String appLayerKeep;
-
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
 
@@ -464,17 +453,12 @@ public class VidocqJlinkMojo extends AbstractMojo {
      * The launch baked into the image: one layer, the JVM's own, every module of {@code rootModules} rooted so that
      * a module nothing requires is resolved too (BUG-20261114-05), and no application layer (Vidocq/vidocq#580).
      * Logged, since this line is what to read when a module is missing at start. The settings of the application
-     * layer do not apply to an image; one that is set is named in an information line, not a warning: a property of
-     * the pom also serves {@code vidocq:package}, where it applies.
+     * layer, {@code vidocq.app.layer} and {@code vidocq.app.layer.keep}, do not apply to an image, and this goal
+     * takes neither (Vidocq/vidocq#663).
      *
      * @param rootModules the modules jlink links, comma separated
      */
     ImageLaunch bakedLaunch(String rootModules) {
-        if (isSet(appLayer) || isSet(appLayerKeep)) {
-            getLog().info("vidocq.app.layer and vidocq.app.layer.keep do not apply to a jlink image: it has one"
-                    + " layer, the JVM's own, with every module linked into it. They still apply to vidocq:package,"
-                    + " vidocq:run and vidocq:dev.");
-        }
         ImageLaunch launch = ImageLaunch.of(mainModule, mainClass, Arrays.asList(rootModules.split(",")));
         getLog().info("Vidocq jlink — main: " + launch.entryPoint() + " " + String.join(" ", launch.vmOptions()));
         return launch;

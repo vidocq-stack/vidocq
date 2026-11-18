@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.spi.ToolProvider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -110,21 +111,22 @@ class ImageLaunchMojosTest {
     }
 
     /**
-     * The settings of the application layer do not apply to an image. One that is set is named in an information
-     * line, never a warning: a property of the pom also serves vidocq:package, where it applies.
+     * An image has one layer (Vidocq/vidocq#580), and the settings of the application layer do not apply to it:
+     * {@code vidocq:jlink} and {@code vidocq:jpackage} declare none. They took {@code vidocq.app.layer} and
+     * {@code vidocq.app.layer.keep} only to say so in an information line (Vidocq/vidocq#663).
      */
     @Test
-    void aLayerSettingIsNamedWithoutAWarning() throws Exception {
-        for (String setting : new String[] {"appLayer", "appLayerKeep"}) {
-            var log = new Infos();
-            VidocqJlinkMojo mojo = jlink("acme.app", "acme.app.App", log);
-            set(VidocqJlinkMojo.class, mojo, setting, "classes");
-
-            ImageLaunch launch = mojo.bakedLaunch("acme.app,flow.push,java.base");
-
-            assertEquals(List.of("--add-modules=flow.push", NO_LAYER), launch.vmOptions(), setting);
-            assertEquals(List.of(), log.warnings, setting);
-            assertTrue(log.lines.getFirst().contains("do not apply to a jlink image"), log.lines.toString());
+    void theImageGoalsTakeNoSettingOfTheApplicationLayer() throws Exception {
+        String xml = Files.readString(Path.of("target", "classes", "META-INF", "maven", "plugin.xml"));
+        for (var goal : Map.of("jlink", VidocqJlinkMojo.class, "jpackage", VidocqJpackageMojo.class).entrySet()) {
+            for (String setting : List.of("appLayer", "appLayerKeep")) {
+                assertThrows(NoSuchFieldException.class, () -> goal.getValue().getDeclaredField(setting),
+                        goal.getKey() + " declares " + setting);
+            }
+            int start = xml.indexOf("<goal>" + goal.getKey() + "</goal>");
+            String mojo = xml.substring(start, xml.indexOf("</mojo>", start));
+            assertFalse(mojo.contains("appLayer"), goal.getKey() + ": " + mojo);
+            assertFalse(mojo.contains("vidocq.app.layer"), goal.getKey() + ": " + mojo);
         }
     }
 
@@ -376,19 +378,6 @@ class ImageLaunchMojosTest {
         assertTrue(VidocqJpackageMojo.entryArgs(launch).containsAll(List.of("--java-options", NO_LAYER)),
                 VidocqJpackageMojo.entryArgs(launch).toString());
         assertEquals(List.of(), log.warnings);
-    }
-
-    /** vidocq.app.layer does not apply to the application jpackage builds on an image: set, it is named. */
-    @Test
-    void jpackageNamesALayerSettingWithoutAWarning() throws Exception {
-        var log = new Infos();
-        VidocqJpackageMojo mojo = jpackage("acme.app", log);
-        set(VidocqJpackageMojo.class, mojo, "appLayer", "all");
-
-        mojo.launchOf();
-
-        assertEquals(List.of(), log.warnings);
-        assertTrue(log.lines.getLast().contains("vidocq.app.layer does not apply"), log.lines.toString());
     }
 
     private VidocqJpackageMojo jpackage(String mainModule, Infos log) throws Exception {

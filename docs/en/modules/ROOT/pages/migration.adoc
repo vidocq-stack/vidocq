@@ -435,6 +435,10 @@ follows (Vidocq/vidocq#663):
   directories over with `-Dvidocq.app.path`, off the module path, as the launchers of `vidocq:package` and
   `vidocq:run` do, or add `-Dvidocq.app.layer.off=true` to run it in one layer. The launchers and the images the
   plugin builds need no change.
+* **`vidocq:jlink` and `vidocq:jpackage` no longer take `appLayer` and `appLayerKeep`.** An image has one layer, and
+  the two only made the goal log that they did not apply. Remove them from the `<configuration>` of these goals; the
+  `vidocq.app.layer` and `vidocq.app.layer.keep` properties of the pom still serve `vidocq:package`, `vidocq:run` and
+  `vidocq:dev`.
 
 == Next steps
 

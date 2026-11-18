@@ -106,8 +106,6 @@ runtime **into a self-contained directory** (`target/dist/`). The binary
                     <param>logging.properties</param>
                     <param>my-custom-config.yaml</param>
                 </includeResources>
-                <appLayer>all</appLayer>                             <!-- vidocq.app.layer: all (default) or classes -->
-                <appLayerKeep>com.acme:shared</appLayerKeep>         <!-- vidocq.app.layer.keep: kept in the parent layer -->
             </configuration>
         </execution>
     </executions>

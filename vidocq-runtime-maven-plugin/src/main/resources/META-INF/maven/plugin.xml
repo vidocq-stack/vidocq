@@ -690,26 +690,10 @@
                     <editable>false</editable>
                     <description>Remote project repositories</description>
                 </parameter>
-                <parameter>
-                    <name>appLayer</name>
-                    <type>java.lang.String</type>
-                    <required>false</required>
-                    <editable>true</editable>
-                    <description>The mode of the application layer the image starts under: all (default since 0.4.0) or classes. The build splits the staged modules under it, as vidocq:package splits its jars, and bakes it into the launcher as -Dvidocq.app.layer.</description>
-                </parameter>
-                <parameter>
-                    <name>appLayerKeep</name>
-                    <type>java.lang.String</type>
-                    <required>false</required>
-                    <editable>true</editable>
-                    <description>Under vidocq.app.layer=all, comma-separated patterns (module name, or groupId:artifactId) kept in the parent layer, as vidocq:package reads them. The split is made at build: the image starts with it.</description>
-                </parameter>
             </parameters>
             <configuration>
                 <project implementation="org.apache.maven.project.MavenProject"
                          default-value="${project}"/>
-                <appLayer implementation="java.lang.String">${vidocq.app.layer}</appLayer>
-                <appLayerKeep implementation="java.lang.String">${vidocq.app.layer.keep}</appLayerKeep>
                 <mainModule implementation="java.lang.String">${vidocq.mainModule}</mainModule>
                 <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
                 <launcher implementation="java.lang.String"
@@ -777,12 +761,10 @@
                 <parameter><name>icon</name><type>java.io.File</type><required>false</required><editable>true</editable><description>Optional icon (.icns/.ico/.png)</description></parameter>
                 <parameter><name>vendor</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Vendor metadata</description></parameter>
                 <parameter><name>description</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>Short description</description></parameter>
-                <parameter><name>appLayer</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>The mode of the application layer the image starts under, baked into its launcher as -Dvidocq.app.layer: all (default since 0.4.0) or classes.</description></parameter>
                 <parameter><name>classesDir</name><type>java.io.File</type><required>false</required><editable>false</editable><description>Compiled classes directory of the project, where an @VidocqMain class stands in for an unset mainClass.</description></parameter>
             </parameters>
             <configuration>
                 <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
-                <appLayer implementation="java.lang.String">${vidocq.app.layer}</appLayer>
                 <mainModule implementation="java.lang.String">${vidocq.mainModule}</mainModule>
                 <mainClass implementation="java.lang.String">${vidocq.mainClass}</mainClass>
                 <classesDir implementation="java.io.File" default-value="${project.build.outputDirectory}"/>

@@ -673,9 +673,10 @@ application as `-Dvidocq.app.layer`, `classes` included.
 The build logs `application layer: <n> libraries, <m> kept in the parent layer by a pin`.
 
 *Jlink, jpackage and Docker.* An image has no application layer (Vidocq/vidocq#580): `vidocq:jlink` links every
-module into one layer, the JVM's own, and the split above does not apply (<<jlink-one-layer>>). `vidocq.app.layer` and
-`vidocq.app.layer.keep` set on an image goal change nothing, and the build says so in an information line. `vidocq:jpackage` and
-`vidocq:docker` build on that image.
+module into one layer, the JVM's own, and the split above does not apply (<<jlink-one-layer>>). `vidocq:jlink` and
+`vidocq:jpackage` read neither `vidocq.app.layer` nor `vidocq.app.layer.keep` [.tag-new]#NEW#: a value the pom sets for
+`vidocq:package` changes nothing in an image. `vidocq:jpackage` and the `vidocq:docker` image of the `jlink` kind build
+on that image; the `jdk` kind ships the `vidocq:package` distribution, which keeps its layer (<<docker-jdk-kind>>).
 
 *Native code and threads.* A library with native code (JNI) cannot be loaded twice by the JVM, so the dev reload cannot reload it: pin it
 with `vidocq.app.layer.keep`. A thread that a library leaves running keeps the previous layer in memory; the reload
