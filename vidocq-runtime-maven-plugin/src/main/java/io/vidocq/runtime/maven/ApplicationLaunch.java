@@ -149,24 +149,32 @@ public final class ApplicationLaunch {
     }
 
     /**
-     * The system properties vidocq:run and vidocq:dev hand to the application under {@code all}: the mode, which the
-     * runtime reads back (the dev reload's thread warning), and the pinned modules when there are some.
+     * The system properties vidocq:dev hands to the application under {@code all}: the mode, which the runtime reads
+     * back (the dev reload's thread warning), and the pinned modules when there are some.
      */
     public static Map<String, String> layerProperties(Map<String, String> pinned) {
         return layerProperties(LayerSplit.Mode.ALL, pinned);
     }
 
     /**
-     * The system properties the launch hands to the application for the mode it settled on. The mode is always
-     * written, {@code classes} included: a runtime that finds the property unset takes the default, {@code all}.
+     * The system properties vidocq:dev hands to the application for the mode it settled on. The mode is always
+     * written, {@code classes} included: the dev reload reads it, and takes the default, {@code all}, when it is
+     * unset.
      */
     public static Map<String, String> layerProperties(LayerSplit.Mode mode, Map<String, String> pinned) {
         Map<String, String> properties = new java.util.LinkedHashMap<>();
         properties.put(LayerSplit.MODE_PROPERTY, mode.name().toLowerCase(java.util.Locale.ROOT));
-        if (!pinned.isEmpty()) {
-            properties.put(LayerSplit.PINNED_PROPERTY, LayerSplit.encodePinned(pinned));
-        }
+        properties.putAll(pinnedProperties(pinned));
         return properties;
+    }
+
+    /**
+     * The pinned modules, as the startup report reads them back ({@value LayerSplit#PINNED_PROPERTY}); empty without
+     * a pin. A launch without a dev reload hands the application nothing else of the split: nothing reads the mode
+     * there (Vidocq/vidocq#663).
+     */
+    public static Map<String, String> pinnedProperties(Map<String, String> pinned) {
+        return pinned.isEmpty() ? Map.of() : Map.of(LayerSplit.PINNED_PROPERTY, LayerSplit.encodePinned(pinned));
     }
 
     /**

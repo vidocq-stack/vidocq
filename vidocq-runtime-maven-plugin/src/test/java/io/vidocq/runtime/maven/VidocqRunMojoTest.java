@@ -239,6 +239,9 @@ class VidocqRunMojoTest {
         userProperties.setProperty("vidocq.dev.hotReload", "false");
         userProperties.setProperty("vidocq.mainClass", "com.example.Other");
         userProperties.setProperty("vidocq.jvmArgs", "-Xmx1g");
+        // Settings of the split, which the goal makes: the application reads neither (Vidocq/vidocq#663).
+        userProperties.setProperty("vidocq.app.layer", "classes");
+        userProperties.setProperty("vidocq.app.layer.keep", "acme.*");
         userProperties.setProperty("maven.test.skip", "true");
 
         Map<String, String> forwarded = VidocqRunMojo.forwarded(userProperties);

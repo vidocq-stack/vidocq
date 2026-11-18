@@ -105,9 +105,6 @@ public class VidocqPackageMojo extends AbstractMojo {
     /** The modules kept in the parent layer by a pin, with the reason: set by {@link #execute()} under {@code all}. */
     private Map<String, String> pinned = Map.of();
 
-    /** The mode the distribution is built under: set by {@link #execute()}, {@code classes} when {@code all} degrades. */
-    private LayerSplit.Mode mode;
-
     /** The distribution's {@code app/} directory under the layer launch, whose modules may require JDK modules. */
     private Path appDir;
 
@@ -276,7 +273,8 @@ public class VidocqPackageMojo extends AbstractMojo {
      * {@link ApplicationLaunch#layered} computes them, so that a kept automatic module keeps its dependencies.
      */
     private Set<Path> splitForAppLayer(List<Packaged> packaged) throws MojoExecutionException {
-        mode = ApplicationLaunch.effectiveMode(appLayer, layerMode, "vidocq.package.layer", getLog()::warn);
+        LayerSplit.Mode mode = ApplicationLaunch.effectiveMode(appLayer, layerMode, "vidocq.package.layer",
+                getLog()::warn);
         pinned = Map.of();
         if (mode != LayerSplit.Mode.ALL) {
             return Set.of();
@@ -314,7 +312,6 @@ public class VidocqPackageMojo extends AbstractMojo {
                 throw new MojoExecutionException(e.getMessage(), e);
             }
             getLog().warn(ApplicationLaunch.splitFallbackWarning(e.getMessage()));
-            mode = LayerSplit.Mode.CLASSES;
             return Set.of();
         }
         pinned = split.pinned();
@@ -327,12 +324,11 @@ public class VidocqPackageMojo extends AbstractMojo {
     /**
      * The JVM options of the application layer in a launcher, each followed by the line continuation. The legacy
      * layout has no layer, and says so: a trampoline main would otherwise load the application a second time into
-     * one (BUG-20261114-10).
+     * one (BUG-20261114-10). The mode is not written: the split is made at build, and the runtime reads the mode only
+     * in a dev reload and in the boot-layer detection of a trampoline, which no launcher reaches (Vidocq/vidocq#663).
      */
     private String appLayerOptions(String continuation) {
-        // The mode is always written, classes too: a runtime that finds it unset takes the default, all.
-        String options = "\n  -Dvidocq.app.layer=" + effectiveMode().name().toLowerCase(java.util.Locale.ROOT)
-                + " " + continuation;
+        String options = "";
         if (!layerMode) {
             options += "\n  -D" + LayerSplit.OFF_PROPERTY + "=true " + continuation;
         }
@@ -481,17 +477,6 @@ public class VidocqPackageMojo extends AbstractMojo {
                     + mainClass + "), or write vidocq.mainClass as <module>/" + mainClass + ".");
         }
         return mainModule + "/" + mainClass;
-    }
-
-    /**
-     * The mode of the launchers: the one {@link #execute()} settled on, or, for a script written on its own, the
-     * configured one ({@code classes} when the layer mode is off).
-     */
-    private LayerSplit.Mode effectiveMode() {
-        if (mode != null) {
-            return mode;
-        }
-        return layerMode ? LayerSplit.Mode.of(appLayer) : LayerSplit.Mode.CLASSES;
     }
 
     /**

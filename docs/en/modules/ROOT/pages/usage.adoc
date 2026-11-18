@@ -452,8 +452,8 @@ not found, ...` with a runtime older than the agent.
 
 *Packaging.* Under `vidocq:package`, `lib/` holds the parent layer and `app/` holds the application jar and its
 libraries. Both launchers hand `app/` to the runtime through `-Dvidocq.app.path`, also for an application with a
-main class, and carry `-Dvidocq.app.layer=` with the mode the build settled on (`classes` too: a runtime that finds
-the property unset takes the default, `all`) and the pinned list. `all` requires the layer mode
+main class, with the pinned list. The build made the split, so they no longer carry the mode [.tag-new]#NEW#: nothing
+reads it there. `all` requires the layer mode
 (`vidocq.dev.layer`, `vidocq.package.layer`). Left to the default, a goal without the layer mode falls back to
 `classes` with a warning; asked for with `-Dvidocq.app.layer=all`, it fails. In the same way a dependency whose module
 name cannot be derived stays in the parent layer with a warning by default, and fails the build when `all` was asked

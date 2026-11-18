@@ -59,8 +59,8 @@ class ApplicationLaunchTest {
     @Test
     void theRuntimeMainBootsTheApplicationLayerOnALoopbackPort() {
         var layout = new ApplicationLaunch.Layout(List.of(Path.of("/m2/core.jar"), Path.of("/m2/vauban.jar")),
-                List.of(Path.of("/app/classes"), Path.of("/m2/lib.jar")), List.of("vidocq.app.layer=all"),
-                "ALL-MODULE-PATH,java.net.http");
+                List.of(Path.of("/app/classes"), Path.of("/m2/lib.jar")),
+                List.of("vidocq.app.layer.pinned=acme.codec=vidocq.app.layer.keep"), "ALL-MODULE-PATH,java.net.http");
 
         Path portFile = dir.resolve("vidocq-test.port");
 
@@ -70,7 +70,7 @@ class ApplicationLaunchTest {
         assertEquals(List.of("/jdk/bin/java",
                 "-Dvidocq.chappe.listener.default.host=127.0.0.1",
                 "-Dvidocq.chappe.listener.default.port=0",
-                "-Dvidocq.app.layer=all",
+                "-Dvidocq.app.layer.pinned=acme.codec=vidocq.app.layer.keep",
                 "-Dgreeting=hi",
                 "-Dvidocq.chappe.listener.default.port-file=" + portFile,
                 "-Dvidocq.app.module=com.acme.demo",
@@ -132,7 +132,8 @@ class ApplicationLaunchTest {
      * gives it leave the module path for the application layer, as in {@code vidocq:run} and the packaged
      * application. On the module path, the JVM resolved them into the boot layer too, and a {@code ServiceLoader}
      * of the application layer found each of their providers twice: Vaadin's two {@code InstantiatorFactory}
-     * (BUG-20261114-07). The JDK modules they require join {@code --add-modules}: a child layer cannot define one.
+     * (BUG-20261114-07). The JDK modules they require join {@code --add-modules}: a child layer cannot define one. The
+     * split is made here, and the launch tells the runtime no mode: nothing reads it there (Vidocq/vidocq#663).
      */
     @Test
     void theApplicationAndItsLibrariesRunInTheApplicationLayer() throws IOException {
@@ -146,7 +147,7 @@ class ApplicationLaunchTest {
 
         assertEquals(List.of(core), layout.modulePath());
         assertEquals(List.of(app, library, tools), layout.appPath());
-        assertEquals(List.of("vidocq.app.layer=all"), layout.properties());
+        assertEquals(List.of(), layout.properties());
         assertEquals("ALL-MODULE-PATH,java.logging,java.net.http", layout.addModules());
         assertEquals(List.of(), warnings);
     }
@@ -162,7 +163,7 @@ class ApplicationLaunchTest {
 
         assertEquals(List.of(core, library), layout.modulePath());
         assertEquals(List.of(app), layout.appPath());
-        assertEquals(List.of("vidocq.app.layer=classes"), layout.properties());
+        assertEquals(List.of(), layout.properties());
         assertEquals("ALL-MODULE-PATH", layout.addModules());
     }
 
@@ -178,8 +179,7 @@ class ApplicationLaunchTest {
 
         assertEquals(List.of(core, library), layout.modulePath());
         assertEquals(List.of(app), layout.appPath());
-        assertEquals(List.of("vidocq.app.layer=all", "vidocq.app.layer.pinned=acme.lib=vidocq.app.layer.keep"),
-                layout.properties());
+        assertEquals(List.of("vidocq.app.layer.pinned=acme.lib=vidocq.app.layer.keep"), layout.properties());
     }
 
     /** As in {@code vidocq:run}: the default {@code all} that cannot be honoured falls back to {@code classes}. */
@@ -194,7 +194,7 @@ class ApplicationLaunchTest {
 
         assertEquals(List.of(core, helper), layout.modulePath());
         assertEquals(List.of(app), layout.appPath());
-        assertEquals(List.of("vidocq.app.layer=classes"), layout.properties());
+        assertEquals(List.of(), layout.properties());
         assertEquals(1, warnings.size(), warnings::toString);
         assertTrue(warnings.getFirst().startsWith("vidocq.app.layer=all, the default, cannot split this launch:"
                 + " acme.helper is kept in the parent layer"), warnings.getFirst());

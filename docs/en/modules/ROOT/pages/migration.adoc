@@ -439,6 +439,10 @@ follows (Vidocq/vidocq#663):
   the two only made the goal log that they did not apply. Remove them from the `<configuration>` of these goals; the
   `vidocq.app.layer` and `vidocq.app.layer.keep` properties of the pom still serve `vidocq:package`, `vidocq:run` and
   `vidocq:dev`.
+* **The launchers of `vidocq:package`, `vidocq:run` and `@VidocqTest` no longer pass `-Dvidocq.app.layer` to the
+  application.** They make the split themselves, and nothing read the mode in their launch. `vidocq:run` no longer
+  forwards `-Dvidocq.app.layer` and `-Dvidocq.app.layer.keep` of the Maven command line either: they configure its
+  split. An application that read the property itself finds it unset there; `vidocq:dev` still passes it.
 
 == Next steps
 

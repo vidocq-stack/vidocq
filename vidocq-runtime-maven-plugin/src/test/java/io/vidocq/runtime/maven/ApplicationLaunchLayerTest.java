@@ -66,17 +66,29 @@ class ApplicationLaunchLayerTest {
     }
 
     /**
-     * run and dev hand the mode to the application, also when it comes from the POM configuration rather than the
-     * command line: the dev reload's thread warning reads it (#247).
+     * dev hands the mode to the application, also when it comes from the POM configuration rather than the command
+     * line: the dev reload's thread warning reads it (#247).
      */
     @Test
-    void theChildGetsTheModeAndThePins() {
+    void theDevChildGetsTheModeAndThePins() {
         assertEquals(Map.of("vidocq.app.layer", "all"), ApplicationLaunch.layerProperties(Map.of()));
         assertEquals(Map.of("vidocq.app.layer", "all", "vidocq.app.layer.pinned", "flow.server=vidocq.app.layer.keep"),
                 ApplicationLaunch.layerProperties(Map.of("flow.server", "vidocq.app.layer.keep")));
     }
 
-    /** The mode is always handed to the application, classes included: unset, the runtime takes the default, all. */
+    /**
+     * run hands the application the pinned modules alone, which the startup report lists: nothing reads the mode in
+     * its launch, which has no dev reload and hands the application over with {@code vidocq.app.path}
+     * (Vidocq/vidocq#663).
+     */
+    @Test
+    void theRunChildGetsThePinsAlone() {
+        assertEquals(Map.of(), ApplicationLaunch.pinnedProperties(Map.of()));
+        assertEquals(Map.of("vidocq.app.layer.pinned", "flow.server=vidocq.app.layer.keep"),
+                ApplicationLaunch.pinnedProperties(Map.of("flow.server", "vidocq.app.layer.keep")));
+    }
+
+    /** The dev reload reads the mode, classes included: unset, the runtime takes the default, all. */
     @Test
     void classesIsHandedOnToo() {
         assertEquals(Map.of("vidocq.app.layer", "classes"),

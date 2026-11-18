@@ -89,10 +89,12 @@ public class VidocqRunMojo extends AbstractMojo {
     private static final List<String> BUILD_PREFIXES = List.of("vidocq.run.", "vidocq.dev.", "vidocq.idea.",
             "vidocq.docker.", "vidocq.jlink.", "vidocq.checkpom.", "vidocq.moduleinfo.", "vidocq.package.");
 
+    /** As {@link #BUILD_PREFIXES}; the two settings of the split, which the goal makes (Vidocq/vidocq#663), too. */
     private static final List<String> BUILD_KEYS = List.of("vidocq.mainModule", "vidocq.mainClass",
             "vidocq.appName", "vidocq.appVersion", "vidocq.appDescription", "vidocq.compress", "vidocq.distDir",
             "vidocq.distName", "vidocq.icon", "vidocq.installerDir", "vidocq.jpackageType", "vidocq.jvmArgs",
-            "vidocq.launcher", "vidocq.runtimeImage", "vidocq.scriptName", "vidocq.stripDebug", "vidocq.vendor");
+            "vidocq.launcher", "vidocq.runtimeImage", "vidocq.scriptName", "vidocq.stripDebug", "vidocq.vendor",
+            LayerSplit.MODE_PROPERTY, LayerSplit.KEEP_PROPERTY);
 
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
@@ -253,8 +255,9 @@ public class VidocqRunMojo extends AbstractMojo {
             getLog().info(PREFIX + ApplicationLaunch.layerSummary(appPath.size() - 1, launch.pinned().size()));
             launch.pinned().forEach((m, why) -> getLog().info(PREFIX + "  parent layer: " + m + " (" + why + ")"));
         }
-        // The mode is always handed on, classes too: a runtime that finds it unset takes the default, all.
-        systemProperties.putAll(ApplicationLaunch.layerProperties(mode, launch.pinned()));
+        // The pins alone, which the startup report lists: the split is made here, and without a dev reload nothing
+        // reads the mode in the application (Vidocq/vidocq#663).
+        systemProperties.putAll(ApplicationLaunch.pinnedProperties(launch.pinned()));
         List<String> jvmArgs = buildJvmArgs();
 
         try {

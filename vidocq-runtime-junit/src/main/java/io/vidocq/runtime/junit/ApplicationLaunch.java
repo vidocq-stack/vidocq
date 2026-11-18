@@ -64,7 +64,8 @@ final class ApplicationLaunch {
      *
      * @param modulePath the module path: the runtime, the bricks and what they read
      * @param appPath    {@code vidocq.app.path}: the application module and its libraries
-     * @param properties the {@code key=value} system properties that tell the runtime how the layer was split
+     * @param properties the {@code key=value} system properties that tell the runtime which modules a pin kept in the
+     *                   parent layer
      * @param addModules the value of {@code --add-modules}
      */
     record Layout(List<Path> modulePath, List<Path> appPath, List<String> properties, String addModules) {
@@ -200,8 +201,8 @@ final class ApplicationLaunch {
         LayerSplit.Result split = all.orElseGet(() -> new LayerSplit.Result(
                 candidates.stream().filter(c -> !isModule(c, module)).toList(),
                 candidates.stream().filter(c -> isModule(c, module)).toList(), Map.of()));
+        // The pins alone: the split is made here, and nothing reads the mode in this launch (Vidocq/vidocq#663).
         List<String> layerProperties = new ArrayList<>();
-        layerProperties.add(LayerSplit.MODE_PROPERTY + "=" + (all.isPresent() ? "all" : "classes"));
         if (!split.pinned().isEmpty()) {
             layerProperties.add(LayerSplit.PINNED_PROPERTY + "=" + LayerSplit.encodePinned(split.pinned()));
         }

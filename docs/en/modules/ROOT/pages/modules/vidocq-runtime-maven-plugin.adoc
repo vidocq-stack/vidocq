@@ -647,8 +647,8 @@ that names both. An application with a trampoline main that ran in this layout t
 |===
 
 `all` is the default since 0.4.0, in `vidocq:run`, `vidocq:dev`, an IDE launch and `vidocq:package` alike, so that
-development and production behave the same way. `classes` is the opt-out. The goals hand the mode they settled on to the
-application as `-Dvidocq.app.layer`, `classes` included.
+development and production behave the same way. `classes` is the opt-out. The goals make the split themselves: only
+`vidocq:dev` hands the mode it settled on to the application, `classes` included, for its reload [.tag-new]#NEW#.
 
 `all` needs the layer mode: `vidocq.dev.layer` for `vidocq:dev`, `vidocq.package.layer` for `vidocq:package`
 (both `true` by default). What happens when it cannot be honoured depends on whether you asked for it:
@@ -694,7 +694,7 @@ set, under `classes` as under `all`: a trampoline launched from the module path 
 the boot layer, and load the application module twice, in the boot layer and in the application layer
 (BUG-20261114-10). Without a main class they pass `-Dvidocq.app.module` instead, with `vidocq.mainModule` or, when it
 is unset, the module the application jar declares: the runtime's own main finds the application module nowhere else
-(BUG-20261115-08). They carry `-Dvidocq.app.layer=` with the mode, and the pinned list when there is one.
+(BUG-20261115-08). They carry the pinned list when there is one, and no longer the mode [.tag-new]#NEW#.
 A jar with classes parked by `vidocq:generate` ships enriched with them, so it moves to `app/` as well. The rule and the
 limits are in xref:usage.adoc#app-layer-dependencies[Dependencies in the application layer].
 
@@ -1193,7 +1193,8 @@ run always uses.
 The application runs in another JVM, so a `-D` of the Maven command line does not reach it by itself. The goal
 forwards the ones that configure the application: every `-Dvidocq.*` that is not a setting of this plugin
 (`vidocq.run.*`, `vidocq.dev.*`, `vidocq.idea.*`, `vidocq.docker.*`, `vidocq.jlink.*`, `vidocq.mainClass`,
-`vidocq.mainModule`, and the other packaging settings). So `mvn vidocq:run
+`vidocq.mainModule`, `vidocq.app.layer` and `vidocq.app.layer.keep` [.tag-new]#NEW#, and the other packaging
+settings). So `mvn vidocq:run
 -Dvidocq.chappe.listener.default.port=8081` listens on 8081. Anything else goes through
 `vidocq.run.systemProperties`, and the forked JVM inherits Maven's environment as it is.
 

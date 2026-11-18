@@ -60,7 +60,8 @@ class AppLayerPackageIT {
         assertTrue(Files.exists(dist.resolve("app/app-layer-pages-1.0.jar")), "the library is the application's");
         assertTrue(Files.notExists(dist.resolve("lib/app-layer-pages-1.0.jar")));
         assertTrue(Files.readString(script).contains("-Dvidocq.app.path="), Files.readString(script));
-        assertTrue(Files.readString(script).contains("-Dvidocq.app.layer=all"), Files.readString(script));
+        // The split is made at build: the launcher writes no mode, which nothing reads (Vidocq/vidocq#663).
+        assertFalse(Files.readString(script).contains("-Dvidocq.app.layer="), Files.readString(script));
 
         Path runLog = Fixture.logs().resolve("package-run.log");
         String out = run(script, runLog);
@@ -92,7 +93,7 @@ class AppLayerPackageIT {
         assertTrue(Files.exists(dist.resolve("lib/app-layer-pages-1.0.jar")), "the library stays in lib/");
         assertTrue(Files.notExists(dist.resolve("app/app-layer-pages-1.0.jar")));
         String launcher = Files.readString(script);
-        assertTrue(launcher.contains("-Dvidocq.app.layer=classes"), launcher);
+        assertFalse(launcher.contains("-Dvidocq.app.layer="), launcher);
         assertTrue(launcher.contains("-Dvidocq.app.path="), launcher);
         assertTrue(launcher.contains("-Dvidocq.app.main=acme.app.AppLayerApp"), launcher);
 
