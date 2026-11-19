@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<taglib xmlns="https://jakarta.ee/xml/ns/jakartaee"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-jsptaglibrary_3_0.xsd"
+        version="3.0">
+  <description>Jakarta Standard Tag Library 3.0 - XML library, JSTL 1.0 request-time URI</description>
+  <display-name>JSTL XML RT</display-name>
+  <tlib-version>3.0</tlib-version>
+  <short-name>x_rt</short-name>
+  <uri>http://java.sun.com/jstl/xml_rt</uri>
+  <validator>
+    <validator-class>io.vidocq.bodoni.core.tags.xml.XmlTagLibraryValidator</validator-class>
+  </validator>
+
+  <tag>
+    <description>Parses an XML document and saves the resulting object in a scoped variable.</description>
+    <name>parse</name>
+    <tag-class>io.vidocq.bodoni.core.tags.xml.ParseTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>Source XML document to be parsed: a String or a Reader.</description>
+      <name>doc</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.Object</type>
+    </attribute>
+    <attribute>
+      <description>Deprecated. Use doc instead.</description>
+      <name>xml</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.Object</type>
+    </attribute>
+    <attribute>
+      <description>The system identifier (URI) for parsing the XML document.</description>
+      <name>systemId</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Filter to be applied to the source document.</description>
+      <name>filter</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>org.xml.sax.XMLFilter</type>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable for the parsed XML document.</description>
+      <name>var</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Scope of var.</description>
+      <name>scope</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable for the parsed XML document as an org.w3c.dom.Document.</description>
+      <name>varDom</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Scope of varDom.</description>
+      <name>scopeDom</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Evaluates an XPath expression and outputs the result to the current JspWriter.</description>
+    <name>out</name>
+    <tag-class>io.vidocq.bodoni.core.tags.xml.OutTag</tag-class>
+    <body-content>empty</body-content>
+    <attribute>
+      <description>XPath expression to be evaluated.</description>
+      <name>select</name>
+      <required>true</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Whether the characters &lt; &gt; &amp; ' " of the result are converted to character entity codes. Defaults to true.</description>
+      <name>escapeXml</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>boolean</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Evaluates an XPath expression and stores the result into a scoped variable.</description>
+    <name>set</name>
+    <tag-class>io.vidocq.bodoni.core.tags.xml.SetTag</tag-class>
+    <body-content>empty</body-content>
+    <attribute>
+      <description>XPath expression to be evaluated.</description>
+      <name>select</name>
+      <required>true</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable that holds the result.</description>
+      <name>var</name>
+      <required>true</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Scope of var.</description>
+      <name>scope</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Evaluates its body content if the XPath test expression evaluates to true.</description>
+    <name>if</name>
+    <tag-class>io.vidocq.bodoni.core.tags.xml.IfTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>The XPath test condition.</description>
+      <name>select</name>
+      <required>true</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable for the Boolean value of the test condition.</description>
+      <name>var</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Scope of var.</description>
+      <name>scope</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Provides the context for mutually exclusive conditional operations, marked by when and otherwise.</description>
+    <name>choose</name>
+    <tag-class>io.vidocq.bodoni.core.tags.xml.ChooseTag</tag-class>
+    <body-content>JSP</body-content>
+  </tag>
+
+  <tag>
+    <description>Represents an alternative within a choose action; evaluates its body content if the XPath test is the first to be true.</description>
+    <name>when</name>
+    <tag-class>io.vidocq.bodoni.core.tags.xml.WhenTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>The XPath test condition.</description>
+      <name>select</name>
+      <required>true</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Represents the last alternative within a choose action.</description>
+    <name>otherwise</name>
+    <tag-class>io.vidocq.bodoni.core.tags.xml.OtherwiseTag</tag-class>
+    <body-content>JSP</body-content>
+  </tag>
+
+  <tag>
+    <description>Evaluates an XPath expression and repeats its body content over the resulting nodes.</description>
+    <name>forEach</name>
+    <tag-class>io.vidocq.bodoni.core.tags.xml.ForEachTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>XPath expression to be evaluated.</description>
+      <name>select</name>
+      <required>true</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable for the current item of the iteration.</description>
+      <name>var</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable for the status of the iteration.</description>
+      <name>varStatus</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Iteration begins at the item located at the specified index; the first item has index 0.</description>
+      <name>begin</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>int</type>
+    </attribute>
+    <attribute>
+      <description>Iteration ends at the item located at the specified index (inclusive).</description>
+      <name>end</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>int</type>
+    </attribute>
+    <attribute>
+      <description>Iteration processes only every step items, starting with the first one.</description>
+      <name>step</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>int</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Applies an XSLT stylesheet transformation to an XML document.</description>
+    <name>transform</name>
+    <tag-class>io.vidocq.bodoni.core.tags.xml.TransformTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>Source XML document to be transformed.</description>
+      <name>doc</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.Object</type>
+    </attribute>
+    <attribute>
+      <description>Deprecated. Use doc instead.</description>
+      <name>xml</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.Object</type>
+    </attribute>
+    <attribute>
+      <description>Transformation stylesheet as a String, Reader or Source object.</description>
+      <name>xslt</name>
+      <required>true</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.Object</type>
+    </attribute>
+    <attribute>
+      <description>The system identifier (URI) for parsing the XML document.</description>
+      <name>docSystemId</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Deprecated. Use docSystemId instead.</description>
+      <name>xmlSystemId</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>The system identifier (URI) for parsing the XSLT stylesheet.</description>
+      <name>xsltSystemId</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Name of the exported scoped variable for the transformed XML document (an org.w3c.dom.Document).</description>
+      <name>var</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Scope of var.</description>
+      <name>scope</name>
+      <required>false</required>
+      <rtexprvalue>false</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Object that captures or processes the transformation result.</description>
+      <name>result</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>javax.xml.transform.Result</type>
+    </attribute>
+  </tag>
+
+  <tag>
+    <description>Sets a transformation parameter; nested in transform.</description>
+    <name>param</name>
+    <tag-class>io.vidocq.bodoni.core.tags.xml.ParamTag</tag-class>
+    <body-content>JSP</body-content>
+    <attribute>
+      <description>Name of the transformation parameter.</description>
+      <name>name</name>
+      <required>true</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.String</type>
+    </attribute>
+    <attribute>
+      <description>Value of the parameter; the body content when absent.</description>
+      <name>value</name>
+      <required>false</required>
+      <rtexprvalue>true</rtexprvalue>
+      <type>java.lang.Object</type>
+    </attribute>
+  </tag>
+</taglib>

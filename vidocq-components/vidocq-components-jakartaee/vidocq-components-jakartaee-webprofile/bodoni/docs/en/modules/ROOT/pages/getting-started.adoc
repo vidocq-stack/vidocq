@@ -1,0 +1,60 @@
+= Getting started
+:description: Adding Bodoni to a page application and writing a first page with the JSTL 3.0 libraries.
+
+[.lead]
+Bodoni provides the five libraries of Jakarta Standard Tag Library 3.0: `c:` (core), `fmt:` (I18N and formatting), `sql:` (relational database access), `x:` (XML processing) and `fn:` (functions). The official Tags tests pass 452 of 541 in their first baseline (B5), a measurement, not a certification: see xref:tck.adoc[TCK status]. `sql:` statements take their values through `sql:param`, and a JDBC parameter string carries the database password in clear: see xref:reference.adoc#sql-security[SQL injection and database credentials]. Documents and stylesheets of `x:` may only reference resources of their own origin: see xref:reference.adoc#xml-external-references[XML external references]. Applications with `fmt:` resource bundles in a named module: see xref:reference.adoc#bundles[Resource bundles under Java Modules].
+
+== Build from source
+
+[source,bash]
+----
+git clone git@codefloe.com:Vidocq/bodoni.git
+cd bodoni
+sdk env                       # Java 25 + Maven 3.9.16 (.sdkmanrc)
+./mvnw -ntp clean install
+----
+
+== Dependency
+
+The application declares Bodoni only. The JSTL API comes with it transitively; the Pages, Servlet and EL APIs come from the container.
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+  <groupId>io.vidocq.bodoni</groupId>
+  <artifactId>bodoni-core</artifactId>
+  <version>{project-version}</version>
+</dependency>
+----
+
+An application module that refers to JSTL API types (for example `LoopTagStatus`) reads them through Bodoni:
+
+[source,java]
+----
+module com.acme.shop {
+    requires io.vidocq.bodoni.core;   // brings jakarta.servlet.jsp.jstl transitively
+}
+----
+
+The TLDs are packaged in `META-INF` of `bodoni-core`: the Pages container finds them by URI, with no `taglib` mapping in `web.xml`.
+
+== First page
+
+[source,jsp]
+----
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
+<c:set var="names" value="${fn:split('ada,grace,edsger', ',')}"/>
+<ul>
+  <c:forEach items="${names}" var="name">
+    <li><c:out value="${fn:toUpperCase(name)}"/></li>
+  </c:forEach>
+</ul>
+----
+
+Under Vidocq, the runtime extension `vidocq-runtime-bodoni-jstl-extension` brings Bodoni, Ibarra and Peano together (and `bodoni-peano`, for `peano.reflection=deny`); the page is precompiled at build time. The application declares the extension only: `vidocq extension add bodoni-jstl`.
+
+[NOTE]
+====
+Under Peano with `peano.reflection=deny`, add `bodoni-peano` to read the properties of the `varStatus` variable and of the `Result` of `sql:query`: see xref:reference.adoc#bod-001[BOD-001].
+====

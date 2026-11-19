@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<taglib xmlns="https://jakarta.ee/xml/ns/jakartaee"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee https://jakarta.ee/xml/ns/jakartaee/web-jsptaglibrary_3_0.xsd"
+        version="3.0">
+    <description>Probe tag of the Open Liberty portability proof: reports its parent tag handler.</description>
+    <tlib-version>1.0</tlib-version>
+    <short-name>probe</short-name>
+    <uri>urn:bodoni:it:probe</uri>
+    <tag>
+        <name>parent</name>
+        <tag-class>io.vidocq.bodoni.it.openliberty.ParentHandlerTag</tag-class>
+        <body-content>empty</body-content>
+    </tag>
+</taglib>

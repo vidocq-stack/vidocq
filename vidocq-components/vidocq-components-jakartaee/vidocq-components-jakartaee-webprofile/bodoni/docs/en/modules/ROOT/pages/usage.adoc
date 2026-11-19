@@ -1,0 +1,106 @@
+= Usage
+:description: The JSTL 3.0 tag libraries, their URIs and one page example per implemented library.
+
+[.lead]
+Bodoni implements the five tag libraries of Jakarta Standard Tag Library 3.0 (B1 to B4). The table gives the status of each. The official Tags tests pass 541 of 541 on Ibarra + Foy + Peano after the TCK fixes (452 of 541 in the first baseline, B5), a measurement, not a certification: see xref:tck.adoc[TCK status].
+
+[cols="1,2,1,1",options="header"]
+|===
+| Library | URI | Prefix | Status
+
+| Core (general purpose, conditionals, iteration, URLs) | `jakarta.tags.core` | `c` | implemented (B1)
+| Functions | `jakarta.tags.functions` | `fn` | implemented (B1)
+| I18N and formatting | `jakarta.tags.fmt` | `fmt` | implemented (B2)
+| XML processing | `jakarta.tags.xml` | `x` | implemented (B3)
+| Relational database access | `jakarta.tags.sql` | `sql` | implemented (B4)
+|===
+
+The JSTL 1.2 URIs `http://java.sun.com/jsp/jstl/core`, `http://java.sun.com/jsp/jstl/fmt`, `http://java.sun.com/jsp/jstl/sql`, `http://java.sun.com/jsp/jstl/xml` and `http://java.sun.com/jsp/jstl/functions` are accepted too and map to the same classes. So are the JSTL 1.0 request-time URIs `http://java.sun.com/jstl/core_rt`, `http://java.sun.com/jstl/fmt_rt`, `http://java.sun.com/jstl/sql_rt` and `http://java.sun.com/jstl/xml_rt`; the JSTL 1.0 EL URIs are not shipped (see xref:reference.adoc#tag-libraries[Tag libraries]).
+
+== Core library
+
+[source,jsp]
+----
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<c:set var="user" value="${param.user}" scope="request"/>
+<c:choose>
+  <c:when test="${empty user}">Hello, stranger.</c:when>
+  <c:otherwise>Hello, <c:out value="${user}"/>.</c:otherwise>
+</c:choose>
+<c:forEach items="${items}" var="item" begin="0" end="9">
+  <c:if test="${item.visible}"><p><c:out value="${item.label}"/></p></c:if>
+</c:forEach>
+<a href="<c:url value='/search'><c:param name='q' value='${user}'/></c:url>">Search</a>
+<c:catch var="failure"><c:import url="https://example.org/fragment.html"/></c:catch>
+----
+
+== I18N and formatting library
+
+[source,jsp]
+----
+<%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
+<fmt:setLocale value="fr_FR"/>
+<fmt:bundle basename="i18n-bundles.Messages" prefix="greeting.">
+  <p><fmt:message key="hello"><fmt:param value="${user}"/></fmt:message></p>
+</fmt:bundle>
+<p><fmt:formatNumber value="${price}" type="currency" currencyCode="EUR"/></p>
+<p><fmt:formatDate value="${now}" type="both" dateStyle="long" timeStyle="short"/></p>
+<fmt:parseNumber var="quantity" value="${param.qty}" integerOnly="true"/>
+----
+
+The directory `i18n-bundles` is not a Java package, so a named application module needs no `opens` for it. Bundles are found by name through the thread context class loader; see xref:reference.adoc#bundles[Resource bundles under Java Modules] for where to put them. Dates are `java.util.Date` values.
+
+== SQL library
+
+[source,jsp]
+----
+<%@ taglib prefix="sql" uri="jakarta.tags.sql" %>
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<sql:query var="books" maxRows="20">
+  SELECT id, title FROM book WHERE author = ? ORDER BY title
+  <sql:param value="${param.author}"/>
+</sql:query>
+<c:forEach items="${books.rows}" var="book">
+  <p>${book.id}: <c:out value="${book.title}"/></p>
+</c:forEach>
+<c:if test="${books.limitedByMaxRows}"><p>More books exist.</p></c:if>
+<sql:transaction>
+  <sql:update>UPDATE book SET stock = stock - 1 WHERE id = ?<sql:param value="${param.id}"/></sql:update>
+  <sql:update>INSERT INTO sale (book_id) VALUES (?)<sql:param value="${param.id}"/></sql:update>
+</sql:transaction>
+----
+
+The actions take the data source of the `jakarta.servlet.jsp.jstl.sql.dataSource` setting, here a context parameter or an object the application sets; a `dataSource` attribute overrides it. The request parameter is bound to the `?` marker by `sql:param`, never written into the statement: see xref:reference.adoc#sql-security[SQL injection and database credentials]. Row keys are the column labels, case-insensitive. Both updates commit together, or roll back together when one fails. Data sources, the JDBC parameter string and driver discovery: xref:reference.adoc#sql-data-sources[Data sources].
+
+== XML library
+
+[source,jsp]
+----
+<%@ taglib prefix="x" uri="jakarta.tags.xml" %>
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<x:parse var="catalog" systemId="/xml/catalog.xml"><catalog><book id="1"><title>Manuale</title></book></catalog></x:parse>
+<x:forEach select="$catalog//book" varStatus="s">
+  <p>${s.count}. <x:out select="title"/> (id <x:out select="@id"/>)</p>
+</x:forEach>
+<x:if select="count($catalog//book) > $param:min"><p>Enough books.</p></x:if>
+<x:transform doc="${catalog}" xslt="${stylesheet}" xsltSystemId="/xsl/list.xsl"/>
+----
+
+The `select` attributes are XPath 1.0 expressions, not EL; `$param:min` reads a request parameter. External references of a document or a stylesheet are limited by a same-origin policy: see xref:reference.adoc#xml-external-references[XML external references].
+
+== Functions library
+
+[source,jsp]
+----
+<%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
+<p>${fn:toUpperCase(fn:trim(title))}</p>
+<p>${fn:length(items)} items, joined: ${fn:join(fn:split('a,b,c', ','), ' | ')}</p>
+<p>${fn:escapeXml(comment)}</p>
+----
+
+== Configuration data
+
+The standard configuration settings of the spec apply unchanged, as context parameters or scoped attributes (`jakarta.servlet.jsp.jstl.core.Config`). The `c:`, `x:` and `fn:` libraries read none of them. The `fmt:` library reads the four `jakarta.servlet.jsp.jstl.fmt.*` settings (see xref:reference.adoc#fmt-config[the reference]), the `sql:` library the two `jakarta.servlet.jsp.jstl.sql.*` settings (see xref:reference.adoc#sql-config[the reference]):
+
+* `jakarta.servlet.jsp.jstl.fmt.locale`, `jakarta.servlet.jsp.jstl.fmt.fallbackLocale`, `jakarta.servlet.jsp.jstl.fmt.localizationContext`, `jakarta.servlet.jsp.jstl.fmt.timeZone`;
+* `jakarta.servlet.jsp.jstl.sql.dataSource`, `jakarta.servlet.jsp.jstl.sql.maxRows`.

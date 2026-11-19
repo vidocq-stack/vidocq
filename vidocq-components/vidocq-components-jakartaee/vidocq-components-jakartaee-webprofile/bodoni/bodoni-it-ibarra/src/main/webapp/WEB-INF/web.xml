@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee" version="6.1">
+    <!-- No taglib mapping: the c: and fn: libraries are resolved by URI from the
+         META-INF/*.tld of bodoni-core, as on any Pages container. -->
+    <!-- The default sql: data source (Tags 3.0 §10.1.1, §2.8), in the JDBC parameter string
+         form url,driver,user,password: no naming implementation runs in the host, so the
+         java:comp/env lookup fails and the string is read as JDBC parameters. -->
+    <context-param>
+        <param-name>jakarta.servlet.jsp.jstl.sql.dataSource</param-name>
+        <param-value>jdbc:h2:mem:bodoni;DB_CLOSE_DELAY=-1,org.h2.Driver,sa,</param-value>
+    </context-param>
+    <jsp-config>
+        <jsp-property-group>
+            <url-pattern>*.jsp</url-pattern>
+            <page-encoding>UTF-8</page-encoding>
+            <trim-directive-whitespaces>true</trim-directive-whitespaces>
+        </jsp-property-group>
+    </jsp-config>
+</web-app>

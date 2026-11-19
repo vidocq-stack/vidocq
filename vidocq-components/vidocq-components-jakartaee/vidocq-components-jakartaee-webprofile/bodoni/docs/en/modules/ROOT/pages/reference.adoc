@@ -1,0 +1,453 @@
+= Reference
+:description: Coordinates, dependencies, tag and function lists, c:import behaviour, fmt: configuration and resource bundles, x: tags and XML external references, sql: tags, data sources and database credentials, deployment notes, test tooling of the TCK runner — B1 to B5.
+
+[.lead]
+Bodoni publishes the five libraries of Jakarta Standard Tag Library 3.0: `c:`, `fmt:`, `sql:`, `x:` and `fn:`. This page fixes the coordinates, the dependency contract, the tags and functions, and the behaviour that the spec leaves to the implementation.
+
+== Coordinates
+
+[cols="1,2",options="header"]
+|===
+| Artefact | Coordinates
+
+| `bodoni-core` | `io.vidocq.bodoni:bodoni-core:{project-version}`
+| `bodoni-peano` | `io.vidocq.bodoni:bodoni-peano:{project-version}` (optional engine adapter, Java module `io.vidocq.bodoni.peano`)
+| `bodoni-architecture-tests` | Unpublished, never released. Test only: Bodoni's architecture rules (allowed dependencies per module, the layers, `bodoni-core` portable and free of any Ibarra, Peano, Foy or Vauban class, no reflection outside the documented fallback, no platform thread, no `ThreadLocal`) on the classes of `bodoni-core` and `bodoni-peano`. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`, in test scope; it brings ArchUnit (Apache-2.0), also test scope. The one reflective fallback is `Class.forName(driver, true, loader)` for the JDBC driver a `sql:` data source names (Tags 3.0 section 10.2), listed with its reason in `ArchitectureRules.REFLECTIVE_FALLBACKS`.
+|===
+
+== Dependencies
+
+[cols="2,1,2",options="header"]
+|===
+| Dependency | Scope | Note
+
+| `jakarta.servlet.jsp.jstl:jakarta.servlet.jsp.jstl-api:3.0.2` | `compile` | The implemented spec. Its POM declares Servlet 6.0 / EL 5.0 at compile scope; Bodoni excludes them.
+| `jakarta.servlet.jsp:jakarta.servlet.jsp-api:4.0.0` | `provided` | Brought by the Pages container.
+| `jakarta.servlet:jakarta.servlet-api:6.1.0` | `provided` | Brought by the container.
+| `jakarta.el:jakarta.el-api:6.0.1` | `provided` | Brought by the container.
+| `com.h2database:h2:2.3.232` | `test` | In-memory database of the unit tests of `bodoni-core` and of the Ibarra IT; never shipped. The Open Liberty IT WAR also carries it at `runtime` scope, as the test application's own driver.
+| `org.junit.jupiter:junit-jupiter` | `test` | Managed by `vidocq-parent`.
+|===
+
+No build tooling dependency.
+
+[WARNING]
+.Deploying on an application server
+====
+* **Nothing to switch off** -- Open Liberty's `pages-4.0` feature has no switch for its bundled JSTL (Apache taglibs), and none is needed. With `bodoni-core` in `WEB-INF/lib`, Bodoni handles the URIs listed under <<tag-libraries>>. `bodoni-it-openliberty` tests the five `jakarta.tags.*` libraries and the legacy core URI `+http://java.sun.com/jsp/jstl/core+`. A page on a URI Bodoni does not declare, such as the JSTL 1.0 `+http://java.sun.com/jstl/*+` URIs, still gets Liberty's built-in tags.
+* **Exclude the JSTL API jar** from the WAR, with the `<exclusions>` below. `pages-4.0` provides it. Under the default `parentFirst` delegation the WAR's copy is never loaded, and under `parentLast` it is a second copy in the JVM.
+* **Keep the default class loader delegation** -- `parentLast` also works, but there is nothing to gain from it.
+* **What runs where** -- do not add `bodoni-peano`: it is for Peano, and Liberty runs its own EL. Bodoni's tag library validators run when Liberty translates a page, so a page that breaks a constraint of section 2.7 fails on first request with Bodoni's message. The application's JDBC driver and resource bundles are found in the WAR, with no server configuration for the lookup itself (a JNDI data source, for example, still needs a Liberty `<dataSource>` and a JDBC feature). `bodoni-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
+[source,xml]
+----
+<dependency>
+  <groupId>io.vidocq.bodoni</groupId>
+  <artifactId>bodoni-core</artifactId>
+  <version>${bodoni.version}</version>
+  <exclusions>
+    <exclusion>
+      <groupId>jakarta.servlet.jsp.jstl</groupId>
+      <artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
+    </exclusion>
+  </exclusions>
+</dependency>
+----
+
+[#test-tooling]
+=== Test tooling of the TCK runner
+
+The official TCK runner `bodoni-tck` (xref:tck.adoc[TCK status]) is built only under the `tck` profile and is never published. Its dependencies are test tooling, all at `test` scope in `bodoni-tck/pom.xml`, and are never shipped. Each is justified in the B5 pull request (workspace rule).
+
+[cols="2,1,3",options="header"]
+|===
+| Dependency | Scope | Note
+
+| `io.vidocq.ibarra:ibarra-arquillian:0.4.0-SNAPSHOT` | `test` | The Arquillian adapter that precompiles each TCK WAR with Ibarra and runs it on modular Foy. Brings the Arquillian container SPI, ShrinkWrap 1.2.6 (both Apache-2.0), the Ibarra compiler, Foy, Peano and Chappe.
+| `org.jboss.arquillian:arquillian-bom:1.9.4.Final` | `import` | One Arquillian version for the TCK clients, the JUnit 5 container and the adapter's SPI (Apache-2.0). Imported in the module's own `dependencyManagement`.
+| `org.jboss.arquillian.junit5:arquillian-junit5-container:1.9.4.Final` | `test` | The Arquillian JUnit 5 runtime the TCK clients run on (Apache-2.0).
+| `org.junit.platform:junit-platform-launcher` | `test` | The launcher API of the listener that starts the TCK database. Managed by `vidocq-parent`.
+| `com.h2database:h2:2.3.232` | `test` | The TCK database, served over TCP to the hosts (MPL-2.0 / EPL-1.0).
+| `jakarta.tck:tags-tck:11.0.3` | `test` | The official tests, under the `tck-official` profile only. Brings `jakarta.tck:common` 11.1.1, `commons-httpclient` 3.1 and `ant` 1.10.15. POM licence EPL-2.0 / GPL-2.0 with Classpath Exception; its `LICENSE.md` is the EFTL 1.1.
+| `jakarta-tags-tck-3.0.0.zip` | — | Not a Maven dependency: fetched by `run-official-tck-tags-3.0.sh` (or taken from `TAGS_TCK_ZIP`), SHA-256 pinned, read for the Derby DDL only, never committed. EFTL 1.0.
+|===
+
+[#tag-libraries]
+== Tag libraries
+
+Each library is served under the `jakarta.tags.*` URI and its JSTL 1.2 URI, and the core, formatting, SQL and XML libraries under their JSTL 1.0 request-time URI too: every URI of a library is mapped to the same classes. The JSTL 1.0 request-time descriptors use the same handlers, all their attributes are request-time, and they declare no deferred values (JSTL 1.0 predates deferred expressions): an attribute that is deferred in 3.0 (`c:set` `value`, `c:forEach` `items`, `c:forTokens` `items`) is a plain `java.lang.Object` attribute there. The XPath `select` of `x_rt` stays static, as in `x`. The JSTL 1.0 EL URIs (`http://java.sun.com/jstl/core`, `.../fmt`, `.../sql`, `.../xml`) are not shipped. JSTL 1.0 had no functions library, so there is no `fn_rt`.
+
+[cols="1,1,3,2",options="header"]
+|===
+| Library | Prefix | URIs | JSTL 1.0 request-time
+
+| Core | `c` | `jakarta.tags.core`, `http://java.sun.com/jsp/jstl/core` | `http://java.sun.com/jstl/core_rt` (`c_rt`)
+| I18N and formatting | `fmt` | `jakarta.tags.fmt`, `http://java.sun.com/jsp/jstl/fmt` | `http://java.sun.com/jstl/fmt_rt` (`fmt_rt`)
+| Relational database access | `sql` | `jakarta.tags.sql`, `http://java.sun.com/jsp/jstl/sql` | `http://java.sun.com/jstl/sql_rt` (`sql_rt`)
+| XML processing | `x` | `jakarta.tags.xml`, `http://java.sun.com/jsp/jstl/xml` | `http://java.sun.com/jstl/xml_rt` (`x_rt`)
+| Functions | `fn` | `jakarta.tags.functions`, `http://java.sun.com/jsp/jstl/functions` | none
+|===
+
+The TLDs are `META-INF/c.tld`, `c-1_2.tld`, `c-1_0-rt.tld`, `fmt.tld`, `fmt-1_2.tld`, `fmt-1_0-rt.tld`, `sql.tld`, `sql-1_2.tld`, `sql-1_0-rt.tld`, `x.tld`, `x-1_2.tld`, `x-1_0-rt.tld`, `fn.tld` and `fn-1_2.tld` in `bodoni-core`. The handlers are in the exported packages `io.vidocq.bodoni.core.tags.core`, `io.vidocq.bodoni.core.tags.fmt`, `io.vidocq.bodoni.core.tags.sql` and `io.vidocq.bodoni.core.tags.xml`, the functions in `io.vidocq.bodoni.core.functions`.
+
+[#constraints]
+=== Constraints
+
+Tags 3.0 §2.7 requires the constraints of each action to be reported at translation time, "unless they operate on a dynamic attribute value". Each descriptor of the core, formatting, SQL and XML libraries (the 3.0, JSTL 1.2 and JSTL 1.0 request-time files) names a tag library validator: `io.vidocq.bodoni.core.tags.core.CoreTagLibraryValidator`, `...tags.fmt.FmtTagLibraryValidator`, `...tags.sql.SqlTagLibraryValidator` and `...tags.xml.XmlTagLibraryValidator`. They are public, final and stateless, take no initialization parameter, and read the XML view of the page with `java.xml` SAX; the external DTD subset of a DOCTYPE is not loaded (an XHTML DOCTYPE kept in a JSP document is harmless), every external general or parameter entity is refused, and a view that cannot be read is itself reported. The functions library has no validator.
+
+Each validator checks the elements of the URI it is called for, whatever that URI is: a `jakarta.tags.*` or legacy URI, a TLD path, a `web.xml` alias or a `urn:jsptld:` namespace.
+
+[cols="1,3,1",options="header"]
+|===
+| Library | Reported | Spec
+
+| `c`, `x` | A `choose` whose body holds anything but white space, `when` and `otherwise` (template text, a scriptlet, another action), no `when`, a `when` after the `otherwise`, or a second `otherwise`. A `jsp:body` child is transparent; a `jsp:attribute` child is ignored | §5.4, §12.3
+| `c`, `x` | A `when` or `otherwise` whose parent (seen through a `jsp:body`) is not a `choose` | §5.5, §5.6, §12.4, §12.5
+| `c`, `fmt`, `sql`, `x` | `scope` without `var` on `c:if`, `c:set`, `fmt:message`, `fmt:formatNumber`, `fmt:parseNumber`, `fmt:formatDate`, `fmt:parseDate`, `sql:update`, `x:if`, `x:parse` and `x:transform` | §4.3, §5.3, §8.8, §9.7-§9.10, §10.4, §11.2, §12.2, §13.2
+| `c` | `c:set` with neither `var` nor `target`, with `var` and `target` or `property`, or with `target` and `property` apart | §4.3
+| `c` | `c:forEach` with neither `items` nor `end` (`begin` defaults to 0, as in the handler) | §6.2
+| `c` | `c:import` with `varReader` and `var` or `scope` | §7.4
+| `fmt` | `fmt:param` not nested in a `fmt:message` | §8.9
+| `sql` | A `dataSource` attribute on `sql:query` or `sql:update` nested in a `sql:transaction` | §10.3-§10.5
+| `sql` | `sql:setDataSource` with neither `dataSource` nor `url`, or with `dataSource` and any of `url`, `driver`, `user`, `password` | §10.6
+| `sql` | `sql:param` or `sql:dateParam` not nested in `sql:query` or `sql:update` | §10.7, §10.8
+| `x` | `x:parse` with neither `var` nor `varDom`, with both, with `doc` and `xml`, or with `scopeDom` without `varDom` | §11.2
+| `x` | `x:transform` with `doc` and `xml`, `docSystemId` and `xmlSystemId`, or `var` and `result` | §13.2
+| all four | A literal `scope` or `scopeDom` other than `page`, `request`, `session` and `application`; an empty `var`, `varDom`, `varStatus` or `varReader` | §2.7
+|===
+
+An attribute counts as present when it is an XML attribute or a `jsp:attribute` of that name. §2.7 reports at run time a constraint that "operate[s] on a dynamic attribute value": an attribute whose "Dynamic" column is true in the spec tables. So `begin` < 0 and `step` < 1 (§6.2, §6.3, §12.6), `maxRows` < -1 (§10.3) and an invalid `currencyCode` (§9.7) are reported by the handler, as a `JspException`, even for a literal value; the official TCK catches that exception for `maxRows="-5"`. Values are checked on the static attributes `var`, `varDom`, `varStatus`, `varReader`, `scope` and `scopeDom`, when they are literal. A literal is an attribute value that holds no request-time expression (`<%= %>`) and no EL expression. When the page sets `isELIgnored`, `${...}` and `#{...}` are literal text and are checked. With `deferredSyntaxAllowedAsLiteral`, `#{...}` is. A static attribute may also be given by a `jsp:attribute` whose body is template text only: that text, trimmed unless `trim="false"`, is checked like an attribute value. Any other `jsp:attribute` value is checked at run time.
+
+The `choose`, `when`, `otherwise`, `transaction`, `message`, `query` and `update` actions are matched in the validated URI and across every standard URI of their library, so a `c_rt:when` inside a `c:choose` is accepted, as the handlers accept it. The nesting of `fmt:param`, `sql:param` and `sql:dateParam` is not checked in a tag file (one that holds a `tag`, `attribute` or `variable` directive, a `jsp:doBody` or a `jsp:invoke`), nor under an action of a tag library other than Bodoni's, whose handler may implement the expected type, nor when no action encloses them (the top level of a tag file without a directive cannot be told from a page): at run time the action may sit inside the expected one. The handlers keep their own run-time checks, which a container that runs no validator still applies.
+
+Some syntax errors are left to the run time. A body-less form that misses its value (`<c:if test="..."/>` without `var`, `<fmt:message/>` without `key`, `<sql:query var="r"/>` without `sql`) is the body form with an empty body, since `<a/>` is `<a></a>`. An invalid value of an attribute with a fixed set of values (`type`, `dateStyle`, `isolation`) is a dynamic attribute, which §2.7 reports at run time.
+
+NOTE: Ibarra runs tag library validators when the page is initialized, before it writes any output, not when it compiles the page (IBARRA-087): a page that breaks a constraint fails on its first request with HTTP 500. Jasper and Open Liberty run them at translation time.
+
+=== Core tags (`c:`)
+
+The attributes of each tag are those of {spec-tags-3-0}[the specification] (chapters 4 to 7).
+
+[cols="1,3",options="header"]
+|===
+| Tag | Role (spec chapter)
+
+| `c:out` | Evaluates an expression and writes it, XML-escaped by default (4)
+| `c:set` | Sets a scoped variable, or a property or map entry of a target (4)
+| `c:remove` | Removes a scoped variable (4)
+| `c:catch` | Catches a `Throwable` of its body into a variable (4)
+| `c:if` | Conditional on a `test` expression (5)
+| `c:choose`, `c:when`, `c:otherwise` | Mutually exclusive conditional (5)
+| `c:forEach` | Iterates over a collection, array, map, iterator, enumeration, comma-separated string, or an integer range; exposes `varStatus` (6)
+| `c:forTokens` | Iterates over the tokens of a string split on delimiters; `items` may be a deferred expression, and a non-String value is coerced to String (6)
+| `c:import` | Includes the content of an absolute or relative URL (7)
+| `c:url` | Builds a URL, rewritten for the context and the session (7)
+| `c:redirect` | Sends an HTTP redirect (7)
+| `c:param` | Adds a request parameter to its enclosing `c:import`, `c:url` or `c:redirect` (7)
+|===
+
+=== I18N and formatting tags (`fmt:`)
+
+The twelve handlers of `io.vidocq.bodoni.core.tags.fmt`, with the attributes of `fmt.tld` (spec chapters 8 and 9). Attributes marked * are required. Every attribute except `var` and `scope` accepts a runtime expression.
+
+[cols="1,3",options="header"]
+|===
+| Tag | Attributes
+
+| `fmt:setLocale` | `value`*, `variant`, `scope`
+| `fmt:requestEncoding` | `value`
+| `fmt:timeZone` | `value`*
+| `fmt:setTimeZone` | `value`*, `var`, `scope`
+| `fmt:bundle` | `basename`*, `prefix`
+| `fmt:setBundle` | `basename`*, `var`, `scope`
+| `fmt:message` | `key`, `bundle`, `var`, `scope`
+| `fmt:param` | `value`
+| `fmt:formatNumber` | `value`, `type`, `pattern`, `currencyCode`, `currencySymbol`, `groupingUsed`, `maxIntegerDigits`, `minIntegerDigits`, `maxFractionDigits`, `minFractionDigits`, `var`, `scope`
+| `fmt:parseNumber` | `value`, `type`, `pattern`, `parseLocale`, `integerOnly`, `var`, `scope`
+| `fmt:formatDate` | `value`*, `type`, `dateStyle`, `timeStyle`, `pattern`, `timeZone`, `var`, `scope`
+| `fmt:parseDate` | `value`, `type`, `dateStyle`, `timeStyle`, `pattern`, `timeZone`, `parseLocale`, `var`, `scope`
+|===
+
+* Dates are `java.util.Date` values, the type of the spec; `java.time` types are not supported.
+* `fmt:parseDate` parses non-lenient (spec 9.10): every field value must be valid, so `2/30/02` is refused. Like `DateFormat.parse(String)`, and like `fmt:parseNumber`, it ignores text after a complete date: with the default `type="date"`, `Nov 21, 2000 3:45:02 AM` gives November 21, 2000, the time left unread.
+* Since JDK 20 the CLDR date and time styles of many locales put a narrow no-break space (U+202F) or a no-break space (U+00A0) where users type an ASCII space, such as before `AM`/`PM` in `en_US` (`h:mm:ss`, U+202F, `a`). When a style-based `fmt:parseDate` fails and its pattern contains one of them, it tries once more with those characters made ASCII spaces, so `3:45:03 AM` parses with `type="time"`. An explicit `pattern` attribute is matched as written. A value neither attempt parses is a `JspException` that names the value, caused by the `ParseException` of the first attempt.
+* The `prefix` of an enclosing `fmt:bundle` applies to every nested `fmt:message`, including one with an explicit `bundle` attribute (spec 8.6, "any nested `<fmt:message>` actions").
+* The actions that establish a localization context set the locale of the response (`ServletResponse.setLocale`, and the session charset attribute when a session exists): `fmt:setLocale`, `fmt:bundle`, `fmt:setBundle`, and `fmt:message` when its `bundle` attribute is given or when it falls back to a configured basename (spec 8.4). A `LocalizationContext` without a locale leaves the response locale unchanged, and the configuration variable `jakarta.servlet.jsp.jstl.fmt.localizationContext` set to a ready `LocalizationContext` is used as is.
+
+[#fmt-config]
+==== Configuration settings
+
+The `fmt:` handlers read these settings through `Config.find`: page, request, session and application scope, then the context initialisation parameter of the same name.
+
+[cols="2,3",options="header"]
+|===
+| Setting | Role
+
+| `jakarta.servlet.jsp.jstl.fmt.locale` | The application-based locale, written by `fmt:setLocale`: when set, it replaces the browser locales (`Accept-Language`) as the preferred locale of every `fmt:` action (8.11.1)
+| `jakarta.servlet.jsp.jstl.fmt.fallbackLocale` | Locale tried after the preferred locales, both for the bundle of a localization context and for the formatting locale lookup (8.11.2, 9.3.3)
+| `jakarta.servlet.jsp.jstl.fmt.localizationContext` | Default `LocalizationContext`, or a base name, for `fmt:message`; its locale is also the formatting locale of a formatting action that is not in a `fmt:bundle` with a locale (8.11.3, 9.2)
+| `jakarta.servlet.jsp.jstl.fmt.timeZone` | Default time zone of the date tags (9.11)
+|===
+
+Formatting in a locale other than English needs the JDK module `jdk.localedata` in a `jlink` image or a runtime started with `--limit-modules`.
+
+[#bundles]
+=== Resource bundles under Java Modules
+
+`fmt:bundle`, `fmt:setBundle` and `fmt:message` load a bundle by name with `ResourceBundle.getBundle(basename, locale, loader)`, where `loader` is the thread context class loader, or the system class loader when it is `null`. This is also the loader of the `LocaleSupport` class of the JSTL API. The first-level matching rules of spec 8.3.1 are applied by Bodoni itself: the JDK refuses a `ResourceBundle.Control` supplied by a named module, so Bodoni filters the candidate locales, and the JVM default locale is never used.
+
+The lookup requires the container to run each request with the application class loader as thread context class loader, as the Jakarta EE platform requires. The Vidocq runtime does. BOD-002 is fixed in link:https://codefloe.com/Vidocq/foy/pulls/76[Vidocq/foy#76] (Foy BUG-20261022-06). Foy builds that predate it leave the request thread's context class loader unset, so `fmt:` cannot find application bundles; the `it-ibarra` ITs need a Foy snapshot that contains the fix.
+
+What the lookup can see depends on where the application keeps its bundles. Observed on JDK 25 (2026-10-22), from a library module, with a named application module in the same class loader:
+
+[cols="3,2,2",options="header"]
+|===
+| Bundle location | Named application module | Application on the class path (WAR)
+
+| Encapsulated package | not found (every `getBundle` overload, including on behalf of the page's module) | found
+| `opens`ed package | found | found
+| Jar root or non-package directory (for example `i18n-bundles/`) | found | found
+| Class-based bundle in a non-exported package | not found | found
+|===
+
+For an application that is a named module, pick one of these placements:
+
+. **`opens` the bundle package** to everyone. The JSTL resolves bundles by name at run time, from another module, so the package must be open for the lookup to see it.
+. **Put the bundles at the jar root, or in a directory whose name is not a Java package** (`i18n-bundles/Messages_fr.properties`, base name `i18n-bundles.Messages`). No `opens` is needed.
+. **Build the `LocalizationContext` in application code** and set it as `jakarta.servlet.jsp.jstl.fmt.localizationContext` (any scope). The application loads the bundle from inside its own module, so nothing is `opens`ed.
+
+An application on the class path, such as a WAR, needs none of this.
+
+A module-aware lookup, where generated code runs inside the application module, is deferred to `bodoni-ibarra` (B6).
+
+[#sql]
+=== SQL tags (`sql:`)
+
+The six handlers of `io.vidocq.bodoni.core.tags.sql`, with the attributes of `sql.tld` (spec chapter 10). Attributes marked * are required. Every attribute except `var` and `scope` accepts a runtime expression.
+
+[cols="1,3",options="header"]
+|===
+| Tag | Attributes
+
+| `sql:query` | `sql`, `dataSource`, `maxRows`, `startRow`, `var`*, `scope`
+| `sql:update` | `sql`, `dataSource`, `var`, `scope`
+| `sql:transaction` | `dataSource`, `isolation`
+| `sql:param` | `value`
+| `sql:dateParam` | `value`*, `type`
+| `sql:setDataSource` | `dataSource`, `driver`, `url`, `user`, `password`, `var`, `scope`
+|===
+
+* **Statement (10.3, 10.4).** The `sql` attribute when it is set, and the body then only runs the nested parameter actions; otherwise the trimmed body. An empty statement is a `JspTagException`. The text goes to `Connection.prepareStatement` exactly as the page wrote it, and the `?` markers are bound in order by the nested `sql:param` and `sql:dateParam` actions.
+* **`sql:query` (10.3).** Exports a disconnected `jakarta.servlet.jsp.jstl.sql.Result` (see <<sql-result>>) to `var`, in `scope` (page by default). `maxRows` comes from the attribute, else from the `jakarta.servlet.jsp.jstl.sql.maxRows` setting, else there is no limit (`-1`). `startRow` rows are skipped first (`0` by default). A `maxRows` below `-1`, a `startRow` below `0` and an invalid setting are a `JspTagException`, raised before any connection is opened.
+* **`sql:update` (10.4).** Exports the number of rows affected, an `Integer`, to `var` when it is set; `0` for a statement that returns nothing, such as DDL.
+* **`sql:transaction` (10.5).** `isolation` is `read_committed`, `read_uncommitted`, `repeatable_read` or `serializable`, lowercase; another value is a `JspTagException`, raised before any connection is opened. The action opens one connection, refuses it when its isolation level is `TRANSACTION_NONE`, switches auto-commit off, and sets the isolation only when it differs from the current one. The nested `sql:query` and `sql:update` actions run on that connection and must not have a `dataSource` attribute (`JspTagException`). The transaction commits at the end of the body. An exception from the body rolls it back, once auto-commit was switched off, and is rethrown; a rollback failure is added to it as suppressed. Then the isolation level and the auto-commit mode are restored and the connection is closed, always; a failure in these steps is written to the servlet context log (`ServletContext.log`), never thrown.
+* **`sql:param` (10.7).** Binds the `value` attribute; a `null` value is the SQL `NULL`, set with `setNull` and the type the driver reports for the marker (`Types.NULL` when it cannot tell). Without `value`, the trimmed body is the value: a body that evaluates to empty text binds `""`, not `NULL`; an element without a body (`<sql:param/>`) binds `NULL`.
+* **`sql:dateParam` (10.8).** Converts the `java.util.Date` value to a `java.sql.Date`, `Time` or `Timestamp` as `type` says (`date`, `time` or `timestamp`, the default); a value already of that type is passed as is, and a `null` value is the SQL `NULL`. Another `type` is a `JspTagException`.
+* **Dates, times and timestamps.** A `java.sql.Date`, `Time` or `Timestamp` parameter, from `sql:dateParam` or `sql:param`, is bound with `setDate`, `setTime` or `setTimestamp` and a default-zone `Calendar`, which JDBC defines as equivalent to the plain setters. Some drivers (H2) convert the plain form with `java.time` zone rules, which differ from the legacy `java.util` rules before 1891 in zones such as `Europe/Paris`, so a date of 1788 reached the database as the day before (BOD-005 in `BUG.md`, fixed). Any other value is bound with `setObject`.
+* **Parameter actions** must be nested in an action that implements `SQLExecutionTag`, such as `sql:query` and `sql:update`; otherwise they fail with a `JspTagException`.
+* **`sql:setDataSource` (10.6).** Builds a data source from `dataSource` (an object, a JNDI path or a JDBC parameter string, see <<sql-data-sources>>) or, without it, from `url`, `driver`, `user` and `password`, with no JNDI lookup; an empty `driver` means none. With neither `dataSource` nor `url`, or with `dataSource` set to `null`, it fails with a `JspException`. The source is resolved at once (JNDI lookup, or driver class loaded) but no connection is opened. The resolved `javax.sql.DataSource` is exported to `var` in `scope` or, without `var`, set as the `jakarta.servlet.jsp.jstl.sql.dataSource` setting in `scope` (page by default). The password stays inside the data source and appears in no message.
+* **Errors (10.3 to 10.6, "Null & Error Handling").** Data-source and database failures end the action with a `JspException`, cause kept when there is one:
+** `<action>: dataSource is null` for a `dataSource` attribute set to `null`; `<action>: no data source: neither the dataSource attribute nor jakarta.servlet.jsp.jstl.sql.dataSource is set` (`sql:setDataSource`: `no data source: set dataSource or url`);
+** `<action>: <resolution message>` when the data source cannot be resolved: an object of another type, an empty string, a JNDI name bound to something else, a driver class that cannot be loaded (see <<sql-data-sources>>);
+** `<action>: cannot get a connection from <source> to execute "<statement>": <message>` for `sql:query` and `sql:update`, which name their statement as 10.3 and 10.4 require; `sql:transaction: cannot get a connection from <source>: <message>` for the transaction's own connection; `<message>` is `the data source returned no connection` when `getConnection` answers `null`;
+** `<action>: cannot execute "<statement>": <message>`;
+** `<action>: cannot close the connection to <source> after "<statement>": <message>` for a failure to close the connection `sql:query` or `sql:update` opened (suppressed on the statement failure when both happen);
+** `sql:transaction: cannot start the transaction: <message>` and `sql:transaction: commit failed: <message>`.
+* **Attribute errors** are `JspTagException`s.
+* **Credentials in errors.** `<source>` never carries a password: it is the redacted string, `DriverManagerDataSource[<redacted URL>]`, or the class name of a `DataSource` object. The no-password guarantee covers resolving the data source and connecting (see <<sql-data-sources>>). Once a connection is open, a statement failure keeps the driver's exception as its cause, and the cleanup of `sql:transaction` writes the driver's exception to `ServletContext.log`. The drivers known so far do not repeat credentials after connecting, but Bodoni does not scrub those exceptions.
+
+[#sql-data-sources]
+==== Data sources
+
+An action finds its data source in this order (10.1.1, 10.2), on every invocation; nothing is cached or pooled:
+
+. the `dataSource` attribute when the page specified it (specified as `null`, the action fails), else the `jakarta.servlet.jsp.jstl.sql.dataSource` setting, read through `Config.find` (page, request, session and application scope, then the context initialisation parameter); with neither, the action fails;
+. a `javax.sql.DataSource` is used as is;
+. a `String` is looked up as `java:comp/env/<string>` through `new InitialContext()`. A `DataSource` bound there is used; a name bound to anything else is an error. A blank string fails before any lookup;
+. when the lookup fails with any `NamingException` (no naming provider, name not found) or finds `null`, the string is read as a JDBC parameter string;
+. any other type is an error.
+
+*JDBC parameter string.* `url[,[driver][,[user][,password]]]`. The string is split on unescaped commas into at most four fields; the password takes the rest of the string, commas included. `\,` stands for a comma and `+\\+` for a backslash, in every field; a backslash before any other character is kept. An absent or empty driver means none; an absent user or password is the empty string. For example `jdbc:h2:mem:shop;DB_CLOSE_DELAY=-1,org.h2.Driver,sa,` (no password), or `jdbc:postgresql://db/shop,,app,pa\,ss` (no driver class, password `pa,ss`).
+
+*Driver discovery.* The data source of a JDBC parameter string captures the thread context class loader when it is created (Bodoni's own class loader when there is none). A named driver class is loaded there with `Class.forName(driver, true, loader)`; a class that is not found is an `SQLException` `JDBC driver class '<driver>' not found`, one whose initialisation fails `JDBC driver class '<driver>' cannot be loaded` (SQLState `08001`, cause kept). Each connection then comes from the first driver of `ServiceLoader.load(java.sql.Driver.class, loader)` that accepts the URL and connects, else from the first such driver that `DriverManager.drivers()` hands Bodoni (drivers registered with `DriverManager` and loadable by Bodoni's class loader: `DriverManager.drivers()` filters every registered driver by its caller's class loader). A JDBC 4 driver, which declares itself in `META-INF/services/java.sql.Driver`, is therefore found in the web application's `WEB-INF/lib` or in the application layer even when Bodoni sits elsewhere, as long as the container runs the request with the application class loader as thread context class loader (as for `fmt:` bundles). **A pre-JDBC 4 driver must be visible to Bodoni's own class loader**: `DriverManager` hands a driver only to a caller whose class loader can load it.
+
+WARNING: The data source of a JDBC parameter string keeps the context class loader it captured at construction. Kept in application scope (`sql:setDataSource scope="application"`, or a `DataSource` object the application stores), it keeps that loader alive across a reload of the web application, a class-loader leak. Build it at each application start, or prefer a `DataSource` provided by the container.
+
+This data source is meant for prototypes (10.1.1): it has no pool, every `getConnection` opens a new connection, and its login timeout is the driver's own (`setLoginTimeout` is ignored).
+
+*Connection failures.* When no driver accepts the URL, the `SQLException` reads `no JDBC driver accepts '<redacted URL>' (…)`, SQLState `08001`, without cause. When a driver fails, Bodoni throws its own `SQLException`, without cause, `JDBC driver <class> cannot connect to '<redacted URL>': <driver message>`, with the driver's SQLState and vendor code (`08001` and `0` for a `RuntimeException` of the driver). The driver's exception is not kept, because a driver may repeat the URL or the password anywhere in its cause chain.
+
+*Redaction.* Every message shows a JDBC URL without its user information, then cut at the first `;` or `?` of what follows: `jdbc:x://user:secret@host/db` shows as `jdbc:x://host/db`, `jdbc:oracle:thin:scott/tiger@host:1521:db` as `jdbc:oracle:thin:@host:1521:db`, and `jdbc:mysql://u:pa;ss@host/db` as `jdbc:mysql://host/db`. The user information ends at the last `@`, so an `@` in the path or in a property of a URL can shorten what is shown; when that `@` falls in a property value, whatever its key (`jdbc:x://host/db?password=p@ss`, `;token=abc@def`), the URL is cut where the user information would start (`jdbc:x://`): redaction hides more than the credentials rather than less. In a driver's message, the full URL, and the URL cut at its first `;` or `?`, are replaced by the redacted one and every known secret by `***`: the password field and the password given to `getConnection(user, password)`, the password of the URL's user information, and the value of every URL property whose key contains `password` or `pwd` in any case (`password`, `sslpassword`, `trustStorePassword`, `PWD`), a `{…}` value both with and without its braces. Masking is literal: a driver that quotes, escapes or encodes the secret in its message is not masked, and a short password masks every occurrence of its text.
+
+[#sql-result]
+==== The `Result` of `sql:query`
+
+`sql:query` reads the rows into a disconnected `jakarta.servlet.jsp.jstl.sql.Result` before the connection is closed:
+
+[cols="1,3",options="header"]
+|===
+| Property | Value
+
+| `rows` | One `SortedMap` per row, keyed by the column label (an `AS` alias wins), case-insensitive (`String.CASE_INSENSITIVE_ORDER`) and unmodifiable: `${r.rows[0].title}` and `${r.rows[0].TITLE}` read the same column. A label that occurs twice keeps the first column in the map.
+| `rowsByIndex` | One `Object[]` per row, every column in order.
+| `columnNames` | The column labels, in order.
+| `rowCount` | The number of rows in the result.
+| `limitedByMaxRows` | `true` when a limit applies (`maxRows` other than `-1`) and the query had at least one more row than the result holds.
+|===
+
+* **Values** are those of `ResultSet.getObject`: the driver's types (`java.sql.Date`, `Timestamp`, `BigDecimal`, `byte[]`, …).
+* **`maxRows` and `startRow`.** With a limit, the driver is asked for at most `startRow + maxRows + 1` rows (`Statement.setMaxRows`, skipped when the sum exceeds `Integer.MAX_VALUE`). `startRow` rows are skipped, at most `maxRows` rows are kept, and the one extra row only tells whether the limit cut the result: a query that returns exactly `maxRows` rows after `startRow` is **not** limited. `maxRows="0"` gives no row, limited when the query had any row after `startRow`. A `startRow` past the last row gives an empty, unlimited result.
+* **Copies.** Each call to `getRows`, `getRowsByIndex` and `getColumnNames` returns new arrays, and the row maps cannot be modified. The cell values themselves, such as a `byte[]` or a `java.util.Date`, are the same objects on every call: do not modify them.
+* Under Peano with `peano.reflection=deny`, the properties of `Result` are read through the table of `bodoni-peano` (see <<bod-001>>).
+
+[#sql-config]
+==== Configuration settings
+
+The `sql:` handlers read these settings through `Config.find`: page, request, session and application scope, then the context initialisation parameter of the same name.
+
+[cols="2,3",options="header"]
+|===
+| Setting | Role
+
+| `jakarta.servlet.jsp.jstl.sql.dataSource` | Default data source of `sql:query`, `sql:update` and `sql:transaction` when they have no `dataSource` attribute: a `javax.sql.DataSource`, a JNDI path or a JDBC parameter string. `sql:setDataSource` without `var` sets it (10.1.1, 10.9.1)
+| `jakarta.servlet.jsp.jstl.sql.maxRows` | Default `maxRows` of `sql:query` (10.9.2): an `Integer` or another `Number` (its `intValue()`), or a `String` holding an integer, trimmed. Unset, blank or `-1` means no limit. Another type, a string that is not an integer, or a value below `-1` is a `JspTagException` naming the setting and the value, raised before any connection is opened
+|===
+
+[#sql-security]
+[CAUTION]
+.SQL injection and database credentials
+====
+*SQL injection.* A value written into the statement text is executed as SQL. In `SELECT * FROM book WHERE title = '${param.title}'`, the request parameter becomes part of the statement, and a value such as `' OR '1'='1` changes what it does. Write a `?` marker instead and bind the value with `sql:param` or `sql:dateParam`: Bodoni prepares every statement with `PreparedStatement` and passes a bound value to the driver as a value, never as SQL.
+
+[source,jsp]
+----
+<sql:query var="books">SELECT title FROM book WHERE title = ?<sql:param value="${param.title}"/></sql:query>
+----
+
+*Database credentials.* A JDBC parameter string in a context parameter (`jakarta.servlet.jsp.jstl.sql.dataSource`) or in a page (`dataSource`, `sql:setDataSource password="…"`) carries the database password in clear. Any code of the application can read it: a page through `${initParam[…]}`, Java code through `ServletContext.getInitParameter` or `Config.find`. Bodoni keeps it out of its own messages (see <<sql-data-sources>>), not out of the application. Prefer a `javax.sql.DataSource` provided by the container, through JNDI or as an object the application sets as the setting, and a database account limited to what the pages need.
+
+The JDBC-string data source has no pool and opens a connection for each action: it is meant for prototypes (spec 10.1.1).
+====
+
+[#sql-jndi-vidocq]
+[NOTE]
+.JNDI under Vidocq
+====
+Bodoni does the standard `new InitialContext()` lookup and ships no naming implementation. Under Vidocq, `java:comp` comes from the runtime's naming extension (`vidocq-runtime-naming-extension`, link:https://codefloe.com/Vidocq/vidocq/issues/297[vidocq#297]): without it, a JNDI path such as `jdbc/shop` is read as a JDBC parameter string and fails with `no JDBC driver accepts 'jdbc/shop'`. The `DataSource` object and JDBC-string forms work.
+====
+
+=== XML tags (`x:`)
+
+The handlers of `io.vidocq.bodoni.core.tags.xml`, with the attributes of `x.tld` (spec chapters 11 to 13). Attributes marked * are required. `select` is an XPath 1.0 expression evaluated by the JDK (`javax.xml.xpath`), never an EL expression; the other attributes except `var`, `varStatus`, `scope`, `varDom` and `scopeDom` accept a runtime expression.
+
+[cols="1,3",options="header"]
+|===
+| Tag | Attributes
+
+| `x:parse` | `doc`, `xml` (the document, also as the body), `systemId`, `filter`, `var`, `scope`, `varDom`, `scopeDom`
+| `x:out` | `select`*, `escapeXml`
+| `x:set` | `select`*, `var`*, `scope`
+| `x:if` | `select`*, `var`, `scope`
+| `x:choose`, `x:otherwise` | none
+| `x:when` | `select`*
+| `x:forEach` | `select`*, `var`, `varStatus`, `begin`, `end`, `step`
+| `x:transform` | `doc`, `xml`, `xslt`*, `docSystemId`, `xmlSystemId`, `xsltSystemId`, `var`, `scope`, `result`
+| `x:param` | `name`*, `value`
+|===
+
+* **XPath variables (11.1.2).** An expression reads the scoped variables of the page: `$foo` searches the page, request, session and application scopes in that order, and `$param:foo`, `$header:foo`, `$cookie:foo`, `$initParam:foo`, `$pageScope:foo`, `$requestScope:foo`, `$sessionScope:foo` and `$applicationScope:foo` read one source. `$sessionScope:` without a session is unbound and creates no session. An unbound variable fails the evaluation.
+* **Types (11.1.3).** A `Boolean`, a `String`, a `Node` or a `NodeList` is passed to XPath as is, a `Number` as a `Double`, any other object as `String.valueOf`. `x:parse` exports the `org.w3c.dom.Document` in `var` and `varDom`. `x:set` exports a `String`, a `Boolean` or a `Double`, and an immutable `NodeList` for a node-set. `x:forEach` exports the current `Node` in `var`.
+* **Context node.** Inside an `x:forEach`, the context node of a `select` is the current node; elsewhere it is an empty document (11.1.6), so only variables and constants can be selected.
+* **`x:transform`.** The result goes to the `result` attribute when it is set (a `javax.xml.transform.Result`), else to `var`, else to the page. A `Source` supplied by the page is passed as is. An `x:param` with a `null` value sets no parameter. A `Reader` supplied by the page is never closed by Bodoni.
+* **JDK engines.** Parsing, XPath and XSLT are the ones of `java.xml`: namespace-aware parsing, XInclude off, DTD validation off (a DOCTYPE with an internal subset is accepted), XSLT 1.0. There are no Xalan extension functions.
+
+[NOTE]
+====
+Inside `x:forEach`, `position()` and `last()` at the top level of a nested `select` evaluate against the context node alone, so they answer `1` and `1`: the JDK's `javax.xml.xpath` cannot set the context position and size of spec 12.6. Use `varStatus` (`count`, `last`) instead. Tracked as BOD-003 in `BUG.md`.
+====
+
+An empty `select` on `x:forEach` is an error, as spec 12.6 words it.
+
+[#xml-external-references]
+[CAUTION]
+.XML external references (XXE and SSRF)
+====
+An untrusted XML document or stylesheet can read local files or reach internal hosts through external entities, an external DTD subset, `xsl:import`, `xsl:include` and the XSLT `document()` function. `x:parse` and `x:transform` therefore apply a same-origin policy, and the JDK never fetches anything on its own: Bodoni resolves every external reference itself and hands the parser an opened stream. The origin comes from the system id the page gives (`systemId`, `docSystemId`, `xmlSystemId`, `xsltSystemId`) and is fixed before the document is read, so an `xml:base` in the document cannot widen it.
+
+* **No system id**: every external reference is refused.
+* **Absolute system id** (`https://example.org/data/doc.xml`): a reference must have the same scheme, host and port. The connection has connect and read timeouts, does not follow HTTP redirects, and a redirect or any non-2xx status is a failure. Under a `file:` system id a UNC target (`file:////host/share`) is refused.
+* **Relative system id** (`/xml/doc.xml`, or relative to the current page): a reference must stay inside the web application and is read through the `ServletContext`; an absolute reference is refused. The reference is resolved against the system id first, so `../x.xml` is accepted when the result is still inside the application; it is refused when the result leaves the web application (above the context root) or hides a dot segment in an encoding (`%2e%2e`, `..%2f`, `..%5c`). A reference into `/WEB-INF/` or `/META-INF/` is refused unless the system id is inside that same directory (see below). An opaque system id (`jar:`) allows no reference at all.
+
+The origin is the whole of what the system id names, not the directory of the document:
+
+* under a relative system id, the web application is the origin, but a reference may enter `/WEB-INF/` or `/META-INF/` only when the system id is already inside that same directory. A stylesheet kept under `/WEB-INF/` still imports its siblings: with `xsltSystemId="/WEB-INF/xsl/main.xsl"`, `<xsl:import href="common.xsl"/>` reads `/WEB-INF/xsl/common.xsl`. A public document cannot reach it: with `systemId="/data/catalog.xml"`, an entity to `/WEB-INF/web.xml` is refused (reason `inside /WEB-INF/ or /META-INF/ while the system id is not`). The directory names are matched on the first path segment, ignoring case, path parameters (`;x`), trailing dots and spaces, and a second level of percent encoding. A system id without a leading `/` inherits the directory of the page: in a view that lives under `/WEB-INF/` (a forwarded `/WEB-INF/views/list.jsp` with `systemId="catalog.xml"`), the system id is `/WEB-INF/views/catalog.xml`, inside `/WEB-INF/`; give such a page a context-relative public system id (`/data/catalog.xml`) or none. The `document()` function is resolved under the stylesheet's system id, not the document's: a stylesheet under `/WEB-INF/` that calls `document()` on URIs taken from its input document lends its access to `/WEB-INF/` to whoever wrote that input;
+* under an absolute `file:` system id, the whole local filesystem is the origin;
+* under an absolute `http:` or `https:` system id, the whole origin server is.
+
+So give no system id when you parse or transform an untrusted document: its external references are then all refused. A document whose system id is itself under `/WEB-INF/` still reaches the rest of `/WEB-INF/`.
+
+A refused or unreadable reference ends the action with a `JspException` that names the reference and the system id, with the cause kept. A system id attribute that is not a valid URI, or a relative one that climbs above the context root, is not a reference: the action ends with a `JspTagException` carrying the message of the `IllegalArgumentException`, before anything is read.
+
+The JDK secure processing mode is on for every parser, transformer and XPath: its entity expansion limits apply. XSLT and XPath extension functions are turned off explicitly, so the `jdk.xml.enableExtensionFunctions` system property cannot turn them back on. The JDK access properties for external DTDs, schemas and stylesheets are set to the empty string, so a system property cannot reopen the fetching.
+
+An `XMLFilter` passed to `x:parse` must not be shared across concurrent requests: Bodoni sets its parent and its entity resolver on each parse.
+
+To use a trusted remote document, load it first with `c:import` and give the text to `x:parse` or `x:transform`, or give the page a system id of the same origin as the references.
+====
+
+=== Functions (`fn:`)
+
+The 16 functions, with the signatures of `fn.tld` (spec chapter 15):
+
+[cols="2,3",options="header"]
+|===
+| Function | Signature
+
+| `fn:contains` | `boolean contains(String, String)`
+| `fn:containsIgnoreCase` | `boolean containsIgnoreCase(String, String)`
+| `fn:endsWith` | `boolean endsWith(String, String)`
+| `fn:escapeXml` | `String escapeXml(String)`
+| `fn:indexOf` | `int indexOf(String, String)`
+| `fn:join` | `String join(String[], String)`
+| `fn:length` | `int length(Object)`
+| `fn:replace` | `String replace(String, String, String)`
+| `fn:split` | `String[] split(String, String)`
+| `fn:startsWith` | `boolean startsWith(String, String)`
+| `fn:substring` | `String substring(String, int, int)`
+| `fn:substringAfter` | `String substringAfter(String, String)`
+| `fn:substringBefore` | `String substringBefore(String, String)`
+| `fn:toLowerCase` | `String toLowerCase(String)`
+| `fn:toUpperCase` | `String toUpperCase(String)`
+| `fn:trim` | `String trim(String)`
+|===
+
+== `c:import` and external resources
+
+* **Absolute URLs.** `http` and `https` go through `java.net.http.HttpClient`; any other absolute scheme goes through `URLConnection`. The client is created lazily, on the first absolute import, runs on virtual threads and has a 10 second connect timeout; each request has a 30 second timeout. `URLConnection` reads get the same limits (10 second connect, 30 second read timeout). There is no public client SPI.
+* **Relative URLs.** The resource is included through the `RequestDispatcher` of the current or of a foreign context (`context` attribute).
+* **Session identifier.** A `;jsessionid=` path parameter is stripped from the URL before it is requested.
+* **Character set.** The `charEncoding` attribute wins; otherwise the `charset` declared in the content type of the resource; otherwise `ISO-8859-1` (spec 7.4).
+
+== Spec-mandated dynamic behaviour
+
+* The `driver` of `sql:setDataSource` or of a JDBC parameter string is a class name: Bodoni loads it with `Class.forName(driver, true, loader)`, `loader` being the thread context class loader, else Bodoni's own class loader when there is none, because the spec asks that the driver class be loaded (10.2). It is the only class Bodoni loads by name for `sql:`; the drivers themselves are instantiated by `ServiceLoader` or by `DriverManager`, never by Bodoni (see <<sql-data-sources>>).
+* A `String` data source is looked up as `java:comp/env/<path>` through `new InitialContext()`, then interpreted as a JDBC parameter string `url[,[driver][,[user][,password]]]`. Bodoni ships no naming implementation: the lookup relies on the one the application server or the Vidocq runtime provides (see <<sql-jndi-vidocq>>).
+
+[#bod-001]
+== Peano deny mode: bodoni-peano (BOD-001)
+
+Under Peano with `peano.reflection=deny`, Peano reads bean properties only through accessor tables. The `varStatus` object of `c:forEach` and `c:forTokens` (Tags 3.0 section 6.1) is an anonymous `LoopTagStatus` implementation of the JSTL API that no application table can name, so reading `${s.index}` fails with "Reflection fallback denied". The `Result` that `sql:query` exports (section 10.3) is an internal Bodoni class in the same position. The `LocalizationContext` that `fmt:setBundle` and `fmt:bundle` export (section 8.1.1) has no table either, so `${b.resourceBundle}` and `${b.locale}` fail the same way.
+
+Add `bodoni-peano` to the application when it runs on Peano with `peano.reflection=deny`. It is an optional engine adapter: its Java module `io.vidocq.bodoni.peano` requires `jakarta.servlet.jsp.jstl` and `io.vidocq.peano.api`, exports nothing, and provides Peano's `AccessorProvider` service with three read-only tables, keyed on the API types: `LoopTagStatus` (`current`, `index`, `count`, `first`, `last`, `begin`, `end`, `step`), `Result` (`rows`, `rowsByIndex`, `columnNames`, `rowCount`, `limitedByMaxRows`) and `LocalizationContext` (`resourceBundle`, `locale`; a class, so subclasses are served too). It is the only Bodoni module that depends on Peano (`peano-api`); `bodoni-core` does not. The Bodoni Vidocq runtime extension will declare it. With `peano.reflection=allow`, or on another Pages container, it is not needed.
+
+The `key` and `value` of the `Map.Entry` items of a `c:forEach` over a `Map` need no Bodoni module: Peano resolves tables through superclasses and interfaces and ships its own `Map.Entry` table.
+
+== Compatibility
+
+* **Java**: 25 (LTS).
+* **Maven**: 3.9.16 (Model 4.0.0).
+* **Java Modules**: strict, every module has a `module-info.java`.
+* **Virtual threads**: no `synchronized`, no `ThreadLocal`. The JDBC calls of `sql:` run on the thread that renders the page.
+* **Runtime image**: a `jlink` image, or a runtime started with `--limit-modules`, must contain the JDK modules `bodoni-core` requires: `java.xml`, `java.sql`, `java.naming` and `java.net.http` (with `java.desktop`, which the JSTL API module requires).
+* **Specs**: targets {spec-tags-3-0}[Jakarta Standard Tag Library 3.0] on Jakarta Pages 4.0, Servlet 6.1 and Expression Language 6.0.

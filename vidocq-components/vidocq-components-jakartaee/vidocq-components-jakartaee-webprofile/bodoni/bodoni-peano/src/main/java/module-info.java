@@ -1,0 +1,38 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+
+/**
+ * Bodoni :: Peano — optional engine adapter between Bodoni and Peano.
+ *
+ * <p>Under {@code -Dpeano.reflection=deny} Peano reads bean properties only through
+ * accessor tables. {@code LoopTagStatus}, the {@code varStatus} object of Tags 3.0
+ * section 6.1, {@code Result}, the {@code var} object of {@code sql:query} (section 10.3),
+ * are implemented by classes of the JSTL API or of Bodoni that no application table can name,
+ * so this module contributes a table for each, keyed on the interface. {@code LocalizationContext},
+ * the {@code var} object of {@code fmt:setBundle} (section 8.1.1), is a class that applications
+ * may subclass: its table is keyed on the class. Nothing is
+ * exported: Peano discovers the provider through the service declaration.
+ */
+module io.vidocq.bodoni.peano {
+    requires jakarta.servlet.jsp.jstl;
+    requires io.vidocq.peano.api;
+
+    provides io.vidocq.peano.spi.AccessorProvider with io.vidocq.bodoni.peano.internal.BodoniAccessorProvider;
+}
