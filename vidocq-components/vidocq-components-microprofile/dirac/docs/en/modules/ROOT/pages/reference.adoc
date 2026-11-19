@@ -1,0 +1,235 @@
+= Reference
+:description: Maven artefacts, Java modules, supported annotations, configuration keys, types and units.
+
+[.lead]
+This page consolidates the public surface of Dirac: artefacts to declare, exported Java modules, supported MicroProfile Metrics 5.1.1 annotations, and the `mp.metrics.*` keys recognised by the implementation.
+
+== Maven artefacts
+
+[cols="2,2,3"]
+|===
+| `groupId` | `artifactId` | Role
+
+| `io.vidocq.dirac`
+| `dirac-mp-metrics-api`
+| Local repackage of `microprofile-metrics-api:5.1.1` with an explicit `module-info.class`. Lifts the `jlink` blocker (M9).
+
+| `io.vidocq.dirac`
+| `dirac-api`
+| Re-exposition of the MP Metrics spec and stable Dirac SPI (`DiracException`, `HistogramSnapshot`, `TimerSnapshot`), plus the `io.vidocq.dirac.spi.gen` descriptors (`MetricsCompanion`) implemented by generated companions.
+
+| `io.vidocq.dirac`
+| `dirac-processor`
+| APT annotation processor (CG-05): generates `$$DiracMetrics` companion sources at compile time (names, units, tags, scopes resolved statically; gauges as direct functional accessors). Build-time only — never a runtime dependency.
+
+| `io.vidocq.dirac`
+| `dirac-core`
+| Pure-Java implementations: `CounterImpl`, `GaugeImpl`, `HistogramImpl`, `TimerImpl`, `MetricRegistryImpl`, `BaseMetricsRegistrar`, `OpenMetricsFormatter`, `JsonMetricsFormatter`. No CDI dependency.
+
+| `io.vidocq.dirac`
+| `dirac-cdi-vauban`
+| CDI interceptors (`CountedInterceptor`, `TimedInterceptor`), BCE `DiracExtension`, producer `MetricRegistryProducerBean`.
+
+| `io.vidocq.dirac`
+| `dirac-rest`
+| JAX-RS resource `MetricsResource` (plus the `ContentNegotiationFilter` `@PreMatching` filter) exposing `GET /metrics`. Optional — activated only if Cassini is on the classpath.
+
+| `io.vidocq.dirac`
+| `dirac-bench`
+| JMH benchmarks. Not for production.
+
+| `io.vidocq.dirac`
+| `dirac-examples`
+| Standalone and vidocq-mps-integrated examples. Not for production.
+
+| `io.vidocq.dirac`
+| `dirac-tck`
+| Official MP Metrics 5.1.1 TCK runner — in-reactor, gated behind the `tck` Maven profile (a plain `mvn install` never builds it). Do not declare as an application dependency.
+|===
+
+All artefacts share the version `{project-version}`.
+
+== Java modules
+
+[cols="2,3"]
+|===
+| Module | Contents
+
+| `microprofile.metrics.api`
+| MP Metrics 5.1.1 repackage with an explicit `module-info.class`. Exports `org.eclipse.microprofile.metrics` and `org.eclipse.microprofile.metrics.annotation`.
+
+| `io.vidocq.dirac.api`
+| Exports `io.vidocq.dirac.api` (stable public SPI) and `io.vidocq.dirac.spi.gen` (compile-time `MetricsCompanion` descriptors implemented by generated `$$DiracMetrics` companions). `requires transitive microprofile.metrics.api`.
+
+| `io.vidocq.dirac.processor`
+| APT processor module — generates the `$$DiracMetrics` companion sources. Compile-time only.
+
+| `io.vidocq.dirac.core`
+| `io.vidocq.dirac.internal.*` — private implementations, exported only to `io.vidocq.dirac.cdi.vauban` and `io.vidocq.dirac.rest`.
+
+| `io.vidocq.dirac.cdi.vauban`
+| `io.vidocq.dirac.cdi.internal.*` — interceptors and BCE. `provides BuildCompatibleExtension with DiracExtension`, `provides io.vidocq.vauban.api.VaubanComponentProvider with _VaubanComponents` (APT-generated, in-module create/inject), and `uses io.vidocq.dirac.spi.gen.MetricsCompanion` (companions provided by user modules).
+
+| `io.vidocq.dirac.rest`
+| `io.vidocq.dirac.rest.*` — JAX-RS resource. `opens` to `jakarta.cdi` and `jakarta.ws.rs` for runtime introspection.
+|===
+
+`io.vidocq.dirac.internal.*` is never exported to application code: any direct dependency signals a regression.
+
+[#bean-archives]
+=== Bean archives
+
+`dirac-cdi-vauban` and `dirac-rest` are explicit bean archives: each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A container that does not scan implicit archives, such as Weld SE by default, therefore still discovers the `@Counted` and `@Timed` interceptors, the `MetricRegistry` and gauge beans, and the `GET /metrics` resource. Under Vauban nothing changes: `annotated` is already how CDI Lite discovers beans. `DiracExtension` is listed in `META-INF/services` as well as in the module descriptor, so it also runs on a class path.
+
+[#other-containers]
+=== Other CDI containers
+
+Dirac does not need Vauban. The jars run unchanged under another CDI container, and two integration-test modules, grouped under `dirac-it-other-containers`, prove it on every build (dirac#23):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `dirac-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban: `@Counted`, `@Timed` and `@Gauge` land in the application registry. A second test starts two Weld containers in one JVM, the second one during the first one's start, and checks that each registers only its own gauges.
+
+| `dirac-it-openliberty`
+| A WAR bundling `dirac-cdi-vauban` and `dirac-rest` on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1), with Liberty's `mpMetrics` feature off: `GET /metrics/application` and `GET /metrics/base`, over HTTP.
+|===
+
+Neither module is published. What they found, now fixed:
+
+* **`vauban-api` is a runtime dependency** of `dirac-cdi-vauban` and `dirac-rest`, under any container. The Vauban build weaves a `protected` constructor taking `io.vidocq.vauban.api.ProxyLink` into each normal-scoped bean (`MetricRegistryProducerBean`, `GaugeRegistrationBean`, `MetricsResource`); a container that cannot load that type cannot load the class, and Weld drops the bean with an INFO message (`WELD-000119`) before failing the deployment (DRC-004). `vauban-api` holds API types only (13 KB): no Vauban code runs outside Vauban. Its Jakarta CDI dependencies are excluded, so the container's own CDI API stays the only one.
+* **Each container has its own discovered metrics** — see xref:internals.adoc[Internals] (DRC-005).
+* **The container's own classes are skipped** — on Open Liberty, the extension visits the server's beans too, and reported each one it could not load as an error, which failed the deployment (DRC-006).
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own metrics off** — `mpMetrics` on Open Liberty. Otherwise its interceptors count the same methods and it answers `/metrics` itself.
+* **Enable the server's CDI and Jakarta REST** — `cdi-4.0` and `restfulWS-3.1` on Open Liberty; Jakarta REST only if you use `dirac-rest`.
+* **Nothing to exclude** — the WAR carries the Dirac jars, the MicroProfile Metrics API (`dirac-mp-metrics-api`) and `vauban-api` (API types only). `dirac-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
+== Supported MicroProfile Metrics annotations
+
+[cols="2,3,1"]
+|===
+| Annotation | Effect | Status
+
+| `@Counted`
+| Interceptor increments a `Counter` (`LongAdder`) on every invocation. Supports `name`, `absolute`, `description`, `unit`, `tags`, `scope`.
+| ✅
+
+| `@Timed`
+| Interceptor measures duration via `System.nanoTime()` and feeds a `Timer` (internal `HistogramImpl`). Supports the same attributes as `@Counted`.
+| ✅
+
+| `@Gauge`
+| Resolved once by `DiracExtension` at startup via `MethodHandle`. Method must return a numeric type (`int`, `long`, `double`, `Number`).
+| ✅
+
+| `@RegistryScope`
+| Injection qualifier to pick among the three `MetricRegistry` (`APPLICATION`, `BASE`, `VENDOR`). Without qualifier → `APPLICATION` registry.
+| ✅
+
+| `@Metric`
+| Extra metadata on an injection point (name, description, unit, tags).
+| ✅
+
+| `@Histogram`
+| _Annotation absent from the `microprofile-metrics-api:5.1.1` JAR used — histograms are declared programmatically._
+| ⚠️ Not exposed by the API
+|===
+
+An interceptor binding of the application that carries `@Counted` or `@Timed`, an annotation annotated with `@InterceptorBinding` and with the metric annotation, names the metric as that annotation would on the same method, constructor or class. A bean carries the metrics of the methods it inherits and does not override: from a superclass, named after that superclass, and from the default methods of its interfaces, named after the interface. An abstract method of an interface carries no metric, and an interface on its own has none.
+
+== Configuration keys
+
+Dirac reads its configuration without any MicroProfile Config dependency: `DistributionConfig` resolves each key from `System.getProperty(...)` first, then scans every `META-INF/microprofile-config.properties` visible on the classpath. Exactly three keys are recognised:
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `mp.metrics.distribution.percentiles`
+| Global percentile list (`0.5,0.95,0.99`) or per-metric (`name=0.5,0.99`). An empty value disables percentiles.
+
+| `mp.metrics.distribution.histogram.buckets`
+| Fixed buckets for `Histogram`. Global or per metric.
+
+| `mp.metrics.distribution.timer.buckets`
+| Fixed buckets for `Timer`, expressed as `ms`, `s`, `ns`, etc. Global or per metric.
+|===
+
+[IMPORTANT]
+====
+`mp.metrics.tags` and `mp.metrics.appName` are **not implemented**: neither key is read, and no global tag is appended to the exposition. The reserved label names `mp_scope` and `mp_app` are rejected by `MetricRegistryImpl` when supplied as user tags.
+====
+
+[NOTE]
+====
+The MP Metrics 5.1 spec defines no path option (no equivalent of `quarkus.smallrye-metrics.path`). The `/metrics` endpoint is fixed by spec §2.3.
+====
+
+== `MetricUnits` types
+
+`org.eclipse.microprofile.metrics.MetricUnits` enumerates the canonical units:
+
+* Durations — `NANOSECONDS`, `MICROSECONDS`, `MILLISECONDS`, `SECONDS`, `MINUTES`, `HOURS`, `DAYS`
+* Sizes — `BITS`, `KILOBITS`, `MEGABITS`, `BYTES`, `KILOBYTES`, `MEGABYTES`, `GIGABYTES`
+* Generic — `NONE`, `PERCENT`, `PER_SECOND`
+
+Dirac performs no automatic conversion: the unit is exposed as declared. Prometheus convention: express durations as `SECONDS`, sizes as `BYTES`.
+
+== `GET /metrics` endpoint
+
+[cols="1,3"]
+|===
+| Route | `GET /metrics`, `GET /metrics/\{scope}`, `GET /metrics/\{scope}/\{name}`
+| Verbs | `GET` only
+| Types | `text/plain;version=0.0.4;charset=utf-8` (default, OpenMetrics), `application/json` (MP Metrics §3.2)
+| Source | `MetricRegistryImpl` (all three scopes, injected via `@RegistryScope`)
+| Status | `200` on success, `404` on unknown scope/metric
+| Implementation | `MetricsResource` + `ContentNegotiationFilter` in `dirac-rest`
+|===
+
+== Injectable `MetricRegistry`
+
+[source,java]
+----
+@Inject
+MetricRegistry application;                                          // APPLICATION
+
+@Inject @RegistryScope(scope = MetricRegistry.BASE_SCOPE)
+MetricRegistry base;
+
+@Inject @RegistryScope(scope = MetricRegistry.VENDOR_SCOPE)
+MetricRegistry vendor;
+----
+
+== Compatibility
+
+* Java 25 (LTS), Maven 3.9.16.
+* CDI 4.1 Lite (Vauban) or Lite-compatible — the standard `Interceptor` and `BuildCompatibleExtension` suffice. Proven on Weld SE 6.0 and Open Liberty (CDI 4.0): see <<other-containers>>.
+* JAX-RS 4.0 (Cassini) — only if `dirac-rest` is used.
+* No MicroProfile Config integration: the `mp.metrics.distribution.*` keys are read from system properties or `META-INF/microprofile-config.properties` directly.
+* No Jakarta EE Full Profile dependency.
+
+== Bugs and benchmarks
+
+* link:{repo-dirac}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:{repo-dirac}/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks (vs Micrometer / SmallRye).
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — MP Metrics 5.1.1 model.
+* xref:internals.adoc[Internals] — lock-free registry, BCE, formatters.
+* xref:tck.adoc[TCK] — status and execution.
+
+== Architecture rules
+
+`io.vidocq.dirac:dirac-architecture-tests` is a **test-only** module, never released. It runs Dirac's architecture
+rules on the classes of every shipped module: the dependencies of each module (the MicroProfile Metrics API and the Jakarta APIs it reads, nothing else), the layers between the modules, no reflection outside the documented fallbacks of `internals.adoc`, no platform thread, no
+`ThreadLocal`. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`,
+in test scope; it brings ArchUnit (Apache-2.0), also test scope. A change that breaks a rule fails the build.

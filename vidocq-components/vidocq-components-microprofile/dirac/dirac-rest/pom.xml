@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.dirac</groupId>
+        <artifactId>dirac-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>dirac-rest</artifactId>
+    <name>Dirac :: REST Endpoint</name>
+    <description>JAX-RS GET /metrics endpoint (OpenMetrics / Prometheus text format) — optional module activated if Cassini is present</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.dirac</groupId>
+            <artifactId>dirac-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Runtime dependency under any CDI container, not only Vauban: the build weaves a
+             `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans
+             (MetricsResource). Without this jar Weld cannot load their classes and skips the beans silently
+             (WELD-000119), then fails the deployment on unsatisfied injection points. API types
+             only, no code runs outside Vauban (vidocq-workspace#15, dirac-it-weld). Its Jakarta CDI
+             dependencies are excluded: the container brings the CDI API. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <version>${vauban.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- Cassini adapter codegen (APT): cassini-api supplies the adapter interface that the
+             generated $$CassiniAdapter implements. provided = compile-only, non-transitive — the jar
+             carries the pre-generated adapter but stays runtime-agnostic (requires static). -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-api</artifactId>
+            <version>${cassini.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+     <build>
+         <plugins>
+            <!--
+                Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
+                plugin is reserved for freezing external, non-APT dependency jars). It generates
+                _ClientProxy/_Factory, META-INF/vauban-beans.list (so a Vidocq runtime discovers
+                MetricsResource via the Vauban container) and _VaubanComponents (in-module
+                instantiation + field injection of the package-private @Inject MetricRegistry fields,
+                no opens). Inert / Weld-safe in plain CDI containers.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                        <!-- Cassini codegen (APT): generates MetricsResource$$CassiniAdapter at compile
+                             time (zero-reflection dispatch, AOT-friendly) so a Cassini runtime finds the
+                             pre-generated adapter — no runtime adapter generation, no opens, no
+                             build-time repackaging needed by the consuming app. -->
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-processor</artifactId>
+                            <version>${cassini.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <!-- Library module, not a complete deployment: MetricsResource injects
+                         MetricRegistry beans produced in dirac-cdi-vauban (cross-module, absent from
+                         the APT index); deployment validation runs at the Vidocq runtime assembly. -->
+                    <compilerArgs>
+                        <arg>-Avauban.validation=false</arg>
+                    </compilerArgs>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

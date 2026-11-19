@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Arquillian configuration for the MicroProfile Metrics 5.1.1 TCK suite.
+    The "dirac" qualifier is selected by the system property
+    arquillian.launch=dirac (see dirac-tck/pom.xml tck-official profile).
+-->
+<arquillian xmlns="http://jboss.org/schema/arquillian"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://jboss.org/schema/arquillian
+                                http://jboss.org/schema/arquillian/arquillian_1_0.xsd">
+
+    <container qualifier="dirac" default="true">
+        <!-- Dirac embedded local: no container properties required. -->
+    </container>
+
+</arquillian>

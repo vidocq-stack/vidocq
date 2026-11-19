@@ -1,0 +1,187 @@
+= Internals
+:description: Lock-free registry, CDI interceptors, Vauban BCE, hand-written formatters, threading model.
+
+[.lead]
+Dirac rejects instrumentation by hot-path reflection: all wiring is done at CDI container startup, and the hot path — bumping a counter, measuring a duration — engages neither lock, nor stray allocation, nor `synchronized`. This page describes the exact sequence and the threading invariants.
+
+[#generated-code]
+== Generated code and reflective fallback
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. For Dirac that is the metric metadata of each bean
+class; the annotation scan of the <<_startup_pipeline,startup pipeline>> stays as the fallback, unchanged.
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| `<Bean>$$DiracMetrics`, a `MetricsCompanion`: the names, units, tags and scopes of the class's `@Counted`, `@Timed`
+  and `@Gauge` metrics, resolved at compile time, and a direct accessor per gauge method
+| `dirac-processor` in javac; on Vidocq the `vidocq-runtime-dirac-metrics-extension-codegen` bundle puts it on the
+  processor path
+| `DiscoveredMetrics`, when the container starts and resolves the classes the extension found: `CompanionRegistry`
+  tries the `ServiceLoader` of `MetricsCompanion` (module layer aware), then `Class.forName(<bean>$$DiracMetrics)`
+| The class's annotations are scanned by reflection, and each gauge method is resolved to a `MethodHandle` through
+  `MethodHandles.privateLookupIn`, which on the module path needs the package opened to Dirac.
+
+| The interceptor bindings and the list of classes carrying metrics
+| `DiracExtension`, a Build Compatible Extension that Vauban runs in javac when `dirac-cdi-vauban` is on the
+  processor path
+| Vauban, from the synthetic metadata the processor wrote
+| The extension runs at boot.
+|===
+
+=== When the fallback runs
+
+* A class compiled without `dirac-processor`: a library of another build, the TCK's classes.
+* A companion that targets another class than the bean's (a stale jar) or cannot be instantiated: logged at
+  `WARNING`, then the scan.
+
+=== Which path ran
+
+Dirac does not announce the scan in the log. A test reads which tier resolved each class through the
+`CompanionRegistry` counters (`serviceLoaderHits()`, `preGeneratedHits()`, `scanFallbacks()`).
+
+== Separation `dirac-core` / `dirac-cdi-vauban`
+
+`dirac-core` is pure Java. It knows nothing of CDI or JAX-RS — only the MP Metrics spec. `CounterImpl`, `GaugeImpl`, `HistogramImpl`, `TimerImpl`, `MetricRegistryImpl`, `BaseMetricsRegistrar`, `OpenMetricsFormatter` and `JsonMetricsFormatter` are unit-testable without a container, and usable outside CDI (a Maven plugin or a JMH benchmark can consume them directly).
+
+`dirac-cdi-vauban` is the integration layer: `@Counted` and `@Timed` interceptors, the `DiracExtension` BCE that validates and resolves `@Gauge`, and the `MetricRegistryProducerBean` producer that exposes the three `MetricRegistry`.
+
+`dirac-rest` is the optional HTTP layer: `MetricsResource` consumes the registries and delegates to a formatter according to `Accept`, normalised upfront by `ContentNegotiationFilter`.
+
+== Startup pipeline
+
+[mermaid]
+....
+flowchart LR
+  BCE["DiracExtension<br/>BuildCompatibleExtension"]
+  Reg["MetricRegistryImpl<br/>APPLICATION / BASE / VENDOR"]
+  Base["BaseMetricsRegistrar<br/>JVM gauges"]
+  Gauges["@Gauge resolution<br/>MethodHandle"]
+  Prod["MetricRegistryProducerBean<br/>@ApplicationScoped"]
+
+  BCE --> Reg
+  BCE --> Base
+  Base --> Reg
+  BCE --> Gauges
+  Gauges --> Reg
+  BCE --> Prod
+  Prod --> Reg
+....
+
+. `DiracExtension` is discovered by Vauban through `ServiceLoader` (`provides BuildCompatibleExtension`).
+. `@Discovery` phase — `registerCustomInterceptorBindings(MetaAnnotations)` declares the interceptor bindings backing `@Counted` and `@Timed`.
+. `@Enhancement` phase — `collectMetricAnnotations(ClassInfo, Messages)` scans every bean class for `@Counted`, `@Timed` and `@Gauge`, which also validates them (a bad `@Gauge` fails the deployment), and keeps the name of each class that carries a metric. A class the application cannot load — the container's own types, on Open Liberty — is skipped.
++
+A class also carries the metrics of the methods it inherits from its superclasses and does not override, as CDI passes their binding on (CDI 4.1, §4.2). The extension reads the methods of each superclass from that superclass's own declaration, and the scan and the `$$DiracMetrics` companion name such a metric after the class that declares the method, as the interceptors do. The superclass may be outside the container's index, in a dependency jar: the extension never visits it on its own (DRC-011). A method of package access in another package than the bean's is left out: it is not inherited (JLS 8.4.8). A superclass that cannot be linked at run time, because one of its methods names a type of an absent optional dependency, ends the walk, and the bean keeps its own metrics. The creator of the synthetic bean reports it at `WARNING`, the extension's own pass at `DEBUG`: one `WARNING` per run of the extension, so one in a deployment frozen at build or one that runs the extension at start only, two when it runs at build and at start. The extension keeps such a class for the creator even when it has no metric of its own, since the metrics it would inherit cannot be read.
++
+The same walk collects the `@Gauge` methods a bean inherits and does not override, static ones left out (DRC-013). A gauge is not intercepted, so §4.2 does not apply, but its method belongs to the bean: the gauge is read on the bean, under the name its declaring class gives it. When the superclass is itself a bean, or is scanned on its own, it carries that gauge too: the gauge is read on the class that declares the method, not on its subclass. Two unrelated beans that carry one gauge id, two subclasses of one base say, give one gauge, read on the bean whose class name comes first, and a `WARNING` names both. The `$$DiracMetrics` companion lists the inherited gauges too; it calls them from the bean's package, so a gauge method inherited as `protected` from another package leaves the bean to the scan.
++
+An interface is no bean (CDI 4.1, §3.1.1): the extension keeps none, and an abstract method an interface declares carries no metric of the class that implements it. A default method a bean inherits from an interface and does not override is another matter: Vauban and Weld intercept it through the annotation of the interface's method. The scan collects, for the bean, the metrics of those default methods, `@Gauge` ones included, named after the interface that declares the method, as the interceptors name them (DRC-012). `Class.getMethods()` gives the most specific method of each signature, so a default method that the class, a superclass or a more specific interface overrides passes nothing on. The companion lists them too.
+. `@Synthesis` phase— `registerDiscoveredMetrics(SyntheticComponents)` registers a synthetic `DiscoveredMetrics` bean whose parameter lists those class names; `DiscoveredMetricsCreator` resolves their metrics again, in the container: gauge methods to `MethodHandle` (preferring `MethodHandles.privateLookupIn` over `setAccessible`) when no compile-time `$$DiracMetrics` companion covers them. The state belongs to the extension instance, so each container has its own: two containers sharing Dirac's classes, as two applications on one class loader do, never see each other's metrics (dirac#23). It used to be a `static` field of the extension.
+. `MetricRegistryProducerBean` is a regular `@ApplicationScoped` bean; its **constructor** instantiates the three `MetricRegistryImpl` (`APPLICATION`, `BASE`, `VENDOR`) and invokes `BaseMetricsRegistrar` to populate the `BASE` scope (JVM gauges: GC, threads, heap, classloader, CPU, uptime). No `@PostConstruct` callback is involved.
+. `GaugeRegistrationBean`, at application start, takes this container's `DiscoveredMetrics` and registers the gathered `@Gauge` as `Gauge<T>` in the target scope (`APPLICATION` by default), and pre-registers the `@Timed` and `@Counted` metrics. Gauge beans are looked up in this container, not through `CDI.current()`. How the target of a gauge class is obtained is decided once, at the first read of one of its gauges, and kept, a failed decision too: one reference of the bean of that class. Among the container's beans, whatever their qualifiers, it is the one whose bean class is that class and that has a type of it: the raw class, or, for a class with type variables, a parameterized type of it (CDI 4.1 §5.2.4: the raw class of a class with a bounded type variable is not a type its bean is looked up by). Those with `@Default` are taken first, the others when there is none (DRC-017). A producer the class declares and a class whose bean types `@Typed` restricts are left out, so a read never runs a producer. A class with no bean of its own, such as an abstract superclass the extension scanned on its own, is read on the bean of that type with `@Default`. For a bean of a normal scope the reference is its client proxy. A `@Dependent` bean is created once, at the first read, and released when the container stops (DRC-016: each read used to create an instance, which Weld kept until the container stopped). When the resolution or the creation fails, each read fails with that cause and none tries again; a gauge with no bean at all fails at each read, unsatisfied. `GaugeRegistrationBean` reads the bean types, a `ParameterizedType` and its raw type, and no member: it is a documented entry of the architecture rule on reflection for that reason.
+
+No user class is instantiated until it is actually injected: `MethodHandle` resolution runs on metadata, not on instances.
+
+== `@Counted` hot path
+
+The `CountedInterceptor` is dispatched by CDI on every invocation. It maintains a `ConcurrentHashMap<CacheKey, ResolvedCounter>` cache keyed by `(BeanClass, Method)` — `MetricID` resolution happens only once, on the first call; subsequent calls pull from the cache.
+
+[source,java]
+----
+// simplified excerpt from CountedInterceptor.aroundInvoke
+ResolvedCounter resolved = counters.computeIfAbsent(
+    new CacheKey(beanClass, method),
+    k -> resolve(beanClass, method));
+resolved.counter.inc();        // LongAdder — no contention
+return ctx.proceed();
+----
+
+`Counter.inc()` is a `LongAdder.increment()` — no CAS, no `synchronized`. `Tag` is an immutable record.
+
+`TimedInterceptor` follows the same scheme: `long t0 = System.nanoTime();` before `ctx.proceed()`, `histogram.update(System.nanoTime() - t0);` after.
+
+Both interceptors name a metric with the scan's rule, `DiracExtension.resolveSimpleMetricName`, and find its annotation as the scan does: on the method, the constructor or the class itself, or on an interceptor binding of the application that carries it. They used to read the annotation on the element only, and looked up a name the scan never registered, so each call failed (DRC-014).
+
+== `MetricRegistryImpl`
+
+`MetricRegistryImpl` is a single `public final class` implementing the spec's `MetricRegistry` directly — no intermediate Dirac interface layer. Three invariants:
+
+. **`ConcurrentHashMap` per scope** — key `MetricID`, value `Metric`. Insert via `computeIfAbsent`, lock-free read.
+. **Idempotence** — `counter(metadata, tags)` returns the existing metric if already registered. No duplicate on a `MetricID`.
+. **No `synchronized`** — registration and reads go through the `ConcurrentHashMap` only. No critical memory barrier.
+
+The registry is `@ApplicationScoped`: one instance per scope, owned by `MetricRegistryProducerBean`.
+
+== `HistogramImpl` and percentiles
+
+`HistogramImpl` uses four lock-free primitives:
+
+* `LongAdder count` — sample counter.
+* `LongAdder sum` — sum of values.
+* `LongAccumulator max(Long::max, Long.MIN_VALUE)` — maximum.
+* `ConcurrentLinkedQueue<Long> values` — buffer for read-time percentile computation.
+
+Percentiles are computed lazily by the formatter (buffer sort + interpolation), not on every update. Instrumentation cost: one `add` on a lock-free queue plus three `adder` increments.
+
+Fixed buckets (`mp.metrics.distribution.histogram.buckets`) add a `_bucket{le=...}` family to the OpenMetrics output, computed by buffer scan.
+
+== `TimerImpl`
+
+`TimerImpl` wraps a `HistogramImpl` (with `timerMetric=true` to enable the timer-bucket profile). The `time(Runnable)` method measures via `System.nanoTime()`. No `ThreadLocal`, no thread-bound `Stopwatch`: the measurement lives on the call stack.
+
+== OpenMetrics format
+
+`OpenMetricsFormatter` builds the whole exposition with a `StringBuilder` and returns it as a `String` (`public String format(MetricRegistry)`); `MetricsResource` hands that `String` to JAX-RS. No third-party library, no templating engine.
+
+Conventions: `Counter` samples carry a `_total` suffix (added unless the name already ends with it); `Timer` is emitted as `summary` under `<name>_seconds` samples (`quantile` labels, `_seconds_count`, `_seconds_sum`, values converted from nanoseconds); `Histogram` with buckets is emitted as `histogram` (lines `_bucket{le=...}` plus the `+Inf` bucket, `_count`, `_sum`). Labels are the metric's own tags only — no `mp_scope` label — and the output is terminated by the `# EOF` marker.
+
+== JSON format
+
+`JsonMetricsFormatter` produces the MP Metrics §3.2 tree — one object per scope, containing one object per metric family. The serialiser is hand-written with `StringBuilder` (minimal string escaping, no pretty-printing) — in the spirit of xref:champollion::index.adoc[Champollion], without Jackson or Yasson.
+
+== Threading model
+
+=== No hot-path locks
+
+The hot path — `inc()`, `update(long)`, `time(...)` — engages neither `synchronized` nor `ReentrantLock`. The concurrent data structures (`LongAdder`, `LongAccumulator`, `ConcurrentHashMap`, `ConcurrentLinkedQueue`) are designed for heavy concurrency with no yield to the scheduler.
+
+=== No `ThreadLocal`
+
+Per the module's `CLAUDE.md`, no `ThreadLocal` is used in production. When state sharing is required, the concurrent structures above are preferred.
+
+=== Virtual threads
+
+On a host runtime that runs on virtual threads (for example Chappe with `Executors.newVirtualThreadPerTaskExecutor()`), Dirac introduces no platform contention: `LongAdder` and `ConcurrentHashMap` are indifferent to the kind of carrier thread.
+
+== `MetricsResource`
+
+`MetricsResource` is an `@ApplicationScoped` JAX-RS resource in `dirac-rest`, paired with `ContentNegotiationFilter` — a `@PreMatching` `ContainerRequestFilter` that rewrites a missing, blank or wildcard `Accept` header to `text/plain` before routing. The resource holds the three registries as three injected fields:
+
+[source,java]
+----
+@Inject @RegistryScope
+MetricRegistry appRegistry;
+
+@Inject @RegistryScope(scope = MetricRegistry.BASE_SCOPE)
+MetricRegistry baseRegistry;
+
+@Inject @RegistryScope(scope = MetricRegistry.VENDOR_SCOPE)
+MetricRegistry vendorRegistry;
+----
+
+Three routes (`/metrics`, `/metrics/\{scope}`, `/metrics/\{scope}/\{name}`), three steps per call:
+
+. Resolve the format via `Accept` (JSON only when it contains `application/json`; otherwise OpenMetrics, served as `text/plain;version=0.0.4;charset=utf-8`).
+. Pick the target registry among the three injected fields.
+. Emit via `OpenMetricsFormatter` or `JsonMetricsFormatter`.
+
+No lock is taken; the serialisation itself can be parallelised safely, since registry reads are lock-free.
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — MP Metrics 5.1.1 model.
+* xref:tck.adoc[TCK] — execution and status.
+* xref:reference.adoc[Reference] — public surfaces.

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.dirac</groupId>
+        <artifactId>dirac-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>dirac-processor</artifactId>
+    <name>Dirac :: APT Processor</name>
+    <description>Annotation processor generating $$DiracMetrics companion sources at compile time for @Timed/@Counted/@Gauge beans (APT-first rule, codegen audit CG-05). Requires only dirac-api + java.compiler.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.dirac</groupId>
+            <artifactId>dirac-api</artifactId>
+        </dependency>
+        <!-- metrics.api (transitive via dirac-api) `requires transitive jakarta.interceptor`,
+             so the module-info compile needs it resolvable on the module path (as in
+             dirac-core). -->
+        <dependency>
+            <groupId>jakarta.interceptor</groupId>
+            <artifactId>jakarta.interceptor-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Equivalence/e2e tests drive the generated companions against the
+             real DiracExtension ingestion (test scope only). -->
+        <dependency>
+            <groupId>io.vidocq.dirac</groupId>
+            <artifactId>dirac-cdi-vauban</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Starts a Vauban container on a bean compiled with the processor (DRC-011, test scope only). The
+             Jakarta APIs are provided in dirac-cdi-vauban, so they are not transitive. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Disable annotation processing during the processor's own compilation
+                         to avoid circular bootstrap issues. -->
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

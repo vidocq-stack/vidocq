@@ -1,0 +1,360 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.dirac.cdi.internal;
+
+import io.vidocq.dirac.api.DiracException;
+import jakarta.annotation.Priority;
+import jakarta.inject.Inject;
+import jakarta.interceptor.AroundConstruct;
+import jakarta.interceptor.AroundInvoke;
+import jakarta.interceptor.Interceptor;
+import jakarta.interceptor.InvocationContext;
+import org.eclipse.microprofile.metrics.Metadata;
+import org.eclipse.microprofile.metrics.MetricID;
+import org.eclipse.microprofile.metrics.MetricRegistry;
+import org.eclipse.microprofile.metrics.Tag;
+import org.eclipse.microprofile.metrics.annotation.Timed;
+
+import java.lang.reflect.Method;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Intercepteur CDI pour {@link Timed}.
+ */
+@Interceptor
+@Timed
+@Priority(4021)
+public class TimedInterceptor {
+
+    private final MetricRegistryProducerBean registries;
+
+    @Inject
+    TimedInterceptor(MetricRegistryProducerBean registries) {
+        this.registries = Objects.requireNonNull(registries, "registries must not be null");
+    }
+
+    @AroundConstruct
+    public void aroundConstruct(InvocationContext context) throws Exception {
+        var constructor = context.getConstructor();
+        var resolved = CONSTRUCTORS.get(constructor.getDeclaringClass())
+                .computeIfAbsent(constructor, c -> java.util.Optional.ofNullable(constructorTimer(c)));
+        if (resolved.isPresent()) {
+            var metric = resolved.get();
+            var start = System.nanoTime();
+            try {
+                context.proceed();
+            } finally {
+                registries.registry(metric.scope()).timer(metric.metadata(), metric.metricID().getTagsAsArray())
+                        .update(Duration.ofNanos(System.nanoTime() - start));
+            }
+        } else {
+            context.proceed();
+        }
+
+        Object target = context.getTarget();
+        if (target == null) return;
+        Class<?> actualClass = target.getClass();
+        if (actualClass.getName().contains("$$")) actualClass = actualClass.getSuperclass();
+        preRegisterTimers(actualClass);
+    }
+
+    /** The timer of a constructor, resolved by reflection once per constructor, not per bean instance. */
+    private static final ClassValue<ConcurrentHashMap<java.lang.reflect.Constructor<?>, java.util.Optional<ResolvedTimer>>>
+            CONSTRUCTORS = new ClassValue<>() {
+                @Override
+                protected ConcurrentHashMap<java.lang.reflect.Constructor<?>, java.util.Optional<ResolvedTimer>>
+                computeValue(Class<?> type) {
+                    return new ConcurrentHashMap<>();
+                }
+            };
+
+    private static ResolvedTimer constructorTimer(java.lang.reflect.Constructor<?> constructor) {
+        Class<?> beanClass = constructor.getDeclaringClass();
+        if (beanClass.getName().contains("$$")) beanClass = beanClass.getSuperclass();
+        var classTimed = DiracExtension.findTimedOnElement(beanClass);
+        var constructorTimed = DiracExtension.findTimedOnElement(constructor);
+        final Timed effective = constructorTimed != null ? constructorTimed : classTimed;
+        if (effective == null || java.lang.reflect.Modifier.isPrivate(constructor.getModifiers())) {
+            return null;
+        }
+        boolean classLevel = (constructorTimed == null);
+        var metricName = classLevel
+                ? DiracExtension.resolveClassLevelConstructorMetricName(beanClass, effective)
+                : DiracExtension.resolveConstructorLevelMetricName(beanClass, effective.name(), effective.absolute());
+        var metadata = Metadata.builder()
+                .withName(metricName).withDescription(effective.description()).withUnit(effective.unit()).build();
+        return new ResolvedTimer(new MetricID(metricName, parseTags(effective.tags())), metadata,
+                normalizeScope(effective.scope()));
+    }
+
+    void preRegisterTimers(Class<?> beanClass) {
+        for (var resolved : PRE_REGISTERED.get(beanClass)) {
+            registries.registry(resolved.scope()).timer(resolved.metadata(), resolved.metricID().getTagsAsArray());
+        }
+    }
+
+    /**
+     * The metrics a bean class pre-registers, scanned by reflection once per class: the scan ran on every
+     * construction of the bean, per request for a request-scoped one.
+     */
+    private static final ClassValue<java.util.List<ResolvedTimer>> PRE_REGISTERED = new ClassValue<>() {
+        @Override
+        protected java.util.List<ResolvedTimer> computeValue(Class<?> beanClass) {
+            var classTimed = DiracExtension.findTimedOnElement(beanClass);
+            var out = new java.util.ArrayList<ResolvedTimer>();
+            // Scan all methods including inherited ones (excluding Object methods)
+            for (var method : getAllDeclaredMethods(beanClass)) {
+                var timed = preRegisteredTimed(method, classTimed);
+                if (timed != null) {
+                    out.add(createResolvedTimer(beanClass, method, timed));
+                }
+            }
+            return java.util.List.copyOf(out);
+        }
+    };
+
+    /** The annotation that makes {@code method} carry a metric, or {@code null}. */
+    private static Timed preRegisteredTimed(Method method, Timed classTimed) {
+        if (java.lang.reflect.Modifier.isStatic(method.getModifiers()) || method.isSynthetic()
+                || method.getName().contains("$$")) {
+            return null;
+        }
+        var methodTimed = DiracExtension.findTimedOnElement(method);
+        if (methodTimed != null) {
+            return methodTimed;
+        }
+        return java.lang.reflect.Modifier.isPrivate(method.getModifiers()) ? null : classTimed;
+    }
+
+    /**
+     * Returns all methods declared in the class and its superclasses (except Object).
+     */
+    private static Method[] getAllDeclaredMethods(Class<?> beanClass) {
+        var methods = new java.util.HashSet<Method>();
+        var currentClass = beanClass;
+        while (currentClass != null && currentClass != Object.class) {
+            methods.addAll(java.util.Arrays.asList(currentClass.getDeclaredMethods()));
+            currentClass = currentClass.getSuperclass();
+        }
+        return methods.toArray(new Method[0]);
+    }
+
+    @AroundInvoke
+    public Object aroundInvoke(InvocationContext context) throws Exception {
+        var resolved = resolveTimer(context);
+        if (resolved == null) {
+            return context.proceed();
+        }
+
+        var registry = registries.registry(resolved.scope());
+        var timer = registry.getTimer(resolved.metricID());
+        if (timer == null) {
+            throw new IllegalStateException("Timer metric was removed from registry: " + resolved.metricID());
+        }
+
+        var start = System.nanoTime();
+        try {
+            return context.proceed();
+        } finally {
+            var duration = Duration.ofNanos(System.nanoTime() - start);
+            timer.update(duration);
+            updateNonPublicInheritedTimers(context, registry);
+        }
+    }
+
+    private void updateNonPublicInheritedTimers(InvocationContext context, MetricRegistry registry) {
+        var invokedMethod = context.getMethod();
+        if (invokedMethod == null || !invokedMethod.getName().contains("$$super$")) {
+            return;
+        }
+
+        var target = context.getTarget();
+        if (target == null) {
+            return;
+        }
+
+        Class<?> beanClass = target.getClass();
+        if (beanClass.getName().contains("$$")) {
+            beanClass = beanClass.getSuperclass();
+        }
+
+        var superClass = beanClass.getSuperclass();
+        if (superClass == null || superClass == Object.class) {
+            return;
+        }
+
+        for (var method : superClass.getDeclaredMethods()) {
+            var timed = java.lang.reflect.Modifier.isPublic(method.getModifiers())
+                    ? null : method.getAnnotation(Timed.class);
+            var timer = timed == null
+                    ? null : registry.getTimer(createResolvedTimer(beanClass, method, timed).metricID());
+            if (timer != null) {
+                timer.update(Duration.ZERO);
+            }
+        }
+    }
+
+    private ResolvedTimer resolveTimer(InvocationContext context) {
+        Objects.requireNonNull(context, "context must not be null");
+        var method = Objects.requireNonNull(context.getMethod(), "InvocationContext method must not be null");
+        var targetClass = context.getTarget() != null ? context.getTarget().getClass() : method.getDeclaringClass();
+        return resolution(targetClass, method).orElse(null);
+    }
+
+    /**
+     * The metric of an intercepted method of {@code targetClass}, resolved by reflection once per class and method:
+     * an interceptor instance is created per bean instance — per request for a request-scoped bean — so a cache held
+     * by the instance would resolve again on every request. {@link ClassValue} lets a reloaded class go.
+     */
+    static java.util.Optional<ResolvedTimer> resolution(Class<?> targetClass, Method method) {
+        return INVOCATIONS.get(targetClass).computeIfAbsent(method,
+                m -> java.util.Optional.ofNullable(resolveUncached(targetClass, m)));
+    }
+
+    private static final ClassValue<ConcurrentHashMap<Method, java.util.Optional<ResolvedTimer>>> INVOCATIONS =
+            new ClassValue<>() {
+                @Override
+                protected ConcurrentHashMap<Method, java.util.Optional<ResolvedTimer>> computeValue(Class<?> type) {
+                    return new ConcurrentHashMap<>();
+                }
+            };
+
+    private static ResolvedTimer resolveUncached(Class<?> targetClass, Method intercepted) {
+        var beanClass = targetClass;
+        if (beanClass.getName().contains("$$")) {
+            beanClass = beanClass.getSuperclass();
+        }
+        var method = normalizeInterceptedMethod(beanClass, intercepted);
+        var timed = findTimed(method, beanClass);
+        if (timed == null) {
+            return null;
+        }
+        return createResolvedTimer(beanClass, timed.sourceMethod(), timed.timed());
+    }
+
+    private static FoundTimed findTimed(Method method, Class<?> beanClass) {
+        Objects.requireNonNull(beanClass);
+        var onMethod = DiracExtension.findTimedOnElement(method);
+        if (onMethod != null) {
+            return new FoundTimed(method, onMethod);
+        }
+
+        Class<?> current = beanClass;
+        while (current != null && current != Object.class) {
+            try {
+                var declared = current.getDeclaredMethod(method.getName(), method.getParameterTypes());
+                var inherited = DiracExtension.findTimedOnElement(declared);
+                if (inherited != null) {
+                    return new FoundTimed(declared, inherited);
+                }
+            } catch (NoSuchMethodException _) {
+                // Continue with superclass traversal.
+            }
+            current = current.getSuperclass();
+        }
+
+        var onClass = DiracExtension.findTimedOnElement(beanClass);
+        return onClass == null ? null : new FoundTimed(method, onClass);
+    }
+
+    private static Method normalizeInterceptedMethod(Class<?> beanClass, Method method) {
+        var name = method.getName();
+        var marker = "$$super$";
+        var markerIndex = name.indexOf(marker);
+        if (markerIndex < 0) {
+            return method;
+        }
+        var targetName = name.substring(markerIndex + marker.length());
+        Class<?> current = beanClass;
+        while (current != null && current != Object.class) {
+            try {
+                return current.getDeclaredMethod(targetName, method.getParameterTypes());
+            } catch (NoSuchMethodException _) {
+                current = current.getSuperclass();
+            }
+        }
+        return method;
+    }
+
+    private static ResolvedTimer createResolvedTimer(Class<?> beanClass, Method method, Timed timed) {
+        var metricName = resolveMetricName(beanClass, method, timed);
+        var tags = parseTags(timed.tags());
+        var metadata = Metadata.builder()
+                .withName(metricName)
+                .withDescription(timed.description())
+                .withUnit(timed.unit())
+                .build();
+        return new ResolvedTimer(new MetricID(metricName, tags), metadata, normalizeScope(timed.scope()));
+    }
+
+    /**
+     * The name the scan gives the metric of {@code method} (DRC-014): the annotation counts as the method's own when
+     * an interceptor binding of the method carries it, as {@code DiracExtension.findTimedOnElement} reads it.
+     */
+    private static String resolveMetricName(Class<?> beanClass, Method method, Timed timed) {
+        boolean classLevel = DiracExtension.findTimedOnElement(method) == null;
+        return DiracExtension.resolveSimpleMetricName(classLevel ? beanClass : method.getDeclaringClass(), method,
+                timed.name(), timed.absolute(), classLevel);
+    }
+
+    private static String normalizeScope(String scope) {
+        var normalized = scope == null ? MetricRegistry.APPLICATION_SCOPE : scope.trim();
+        return normalized.isEmpty() ? MetricRegistry.APPLICATION_SCOPE : normalized;
+    }
+
+    private static Tag[] parseTags(String[] tagValues) {
+        if (tagValues == null || tagValues.length == 0) {
+            return new Tag[0];
+        }
+
+        return Arrays.stream(tagValues)
+                .filter(tag -> tag != null && !tag.isBlank())
+                .map(TimedInterceptor::parseTag)
+                .toArray(Tag[]::new);
+    }
+
+    private static Tag parseTag(String source) {
+        var separator = source.indexOf('=');
+        if (separator <= 0 || separator == source.length() - 1) {
+            throw new DiracException("Invalid @Timed tag declaration: '" + source + "'");
+        }
+        try {
+            var key = source.substring(0, separator).trim();
+            var value = source.substring(separator + 1).trim();
+            // Validate reserved tag names according to spec §4.1
+            if ("mp_scope".equalsIgnoreCase(key) || "mp_app".equalsIgnoreCase(key)) {
+                throw new IllegalArgumentException("Tag name '" + key + "' is reserved");
+            }
+            return new Tag(key, value);
+        } catch (IllegalArgumentException exception) {
+            throw new DiracException("Invalid @Timed tag declaration: '" + source + "'", exception);
+        }
+    }
+
+
+    record ResolvedTimer(MetricID metricID, Metadata metadata, String scope) {
+    }
+
+    private record FoundTimed(Method sourceMethod, Timed timed) {
+    }
+}

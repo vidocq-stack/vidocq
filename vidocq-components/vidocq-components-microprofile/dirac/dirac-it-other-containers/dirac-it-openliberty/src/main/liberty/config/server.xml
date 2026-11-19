@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Dirac on Open Liberty (MicroProfile 7 distribution). mpMetrics stays off, otherwise Liberty's own
+    implementation would intercept @Counted and @Timed and answer /metrics itself.
+-->
+<server description="dirac-it-openliberty">
+    <featureManager>
+        <feature>cdi-4.0</feature>
+        <feature>restfulWS-3.1</feature>
+    </featureManager>
+
+    <httpEndpoint id="defaultHttpEndpoint" host="localhost" httpPort="${http.port}" httpsPort="${https.port}"/>
+
+    <webApplication location="dirac-it-openliberty.war" contextRoot="/dirac"/>
+</server>

@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.dirac</groupId>
+        <artifactId>dirac-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>dirac-cdi-vauban</artifactId>
+    <name>Dirac :: CDI Vauban Integration</name>
+    <description>CDI interceptors for Metrics (@Counted, @Timed) and Vauban BCE (DiracExtension, MetricRegistryProducerBean)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.dirac</groupId>
+            <artifactId>dirac-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.interceptor</groupId>
+            <artifactId>jakarta.interceptor-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+         <dependency>
+             <groupId>org.junit.jupiter</groupId>
+             <artifactId>junit-jupiter</artifactId>
+             <scope>test</scope>
+         </dependency>
+        <!-- Runtime dependency under any CDI container, not only Vauban: the build weaves a
+             `(io.vidocq.vauban.api.ProxyLink)` entry constructor into the normal-scoped beans
+             (MetricRegistryProducerBean, GaugeRegistrationBean). Without this jar Weld cannot load their classes and skips the beans silently
+             (WELD-000119), then fails the deployment on unsatisfied injection points. API types
+             only, no code runs outside Vauban (vidocq-workspace#15, dirac-it-weld). Its Jakarta CDI
+             dependencies are excluded: the container brings the CDI API. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+         <!-- Vauban CDI container for integration tests -->
+         <dependency>
+             <groupId>io.vidocq.vauban</groupId>
+             <artifactId>vauban-core</artifactId>
+             <scope>test</scope>
+         </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+     <build>
+         <plugins>
+             <!--
+                 Vauban codegen runs as an ANNOTATION PROCESSOR on this module's own beans (the Maven
+                 plugin is reserved for freezing external, non-APT-processed dependency jars). The APT
+                 emits META-INF/vauban-beans.list + _ClientProxy/_Factory for runtime discovery, the
+                 per-package _VaubanComponents, and — for any intercepted target — its $$Intercepted
+                 subclass. Build-time only, no compile/runtime dependency on Vauban, Weld-safe.
+             -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- Vauban APT processes this module's own beans at compile time. -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <!-- A test reads what DiscoveredMetrics logs through the JDK's own logging, which
+                                 the module has no reason to require. -->
+                            <compilerArgs combine.children="append">
+                                <arg>--add-modules</arg>
+                                <arg>java.logging</arg>
+                                <arg>--add-reads</arg>
+                                <arg>io.vidocq.dirac.cdi.vauban=java.logging</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Tests run on the module path: the container is booted over test beans that have no generated provider, so Vauban reaches the test package reflectively and defines interceptor subclasses that call into vauban-core (module-path wiring without opens is covered by dirac-cdi-vauban-module-it). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>
+                        @{argLine}
+                        --add-reads io.vidocq.dirac.cdi.vauban=io.vidocq.vauban.core
+                        --add-opens io.vidocq.dirac.cdi.vauban/io.vidocq.dirac.cdi.internal=io.vidocq.vauban.core
+                        --add-reads io.vidocq.dirac.cdi.vauban=java.logging
+                    </argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
