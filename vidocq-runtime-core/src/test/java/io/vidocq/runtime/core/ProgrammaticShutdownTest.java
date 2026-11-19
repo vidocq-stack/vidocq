@@ -182,6 +182,25 @@ class ProgrammaticShutdownTest {
         assertEquals(1, stops.get());
     }
 
+    /**
+     * BUG-20261119-80: the class path scan of any deployment of this module finds {@link ShutdownObserver}, whose
+     * generated code is in the test round's {@code _VaubanComponents}. That provider was never loaded, so every stop
+     * logged a failure to call the observer reflectively; Vauban now takes the provider of the packages a bean list
+     * names (Vauban BUG-20261119-72).
+     */
+    @Test
+    void aStopLogsNoFailureOfAnObserverItDiscovered() {
+        try (LogRecords records = new LogRecords("io.vidocq.vauban")) {
+            started(new Counting());
+
+            assertTimeoutPreemptively(LIMIT, Vidocq::shutdownAndWait);
+
+            assertEquals(List.of(), records.all().stream().map(LogRecords::message)
+                    .filter(message -> message.contains(ShutdownObserver.class.getName())).toList());
+            assertEquals(1, stops.get());
+        }
+    }
+
     /** The stop {@link Vidocq#shutdown()} runs on its own thread fires the CDI {@code Shutdown} event, once. */
     @Test
     void theAsyncShutdownFiresTheCdiShutdownEventOnce() {
