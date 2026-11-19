@@ -21,6 +21,7 @@ package io.vidocq.runtime.core.commonpool;
 
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The thread factory of the JVM's common pool under a Vidocq launch: it gives each worker the application's class
@@ -46,7 +47,7 @@ public final class CommonPoolThreadFactory implements ForkJoinPool.ForkJoinWorke
     public static final String PROPERTY = "java.util.concurrent.ForkJoinPool.common.threadFactory";
 
     /** The application's loader, or {@code null} when no application layer is installed. */
-    private static volatile ClassLoader applicationLoader;
+    private static final AtomicReference<ClassLoader> APPLICATION_LOADER = new AtomicReference<>();
 
     /** The JDK calls it, by reflection, when the common pool starts. */
     public CommonPoolThreadFactory() {
@@ -81,7 +82,7 @@ public final class CommonPoolThreadFactory implements ForkJoinPool.ForkJoinWorke
      * @param loader the application's loader, or {@code null} for the system class loader
      */
     public static void useLoader(ClassLoader loader) {
-        applicationLoader = loader;
+        APPLICATION_LOADER.set(loader);
         ClassLoader target = loader();
         for (Thread thread : Thread.getAllStackTraces().keySet()) {
             if (thread instanceof Worker worker) {
@@ -92,7 +93,7 @@ public final class CommonPoolThreadFactory implements ForkJoinPool.ForkJoinWorke
 
     /** The context class loader a worker gets: the application's, else the system class loader, as the JDK gives. */
     static ClassLoader loader() {
-        ClassLoader loader = applicationLoader;
+        ClassLoader loader = APPLICATION_LOADER.get();
         return loader != null ? loader : ClassLoader.getSystemClassLoader();
     }
 

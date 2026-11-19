@@ -44,7 +44,7 @@ class CommonPoolThreadFactoryTest {
 
     @Test
     @DisplayName("a worker gets the application's loader, and the system class loader without one, as the JDK gives")
-    void aWorkerGetsTheApplicationsLoader() throws Exception {
+    void aWorkerGetsTheApplicationsLoader() {
         CommonPoolThreadFactory.useLoader(application);
         ForkJoinPool pool = pool();
         try {
