@@ -49,6 +49,14 @@ import java.util.Map;
  */
 public final class OtelDevService implements DevService {
 
+    /**
+     * How long the stack has to answer {@code /api/health}. A quiet build of {@code main} sees it answer in 3 s to 93 s
+     * depending on the runner, and a build that ran twice as slow did not within three minutes (BUG-20261116-10): the
+     * wait is twice that, and a stack that answers sooner is used at once.
+     */
+    static final Duration STARTUP_TIMEOUT = Duration.ofMinutes(6);
+
+
     /** The image, pinned. */
     static final String DEFAULT_IMAGE = "grafana/otel-lgtm:0.37.0";
     /** The id of this dev service, also the name and label of its container. */
@@ -125,7 +133,7 @@ public final class OtelDevService implements DevService {
                 .withLabels(DevContainers.labels(ctx, ID))
                 .withCreateContainerCmdModifier(cmd -> cmd.withName(name));
         container.waitingFor(Wait.forHttp("/api/health").forPort(GRAFANA_PORT).forStatusCode(200)
-                .withStartupTimeout(Duration.ofMinutes(3)));
+                .withStartupTimeout(STARTUP_TIMEOUT));
         if (reuse) {
             container.withReuse(true);
         }
