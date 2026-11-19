@@ -1,0 +1,350 @@
+= Reference
+:description: Maven artifacts, exported Java modules, supported annotations, canonical composition order, MicroProfile Config keys.
+
+[.lead]
+This page consolidates Heisenberg's public surface: Maven artifacts, Java modules, full table of MP FT 4.1 annotations with the canonical composition order, and the MicroProfile Config keys recognised through xref:ravel::index.adoc[Ravel].
+
+== Maven artifacts
+
+[cols="2,2,3"]
+|===
+| `groupId` | `artifactId` | Role
+
+| `io.vidocq.heisenberg`
+| `heisenberg-api`
+| Stable public SPI: `FtMetricsRecorder` (metrics recorder) and `FaultToleranceException`; re-exports the MP FT 4.1 spec API (`requires transitive`).
+
+| `io.vidocq.heisenberg`
+| `heisenberg-core`
+| Pure Java 25 policy engines without CDI: `RetryEngine`, `TimeoutEngine`, `CircuitBreakerEngine`, `BulkheadEngine`, `FallbackResolver`, `PolicyComposer`.
+
+| `io.vidocq.heisenberg`
+| `heisenberg-cdi-vauban`
+| Single CDI interceptor (`FaultToleranceInterceptor`) and Build Compatible Extensions (`HeisenbergExtension`, `InterceptorPriorityExtension`).
+
+| `io.vidocq.heisenberg`
+| `heisenberg-mp-ft-api`
+| Modularised repackage of `microprofile-fault-tolerance-api` (named Java module, jlink-compatible).
+
+| `io.vidocq.heisenberg`
+| `heisenberg-bench`
+| JMH benchmarks (vs SmallRye Fault Tolerance). Not for production.
+
+| `io.vidocq.heisenberg`
+| `heisenberg-examples`
+| Usage examples, standalone or integrated.
+
+| `io.vidocq.heisenberg`
+| `heisenberg-tck`
+| Official MP FT 4.1 TCK runner — in-reactor, gated by the `tck` Maven profile. Do not declare as an application dependency.
+|===
+
+All versions at `{project-version}` (latest release on Maven Central: `{release-version}`).
+
+[#java-modules]
+== Java modules
+
+[cols="2,3"]
+|===
+| Module | Contents
+
+| `io.vidocq.heisenberg.api`
+| `io.vidocq.heisenberg.api` — public SPI: `FtMetricsRecorder` (metrics SPI with its `NOOP` constant and the `RetryResult`, `CBCallResult`, `CBState` enums) and `FaultToleranceException`. Re-exports the spec annotations via `requires transitive microprofile.fault.tolerance.api`.
+
+| `io.vidocq.heisenberg.core`
+| Internal implementations: engines, `PolicyComposer`, the `CircuitBreakerStateRegistry` / `BulkheadStateRegistry` interfaces and the immutable `*Config` records. The `io.vidocq.heisenberg.internal` package is exported only to `io.vidocq.heisenberg.cdi.vauban`.
+
+| `io.vidocq.heisenberg.cdi.vauban`
+| CDI integration: `FaultToleranceInterceptor`, `HeisenbergExtension` and `InterceptorPriorityExtension` (BCEs), `StateRegistryBean`, `BulkheadStateRegistryBean`, `MetricsRecorderResolver`, `CompositeFtMetricsRecorder`.Declares `requires static io.vidocq.vauban.core` (Maven scope `provided`): it uses Vauban's `ModuleLookups` to reach fallback methods, and the container brings `vauban-core` at runtime.Declares `requires io.vidocq.vauban.api` (it was `requires static`): `vauban-api` is a runtime dependency under any container, see <<other-containers>>.
+|===
+
+`io.vidocq.heisenberg.internal` is invisible to application modules (qualified export to `io.vidocq.heisenberg.cdi.vauban` only). Any application class depending on it indicates a regression to fix.
+
+[#class-path]
+=== On a class path
+
+`heisenberg-cdi-vauban` is an explicit bean archive. It ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`, so the interceptors, the state registries and the metrics recorders are discovered even by a container that does not scan implicit archives, such as Weld SE by default. Without it, `@Retry`, `@Timeout` and the other annotations were silently ignored there (BUG-004).
+
+On a class path, `provides` clauses are ignored. `HeisenbergExtension`, `InterceptorPriorityExtension` and `HeisenbergAutoDiscovery` are therefore also listed in `META-INF/services`.
+
+[#other-containers]
+== Other CDI containers
+
+Heisenberg does not need Vauban. The jars run unchanged under another CDI container, on a class path, and two integration-test modules, grouped under `heisenberg-it-other-containers`, prove it on every build (heisenberg#25):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `heisenberg-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban, Ravel for MicroProfile Config: `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Fallback` (private fallback method) and `@Bulkhead` apply, a `<class>/<method>/Retry/maxRetries` key overrides the annotation, metrics carry the bean class name, and `mp.fault.tolerance.interceptor.priority` moves the interceptor.
+
+| `heisenberg-it-openliberty`
+| A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, MicroProfile Config 3.1), with Liberty's `mpFaultTolerance` feature off: the same scenarios, driven over HTTP.
+|===
+
+Neither module is published. Three things make this work:
+
+* **`vauban-api` is a runtime dependency** of `heisenberg-cdi-vauban`, under any container. The Vauban build weaves a `protected` constructor taking `io.vidocq.vauban.api.ProxyLink` into each normal-scoped bean (the state registries, the metrics recorders); a container that cannot load that type cannot load the bean class, and Weld drops the bean with an INFO message (`WELD-000119`), then fails the deployment on the interceptor's unsatisfied injection points. `vauban-api` holds API types only (13 KB): no Vauban code runs outside Vauban. Its Jakarta CDI dependencies are excluded, so the container's own CDI API stays the only one.
+* **Names come from the class the application wrote** — metric names, configuration keys and fallback methods are keyed by the bean class, and the interceptor sees the subclass the container generated: `Foo$$Intercepted` under Vauban, `Foo$Proxy$_$$_WeldSubclass` under Weld and Open Liberty, `Foo$$OwbInterceptProxy0` under OpenWebBeans. Heisenberg walks up past every class whose name holds `$$`, which javac never produces.
+* **`HeisenbergAutoDiscovery` stays out of the way** — it forwards to the first other `ConfigProviderResolver` on the path (Ravel under Weld); Open Liberty's mpConfig feature installs its own resolver, which wins.
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own Fault Tolerance off** — `mpFaultTolerance` on Open Liberty. Otherwise its interceptor applies the policies too.
+* **Enable the server's CDI and MicroProfile Config** — `cdi-4.0` and `mpConfig-3.1` on Open Liberty; the `<class>/<method>/<annotation>/<parameter>` keys are read through the MicroProfile Config API. Metrics and Telemetry are optional: without their API, Heisenberg publishes no metrics and starts anyway.
+* **Nothing to exclude** — the WAR carries the Heisenberg jars, the MicroProfile Fault Tolerance and Config APIs and `vauban-api` (API types only); with the features above, the server's MicroProfile Config is loaded first. `heisenberg-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
+== MicroProfile Fault Tolerance 4.1 annotations
+
+Summary table of the six annotations, in wrapping order from the outside in.
+
+[cols="1,2,3,1"]
+|===
+| Annotation | Level | Effect | Status
+
+| `@Asynchronous`
+| Method
+| Runs the method on a virtual thread. Return type: `CompletionStage<T>` or `Future<T>`.
+| ✅
+
+| `@Fallback`
+| Method
+| Provides an alternative result on failure. Parameters: `fallbackMethod` or `FallbackHandler<T>` class.
+| ✅
+
+| `@Retry`
+| Method or class
+| Bounded retries with delay, jitter, `retryOn` / `abortOn`.
+| ✅
+
+| `@CircuitBreaker`
+| Method or class
+| CLOSED/OPEN/HALF_OPEN breaker over a sliding window.
+| ✅
+
+| `@Timeout`
+| Method or class
+| Bounds an attempt's duration — virtual thread + `join(Duration)`.
+| ✅
+
+| `@Bulkhead`
+| Method or class
+| Isolation via semaphore (sync) or semaphore-bounded waiting queue (async).
+| ✅
+|===
+
+== Detailed parameters
+
+=== `@Retry`
+
+[cols="2,1,3"]
+|===
+| Parameter | Default | Effect
+
+| `maxRetries`
+| 3
+| Maximum number of retries after the first attempt. -1 = unbounded (use with `maxDuration`).
+
+| `delay`
+| 0
+| Base delay between attempts.
+
+| `delayUnit`
+| `MILLIS`
+| `delay` unit.
+
+| `maxDuration`
+| 180000
+| Total maximum duration (across all attempts).
+
+| `durationUnit`
+| `MILLIS`
+| `maxDuration` unit.
+
+| `jitter`
+| 200
+| Random variation added to `delay`.
+
+| `jitterDelayUnit`
+| `MILLIS`
+| `jitter` unit.
+
+| `retryOn`
+| `Throwable`
+| Exceptions that trigger a retry.
+
+| `abortOn`
+| None
+| Exceptions that abort immediately (take precedence over `retryOn`).
+|===
+
+=== `@Timeout`
+
+[cols="2,1,3"]
+|===
+| Parameter | Default | Effect
+| `value` | 1000 | Maximum duration of an attempt.
+| `unit` | `MILLIS` | `value` unit.
+|===
+
+Beyond that, `TimeoutException` is raised. For `@Asynchronous`, the underlying virtual thread is interrupted (best-effort).
+
+=== `@CircuitBreaker`
+
+[cols="2,1,3"]
+|===
+| Parameter | Default | Effect
+| `requestVolumeThreshold` | 20 | Sliding window size.
+| `failureRatio` | 0.5 | Opening threshold (failure proportion).
+| `delay` | 5000 | OPEN state duration before transition to HALF_OPEN.
+| `delayUnit` | `MILLIS` | `delay` unit.
+| `successThreshold` | 1 | Number of consecutive OK probes to re-close.
+| `failOn` | `Throwable` | Exceptions counted as failure.
+| `skipOn` | None | Exceptions not counted (take precedence over `failOn`).
+|===
+
+=== `@Bulkhead`
+
+[cols="2,1,3"]
+|===
+| Parameter | Default | Effect
+| `value` | 10 | Maximum concurrency (semaphore permits).
+| `waitingTaskQueue` | 10 | Waiting queue size (`@Asynchronous` mode only).
+|===
+
+[#fallback-parameters]
+=== `@Fallback`
+
+[cols="2,1,3"]
+|===
+| Parameter | Default | Effect
+| `value` | `Fallback.DEFAULT` | `FallbackHandler<T>` class.
+| `fallbackMethod` | `""` | Name of a private/package-local method on the class.
+| `applyOn` | `Throwable` | Exceptions that trigger the fallback.
+| `skipOn` | None | Exceptions that skip the fallback.
+|===
+
+Note: `value` and `fallbackMethod` are mutually exclusive.
+
+On a strict module path, a `fallbackMethod` of any access modifier is reached with no `opens` when the bean's package has a generated `_VaubanComponents`; otherwise `opens <pkg> to io.vidocq.heisenberg.core` is enough. See xref:usage.adoc#fallback-method-module-path[Fallback methods on the module path].
+
+=== `@Asynchronous`
+
+No parameter. The method must return `CompletionStage<T>` or `Future<T>`.
+
+The method runs on its own virtual thread with the CDI request context active, as MicroProfile Fault Tolerance requires: a `@RequestScoped` bean used there lives for that call. Heisenberg activates it through the standard `RequestContextController` when it is not already active, and deactivates it after, on any CDI container.
+
+== MicroProfile Config keys
+
+[#mp-config]
+All keys are read through `ConfigProvider.getConfig()`. Precedence: *method* > *class* > *global* > *annotation default* (spec §12).
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `<Annotation>/<param>`
+| Global value.
+
+| `<FQCN>/<Annotation>/<param>`
+| Class override.
+
+| `<FQCN>/<method>/<Annotation>/<param>`
+| Method override — highest precedence.
+
+| `MP_Fault_Tolerance_NonFallback_Enabled`
+| Boolean. `false` disables `@Retry`, `@Timeout`, `@CircuitBreaker`, `@Bulkhead`, `@Asynchronous`; `@Fallback` stays active (spec §11). Dotted alias: `mp.fault.tolerance.nonFallback.enabled`.
+
+| `mp.fault.tolerance.metrics.enabled`
+| Boolean. `false` disables §9 and §10 recorders. Default `true`.
+
+| `mp.fault.tolerance.interceptor.priority`
+| Interceptor priority (`@Priority`). Default `4010` (`Platform.AFTER + 10`); `Integer.MAX_VALUE` disables the interceptor entirely. Read once, when the container starts, from the configuration the application starts with — never when the application builds. Under Vauban this needs the fix of its BUG-20261113-12 (BUG-019 here): see xref:internals.adoc#interceptor-priority[the interceptor's priority].
+|===
+
+Examples with their parameters:
+
+[source,properties]
+----
+# Global
+Retry/maxRetries=5
+Timeout/value=2000
+CircuitBreaker/failureRatio=0.6
+
+# Per class
+io.example.CatalogClient/Retry/maxRetries=2
+
+# Per method (highest precedence)
+io.example.CatalogClient/fetch/Retry/maxRetries=1
+io.example.CatalogClient/fetch/Retry/delay=500
+io.example.CatalogClient/fetch/CircuitBreaker/delay=30000
+io.example.CatalogClient/fetch/Bulkhead/value=20
+----
+
+== Exceptions
+
+[cols="2,3"]
+|===
+| Exception | Case
+
+| `org.eclipse.microprofile.faulttolerance.exceptions.TimeoutException`
+| `@Timeout` exceeded on an attempt.
+
+| `org.eclipse.microprofile.faulttolerance.exceptions.CircuitBreakerOpenException`
+| Call rejected in OPEN state.
+
+| `org.eclipse.microprofile.faulttolerance.exceptions.BulkheadException`
+| Bulkhead saturated.
+
+| `org.eclipse.microprofile.faulttolerance.exceptions.FaultToleranceException`
+| Generic runtime error.
+
+| `org.eclipse.microprofile.faulttolerance.exceptions.FaultToleranceDefinitionException`
+| Invalid annotation detected at startup (`@Asynchronous` signature, out-of-range values, etc.).
+|===
+
+== Vidocq SPI exposed by `heisenberg-api`
+
+The public surface of `heisenberg-api` is deliberately small — two types, plus the re-exported spec annotations.
+
+[cols="2,3"]
+|===
+| Type | Role
+
+| `io.vidocq.heisenberg.api.FtMetricsRecorder`
+| Metrics recorder SPI, implementable by a third-party module. Provided implementations (in `heisenberg-cdi-vauban`): `DiracFtMetricsRecorder` (MP Metrics) and `OtelFtMetricsRecorder` (OpenTelemetry); several recorders are composed via `CompositeFtMetricsRecorder`, and the `FtMetricsRecorder.NOOP` constant is used when none is present.
+
+| `io.vidocq.heisenberg.api.FaultToleranceException`
+| Base Heisenberg exception for configuration errors detected at container startup — distinct from the spec-defined runtime exceptions above.
+|===
+
+The shared state registries (`CircuitBreakerStateRegistry`, `BulkheadStateRegistry`), the policy engines and the policy configuration records are internal (`io.vidocq.heisenberg.internal`, exported only to the CDI module) — they are not extension points.
+
+== Compatibility
+
+* Java 25 (LTS), Maven 3.9.16.
+* CDI 4.1 Lite (Vauban) or any CDI 4.0 Lite-compatible container — proven on Weld and Open Liberty, see <<other-containers>>.
+* MicroProfile Config 3.1 (Ravel) in `provided`.
+* OpenTelemetry 1.39 (Humboldt) in `requires static` — optional.
+* MicroProfile Metrics 5.x (Dirac) — optional.
+
+== Bugs and benchmarks
+
+* link:https://codefloe.com/Vidocq/heisenberg/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:https://codefloe.com/Vidocq/heisenberg/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks, dated runs.
+
+== Going further
+
+* xref:concepts.adoc[Concepts] — MP FT model, canonical order.
+* xref:internals.adoc[Internals] — pure engines, virtual threads.
+* xref:tck.adoc[TCK] — execution and status.
+
+== Architecture rules
+
+`io.vidocq.heisenberg:heisenberg-architecture-tests` is a **test-only** module, never released. It runs Heisenberg's architecture
+rules on the classes of every shipped module: the dependencies of each module (the MicroProfile Fault Tolerance and Config APIs and the Jakarta APIs it reads, nothing else), the layers between the modules, no reflection outside the documented fallbacks of `internals.adoc`, no platform thread, no
+`ThreadLocal`. The rules come from `io.vidocq:vidocq-archrules`, the shared build and test library of `vidocq-parent`,
+in test scope; it brings ArchUnit (Apache-2.0), also test scope. A change that breaks a rule fails the build.

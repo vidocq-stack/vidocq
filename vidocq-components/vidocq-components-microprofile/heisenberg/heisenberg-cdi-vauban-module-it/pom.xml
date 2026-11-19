@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.heisenberg</groupId>
+        <artifactId>heisenberg-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>heisenberg-cdi-vauban-module-it</artifactId>
+    <name>Heisenberg :: CDI Vauban Java module-path IT</name>
+    <description>Module-path proof vehicle: a @Retry bean intercepted with a build-time $$Intercepted
+        subclass and the generated VaubanComponentProvider — including the FaultToleranceInterceptor
+        itself (VAU-INT-004), whose @Inject fields are package-private — with no `opens` to
+        vauban.core.</description>
+
+    <properties>
+        <!-- Test vehicle: never released. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+        <!-- SonarQube: test vehicle, its main code only exists for its tests (Vidocq/vidocq#284). -->
+        <sonar.skip>true</sonar.skip>
+    </properties>
+
+    <dependencies>
+        <!-- Brings heisenberg-core → heisenberg-api → the FT API wrapper (module
+             microprofile.fault.tolerance.api) and the Config API wrapper transitively, exactly as
+             heisenberg-core does — using the raw microprofile-*-api jars here would split-package
+             against those wrappers on the module path. -->
+        <dependency>
+            <groupId>io.vidocq.heisenberg</groupId>
+            <artifactId>heisenberg-cdi-vauban</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.interceptor</groupId>
+            <artifactId>jakarta.interceptor-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+        </dependency>
+        <!--
+            Vauban container as a REAL (compile) dependency: this vehicle boots a container, and the
+            build-time FaultToleranceService$$Intercepted references io.vidocq.vauban.core.interceptor.*.
+            Legitimate for a Java Modules proof vehicle (unlike the production wrappers).
+        -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <version>${vauban.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- MP Config implementation (Ravel) so ConfigResolver resolves at runtime on the module path. -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-core</artifactId>
+            <version>${ravel.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!--
+                        The Vauban APT processes the @Retry fixture bean at compile time. heisenberg-cdi-vauban
+                        is on the processor path too so the HeisenbergExtension BCE is discovered: its
+                        @Enhancement adds the @FaultToleranceBinding marker to FT-annotated elements, which is
+                        what lets the APT see the fixture's @Retry method as an intercepted target and emit
+                        FaultToleranceService$$Intercepted plus the in-module _VaubanComponents (including the
+                        interceptor — VAU-INT-004).
+                    -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                        <path>
+                            <groupId>io.vidocq.heisenberg</groupId>
+                            <artifactId>heisenberg-cdi-vauban</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                        <!-- The $$HeisenbergPolicies companions, provided below: on the strict module path the
+                             runtime reads the annotations from them, without reflection (vidocq-workspace#38). -->
+                        <path>
+                            <groupId>io.vidocq.heisenberg</groupId>
+                            <artifactId>heisenberg-processor</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                        <!-- The BCE needs the CDI API to load. heisenberg-cdi-vauban leaves it to the
+                             container (`provided`, and excluded from vauban-api), so name it here. -->
+                        <path>
+                            <groupId>jakarta.enterprise</groupId>
+                            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                            <version>${jakarta.cdi.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <compilerArgs>
+                        <!-- The fixture/interceptor inject state beans produced in heisenberg-cdi-vauban
+                             (another module); the APT cannot resolve beans from dependency modules. -->
+                        <arg>-Avauban.validation=false</arg>
+                    </compilerArgs>
+                </configuration>
+                <executions>
+                    <!-- No annotation processing on the test sources (the IT is not a bean). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

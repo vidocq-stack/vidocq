@@ -1,0 +1,582 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.heisenberg.internal;
+
+import java.lang.annotation.Annotation;
+import java.io.InputStream;
+import java.lang.reflect.Method;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
+import org.eclipse.microprofile.faulttolerance.Asynchronous;
+import org.eclipse.microprofile.faulttolerance.Bulkhead;
+import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
+import org.eclipse.microprofile.faulttolerance.Fallback;
+import org.eclipse.microprofile.faulttolerance.FallbackHandler;
+import org.eclipse.microprofile.faulttolerance.Retry;
+import org.eclipse.microprofile.faulttolerance.Timeout;
+
+public final class ConfigResolver {
+
+    static final String RETRY = "Retry";
+    static final String TIMEOUT = "Timeout";
+    static final String CIRCUIT_BREAKER = "CircuitBreaker";
+    static final String BULKHEAD = "Bulkhead";
+    static final String FALLBACK = "Fallback";
+    static final String ASYNCHRONOUS = "Asynchronous";
+    private static final String VALUE = "value";
+    private static final String PRIORITY_KEY = "mp.fault.tolerance.interceptor.priority";
+
+    private ConfigResolver() {}
+
+    public static RetryConfig retryConfig(Method method, Retry retry) {
+        return retryConfig(method, method.getDeclaringClass(), retry, loadConfig());
+    }
+
+    public static RetryConfig retryConfig(Method method, Class<?> beanClass, Retry retry) {
+        return retryConfig(method, beanClass, retry, loadConfig());
+    }
+
+    static RetryConfig retryConfig(Method method, Retry retry, Config config) {
+        return retryConfig(method, method.getDeclaringClass(), retry, config);
+    }
+
+    static RetryConfig retryConfig(Method method, Class<?> beanClass, Retry retry, Config config) {
+        int maxRetries = getInt(config, method, beanClass, Retry.class, "maxRetries").orElse(retry.maxRetries());
+        long delay = getLong(config, method, beanClass, Retry.class, "delay").orElse(retry.delay());
+        ChronoUnit delayUnit = getChronoUnit(config, method, beanClass, Retry.class, "delayUnit").orElse(retry.delayUnit());
+        long maxDuration = getLong(config, method, beanClass, Retry.class, "maxDuration").orElse(retry.maxDuration());
+        ChronoUnit durationUnit = getChronoUnit(config, method, beanClass, Retry.class, "durationUnit").orElse(retry.durationUnit());
+        long jitter = getLong(config, method, beanClass, Retry.class, "jitter").orElse(retry.jitter());
+        ChronoUnit jitterDelayUnit = getChronoUnit(config, method, beanClass, Retry.class, "jitterDelayUnit").orElse(retry.jitterDelayUnit());
+        Class<? extends Throwable>[] retryOn = getThrowableArray(config, method, beanClass, Retry.class, "retryOn").orElse(retry.retryOn());
+        Class<? extends Throwable>[] abortOn = getThrowableArray(config, method, beanClass, Retry.class, "abortOn").orElse(retry.abortOn());
+
+        return new RetryConfig(
+                maxRetries,
+                delay,
+                delayUnit,
+                maxDuration,
+                durationUnit,
+                jitter,
+                jitterDelayUnit,
+                retryOn,
+                abortOn
+        );
+    }
+
+    public static TimeoutConfig timeoutConfig(Method method, Timeout timeout) {
+        return timeoutConfig(method, method.getDeclaringClass(), timeout, loadConfig());
+    }
+
+    public static TimeoutConfig timeoutConfig(Method method, Class<?> beanClass, Timeout timeout) {
+        return timeoutConfig(method, beanClass, timeout, loadConfig());
+    }
+
+    static TimeoutConfig timeoutConfig(Method method, Timeout timeout, Config config) {
+        return timeoutConfig(method, method.getDeclaringClass(), timeout, config);
+    }
+
+    static TimeoutConfig timeoutConfig(Method method, Class<?> beanClass, Timeout timeout, Config config) {
+        long value = getLong(config, method, beanClass, Timeout.class, VALUE).orElse(timeout.value());
+        ChronoUnit unit = getChronoUnit(config, method, beanClass, Timeout.class, "unit").orElse(timeout.unit());
+        return new TimeoutConfig(value, unit);
+    }
+
+    public static CircuitBreakerConfig circuitBreakerConfig(Method method, CircuitBreaker cb) {
+        return circuitBreakerConfig(method, method.getDeclaringClass(), cb, loadConfig());
+    }
+
+    public static CircuitBreakerConfig circuitBreakerConfig(Method method, Class<?> beanClass, CircuitBreaker cb) {
+        return circuitBreakerConfig(method, beanClass, cb, loadConfig());
+    }
+
+    static CircuitBreakerConfig circuitBreakerConfig(Method method, CircuitBreaker cb, Config config) {
+        return circuitBreakerConfig(method, method.getDeclaringClass(), cb, config);
+    }
+
+    static CircuitBreakerConfig circuitBreakerConfig(Method method, Class<?> beanClass, CircuitBreaker cb, Config config) {
+        int requestVolumeThreshold = getInt(config, method, beanClass, CircuitBreaker.class, "requestVolumeThreshold")
+                .orElse(cb.requestVolumeThreshold());
+        double failureRatio = getDouble(config, method, beanClass, CircuitBreaker.class, "failureRatio")
+                .orElse(cb.failureRatio());
+        long delay = getLong(config, method, beanClass, CircuitBreaker.class, "delay").orElse(cb.delay());
+        ChronoUnit delayUnit = getChronoUnit(config, method, beanClass, CircuitBreaker.class, "delayUnit").orElse(cb.delayUnit());
+        int successThreshold = getInt(config, method, beanClass, CircuitBreaker.class, "successThreshold")
+                .orElse(cb.successThreshold());
+        Class<? extends Throwable>[] failOn = getThrowableArray(config, method, beanClass, CircuitBreaker.class, "failOn")
+                .orElse(cb.failOn());
+        Class<? extends Throwable>[] skipOn = getThrowableArray(config, method, beanClass, CircuitBreaker.class, "skipOn")
+                .orElse(cb.skipOn());
+
+        return new CircuitBreakerConfig(
+                requestVolumeThreshold,
+                failureRatio,
+                delay,
+                delayUnit,
+                successThreshold,
+                failOn,
+                skipOn
+        );
+    }
+
+    public static BulkheadConfig bulkheadConfig(Method method, Bulkhead bulkhead) {
+        return bulkheadConfig(method, method.getDeclaringClass(), bulkhead, loadConfig());
+    }
+
+    public static BulkheadConfig bulkheadConfig(Method method, Class<?> beanClass, Bulkhead bulkhead) {
+        return bulkheadConfig(method, beanClass, bulkhead, loadConfig());
+    }
+
+    static BulkheadConfig bulkheadConfig(Method method, Bulkhead bulkhead, Config config) {
+        return bulkheadConfig(method, method.getDeclaringClass(), bulkhead, config);
+    }
+
+    static BulkheadConfig bulkheadConfig(Method method, Class<?> beanClass, Bulkhead bulkhead, Config config) {
+        int value = getInt(config, method, beanClass, Bulkhead.class, VALUE).orElse(bulkhead.value());
+        int waitingTaskQueue = getInt(config, method, beanClass, Bulkhead.class, "waitingTaskQueue")
+                .orElse(bulkhead.waitingTaskQueue());
+
+        return new BulkheadConfig(value, waitingTaskQueue);
+    }
+
+    /**
+     * M8 §9.1: {@code @Fallback} configuration.
+     */
+    public static FallbackConfig fallbackConfig(Method method, Fallback fallback) {
+        return fallbackConfig(method, method.getDeclaringClass(), fallback, loadConfig());
+    }
+
+    public static FallbackConfig fallbackConfig(Method method, Class<?> beanClass, Fallback fallback) {
+        return fallbackConfig(method, beanClass, fallback, loadConfig());
+    }
+
+    static FallbackConfig fallbackConfig(Method method, Fallback fallback, Config config) {
+        return fallbackConfig(method, method.getDeclaringClass(), fallback, config);
+    }
+
+    static FallbackConfig fallbackConfig(Method method, Class<?> beanClass, Fallback fallback, Config config) {
+        Class<? extends Throwable>[] applyOn = getThrowableArray(config, method, beanClass, Fallback.class, "applyOn")
+                .orElse(fallback.applyOn());
+        Class<? extends Throwable>[] skipOn = getThrowableArray(config, method, beanClass, Fallback.class, "skipOn")
+                .orElse(fallback.skipOn());
+        String fallbackMethod = getValue(config, method, beanClass, Fallback.class, "fallbackMethod", String.class)
+                .orElse(fallback.fallbackMethod());
+        Class<? extends FallbackHandler<?>> fallbackHandlerClass = getFallbackHandlerClass(config, method, beanClass)
+                .orElse(fallback.value());
+        return new FallbackConfig(applyOn, skipOn, fallbackMethod, fallbackHandlerClass);
+    }
+
+    // M7: policy-based disablement via external configuration
+    public static boolean isRetryEnabled(Method method) {
+        return isEnabled(method, method.getDeclaringClass(), RETRY);
+    }
+
+    public static boolean isRetryEnabled(Method method, Class<?> beanClass) {
+        return isEnabled(method, beanClass, RETRY);
+    }
+
+    public static boolean isTimeoutEnabled(Method method) {
+        return isEnabled(method, method.getDeclaringClass(), TIMEOUT);
+    }
+
+    public static boolean isTimeoutEnabled(Method method, Class<?> beanClass) {
+        return isEnabled(method, beanClass, TIMEOUT);
+    }
+
+    public static boolean isCircuitBreakerEnabled(Method method) {
+        return isEnabled(method, method.getDeclaringClass(), CIRCUIT_BREAKER);
+    }
+
+    public static boolean isCircuitBreakerEnabled(Method method, Class<?> beanClass) {
+        return isEnabled(method, beanClass, CIRCUIT_BREAKER);
+    }
+
+    public static boolean isBulkheadEnabled(Method method) {
+        return isEnabled(method, method.getDeclaringClass(), BULKHEAD);
+    }
+
+    public static boolean isBulkheadEnabled(Method method, Class<?> beanClass) {
+        return isEnabled(method, beanClass, BULKHEAD);
+    }
+
+    public static boolean isFallbackEnabled(Method method) {
+        return isEnabled(method, method.getDeclaringClass(), FALLBACK);
+    }
+
+    public static boolean isFallbackEnabled(Method method, Class<?> beanClass) {
+        return isEnabled(method, beanClass, FALLBACK);
+    }
+
+    public static boolean isAsynchronousEnabled(Method method) {
+        return isEnabled(method, method.getDeclaringClass(), ASYNCHRONOUS);
+    }
+
+    public static boolean isAsynchronousEnabled(Method method, Class<?> beanClass) {
+        return isEnabled(method, beanClass, ASYNCHRONOUS);
+    }
+
+    /**
+     * M7 §9: global disablement via {@code mp.fault.tolerance.interceptor.priority}.
+     */
+    public static boolean isInterceptorGloballyDisabled() {
+        return interceptorSettings().globallyDisabled();
+    }
+
+    static boolean isInterceptorGloballyDisabled(Config config) {
+        if (config == null) return false;
+        return config.getOptionalValue(PRIORITY_KEY, Integer.class)
+                .map(priority -> priority >= Integer.MAX_VALUE)
+                .orElse(false);
+    }
+
+    /**
+     * M8 §9: the Fault Tolerance interceptor priority the configuration sets now. {@code InterceptorPriorityExtension}
+     * reads it once, when a container starts. Nothing keeps it: a value kept for the invocations could still be the one
+     * a previous deployment of the same JVM read under the same {@link Config} instance, since a deployment says it
+     * started ({@link #configurationChanged()}) only after its extensions ran (BUG-020).
+     */
+    public static int readInterceptorPriority() {
+        return interceptorPriority(loadConfig());
+    }
+
+    /**
+     * The global switch under one configuration: the interceptor reads it on every invocation. It is kept for the
+     * configuration instance and {@link #configurationChanged() generation} it was read from, and read again
+     * otherwise. Without a configuration implementation nothing is kept.
+     */
+    private record InterceptorSettings(Config config, int generation, boolean globallyDisabled) {}
+
+    private static final java.util.concurrent.atomic.AtomicReference<InterceptorSettings> INTERCEPTOR_SETTINGS =
+            new java.util.concurrent.atomic.AtomicReference<>();
+
+    private static InterceptorSettings interceptorSettings() {
+        Config config = loadConfig();
+        int generation = GENERATION.get();
+        InterceptorSettings settings = INTERCEPTOR_SETTINGS.get();
+        if (settings == null || settings.config() != config || settings.generation() != generation || config == null) {
+            settings = new InterceptorSettings(config, generation, isInterceptorGloballyDisabled(config));
+            if (config != null) INTERCEPTOR_SETTINGS.set(settings);
+        }
+        return settings;
+    }
+
+    static int interceptorPriority(Config config) {
+        if (config != null) {
+            Optional<Integer> fromConfig = config.getOptionalValue(PRIORITY_KEY, Integer.class);
+            if (fromConfig.isPresent()) {
+                return fromConfig.get();
+            }
+        }
+        // Bootstrap fallback: during BCE initialization, MP Config may not be fully
+        // initialized yet even though microprofile-config.properties is already on the classpath.
+        return interceptorPriorityFromClasspath().orElse(DEFAULT_INTERCEPTOR_PRIORITY);
+    }
+
+    private static Optional<Integer> interceptorPriorityFromClasspath() {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        if (cl == null) {
+            cl = ConfigResolver.class.getClassLoader();
+        }
+        if (cl == null) {
+            return Optional.empty();
+        }
+        try {
+            Enumeration<java.net.URL> resources = cl.getResources("META-INF/microprofile-config.properties");
+            while (resources.hasMoreElements()) {
+                Optional<Integer> priority = priorityIn(resources.nextElement());
+                if (priority.isPresent()) {
+                    return priority;
+                }
+            }
+        } catch (Exception _) {
+            return Optional.empty();
+        }
+        return Optional.empty();
+    }
+
+    /** The interceptor priority one properties resource sets, or empty when it sets none or is malformed. */
+    private static Optional<Integer> priorityIn(java.net.URL resource) {
+        try (InputStream in = resource.openStream()) {
+            Properties props = new Properties();
+            props.load(in);
+            String raw = props.getProperty(PRIORITY_KEY);
+            if (raw != null && !raw.trim().isEmpty()) {
+                return Optional.of(Integer.parseInt(raw.trim()));
+            }
+        } catch (Exception _) {
+            // Ignore malformed resources and continue scanning the classpath.
+        }
+        return Optional.empty();
+    }
+
+    /** MP FT 4.1 spec default: Platform.AFTER (4000) + 10. */
+    public static final int DEFAULT_INTERCEPTOR_PRIORITY = 4010;
+
+    public static boolean isMetricsEnabled() {
+        return isMetricsEnabled(loadConfig());
+    }
+
+    static boolean isMetricsEnabled(Config config) {
+        if (config == null) return true;
+        return config.getOptionalValue("mp.fault.tolerance.metrics.enabled", Boolean.class)
+                .orElse(true);
+    }
+
+    private static boolean isEnabled(Method method, Class<?> beanClass, String annotation) {
+        return isEnabled(method, beanClass, annotation, loadConfig());
+    }
+
+    static boolean isEnabled(Method method, String annotation, Config config) {
+        return isEnabled(method, method.getDeclaringClass(), annotation, config);
+    }
+
+    static boolean isEnabled(Method method, Class<?> beanClass, String annotation, Config config) {
+        Class<? extends Annotation> annotationType = annotationTypeFor(annotation);
+        java.util.Optional<Boolean> explicit = getBooleanByName(config, method, beanClass, annotationType, annotation, "enabled");
+        if (explicit.isPresent()) {
+            return explicit.get();
+        }
+        return !isNonFallbackGloballyDisabled(config) || FALLBACK.equals(annotation);
+    }
+
+    private static Class<? extends Annotation> annotationTypeFor(String simpleName) {
+        switch (simpleName) {
+            case RETRY: return Retry.class;
+            case TIMEOUT: return Timeout.class;
+            case CIRCUIT_BREAKER: return CircuitBreaker.class;
+            case BULKHEAD: return Bulkhead.class;
+            case FALLBACK: return Fallback.class;
+            case ASYNCHRONOUS: return Asynchronous.class;
+            default: return null;
+        }
+    }
+
+    private static boolean isNonFallbackGloballyDisabled(Config config) {
+        if (config == null) return false;
+        java.util.Optional<Boolean> value = config.getOptionalValue("MP_Fault_Tolerance_NonFallback_Enabled", Boolean.class);
+        if (value.isEmpty()) {
+            value = config.getOptionalValue("mp.fault.tolerance.nonFallback.enabled", Boolean.class);
+        }
+        return value.map(v -> !v).orElse(false);
+    }
+
+    private static java.util.Optional<Boolean> getBooleanByName(
+            Config config, Method method, Class<?> beanClass, Class<? extends Annotation> annotationType, String annotationName, String parameter) {
+        return getValueByName(config, method, beanClass, annotationType, annotationName, parameter, String.class).map(value -> {
+            String trimmed = value.trim().toLowerCase();
+            return "true".equals(trimmed);
+        });
+    }
+
+    /**
+     * Bumped whenever the configuration may have changed under the same {@link Config} instance: a new deployment
+     * starting in the same JVM, a configuration registered or released. What was resolved from the configuration
+     * before is resolved again.
+     */
+    private static final java.util.concurrent.atomic.AtomicInteger GENERATION = new java.util.concurrent.atomic.AtomicInteger();
+
+    /** Says that the configuration may have changed: everything resolved from it is resolved again. */
+    public static void configurationChanged() {
+        GENERATION.incrementAndGet();
+        INTERCEPTOR_SETTINGS.set(null);
+        // A new deployment brings new classes: keys of the previous ones would only pin their class loader.
+        KEYS.clear();
+    }
+
+    static int generation() {
+        return GENERATION.get();
+    }
+
+    /** The MicroProfile Config of the calling thread, or {@code null} without an implementation. */
+    static Config currentConfig() {
+        return loadConfig();
+    }
+
+    private static Config loadConfig() {
+        try {
+            return ConfigProvider.getConfig();
+        } catch (RuntimeException | java.util.ServiceConfigurationError | LinkageError _) {
+            // No MicroProfile Config implementation (or a broken one): annotation values only.
+            return null;
+        }
+    }
+
+    private static <A extends Annotation> java.util.Optional<Integer> getInt(
+            Config config, Method method, Class<?> beanClass, Class<A> annotationType, String parameter) {
+        return getValue(config, method, beanClass, annotationType, parameter, Integer.class);
+    }
+
+    private static <A extends Annotation> java.util.Optional<Long> getLong(
+            Config config, Method method, Class<?> beanClass, Class<A> annotationType, String parameter) {
+        return getValue(config, method, beanClass, annotationType, parameter, Long.class);
+    }
+
+    private static <A extends Annotation> java.util.Optional<Double> getDouble(
+            Config config, Method method, Class<?> beanClass, Class<A> annotationType, String parameter) {
+        return getValue(config, method, beanClass, annotationType, parameter, Double.class);
+    }
+
+    private static <A extends Annotation> java.util.Optional<ChronoUnit> getChronoUnit(
+            Config config, Method method, Class<?> beanClass, Class<A> annotationType, String parameter) {
+        return getValue(config, method, beanClass, annotationType, parameter, String.class).map(String::trim).map(ChronoUnit::valueOf);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <A extends Annotation> java.util.Optional<Class<? extends Throwable>[]> getThrowableArray(
+            Config config,
+            Method method,
+            Class<?> beanClass,
+            Class<A> annotationType,
+            String parameter
+    ) {
+        return getValue(config, method, beanClass, annotationType, parameter, String.class).map(value -> {
+            String[] classNames = value.split(",");
+            List<Class<? extends Throwable>> resolved = new ArrayList<>();
+            for (String className : classNames) {
+                String trimmed = className.trim();
+                if (trimmed.isEmpty()) continue;
+                try {
+                    Class<?> clazz = Class.forName(trimmed);
+                    if (!Throwable.class.isAssignableFrom(clazz)) {
+                        throw new IllegalArgumentException("Not a throwable type: " + trimmed);
+                    }
+                    resolved.add((Class<? extends Throwable>) clazz);
+                } catch (ClassNotFoundException failure) {
+                    throw new IllegalArgumentException("Unknown throwable class: " + trimmed, failure);
+                }
+            }
+            return resolved.toArray(new Class[0]);
+        });
+    }
+
+    private static <A extends Annotation, T> java.util.Optional<T> getValue(
+            Config config,
+            Method method,
+            Class<?> beanClass,
+            Class<A> annotationType,
+            String parameter,
+            Class<T> type
+    ) {
+        return getValueByName(config, method, beanClass, annotationType, annotationType.getSimpleName(), parameter, type);
+    }
+
+    private static <T> java.util.Optional<T> getValueByName(
+            Config config,
+            Method method,
+            Class<?> beanClass,
+            Class<? extends Annotation> annotationType,
+            String annotationName,
+            String parameter,
+            Class<T> type
+    ) {
+        if (config == null) {
+            return java.util.Optional.empty();
+        }
+        boolean classLevelAppliesToAllMethods = "enabled".equals(parameter);
+        for (String key : keys(method, beanClass, annotationType, annotationName, parameter, classLevelAppliesToAllMethods)) {
+            java.util.Optional<T> value = config.getOptionalValue(key, type);
+            if (value.isPresent()) {
+                return value;
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * MP FT 4.1 §9: property-resolution precedence.
+     * <ul>
+     *   <li>{@code <class>/<method>/<Annotation>/<param>}</li>
+     *   <li>{@code <class>/<Annotation>/<param>}</li>
+     *   <li>{@code <Annotation>/<param>}</li>
+     * </ul>
+     */
+    static List<String> keys(
+            Method method,
+            Class<?> beanClass,
+            Class<? extends Annotation> annotationType,
+            String annotationName,
+            String parameter,
+            boolean classLevelAppliesToAllMethods
+    ) {
+        // An interceptor resolves its policy on every invocation: the keys, which depend on annotations only, are
+        // computed once per method, class and parameter instead of reading those annotations each time.
+        return KEYS.computeIfAbsent(
+                new KeysOf(method, beanClass, annotationName, parameter, classLevelAppliesToAllMethods),
+                k -> computeKeys(method, beanClass, annotationType, annotationName, parameter,
+                        classLevelAppliesToAllMethods));
+    }
+
+    /** What the configuration keys of a policy parameter depend on. */
+    private record KeysOf(Method method, Class<?> beanClass, String annotationName, String parameter,
+                          boolean classLevelAppliesToAllMethods) {}
+
+    private static final java.util.concurrent.ConcurrentHashMap<KeysOf, List<String>> KEYS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static List<String> computeKeys(
+            Method method,
+            Class<?> beanClass,
+            Class<? extends Annotation> annotationType,
+            String annotationName,
+            String parameter,
+            boolean classLevelAppliesToAllMethods
+    ) {
+        String className = beanClass.getName();
+        String methodName = method.getName();
+        String globalKey = annotationName + "/" + parameter;
+        List<String> keys = new ArrayList<>(3);
+        keys.add(className + "/" + methodName + "/" + annotationName + "/" + parameter);
+
+        boolean hasMethodLevelAnnotation = annotationType != null && method.isAnnotationPresent(annotationType);
+        boolean hasClassLevelAnnotation = annotationType != null && beanClass.isAnnotationPresent(annotationType);
+        if (classLevelAppliesToAllMethods || (!hasMethodLevelAnnotation && hasClassLevelAnnotation)) {
+            keys.add(className + "/" + annotationName + "/" + parameter);
+        }
+
+        keys.add(globalKey);
+        return List.copyOf(keys);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.Optional<Class<? extends FallbackHandler<?>>> getFallbackHandlerClass(
+            Config config,
+            Method method,
+            Class<?> beanClass
+    ) {
+        return getValue(config, method, beanClass, Fallback.class, VALUE, String.class).map(className -> {
+            try {
+                Class<?> clazz = Class.forName(className.trim());
+                if (!FallbackHandler.class.isAssignableFrom(clazz)) {
+                    throw new IllegalArgumentException("Configured fallback value is not a FallbackHandler: " + className);
+                }
+                return (Class<? extends FallbackHandler<?>>) clazz;
+            } catch (ClassNotFoundException failure) {
+                throw new IllegalArgumentException("Unknown fallback handler class: " + className, failure);
+            }
+        });
+    }
+}
+

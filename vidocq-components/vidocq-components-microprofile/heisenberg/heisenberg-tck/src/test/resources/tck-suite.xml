@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!--
+    Suite TestNG TCK MicroProfile Fault Tolerance 4.1 — exécutée par Arquillian
+    contre l'implémentation Heisenberg (container embedded + Vauban CDI).
+-->
+<suite name="microprofile-fault-tolerance-tck-4.1" verbose="1" configfailurepolicy="continue">
+    <test name="microprofile-fault-tolerance-tck">
+        <packages>
+            <package name="org.eclipse.microprofile.fault.tolerance.tck.*"/>
+        </packages>
+    </test>
+</suite>
+

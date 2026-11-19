@@ -1,0 +1,304 @@
+= Internals
+:description: Invocation pipeline, pure Java 25 engines, virtual threads, shared state registries, no hot-path locking.
+
+[.lead]
+Heisenberg strictly separates pure automata (`heisenberg-core`) from the CDI integration (`heisenberg-cdi-vauban`). This page describes the invocation sequence, the role of each engine, the shared state management for `@CircuitBreaker` and `@Bulkhead`, and the threading invariants required by virtual threads.
+
+[#generated-code]
+== Generated code and reflective fallback
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. For Heisenberg that is the Fault Tolerance
+annotations of each bean class, read at compile time (<<compile-time-policies>>); reading them by reflection stays as
+the fallback, unchanged.
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| `<Bean>$$HeisenbergPolicies`, a `FaultToleranceCompanion`: the bean's `@Retry`, `@Timeout`, `@CircuitBreaker`,
+  `@Bulkhead`, `@Asynchronous` and `@Fallback` as constant literals, defaults filled in
+| `heisenberg-processor` in javac, for each class whose methods carry Fault Tolerance annotations; on Vidocq the
+  `vidocq-runtime-heisenberg-fault-tolerance-extension-codegen` bundle puts it on the processor path
+| `AnnotationReader`, on the first call of a guarded method, through `Companions`: the `ServiceLoader` of the bean's
+  module layer, then its class loaders, then by name; cached per class
+| The annotations are read by reflection on the first call of each method, and announced once per class.
+
+| The `@FaultToleranceBinding` marker on each guarded class
+| `HeisenbergExtension`, a Build Compatible Extension (`@Enhancement`) that Vauban runs in javac when
+  `heisenberg-cdi-vauban` is on the processor path
+| Vauban applies the frozen enhancement at boot
+| The extension runs at boot, which it also does whenever a bean archive lacks Vauban's processed marker
+  (xref:vauban::internals.adoc#generated-code[Vauban]).
+
+| The lookup a private `fallbackMethod` is resolved with
+| Vauban's generated `_VaubanComponents` of the bean's package (<<fallback-lookup>>)
+| `FallbackResolver`, through `VaubanLookupSource`
+| The core adds the read edge itself, and the bean's package must be opened to `io.vidocq.heisenberg.core`.
+|===
+
+The validation of the definitions is generated too, as compile errors: see <<definition-errors>>. A class without a
+companion is still validated by `HeisenbergExtension` at boot, by reflection.
+
+The priority of the interceptor is not generated: it comes from the configuration the application starts with, and
+is applied when the container starts (<<interceptor-priority>>).
+
+=== When the fallback runs
+
+* A class compiled without `heisenberg-processor`, such as the TCK's classes or a library of another build.
+* A class the processor skips with a compiler note: a private, local or anonymous class, or an annotation value
+  naming a class the companion's package cannot reach.
+
+=== Which path ran
+
+* `HEISENBERG — Fault Tolerance annotations of <class> read by reflection` at `WARNING`, once per class, the first
+  time it is read without a companion.
+* A companion that cannot be used logs why, and the annotations are read by reflection.
+
+== `heisenberg-core` / `heisenberg-cdi-vauban` split
+
+`heisenberg-core` is plain Java — no CDI, no `@Inject`. It is usable outside a container, which is how the project's own JUnit 5 tests verify a `RetryEngine`'s logic without deploying an application. Its `io.vidocq.heisenberg.internal` package is exported only to the CDI module — it is not application API.
+
+`heisenberg-cdi-vauban` is the integration layer: a single CDI `@Interceptor` (`FaultToleranceInterceptor`) orchestrates the engines, a Build Compatible Extension (`HeisenbergExtension`) declares it at startup, a second one (`InterceptorPriorityExtension`) gives it the configured priority, two `@ApplicationScoped` beans (`StateRegistryBean`, `BulkheadStateRegistryBean`) maintain the shared state.
+
+== Invocation pipeline
+
+[mermaid]
+....
+flowchart LR
+  Bean["annotated CDI method"]
+  Around["FaultToleranceInterceptor.around()"]
+  Composer["PolicyComposer<br/>resolves config + §2.5 order"]
+  Fb["FallbackResolver"]
+  Rt["RetryEngine"]
+  Cb["CircuitBreakerEngine"]
+  To["TimeoutEngine"]
+  Bh["BulkheadEngine"]
+  Target["target method"]
+  Metrics["FtMetricsRecorder<br/>(composite)"]
+
+  Bean --> Around
+  Around --> Composer
+  Composer --> Fb
+  Fb --> Rt
+  Rt --> Cb
+  Cb --> To
+  To --> Bh
+  Bh --> Target
+
+  Around -.emits.-> Metrics
+....
+
+. `FaultToleranceInterceptor.around()` intercepts the `InvocationContext`. For `@Asynchronous`, it immediately switches onto a virtual thread.
+. `PolicyComposer` reads the resolved annotations (direct annotations + MP Config overrides) and builds the chain in canonical §2.5 order.
++
+What the annotations and MicroProfile Config say about a method is resolved on its first invocation and kept: `MethodPolicies` holds the enabled policies and their configurations per bean class and method, for the `Config` instance they were read from, and resolves them again under another instance (another deployment). The interceptor keeps, the same way, the method it resolved on the bean class, and the interceptor priority read from the configuration or, when it does not set it, from the class path. Until 0.4.0-RC1 all of it was read on every invocation: a `@Retry` method that succeeded at once cost about 4 µs and 16 KB (BENCH.md, BENCH-20261030-01).
+. Each engine applies its logic:
+.. `RetryEngine` loops up to `maxRetries` with `delay + jitter` randomness.
+.. `TimeoutEngine` runs the attempt on a virtual thread and calls `Thread.join(Duration)`; on expiry, it raises `TimeoutException` and interrupts the worker.
+.. `BulkheadEngine` acquires a fair `Semaphore` (sync mode); in async mode a second bounded `Semaphore` models the `waitingTaskQueue`.
+.. `CircuitBreakerEngine` reads/updates the three-state machine held by the shared registry; its sliding window counts requests and failures with `AtomicInteger` counters.
+.. `FallbackResolver` resolves `fallbackMethod` or instantiates the `FallbackHandler<T>` through CDI lookup.
+. `FtMetricsRecorder` emits §9 (MP Metrics) and §10 (OpenTelemetry) metrics on every transition.
+
+== Pure Java 25 engines
+
+[cols="2,3"]
+|===
+| Engine | Implementation
+
+| `RetryEngine`
+| `for` loop bounded by `maxRetries` / `maxDuration`. `Thread.sleep(Duration)` for delay. `ThreadLocalRandom` for jitter (lock-free).
+
+| `TimeoutEngine`
+| `Thread worker = Thread.ofVirtual().start(task)`. `worker.join(Duration.ofMillis(timeoutMs))`. If not done: `worker.interrupt()` and `TimeoutException`.
+
+| `CircuitBreakerEngine`
+| Finite-state machine (CLOSED/OPEN/HALF_OPEN) stored in the shared registry as a `volatile` per-method snapshot; sliding window backed by a `ConcurrentLinkedDeque` plus `AtomicInteger` request/failure counters. No lock.
+
+| `BulkheadEngine`
+| Fair `Semaphore` with `value` permits. Async mode: a second fair `Semaphore` bounds the waiting queue to `waitingTaskQueue` permits.
+
+| `FallbackResolver`
+| `MethodHandle` resolved once at construction (via `MethodHandles.privateLookupIn`, from a lookup taken in the bean's own module when the container supplies one — see xref:#fallback-lookup[how a fallback method is reached]). No `Proxy.newProxyInstance`.
+
+| `PolicyComposer`
+| Builds the chain inside out by nesting `Invocation` lambdas (`@Bulkhead` first, `@Fallback` / `@Asynchronous` last), from the annotation snapshot read by `AnnotationReader`.
+|===
+
+== Shared state registries
+
+`@CircuitBreaker` and `@Bulkhead` need state shared across all invocations of a given method — whether it is called from a `@RequestScoped`, `@ApplicationScoped` or `@Dependent` bean. MP FT spec §5.4 / §9.6 explicitly states that the state is attached to the _method signature_, not to the instance.
+
+[cols="2,3"]
+|===
+| Bean | Role
+
+| `StateRegistryBean` (`@ApplicationScoped`)
+| Implements `CircuitBreakerStateRegistry`. Keyed by `beanClass#method`; `ConcurrentHashMap.computeIfAbsent` returns a per-breaker snapshot (`volatile` state, opened-at timestamp, HALF_OPEN success counter).
+
+| `BulkheadStateRegistryBean` (`@ApplicationScoped`)
+| Implements `BulkheadStateRegistry`. Keyed by `beanClass#method`; fair concurrency `Semaphore`, plus a fair waiting-queue `Semaphore` in async mode.
+|===
+
+Consequence: a `@RequestScoped` bean recreated on every request _shares_ its `@CircuitBreaker` with previous requests — this is intentional and spec-compliant.
+
+== Threading model
+
+[#virtual-threads]
+=== Virtual threads everywhere
+
+Every policy that needs to block (`@Timeout`, `@Asynchronous`, `@Bulkhead` async mode) uses `Thread.ofVirtual()`. No platform thread pool is created by Heisenberg.
+
+* `TimeoutEngine` — `Thread.ofVirtual().start(task)` + `join(Duration)`. Memory cost is in the order of a few kB per attempt (stack pinning included).
+* `AsynchronousEngine` (`heisenberg-core`) — `Thread.ofVirtual().start(...)` to run the full chain and complete the returned `CompletionStage`.
+* `BulkheadEngine` (async) — waiting invocations block on the fair `Semaphore` from their own virtual thread; no dispatcher thread exists.
+
+[NOTE]
+====
+`StructuredTaskScope` (JEP 505, finalised in Java 25) is available but the current implementation uses `Thread.join(Duration)` to stay strictly compatible with Java 21+. Migration to `StructuredTaskScope` is listed in `ROADMAP.md`.
+====
+
+=== No `synchronized`, no `ThreadLocal`
+
+The repo `CLAUDE.md` mandates strictly, and the engines follow through:
+
+* no `synchronized` — `ReentrantLock` with `tryLock` when a lock is unavoidable (so far, none has been);
+* no `ThreadLocal` — invocation state travels through explicit parameters and captured lambdas;
+* no `setAccessible(true)` — `MethodHandles.privateLookupIn` for private fallbacks, from the bean module's own lookup when the container supplies one (xref:#fallback-lookup[how a fallback method is reached]);
+* no `java.lang.reflect.Proxy` — direct `MethodHandle`.
+
+This discipline guarantees that virtual threads are never _pinned_ to their carrier thread — otherwise the memory cost of `@Asynchronous` explodes under load.
+
+=== Lock-free counters
+
+`CircuitBreakerEngine` counts requests and failures with `AtomicInteger` counters behind a `ConcurrentLinkedDeque` sliding window; the shared registry keeps each breaker's state in a `volatile` snapshot field. No lock is taken on the hot path.
+
+== Vauban BCE: `HeisenbergExtension`
+
+Startup orchestration is carried by two CDI 4.1 Build Compatible Extensions of `io.vidocq.heisenberg.cdi.internal`, `HeisenbergExtension` and `InterceptorPriorityExtension`. They use only the `@Enhancement` phase — one hook each:
+
+[source,java]
+----
+// Simplified from the real extensions — both hooks are @Enhancement.
+
+// HeisenbergExtension
+@Enhancement(types = Object.class, withSubtypes = true,
+        withAnnotations = { Retry.class, Timeout.class, CircuitBreaker.class,
+                            Bulkhead.class, Asynchronous.class, Fallback.class })
+public void addFaultToleranceBinding(ClassConfig classConfig) {
+    // Validates the FT definitions (@Asynchronous return type, @Bulkhead
+    // bounds, @Fallback method signature, ...) and adds the
+    // @FaultToleranceBinding marker so CDI selects the interceptor.
+}
+
+// InterceptorPriorityExtension
+@Enhancement(types = FaultToleranceInterceptor.class)
+public void configureInterceptorPriority(ClassConfig classConfig) {
+    // Does nothing while the application builds. When the container starts,
+    // replaces the interceptor's @Priority if
+    // mp.fault.tolerance.interceptor.priority differs from the default 4010.
+}
+----
+
+Startup validation stays the portable path: any malformed annotation (`@Asynchronous void m()`, `@Bulkhead(value=0)`, a `@Fallback` whose fallback method does not match the guarded signature) raises `FaultToleranceDefinitionException` and immediately aborts application startup — no late runtime surprise.
+
+Both extensions are declared twice, as every Build Compatible Extension must be: with `provides` in `module-info.java` for the module path, and in `META-INF/services` for the class path.
+
+[#interceptor-priority]
+=== The interceptor's priority
+
+`mp.fault.tolerance.interceptor.priority` belongs to the configuration the application starts with: a system property, an environment variable, a properties file of the deployment. A build reads the configuration of the build machine. So `InterceptorPriorityExtension` asks Vauban's `ExtensionPhase.isBuildTime()` first and does nothing at build time; when the container starts, it replaces the `@Priority` of `FaultToleranceInterceptor` by the configured value, read once, from the configuration at that moment: nothing keeps the value, so a container started after another one in the same JVM gets its own (BUG-020). `FaultToleranceInterceptor` is the only Fault Tolerance interceptor: every configured value moves it, the `3850` of the TCK's priority test included.
+
+The priority has an extension of its own because of how Vauban treats extensions: it runs them while the application compiles and freezes what they produce, and, with Vidocq/vauban#288, runs an extension again when the container starts only if that extension asked `ExtensionPhase.isBuildTime()` during the build. `HeisenbergExtension` depends on the classes only, so its result stays frozen; `InterceptorPriorityExtension` alone runs again at start. Under another container, such as Weld or Open Liberty, both run when the application is deployed; `heisenberg-it-weld` checks that a configured priority moves the interceptor under Weld SE.
+
+NOTE: Under a Vauban older than its fix BUG-20261113-12 (Vidocq/vauban#289), the configured priority does not move the interceptor (BUG-019, heisenberg#66): Vauban drops a `@Priority` that an `@Enhancement` adds to an interceptor class with `ClassConfig.addAnnotation(Annotation)`, so `FaultToleranceInterceptor` keeps its default priority `4010`, whatever the value, `3850` included. Until that fix, a second interceptor, `FaultTolerancePriority3850Interceptor`, declared `3850` statically so that the TCK's priority test passed; it was removed once Vauban applied the configured priority. `Integer.MAX_VALUE` still disables Fault Tolerance under any Vauban: the interceptor checks it on each call.
+
+[#definition-errors]
+== Definition errors at build time
+
+The processor reports the MicroProfile Fault Tolerance 4.1 definition errors as compile errors, one per rule, with the
+messages of `FaultToleranceDefinitionException`. It checks every method an interceptor guards, with the annotations the
+interceptor applies (the method's own, else the nearest class's). A class that has a companion carries
+`validated() == true`, and the container boot does not validate it again; a class without one (compiled without the
+processor, a class the processor could not name, a companion of an older processor) is validated by reflection at boot as before.
+
+[cols="1,3",options="header"]
+|===
+| Annotation | Error
+| `@Asynchronous` | return type neither `Future` nor `CompletionStage` (or a subtype)
+| `@Bulkhead` | `value < 1`; `waitingTaskQueue < 0` together with `@Asynchronous`
+| `@CircuitBreaker` | `failureRatio` outside [0,1]; `requestVolumeThreshold < 1`; `successThreshold < 1`
+| `@Retry` | `maxRetries < -1`; negative `delay`, `jitter` or `maxDuration`; `0 < maxDuration < delay` (numbers compared as written, as at run time)
+| `@Timeout` | `value < 0`
+| `@Fallback` | not exactly one of `fallbackMethod` and `value`; no `fallbackMethod` of that name with identical parameter types, an assignable return type and agreeing generic arguments, visible from the bean class (bean class, superclasses, interfaces); a `FallbackHandler<X>` whose `X` does not fit the (boxed) return type
+|===
+
+What changes compared with the boot validation, for the classes the processor serves:
+
+* A definition error is a build error instead of a startup error (same rule, same text).
+* Inherited methods are checked too: the boot walked only the methods declared by the bean class.
+* A nearer class annotation hides a farther one, as for the interceptor: the boot looked at the method's declaring class.
+* An annotation on a `private` or `static` method, which no interceptor guards, is not checked any more.
+* An abstract class is checked through its concrete subclasses.
+
+Rules the processor does not check, because they need the running container: that a `FallbackHandler` can be
+instantiated, and a fallback method's lookup rights in a named application module.
+
+[#compile-time-policies]
+== Annotations read at compile time
+
+`heisenberg-processor` is an annotation processor. For each class whose methods carry Fault Tolerance annotations, directly or through a class of their hierarchy, it generates a `<Bean>$$HeisenbergPolicies` companion: an implementation of `io.vidocq.heisenberg.spi.gen.FaultToleranceCompanion` that holds the annotations as constant `Literals`, defaults filled in. The resolution rule is the runtime's: each annotation comes from the method's nearest declaration in the class hierarchy, else from the nearest class that carries it. The processor is checked against `AnnotationReader` as an oracle (`FaultTolerancePoliciesProcessorOracleTest`).
+
+At run time, `AnnotationReader` asks the companion first. It is found once per bean class: through `ServiceLoader` in the bean's module layer, then through its class loaders, then by its name. With a companion there is no reflection on the annotations, which matters for ahead-of-time compilation. MicroProfile Config overrides still apply at run time.
+
+* *On a plain module path*, the application declares `provides io.vidocq.heisenberg.spi.gen.FaultToleranceCompanion with ...$$HeisenbergPolicies`, as `heisenberg-cdi-vauban-module-it` does.
+* *On the Vidocq runtime*, the application layer turns the processor's `META-INF/services` file into `provides` by itself.
+
+A class compiled without the processor, such as the TCK's classes, is read by reflection as before. Its first read logs one warning per class (`HEISENBERG — Fault Tolerance annotations of ... read by reflection`).
+
+The processor skips, with a compiler note, the classes a companion cannot name: private, local or anonymous classes, and annotation values naming a class the companion's package cannot reach. The generated code carries no `@Generated` annotation: `javax.annotation.processing` belongs to `java.compiler`, which an application module does not read.
+
+[#fallback-lookup]
+== How a fallback method is reached
+
+`FallbackResolver` turns a `fallbackMethod` into a `MethodHandle` with `MethodHandles.privateLookupIn(owner, lookup)`. On a strict module path, a private lookup taken from `io.vidocq.heisenberg.core` needs two things the application does not give: a read edge from the core to the application module, and the bean's package opened to the core. The official TCK runs on the class path, where both always hold, so it never saw that a bean with a `fallbackMethod` in a module that opens nothing failed deployment with `Invalid fallbackMethod` (BUG-003, heisenberg#22).
+
+`heisenberg-core` stays container-agnostic. `FallbackResolver` asks a hook, `FallbackResolver.LookupSource`, for a lookup on the bean class, and resolves in this order:
+
+. **A lookup from the container.** `heisenberg-cdi-vauban` installs the hook (`VaubanLookupSource`) with Vauban's xref:vauban::internals.adoc#module-lookups[`ModuleLookups`]: its lookup is supplied by the generated `_VaubanComponents` of the bean's package — written by the annotation processor for the application, or by the Vauban Maven plugin for a scanned dependency. That lookup lives in the bean's own module, so the private lookup derived from it needs no read edge and no `opens`. `io.vidocq.vauban.core` exports `ModuleLookups` to the trusted extension modules only, and `heisenberg-cdi-vauban` reaches it through `requires static io.vidocq.vauban.core` (Maven scope `provided`): under another container the hook answers nothing.
+. **No lookup** — no Vauban provider for that package (for instance an archive compiled by an older processor), another container, or the engines used without a container. The core adds the read edge to the bean's module itself (`Module.addReads`), so an `opens <pkg> to io.vidocq.heisenberg.core` in the application is the only thing left to declare.
+
+Either way, no `setAccessible(true)` and no `--add-reads` on the command line. `heisenberg-cdi-vauban-module-it` (`FallbackMethodModulePathTest`) covers private and package-private fallback methods on the module path with an application that opens nothing; the `heisenberg-cdi-vauban` unit tests, which call the interceptor without a container, keep the `opens`-only path covered.
+
+[#observability]
+== Optional observability
+
+The `io.vidocq.heisenberg.api.FtMetricsRecorder` SPI is implemented in parallel by two recorders:
+
+[cols="2,3"]
+|===
+| Recorder | Module
+
+| `DiracFtMetricsRecorder`
+| `heisenberg-cdi-vauban` — MP Metrics §9 via Dirac, counters `ft.invocations.total`, `ft.retry.retries.total`, etc. Publishes through `DiracFtMetrics` when the MicroProfile Metrics API is present.
+
+| `OtelFtMetricsRecorder`
+| `heisenberg-cdi-vauban` — OpenTelemetry §10, via `GlobalOpenTelemetry`. Publishes through `OtelFtMetrics` when the OpenTelemetry API is present. Declared `requires static io.opentelemetry.api`.
+|===
+
+The `FaultToleranceInterceptor` injects `@Any Instance<FtMetricsRecorder>`. If several recorders are present, `MetricsRecorderResolver.resolve()` wraps them in a `CompositeFtMetricsRecorder` (fan-out) — this avoids `AmbiguousResolutionException` and publishes MP Metrics and OTel simultaneously.
+
+Both recorders are always deployed, and neither bean class refers to a type of its API: each forwards to a delegate (`DiracFtMetrics`, `OtelFtMetrics`, not beans) that it creates in `@PostConstruct` only when the API can be loaded and read from `io.vidocq.heisenberg.cdi.vauban`. A container inspects the fields and methods of every bean class it discovers, and a class that refers to a missing type fails to link: Weld drops it with `WELD-000119`, Vauban stops the start (BUG-005). Keeping the API types out of the beans makes an application with Fault Tolerance alone start on any container.
+
+If no recorder is active (OpenTelemetry absent, MicroProfile Metrics absent), `MetricsRecorderResolver` leaves the inactive recorders out and the `FtMetricsRecorder.NOOP` constant is used — invocation cost is negligible. `MetricsRecordersWithoutObservabilityTest` (`heisenberg-cdi-vauban-module-it`) deploys both recorders on a module path that has neither API. The `run-tck-no-observability.sh` script validates this no-observability path.
+
+== Records and exhaustive switches
+
+The internal model leans on records and enums rather than a sealed result hierarchy. Policy configurations are immutable records — `RetryConfig`, `TimeoutConfig`, `CircuitBreakerConfig`, `BulkheadConfig`, `FallbackConfig` — that validate their bounds in compact constructors. State is enum-driven: `CircuitBreakerState` (CLOSED/OPEN/HALF_OPEN) and the `FtMetricsRecorder` enums (`RetryResult`, `CBCallResult`, `CBState`) feed exhaustive `switch` expressions in `PolicyComposer` and the recorders — the MP FT 4.1 spec is frozen, so static exhaustivity is appropriate. The records and `CircuitBreakerState` live in the qualified-export `io.vidocq.heisenberg.internal` package (the recorder enums are nested in the public `FtMetricsRecorder`); the application-facing API remains the spec annotations plus the small `io.vidocq.heisenberg.api` SPI.
+
+== Going further
+
+* xref:concepts.adoc[Concepts] — composition order, CircuitBreaker states.
+* xref:reference.adoc[Reference] — annotations, MP Config keys, public SPI.
+* xref:tck.adoc[TCK] — execution and exclusions.
