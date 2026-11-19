@@ -1,0 +1,302 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cyrano.cdi.internal;
+
+import io.vidocq.cyrano.runtime.ProviderInstantiator;
+import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.enterprise.inject.spi.CDI;
+import jakarta.enterprise.inject.spi.Interceptor;
+import jakarta.enterprise.inject.spi.InterceptionType;
+import jakarta.interceptor.InvocationContext;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Callable;
+
+/**
+ * CDI-aware implementation of {@link ProviderInstantiator} — resolves providers
+ * (filters, interceptors, mappers...) via the current {@link BeanManager} if a managed
+ * bean exists for the requested class. Otherwise returns {@code null} to let
+ * cyrano-core fall back on reflective instantiation.
+ *
+ * <p>Spec MP Rest Client 4.0 §4.2.4 — <em>« RestClient implementations must use the
+ * BeanManager to obtain providers if they are managed beans. »</em></p>
+ *
+ * <p>Discovered via {@code META-INF/services/io.vidocq.cyrano.runtime.ProviderInstantiator}
+ * and Java Modules {@code provides}.</p>
+ *
+ * @since 0.1.0 (M4-3)
+ */
+public final class CyranoCdiProviderInstantiator implements ProviderInstantiator {
+
+    @Override
+    public Object create(Class<?> componentClass) {
+        BeanManager bm;
+        try {
+            bm = CDI.current().getBeanManager();
+        } catch (IllegalStateException _) {
+            //CDI not yet started (or outside CDI) — delegates to reflective fallback
+            return null;
+        }
+        var beans = bm.getBeans(componentClass);
+        if (beans == null || beans.isEmpty()) return null;
+        var bean = bm.resolve(beans);
+        if (bean == null) return null;
+        var ctx = bm.createCreationalContext(bean);
+        return bm.getReference(bean, componentClass, ctx);
+    }
+
+    @Override
+    public Object aroundInvoke(Object target, Method method, Object[] args, Callable<Object> invocation) throws Exception {
+        return aroundInvoke(method.getDeclaringClass(), target, method, args, invocation);
+    }
+
+    @Override
+    public Object aroundInvoke(Class<?> clientInterface, Object target, Method method, Object[] args,
+                               Callable<Object> invocation) throws Exception {
+        if (released) {
+            return invocation.call(); // a closed client: the call is refused, no interceptor is created again
+        }
+        BeanManager bm;
+        try {
+            bm = CDI.current().getBeanManager();
+        } catch (IllegalStateException _) {
+            return invocation.call();
+        }
+
+        Annotation[] bindings = bindingsFor(clientInterface, method);
+        if (bindings.length == 0) {
+            return invocation.call();
+        }
+
+        List<InterceptorInvocation> chain = chainFor(bm, new BindingsOf(clientInterface, method), bindings);
+        if (chain.isEmpty()) {
+            return invocation.call();
+        }
+        return new InvocationContextImpl(target, method, args, invocation, chain).proceed();
+    }
+
+    /*
+     * The interceptor instances of the client this instantiator serves: one per interceptor, as for any intercepted
+     * bean instance, created on first use and destroyed by release(). They used to be created on every call and
+     * never destroyed (BUG-20261102-04).
+     */
+    private final Object lock = new Object();
+    private final java.util.concurrent.atomic.AtomicReference<BeanManager> instancesOf =
+            new java.util.concurrent.atomic.AtomicReference<>();
+    private volatile boolean released;
+    /** By interceptor class: a container may describe the same interceptor with a new Interceptor object each time. */
+    private final Map<Class<?>, Object> instances = new HashMap<>();
+    private final List<CreationalContext<?>> contexts = new ArrayList<>();
+    private final java.util.concurrent.ConcurrentHashMap<BindingsOf, List<InterceptorInvocation>> chains =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private List<InterceptorInvocation> chainFor(BeanManager bm, BindingsOf call, Annotation[] bindings) {
+        if (bm == instancesOf.get()) {
+            List<InterceptorInvocation> known = chains.get(call);
+            if (known != null) {
+                return known;
+            }
+        }
+        synchronized (lock) {
+            if (bm != instancesOf.get()) {
+                // another container (a reload): the instances of the previous one are not used any more
+                releaseInstances();
+                instancesOf.set(bm);
+            }
+            return chains.computeIfAbsent(call, k -> buildChain(bm, bindings));
+        }
+    }
+
+    private List<InterceptorInvocation> buildChain(BeanManager bm, Annotation[] bindings) {
+        List<Interceptor<?>> interceptors = bm.resolveInterceptors(InterceptionType.AROUND_INVOKE, bindings);
+        if (interceptors == null || interceptors.isEmpty()) {
+            return List.of();
+        }
+        List<InterceptorInvocation> chain = new ArrayList<>(interceptors.size());
+        for (Interceptor<?> interceptor : interceptors) {
+            Object instance = instances.computeIfAbsent(interceptor.getBeanClass(), beanClass -> {
+                var ctx = bm.createCreationalContext(interceptor);
+                contexts.add(ctx);
+                return bm.getReference(interceptor, beanClass, ctx);
+            });
+            chain.add(new InterceptorInvocation(interceptor, instance));
+        }
+        return List.copyOf(chain);
+    }
+
+    /** Destroys the interceptor instances of the client: their {@code @PreDestroy} callbacks run. */
+    @Override
+    public void release() {
+        released = true;
+        synchronized (lock) {
+            releaseInstances();
+            instancesOf.set(null);
+        }
+    }
+
+    private void releaseInstances() {
+        chains.clear();
+        instances.clear();
+        for (CreationalContext<?> ctx : contexts) {
+            try {
+                ctx.release();
+            } catch (RuntimeException _) {
+                // a failing @PreDestroy must not prevent the others from running
+            }
+        }
+        contexts.clear();
+    }
+
+    /** What the interceptor bindings of a client call depend on. */
+    private record BindingsOf(Class<?> clientInterface, Method method) {}
+
+    /**
+     * The interceptor bindings of each client method, read once: reading them on every call cost annotation reflection
+     * and the creation of annotation proxies each time. Held by this instantiator, one per client, so a reloaded
+     * application does not keep the previous classes alive.
+     */
+    private final java.util.concurrent.ConcurrentHashMap<BindingsOf, Annotation[]> bindingsByCall =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Package-private for the test: the bindings this instantiator uses for a call. */
+    Annotation[] bindingsFor(Class<?> clientInterface, Method method) {
+        return bindingsByCall.computeIfAbsent(new BindingsOf(clientInterface, method),
+                k -> interceptorBindings(k.clientInterface(), k.method()));
+    }
+
+    /**
+     * The method's own bindings, then for each other binding type the one the client interface declares, else the one
+     * the super-interface declaring an inherited method declares: the nearest declaration wins.
+     */
+    private static Annotation[] interceptorBindings(Class<?> clientInterface, Method method) {
+        List<Annotation> out = new ArrayList<>();
+        collectBindings(out, method.getAnnotations());
+        collectBindings(out, clientInterface.getAnnotations());
+        if (method.getDeclaringClass() != clientInterface) {
+            collectBindings(out, method.getDeclaringClass().getAnnotations());
+        }
+        return out.toArray(new Annotation[0]);
+    }
+
+    private static void collectBindings(List<Annotation> out, Annotation[] candidates) {
+        for (Annotation candidate : candidates) {
+            if (candidate.annotationType().isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class)
+                    && out.stream().noneMatch(a -> a.annotationType() == candidate.annotationType())) {
+                out.add(candidate);
+            }
+        }
+    }
+
+    private record InterceptorInvocation(Interceptor<?> interceptor, Object instance) {}
+
+    private static final class InvocationContextImpl implements InvocationContext {
+        private final Object target;
+        private final Method method;
+        private final Object[] args;
+        private final Callable<Object> terminal;
+        private final List<InterceptorInvocation> chain;
+        private final Map<String, Object> contextData = new HashMap<>();
+        private int index;
+
+        private InvocationContextImpl(Object target,
+                                      Method method,
+                                      Object[] args,
+                                      Callable<Object> terminal,
+                                      List<InterceptorInvocation> chain) {
+            this.target = target;
+            this.method = method;
+            this.args = args == null ? new Object[0] : args.clone();
+            this.terminal = terminal;
+            this.chain = chain;
+        }
+
+        @Override
+        public Object getTarget() {
+            return target;
+        }
+
+        @Override
+        public Method getMethod() {
+            return method;
+        }
+
+        @Override
+        public Constructor<?> getConstructor() {
+            return null;
+        }
+
+        @Override
+        public Object[] getParameters() {
+            return args.clone();
+        }
+
+        @Override
+        public void setParameters(Object[] params) {
+            if (params == null || params.length != args.length) {
+                throw new IllegalArgumentException("Invalid interception parameters");
+            }
+            System.arraycopy(params, 0, args, 0, args.length);
+        }
+
+        @Override
+        public Map<String, Object> getContextData() {
+            return contextData;
+        }
+
+        @Override
+        public Object proceed() throws Exception {
+            if (index >= chain.size()) {
+                return terminal.call();
+            }
+            InterceptorInvocation current = chain.get(index++);
+            //Exceptions and errors of the interceptor or of the invocation cross the chain unchanged.
+            return intercept(current, this);
+        }
+
+        @Override
+        public Object getTimer() {
+            return null;
+        }
+
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        private static Object intercept(InterceptorInvocation current, InvocationContext ctx) throws Exception {
+            try {
+                return ((Interceptor) current.interceptor()).intercept(InterceptionType.AROUND_INVOKE, current.instance(), ctx);
+            } catch (InvocationTargetException wrapped) {
+                //A container that calls the @AroundInvoke method reflectively may hand back the reflection
+                //wrapper: the caller must see the exception of the invocation itself (Jakarta Interceptors
+                //2.2 §2.5) — BUG-20261028-11.
+                switch (wrapped.getCause()) {
+                    case Exception cause -> throw cause;
+                    case Error error -> throw error;
+                    case null, default -> throw wrapped;
+                }
+            }
+        }
+    }
+}

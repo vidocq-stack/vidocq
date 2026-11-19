@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.cyrano</groupId>
+        <artifactId>cyrano-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>cyrano-cdi-vauban</artifactId>
+    <name>Cyrano :: CDI Vauban Integration</name>
+    <description>Intégration CDI 4.1 (Vauban) — découverte auto des interfaces @RegisterRestClient via BCE, injection @Inject @RestClient</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.cyrano</groupId>
+            <artifactId>cyrano-core</artifactId>
+        </dependency>
+        <!-- MicroProfile Config API (module org.eclipse.microprofile.config): optional, read directly when the
+             application has it, reflection otherwise. -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-mp-config-api</artifactId>
+            <version>${ravel.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <!-- Jakarta REST: `provided`, the container brings it (vidocq-workspace#17). -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Compile-only: supplies the VaubanComponentProvider service type referenced by the
+             APT-generated _VaubanComponents. Provided scope: no runtime dependency on Vauban. -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+            <version>${vauban.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Container CDI pour les tests d'intégration -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!--
+                        Vauban codegen now runs as an ANNOTATION PROCESSOR on this module's own
+                        beans (the Maven plugin is reserved for freezing external, non-APT-processed
+                        dependency jars). During the main compile it generates _ClientProxy/_Factory,
+                        META-INF/vauban-beans.list (runtime discovery, both class path and module path)
+                        and an in-module _VaubanComponents per package (instantiation / producer
+                        invocation, no `opens … to io.vidocq.vauban.core`). Build-time only: adds no
+                        compile/runtime dependency on Vauban, and the output stays inert under Weld.
+                    -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <!-- Test fixtures are not application beans (the integration test bootstraps a
+                         container on the class path and resolves its often-nested test beans
+                         reflectively). Running the APT over them would emit a provider for nested
+                         fixtures (bogus package / cannot find symbol). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                            <!-- The tests serve requests with the JDK HTTP server (jdk.httpserver) and
+                                 inspect the proxy registry, internal to cyrano-core. -->
+                            <compilerArgs combine.children="append">
+                                <arg>--add-modules</arg>
+                                <arg>jdk.httpserver</arg>
+                                <arg>--add-reads</arg>
+                                <arg>io.vidocq.cyrano.cdi.vauban=jdk.httpserver</arg>
+                                <arg>--add-exports</arg>
+                                <arg>io.vidocq.cyrano.core/io.vidocq.cyrano.internal.gen=io.vidocq.cyrano.cdi.vauban</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Tests run on the module path, patched into io.vidocq.cyrano.cdi.vauban (test dependencies
+                 such as vauban-core are not read by the module, hence the reads below):
+                 - they serve requests with the JDK HTTP server and inspect the proxy registry,
+                   internal to cyrano-core;
+                 - the container instantiates and injects the nested test beans reflectively (the APT
+                   does not run on test fixtures), so the package is opened to vauban-core. The main
+                   beans of that package keep being served by their generated _VaubanComponents;
+                 - the integration test's client interface has no generated client, so cyrano-core
+                   defines its proxy at run time: the opens to cyrano-core is what a host module
+                   declares for that fallback, and all it needs (BUG-20261008-02). -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>
+                        @{argLine}
+                        --add-modules jdk.httpserver
+                        --add-reads io.vidocq.cyrano.cdi.vauban=jdk.httpserver,io.vidocq.vauban.core
+                        --add-exports io.vidocq.cyrano.core/io.vidocq.cyrano.internal.gen=io.vidocq.cyrano.cdi.vauban
+                        --add-opens io.vidocq.cyrano.cdi.vauban/io.vidocq.cyrano.cdi.internal=io.vidocq.vauban.core,io.vidocq.cyrano.core
+                    </argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+

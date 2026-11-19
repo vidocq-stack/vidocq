@@ -1,0 +1,84 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cyrano.internal;
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Type;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Unchangeable description of an HTTP request derived from a client interface method.
+ *
+ * <p>Built once by {@link CyranoInterfaceScanner} and shared among all
+ * the invocations of the method (thread-safe car immutable).</p>
+ *
+ * @param httpMethod      verbe HTTP en majuscules
+ * @param pathTemplate    path template, may contain {@code {name}} variables
+ * @param bindings from Java settings to HTTP locations
+ * @param returnType      type de retour Java (raw)
+ * @param genericReturnComplete generic type type for JSON-B deserialization
+ * @param consumes        valeurs {@code @Consumes} (Content-Type d'envoi)
+ * @param produced values {@code @Produces} (Accept on receipt)
+ * @param staticHeaders fixed via {@code @ClientHeaderParam(value="literal")} (spec §6.5)
+ * @param dynamicHeaders calculated via {@code @ClientHeaderParam(value="{methodName}")} —
+ * each value captures the method name and flag {@code required}
+ * @param method reference to the source method (used by dynamic headers)
+ * @param clientInterface the client interface the method belongs to, which may inherit it from a super-interface:
+ *                        its type-level annotations and compute methods apply to the method
+ */
+public record RequestSpec(
+        String httpMethod,
+        String pathTemplate,
+        List<ParamBinding> bindings,
+        Class<?> returnType,
+        Type genericReturnType,
+        List<String> consumes,
+        List<String> produces,
+        Map<String, List<String>> staticHeaders,
+        Map<String, DynamicHeader> dynamicHeaders,
+        Method method,
+        Class<?> clientInterface
+) {
+    public RequestSpec {
+        bindings = List.copyOf(bindings);
+        consumes = List.copyOf(consumes);
+        produces = List.copyOf(produces);
+        staticHeaders = Map.copyOf(staticHeaders);
+        dynamicHeaders = Map.copyOf(dynamicHeaders);
+    }
+
+    /**
+     * Dynamic header {@code @ClientHeaderParam(value="{methodName}")} — capture
+     * the name of the {@code default}/{@code static} method which calculates the value
+     * and flag {@code required} (spec §6.5).
+     *
+     * @param methodName of the {@code default}/{@code static} method of invocation
+     * @param required {@code true} (default) — any exception is spread;
+     * {@code false} — the header is silently omitted if the invocation fails
+     */
+    public record DynamicHeader(String methodName, boolean required,
+                                io.vidocq.cyrano.spi.gen.DynamicHeaderDescriptor.Compute compute) {
+        /** Found by the scanner: the compute method is looked up and invoked by reflection. */
+        public DynamicHeader(String methodName, boolean required) {
+            this(methodName, required, null);
+        }
+    }
+}

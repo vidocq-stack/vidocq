@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.cyrano</groupId>
+        <artifactId>cyrano-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>cyrano-core</artifactId>
+    <name>Cyrano :: Core</name>
+    <description>Implémentation MicroProfile Rest Client 4.0 standalone — scanning d'interface, proxy Class-File API, transport JDK HttpClient, mapping JSON-B</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.cyrano</groupId>
+            <artifactId>cyrano-api</artifactId>
+        </dependency>
+        <!-- Jakarta REST: `provided`, the container brings it (vidocq-workspace#17). -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- JSON-B (sérialisation corps requête/réponse — implémentation runtime : champollion) -->
+        <dependency>
+            <groupId>jakarta.json.bind</groupId>
+            <artifactId>jakarta.json.bind-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.json</groupId>
+            <artifactId>jakarta.json-api</artifactId>
+        </dependency>
+        <!--
+            Reactive Streams — required by the MP Rest Client 4.0 SSE API
+            surface (spec §10: org.reactivestreams.Publisher<T> return types on
+            client interfaces). Interface-only de-facto spec jar (4 interfaces
+            + the FlowAdapters bridge, no implementation code), shipped with
+            Automatic-Module-Name org.reactivestreams — treated like a
+            Jakarta/MicroProfile spec API under the zero-dep rule. Declared
+            `requires static` in module-info: only clients that actually use
+            Publisher return types need it on their module path.
+            Optional, so it is not passed on to every client: the jar is an
+            automatic module, and an automatic module on the module path stops
+            jlink (BUG-20261008-07). An application returning Publisher declares it.
+        -->
+        <dependency>
+            <groupId>org.reactivestreams</groupId>
+            <artifactId>reactive-streams</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Tests only: @Priority on test providers (Cyrano reads it by name, without this API). -->
+        <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Implémentation JSON-B (Jakarta JSON Binding) pour les tests d'intégration -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonb</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Implémentation JSON-P (Jakarta JSON Processing) — transitive de champollion-jsonb -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            MP Config (API + ravel impl), test scope only: exercises the
+            reflective MP Config lookup of
+            microprofile.rest.client.disable.default.mapper (spec §8.1) —
+            cyrano-core itself stays free of any compile-scope MP Config
+            dependency.
+        -->
+        <dependency>
+            <groupId>org.eclipse.microprofile.config</groupId>
+            <artifactId>microprofile-config-api</artifactId>
+            <version>3.1.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-core</artifactId>
+            <version>${ravel.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- The tests serve their requests with the JDK HTTP server (jdk.httpserver), a module
+                 the main code does not read. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <compilerArgs combine.children="append">
+                                <arg>--add-modules</arg>
+                                <arg>jdk.httpserver</arg>
+                                <arg>--add-reads</arg>
+                                <arg>io.vidocq.cyrano.core=jdk.httpserver</arg>
+                                <arg>--add-modules</arg>
+                                <arg>jakarta.annotation</arg>
+                                <arg>--add-reads</arg>
+                                <arg>io.vidocq.cyrano.core=jakarta.annotation</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Tests run on the module path, patched into io.vidocq.cyrano.core: they serve requests
+                 with the JDK HTTP server, and JSON-B binds test classes declared in the internal
+                 packages. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>
+                        @{argLine}
+                        --add-modules jdk.httpserver
+                        --add-reads io.vidocq.cyrano.core=jdk.httpserver
+                        --add-modules jakarta.annotation
+                        --add-reads io.vidocq.cyrano.core=jakarta.annotation
+                        --add-opens io.vidocq.cyrano.core/io.vidocq.cyrano.internal=io.vidocq.champollion.jsonb
+                        --add-opens io.vidocq.cyrano.core/io.vidocq.cyrano.internal.sse=io.vidocq.champollion.jsonb
+                    </argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+

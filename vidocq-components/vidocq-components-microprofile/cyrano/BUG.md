@@ -1,0 +1,514 @@
+# BUG — Cyrano
+
+Tracking of reproducible bugs in `cyrano` (internal issues, regressions, incorrect behaviours
+not yet fixed). Vidocq workspace convention: short id, date, symptom,
+minimal repro, root cause hypothesis, status.
+
+---
+
+## CYR-001 — Java Modules bypassed via manual copy of compile-scope JARs
+
+- **Opened**: 2026-05-25
+- **Last revisited**: 2026-06-03
+- **Status**: ✅ FIXED 2026-10-07 — workaround removed (Vidocq/vidocq-parent#13)
+
+### Symptom
+
+The root `pom.xml` of cyrano uses `maven-dependency-plugin` (phase `initialize`) to
+copy all compile-scope JARs into `target/javamodules/`, then passes
+`--module-path ${project.build.directory}/javamodules` manually to the compiler.
+
+### Minimal Repro
+
+```bash
+grep -n "javamodules\|module-path" cyrano/pom.xml
+# reveals the two manually configured plugins
+```
+
+Without the workaround (removing the `<build>` block), `./mvnw -ntp clean install`
+fails on `cyrano-mp-rest-client-api` at the testCompile phase with:
+
+```
+[ERROR] module not found: jakarta.annotation
+[ERROR] module not found: jakarta.inject
+[ERROR] module not found: jakarta.cdi
+[ERROR] module not found: jakarta.ws.rs
+```
+
+### Root Cause (refined 2026-06-03)
+
+Initial hypothesis (missing `Automatic-Module-Name`) was wrong for most deps:
+
+- ✅ `microprofile-rest-client-api` — initial issue (automatic module only),
+  now resolved by the internal repackage module `cyrano-mp-rest-client-api`
+  which publishes a real `module-info.class`.
+- ✅ `vauban-core`, `vauban-classloader-spi`, `champollion-jsonp`,
+  `champollion-jsonb` — **already ship a real `module-info.class`** in their
+  published JARs (verified via `unzip -l ~/.m2/repository/.../*.jar`).
+
+The actual remaining cause is **`maven-compiler-plugin` 3.13.0 + Maven 3.9.16
+not placing `requires static` dependencies on the `--module-path` automatically**
+during the `testCompile` phase. `cyrano-mp-rest-client-api/module-info.java`
+declares `requires static jakarta.cdi / jakarta.inject / jakarta.annotation`
+(plus `requires transitive jakarta.ws.rs`); without the workaround,
+javac receives those API JARs on the classpath instead of the module-path
+and fails with `module not found`.
+
+### Resolution Path
+
+1. ✅ ~~Repackage `microprofile-rest-client-api` with an explicit
+   `module-info.class`~~ — done via `cyrano-mp-rest-client-api`.
+2. ⏳ **Upgrade** `maven-compiler-plugin` to a version that correctly routes
+   `requires static` Java Modules deps to `--module-path` during testCompile.
+   Track Apache `MCOMPILER` JIRA for the matching fix.
+3. ⏳ Alternative: switch the affected `requires static` to non-static where
+   feasible (would force the Jakarta APIs onto the compile-scope, raising
+   the runtime footprint but simplifying the build).
+4. ✅ ~~Narrow the workaround to `cyrano-mp-rest-client-api` only~~ —
+   applied 2026-06-03. The `<build>` block that copied compile-scope JARs
+   into `target/javamodules` for the whole reactor has been moved into
+   `cyrano-mp-rest-client-api/pom.xml`. Verified: `cyrano-api`,
+   `cyrano-core`, and `cyrano-cdi-vauban` build cleanly without it
+   (BUILD SUCCESS, 69/69 tests pass). Only the repackage module retains
+   the workaround.
+
+### Resolution (2026-10-07)
+The failure no longer reproduces on main: with the `target/javamodules` copy and the `--module-path` arguments
+removed, `clean verify` passes with the same tests (152) and every produced jar (5) keeps the same module
+descriptor. Most likely the failure dated from the Maven 4 RC / compiler-plugin 4.0.0-beta era (it does not come
+back with compiler plugin 3.13 either). Workaround removed; the shared execution in vidocq-parent goes next
+(Vidocq/vidocq-parent#13).
+
+## BUG-20261102-05 — a hot reload keeps the previous application layers reachable through Cyrano's statics
+
+- **Date**: 2026-11-02
+- **Symptom**: in `vidocq dev`, 15 hot reloads of an application that calls a REST client left 16 live `VaubanClassLoader`s instead of one (about 0.8 MB of heap per reload): the static audit of vidocq-workspace#40 (item 25) traced the chain with a heap dump.
+- **Repro**: `ClientProxyLayerLeakTest` (a layer whose client interface was resolved, through the generated tier and through the run-time tier, is collectable once dropped) and `JsonbHolderResetTest` (the shared `Jsonb` is dropped by `CyranoMaintenance.resetCaches()`); both failed before the fix. `CyranoLayerCleanupTest` (cyrano-cdi-vauban): destroying the container drops the caches.
+- **Cause**: `ClientProxyRegistry.CACHE` and `CyranoProxyCache.CACHE` were JVM-wide `ConcurrentHashMap`s keyed by the client interface `Class` (`resetForTests` is test-only), and `JsonbHolder` held one `Jsonb` for the life of the JVM, whose index holds the entity classes of the layer that used it first. The Cyrano library sits in the parent layer, so these statics outlive every application layer.
+- **Status**: FIXED — both proxy caches are `ClassValue`s, so an entry lives and dies with its interface; the `Jsonb` is dropped by `CyranoMaintenance.resetCaches()`, which the Vauban integration calls when the container is destroyed (`@BeforeDestroyed(ApplicationScoped.class)`). The reflective fallbacks are unchanged.
+
+## BUG-20261102-01 — a client call reads and writes by reflection on every request
+
+- **Date**: 2026-11-02
+- **Symptom**: the reflection audit of 2026-11-02 traced, per client call: `patchPrivateFieldsFromJson` re-reading the JSON body with `JsonProvider.provider()` (a `ServiceLoader` scan and a `newInstance`) and writing private fields through `getDeclaredFields` + `privateLookupIn` + `VarHandle`; `applyClientHeadersFactory` reading `@RegisterClientHeaders` and creating a new `ClientHeadersFactory`; `CyranoCdiProviderInstantiator.interceptorBindings` reading annotations and creating annotation proxies.
+- **Repro**: `CyranoPerRequestReflectionTest` (a factory created 3 times for 3 calls; the fields to fill found once per class, none for a public-fields DTO; a private field without accessor still filled), `CyranoCdiBindingsCacheTest` (two reads, two arrays).
+- **Cause**: nothing was kept between calls: the private-field patch looked the fields up and parsed the body again for every response, even for classes with no such field; the factory and the bindings were simply not kept.
+- **Status**: FIXED (branch `fix/per-request-reflection`) — the private-field patch keeps its behaviour (it is the fallback for types without a generated JSON-B binding, on any container) but finds the fields to fill and their `VarHandle`s once per class (`ClassValue`): a class with no such field — most DTOs — is not parsed a second time. It now only fills fields JSON-B's default visibility leaves alone (not public, no public setter): writing the fields JSON-B already filled again put the raw JSON over a value an adapter had converted. The `ClientHeadersFactory` is created once per client interface and handler; the interceptor bindings are read once per client method and instantiator (no global cache: a reloaded application does not keep the previous classes). MP Rest Client TCK unchanged. The reflection the trace attributes to `CyranoHttpTransport.send` is inside the JDK `HttpClient`.
+
+## BUG-20260712-01 — hardcoded implementation version constant in the published api artifact
+
+- **Date** : 2026-07-12
+- **Statut** : FIXED (branch fix/build-derived-version — ships with the next release)
+- **Module touché** : Cyrano.IMPLEMENTATION_VERSION (cyrano-api/Cyrano.java)
+- **Symptôme** : the artifact published on Maven Central as 0.2.0 reports a hardcoded
+  "0.1.0-SNAPSHOT" implementation version — the constant was maintained by hand and never
+  updated by the release train. Same class as vidocq BUG-20260704-01 (CLI banner).
+- **Reproduction minimale** : read the constant from the published 0.2.0 jar.
+- **Hypothèse de cause** : compile-time constant, no build filtering.
+- **Investigations** :
+  - 2026-07-12 : found by grepping for stale version strings after the issue #3 follow-up.
+    Fixed: version.properties filtered by Maven next to the class, constant loaded at class
+    init (same-module Java Modules resource, no opens). No longer compile-time-inlineable, which
+    also protects future consumers from the javac inlining trap.
+
+## BUG-20261008-01 — RestClientBuilder.newBuilder() throws ServiceConfigurationError on the module path
+
+- **Date**: 2026-10-08
+- **Status**: FIXED (branch pr/ybl/module-info-in-place — ships with the next release)
+- **Affected modules**: `io.vidocq.cyrano.mp.rest.client.api`, `io.vidocq.cyrano.core` (module descriptors)
+- **Symptom**: on the module path, no Rest Client can be created. `RestClientBuilder.newBuilder()` throws
+  `ServiceConfigurationError: org.eclipse.microprofile.rest.client.spi.RestClientBuilderResolver: module
+  io.vidocq.cyrano.mp.rest.client.api does not declare 'uses'`; a builder obtained from
+  `CyranoRestClientBuilderResolver` directly fails the same way in cyrano-core (`RestClientBuilderListener:
+  module io.vidocq.cyrano.core does not declare 'uses'`), at creation and again in `build()`. The CDI path
+  (`CyranoRestClientSyntheticCreator`) calls `RestClientBuilder.newBuilder()`, so `@Inject @RestClient` is
+  affected too. Invisible on the class path, where every test and the TCK run.
+- **Minimal repro**: put cyrano-api, cyrano-core, cyrano-mp-rest-client-api and their dependencies on a plain
+  `--module-path` and call `RestClientBuilder.newBuilder()`. Also reproduced on the Vidocq runtime: the
+  vidocq-runtime-cassini-rest-example jlink image with the Rest Client extension added answers a request
+  calling `RestClientBuilder.newBuilder()` with the `ServiceConfigurationError` above (Cyrano bricks in the
+  boot layer, the application in the Vauban child layer).
+- **Root cause**: the MicroProfile API (`RestClientBuilder.newBuilder()`,
+  `RestClientBuilderResolver.instance()`) and Cyrano (`CyranoRestClientBuilderResolver`,
+  `CyranoRestClientBuilder`) look services up with `ServiceLoader`, which a named module may only do for
+  services its descriptor `uses`. Missing: `uses RestClientBuilderResolver` and `uses
+  RestClientBuilderListener` in the repackaged API, `uses RestClientBuilderListener` and `uses
+  RestClientListener` in cyrano-core. Nothing in the Vidocq runtime adds them: the Vauban application layer
+  only synthesises `provides` (and only for re-layered application modules), and the `io.vidocq.cyrano`
+  bricks stay in the boot layer.
+- **Investigations**:
+  - 2026-10-08: found while moving cyrano's tests to the module path (late module-info workaround removal).
+    Fixed with the four `uses`; module-path tests in cyrano-mp-rest-client-api (`RestClientBuilderLookupTest`)
+    and cyrano-core (`CyranoRestClientBuilderResolverTest`) look the resolver and the listeners up from
+    another module (a jar defined in a child layer). Before the fix they failed with the errors above, as did
+    55 existing cyrano-core tests once on the module path.
+
+## BUG-20261008-02 — runtime-fallback proxy cannot be defined for an interface of another named module
+
+- **Date**: 2026-10-08
+- **Status**: FIXED (branch pr/ybl/rest-client-module-path — ships with the next release)
+- **Affected module**: `io.vidocq.cyrano.core` (`CyranoProxyGenerator`, runtime fallback tier)
+- **Symptom**: on the module path, `build()` of an interface without a generated `$$CyranoClient`, declared in
+  another named module, fails even when that module follows the error message's advice
+  (`opens <pkg> to io.vidocq.cyrano.core`): first `IllegalAccessException: module io.vidocq.cyrano.core does
+  not read module <host>`, then, with that read added, `IllegalAccessError: class <pkg>.Cyrano$<Iface> (in
+  module <host>) cannot access class io.vidocq.cyrano.internal.CyranoInvocationHandler (in module
+  io.vidocq.cyrano.core) because module io.vidocq.cyrano.core does not export io.vidocq.cyrano.internal to
+  module <host>`.
+- **Minimal repro**: module `probe.app` (`requires io.vidocq.cyrano.core; opens probe.app to
+  io.vidocq.cyrano.core;`) builds a client for its own `@Path` interface on a plain module path. It works only
+  with `--add-reads io.vidocq.cyrano.core=probe.app --add-exports
+  io.vidocq.cyrano.core/io.vidocq.cyrano.internal=probe.app`.
+- **Root cause hypothesis**: the proxy is defined in the host's package (`privateLookupIn` +
+  `defineClass`) and extends/uses `io.vidocq.cyrano.internal` types, but cyrano-core neither adds a read edge
+  to the host module nor exports its internal package to it. A module may do both for itself at run time
+  (`Module.addReads`, `Module.addExports` from cyrano-core), or the proxy could depend on exported SPI types
+  only. Not live for clients generated by cyrano-processor (generated tier), nor on the class path (TCK).
+- **Investigations**:
+  - 2026-10-08: reproduced in a cyrano-core module-path test: an explicit module `cyrano.test.host`
+    (`requires io.vidocq.cyrano.mp.rest.client.api; opens io.vidocq.cyrano.test.host to io.vidocq.cyrano.core;`,
+    written with the Class-File API, defined in a child layer) fails with `IllegalAccessException: module
+    io.vidocq.cyrano.core does not read module cyrano.test.host`. Fixed both halves: cyrano-core adds the read
+    edge to the host module for itself (`Module.addReads`, allowed for the caller's own module), and the
+    generated proxy no longer refers to `io.vidocq.cyrano.internal`: it holds a bound `MethodHandle` to
+    `CyranoInvocationHandler.invoke` (called with `invokeExact`) and a `Runnable` for `close()`, both
+    `java.base` types. The host module therefore needs nothing but the `opens` the error message names: it
+    does not have to read cyrano-core, and cyrano-core exports nothing more. A zero-opens path exists already:
+    clients generated by cyrano-processor. Defining the proxy elsewhere than in the interface's package (a
+    dynamic module, as `java.lang.reflect.Proxy` does) would only help public interfaces of exported packages,
+    so the `opens` stays the documented requirement of the runtime fallback.
+- **Investigations**:
+  - 2026-10-08: seen when moving the cyrano-processor and cyrano-cdi-vauban tests to the module path; their
+    surefire `argLine` stands in for the read and the export until this is fixed.
+
+## BUG-20261008-03 — RestClientBuilderListener.onNewBuilder runs up to three times per builder
+
+- **Date**: 2026-10-08
+- **Status**: FIXED (branch pr/ybl/rest-client-module-path — ships with the next release)
+- **Affected module**: `io.vidocq.cyrano.core` (`CyranoRestClientBuilderResolver`, `CyranoRestClientBuilder.build`)
+- **Symptom**: every `RestClientBuilderListener` is notified several times for one builder. A builder from
+  `RestClientBuilder.newBuilder()` is notified by the MicroProfile API, again by `CyranoRestClientBuilderResolver.newBuilder()`,
+  and once more by `build()`; a listener that registers a provider registers it again on the same builder (no-op, but
+  a listener that counts or adds a non-idempotent configuration sees the duplicates). Module-path probe: 5 calls for
+  3 builders.
+- **Minimal repro**: a `RestClientBuilderListener` that counts its calls; `RestClientBuilder.newBuilder().baseUri(u).build(Api.class)`
+  counts 3.
+- **Spec**: MP Rest Client 4.0 API, `RestClientBuilderListener` Javadoc: implementations "will be notified when new
+  RestClientBuilder instances are being constructed" and `onNewBuilder` "will be called when the RestClientBuilder is
+  constructed, not when its build method is invoked". The API's own `RestClientBuilder.newBuilder()` does the
+  notification (it loops over `ServiceLoader.load(RestClientBuilderListener.class)` after calling the resolver), so the
+  implementation must not notify again — neither in the resolver nor in `build()`. TCK `RestClientBuilderListenerTest`
+  only checks that the listener ran (a registered filter wins).
+- **Root cause**: the resolver and `build()` each run their own listener loop on top of the API's.
+- **Investigations**:
+  - 2026-10-08: the module-path test (`CyranoRestClientBuilderResolverTest`) counted 2 calls after
+    `RestClientBuilder.newBuilder()` and 3 after `build()`. Fixed: the resolver returns a bare builder and
+    `build()` no longer runs builder listeners; `RestClientBuilder.newBuilder()` notifies each listener once. A
+    builder taken from `CyranoRestClientBuilderResolver.newBuilder()` directly is not notified (the resolver is the
+    SPI behind `newBuilder()`; Cyrano's own CDI path goes through `RestClientBuilder.newBuilder()`).
+
+## BUG-20261008-04 — build() registered TCK providers by class name when no listener was found
+
+- **Date**: 2026-10-08
+- **Status**: FIXED (branch pr/ybl/rest-client-module-path — ships with the next release)
+- **Affected modules**: `io.vidocq.cyrano.core` (`CyranoRestClientBuilder.applyTckListenerFallback`), `cyrano-tck`
+  (`VaubanTckBootstrap`)
+- **Symptom**: `CyranoRestClientBuilder.build()` held a branch keyed on the TCK's own class names: for the interface
+  `org.eclipse.microprofile.rest.client.tck.interfaces.SimpleGetApi`, when no `RestClientListener` had been found, it
+  registered `ReturnWith200RequestFilter` (or `ReturnWith500RequestFilter`) and called
+  `SimpleRestClientListenerImpl.onNewClient` itself — the outcomes `RestClientBuilderListenerTest` and
+  `RestClientListenerTest` check. Those two TCK tests passed without the listeners ever being discovered.
+- **Minimal repro**: make `applyTckListenerFallback` return at once and run
+  `-Ptck,tck-official -pl cyrano-tck -am verify -Dtest='RestClientBuilderListenerTest,RestClientListenerTest'`: both
+  fail (`HTTP 500`; `The RestClientListener impl was not invoked expected [500] but found [200]`).
+- **Root cause**: a harness gap hidden by a workaround in production code. The TCK deployments ship the listener and
+  its `META-INF/services` file in a library jar (`WebArchive.addAsLibrary`); `VaubanTckBootstrap` put only the
+  archive's loose resources on the deployment class loader, so `ServiceLoader` never saw the services file.
+- **Investigations**:
+  - 2026-10-08: found while fixing BUG-20261008-03. Fixed the harness: the deployment class loader also covers the
+    archive's `WEB-INF/lib/*.jar`, as a servlet container would (classes still resolve parent-first). With that, both
+    TCK tests pass with the fallback disabled; the fallback is removed. No other TCK class name remains in the
+    production modules.
+
+## BUG-20261008-05 — an asynchronous method can run its response filters on the caller's thread
+
+- **Date**: 2026-10-08
+- **Status**: FIXED (branch pr/ybl/rest-client-module-path — ships with the next release)
+- **Affected module**: `io.vidocq.cyrano.core` (`CyranoInvocationHandler`, `CompletionStage` return path)
+- **Symptom**: TCK `AsyncMethodTest.testInterfaceMethodWithCompletionStageObjectReturnIsInvokedAsynchronously` failed
+  once on cyrano#24's CI (head fe24ec02): `AssertionError: did not expect [3] but found [3]` (AsyncMethodTest.java:143)
+  — the response filter ran on the thread that called the client method. It passed locally on the same head.
+- **Minimal repro**: an interface method returning `CompletionStage<String>`, a `ClientResponseFilter` that records its
+  thread, no `executorService(...)` on the builder, and a response that is complete before `invoke` attaches its
+  continuation (fast local server; deterministically: a transport whose `sendAsync` returns a completed future). Same
+  with a request filter that calls `abortWith`.
+- **Root cause**: with no executor configured, `asyncCallbackExecutor()` is `Runnable::run`. `sendAsync(...)
+  .thenApplyAsync(fn, Runnable::run)` runs `fn` on whichever thread completes the future — or on the calling thread
+  when the future is already complete. The `abortWith` path builds the result on the calling thread and returns
+  `completedFuture`. Response filters, `MessageBodyReader`s, `ResponseExceptionMapper`s and
+  `AsyncInvocationInterceptor.applyContext` then run on the caller's thread, which the TCK forbids for asynchronous
+  methods.
+- **Investigations**:
+  - 2026-10-08: `CyranoInvocationHandlerTest` reproduces both paths deterministically (a transport whose `sendAsync`
+    returns a completed future; a request filter calling `abortWith`): the response filter ran on `main`. Fixed: with no
+    executor service configured, the response is processed on a new virtual thread, and the `abortWith` path completes
+    through the same executor (`supplyAsync`) instead of returning `completedFuture`. With an executor service set on
+    the builder, that executor is used, as before.
+
+## BUG-20261008-06 — no @RestClient bean for an application's interface when the extension runs at build time
+
+- **Date**: 2026-10-08
+- **Status**: FIXED (branch pr/ybl/rest-client-module-path — ships with the next release)
+- **Affected module**: `io.vidocq.cyrano.cdi.vauban` (`CyranoRestClientCdiExtension.synthesizeRestClientBeans`)
+- **Symptom**: on the Vidocq runtime, `@Inject @RestClient GreetingClient` fails: at run time `DeploymentException:
+  Unsatisfied dependency: field RelayResource.greetings of type ... GreetingClient with qualifiers [@Any, @RestClient]`
+  when the extension is not on the annotation-processor path (the Vauban processor only warns that the BCE "will not
+  run", and the runtime skips extensions for archives the processor already handled); with the extension on the
+  processor path, the same message becomes a compilation error.
+- **Minimal repro**: compile a `@RegisterRestClient` interface and a bean injecting it with `@Inject @RestClient`, with
+  vauban-processor and cyrano-cdi-vauban on the processor path: `[Vauban] Unsatisfied dependency`.
+- **Root cause**: the `@Enhancement` phase collects the interface (by its lang-model `ClassInfo`), but `@Synthesis`
+  registers the bean with `components.addBean(Class)`, after loading the interface by name; at build time the interface
+  is being compiled and cannot be loaded, so the extension skips it silently ("Vauban has already reported the
+  classpath error", which it has not). No bean is synthesised, none is recorded for the runtime.
+- **Investigations**:
+  - 2026-10-08: reproduced on the Vidocq runtime with a Rest Client example (vidocq branch
+    pr/ybl/rest-client-module-path): without the extension on the processor path the processor warns and the runtime
+    fails with the unsatisfied dependency; with it, compilation fails the same way. Fixed: when the interface cannot be
+    loaded, `@Synthesis` declares the bean with `addBean(Object.class).type(types.ofClass(info))`, the creator loading
+    the interface by name when it builds the client. `CyranoRestClientCdiExtensionTest` (language-model doubles, an
+    interface name no loader knows) saw no bean declared before the fix. The bean type then reaches the runtime only
+    with vauban BUG-20261008-01 fixed (the synthetic metadata dropped language-model types). On Vidocq the extension
+    reaches the processor through the new `vidocq-runtime-cyrano-rest-client-extension-codegen` bundle, which
+    `vidocq:checkpom` now requires.
+
+## BUG-20261008-07 — every Rest Client application gets reactive-streams, an automatic module, and cannot be linked
+
+- **Date**: 2026-10-08
+- **Status**: FIXED (branch pr/ybl/rest-client-module-path — ships with the next release)
+- **Affected module**: `cyrano-core` (POM)
+- **Symptom**: on the Vidocq runtime, `vidocq:jlink` fails as soon as the application depends on the Rest Client
+  extension: `jlink does not support automatic modules: org.reactivestreams`. `org.reactivestreams:reactive-streams`
+  1.0.4 has no module descriptor, only `Automatic-Module-Name`, and came with cyrano-core as a compile dependency.
+- **Minimal repro**: an application depending on `vidocq-runtime-cyrano-rest-client-extension`, `mvn package` with
+  the `vidocq:jlink` goal (vidocq `vidocq-runtime-cyrano-rest-client-example`).
+- **Root cause**: cyrano-core needs Reactive Streams only for clients whose methods return `Publisher` (MP Rest Client
+  4.0 server-sent events). Its descriptor already says so (`requires static org.reactivestreams`) and the invocation
+  handler recognises `Publisher` by name, but the POM made the jar a transitive dependency of every client.
+- **Investigations**:
+  - 2026-10-08: the dependency is now `optional`: cyrano-core still compiles and tests against it, the TCK runners get
+    it from the TCK (reactive-streams-tck), and an application that returns `Publisher` declares it — the
+    jar is an automatic module, so such an application cannot be linked until an explicit `org.reactivestreams` module
+    is available. With the change, the Vidocq Rest Client example links with `vidocq:jlink` and its image answers
+    through the client.
+
+## BUG-20261028-01 — the processor skips every interface with two @ClientHeaderParam on one element
+
+- **Date**: 2026-10-28
+- **Status**: FIXED (branch test/coverage-core — ships with the next release)
+- **Affected module**: `cyrano-processor` (`CyranoClientProcessor.collectHeaders`)
+- **Symptom**: an interface or a method carrying two `@ClientHeaderParam` with distinct names (valid per MP Rest
+  Client 4.0 §7.2, which only forbids the same name twice on one target) gets no `$$CyranoClient`: the processor
+  notes `header 'X-A' declared multiple times` and leaves the interface to the runtime fallback. Behaviour stays
+  correct (the runtime scanner accepts the interface), but the APT-first path (codegen audit CG-01) is lost for
+  such clients.
+- **Minimal repro**: compile with the processor
+  `@RegisterRestClient @ClientHeaderParam(name = "X-A", value = "a") @ClientHeaderParam(name = "X-B", value = "b") interface TwoHeaders { @GET String get(); }`
+  — no `TwoHeaders$$CyranoClient` is generated.
+- **Root cause**: `Element.getAnnotationsByType(ClientHeaderParam.class)` already looks through the
+  `@ClientHeaderParams` container of the repeated annotations; the processor also added the container's values, so
+  each header was counted twice.
+- **Investigations**:
+  - 2026-10-28: found while covering the processor for SonarQube. The container is no longer read separately.
+    Regression test: `CyranoClientProcessorCoverageTest.twoDistinctClientHeaderParams_onOneElement_areGenerated`
+    (and `CyranoClientProcessorDefinitionsTest.a_method_header_overrides_the_interface_header_of_the_same_name`).
+
+## BUG-20261028-11 — an exception thrown by an intercepted client method reaches the caller as InvocationTargetException
+
+- **Date**: 2026-10-28
+- **Status**: FIXED in cyrano (defensive unwrap); container-side cause to report to Vauban — regression test
+  `CyranoCdiProviderInstantiatorTest#exceptions_of_the_invocation_cross_the_interceptor_chain`
+- **Affected module**: `cyrano-cdi-vauban` (`CyranoCdiProviderInstantiator`)
+- **Symptom**: when a CDI interceptor is bound to a Rest Client method (MP Rest Client 4.0 §4.2.4), any exception
+  thrown by the invocation — a `WebApplicationException` of the default mapper (§8), a checked exception of a
+  `ResponseExceptionMapper`, a `ProcessingException` — comes out of `aroundInvoke` wrapped in
+  `java.lang.reflect.InvocationTargetException` instead of unchanged.
+- **Minimal repro**: on a Vauban container with an `@Interceptor` bound to the method,
+  `new CyranoCdiProviderInstantiator().aroundInvoke(target, method, args, () -> { throw new IOException(); })`
+  throws `InvocationTargetException` whose cause is the `IOException`.
+- **Root cause**: Vauban's `VaubanInterceptor.intercept` calls the `@AroundInvoke` method with `Method.invoke` and
+  lets the `InvocationTargetException` escape, while `Interceptor.intercept` must throw what the interceptor method
+  throws (Jakarta Interceptors 2.2 §2.5: `InvocationContext.proceed` and the interceptor see the target's own
+  exception). `CyranoCdiProviderInstantiator` passes that wrapper on as is.
+- **Investigations**:
+  - 2026-10-28: found by a new unit test; the TCK `CDIInterceptorTest` only exercises a method that returns
+    normally. The container-side cause belongs to Vauban and is to be reported there.
+  - 2026-10-28: `CyranoCdiProviderInstantiator` now rethrows the cause of an `InvocationTargetException` coming out of
+    `Interceptor.intercept` when it is an `Exception`, so the caller sees the invocation's own exception whatever
+    the container does.
+  - 2026-10-28: an `Error` of the invocation still came out wrapped, and `error_of_the_invocation_is_not_lost_in_the_
+    interceptor_chain` only checked that it was the root cause. The unwrap now rethrows an `Error` as itself too,
+    and the test requires the error unchanged. The container-side cause is fixed in Vauban (vauban#229,
+    VAU-INT-010); the defensive unwrap stays for the containers that still wrap.
+
+## BUG-20261028-21 — the response media type handed to a MessageBodyReader ignores most Content-Type headers
+
+- **Date**: 2026-10-28
+- **Status**: FIXED (branch test/coverage-invocation)
+- **Affected module**: `cyrano-core`
+- **Symptom**: a `MessageBodyReader` registered on a client receives `*/*` as media type instead of the response
+  `Content-Type` whenever the server does not spell the header exactly `Content-Type` — e.g. the JDK `HttpServer`
+  (`Content-type`) or any HTTP/2 server (always lower case).
+- **Minimal repro**: a server answering `Content-type: text/plain`, a client method returning a type read by a
+  registered reader that records its `mediaType` argument: it gets `*/*`
+  (`CyranoInvocationHandlerResponseTest.registered_reader_reads_the_body_with_the_response_media_type_spec_section4_2`).
+- **Root cause**: `CyranoInvocationHandler.extractResponseMediaType` looked the header up with a case-sensitive
+  `getHeaders().get("Content-Type")`, while HTTP header names are case-insensitive (RFC 9110 §5.1).
+- **Fix**: the lookup goes through `CyranoClientResponseContext.getHeaderString`, which is case-insensitive.
+- **Regression test**: the test above (red before the fix, green after).
+
+## BUG-20261029-02 — what the client interface declares does not apply to a method it inherits
+
+- **Date**: 2026-10-29
+- **Status**: FIXED (branch fix/client-interface-annotations)
+- **Affected module**: `cyrano-core`, `cyrano-cdi-vauban`
+- **Symptom**: for a method the client interface inherits from a super-interface, the type-level declarations of the
+  client interface were looked up on the super-interface instead:
+  - a `@ClientHeaderParam(value = "{computed}")` whose `computed` default method is on the client interface fails
+    every call with `IllegalStateException: @ClientHeaderParam method not found: …Base#computed`;
+  - a `@RegisterClientHeaders` factory on the client interface is never called;
+  - a CDI interceptor binding on the client interface does not surround the call.
+- **Minimal repro**: `InheritedClientMethodTest` (cyrano-core), and
+  `CyranoCdiProviderInstantiatorTest.the_client_interface_binding_surrounds_an_inherited_method`.
+- **Root cause**: `CyranoInvocationHandler` and `CyranoCdiProviderInstantiator` used `Method.getDeclaringClass()`
+  as the client interface; it is the super-interface for an inherited method.
+- **Fix**: `RequestSpec` carries the client interface. Compute methods are looked up there, then on the declaring
+  super-interface (its static methods are not inherited). `@RegisterClientHeaders` is read there. The SPI gains
+  `ProviderInstantiator.aroundInvoke(Class<?> clientInterface, …)`, whose default delegates to the former method;
+  the CDI side takes the method's bindings, then the client interface's, then the declaring super-interface's,
+  the nearest declaration winning for each binding type.
+- **Regression tests**: the two tests above.
+
+## BUG-20261029-01 — a client interface that parameterizes a generic super-interface cannot be built, or reads the wrong type
+
+- **Date**: 2026-10-29
+- **Status**: FIXED (branch fix/generic-super-interface)
+- **Affected module**: `cyrano-processor`, `cyrano-core`
+- **Symptom**: with `interface Echo<T> { @POST String post(T body); @GET T get(String id); }` and
+  `@RegisterRestClient interface EchoClient extends Echo<String> {}`:
+  - compiled with the processor, `build(EchoClient.class)` throws `RestClientDefinitionException: Descriptor method
+    post[class java.lang.String] not found on t.EchoClient — stale generated class?`;
+  - compiled without it, `get` reads the response as `Object`, so through JSON-B (`JsonParsingException` on a
+    `text/plain` body);
+  - redeclaring `@GET String get(String id)` in `EchoClient` makes javac add a bridge `Object get(String)` carrying
+    the same annotations: the runtime proxy overrides it as a client method with an `Object` return, and a call
+    through `Echo` reads the body as JSON.
+- **Minimal repro**: `GenericSuperInterfaceTest` (cyrano-processor), with and without the processor.
+- **Root cause**:
+  - the processor wrote in the descriptor the parameter types as the client interface binds them (`post(String)`),
+    while the runtime looks the method up by its JVM signature (`post(Object)`);
+  - both paths took the return type from `Method.getGenericReturnType()`, which reports the type variable `T` of
+    the declaring interface, never resolved against the client interface;
+  - the runtime scanner kept every public method of `getMethods()`, bridges and default methods included, while
+    the processor keeps the abstract ones only.
+- **Fix**: the descriptor carries the erasure of the declared parameter types; `GenericTypes.returnType` replaces
+  the type variables of the return type by what the client interface binds them to (also inside `List<T>`, `T[]`,
+  through a chain of super-interfaces), on the generated and the runtime paths; the runtime scanner keeps the
+  abstract methods only, like the processor.
+- **Regression tests**: `GenericSuperInterfaceTest` (4 cases, red before), `GenericTypesTest`.
+
+## BUG-20261029-03 — a private nested client interface fails the build
+
+- **Date**: 2026-10-29
+- **Status**: FIXED (branch fix/private-nested-client)
+- **Affected module**: `cyrano-processor`
+- **Symptom**: compiling a `@RegisterRestClient` interface declared `private` inside a class, with the processor on
+  the processor path, fails the build: `t.Outer.Hidden has private access in t.Outer`.
+- **Minimal repro**: `GeneratedClientEndToEndTest.privateNestedInterface_compilesAndIsServedByTheFallback`.
+- **Root cause**: the generated `$$CyranoClient` is a top-level class of the interface's package, which cannot
+  implement a private nested interface (nor a local one, nor one nested in a private type). The processor emitted
+  it anyway, against its rule never to fail a build.
+- **Fix**: the processor skips such an interface with a NOTE; the runtime fallback serves it.
+- **Regression test**: the test above (red before the fix).
+
+## BUG-20261102-02 — the base URI lookup reads MicroProfile Config by reflection on every client creation
+
+- **Opened**: 2026-11-02
+- **Status**: ✅ FIXED 2026-11-02
+
+### Symptom
+
+`CyranoBaseUriResolver.defaultMpConfigLookup()` resolved `ConfigProvider` and `Config` with `Class.forName` and
+`getMethod`, then called `getConfig` and `getOptionalValue` through `Method.invoke`, even in a Vidocq application
+where the MicroProfile Config API (Ravel) is on the module path.
+
+### Minimal Repro
+
+```bash
+grep -n "forName\|getMethod\|invoke" cyrano-cdi-vauban/src/main/java/io/vidocq/cyrano/cdi/internal/CyranoBaseUriResolver.java
+```
+
+### Root Cause
+
+`cyrano-cdi-vauban` did not depend on the MicroProfile Config API, so reflection was the only way to read it.
+
+### Resolution
+
+`requires static org.eclipse.microprofile.config` plus an optional `ravel-mp-config-api` dependency: the API is read
+directly when it is present. The reflective lookup is unchanged and stays the fallback when the API is not readable
+(portable containers, class path setups). `CyranoBaseUriDirectConfigTest` covers both lookups.
+
+## BUG-20261102-03 — computed headers and `@BeanParam` fields are read by reflection on every call of a generated client
+
+- **Opened**: 2026-11-02
+- **Status**: ✅ FIXED 2026-11-02
+
+### Symptom
+
+Even when `cyrano-processor` generated the client, each call invoked the `@ClientHeaderParam("{method}")` compute
+methods with `Method.invoke` and read each `@BeanParam` field with `Field.get`.
+
+### Minimal Repro
+
+```bash
+grep -n "dm.invoke\|fb.field().get" cyrano-core/src/main/java/io/vidocq/cyrano/internal/CyranoInvocationHandler.java
+```
+
+### Root Cause
+
+The generated descriptor named the compute methods and fields only; the runtime resolved and used them reflectively.
+
+### Resolution
+
+The processor now emits a call of each compute method it can reach (`DynamicHeaderDescriptor.compute`) and a read of
+each field it can reach (`BeanField.accessor`). Private methods and fields, descriptors generated before this change
+and clients found by the scanner keep the reflective path, unchanged. Covered by
+`CyranoClientProcessorCoverageTest.computeMethodsAndBeanFieldsAreReadByGeneratedCode` and
+`DescriptorConverterTest.generatedReadsAreUsedAndTheReflectiveOnesKeptForTheRest`.
+
+## BUG-20261102-04 — the CDI interceptors of a client are created on every call and never destroyed
+
+- **Opened**: 2026-11-02
+- **Status**: ✅ FIXED 2026-11-02
+
+### Symptom
+
+`CyranoCdiProviderInstantiator.aroundInvoke` resolved the interceptors and created a new instance of each one, with a
+new `CreationalContext`, on every call of a client method, and never released them: one allocation per interceptor per
+call, and `@Dependent` interceptors were never destroyed, so their `@PreDestroy` never ran and what they held leaked.
+
+### Minimal Repro
+
+`CyranoInterceptorLifecycleTest`: an interceptor counting its instances gives 10 instances for 10 calls, and 0
+`@PreDestroy` after the client is released.
+
+### Root Cause
+
+Nothing kept the instances, and the client's close (`markClosed`) did not reach the instantiator.
+
+### Resolution
+
+The instantiator (one per client) keeps one instance per interceptor, as for any intercepted bean instance, and the
+interceptor chain of each method. `ProviderInstantiator.release()` (no-op by default) is called by `markClosed` and
+releases the creational contexts, so `@PreDestroy` runs; a closed client creates no interceptor again. A sub-resource
+proxy shares its client's instantiator. Containers other than Vauban go through the same portable `BeanManager` calls.

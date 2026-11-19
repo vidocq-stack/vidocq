@@ -1,0 +1,189 @@
+# AGENTS.md
+
+## Repository Mission
+
+- Cyrano implements **MicroProfile Rest Client 4.0** in Java 25 with **zero third-party
+  implementation libraries**: only the MP Rest Client spec + Jakarta APIs as dependencies
+  (`README.md`, `pom.xml`, `CLAUDE.md`).
+- Strict Java Modules architecture: `cyrano-api` re-exports the spec, `cyrano-core` stays standalone SE
+  (depends on `jakarta.ws.rs` / `jakarta.json.bind` for annotations and serialization),
+  `cyrano-cdi-vauban` is an optional CDI adapter, `cyrano-tck` is in-reactor behind
+  the `tck` Maven profile.
+- **APT-first proxy generation (codegen audit CG-01)**: `cyrano-processor` generates
+  `$$CyranoClient` sources at compile time (primary path); the Class-File API (JEP 484)
+  runtime generator is the documented fallback. No `java.lang.reflect.Proxy`,
+  no ASM/Byte Buddy anywhere — the fallback emits named classes (`Cyrano$<Interface>`)
+  via `ClassFile` + `MethodHandles.Lookup.defineClass` — AOT-compatible, readable stack traces.
+- **Transport via JDK `java.net.http.HttpClient`** with `VirtualThreadPerTaskExecutor` —
+  no external network dependency.
+- Prefer `ROADMAP.md` to track project progress rather than updating this file,
+  which is intended as a contribution guide for agents.
+- If the rules in this file need updating, remember to align `CLAUDE.md` accordingly
+  so Claude Code can reference it easily.
+
+## Actual Code State to Know Before Modifying
+
+- See `ROADMAP.md` for the detailed status of each milestone (M0..M5).
+- Milestones marked ✅ are complete; others are pending or in progress.
+- The target flow in `cyrano-core`:
+  `RestClientBuilder.newBuilder().baseUri(uri).build(MyService.class)` →
+  `ClientProxyRegistry.resolve(MyService.class)` (generated tier first, runtime Class-File fallback, cached) →
+  proxy instance `Cyrano$MyService` →
+  method calls intercepted via `CyranoInvocationHandler` →
+  `CyranoHttpTransport` (JDK HttpClient, virtual thread) →
+  response deserialized via Jakarta JSON-B (champollion).
+- The exported runtime SPI is `io.vidocq.cyrano.spi.*`:
+  `TransportAdapter`, `ResponseExceptionMapper`, client interceptors.
+  Adapters (`cyrano-cdi-vauban`) must never depend on `io.vidocq.cyrano.internal.*`.
+
+## Boundaries Not to Break
+
+- `cyrano-tck` joins the reactor only under the `tck` Maven profile (TCK harmonisation,
+  `vidocq-runtime-tck-*` pattern): never add it to the default `<modules>` — a plain
+  `mvn install` must neither download nor run anything TCK-related.
+- `cyrano-core` depends only on `jakarta.ws.rs` (JAX-RS annotations, spec API) and
+  `jakarta.json.bind` (JSON-B spec API); CDI stays in `cyrano-cdi-vauban`. Transport
+  is `java.net.http` (JDK). Champollion is the runtime JSON-B implementation.
+- **No `java.lang.reflect.Proxy`**: generated-source proxies first (cyrano-processor),
+  Class-File API for the runtime fallback only.
+  Use the `classfile-codegen` agent for any review of the bytecode fallback generator.
+- Keep `io.vidocq.cyrano.internal.*` unexported; all extensions go through the SPI.
+- No `synchronized`, no `ThreadLocal` — virtual-thread-friendly.
+  `CyranoProxyCache` uses `ConcurrentHashMap.computeIfAbsent`.
+- No `setAccessible(true)` in production — use `MethodHandles.privateLookupIn`
+  if internal access is needed. Document any opening in `module-info`.
+- **JUnit 6 minimum** (`org.junit:junit-bom` ≥ 6.0.3) for all tests.
+- JSON via Jakarta JSON-B (`jakarta.json.bind.Jsonb`) only — champollion is its implementation.
+  Never Jackson, Gson, or standalone Yasson.
+- **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.
+
+## Useful Workflows
+
+```bash
+sdk env
+./mvnw -ntp install -DskipTests
+./mvnw test
+./run-official-tck-mp-rest-client-4.0.sh
+./run-official-tck-mp-rest-client-4.0.sh all
+./run-official-tck-mp-rest-client-4.0.sh -Dtest=TestName
+```
+
+- The TCK always goes through the root script, which first installs the reactor then invokes
+  `mvn -f cyrano-tck/pom.xml -Ptck-official test`.
+- The TCK script explicitly installs `cyrano-api,cyrano-core,cyrano-cdi-vauban` via
+  `./mvnw -pl ... -am install -DskipTests` before executing `cyrano-tck`.
+- The TCK drives its own HTTP backend (WireMock, started at JVM boot by `WireMockProbeListener`):
+  `CyranoDeployableContainer` is a `Local` Arquillian container that deploys nothing, and
+  `VaubanTckBootstrap` starts one Vauban container per deployment for the `cditests.*` tests.
+  No `cassini-tck` dependency (removed in `be73623`).
+
+## Observed Contribution Conventions
+
+- Strict TDD: Red → Green → Refactor, with citation of the targeted MicroProfile Rest Client
+  section in tests (`CLAUDE.md`, `ROADMAP.md`).
+- Tests in the same package, named `<Class>Test`; no Mockito — manual doubles or
+  inline JDK `HttpServer` to simulate the backend.
+- Bytecode generation tested by verifying observable behavior (HTTP calls,
+  parameters, returns), not by inspecting the generated bytecode.
+- Performance is a design constraint: the hot path (proxy already generated, 200 response)
+  must not allocate more than necessary.
+- **Language** — commit messages, Javadoc, and all `.md` file content must be written in **English**.
+
+## What an Agent Should Assume for Upcoming Tasks
+
+- `cyrano-core` is the foundation: `CyranoRestClientBuilder`, `CyranoProxyGenerator`
+  (runtime Class-File fallback), `CyranoClientProcessor` (APT), `CyranoHttpTransport` (JDK HttpClient), `CyranoInvocationHandler`.
+  None of these components should import CDI classes, internal Cassini classes,
+  or third-party libraries.
+- `cyrano-cdi-vauban` is an optional adapter: BCE `CyranoRestClientExtension` that
+  discovers `@RegisterRestClient` interfaces and produces the corresponding CDI beans.
+  Base URL configuration goes through MicroProfile Config (Ravel) when available.
+- The TCK requires both a programmatic `RestClientBuilder.newBuilder()` and CDI injection
+  `@Inject @RestClient`. Both paths must go through the same ClientProxyRegistry resolution chain.
+- Before any structural modification to `cyrano-core` or `cyrano-cdi-vauban`, reason
+  against the final contract: **MicroProfile Rest Client 4.0 TCK at 100% PASS**.
+
+## Documentation (Antora) conventions
+
+The project documentation lives in `docs/en` as an Antora component and is
+aggregated by the **vidocq-docs** site, which provides a **shared UI bundle** (banner,
+logo, fonts, colours, footer). **Never customise the documentation UI per project** —
+all visual harmonisation is centralised in `vidocq-docs/ui-bundle`.
+
+### Gold reference
+**Vauban** is the reference implementation for documentation structure. Mirror its
+`docs/en` layout when creating or updating docs. **Chappe** (HTTP server)
+and **Vidocq** (runtime orchestrator) are *special cases*, not references: they are not
+Jakarta EE / MicroProfile spec implementations.
+
+### Repository layout
+- `docs/en/antora.yml` → `name: <project>`, `title:`, versioned per branch (`dev` prerelease on `main`, `'<version>'` on `docs/<version>`), `project-version` attribute, `nav:`, `lang: en`.
+- Pages in `modules/ROOT/pages/`, navigation in `modules/ROOT/nav.adoc`, images in
+  `modules/ROOT/images/`.
+- **English-only** (ADR 0004 in vidocq-docs): no French mirror — do not reintroduce one.
+
+### Canonical navigation (section order)
+`index` → `getting-started` → `usage` → `concepts` → `internals` → `tck` →
+`performance` → `reference` → `migration`
+
+Multi-module projects (e.g. Vidocq, Mansart) may append `modules/*` / `sub-modules/*`
+sub-pages after `migration`.
+
+### TCK / Performance rule (not mutually exclusive)
+- Every **spec implementation** — i.e. **all projects except Chappe and Vidocq** — MUST
+  have a **`tck`** section documenting TCK coverage/status.
+- Projects with a performance story (e.g. **Chappe**) keep their **`performance`** section.
+- When **both** sections exist, order them **TCK first, then Performance**.
+- **Chappe** and **Vidocq** do not require a `tck` section (not spec implementations).
+
+### `index.adoc` structure
+Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a centred logo
+(`image::<project>-logo.png[...,role=module-logo]`), a `[.lead]` paragraph, then
+`== Origin of the name`, an `== At a glance` table, and ecosystem / quick-links sections.
+
+### Logo
+Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
+
+> When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.
+
+## Architecture rules
+
+- The architecture rules (module dependencies, layers, no reflection outside the documented fallbacks, no platform thread, no `ThreadLocal`) are ArchUnit tests in `cyrano-architecture-tests`, built on the shared `vidocq-archrules` library of `vidocq-parent` (test scope; Vidocq/vidocq#289). A new reflective path is documented in `internals.adoc` and added to the rule's fallback list with its reason, never silently.
+
+## Build compatible extensions work at build only
+
+A CDI build compatible extension works at build, and only there. `vidocq:generate` runs the extensions of an
+application once and records what they did; the packaged application loads that record instead of running them
+(Vidocq/vauban#288). An extension that breaks these rules loses work or checks in a packaged application:
+
+- compute from the deployment's classes only: no configuration value, environment variable, outside file or network
+  resource in a phase;
+- check the start environment in an observer of `jakarta.enterprise.event.Startup` that throws a
+  `DeploymentException`, fed with what the build collected (`withParam`); models: Ravel's `ConfigStartCheck`,
+  Cervantes' `JwtConfigurationCheck`;
+- add annotations, never remove them; carry data in parameters, never in fields of the extension;
+- ask `ExtensionPhase.isBuildTime()` only as a last resort, in a class of its own: an extension that asks runs again
+  at each start (Heisenberg's `InterceptorPriorityExtension`);
+- the brick's Vidocq runtime extension adds its own beans with `VaubanContainerBuilder.addHostBean`, never
+  `addBeanClass`, and its `-codegen` bundle brings the brick's CDI jar to the processor path;
+- list in `@io.vidocq.vauban.api.ClientProxies` every interface the extension registers as a synthetic bean of a
+  normal scope (`@ApplicationScoped`, `@TransactionScoped`, ...). Vauban generates client proxies at build from the
+  classes it compiles, and a synthetic bean has none: the freeze records its descriptor, not a proxy, and a deployment
+  that runs its extensions at start has no build step. Without the list, the container builds a
+  `java.lang.reflect.Proxy` at every start: every call goes through reflection, the boot is slower, nothing runs ahead
+  of time, and every application prints the `RUNTIME CODE GENERATION FALLBACK` warning (Vauban BUG-20261113-19:
+  Noether's `EntityManager` and `EntityManagerFactory`). Put it on a class of a module compiled with
+  `vauban-processor` that provides its `_VaubanComponents`: the `*-cdi-vauban` extension, or, for a
+  container-neutral brick, its Vidocq runtime extension (Vidocq's `NoetherPersistenceExtension`). Public interfaces
+  only, no class, no `@Dependent` bean;
+- test both ways: the extensions run at start (TCK, another container) and frozen (the startup report says
+  `cdi extensions  N extensions frozen at build`, and an invalid environment still stops the start).
+
+Guide: `docs/writing-a-build-compatible-extension.md` in `Vidocq/vidocq-workspace`, and Vauban's concepts page,
+"Writing an extension the build can freeze" (`docs/en/modules/ROOT/pages/concepts.adoc#writing-a-frozen-extension`).
