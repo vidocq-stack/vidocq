@@ -3,7 +3,8 @@ name: Nightly build
 # The whole reactor built, tested and deployed as SNAPSHOTs once a night (01:00 UTC), whatever the pushes of the day
 # built incrementally (ci.yml), then the CRaC extension, which needs a CRaC JDK. The nightly TCK (tck-nightly.yml,
 # 03:00 UTC) and the SonarQube analysis of main (sonar.yml, 02:00 UTC) follow. No sources or javadoc jar: the
-# release builds them. A maintainer can run it by hand (workflow_dispatch), on main only.
+# release builds them. Unlike a push build, it makes the jlink images of the examples and copies the SNAPSHOTs to
+# central-snapshots. A maintainer can run it by hand (workflow_dispatch), on main only.
 on:
   schedule:
     - cron: '0 1 * * *'
@@ -43,8 +44,9 @@ jobs:
       - name: Build, test & deploy the whole reactor
         uses: ./.ci-action/deploy-maven
         with:
-          maven-args: -B -ntp -U -Dgib.disable=true -Dmaven.source.skip=true -Dmaven.javadoc.skip=true
+          maven-args: -B -ntp -U -Dgib.disable=true -Dmaven.source.skip=true -Dmaven.javadoc.skip=true -Dvidocq.build-info.dirty=^none
           skip-tests: "false"
+          snapshot-also-central: "true"
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
           snapshot-username: ${{ secrets.REPOSILITE_USERNAME }}
@@ -78,7 +80,7 @@ jobs:
         env:
           JAVA_HOME: ${{ env.CRAC_JAVA_HOME }}
         with:
-          maven-args: -B -ntp -Dgib.disable=true -Dmaven.source.skip=true -Dmaven.javadoc.skip=true -Pcrac -pl vidocq-runtime/vidocq-runtime-extensions/vidocq-runtime-extensions-essentials/vidocq-runtime-crac-extension
+          maven-args: -B -ntp -Dgib.disable=true -Dmaven.source.skip=true -Dmaven.javadoc.skip=true -Dvidocq.build-info.dirty=^none -Pcrac -pl vidocq-runtime/vidocq-runtime-extensions/vidocq-runtime-extensions-essentials/vidocq-runtime-crac-extension
           skip-tests: "true"
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}

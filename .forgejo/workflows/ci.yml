@@ -67,12 +67,16 @@ jobs:
       - uses: ./.ci-action/setup-maven
 
       # deployAtEnd (vidocq-parent, the runtime's BOM and parent) holds every upload until every module of the
-      # reactor built and passed its tests.
+      # reactor built and passed its tests. Only to maven.vidocq.dev, where CI reads SNAPSHOTs: the copy to
+      # central-snapshots is a second pass over the reactor (15 min), made by the nightly build. No git.dirty (a
+      # status of the whole tree in every module, 13 min; the checkout is clean) and no jlink image of the examples
+      # (the nightly build makes them).
       - name: Build, test & deploy what the push changed
         uses: ./.ci-action/deploy-maven
         with:
-          maven-args: -B -ntp -U -Dmaven.source.skip=true -Dmaven.javadoc.skip=true ${{ steps.scope.outputs.args }}
+          maven-args: -B -ntp -U -Dmaven.source.skip=true -Dmaven.javadoc.skip=true -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true ${{ steps.scope.outputs.args }}
           skip-tests: "false"
+          snapshot-also-central: "false"
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
           snapshot-username: ${{ secrets.REPOSILITE_USERNAME }}

@@ -131,7 +131,7 @@ jobs:
         # -am: the upstream of a changed module is built from this tree, its tests skipped
         # (gib.skipTestsForUpstreamModules); every downstream module runs its tests (gib.buildDownstream=always).
         run: >-
-          mvn -B -ntp -U install -am
+          mvn -B -ntp -U install -am -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true
           -Dgib.referenceBranch=refs/remotes/origin/main
           -Dgib.skipTestsForUpstreamModules=true
           -Dgib.uncommitted=false -Dgib.untracked=false

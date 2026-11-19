@@ -152,6 +152,8 @@
         <!-- git-commit-id-maven-plugin: writes the per-artifact build identity
              file (see <build><plugins>). Latest 9.x line. -->
         <git-commit-id.plugin.version>9.2.0</git-commit-id.plugin.version>
+        <!-- The pattern of git.dirty in the build identity file; CI sets ^none (see the plugin below). -->
+        <vidocq.build-info.dirty>^git.dirty$</vidocq.build-info.dirty>
 
         <!--
             central-publishing-maven-plugin's autoPublish flag, exposed as a
@@ -375,6 +377,12 @@
                 name would make every brick read the first jar's file.
                 - pom-packaged modules are skipped (skipPoms, default true);
                 - -Dmaven.gitcommitid.skip=true disables it;
+                - git.dirty is the costly one: the plugin computes it from a
+                  status of the whole working tree, in every module (1:43 over the
+                  monorepo's reactor on a laptop, 13 min on a CI runner, against
+                  3 s without it). CI checks out a clean tree, so it leaves the
+                  property out with -Dvidocq.build-info.dirty=^none (a jar without
+                  git.dirty reads as clean);
                 - outside a git repository the build still succeeds, with only
                   git.build.version and git.build.time.
                 Do NOT set project.build.outputTimestamp outside the release
@@ -406,7 +414,7 @@
                         <includeOnlyProperty>^git.build.time$</includeOnlyProperty>
                         <includeOnlyProperty>^git.commit.id.abbrev$</includeOnlyProperty>
                         <includeOnlyProperty>^git.commit.time$</includeOnlyProperty>
-                        <includeOnlyProperty>^git.dirty$</includeOnlyProperty>
+                        <includeOnlyProperty>${vidocq.build-info.dirty}</includeOnlyProperty>
                     </includeOnlyProperties>
                 </configuration>
             </plugin>
