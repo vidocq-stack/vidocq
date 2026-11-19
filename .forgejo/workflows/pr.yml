@@ -15,8 +15,10 @@
 #   pr-validate        the aggregator (pr-validate-gate, mode verdict). Required context
 #                      `pr-validate / pr-validate (pull_request)`.
 #
-# Not yet here: the title check (§7, a warning first), one `tck / <component>` job per impacted spec (§9), the
-# reuse of a validated tree.
+#   title-check        MONOREPO.md §7, a warning only for now: the verdict does not read it.
+#
+# Not yet here: one `tck / <component>` job per impacted spec on a pull request (the nightly has them), the reuse
+# of a validated tree.
 name: pr-validate
 on:
   pull_request:
@@ -47,6 +49,55 @@ jobs:
         with:
           pr-author: ${{ github.event.pull_request.user.login }}
           slack-webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # MONOREPO.md §7: `[WIP] [TAG][TAG] type(scope): subject (#n)`. A warning for now (Yann, 2026-11-19), blocking after
+  # a week: this job is not one the verdict reads, and it never fails. The tags come from components.json.
+  title-check:
+    runs-on: vidocq-runner
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check the pull request title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main || true
+          git diff --name-only "$(git merge-base origin/main HEAD)" HEAD > "$RUNNER_TEMP/changed.txt" || true
+          python3 - "$RUNNER_TEMP/changed.txt" <<'PY'
+          import json, os, re, sys
+          title = os.environ["TITLE"]
+          doc = json.load(open("components.json"))
+          known = {c["tag"]: [c["path"]] for c in doc["components"]}
+          known.update({o["tag"]: o["paths"] for o in doc["other_tags"]})
+          problems = []
+          m = re.match(r"^(\[WIP\] ?)?((?:\[[A-Z0-9-]+\])+) (\S.*)$", title)
+          if not m:
+              problems.append("the title does not start with [WIP]? then one or more [TAG]: " + title)
+              tags = []
+          else:
+              tags = re.findall(r"\[([A-Z0-9-]+)\]", m.group(2))
+              for t in tags:
+                  if t not in known:
+                      problems.append(f"unknown tag [{t}] (components.json)")
+              if not re.match(r"^[a-z]+(\([^)]+\))?!?: \S", m.group(3)):
+                  problems.append("no Conventional Commits title after the tags: " + m.group(3))
+          changed = [l.strip() for l in open(sys.argv[1]) if l.strip()]
+          touched = set()
+          for f in changed:
+              best = max(((t, p) for t, ps in known.items() for p in ps if f == p or f.startswith(p + "/")),
+                         key=lambda tp: len(tp[1]), default=None)
+              if best:
+                  touched.add(best[0])
+          docs_only = changed and all(f.endswith((".md", ".adoc")) or "/docs/" in f for f in changed)
+          missing = sorted(touched - set(tags) - ({"DOCS"} if docs_only else set()))
+          if missing and not (docs_only and "DOCS" in tags):
+              problems.append("components touched but not tagged: " + ", ".join(f"[{t}]" for t in missing))
+          for p in problems:
+              print("::warning title=PR title::" + p)
+          print("Title check: " + ("OK" if not problems else f"{len(problems)} warning(s), not blocking yet"))
+          PY
 
   producer:
     needs: [governance-checks, pr-state]

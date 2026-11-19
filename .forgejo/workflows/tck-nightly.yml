@@ -1,0 +1,80 @@
+# Every TCK of the monorepo, nightly: one job per component, named `tck / <TAG>` (MONOREPO.md §9).
+#
+# A component's TCK is what its root pom declares (ci.tck.modules, each run with -Ptck; ci.tck.command, run in
+# its folder), the same declaration the pull request reads for the impacted components. The runtime adds the
+# three runners too slow for a pull request (humboldt-telemetry ~256 s, heisenberg-faulttolerance and
+# cyrano-restclient ~183 s each). Left out, as before the monorepo: vidocq-runtime-tck-annotations (its TCK is not
+# on Maven Central) and vidocq-runtime-tck-coreprofile (red on JDK 25 in the TCK's own code, GestionProjet#9).
+name: TCK nightly
+
+on:
+  schedule:
+    # 03:00 UTC, when the shared runners are idle.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  plan:
+    runs-on: vidocq-runner
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        run: |
+          python3 - >> "$GITHUB_OUTPUT" <<'PY'
+          import json, os, xml.etree.ElementTree as ET
+          SLOW_RUNTIME = ["vidocq-runtime-integration-tests/vidocq-runtime-tck-cyrano-restclient",
+                          "vidocq-runtime-integration-tests/vidocq-runtime-tck-heisenberg-faulttolerance",
+                          "vidocq-runtime-integration-tests/vidocq-runtime-tck-humboldt-telemetry"]
+          include = []
+          for c in json.load(open("components.json"))["components"]:
+              pom = ET.parse(os.path.join(c["path"], "pom.xml")).getroot()
+              ns = pom.tag[1:].split("}", 1)[0]
+              props = pom.find("{%s}properties" % ns)
+              def get(n):
+                  e = props.find("{%s}%s" % (ns, n)) if props is not None else None
+                  return (e.text or "").strip() if e is not None else ""
+              modules = [m.strip() for m in get("ci.tck.modules").split(",") if m.strip()]
+              if c["tag"] == "RUNTIME":
+                  modules += SLOW_RUNTIME
+              commands = ["mvn -B -ntp -pl " + m + " -Ptck test" for m in modules]
+              if get("ci.tck.command"):
+                  commands.append(get("ci.tck.command"))
+              if commands:
+                  include.append({"tag": c["tag"], "path": c["path"], "commands": " && ".join(commands)})
+          print("matrix=" + json.dumps({"include": include}))
+          PY
+
+  tck:
+    needs: plan
+    name: tck / ${{ matrix.tag }}
+    runs-on: vidocq-runner
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: https://codefloe.com/Vidocq/ci/setup-maven@main
+      - name: Build & install the reactor
+        run: mvn -B -ntp -U install -DskipTests -Dgib.disable=true
+      - name: TCK ${{ matrix.tag }}
+        working-directory: ${{ matrix.path }}
+        run: bash -c "$TCK_COMMANDS"
+        env:
+          TCK_COMMANDS: ${{ matrix.commands }}
+
+  notify:
+    needs: tck
+    if: failure()
+    runs-on: vidocq-runner
+    steps:
+      # Failure only: a nightly that reports every green night is noise nobody reads.
+      - uses: https://codefloe.com/Vidocq/ci/notify-slack@main
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: failure
+          repo: ${{ github.repository }}
+          ref: ${{ github.ref_name }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}
