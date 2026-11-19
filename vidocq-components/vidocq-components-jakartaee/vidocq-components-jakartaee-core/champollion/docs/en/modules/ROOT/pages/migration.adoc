@@ -33,7 +33,7 @@ Nothing changes. Application code only uses `jakarta.json.*` (the spec) — `Jso
 
 === Expected performance
 
-Measured parser figures, with the hardware and the exact command of each run, are recorded in link:{repo-champollion}/src/branch/main/BENCH.md[BENCH.md]. They depend on the payload size and on the JVM; run the benchmark on your own workload.
+Measured parser figures, with the hardware and the exact command of each run, are recorded in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion/BENCH.md[BENCH.md]. They depend on the payload size and on the JVM; run the benchmark on your own workload.
 
 === Benefits of switching
 
@@ -88,7 +88,7 @@ To benefit from reflection-free bindings (Champollion's identity-defining streng
 
 === Expected performance
 
-Measured binding figures (runtime mode and static codegen mode) are recorded in link:{repo-champollion}/src/branch/main/BENCH.md[BENCH.md]. Static codegen mode removes the introspection warmup.
+Measured binding figures (runtime mode and static codegen mode) are recorded in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion/BENCH.md[BENCH.md]. Static codegen mode removes the introspection warmup.
 
 === Subtle differences
 
@@ -173,7 +173,7 @@ The `JsonGenerator` on the JSON-B side is the **Jakarta JSON-P** one — not Jac
 
 === Expected performance
 
-Jackson is **not** a Jakarta JSON-B implementation: migration is meant to align with the Jakarta specs and benefit from standard portability. Measured figures are in link:{repo-champollion}/src/branch/main/BENCH.md[BENCH.md].
+Jackson is **not** a Jakarta JSON-B implementation: migration is meant to align with the Jakarta specs and benefit from standard portability. Measured figures are in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion/BENCH.md[BENCH.md].
 
 === Benefits of switching
 

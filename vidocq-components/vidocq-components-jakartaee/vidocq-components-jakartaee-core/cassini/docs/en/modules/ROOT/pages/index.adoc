@@ -30,7 +30,7 @@ The REST resource tree is a map. Cassini is the runtime that draws it and routes
 [cols="1,3"]
 |===
 | Implemented spec | {spec-rest-4}
-| Repo | {repo-cassini}
+| Repo | {repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.cassini.api`, `io.vidocq.cassini.core`, `io.vidocq.cassini.client`, `io.vidocq.cassini.chappe`, `io.vidocq.cassini.jdkhttp`, `io.vidocq.cassini.cdi.vauban` (+ build-time: `io.vidocq.cassini.processor`, `cassini-maven-plugin`)
 | Runtime dependencies | Jakarta specs only (`jakarta.ws.rs`, `jakarta.json.bind`). Transport via xref:chappe::index.adoc[Chappe] or JDK `com.sun.net.httpserver`. CDI optional via xref:vauban::index.adoc[Vauban].
@@ -64,4 +64,4 @@ Cassini shares Chappe with xref:foy::index.adoc[Foy] (Servlet 6.1): a single pro
 * xref:reference.adoc[Reference]
 * xref:migration.adoc[Migration from Jersey / RESTEasy / Helidon]
 
-Consolidated bugs and benchmarks: link:{repo-cassini}/src/branch/main/BUG.md[BUG.md], link:{repo-cassini}/src/branch/main/BENCH.md[BENCH.md].
+Consolidated bugs and benchmarks: link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini/BUG.md[BUG.md], link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini/BENCH.md[BENCH.md].

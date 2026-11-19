@@ -2,7 +2,7 @@
 
 Vidocq Runtime extension for Jakarta Servlet 6.1: it deploys the application's servlets, filters,
 listeners, `web.xml`, web fragments and `ServletContainerInitializer`s with
-[Foy](https://codefloe.com/Vidocq/foy) and mounts them on the shared Chappe web server, next to
+[Foy](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy) and mounts them on the shared Chappe web server, next to
 the other extensions (REST, OpenAPI, static files). Foy activates the CDI request context for
 every request and, through `foy-cdi-vauban` and `vauban-webcontexts`, the session context.
 

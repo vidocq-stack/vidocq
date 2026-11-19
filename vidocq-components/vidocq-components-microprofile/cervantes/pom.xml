@@ -19,7 +19,7 @@
 
     <name>Cervantes</name>
     <description>MicroProfile JWT 2.2 implementation — no third-party library, crypto via java.security, JSON via Champollion, config via Ravel, strict Java Modules, virtual threads, CDI via Vauban</description>
-    <url>https://codefloe.com/Vidocq/cervantes</url>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/cervantes</url>
 
     <!--
         Disjunctive triple license: a recipient may use this software under
@@ -47,9 +47,9 @@
     </licenses>
 
     <scm>
-        <url>https://codefloe.com/Vidocq/cervantes</url>
-        <connection>scm:git:https://codefloe.com/Vidocq/cervantes.git</connection>
-        <developerConnection>scm:git:git@codefloe.com:Vidocq/cervantes.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/cervantes</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
     </scm>
 
     <properties>

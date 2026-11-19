@@ -218,8 +218,8 @@ MetricRegistry vendor;
 
 == Bugs and benchmarks
 
-* link:{repo-dirac}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
-* link:{repo-dirac}/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks (vs Micrometer / SmallRye).
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/dirac/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/dirac/BENCH.md[BENCH.md] — JMH benchmarks (vs Micrometer / SmallRye).
 
 == Further reading
 

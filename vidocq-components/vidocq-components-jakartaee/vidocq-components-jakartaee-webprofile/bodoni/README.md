@@ -8,7 +8,7 @@
 > Named after **Giambattista Bodoni** (1740–1813), printer to the Duke of Parma and
 > rival of Joaquín Ibarra, whose *Manuale Tipografico* catalogued standard, ready-made
 > type for any printer to compose pages with. JSTL is the standard catalogue of tags
-> every page composes with: [Ibarra](https://codefloe.com/Vidocq/ibarra) (Jakarta Pages
+> every page composes with: [Ibarra](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra) (Jakarta Pages
 > 4.0) composes and prints the pages, Bodoni supplies the type.
 
 ## Status

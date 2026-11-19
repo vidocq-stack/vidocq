@@ -68,6 +68,6 @@ from the auto-configuration.
 
 ## See also
 
-- [humboldt/](https://codefloe.com/Vidocq/humboldt) — Humboldt implementation
-- [humboldt/PLAN.md](https://codefloe.com/Vidocq/humboldt/src/branch/main/PLAN.md) — detailed architecture
-- [humboldt/TCK.md](https://codefloe.com/Vidocq/humboldt/src/branch/main/TCK.md) — MP Telemetry 2.2 TCK status
+- [humboldt/](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/humboldt) — Humboldt implementation
+- [humboldt/PLAN.md](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/humboldt/PLAN.md) — detailed architecture
+- [humboldt/TCK.md](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/humboldt/TCK.md) — MP Telemetry 2.2 TCK status

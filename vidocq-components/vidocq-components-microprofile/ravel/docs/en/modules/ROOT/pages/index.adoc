@@ -33,7 +33,7 @@ Ravel orchestrates all these voices into a single, unified configuration accessi
 [cols="1,3"]
 |===
 | Implemented spec | {spec-mp-config}
-| Repo | {repo-ravel}
+| Repo | {repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/ravel
 | Java | 25 (LTS)
 | Java modules | `org.eclipse.microprofile.config` (repackaged), `io.vidocq.ravel.api`, `io.vidocq.ravel.core`, `io.vidocq.ravel.cdi.vauban`
 | Runtime dependencies | MicroProfile Config spec only. CDI optional via xref:vauban::index.adoc[Vauban].

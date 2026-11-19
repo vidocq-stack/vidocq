@@ -5,7 +5,7 @@
 Noether is measured with a JMH harness that runs the same four workloads on Noether, Hibernate ORM and EclipseLink:
 a find by primary key, a JPQL query of 32 rows, a versioned update, and an insert-update-delete cycle. Every figure
 on this page comes from an entry of
-link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[`BENCH.md`], which holds the raw scores, errors
+link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/BENCH.md[`BENCH.md`], which holds the raw scores, errors
 and allocation.
 
 == In short
@@ -46,7 +46,7 @@ It is not a GraalVM native-image claim.
 
 == Pre-optimization baseline after D43
 
-link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261018-01/02/03]
+link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/BENCH.md[BENCH-20261018-01/02/03]
 records the current measurements and preserves older Mansart evidence verbatim.
 The current code was rebuilt cleanly at `352e684`, on Apple M5 (10 cores,
 24 GiB RAM), Temurin 25.0.4.1 and H2 2.3.232. Hibernate ORM 7.4.12.Final
@@ -235,7 +235,7 @@ the selected columns, returned rows or write/version semantics.
 
 == Hibernate ORM 5.6 comparison (2026-11-11)
 
-link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261111-01]
+link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/BENCH.md[BENCH-20261111-01]
 measures Noether, Hibernate ORM 5.6.15 and Hibernate ORM 7.4.12 in one session, on another
 machine than the entries above (Apple M5 Max, Temurin 25.0.3), with unchanged workloads.
 
@@ -268,7 +268,7 @@ column, a row, a dirty or version check, a callback or a cache rule, or adds a s
 * the rows of an entity without relationships or element collections become managed in one pass
   instead of three.
 
-link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261111-04] measures the
+link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/BENCH.md[BENCH-20261111-04] measures the
 result against Hibernate ORM 5.6.15 in one session (ops/s, JMH 99.9% error; allocation in B/op):
 
 [cols="2,>2,>2,>1,>1",options="header"]
@@ -291,7 +291,7 @@ claim. Hibernate 7.4 and EclipseLink were not rerun.
 === Allocation
 
 A second profile, of the objects those two workloads still made
-(link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261111-06]), led to five
+(link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/BENCH.md[BENCH-20261111-06]), led to five
 more changes, under the same rule: no column, row, snapshot, dirty or version check, callback, flush
 order, lazy reference or cascade changes.
 
@@ -311,7 +311,7 @@ order, lazy reference or cascade changes.
   its column, without an array; the state read back from a loaded instance becomes its snapshot in
   place where nothing reads it afterwards.
 
-link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261111-07], same harness
+link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/BENCH.md[BENCH-20261111-07], same harness
 and settings, one session:
 
 [cols="2,>2,>2,>1,>1",options="header"]
@@ -327,7 +327,7 @@ Noether now allocates less than Hibernate 5.6 on the four workloads (0.55x to 0.
 less than in BENCH-20261111-04; its throughput rises 13% to 64% while Hibernate's moves by -1% to
 +5% between the two sessions. The allocation of `jpqlQuery` varies by about 5% from one fork to
 another. On PostgreSQL 17 the allocation is 0.61x to 0.78x Hibernate's
-(link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261111-08]); no throughput
+(link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/BENCH.md[BENCH-20261111-08]); no throughput
 claim is made there. The shared cache is off for both providers in this harness. What remains per
 result row is the placeholder of the select item and the key that resolves it, and the boxing of
 primitive attributes at each read of the state, which the small identifiers of this harness hide.
@@ -337,7 +337,7 @@ primitive attributes at each read of the state, which the small identifiers of t
 The harness also runs against a database server: `BENCH_JDBC_URL`, `BENCH_JDBC_DRIVER`,
 `BENCH_JDBC_USER` and `BENCH_JDBC_PASSWORD` replace in-memory H2 for every provider of a run (see
 the bench `README.md`).
-link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[BENCH-20261111-05] runs Noether
+link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/BENCH.md[BENCH-20261111-05] runs Noether
 before and after these changes and Hibernate ORM 5.6.15 on PostgreSQL 17, in a container on the
 same machine, three rounds in different orders. A round trip and the commit's `fsync` cost 130 µs to
 1.1 ms per operation, against 1.2 to 13 µs on H2, and the providers come out at parity within the

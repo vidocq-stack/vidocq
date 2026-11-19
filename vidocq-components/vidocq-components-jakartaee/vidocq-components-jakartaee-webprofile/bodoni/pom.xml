@@ -19,7 +19,7 @@
 
     <name>Bodoni</name>
     <description>Jakarta Standard Tag Library 3.0 implementation — zero third-party dependency, strict Java Modules, portable tag handlers with optional build-time inlining by Ibarra</description>
-    <url>https://codefloe.com/Vidocq/bodoni</url>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni</url>
 
     <developers>
         <developer>
@@ -54,9 +54,9 @@
     </licenses>
 
     <scm>
-        <url>https://codefloe.com/Vidocq/bodoni</url>
-        <connection>scm:git:https://codefloe.com/Vidocq/bodoni.git</connection>
-        <developerConnection>scm:git:git@codefloe.com:Vidocq/bodoni.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
     </scm>
 
     <properties>

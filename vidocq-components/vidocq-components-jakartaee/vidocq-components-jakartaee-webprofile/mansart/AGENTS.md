@@ -4,7 +4,7 @@ Contributor guidance for agents working on this repository. See also the compani
 
 ## Repository ownership
 
-Mansart owns Jakarta Data, the JDBC pool and Jakarta Transactions. Persistence and the provisional Validation provider moved to [Noether](https://codefloe.com/Vidocq/noether) on 2026-10-11. Read its own guidance before changing those implementations; they are no longer part of this reactor. Data production semantics stay unchanged and a Data/JPA bridge remains deferred.
+Mansart owns Jakarta Data, the JDBC pool and Jakarta Transactions. Persistence and the provisional Validation provider moved to [Noether](https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether) on 2026-10-11. Read its own guidance before changing those implementations; they are no longer part of this reactor. Data production semantics stay unchanged and a Data/JPA bridge remains deferred.
 
 ## Architecture rules
 

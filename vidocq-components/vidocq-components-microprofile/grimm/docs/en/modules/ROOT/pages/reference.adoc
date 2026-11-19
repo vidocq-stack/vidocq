@@ -264,8 +264,8 @@ Grimm's own classes (`io.vidocq.grimm.*`) never enter the document, so `/openapi
 
 == Bugs and benchmarks
 
-* link:https://codefloe.com/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (to be created if missing).
-* link:https://codefloe.com/Vidocq/grimm/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks (to be created if missing).
+* link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/grimm/BUG.md[BUG.md] — tracked reproducible bugs (to be created if missing).
+* link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/grimm/BENCH.md[BENCH.md] — JMH benchmarks (to be created if missing).
 
 == Further reading
 

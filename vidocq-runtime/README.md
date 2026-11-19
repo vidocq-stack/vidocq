@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Modular Java SE MicroProfile Runtime</strong><br>
-  <a href="https://microprofile.io/">MicroProfile 7.2</a> | <a href="https://codefloe.com/Vidocq/vauban">Vauban CDI Lite</a> | JDK 25 | Java Modules
+  <a href="https://microprofile.io/">MicroProfile 7.2</a> | <a href="https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban">Vauban CDI Lite</a> | JDK 25 | Java Modules
 </p>
 
 <p align="center">
@@ -21,11 +21,11 @@
 
 ## What is Vidocq?
 
-Vidocq is a modular Java SE application runtime built on [Vauban](https://codefloe.com/Vidocq/vauban) (CDI 4.1 Lite). It progressively implements the MicroProfile 7.2 specifications via a lightweight extension system inspired by Quarkus.
+Vidocq is a modular Java SE application runtime built on [Vauban](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban) (CDI 4.1 Lite). It progressively implements the MicroProfile 7.2 specifications via a lightweight extension system inspired by Quarkus.
 
 ### What Vidocq is
 
-- **CDI Lite on Java Modules**: the container is [Vauban](https://codefloe.com/Vidocq/vauban), CDI 4.1 Lite, and every module declares a `module-info.java`.
+- **CDI Lite on Java Modules**: the container is [Vauban](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban), CDI 4.1 Lite, and every module declares a `module-info.java`.
 - **Extensions on CDI Lite**: each MicroProfile specification is an independent extension on top of the container.
 - **Build-time generation**: proxies, interceptors and wiring are generated at compile time with the JDK 25 Class-File API rather than at runtime.
 - **Virtual threads**: I/O runs on virtual threads, with `ScopedValue` (JEP 487) carrying the `@RequestScoped` context.

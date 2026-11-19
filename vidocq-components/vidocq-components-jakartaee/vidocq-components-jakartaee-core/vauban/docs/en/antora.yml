@@ -10,4 +10,4 @@ asciidoc:
     project-version: 0.4.0-SNAPSHOT
     release-version: 0.4.0-RC2
     # Used by page links into the source tree; without it the links render literally.
-    repo-vauban: https://codefloe.com/Vidocq/vauban
+    repo-vauban: https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban

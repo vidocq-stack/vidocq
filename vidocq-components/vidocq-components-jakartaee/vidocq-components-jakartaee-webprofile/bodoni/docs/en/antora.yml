@@ -9,5 +9,5 @@ asciidoc:
     lang: en
     project-version: 0.4.0-SNAPSHOT
     # Not defined by the vidocq-docs playbook yet: declared here so the links render.
-    repo-bodoni: https://codefloe.com/Vidocq/bodoni
+    repo-bodoni: https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni
     spec-tags-3-0: https://jakarta.ee/specifications/tags/3.0/

@@ -15,12 +15,12 @@
 
     <name>Vidocq :: Parent</name>
     <description>Common parent POM for all Vidocq ecosystem projects - Java 25, Maven Central, release/snapshot/quality profiles.</description>
-    <url>https://codefloe.com/Vidocq/vidocq-parent</url>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-parent</url>
 
     <scm>
-        <connection>scm:git:https://codefloe.com/Vidocq/vidocq-parent.git</connection>
-        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq-parent.git</developerConnection>
-        <url>https://codefloe.com/Vidocq/vidocq-parent</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-parent</url>
       <tag>HEAD</tag>
   </scm>
 

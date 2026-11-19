@@ -405,7 +405,7 @@ by both the runtime `RuntimeClientProxyGenerator` and the `vauban-maven-plugin` 
 jars — bytecode parity for the producer case, #42 Stage 1.6). The interface case has its own
 source renderer (`InterfaceProxySourceRenderer`, `implements` rather than `extends`). The
 APT-source-first rule keeps them aligned; residual drift is tracked in
-link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] (VAU-PRX-002).
+link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md] (VAU-PRX-002).
 
 Both kinds of front-end choose the forwarded methods with one walk, `ForwardedMethods`: the processor over the
 language model, the bytecode front-ends over the loaded class. A class file holds the bridges javac adds, `Object get()`
@@ -1303,7 +1303,7 @@ See xref:reference.adoc[the reference] for the exhaustive list.
 
 == Sources
 
-* link:{repo-vauban}/src/branch/main/vauban-core[vauban-core] — container runtime
-* link:{repo-vauban}/src/branch/main/vauban-processor[vauban-processor] — APT and Class-File API generators
-* link:{repo-vauban}/src/branch/main/vauban-indexer[vauban-indexer] — build-time scanner
-* link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (VAU-PRX-002, VAU-INJ-001)
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/vauban-core[vauban-core] — container runtime
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/vauban-processor[vauban-processor] — APT and Class-File API generators
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/vauban-indexer[vauban-indexer] — build-time scanner
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md] — tracked reproducible bugs (VAU-PRX-002, VAU-INJ-001)

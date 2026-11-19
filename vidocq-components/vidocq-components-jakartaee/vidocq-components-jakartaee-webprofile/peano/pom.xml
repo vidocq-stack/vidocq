@@ -19,7 +19,7 @@
 
     <name>Peano</name>
     <description>Jakarta Expression Language 6.0 implementation — zero third-party dependency, strict Java Modules, build-time accessor generation and compiled expressions instead of runtime reflection</description>
-    <url>https://codefloe.com/Vidocq/peano</url>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano</url>
 
     <developers>
         <developer>
@@ -54,9 +54,9 @@
     </licenses>
 
     <scm>
-        <url>https://codefloe.com/Vidocq/peano</url>
-        <connection>scm:git:https://codefloe.com/Vidocq/peano.git</connection>
-        <developerConnection>scm:git:git@codefloe.com:Vidocq/peano.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
     </scm>
 
     <properties>

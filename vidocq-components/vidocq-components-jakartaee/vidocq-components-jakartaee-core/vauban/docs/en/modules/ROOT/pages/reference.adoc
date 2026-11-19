@@ -620,7 +620,7 @@ The test tooling is named here as the zero-dependency rule asks: `io.vidocq:vido
 
 == Bugs
 
-* link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md] — tracked reproducible bugs.
 
 == Compatibility
 

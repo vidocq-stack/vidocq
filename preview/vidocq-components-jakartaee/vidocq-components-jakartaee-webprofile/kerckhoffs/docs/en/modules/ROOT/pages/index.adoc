@@ -10,7 +10,7 @@ mechanisms, identity stores and the security context of a Jakarta EE application
 third-party dependency and strict Java Modules.
 
 NOTE: Kerckhoffs is under construction: identity stores (K1) are in; the HTTP authentication mechanisms are not. The first TCK figures are on the xref:tck.adoc[TCK] page; the design of
-record is `PLAN.md` in the {repo-kerckhoffs}[repository].
+record is `PLAN.md` in the {repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/kerckhoffs[repository].
 
 == Origin of the name
 

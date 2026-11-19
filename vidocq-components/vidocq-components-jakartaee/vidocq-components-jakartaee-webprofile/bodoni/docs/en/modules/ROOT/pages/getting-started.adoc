@@ -8,10 +8,10 @@ Bodoni provides the five libraries of Jakarta Standard Tag Library 3.0: `c:` (co
 
 [source,bash]
 ----
-git clone git@codefloe.com:Vidocq/bodoni.git
-cd bodoni
+git clone git@codefloe.com:Vidocq/vidocq.git
+cd vidocq
 sdk env                       # Java 25 + Maven 3.9.16 (.sdkmanrc)
-./mvnw -ntp clean install
+./mvnw -ntp clean install -pl vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni -am
 ----
 
 == Dependency

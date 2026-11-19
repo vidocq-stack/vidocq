@@ -19,7 +19,7 @@
 
     <name>Heisenberg</name>
     <description>Implémentation MicroProfile Fault Tolerance 4.1 — zéro librairie tierce, virtual threads, Java Modules strict, CDI via Vauban, config via Ravel</description>
-    <url>https://codefloe.com/Vidocq/heisenberg</url>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/heisenberg</url>
 
     <!--
         Disjunctive triple license: a recipient may use this software under
@@ -47,9 +47,9 @@
     </licenses>
 
     <scm>
-        <url>https://codefloe.com/Vidocq/heisenberg</url>
-        <connection>scm:git:https://codefloe.com/Vidocq/heisenberg.git</connection>
-        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/heisenberg.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/heisenberg</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
     </scm>
 
     <properties>

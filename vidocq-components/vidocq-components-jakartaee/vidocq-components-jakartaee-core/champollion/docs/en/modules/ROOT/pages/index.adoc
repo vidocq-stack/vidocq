@@ -24,7 +24,7 @@ The metaphor is direct: **decoding arbitrary JSON and translating it into typed 
 | {spec-jsonp-2-1}[Jakarta JSON Processing 2.1] + {spec-jsonb-3-0}[Jakarta JSON Binding 3.0]
 
 | Repo
-| {repo-champollion}
+| {repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion
 
 | Java
 | 25 (LTS)
@@ -42,7 +42,7 @@ The metaphor is direct: **decoding arbitrary JSON and translating it into typed 
 | **290 / 295 PASS**, 0 FAIL (the 5 SKIP are disabled upstream inside the TCK itself) — run of 2026-06-16, see xref:tck.adoc[detailed status]
 
 | Performance
-| Measured figures (JMH, with hardware, command and raw results) are recorded in dated entries of link:{repo-champollion}/src/branch/main/BENCH.md[BENCH.md]. No ranking against other implementations is claimed.
+| Measured figures (JMH, with hardware, command and raw results) are recorded in dated entries of link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion/BENCH.md[BENCH.md]. No ranking against other implementations is claimed.
 |===
 
 == Position in the ecosystem

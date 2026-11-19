@@ -1,5 +1,5 @@
 = mansart-jakarta-data
-:repo-noether: https://codefloe.com/Vidocq/noether
+:repo-noether: https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether
 :description: Jakarta Data 1.0 implementation — repositories, JDQL, JDBC dialects, APT codegen.
 
 NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
@@ -201,11 +201,11 @@ module io.vidocq.mansart.data.core {
 
 == Bench
 
-First smoke: see link:{repo-mansart}/src/branch/main/mansart-jakarta-data/BENCH.md[mansart-jakarta-data BENCH.md] (BENCH-20260504-01: `findById` H2 in-memory).
+First smoke: see link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-jakarta-data/BENCH.md[mansart-jakarta-data BENCH.md] (BENCH-20260504-01: `findById` H2 in-memory).
 
 == Bugs
 
-See link:{repo-mansart}/src/branch/main/mansart-jakarta-data/BUG.md[BUG.md]. Major historical bug: `BUG-20260505-01` (TCK entities not metamodelled) — resolved via the M7 runtime repo creator.
+See link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-jakarta-data/BUG.md[BUG.md]. Major historical bug: `BUG-20260505-01` (TCK entities not metamodelled) — resolved via the M7 runtime repo creator.
 
 == Roadmap
 
@@ -217,4 +217,4 @@ See link:{repo-mansart}/src/branch/main/mansart-jakarta-data/BUG.md[BUG.md]. Maj
 * ✅ M6 — Jakarta Data 1.0 TCK.
 * ✅ M7 — Runtime impl generation — TCK 74/74 PASS.
 
-See link:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[PLAN.md] for sub-milestone details (M7-26 to M7-29).
+See link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-jakarta-data/PLAN.md[PLAN.md] for sub-milestone details (M7-26 to M7-29).

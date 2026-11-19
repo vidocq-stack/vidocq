@@ -1,5 +1,5 @@
 * xref:index.adoc[Mansart]
-:repo-noether: https://codefloe.com/Vidocq/noether
+:repo-noether: https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether
 ** xref:whats-new.adoc[What's new]
 
 NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.

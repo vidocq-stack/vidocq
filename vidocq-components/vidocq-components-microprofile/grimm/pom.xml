@@ -15,7 +15,7 @@
 
   <name>Grimm</name>
   <description>MicroProfile OpenAPI 4.2 implementation for Vidocq</description>
-  <url>https://codefloe.com/Vidocq/grimm</url>
+  <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/grimm</url>
 
   <developers>
     <developer>
@@ -54,9 +54,9 @@
     </licenses>
 
   <scm>
-    <connection>scm:git:https://codefloe.com/Vidocq/grimm.git</connection>
-    <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/grimm.git</developerConnection>
-    <url>https://codefloe.com/Vidocq/grimm</url>
+    <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+    <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/grimm</url>
     <tag>HEAD</tag>
   </scm>
 

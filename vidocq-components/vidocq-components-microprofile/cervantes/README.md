@@ -2,10 +2,10 @@
 
 **MicroProfile JWT 2.2** ("JWT RBAC for MicroProfile") implementation for the
 [Vidocq](https://codefloe.com/Vidocq) ecosystem, with **zero implementation dependencies**:
-signature verification via `java.security`, JSON parsing via [Champollion](https://codefloe.com/Vidocq/champollion)
-(JSON-P), configuration via [Ravel](https://codefloe.com/Vidocq/ravel) (MP Config), CDI injection
-via [Vauban](https://codefloe.com/Vidocq/vauban), JAX-RS security via
-[Cassini](https://codefloe.com/Vidocq/cassini).
+signature verification via `java.security`, JSON parsing via [Champollion](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion)
+(JSON-P), configuration via [Ravel](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/ravel) (MP Config), CDI injection
+via [Vauban](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban), JAX-RS security via
+[Cassini](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini).
 
 > Don Quixote *claims* an identity the world must accept as true. Cervantes actually verifies
 > the *claims* of a bearer token — signature, issuer, audience, expiration — before

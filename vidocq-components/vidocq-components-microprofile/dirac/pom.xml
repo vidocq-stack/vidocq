@@ -16,7 +16,7 @@
 
     <name>Dirac</name>
     <description>MicroProfile Metrics 5.1.1 implementation — zero third-party libraries, virtual threads, strict Java Modules, CDI via Vauban, REST endpoint via Cassini</description>
-    <url>https://codefloe.com/Vidocq/dirac</url>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/dirac</url>
 
     <!--
         Disjunctive triple license: a recipient may use this software under
@@ -44,9 +44,9 @@
     </licenses>
 
     <scm>
-        <url>https://codefloe.com/Vidocq/dirac</url>
-        <connection>scm:git:https://codefloe.com/Vidocq/dirac.git</connection>
-        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/dirac.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/dirac</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
     </scm>
 
     <properties>

@@ -1,5 +1,5 @@
 = Mansart
-:repo-noether: https://codefloe.com/Vidocq/noether
+:repo-noether: https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether
 :description: Jakarta Data 1.0 + transactions + JDBC pool, virtual threads, static codegen, zero reflection.
 
 NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
@@ -25,7 +25,7 @@ The Mansart persistence layer applies the same separation: the foundation of an 
 | {spec-data-1}[Jakarta Data 1.0] + Jakarta Transactions 2.0
 
 | Repository
-| {repo-mansart}[codefloe.com/Vidocq/mansart]
+| {repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart[codefloe.com/Vidocq/mansart]
 
 | Java
 | 25 (LTS)

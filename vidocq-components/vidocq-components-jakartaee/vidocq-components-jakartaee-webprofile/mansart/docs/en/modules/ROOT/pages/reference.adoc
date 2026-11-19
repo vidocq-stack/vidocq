@@ -1,5 +1,5 @@
 = Reference
-:repo-noether: https://codefloe.com/Vidocq/noether
+:repo-noether: https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether
 :description: Maven artefacts, annotations, configuration, dialects, Java modules.
 
 NOTE: Persistence and Validation now live in the separate xref:noether::index.adoc[Noether] repository. Any pre-extraction JPA results on this page are historical Mansart measurements; Noether paths refer to that repository.
@@ -296,7 +296,7 @@ Read a statement's first keyword (is it an `UPDATE` or a `DELETE`?) and the enti
 
 == See also
 
-* link:{repo-mansart}/src/branch/main/PLAN.md[Mansart PLAN.md] — global vision and work order.
-* link:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[mansart-jakarta-data PLAN.md] — detailed plan of the Data module.
-* link:{repo-mansart}/src/branch/main/mansart-pool/PLAN.md[mansart-pool PLAN.md] — pool design.
-* link:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[mansart-transactions PLAN.md] — transactions roadmap.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/PLAN.md[Mansart PLAN.md] — global vision and work order.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-jakarta-data/PLAN.md[mansart-jakarta-data PLAN.md] — detailed plan of the Data module.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-pool/PLAN.md[mansart-pool PLAN.md] — pool design.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-transactions/PLAN.md[mansart-transactions PLAN.md] — transactions roadmap.

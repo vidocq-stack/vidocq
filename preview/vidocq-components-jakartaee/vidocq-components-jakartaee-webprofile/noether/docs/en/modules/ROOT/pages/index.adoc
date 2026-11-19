@@ -27,7 +27,7 @@ database holds must stay the same thing across every flush, every transaction an
 | Runs on | Java SE; CDI through `noether-jpa-cdi` (tested on Vauban and Quarkus ArC); the Vidocq runtime; Jakarta EE servers (tested on Open Liberty)
 | Runtime dependencies | The Jakarta Persistence API. Optional: Mansart Pool for Java SE connection pooling, the Jakarta CDI and Transactions APIs for container integration
 | Persistence TCK 3.2.1 | 2131 of 2135 tests pass, 0 failures, 4 official skips, on PostgreSQL 17, with one fixture backported from upstream. A local run, not a certification: see xref:tck.adoc[TCK]
-| Repository | {repo-noether}
+| Repository | {repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether
 |===
 
 == Three identifying traits
@@ -93,5 +93,5 @@ Transactions. The two serve different needs:
 [NOTE]
 ====
 No performance figure appears on this page. Every figure of the documentation points to an entry of
-link:{repo-noether}/src/branch/main/noether-persistence/BENCH.md[`BENCH.md`].
+link:{repo-vidocq}/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether/noether-persistence/BENCH.md[`BENCH.md`].
 ====

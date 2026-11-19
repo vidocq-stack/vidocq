@@ -52,7 +52,7 @@ page's defining loader to discover child-layer services, restoring the caller
 loader on success or failure.
 
 Applications generate/register private property and method tables through
-https://codefloe.com/Vidocq/peano[Peano's processor] or its public AccessorProvider
+https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano[Peano's processor] or its public AccessorProvider
 contract. This permits direct access with `peano.reflection=deny`, without
 exports/opens. Ibarra core introduces no Peano-specific runtime lookup.
 

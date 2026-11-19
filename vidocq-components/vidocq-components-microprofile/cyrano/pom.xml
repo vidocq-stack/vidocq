@@ -16,7 +16,7 @@
 
     <name>Cyrano</name>
     <description>MicroProfile Rest Client 4.0 implementation — zero third-party library, virtual threads, strict Java Modules, proxies via the Class-File API (JEP 484)</description>
-    <url>https://codefloe.com/Vidocq/cyrano</url>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/cyrano</url>
 
     <!--
         Disjunctive triple license: a recipient may use this software under
@@ -44,9 +44,9 @@
     </licenses>
 
     <scm>
-        <url>https://codefloe.com/Vidocq/cyrano</url>
-        <connection>scm:git:https://codefloe.com/Vidocq/cyrano.git</connection>
-        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/cyrano.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/cyrano</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
     </scm>
 
     <properties>

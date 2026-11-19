@@ -41,7 +41,7 @@
         now wraps Cassini, the native Jakarta REST 4.0 runtime on top of Chappe.
 
         The Jakarta Servlet 6.1 implementation was extracted in April 2026 into the standalone
-        Foy project: https://codefloe.com/Vidocq/foy (groupId io.vidocq.foy; modules foy-api,
+        Foy project: https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy (groupId io.vidocq.foy; modules foy-api,
         foy-core, foy-cdi-vauban, foy-chappe, foy-tck).
 
         The Cassini TCK runner (cassini-tck) lives in the Cassini repository, not here. It joins

@@ -154,7 +154,7 @@ directory move.
 `vidocq:dev`, `vidocq:jlink` and `vidocq:package` still pick the patched copies up automatically;
 they read the new directory. No other change is needed.
 
-The goal's own reference lives with it now, in the Vauban documentation — [`vauban:modularize` in detail](https://codefloe.com/Vidocq/vauban/src/branch/main/docs/en/modules/ROOT/pages/reference.adoc).
+The goal's own reference lives with it now, in the Vauban documentation — [`vauban:modularize` in detail](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/docs/en/modules/ROOT/pages/reference.adoc).
 
 ## Roadmap
 

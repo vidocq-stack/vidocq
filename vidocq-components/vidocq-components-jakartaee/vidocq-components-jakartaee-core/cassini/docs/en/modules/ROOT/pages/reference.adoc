@@ -220,8 +220,8 @@ When Cassini is driven by xref:vidocq::index.adoc[Vidocq Runtime] (the `io.vidoc
 
 == Bugs and benchmarks
 
-* link:{repo-cassini}/src/branch/main/BUG.md[`BUG.md`] — reproducible issues.
-* link:{repo-cassini}/src/branch/main/BENCH.md[`BENCH.md`] — measured JMH/wrk figures, with their setup.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini/BUG.md[`BUG.md`] — reproducible issues.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini/BENCH.md[`BENCH.md`] — measured JMH/wrk figures, with their setup.
 
 == See also
 

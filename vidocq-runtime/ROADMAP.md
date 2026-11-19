@@ -65,7 +65,7 @@ included; it holds only with days dedicated to the campaign.
 
 Decided on 2026-10-19: Vauban implements **CDI 4.1 Full**, the version Jakarta EE Web Profile 11
 requires; **no move to CDI 5 for now** (CDI 5 belongs to Jakarta EE 12, and its API is not a
-superset of 4.1's). Study: [`vauban/docs/superpowers/plans/2026-10-19-cdi-4.1-full-study.md`](https://codefloe.com/Vidocq/vauban/src/branch/main/docs/superpowers/plans/2026-10-19-cdi-4.1-full-study.md)
+superset of 4.1's). Study: [`vauban/docs/superpowers/plans/2026-10-19-cdi-4.1-full-study.md`](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/docs/superpowers/plans/2026-10-19-cdi-4.1-full-study.md)
 ([vauban#172](https://codefloe.com/Vidocq/vauban/pulls/172)): one shared engine with an optional
 `vauban-full` module, portable extensions in an opt-in module generating at run time with the
 Class-File API. The CDI 5 study ([vauban#171](https://codefloe.com/Vidocq/vauban/pulls/171)) stays
@@ -185,7 +185,7 @@ Planned across 1.1.0, 1.2.0 and 1.3.0, certification for 1.4.0 (see the release 
 Gap analysis, per-spec status, and tracking issues: [`WEB-PROFILE.md`](WEB-PROFILE.md)
 (umbrella issue [vidocq#67](https://codefloe.com/Vidocq/vidocq/issues/67)). The pivotal
 gap is CDI 4.1 **Full** (Vauban implements Lite only), whose Portable Extensions
-sub-problem has a dedicated design doc: [`vauban/CDI-FULL.md`](https://codefloe.com/Vidocq/vauban/src/branch/main/CDI-FULL.md)
+sub-problem has a dedicated design doc: [`vauban/CDI-FULL.md`](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/CDI-FULL.md)
 ([vauban#38](https://codefloe.com/Vidocq/vauban/issues/38), [vauban#39](https://codefloe.com/Vidocq/vauban/issues/39)).
 
 ## Reactor modules

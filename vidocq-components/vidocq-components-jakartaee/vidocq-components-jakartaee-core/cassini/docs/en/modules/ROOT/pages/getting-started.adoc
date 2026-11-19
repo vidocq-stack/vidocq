@@ -197,6 +197,6 @@ Stop the server with kbd:[Ctrl+C].
 
 == Going further
 
-* **CDI-managed resources** (`@Inject`, scopes): the streamlined path is the https://doc.vidocq.dev/vidocq/getting-started[Vidocq runtime] — it wires Vauban, the annotation processors and the packaging for you. The standalone wiring (Vauban container, `cassini-cdi-vauban`, build-time bean index) is demonstrated in the https://codefloe.com/Vidocq/cassini/src/branch/main/cassini-examples/cassini-examples-vauban[`cassini-examples-vauban`] module.
-* **Embedding Cassini** in an existing Chappe server (composite handlers, static files + API): see the `CassiniStack` SPI in xref:usage.adoc[Usage] and the https://codefloe.com/Vidocq/cassini/src/branch/main/cassini-examples[`cassini-examples`] modules.
+* **CDI-managed resources** (`@Inject`, scopes): the streamlined path is the https://doc.vidocq.dev/vidocq/getting-started[Vidocq runtime] — it wires Vauban, the annotation processors and the packaging for you. The standalone wiring (Vauban container, `cassini-cdi-vauban`, build-time bean index) is demonstrated in the https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini/cassini-examples/cassini-examples-vauban[`cassini-examples-vauban`] module.
+* **Embedding Cassini** in an existing Chappe server (composite handlers, static files + API): see the `CassiniStack` SPI in xref:usage.adoc[Usage] and the https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini/cassini-examples[`cassini-examples`] modules.
 * xref:usage.adoc[Usage] — sub-resources, providers, async, SSE · xref:concepts.adoc[Concepts] · xref:tck.adoc[TCK status]

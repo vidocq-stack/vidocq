@@ -46,7 +46,7 @@ A JWT is exactly that: a bearer token that presents a signed identity on every H
 [cols="1,3"]
 |===
 | Implemented spec | {spec-mp-jwt}
-| Repo | {repo-cervantes}
+| Repo | {repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-microprofile/cervantes
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.cervantes.api`, `io.vidocq.cervantes.core`, `io.vidocq.cervantes.cdi.vauban`, `io.vidocq.cervantes.jaxrs`, `org.eclipse.microprofile.jwt` (repackaging)
 | Public packages | `io.vidocq.cervantes.api.*` (stable SPI), `io.vidocq.cervantes.cdi.*` (CDI integration), `io.vidocq.cervantes.jaxrs.*` (JAX-RS integration)

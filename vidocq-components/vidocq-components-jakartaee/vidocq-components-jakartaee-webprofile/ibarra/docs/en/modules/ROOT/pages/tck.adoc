@@ -28,9 +28,9 @@ sdk env
 | Failures, errors, skipped methods | 0, 0, 0 |
 
 The detailed environment, report totals and historical snapshots are in
-link:{repo-ibarra}/src/branch/main/ibarra-tck/BASELINE.md[the recorded baseline].
+link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra/ibarra-tck/BASELINE.md[the recorded baseline].
 The previous method-level diagnostic records remain in
-link:{repo-ibarra}/src/branch/main/ibarra-tck/FAILURES.md[the historical failure inventory];
+link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra/ibarra-tck/FAILURES.md[the historical failure inventory];
 there are no outstanding official TCK failures.
 
 == Smoke and CI
@@ -63,6 +63,6 @@ its configuration and its limits.
 
 == Tracking
 
-* Reproducible issues: link:{repo-ibarra}/src/branch/main/BUG.md[BUG.md].
-* Plan and milestones: link:{repo-ibarra}/src/branch/main/PLAN.md[PLAN.md].
+* Reproducible issues: link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra/BUG.md[BUG.md].
+* Plan and milestones: link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra/PLAN.md[PLAN.md].
 * Challenges, if filed, belong in `TCK.md` with a specification citation.

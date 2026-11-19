@@ -8,4 +8,4 @@ asciidoc:
   attributes:
     lang: en
     project-version: 0.4.0-SNAPSHOT
-    repo-noether: https://codefloe.com/Vidocq/noether
+    repo-noether: https://codefloe.com/Vidocq/vidocq/src/branch/main/preview/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/noether

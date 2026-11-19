@@ -10,4 +10,4 @@ No numbers yet. Precompilation removes first-request translation latency entirel
 * Startup time and memory with precompiled pages vs development-mode translation.
 * The effect of not pooling tag handlers.
 
-The `ibarra-bench` JMH module arrives with milestone I9. Every figure is recorded in link:{repo-ibarra}/src/branch/main/BENCH.md[BENCH.md] with hardware, JVM and exact command before it appears anywhere else.
+The `ibarra-bench` JMH module arrives with milestone I9. Every figure is recorded in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra/BENCH.md[BENCH.md] with hardware, JVM and exact command before it appears anywhere else.

@@ -19,7 +19,7 @@
 
     <name>Vauban</name>
     <description>CDI 4.1 container, Java Modules native</description>
-    <url>https://codefloe.com/Vidocq/vauban</url>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban</url>
 
     <developers>
         <developer>
@@ -58,9 +58,9 @@
     </licenses>
 
     <scm>
-        <connection>scm:git:https://codefloe.com/Vidocq/vauban.git</connection>
-        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vauban.git</developerConnection>
-        <url>https://codefloe.com/Vidocq/vauban</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban</url>
     </scm>
 
     <modules>

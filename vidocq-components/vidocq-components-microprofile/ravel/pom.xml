@@ -19,7 +19,7 @@
 
     <name>Ravel</name>
     <description>Implémentation MicroProfile Config 3.1 — zéro librairie tierce, virtual threads, Java Modules strict</description>
-    <url>https://codefloe.com/Vidocq/ravel</url>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/ravel</url>
 
     <!--
         Disjunctive triple license: a recipient may use this software under
@@ -47,9 +47,9 @@
     </licenses>
 
     <scm>
-        <url>https://codefloe.com/Vidocq/ravel</url>
-        <connection>scm:git:https://codefloe.com/Vidocq/ravel.git</connection>
-        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/ravel.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/ravel</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
     </scm>
 
     <properties>

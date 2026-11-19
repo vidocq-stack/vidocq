@@ -105,4 +105,4 @@ Quarkus OpenAPI sits on top of SmallRye OpenAPI but adds proprietary extensions.
 
 * xref:concepts.adoc[Concepts] — model, merge, filters.
 * xref:reference.adoc[Reference] — annotations and `mp.openapi.*` keys.
-* link:https://codefloe.com/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — known gotchas.
+* link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/grimm/BUG.md[BUG.md] — known gotchas.

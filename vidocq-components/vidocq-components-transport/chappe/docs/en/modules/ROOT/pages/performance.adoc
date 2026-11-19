@@ -8,10 +8,10 @@ good enough for production.
 
 == Where the figures are
 
-* link:{repo-chappe}/blob/main/BENCH.md[BENCH.md] holds the current entries:
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-transport/chappe/BENCH.md[BENCH.md] holds the current entries:
   date, hardware and JVM, exact command, raw results and the delta against the
   previous run.
-* link:{repo-chappe}/blob/main/BENCHMARKS.md[BENCHMARKS.md] keeps the earlier
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-transport/chappe/BENCHMARKS.md[BENCHMARKS.md] keeps the earlier
   in-process and shootout runs and their detailed methodology. Those runs
   predate the current harness and are history, not a statement about the
   current release.
@@ -28,5 +28,5 @@ good enough for production.
 ----
 
 The Dockerfiles, harness and JFR profiling suite are in the
-link:{repo-chappe}/tree/main/chappe-bench/docker/shootout[`chappe-bench/docker/shootout`]
+link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-transport/chappe/chappe-bench/docker/shootout[`chappe-bench/docker/shootout`]
 folder.

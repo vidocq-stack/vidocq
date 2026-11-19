@@ -95,7 +95,7 @@ The causes of the first run's 89 errors, all fixed:
 | `fmt:parseDate` refused the text after a complete date (BOD-010; first triaged as TCK input on JDK 20 and later, a wrong diagnosis) | Bodoni | 2 | Text after a complete date is ignored, as `DateFormat.parse(String)` does; with BOD-011, an ASCII space matches the U+202F of a JDK 20+ style
 |===
 
-The Bodoni defects are tracked in link:{repo-bodoni}/src/branch/main/BUG.md[BUG.md]. Per-class results of both runs, evidence, the resolved snapshots, the passing tests worth a note and the upstream items: link:{repo-bodoni}/src/branch/main/bodoni-tck/BASELINE.md[`bodoni-tck/BASELINE.md`].
+The Bodoni defects are tracked in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni/BUG.md[BUG.md]. Per-class results of both runs, evidence, the resolved snapshots, the passing tests worth a note and the upstream items: link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/bodoni/bodoni-tck/BASELINE.md[`bodoni-tck/BASELINE.md`].
 
 The four interpretations Bodoni recorded in B3 and B4 are not settled by this suite: the 11.0.3 `x:forEach` class has no test that requests its empty-`select` page, and `startRow < 0`, a blank `maxRows` setting and `limitedByMaxRows` at exactly `maxRows` rows are not exercised.
 

@@ -6,8 +6,8 @@
 
 **Jakarta Pages 4.0** (formerly JavaServer Pages) implementation for the
 [Vidocq](https://codefloe.com/Vidocq/vidocq) runtime — Expression Language
-through [Peano](https://codefloe.com/Vidocq/peano), servlet container through
-[Foy](https://codefloe.com/Vidocq/foy).
+through [Peano](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano), servlet container through
+[Foy](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy).
 
 > Named after **Joaquín Ibarra** (1725–1785), royal printer in Madrid, famous for
 > the 1780 Real Academia edition of *Don Quixote* — a nod to `cervantes`, the

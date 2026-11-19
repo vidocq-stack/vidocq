@@ -128,4 +128,4 @@ Every pull request runs the full suite. The root `pom.xml` declares it in `ci.tc
 
 * xref:internals.adoc[Internals] — understand what the TCK validates.
 * xref:reference.adoc[Reference] — annotations and keys exercised by the tests.
-* link:https://codefloe.com/Vidocq/grimm/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/grimm/BUG.md[BUG.md] — tracked reproducible bugs.

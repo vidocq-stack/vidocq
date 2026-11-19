@@ -19,7 +19,7 @@
 
     <name>Ibarra</name>
     <description>Jakarta Pages 4.0 (JSP) implementation — zero third-party dependency, strict Java Modules, pages translated and compiled at build time, Expression Language through Peano, servlet container through Foy</description>
-    <url>https://codefloe.com/Vidocq/ibarra</url>
+    <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra</url>
 
     <developers>
         <developer>
@@ -54,9 +54,9 @@
     </licenses>
 
     <scm>
-        <url>https://codefloe.com/Vidocq/ibarra</url>
-        <connection>scm:git:https://codefloe.com/Vidocq/ibarra.git</connection>
-        <developerConnection>scm:git:git@codefloe.com:Vidocq/ibarra.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/vidocq.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vidocq.git</developerConnection>
     </scm>
 
     <properties>

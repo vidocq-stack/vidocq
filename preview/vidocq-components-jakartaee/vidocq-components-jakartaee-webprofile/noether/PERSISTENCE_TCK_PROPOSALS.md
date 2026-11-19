@@ -10,7 +10,7 @@
 >
 > The defects that Mansart found in the TCK fixtures before Persistence moved to Noether (TCK-BUG-001, delimited
 > identifiers) are historical evidence. They stay in Mansart's
-> [`PERISTENCE_TCK_PROPOSALS.md`](https://codefloe.com/Vidocq/mansart/src/branch/main/PERISTENCE_TCK_PROPOSALS.md).
+> [`PERISTENCE_TCK_PROPOSALS.md`](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/PERISTENCE_TCK_PROPOSALS.md).
 
 ---
 

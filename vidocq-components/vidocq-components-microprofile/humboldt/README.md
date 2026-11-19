@@ -17,9 +17,9 @@ See [`PLAN.md`](PLAN.md) for the detailed M0 → M9 roadmap, and [`tasks/todo.md
 - ✅ Traces (W3C TraceContext, samplers, `@WithSpan`)
 - ✅ Metrics (Counter, Histogram, UpDownCounter, Gauge async, ExponentialHistogram)
 - ✅ Logs (bridge JUL/SLF4J to OTel Log records)
-- ✅ Configuration `OTEL_*` / `MP_TELEMETRY_*` via [Ravel](https://codefloe.com/Vidocq/ravel) (MicroProfile Config)
-- ✅ Exporter **OTLP HTTP/protobuf** via [Chappe](https://codefloe.com/Vidocq/chappe) HTTP client
-- ✅ Auto-instrumentation Jakarta REST via [Cassini](https://codefloe.com/Vidocq/cassini) + CDI via [Vauban](https://codefloe.com/Vidocq/vauban)
+- ✅ Configuration `OTEL_*` / `MP_TELEMETRY_*` via [Ravel](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-microprofile/ravel) (MicroProfile Config)
+- ✅ Exporter **OTLP HTTP/protobuf** via [Chappe](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-transport/chappe) HTTP client
+- ✅ Auto-instrumentation Jakarta REST via [Cassini](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini) + CDI via [Vauban](https://codefloe.com/Vidocq/vidocq/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban)
 - 🚧 Exporter **OTLP gRPC** (post-MVP — awaits module `chappe-grpc`, see PLAN.md §3.5)
 - ❌ No JVM bytecode agent (instrumentation via APT + Class-File API at build time, never at runtime)
 - ❌ No Netty / grpc-java / OkHttp / Guava dependency

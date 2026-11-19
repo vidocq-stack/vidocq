@@ -68,11 +68,11 @@ OpenWebBeans is very close to Weld in API. The Weld table mostly applies. OWB-sp
 
 Lite-profile specifics worth knowing before migrating:
 
-* **`@Decorator`** — not supported. Decorators belong to CDI Full, not to Lite: Vauban applies none, and `BeanManager.resolveDecorators` returns an empty list. Use an interceptor, or composition, until CDI Full support lands (see BUG-20261116-02 in link:{repo-vauban}/src/branch/main/BUG.md[BUG.md]).
+* **`@Decorator`** — not supported. Decorators belong to CDI Full, not to Lite: Vauban applies none, and `BeanManager.resolveDecorators` returns an empty list. Use an interceptor, or composition, until CDI Full support lands (see BUG-20261116-02 in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md]).
 * **`@Specializes`** — not supported. Refactor as composition or a prioritised `@Alternative`.
 * **`@Alternative` + `@Priority`** — supported; check existing priorities.
 * **Producer methods with `@Disposes`** — supported.
-* **`@Inject` field on a normal scope** — correctly resolves the client proxy (see fix VAU-INJ-001 in link:{repo-vauban}/src/branch/main/BUG.md[BUG.md]).
+* **`@Inject` field on a normal scope** — correctly resolves the client proxy (see fix VAU-INJ-001 in link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md]).
 * **`InjectionPoint` metadata** — supported.
 
 [#upgrading]
@@ -165,4 +165,4 @@ What an application built on Vauban `{release-version}` may notice on the `{proj
 
 * xref:concepts.adoc[Concepts] — vocabulary and implementation choices.
 * xref:internals.adoc[Internals] — APT pipeline, threading model.
-* link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:{repo-vidocq}/src/branch/main/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md] — tracked reproducible bugs.
