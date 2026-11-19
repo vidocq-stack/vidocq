@@ -5,7 +5,7 @@
 The opt-in peano-bench module compares interpreted Peano, build-time compiled Peano
 and Expressly using arithmetic, property, lambda and collection fixtures. Semantic agreement is checked before
 timing. Baseline, final combined results and raw samples are recorded in
-link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md]; they are exploratory workstation measurements.
+link:https://codefloe.com/Vidocq/vidocq/src/tag/peano/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano/BENCH.md[BENCH.md]; they are exploratory workstation measurements.
 
 == Run the harness
 
@@ -24,8 +24,8 @@ Repeated creation includes implementation caches; it does not isolate uncached p
 == Measurement scope
 
 The optimization campaign records a longer baseline and focused comparisons in
-link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md], with its decisions in
-link:{repo-peano}/src/branch/main/OPTIMS.md[OPTIMS.md]. Creation now uses factory-owned
+link:https://codefloe.com/Vidocq/vidocq/src/tag/peano/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano/BENCH.md[BENCH.md], with its decisions in
+link:https://codefloe.com/Vidocq/vidocq/src/tag/peano/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano/OPTIMS.md[OPTIMS.md]. Creation now uses factory-owned
 bounded analysis reuse. Measurements distinguish repeated hits, a rotating source
 set, unique misses and cold factory/context setup. Warm gains must be assessed
 alongside miss penalties and retained estimated weight; no general startup gain is claimed.
@@ -76,7 +76,7 @@ current files cannot remove values already present in Git history (BENCH-004).
 The bench-profile test suite also rejects unapproved archived events without printing
 their values. Its JDK `jdk.jfr` dependency is confined to the non-published benchmark module.
 Every figure is recorded in
-link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md] with hardware, JVM and exact command.
+link:https://codefloe.com/Vidocq/vidocq/src/tag/peano/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano/BENCH.md[BENCH.md] with hardware, JVM and exact command.
 
 == Creation component diagnostics
 

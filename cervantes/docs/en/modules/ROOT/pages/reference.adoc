@@ -326,8 +326,8 @@ The configuration is validated when the container starts, never during compilati
 
 == Bugs and benchmarks
 
-* link:{repo-cervantes}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (id, symptom, minimal reproduction, status).
-* link:{repo-cervantes}/src/branch/main/BENCH.md[BENCH.md] — JMH `DefaultJwtValidator.validate` vs SmallRye JWT (M7).
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/cervantes/v0.4.0-RC2/vidocq-components/vidocq-components-microprofile/cervantes/BUG.md[BUG.md] — tracked reproducible bugs (id, symptom, minimal reproduction, status).
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/cervantes/v0.4.0-RC2/vidocq-components/vidocq-components-microprofile/cervantes/BENCH.md[BENCH.md] — JMH `DefaultJwtValidator.validate` vs SmallRye JWT (M7).
 
 == Further reading
 

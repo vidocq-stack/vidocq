@@ -149,7 +149,7 @@ var ds = MansartDataSource.of(PoolConfig.builder()
 
 === Sizing
 
-With virtual threads, the classic "threads = connections" sizing disappears: dimension on real DB concurrency, not application concurrency. Rule of thumb: `maxSize ≈ DB vCPUs × 2..4`. Beyond that, the DB becomes the bottleneck — see link:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md].
+With virtual threads, the classic "threads = connections" sizing disappears: dimension on real DB concurrency, not application concurrency. Rule of thumb: `maxSize ≈ DB vCPUs × 2..4`. Beyond that, the DB becomes the bottleneck — see link:https://codefloe.com/Vidocq/vidocq/src/tag/mansart/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-pool/BENCH.md[mansart-pool BENCH.md].
 
 === Leak detection
 

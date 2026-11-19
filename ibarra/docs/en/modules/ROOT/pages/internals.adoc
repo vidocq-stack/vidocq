@@ -2,7 +2,7 @@
 :description: Ibarra's planned architecture — modules, translation pipeline, Foy SPI, Peano integration.
 
 [.lead]
-How Ibarra is designed to work inside. The runtime in `ibarra-core` implements milestone I1; the full design is `PLAN.md` in {repo-ibarra}[the repository].
+How Ibarra is designed to work inside. The runtime in `ibarra-core` implements milestone I1; the full design is `PLAN.md` in https://codefloe.com/Vidocq/vidocq/src/tag/ibarra/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra[the repository].
 
 [#generated-code]
 == Generated code and reflective fallback [.tag-new]#NEW#

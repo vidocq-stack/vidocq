@@ -2,7 +2,7 @@
 :description: Status, runner execution, in-reactor runner behind the tck profile, M9 jlink smoke test.
 
 [.lead]
-The official MicroProfile Metrics 5.1.1 TCK (`org.eclipse.microprofile.metrics:microprofile-metrics-api-tck:5.1.1`) validates that an implementation honours the whole spec — exposition formats, scopes, types, configuration. Dirac passes it in full: **127/127 PASS (100 %)**, consolidated in link:{repo-dirac}/src/branch/main/TCK.md[TCK.md]. The runner ships in the `dirac-tck` module, part of the reactor but gated behind the `tck` Maven profile.
+The official MicroProfile Metrics 5.1.1 TCK (`org.eclipse.microprofile.metrics:microprofile-metrics-api-tck:5.1.1`) validates that an implementation honours the whole spec — exposition formats, scopes, types, configuration. Dirac passes it in full: **127/127 PASS (100 %)**, consolidated in link:https://codefloe.com/Vidocq/vidocq/src/tag/dirac/v0.4.0-RC2/vidocq-components/vidocq-components-microprofile/dirac/TCK.md[TCK.md]. The runner ships in the `dirac-tck` module, part of the reactor but gated behind the `tck` Maven profile.
 
 == Status
 
@@ -10,15 +10,15 @@ The official MicroProfile Metrics 5.1.1 TCK (`org.eclipse.microprofile.metrics:m
 |===
 | Metric | Value
 
-| Official 5.1.1 suite | ✅ **127/127 PASS (100 %)** — link:{repo-dirac}/src/branch/main/TCK.md[TCK.md]
-| Milestone | M8 — complete (link:{repo-dirac}/src/branch/main/ROADMAP.md[ROADMAP.md])
+| Official 5.1.1 suite | ✅ **127/127 PASS (100 %)** — link:https://codefloe.com/Vidocq/vidocq/src/tag/dirac/v0.4.0-RC2/vidocq-components/vidocq-components-microprofile/dirac/TCK.md[TCK.md]
+| Milestone | M8 — complete (link:https://codefloe.com/Vidocq/vidocq/src/tag/dirac/v0.4.0-RC2/vidocq-components/vidocq-components-microprofile/dirac/ROADMAP.md[ROADMAP.md])
 | Smoke test (out of Arquillian) | ✅ `DiracTckSmokeTest` operational
 | M9 jlink smoke | ✅ `dirac-image-smoke` image built (`run-jlink-smoke.sh`)
 |===
 
 [NOTE]
 ====
-The consolidated score lives in link:{repo-dirac}/src/branch/main/TCK.md[TCK.md]; each run also regenerates a raw report in `dirac-tck/target/tck-report.txt` (via `run-official-tck-mp-metrics-5.1.sh`).
+The consolidated score lives in link:https://codefloe.com/Vidocq/vidocq/src/tag/dirac/v0.4.0-RC2/vidocq-components/vidocq-components-microprofile/dirac/TCK.md[TCK.md]; each run also regenerates a raw report in `dirac-tck/target/tck-report.txt` (via `run-official-tck-mp-metrics-5.1.sh`).
 ====
 
 == Prerequisites
@@ -102,15 +102,15 @@ The jlink smoke validates that the whole Dirac stack can be assembled into a Jav
 ./mvnw -ntp -N -Pjlink-smoke verify
 ----
 
-Details in link:{repo-dirac}/src/branch/main/JLINK.md[JLINK.md].
+Details in link:https://codefloe.com/Vidocq/vidocq/src/tag/dirac/v0.4.0-RC2/vidocq-components/vidocq-components-microprofile/dirac/JLINK.md[JLINK.md].
 
 == Quality contract
 
-Any structural modification of `dirac-core`, `dirac-cdi-vauban` or `dirac-rest` must preserve the 127/127 TCK score before merge. A TCK regression is a CI-level blocker: the PR does not pass. Any excluded test (if any) must be justified in link:{repo-dirac}/src/branch/main/TCK.md[TCK.md].
+Any structural modification of `dirac-core`, `dirac-cdi-vauban` or `dirac-rest` must preserve the 127/127 TCK score before merge. A TCK regression is a CI-level blocker: the PR does not pass. Any excluded test (if any) must be justified in link:https://codefloe.com/Vidocq/vidocq/src/tag/dirac/v0.4.0-RC2/vidocq-components/vidocq-components-microprofile/dirac/TCK.md[TCK.md].
 
 == Further reading
 
 * xref:internals.adoc[Internals] — what the TCK validates.
 * xref:reference.adoc[Reference] — annotations and keys exercised.
-* link:{repo-dirac}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
-* link:{repo-dirac}/src/branch/main/BENCH.md[BENCH.md] — consolidated JMH benchmarks.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/dirac/v0.4.0-RC2/vidocq-components/vidocq-components-microprofile/dirac/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/dirac/v0.4.0-RC2/vidocq-components/vidocq-components-microprofile/dirac/BENCH.md[BENCH.md] — consolidated JMH benchmarks.

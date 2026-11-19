@@ -23,7 +23,7 @@ installs the non-Central artifacts, clean-installs Ibarra (which runs the adapte
 tests of `ibarra-arquillian`), runs the runner tests with `-Ptck -pl ibarra-tck`,
 and runs the requested official tests. Java 25, Maven 3.9.16 and Python 3 are
 required. Local ZIP overrides and skip switches are documented in
-link:{repo-ibarra}/src/branch/main/ibarra-tck/README.md[the runner README].
+link:https://codefloe.com/Vidocq/vidocq/src/tag/ibarra/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra/ibarra-tck/README.md[the runner README].
 Retained server logs are under `ibarra-tck/target/pages-deployments`, and Surefire
 reports under `ibarra-tck/target/surefire-reports`.
 
@@ -45,7 +45,7 @@ These dependencies are test-only and never enter application artifacts.
 SHA-256 digests of the distributions, preserves the official jar's embedded Maven POM
 and installs the jar and `javatest:javatest:5.0` into the local Maven repository.
 The fingerprints and the `TCK_PAGES_ZIP` / `TCK_JAVATEST_ZIP` overrides are listed in
-link:{repo-ibarra}/src/branch/main/ibarra-tck/README.md[the runner README].
+link:https://codefloe.com/Vidocq/vidocq/src/tag/ibarra/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra/ibarra-tck/README.md[the runner README].
 
 == Official API signature check
 

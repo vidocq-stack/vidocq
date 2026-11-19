@@ -108,5 +108,5 @@ SmallRye JWT is the reference implementation in Quarkus and in several Jakarta E
 
 * xref:concepts.adoc[Concepts] — JWT model, claims, signature, JWK Set.
 * xref:reference.adoc[Reference] — annotations and `mp.jwt.*` keys.
-* link:{repo-cervantes}/src/branch/main/BUG.md[BUG.md] — known gotchas.
-* link:{repo-cervantes}/src/branch/main/BENCH.md[BENCH.md] — throughput comparison with SmallRye JWT 4.6.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/cervantes/v0.4.0-RC2/vidocq-components/vidocq-components-microprofile/cervantes/BUG.md[BUG.md] — known gotchas.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/cervantes/v0.4.0-RC2/vidocq-components/vidocq-components-microprofile/cervantes/BENCH.md[BENCH.md] — throughput comparison with SmallRye JWT 4.6.

@@ -279,7 +279,7 @@ Read a statement's first keyword (is it an `UPDATE` or a `DELETE`?) and the enti
 
 == See also
 
-* link:{repo-mansart}/src/branch/main/PLAN.md[Mansart PLAN.md] — global vision and work order.
-* link:{repo-mansart}/src/branch/main/mansart-jakarta-data/PLAN.md[mansart-jakarta-data PLAN.md] — detailed plan of the Data module.
-* link:{repo-mansart}/src/branch/main/mansart-pool/PLAN.md[mansart-pool PLAN.md] — pool design.
-* link:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[mansart-transactions PLAN.md] — transactions roadmap.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/mansart/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/PLAN.md[Mansart PLAN.md] — global vision and work order.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/mansart/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-jakarta-data/PLAN.md[mansart-jakarta-data PLAN.md] — detailed plan of the Data module.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/mansart/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-pool/PLAN.md[mansart-pool PLAN.md] — pool design.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/mansart/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-transactions/PLAN.md[mansart-transactions PLAN.md] — transactions roadmap.

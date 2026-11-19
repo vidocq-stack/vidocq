@@ -142,7 +142,7 @@ Current   100%   █████████████████████
 
 == Open bugs impacting coverage
 
-Tracked in link:{repo-vauban}/src/branch/main/BUG.md[BUG.md]:
+Tracked in link:https://codefloe.com/Vidocq/vidocq/src/tag/vauban/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md]:
 
 [cols="1,3,1"]
 |===

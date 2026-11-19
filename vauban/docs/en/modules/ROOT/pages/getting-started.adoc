@@ -202,7 +202,7 @@ the project runs them all.
   own package by the class loader), an intercepted bean, and a nested bean. Zero `opens`
   throughout. This is https://github.com/jakartaee/cdi/issues/1015[jakartaee/cdi#1015^], solved.
   It has its own
-  link:{repo-vauban}/src/branch/main/vauban-examples/example-cdi1015-app/README.adoc[README^].
+  link:https://codefloe.com/Vidocq/vidocq/src/tag/vauban/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/vauban-examples/example-cdi1015-app/README.adoc[README^].
 
 | `example-legacy-lib` + `example-legacy-app`
 | The *packaging* case the pair above does not cover: a dependency shipped with *no*

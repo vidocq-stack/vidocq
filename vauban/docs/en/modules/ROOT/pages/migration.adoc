@@ -72,7 +72,7 @@ Lite-profile specifics worth knowing before migrating:
 * **`@Specializes`** — not supported. Refactor as composition or a prioritised `@Alternative`.
 * **`@Alternative` + `@Priority`** — supported; check existing priorities.
 * **Producer methods with `@Disposes`** — supported.
-* **`@Inject` field on a normal scope** — correctly resolves the client proxy (see fix VAU-INJ-001 in link:{repo-vauban}/src/branch/main/BUG.md[BUG.md]).
+* **`@Inject` field on a normal scope** — correctly resolves the client proxy (see fix VAU-INJ-001 in link:https://codefloe.com/Vidocq/vidocq/src/tag/vauban/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md]).
 * **`InjectionPoint` metadata** — supported.
 
 [#upgrading]
@@ -102,4 +102,4 @@ What an application built on Vauban `{release-version}` may notice on the `{proj
 
 * xref:concepts.adoc[Concepts] — vocabulary and implementation choices.
 * xref:internals.adoc[Internals] — APT pipeline, threading model.
-* link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/vauban/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md] — tracked reproducible bugs.

@@ -240,7 +240,7 @@ fallback or handler pooling is enabled.
 Some official TEI validation fixtures share and reset translation-time static state
 with JSP requests. Build-side validation alone does not preserve that state in the
 separate server process. The observed contract and remaining design work are recorded
-in link:{repo-ibarra}/src/branch/main/studies/tag-extra-info-aot.md[the TEI/AOT study].
+in link:https://codefloe.com/Vidocq/vidocq/src/tag/ibarra/v0.4.0-RC2/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/ibarra/studies/tag-extra-info-aot.md[the TEI/AOT study].
 The static variable synchronization case passes without replaying TEI code at request
 time or rewriting fixtures; broader metadata APIs remain incomplete.
 
