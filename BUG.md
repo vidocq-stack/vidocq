@@ -407,9 +407,11 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261117-13 — An application class that has only another qualifier than `@Default` is created by its constructor
 
 - **Date**: 2026-11-17
-- **Status**: OPEN. Found while fixing BUG-20261117-11 and left as it was: that fix keeps the qualifiers of the
-  lookup. Disabled reproduction:
-  `ApplicationClassBeanTest.anApplicationClassWithAnotherQualifierIsRunWithItsInjections`.
+- **Status**: FIXED on `fix/app-class-lifecycle`. The runtime looks the bean up through the `BeanContainer`: the
+  beans with `@Default` first, as before, then the bean of the class itself under `@Any`, whatever its qualifiers.
+  A producer the class declares is still told apart by its types. Reproduction enabled:
+  `ApplicationClassBeanTest.anApplicationClassWithAnotherQualifierIsRunWithItsInjections`, red on `main`
+  (`expected: <1> but was: <0>`).
 - **Module**: `vidocq-runtime-core` (`Vidocq.run(Class, String...)`)
 - **Symptom**: an `@ApplicationScoped` application class with a qualifier of its own is a bean, and the runtime
   creates it with its public no-arg constructor. Its injected fields are `null` (`expected: <1> but was: <0>`), and
@@ -421,8 +423,13 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261117-12 — The `@PreDestroy` of a `@Dependent` application class never runs
 
 - **Date**: 2026-11-17
-- **Status**: OPEN. Found while fixing BUG-20261117-11, not fixed with it. Disabled reproduction:
-  `ApplicationClassBeanTest.theInstanceOfADependentApplicationClassIsDestroyedWhenTheRuntimeStops`.
+- **Status**: FIXED on `fix/app-class-lifecycle`. The runtime destroys the `@Dependent` instance it asked the
+  container for when it stops, after the tasks before the stop and before any extension stops, so its `@PreDestroy`
+  still has the data source, the server and the configuration (`VidocqBootstrap.releaseOnStop`). The bounded path of
+  BUG-20261117-11 goes the same way. Reproductions enabled:
+  `ApplicationClassBeanTest.theInstanceOfADependentApplicationClassIsDestroyedWhenTheRuntimeStops`, and
+  `theInstanceOfABoundedApplicationClassLivesAsLongAsTheOneOfAnyDependentApplicationClass`, which now asks for one
+  destroyed instance of each, not equal counts. Red on `main`, `expected: <1> but was: <0>`.
 - **Module**: `vidocq-runtime-core` (`Vidocq.run(Class, String...)`)
 - **Symptom**: an application class annotated `@Dependent` has a `@PreDestroy` method. The method does not run when
   the runtime stops (`expected: <1> but was: <0>`).
@@ -1043,8 +1050,10 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261116-10 — The build of `main` fails when the Grafana LGTM container of `OtelDevServiceTest` needs more than its three minutes
 
 - **Date**: 2026-11-16
-- **Status**: OPEN. Seen once, in the build of `main` at `d59fbac7` (run 4846); the four builds of `main` before it
-  passed.
+- **Status**: FIXED on `fix/app-class-lifecycle`, by the wait: `OtelDevService.STARTUP_TIMEOUT` is six minutes,
+  twice the three that ran out. A stack that answers sooner is used at once, so a quiet build does not wait longer.
+  No reproduction on demand: the proof is the next builds of `main` on runner `6c935f1a`. The Keycloak dev service
+  keeps its three minutes, since no build has seen it run out.
 - **Module**: `vidocq-runtime-devservice-otel` (`OtelDevService.container`, `OtelDevServiceTest`)
 - **Symptom**: `CI / build-and-deploy (push)` fails in `vidocq-runtime-devservice-otel`, so that commit publishes no
   SNAPSHOT: `OtelDevServiceTest.startsTheStackAndPublishesAnEndpointThatAcceptsTraces:113 » ContainerLaunch Container
@@ -2189,7 +2198,8 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261108-02 — Under Maven 3.10.0 every build with Flyway prints a `prefixes.txt … HTTP Status: 401` WARNING
 
 - **Date**: 2026-11-08
-- **Status**: OPEN — not Vidocq's code; to document as expected, or to work around in the project `vidocq create` writes
+- **Status**: DOCUMENTED as expected on `fix/app-class-lifecycle`: `vidocq-runtime-extensions.adoc#flyway-prefixes-warning`.
+  `flyway-parent` 13.9.0, the version the backend uses, still declares the repository.
 - **Affected module**: the Maven wrapper `vidocq create` writes (3.10.0 since #487), with the `flyway-migration` extension; docs
 - **Symptom**: from the first build after `vidocq extension add flyway-migration`, with or without `vidocq-runtime-parent`,
   with or without `-U`:
@@ -2678,7 +2688,9 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-14 — `META-INF/openapi.yaml` edited under `vidocq dev` is not re-read on hot reload
 
 - **Date**: 2026-10-30
-- **Status**: NOT REPRODUCED on main 070881f2 (grimm main): an application with `META-INF/openapi.yaml` under `vidocq dev`, the title edited, the hot reload swapped the layer and `/openapi` served the new title. To verify against the tutorial's step; reopen with its exact sequence if it still happens
+- **Status**: NOT REPRODUCED on main 070881f2 (grimm main): an application with `META-INF/openapi.yaml` under
+  `vidocq dev`, the title edited, the hot reload swapped the layer and `/openapi` served the new title. Closed on
+  2026-11-19: no report since. Reopen with the tutorial's exact sequence if it happens again.
 - **Reported by**: the vidocq-tutorial session (batch 5, item 2)
 - **Minimal reproduction**: edit the file while `vidocq dev` runs: `/openapi` keeps the old content until a restart.
 - **Cause hypothesis**: resources are not part of the watched roots, or Grimm's model cache outlives the reload.
@@ -2702,7 +2714,7 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 ## BUG-20261030-17 — `vidocq build` packaging: docker does not chain jlink, automatic modules stop jlink, test jars in the distribution, no JVM options hook, no `--help` per command, incomplete extension list
 
 - **Date**: 2026-10-30
-- **Status**: items 1-6 FIXED. Item 4 (no JVM options hook) on `feat/launcher-java-opts`: the launchers pass `JAVA_OPTS` after `<jvmArgs>` (`VidocqPackageMojoTest.javaOptsReachTheJvmAfterTheConfiguredJvmArgs`). Item 1 (docker without jlink) on `fix/packaging-17-docker-jlink`: `vidocq build docker` runs `package vidocq:jlink vidocq:docker` (`BuildTypeTest.dockerBuildsTheJlinkImageFirst`). Item 2 (automatic modules stop jlink) on the same branch: `vidocq:jlink` modularizes them first (`VidocqJlinkMojoStagingTest.anAutomaticModuleIsModularizedBeforeStaging`; a scaffolded application with cassini-rest, flyway-migration, humboldt-telemetry and the PostgreSQL driver: 12 automatic modules, image built and started). Item 3 (test jars in `lib/`): `opentelemetry-sdk-testing` no longer reaches it, on `fix/packaging-17-lib-scope` with humboldt#46 (`NoTestLibraryTest`; the other jars listed, `flyway-database-cockroachdb`, `jackson-annotations`, `commons-text`, `annotations`, are Flyway's own runtime dependencies, not a scope error). Item 5 (`--help` per command) on `fix/packaging-17-cli-help-extensions` (`CliParserHelpTest`). Item 6 (start-up list without the CDI-only extensions) on the same branch: they are listed as _CDI only_ (`ExtensionLoaderTest`). The image linked on macOS (reported with these items, then as finding S3 of the tutorial replay: no image built, yet "✔ Done.") FIXED on `fix/docker-on-macos`: `vidocq:jlink` leaves a host-independent recipe in `target/jlink-image/` (`PortableImage`), and `vidocq:docker` writes a two-stage Dockerfile that links the image again inside `eclipse-temurin:<feature>-jdk` when the image is not Linux (`vidocq.docker.linkInContainer`, `VidocqDockerMojoTest.aMacOsImageIsLinkedAgainInsideALinuxJdk`); the entry point runs `bin/java -m`, since the distroless base has no shell for the launcher script; `vidocq build docker` passes `-Dvidocq.docker.build=true` when `docker info` answers and warns that the image is not built otherwise (`DockerBuildTest`). Checked on macOS (OrbStack, linux/arm64): a scaffolded application with cassini-rest, flyway-migration and the PostgreSQL driver, `vidocq build docker` → image built, container started, `GET /hello` 200.
+- **Status**: FIXED (all six items; status line closed on 2026-11-19). Item 4 (no JVM options hook) on `feat/launcher-java-opts`: the launchers pass `JAVA_OPTS` after `<jvmArgs>` (`VidocqPackageMojoTest.javaOptsReachTheJvmAfterTheConfiguredJvmArgs`). Item 1 (docker without jlink) on `fix/packaging-17-docker-jlink`: `vidocq build docker` runs `package vidocq:jlink vidocq:docker` (`BuildTypeTest.dockerBuildsTheJlinkImageFirst`). Item 2 (automatic modules stop jlink) on the same branch: `vidocq:jlink` modularizes them first (`VidocqJlinkMojoStagingTest.anAutomaticModuleIsModularizedBeforeStaging`; a scaffolded application with cassini-rest, flyway-migration, humboldt-telemetry and the PostgreSQL driver: 12 automatic modules, image built and started). Item 3 (test jars in `lib/`): `opentelemetry-sdk-testing` no longer reaches it, on `fix/packaging-17-lib-scope` with humboldt#46 (`NoTestLibraryTest`; the other jars listed, `flyway-database-cockroachdb`, `jackson-annotations`, `commons-text`, `annotations`, are Flyway's own runtime dependencies, not a scope error). Item 5 (`--help` per command) on `fix/packaging-17-cli-help-extensions` (`CliParserHelpTest`). Item 6 (start-up list without the CDI-only extensions) on the same branch: they are listed as _CDI only_ (`ExtensionLoaderTest`). The image linked on macOS (reported with these items, then as finding S3 of the tutorial replay: no image built, yet "✔ Done.") FIXED on `fix/docker-on-macos`: `vidocq:jlink` leaves a host-independent recipe in `target/jlink-image/` (`PortableImage`), and `vidocq:docker` writes a two-stage Dockerfile that links the image again inside `eclipse-temurin:<feature>-jdk` when the image is not Linux (`vidocq.docker.linkInContainer`, `VidocqDockerMojoTest.aMacOsImageIsLinkedAgainInsideALinuxJdk`); the entry point runs `bin/java -m`, since the distroless base has no shell for the launcher script; `vidocq build docker` passes `-Dvidocq.docker.build=true` when `docker info` answers and warns that the image is not built otherwise (`DockerBuildTest`). Checked on macOS (OrbStack, linux/arm64): a scaffolded application with cassini-rest, flyway-migration and the PostgreSQL driver, `vidocq build docker` → image built, container started, `GET /hello` 200.
 - **Reported by**: the vidocq-tutorial session (batch 8)
 - **Minimal reproduction**: `vidocq build docker --skip-tests` on the tutorial application (flyway + PostgreSQL + telemetry).
 - **Cause hypothesis**: six separate causes, listed in the batch; jlink refuses `flyway.core` (automatic module), `opentelemetry-sdk-testing` reaches `lib/` through a wrong scope, `bin/<app>.sh` passes `$@` after `--module`.

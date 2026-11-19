@@ -1737,6 +1737,9 @@ A backend brings its engine into the application, with the engine's own dependen
 * `vidocq-runtime-flyway-migration-extension`: Flyway 13.9.0 (`flyway-core`, `flyway-database-postgresql` and `flyway-database-cockroachdb`), Apache 2.0. Of Jackson, only `jackson-annotations` comes with it: since Flyway 13.5, `jackson-databind` serves Flyway's TOML and JSON configuration files only, which the extension does not read.
 * `vidocq-runtime-liquibase-migration-extension`: Liquibase 4.33.0 and its libraries, Apache 2.0, with commons-lang3 3.20.0 in place of the 3.17.0 Liquibase declares (CVE-2025-48924). The backend stays on Liquibase 4: 4.33.0 is the last release under the Apache 2.0 licence, as Liquibase 5 moved to the Functional Source License (FSL-1.1-ALv2).
 
+[#flyway-prefixes-warning]
+NOTE: Under Maven 3.10, the Maven of the wrapper `vidocq create` writes, a build with the Flyway backend prints `[WARNING] Could not transfer metadata /.meta/prefixes.txt from/to flyway-community-db-support (https://maven.pkg.github.com/flyway/flyway-community-db-support): HTTP Status: 401`, and goes on. It is harmless. Maven 3.10 reads the list of prefixes of every repository the resolution meets. `flyway-parent`, up to 13.9.0, declares a GitHub Packages repository that refuses anonymous reads. Nothing is downloaded from it: Maven Central serves every Flyway artifact. Maven 3.9 printed nothing (BUG-20261108-02).
+
 [#schema-migration-keys]
 === Configuration
 
