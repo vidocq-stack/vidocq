@@ -58,6 +58,14 @@ warns with <<vidocq-lay-001>>. A launcher without a layer
 runs the application where the JVM resolved it, without a layer. A `vidocq:jlink` image always starts so: it has
 one layer, the JVM's own (xref:modules/vidocq-runtime-maven-plugin.adoc#jlink-one-layer[one layer]).
 
+[#application-class-bean]
+The `VidocqApp` class `Vidocq.run` receives is a CDI bean when the container knows it, and the container then creates
+it with its injections. The lookup asks for the bean with `@Default`, else for the bean of the class itself, whatever
+its qualifiers: an `@ApplicationScoped` class with a qualifier of its own, which loses `@Default`, is a bean too. A class with a bounded type variable is
+found the same way. Only a class the container does not know is created by its public no-arg constructor, without
+injections. A `@Dependent` instance belongs to the runtime that asked for it, which destroys it when it stops, before
+the extensions stop: its `@PreDestroy` runs while the data sources, the server and the configuration are still there.
+
 [#app-module-property]
 `-Dvidocq.app.module=<module>` names the application module to the runtime's own main: the module the banner and the startup report name, and the one an extension reads to declare something for the application by default.
 

@@ -21,6 +21,9 @@ package io.vidocq.runtime.core;
 
 import io.vidocq.runtime.core.console.ConsoleLogging;
 import io.vidocq.runtime.spi.VidocqApp;
+import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanContainer;
 
@@ -286,16 +289,10 @@ public final class Vidocq {
         Class<?> layerClass = Class.forName(appClass.getName(), true, tccl);
         // As a CDI bean when the container knows it…
         try {
-            var cdi = jakarta.enterprise.inject.spi.CDI.current();
-            var instance = cdi.select(layerClass);
-            if (instance.isResolvable()) {
-                return (VidocqApp) instance.get();
-            }
-            if (instance.isUnsatisfied()) {
-                Object bean = beanOfParameterizedClass(cdi.getBeanContainer(), layerClass);
-                if (bean != null) {
-                    return (VidocqApp) bean;
-                }
+            BeanContainer beans = jakarta.enterprise.inject.spi.CDI.current().getBeanContainer();
+            Bean<?> bean = applicationBean(beans, layerClass);
+            if (bean != null) {
+                return (VidocqApp) reference(beans, bean, layerClass);
             }
         } catch (RuntimeException failure) {
             // The container knows the class (or has none) but could not give its bean: the constructor still runs,
@@ -315,29 +312,58 @@ public final class Vidocq {
     }
 
     /**
-     * The instance of the bean of {@code layerClass} when the lookup by its raw class finds no bean, or {@code null}
-     * when the class has no such bean. A class with a bounded type variable is a bean whose only type of that class
-     * is parameterized, and the raw class does not look it up (CDI 4.1 section 5.2.4, BUG-20261117-11). The beans
-     * are those the lookup by type asks for: the ones with {@code @Default}. They are walked once, when the
-     * application starts, and only for a class with type variables. Nothing releases the instance, as for the one the
-     * lookup by type gives.
+     * The bean of the application class, or {@code null} when it is none. First the beans the lookup by type asks
+     * for, those with {@code @Default}, as {@code CDI.current().select(layerClass)} resolves them; else the bean of
+     * the class itself, whatever its qualifiers: an application class with a qualifier of its own is a bean too, and
+     * not to be created by its constructor (BUG-20261117-13). A class with a bounded type variable is a bean whose
+     * only type of that class is parameterized, which the raw class does not look up (CDI 4.1 section 5.2.4,
+     * BUG-20261117-11): its beans are walked once, when the application starts, and only for such a class.
      */
-    private static Object beanOfParameterizedClass(BeanContainer beans, Class<?> layerClass) {
+    private static Bean<?> applicationBean(BeanContainer beans, Class<?> layerClass) {
+        Set<Bean<?>> candidates;
         if (layerClass.getTypeParameters().length == 0) {
-            return null;
+            candidates = beans.getBeans(layerClass);
+            if (candidates.isEmpty()) {
+                candidates = ofThatClass(beans.getBeans(layerClass, Any.Literal.INSTANCE), layerClass);
+            }
+        } else {
+            candidates = ofThatClass(beans.getBeans(Object.class), layerClass);
+            if (candidates.isEmpty()) {
+                candidates = ofThatClass(beans.getBeans(Object.class, Any.Literal.INSTANCE), layerClass);
+            }
         }
+        return candidates.isEmpty() ? null : beans.resolve(candidates);
+    }
+
+    /**
+     * The beans of {@code beans} that are the bean of {@code layerClass} itself: a producer is a bean of the class
+     * that declares it too, and its types tell it from the bean of the class.
+     */
+    private static Set<Bean<?>> ofThatClass(Set<Bean<?>> beans, Class<?> layerClass) {
         Set<Bean<?>> ofThatClass = new HashSet<>();
-        for (Bean<?> bean : beans.getBeans(Object.class)) {
-            // A producer is a bean of the class that declares it too: its types tell it from the bean of the class.
+        for (Bean<?> bean : beans) {
             if (bean.getBeanClass() == layerClass && typeOfClass(bean, layerClass) != null) {
                 ofThatClass.add(bean);
             }
         }
-        if (ofThatClass.isEmpty()) {
-            return null;
+        return ofThatClass;
+    }
+
+    /**
+     * The instance of {@code bean}. A {@code @Dependent} instance belongs to whoever asked the container for it, which
+     * destroys it: the runtime does it when it stops, before the extensions stop, and its {@code @PreDestroy} runs
+     * (BUG-20261117-12). The container itself ends the instance of a normal scope.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Object reference(BeanContainer beans, Bean<?> bean, Class<?> layerClass) {
+        CreationalContext context = beans.createCreationalContext(bean);
+        Object instance = beans.getReference(bean, typeOfClass(bean, layerClass), context);
+        VidocqBootstrap bootstrap = CURRENT.get();
+        if (bootstrap != null && bean.getScope() == Dependent.class) {
+            Bean raw = bean;
+            bootstrap.releaseOnStop(() -> raw.destroy(instance, context));
         }
-        Bean<?> bean = beans.resolve(ofThatClass);
-        return beans.getReference(bean, typeOfClass(bean, layerClass), beans.createCreationalContext(bean));
+        return instance;
     }
 
     /** The deepest cause of {@code failure}: the container wraps what the application's own code threw. */
@@ -349,10 +375,14 @@ public final class Vidocq {
         return cause;
     }
 
-    /** The bean type of {@code bean} whose raw class is {@code layerClass}, or {@code null} when it has none. */
+    /**
+     * The bean type of {@code bean} whose raw class is {@code layerClass}, the class itself or one of its
+     * parameterizations, or {@code null} when it has none.
+     */
     private static Type typeOfClass(Bean<?> bean, Class<?> layerClass) {
         for (Type type : bean.getTypes()) {
-            if (type instanceof ParameterizedType parameterized && parameterized.getRawType() == layerClass) {
+            if (type == layerClass
+                    || type instanceof ParameterizedType parameterized && parameterized.getRawType() == layerClass) {
                 return type;
             }
         }

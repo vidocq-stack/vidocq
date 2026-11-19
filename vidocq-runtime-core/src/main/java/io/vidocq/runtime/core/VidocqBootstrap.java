@@ -170,6 +170,8 @@ public final class VidocqBootstrap {
     private List<VidocqExtension> givenExtensions;
     /** Runs when this boot stops, before any extension stops: see {@link #beforeStop(Runnable)}. */
     private Runnable beforeStop = () -> {};
+    /** Run when this boot stops, before the extensions stop: see {@link #releaseOnStop(Runnable)}. */
+    private final List<Runnable> releaseOnStop = new java.util.concurrent.CopyOnWriteArrayList<>();
     /** The handover store of the reload loop of {@code vidocq:dev}; {@code null} in any other boot. */
     private DevHandoverStore devHandover;
     /**
@@ -607,6 +609,16 @@ public final class VidocqBootstrap {
         return this;
     }
 
+    /**
+     * Runs {@code task} when this boot stops, after {@link #beforeStop(Runnable)} and before any extension stops, so
+     * that what the task ends still has its data source, its server and its configuration: {@code Vidocq.run}
+     * destroys there the {@code @Dependent} instance of the application class it asked the container for, whose
+     * {@code @PreDestroy} then runs (BUG-20261117-12). A task that fails is logged, and the stop goes on.
+     */
+    void releaseOnStop(Runnable task) {
+        releaseOnStop.add(task);
+    }
+
     /** Boots {@code extensions} instead of those the {@link java.util.ServiceLoader} finds: for tests. */
     VidocqBootstrap extensions(List<VidocqExtension> extensions) {
         this.givenExtensions = List.copyOf(extensions);
@@ -894,6 +906,15 @@ public final class VidocqBootstrap {
         } catch (RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "Vidocq - the task before the stop failed: " + e);
         }
+
+        for (Runnable task : releaseOnStop) {
+            try {
+                task.run();
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "Vidocq - the release of the application's instance failed: " + e);
+            }
+        }
+        releaseOnStop.clear();
 
         // Stop extensions in reverse order
         stopInReverse(extensions);

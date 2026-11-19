@@ -24,7 +24,6 @@ import io.vidocq.runtime.spi.VidocqExtension;
 import io.vidocq.vauban.core.container.VaubanContainerBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -36,8 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * {@code Vidocq.run(Class)} runs the application class as the CDI bean it is. A class with a bounded type variable
  * is a bean too, although its raw class does not look it up (CDI 4.1 section 5.2.4): it is not to be created by its
- * constructor, without its injections (BUG-20261117-11). Nothing else changes: the lookup still asks for
- * {@code @Default}, and the instance lives as long as the one of any {@code @Dependent} application class.
+ * constructor, without its injections (BUG-20261117-11). The lookup asks for {@code @Default} first, then for the
+ * bean of the class whatever its qualifiers (BUG-20261117-13), and the runtime destroys a {@code @Dependent} instance
+ * when it stops (BUG-20261117-12).
  */
 class ApplicationClassBeanTest {
 
@@ -117,8 +117,8 @@ class ApplicationClassBeanTest {
     }
 
     /**
-     * Whatever the runtime does with the instance of a {@code @Dependent} application class when it stops. Today
-     * neither is destroyed (BUG-20261117-12): the test fails the day one of them is and the other is not.
+     * The instance of a {@code @Dependent} application class with a bounded type variable is destroyed when the
+     * runtime stops, as the one of any {@code @Dependent} application class (BUG-20261117-12).
      */
     @Test
     void theInstanceOfABoundedApplicationClassLivesAsLongAsTheOneOfAnyDependentApplicationClass() throws Exception {
@@ -128,13 +128,12 @@ class ApplicationClassBeanTest {
 
         Vidocq.shutdownAndWait();
 
-        assertEquals(DependentApplication.DESTROYED.get(), BoundedApplication.DESTROYED.get(),
-                "instances of the bounded class destroyed once the runtime stopped, against those of the other");
+        assertEquals(1, DependentApplication.DESTROYED.get(), "instances destroyed once the runtime stopped");
+        assertEquals(1, BoundedApplication.DESTROYED.get(), "instances of the bounded class destroyed as well");
     }
 
-    /** BUG-20261117-12, open: nothing releases the instance the runtime asked the container for. */
+    /** The runtime destroys the instance it asked the container for, before the extensions stop (BUG-20261117-12). */
     @Test
-    @Disabled("BUG-20261117-12: the @PreDestroy of a @Dependent application class never runs")
     void theInstanceOfADependentApplicationClassIsDestroyedWhenTheRuntimeStops() throws Exception {
         start(DependentApplication.class);
         Vidocq.instantiateInLayer(DependentApplication.class);
@@ -144,9 +143,8 @@ class ApplicationClassBeanTest {
         assertEquals(1, DependentApplication.DESTROYED.get(), "instances destroyed once the runtime stopped");
     }
 
-    /** BUG-20261117-13, open: the lookup of the application class names no qualifier, so it asks for @Default. */
+    /** The bean of the class itself, whatever its qualifiers, when none has {@code @Default} (BUG-20261117-13). */
     @Test
-    @Disabled("BUG-20261117-13: an application class that has only another qualifier than @Default is not injected")
     void anApplicationClassWithAnotherQualifierIsRunWithItsInjections() throws Exception {
         start(TaggedApplication.class);
 
