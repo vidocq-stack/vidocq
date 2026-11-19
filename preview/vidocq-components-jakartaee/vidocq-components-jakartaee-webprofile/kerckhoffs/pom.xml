@@ -79,6 +79,8 @@
         <jakarta.el.version>6.0.1</jakarta.el.version>
         <!-- Test scope only: the Expression Language engine the tests of the *Expression attributes run on. -->
         <peano.version>0.4.0-SNAPSHOT</peano.version>
+        <!-- Test scope only: the JSON-P provider the tests of the OpenID Connect token validation run on. -->
+        <champollion.version>0.4.0-SNAPSHOT</champollion.version>
 
         <!-- The official TCK the pull requests are gated on: the smoke set of the runner (the applications
              that are green, see kerckhoffs-tck/BASELINE.md). A measurement, never a certification. -->
@@ -143,6 +145,12 @@
                 <artifactId>jakarta.el-api</artifactId>
                 <version>${jakarta.el.version}</version>
                 <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.champollion</groupId>
+                <artifactId>champollion-jsonp</artifactId>
+                <version>${champollion.version}</version>
+                <scope>test</scope>
             </dependency>
             <dependency>
                 <groupId>io.vidocq.peano</groupId>
