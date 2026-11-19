@@ -211,7 +211,7 @@ For dynamic application configuration, use MicroProfile Config through xref:vido
 
 == Bugs
 
-* link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/vauban/v0.2.0/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md] — tracked reproducible bugs.
 
 == Compatibility
 

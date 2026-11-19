@@ -34,7 +34,7 @@ The processor generates:
 
 [NOTE]
 ====
-Drift between `ClientProxyGenerator` (compile time) and `RuntimeClientProxyGenerator` (fallback) is a tracked risk in link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] (entry VAU-PRX-002). Any change to one generator must be replicated in the other.
+Drift between `ClientProxyGenerator` (compile time) and `RuntimeClientProxyGenerator` (fallback) is a tracked risk in link:https://codefloe.com/Vidocq/vidocq/src/tag/vauban/v0.2.0/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md] (entry VAU-PRX-002). Any change to one generator must be replicated in the other.
 ====
 
 == APT pipeline — sequence diagram
@@ -142,7 +142,7 @@ See xref:reference.adoc[the reference] for the exhaustive list.
 
 == Sources
 
-* link:{repo-vauban}/src/branch/main/vauban-core[vauban-core] — container runtime
-* link:{repo-vauban}/src/branch/main/vauban-processor[vauban-processor] — APT and Class-File API generators
-* link:{repo-vauban}/src/branch/main/vauban-indexer[vauban-indexer] — build-time scanner
-* link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (VAU-PRX-002, VAU-INJ-001)
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/vauban/v0.2.0/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/vauban-core[vauban-core] — container runtime
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/vauban/v0.2.0/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/vauban-processor[vauban-processor] — APT and Class-File API generators
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/vauban/v0.2.0/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/vauban-indexer[vauban-indexer] — build-time scanner
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/vauban/v0.2.0/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BUG.md[BUG.md] — tracked reproducible bugs (VAU-PRX-002, VAU-INJ-001)

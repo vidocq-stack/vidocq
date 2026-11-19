@@ -16,7 +16,7 @@ _Knock, or the Triumph of Medicine_ (« Knock, ou le Triomphe de la médecine »
 [cols="1,3"]
 |===
 | Implemented spec | {spec-mp-health}[MicroProfile Health 4.0]
-| Repo | {repo-knock}
+| Repo | https://codefloe.com/Vidocq/vidocq/src/tag/knock/v0.2.0/vidocq-components/vidocq-components-microprofile/knock
 | Java | 25
 | Java modules | `knock-mp-health-api`, `knock-api`, `knock-core`, `knock-cdi-vauban`, `knock-jaxrs` (plus `knock-tck`, the TCK runner — no `module-info.java`, never published)
 | Runtime dependencies | `knock-core`: only the MicroProfile Health API and `jakarta.json` (JSON-P). The integration modules add their spec APIs — `jakarta.cdi`/`jakarta.inject` for `knock-cdi-vauban`, `jakarta.ws.rs` for `knock-jaxrs` — plus compile-time-only (`requires static`) `vauban-api` / `cassini-api`

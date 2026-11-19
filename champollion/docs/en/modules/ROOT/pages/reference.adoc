@@ -203,6 +203,6 @@ Bound to `generate-sources`. `<targets>` takes **explicit record FQNs** (present
 
 == Resources
 
-* link:{repo-champollion}/src/branch/main/BENCH.md[BENCH.md] — JMH benchmarks vs Parsson / Yasson / Jackson
-* link:{repo-champollion}/src/branch/main/TCK.md[TCK.md] — TCK details
-* link:{repo-champollion}/src/branch/main/ROADMAP.md[ROADMAP.md] — phases M0..M7
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/champollion/v0.2.0/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion/BENCH.md[BENCH.md] — JMH benchmarks vs Parsson / Yasson / Jackson
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/champollion/v0.2.0/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion/TCK.md[TCK.md] — TCK details
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/champollion/v0.2.0/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/champollion/ROADMAP.md[ROADMAP.md] — phases M0..M7

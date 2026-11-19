@@ -5,7 +5,7 @@
 This page provides a quick read of Chappe's performance (JVM and native)
 against major HTTP servers. *Full numbers, run history and detailed
 methodology* are kept in
-link:{repo-chappe}/blob/main/BENCHMARKS.md[BENCHMARKS.md].
+link:https://codefloe.com/Vidocq/vidocq/src/tag/chappe/v0.2.0/vidocq-components/vidocq-components-transport/chappe/BENCHMARKS.md[BENCHMARKS.md].
 
 == TL;DR
 
@@ -103,7 +103,7 @@ no `-march=native` — additional optimization headroom available.
 
 [NOTE]
 ====
-The link:{repo-chappe}/blob/main/BENCHMARKS.md[BENCHMARKS.md] report also
+The link:https://codefloe.com/Vidocq/vidocq/src/tag/chappe/v0.2.0/vidocq-components/vidocq-components-transport/chappe/BENCHMARKS.md[BENCHMARKS.md] report also
 contains _closed-loop_ in-process measurements (2026-04-16, 2026-04-23,
 re-run 2026-05-18) that report 275k req/s for Chappe at 16 threads. Those
 numbers measure *raw physical capacity* (client running in the same JVM,
@@ -127,5 +127,5 @@ performance. The table above remains the canonical reference.
 ----
 
 For the full Dockerfiles, harness and JFR profiling suite, see the
-link:{repo-chappe}/tree/main/chappe-bench/docker/shootout[`chappe-bench/docker/shootout`]
-folder and the complete link:{repo-chappe}/blob/main/BENCHMARKS.md[BENCHMARKS.md] report.
+link:https://codefloe.com/Vidocq/vidocq/src/tag/chappe/v0.2.0/vidocq-components/vidocq-components-transport/chappe/chappe-bench/docker/shootout[`chappe-bench/docker/shootout`]
+folder and the complete link:https://codefloe.com/Vidocq/vidocq/src/tag/chappe/v0.2.0/vidocq-components/vidocq-components-transport/chappe/BENCHMARKS.md[BENCHMARKS.md] report.

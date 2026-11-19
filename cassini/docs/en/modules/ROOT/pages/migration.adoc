@@ -108,4 +108,4 @@ All standard annotations are preserved. No expected change on user code if it is
 
 * xref:concepts.adoc[Concepts]
 * xref:tck.adoc[TCK status]
-* link:{repo-cassini}/src/branch/main/cassini-migration.md[Internal migration notes (repo)]
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/cassini/v0.2.0/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini/cassini-migration.md[Internal migration notes (repo)]

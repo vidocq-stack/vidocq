@@ -176,8 +176,8 @@ When Cassini is driven by xref:vidocq::index.adoc[Vidocq Runtime] (the `io.vidoc
 
 == Bugs and benchmarks
 
-* link:{repo-cassini}/src/branch/main/BUG.md[`BUG.md`] — reproducible issues.
-* link:{repo-cassini}/src/branch/main/BENCH.md[`BENCH.md`] — JMH/wrk vs RESTEasy / Jersey / Helidon.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/cassini/v0.2.0/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini/BUG.md[`BUG.md`] — reproducible issues.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/cassini/v0.2.0/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/cassini/BENCH.md[`BENCH.md`] — JMH/wrk vs RESTEasy / Jersey / Helidon.
 
 == See also
 
