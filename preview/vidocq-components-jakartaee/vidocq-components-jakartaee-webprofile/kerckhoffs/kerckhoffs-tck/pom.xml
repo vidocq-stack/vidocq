@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.kerckhoffs</groupId>
+        <artifactId>kerckhoffs-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>kerckhoffs-tck</artifactId>
+    <name>Kerckhoffs :: TCK runner</name>
+    <description>Arquillian container adapter and runner of the official Jakarta Security 4.0 TCK
+        on Foy + Vauban + Kerckhoffs. Behind the tck profile, never published.</description>
+
+    <properties>
+        <!-- Never published: a TCK runner is not an artifact of the brick. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <skipPublishing>true</skipPublishing>
+        <foy.version>0.4.0-SNAPSHOT</foy.version>
+        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
+        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <arquillian.version>1.8.0.Final</arquillian.version>
+        <shrinkwrap.version>1.2.6</shrinkwrap.version>
+        <junit.version>5.10.2</junit.version>
+    </properties>
+
+    <!--
+        Test code only: the container is a copy of the one in foy-tck (decision of 2026-11-14,
+        PLAN.md section 9), and like it reaches into Foy's internal packages, so everything runs on
+        the class path and nothing here is exported. The Foy engine, Chappe and Vauban are test
+        dependencies of this runner alone; Kerckhoffs itself depends on none of them.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-core</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-foy</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-cdi</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-api</artifactId>
+            <version>${foy.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-core</artifactId>
+            <version>${foy.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-chappe</artifactId>
+            <version>${foy.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.foy</groupId>
+            <artifactId>foy-cdi-vauban</artifactId>
+            <version>${foy.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- The Expression Language engine of the container under test (*Expression attributes). -->
+        <dependency>
+            <groupId>io.vidocq.peano</groupId>
+            <artifactId>peano-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+            <version>${chappe.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+            <version>${chappe.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <version>${vauban.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>6.1.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!--
+            The container brings the platform APIs the bricks leave provided: kerckhoffs-foy answers
+            web resource permissions through Jakarta Authorization, and runs an HTTP authentication
+            mechanism through Jakarta Authentication (KERCK-20261118-02).
+        -->
+        <dependency>
+            <groupId>jakarta.authentication</groupId>
+            <artifactId>jakarta.authentication-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.authorization</groupId>
+            <artifactId>jakarta.authorization-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.container</groupId>
+            <artifactId>arquillian-container-spi</artifactId>
+            <version>${arquillian.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <version>${shrinkwrap.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-impl-base</artifactId>
+            <version>${shrinkwrap.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

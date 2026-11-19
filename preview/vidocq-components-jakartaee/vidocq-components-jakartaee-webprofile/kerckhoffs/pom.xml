@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq</groupId>
+        <artifactId>vidocq-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.vidocq.kerckhoffs</groupId>
+    <artifactId>kerckhoffs-parent</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Kerckhoffs</name>
+    <description>Jakarta Security 4.0 implementation — zero third-party dependency, strict Java Modules, build-time generated authentication mechanisms and identity stores</description>
+    <url>https://codefloe.com/Vidocq/kerckhoffs</url>
+
+    <developers>
+        <developer>
+            <name>Yann Blazart</name>
+            <email>yann.blazart@gmail.com</email>
+        </developer>
+    </developers>
+
+    <!--
+        Disjunctive triple license: a recipient may use this software under
+        ANY ONE of the three licences below, at their option. EPL-2.0 is the
+        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
+        is offered as a Secondary License.
+        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+    -->
+    <licenses>
+        <license>
+            <name>EPL-2.0</name>
+            <url>https://www.eclipse.org/legal/epl-2.0/</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>EUPL-1.2</name>
+            <url>https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>GPL-2.0-or-later</name>
+            <url>https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <scm>
+        <url>https://codefloe.com/Vidocq/kerckhoffs</url>
+        <connection>scm:git:https://codefloe.com/Vidocq/kerckhoffs.git</connection>
+        <developerConnection>scm:git:git@codefloe.com:Vidocq/kerckhoffs.git</developerConnection>
+    </scm>
+
+    <properties>
+        <!-- Jakarta Security 4.0 spec API (Jakarta EE 11) — already modular upstream
+             (module-info.class in the 4.0.0 jar, verified 2026-11-14). Kerckhoffs ships it
+             at compile scope: it is the spec this brick implements. Its POM declares
+             Servlet, CDI, Interceptor, EL and Authentication as `provided`, so none of
+             them reaches an application transitively. -->
+        <jakarta.security.version>4.0.0</jakarta.security.version>
+
+        <!-- Platform APIs Kerckhoffs runs on — `provided`: the container (Vidocq runtime
+             extension, an application server) brings them. Levels of Jakarta EE 11. -->
+        <jakarta.authentication.version>3.1.0</jakarta.authentication.version>
+        <jakarta.authorization.version>3.0.0</jakarta.authorization.version>
+        <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
+        <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
+        <jakarta.inject.version>2.0.1</jakarta.inject.version>
+        <vauban.version>0.4.0-SNAPSHOT</vauban.version>
+        <foy.version>0.4.0-SNAPSHOT</foy.version>
+        <jakarta.interceptor.version>2.2.0</jakarta.interceptor.version>
+        <jakarta.el.version>6.0.1</jakarta.el.version>
+        <!-- Test scope only: the Expression Language engine the tests of the *Expression attributes run on. -->
+        <peano.version>0.4.0-SNAPSHOT</peano.version>
+        <!-- Test scope only: the JSON-P provider the tests of the OpenID Connect token validation run on. -->
+        <champollion.version>0.4.0-SNAPSHOT</champollion.version>
+
+        <!-- The official TCK the pull requests are gated on: the smoke set of the runner (the applications
+             that are green, see kerckhoffs-tck/BASELINE.md). A measurement, never a certification. -->
+        <ci.tck.command>./run-official-tck-security-4.0.sh</ci.tck.command>
+    </properties>
+
+    <!--
+        Main reactor modules. Planned (PLAN.md): kerckhoffs-cdi (build compatible extension),
+        kerckhoffs-it-other-containers (Open Liberty WAR). kerckhoffs-tck joins the reactor
+        only under the tck profile.
+    -->
+    <modules>
+        <module>kerckhoffs-core</module>
+        <module>kerckhoffs-authentication</module>
+        <module>kerckhoffs-authorization</module>
+        <module>kerckhoffs-cdi</module>
+        <module>kerckhoffs-foy</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Jakarta Security 4.0 — the implemented spec. -->
+            <dependency>
+                <groupId>jakarta.security.enterprise</groupId>
+                <artifactId>jakarta.security.enterprise-api</artifactId>
+                <version>${jakarta.security.version}</version>
+            </dependency>
+
+            <!-- Platform APIs (provided by the container) -->
+            <dependency>
+                <groupId>jakarta.authentication</groupId>
+                <artifactId>jakarta.authentication-api</artifactId>
+                <version>${jakarta.authentication.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.authorization</groupId>
+                <artifactId>jakarta.authorization-api</artifactId>
+                <version>${jakarta.authorization.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.servlet</groupId>
+                <artifactId>jakarta.servlet-api</artifactId>
+                <version>${jakarta.servlet.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                <version>${jakarta.cdi.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.interceptor</groupId>
+                <artifactId>jakarta.interceptor-api</artifactId>
+                <version>${jakarta.interceptor.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.el</groupId>
+                <artifactId>jakarta.el-api</artifactId>
+                <version>${jakarta.el.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.champollion</groupId>
+                <artifactId>champollion-jsonp</artifactId>
+                <version>${champollion.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.peano</groupId>
+                <artifactId>peano-core</artifactId>
+                <version>${peano.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- Internal Kerckhoffs modules -->
+            <dependency>
+                <groupId>jakarta.inject</groupId>
+                <artifactId>jakarta.inject-api</artifactId>
+                <version>${jakarta.inject.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <!-- Test only: the embedded CDI container of the integration tests. -->
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-core</artifactId>
+                <version>${vauban.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-classloader-spi</artifactId>
+                <version>${vauban.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.kerckhoffs</groupId>
+                <artifactId>kerckhoffs-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.kerckhoffs</groupId>
+                <artifactId>kerckhoffs-authentication</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.kerckhoffs</groupId>
+                <artifactId>kerckhoffs-authorization</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <!-- The Servlet container the adapter bridges to: its API only, never an implementation. -->
+            <dependency>
+                <groupId>io.vidocq.foy</groupId>
+                <artifactId>foy-api</artifactId>
+                <version>${foy.version}</version>
+                <scope>provided</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <profiles>
+        <!--
+            tck adds kerckhoffs-tck, the unpublished runner of the official Jakarta Security
+            TCK (PLAN.md "TCK plan", milestone K0):
+                ./run-official-tck-security-4.0.sh
+            The default build neither builds the module nor resolves anything TCK-related.
+        -->
+        <profile>
+            <id>tck</id>
+            <modules>
+                <module>kerckhoffs-tck</module>
+            </modules>
+        </profile>
+    </profiles>
+</project>

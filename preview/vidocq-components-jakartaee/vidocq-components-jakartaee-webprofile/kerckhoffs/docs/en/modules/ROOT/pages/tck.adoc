@@ -1,0 +1,88 @@
+= Jakarta Security TCK
+:description: How the official Jakarta Security 4.0 TCK is run on Kerckhoffs, and where it stands.
+
+[.lead]
+Kerckhoffs is measured against the official Jakarta Security 4.0 TCK (`jakartaee/security`, tag
+`4.0.0-RELEASE`). The figures below are a *compatibility measurement*, never a certification: a
+partial or local run does not certify anything.
+
+The runtime column was measured on 2026-11-17, locally, with the runner of the Vidocq repository (`vidocq-runtime-tck-kerckhoffs-security`) on the commit `e0d61cdd` of the pull request that added the REST servlet mode (Vidocq/vidocq#634), which is `23331bda` on `main`; the Kerckhoffs commit was `3fe80a6`.
+
+== How it runs
+
+The TCK is published as sources only. `run-official-tck-security-4.0.sh` downloads the
+distribution (SHA-256 pinned), builds it with its own Maven build and runs its Arquillian
+tests on the Kerckhoffs container of the `kerckhoffs-tck` module (Foy, Chappe and Vauban)
+instead of the GlassFish container. The deviations from an unmodified run are all on the Maven
+command line and none is in the TCK sources; they are listed in `kerckhoffs-tck/BASELINE.md`.
+
+[source,shell]
+----
+./run-official-tck-security-4.0.sh            # smoke set: the applications that are green
+./run-official-tck-security-4.0.sh app-mem
+----
+
+== Where it stands
+
+Figures of 2026-11-16, on the Kerckhoffs container (`kerckhoffs-tck`, this repository) and on the assembled Vidocq
+runtime (`vidocq-runtime-tck-kerckhoffs-security`, in `Vidocq/vidocq`). A dash means the application was not run there.
+
+=== Green
+
+[cols="3,1,1,3"]
+|===
+| Application | Kerckhoffs container | Vidocq runtime | Covers
+
+| `app-mem` | 4 of 4 | 4 of 4 | In-memory identity store behind the mechanism of the war.
+| `app-mem-basic` | 4 of 4 | 4 of 4 | Built-in BASIC mechanism.
+| `app-custom` | 4 of 4 | 4 of 4 | Custom mechanism and identity store, injected `SecurityContext`.
+| `app-custom-session` | 5 of 5 | 5 of 5 | `@AutoApplySession`.
+| `app-multiple-store` | 4 of 4 | 4 of 4 | Several identity stores behind one handler.
+| `app-multiple-store-backup` | 6 of 6 | 6 of 6 | Request-scoped identity stores.
+| `app-securitycontext-auth` | 5 of 5 | 5 of 5 | Programmatic `SecurityContext.authenticate(...)`.
+| `app-custom-authentication-mechanism-handler` | 4 of 4 | 4 of 4 | An application `HttpAuthenticationMechanismHandler` serves the requests.
+| `app-custom-authentication-mechanism-handler2` | 3 of 3 | 3 of 3 | Repeated `@BasicAuthenticationMechanismDefinition` with `qualifiers`.
+| `app-custom-rememberme` | 25 of 25 | 25 of 25 | `@RememberMe`: cookie, flags, `*Expression` attributes through Jakarta Expression Language.
+| `app-mem-policy` | 4 of 4 | 4 of 4 | A `Policy` the application registers with the `PolicyFactory` decides the access to a web resource (`kerckhoffs-authorization`, `PolicyAccessControl`).
+| `app-mem-policy2` | 5 of 5 | 5 of 5 | The same, with the `PrincipalMapper` of the policy context (`PolicyContext.PRINCIPAL_MAPPER`).
+| `app-jaxrs` | -- | 8 of 8 | The REST endpoints are served as a servlet of Foy (`cassini-servlet`), so the authentication and the roles apply to them (KERCK-20261116-02, fixed). The Kerckhoffs container has no Jakarta REST and does not run it.
+|===
+
+The first twelve are the smoke set the `ci.tck.command` gate of the pull requests runs; `app-jaxrs` runs on the Vidocq runtime only.
+
+=== Partly green
+
+[cols="3,1,1,3"]
+|===
+| Application | Kerckhoffs container | Vidocq runtime | What is red
+| `app-mem-form` | `AppMemFormIT` 4 of 4; `AppMemFormImmediateIT` refused | same | The deployment is refused: `loginPage` and `useForwardToLoginExpression` of `@LoginToContinue` are expressions. See "Out of scope for now".
+| `app-mem-basic-decorate` | 1 of 2 | 1 of 2 | A CDI decorator on the mechanism: the decorated response header is missing. Vauban applies no `@Decorator` yet (KERCK-20261116-01, waits for CDI Full).
+|===
+
+=== Out of scope for now
+
+The maintainer keeps the Jakarta Security 4.0 TCK *without JSF* for now. These applications are set aside, and
+none of them is counted against the figures above.
+
+[cols="3,3"]
+|===
+| Application | Why
+
+| `app-mem-customform` | The only application that uses Jakarta Faces (JSF), with `@LoginToContinue`. Kerckhoffs has no JSF.
+| `app-mem-form` (`AppMemFormImmediateIT` only) | `@LoginToContinue` with `*Expression` attributes. The interceptor is not written; no JSF is involved, the class is set aside with the annotation.
+| `app-securitycontext`, `app-securitycontext-customprincipal` | The application uses an EJB.
+| `app-db` | An EJB and a `@DataSourceDefinition` on an embedded database.
+| `app-ldap`, `app-ldap2`, `app-ldap3`, `app-custom-identity-store-handler` | An embedded LDAP directory (`@LdapIdentityStoreDefinition` is milestone K4). `app-custom-identity-store-handler` is 4 of 5 on the Kerckhoffs container: the red test reads groups from the directory.
+| `app-openid`, `app-openid2`, `app-openid3` | An OpenID Connect provider (milestone K5).
+|===
+
+=== Still to do
+
+[cols="3,3"]
+|===
+| Application | What is missing
+
+| `app-mem-basic-decorate` | The CDI decorator on a mechanism (1 of 2).
+|===
+
+A result is a compatibility measurement, never a certification: the full run is milestone K7.

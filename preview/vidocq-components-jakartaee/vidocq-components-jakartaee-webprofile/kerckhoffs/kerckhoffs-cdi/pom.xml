@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.kerckhoffs</groupId>
+        <artifactId>kerckhoffs-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>kerckhoffs-cdi</artifactId>
+    <name>Kerckhoffs :: CDI</name>
+    <description>CDI integration of Jakarta Security 4.0: the identity store handler and the identity stores declared by annotation, as a build compatible extension.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.kerckhoffs</groupId>
+            <artifactId>kerckhoffs-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- The modules jakarta.security requires transitively: provided like every platform API. -->
+        <dependency>
+            <groupId>jakarta.authentication</groupId>
+            <artifactId>jakarta.authentication-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+        </dependency>
+
+        <!-- Tests -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.peano</groupId>
+            <artifactId>peano-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Test-only: the tests build a VaubanContainer (a test-scope module this module does not read). -->
+                    <argLine>
+                        @{argLine}
+                        --add-reads io.vidocq.kerckhoffs.cdi=io.vidocq.vauban.core
+                        --add-opens io.vidocq.kerckhoffs.cdi/io.vidocq.kerckhoffs.cdi=io.vidocq.vauban.core
+                        --add-opens io.vidocq.kerckhoffs.cdi/io.vidocq.kerckhoffs.cdi=jakarta.el
+                    </argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,2 @@
+# Read by the Vauban class path scan, as Cervantes does; the module path uses `provides` in module-info.java.
+io.vidocq.kerckhoffs.cdi.KerckhoffsExtension
