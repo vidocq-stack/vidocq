@@ -19,6 +19,8 @@
  */
 package io.vidocq.runtime.maven;
 
+import io.vidocq.vauban.weaver.ProxyLinkWeaver;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -408,7 +410,7 @@ class StagedProxiesTest {
             for (String name : List.of(GADGET, GADGET + "$Kind", GADGET + "$Nested", GADGET + "$Empty")) {
                 byte[] bytes = Files.readAllBytes(classes.resolve(name.replace('.', '/') + ".class"));
                 assertEquals(java.io.ObjectStreamClass.lookup(Class.forName(name, false, loader))
-                        .getSerialVersionUID(), StagedProxyLinks.defaultSerialVersionUid(bytes), name);
+                        .getSerialVersionUID(), ProxyLinkWeaver.defaultSerialVersionUid(bytes), name);
             }
         }
     }

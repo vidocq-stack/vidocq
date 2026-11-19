@@ -22,28 +22,16 @@ package io.vidocq.runtime.maven;
 import io.vidocq.vauban.weaver.ProxyLinkWeaver;
 import io.vidocq.vauban.weaver.ProxyLinkWeaver.SuperChain;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.classfile.ClassFile;
 import java.lang.classfile.ClassModel;
-import java.lang.classfile.ClassTransform;
-import java.lang.classfile.FieldModel;
-import java.lang.classfile.MethodModel;
-import java.lang.classfile.attribute.ConstantValueAttribute;
-import java.lang.classfile.attribute.InnerClassesAttribute;
 import java.lang.classfile.constantpool.ClassEntry;
-import java.lang.constant.ConstantDescs;
-import java.lang.reflect.Modifier;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,7 +52,9 @@ import java.util.jar.JarFile;
  * arguments in the image alone.
  *
  * <p>A {@link java.io.Serializable} class that declares no {@code serialVersionUID} gets the one the JVM computed for
- * it before the weaving: the woven constructor is not private, and would change the computed one.
+ * it before the weaving: the woven constructor is not private, and would change the computed one. The weaver does it,
+ * {@link ProxyLinkWeaver#addMarkerConstructorKeepingSerialVersionUid}, as Vauban's loader does for a class of a jar
+ * (Vauban BUG-20261118-95), so both give the same value.
  */
 final class StagedProxyLinks {
 
@@ -81,14 +71,7 @@ final class StagedProxyLinks {
     private static final String CLASS_SUFFIX = ".class";
     private static final String VERSIONS = "META-INF/versions/";
     private static final String OBJECT = "java.lang.Object";
-    private static final String SERIAL_VERSION_UID = "serialVersionUID";
     private static final List<String> SERIALIZABLE = List.of("java.io.Serializable", "java.io.Externalizable");
-
-    private static final int CLASS_MASK = Modifier.PUBLIC | Modifier.FINAL | Modifier.INTERFACE | Modifier.ABSTRACT;
-    private static final int FIELD_MASK = Modifier.PUBLIC | Modifier.PRIVATE | Modifier.PROTECTED | Modifier.STATIC
-            | Modifier.FINAL | Modifier.VOLATILE | Modifier.TRANSIENT;
-    private static final int METHOD_MASK = Modifier.PUBLIC | Modifier.PRIVATE | Modifier.PROTECTED | Modifier.STATIC
-            | Modifier.FINAL | Modifier.SYNCHRONIZED | Modifier.NATIVE | Modifier.ABSTRACT | Modifier.STRICT;
 
     private final List<Path> jars;
     /** The entries of each staged jar. */
@@ -157,10 +140,10 @@ final class StagedProxyLinks {
         boolean pin = isSerializable(name);
         for (String entry : entriesOf(jar, rootEntry(name))) {
             byte[] original = read(jar, entry);
-            byte[] woven = ProxyLinkWeaver.addMarkerConstructor(original, chain);
+            byte[] woven = pin ? ProxyLinkWeaver.addMarkerConstructorKeepingSerialVersionUid(original, chain)
+                    : ProxyLinkWeaver.addMarkerConstructor(original, chain);
             if (woven != null) {
-                rewrite(jar, entry, pin && !declaresSerialVersionUid(original)
-                        ? withSerialVersionUid(woven, defaultSerialVersionUid(original)) : woven);
+                rewrite(jar, entry, woven);
             }
         }
         decided.put(name, true);
@@ -229,99 +212,6 @@ final class StagedProxyLinks {
         }
         serializableByName.put(name, result);
         return result;
-    }
-
-    private static boolean declaresSerialVersionUid(byte[] bytes) {
-        return ClassFile.of().parse(bytes).fields().stream()
-                .anyMatch(field -> field.fieldName().equalsString(SERIAL_VERSION_UID));
-    }
-
-    /** {@code bytes} with a {@code private static final long serialVersionUID} of {@code value}. */
-    private static byte[] withSerialVersionUid(byte[] bytes, long value) {
-        ClassFile files = ClassFile.of();
-        return files.transformClass(files.parse(bytes), ClassTransform.endHandler(builder -> builder.withField(
-                SERIAL_VERSION_UID, ConstantDescs.CD_long, field -> field
-                        .withFlags(ClassFile.ACC_PRIVATE | ClassFile.ACC_STATIC | ClassFile.ACC_FINAL)
-                        .with(ConstantValueAttribute.of(value)))));
-    }
-
-    /**
-     * The {@code serialVersionUID} the JVM computes for the class of {@code bytes} when it declares none: the
-     * algorithm of the Java Object Serialization Specification, section 4.6, read from the class file instead of
-     * through reflection.
-     */
-    static long defaultSerialVersionUid(byte[] bytes) {
-        ClassModel model = ClassFile.of().parse(bytes);
-        List<MethodModel> methods = model.methods().stream()
-                .filter(method -> !method.methodName().stringValue().startsWith("<")).toList();
-        try (ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-                DataOutputStream out = new DataOutputStream(buffer)) {
-            out.writeUTF(binaryName(model.thisClass()));
-            out.writeInt(classModifiers(model, !methods.isEmpty()));
-            for (String name : model.interfaces().stream().map(StagedProxyLinks::binaryName).sorted().toList()) {
-                out.writeUTF(name);
-            }
-            for (FieldModel field : model.fields().stream()
-                    .sorted(Comparator.comparing(field -> field.fieldName().stringValue())).toList()) {
-                int flags = field.flags().flagsMask() & FIELD_MASK;
-                if ((flags & Modifier.PRIVATE) == 0 || (flags & (Modifier.STATIC | Modifier.TRANSIENT)) == 0) {
-                    out.writeUTF(field.fieldName().stringValue());
-                    out.writeInt(flags);
-                    out.writeUTF(field.fieldType().stringValue());
-                }
-            }
-            if (model.methods().stream().anyMatch(method -> method.methodName().equalsString("<clinit>"))) {
-                out.writeUTF("<clinit>");
-                out.writeInt(Modifier.STATIC);
-                out.writeUTF("()V");
-            }
-            writeMembers(out, model.methods().stream()
-                    .filter(method -> method.methodName().equalsString(ConstantDescs.INIT_NAME)).toList(), true);
-            writeMembers(out, methods, false);
-            out.flush();
-            byte[] hash = MessageDigest.getInstance("SHA").digest(buffer.toByteArray());
-            long value = 0;
-            for (int i = Math.min(hash.length, 8) - 1; i >= 0; i--) {
-                value = (value << 8) | (hash[i] & 0xFF);
-            }
-            return value;
-        } catch (IOException | NoSuchAlgorithmException e) {
-            throw new IllegalStateException("cannot compute the serialVersionUID of " + model.thisClass().name(), e);
-        }
-    }
-
-    /** The non-private constructors or methods, sorted by signature (by name first for methods). */
-    private static void writeMembers(DataOutputStream out, List<MethodModel> members, boolean constructors)
-            throws IOException {
-        Comparator<MethodModel> bySignature = Comparator.comparing(method -> method.methodType().stringValue());
-        Comparator<MethodModel> order = constructors ? bySignature
-                : Comparator.<MethodModel, String>comparing(method -> method.methodName().stringValue())
-                        .thenComparing(bySignature);
-        for (MethodModel member : members.stream().sorted(order).toList()) {
-            int flags = member.flags().flagsMask() & METHOD_MASK;
-            if ((flags & Modifier.PRIVATE) == 0) {
-                out.writeUTF(member.methodName().stringValue());
-                out.writeInt(flags);
-                out.writeUTF(member.methodType().stringValue().replace('/', '.'));
-            }
-        }
-    }
-
-    /** The modifiers {@code Class.getModifiers()} gives: those of the inner class entry for a nested class. */
-    private static int classModifiers(ClassModel model, boolean hasMethods) {
-        int flags = model.flags().flagsMask();
-        for (InnerClassesAttribute inner : model.findAttributes(java.lang.classfile.Attributes.innerClasses())) {
-            for (var info : inner.classes()) {
-                if (info.innerClass().asInternalName().equals(model.thisClass().asInternalName())) {
-                    flags = info.flagsMask();
-                }
-            }
-        }
-        flags &= CLASS_MASK;
-        if ((flags & Modifier.INTERFACE) != 0) {
-            flags = hasMethods ? flags | Modifier.ABSTRACT : flags & ~Modifier.ABSTRACT;
-        }
-        return flags;
     }
 
     /** The bytes of a class of the JDK; {@code null} when the JDK has no such class. */

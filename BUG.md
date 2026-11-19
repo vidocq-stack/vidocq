@@ -5,6 +5,29 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
 
 ---
 
+## BUG-20261119-80 — Every stop in the tests of `vidocq-runtime-core` fails to call `ShutdownObserver`
+
+- **Date**: 2026-11-19
+- **Status**: FIXED by Vauban BUG-20261119-72 (vauban#354, snapshot `0.4.0-20261119.100429-81`, build-info
+  `e099b7ef`). No change to the fixture.
+- **Module**: `vidocq-runtime-core` (tests)
+- **Symptom**: 37 warnings per run of the module's tests, in seven test classes (`StartupReportBootTest`,
+  `StartupReportViewTest`, `ProgrammaticShutdownTest`, ...): `The lifecycle observer
+  io.vidocq.runtime.core.ShutdownObserver.onShutdown of Shutdown threw ContainerOperationException`, `Cannot
+  reflectively access io.vidocq.runtime.core.ShutdownObserver on the module path`. Found by VAUBAN.
+- **Repro**: `ProgrammaticShutdownTest.aStopLogsNoFailureOfAnObserverItDiscovered`: a deployment that does not add
+  the observer, a stop, and the records of `io.vidocq.vauban`. Red on Vauban snapshot 80.
+- **Cause**: the class path scan of `VidocqBootstrap` reads the test round's `vauban-beans.list` and finds the
+  `@ApplicationScoped` fixture, but not its generated code. The module's main sources have no bean, so the test round
+  emits a plain `_VaubanComponents` that no `provides` names, and a `META-INF/services` file is ignored in the named
+  module the test classes are patched into. The container then went reflective and could not reach the package.
+  Two fixes on the Vidocq side were tried and fail: `@Vetoed` with `addBeanClass` (the latter honours the veto), and
+  no bean defining annotation (the processor then generates nothing, and `addBeanClass` registered no observer and
+  said nothing: Vauban BUG-20261119-73).
+- **Fix**: Vauban takes the generated provider of each package that a bean list names, when the package is exported
+  or opened to it. `io.vidocq.runtime.core` is exported. The observer is now called through its generated code at
+  every stop, and returns at once there, as the fixture intends.
+
 ## BUG-20261118-94 — A dev reload no longer names a leaked thread when the application has the Ravel extension
 
 - **Date**: 2026-11-18
@@ -86,7 +109,9 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   is rewritten then. A `Serializable` class without a `serialVersionUID` gets the one the JVM computed before the
   weaving (Java Object Serialization Specification §4.6, computed from the class file and checked against
   `ObjectStreamClass`): the added constructor is not private and would change it. Under the application layer the
-  loader weaves without pinning it: that drift is Vauban BUG-20261118-95.
+  loader weaves without pinning it: that drift is Vauban BUG-20261118-95. Since Vauban fixed it (option A, vauban#354),
+  `StagedProxyLinks` calls the weaver's `addMarkerConstructorKeepingSerialVersionUid`, which the loader uses for a
+  class of a jar, and no longer carries its own copy of the §4.6 computation: both give the same value.
 - **Verification**: `StagedProxiesTest`, 7 new tests red before (no marker, no refusal, no `serialVersionUID`), green
   after: a strict class, a strict superclass in the same jar and in another staged jar, a JDK superclass with a no-arg
   constructor, a JDK superclass without one (the build fails), a `Serializable` class keeps its value, the computed
