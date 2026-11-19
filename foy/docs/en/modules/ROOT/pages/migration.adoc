@@ -1,0 +1,226 @@
+= Migration
+:description: From Tomcat, Jetty, Undertow or Helidon Servlet to Foy.
+
+[.lead]
+Foy honours the Jakarta Servlet 6.1 spec to the letter — your `web.xml`, your `@WebServlet`, your filters and listeners are ported as-is. This page lists the points where the environment differs.
+
+[CAUTION]
+====
+Foy is at **{project-version}** and the official TCK passes **99.6 %** over the full suite: 1707 passing / 1714 run, 7 skipped (`api.*` 859/859, `pluggability.*` 646/646, `spec.*` 200/207, `compat.*` 2/2); every test that runs passes, the JSP tests with Ibarra as the page engine (see xref:tck.adoc[TCK status]). Migration is not recommended in production until the listed gaps are closed.
+====
+
+== From Tomcat
+
+[cols="1,1,2",options="header"]
+|===
+| Tomcat | Foy | Note
+
+| `server.xml` (`<Connector>`, `<Engine>`, `<Host>`)
+| `FoyChappeBoot.builder()` + xref:chappe::index.adoc[Chappe]
+| Programmatic configuration. The connector is Chappe; the Foy handler is mounted through the Chappe router (`Router.Builder.mount(...)`).
+
+| `WEB-INF/web.xml`
+| Supported subset
+| Read by `WebXmlParser` — see the exact element list in xref:reference.adoc[Reference].
+
+| `@WebServlet`, `@WebFilter`, `@WebListener`
+| Identical
+| Detected at compile time by APT — no runtime annotation scan (descriptors and initializers are discovered at boot).
+
+| `META-INF/web-fragment.xml`
+| ✅ Implemented
+| Discovered on the class path or module path, ordered per §8.2.2 and merged per §8.2.3 — see xref:usage.adoc#native-layout-descriptors-fragments-and-resources[the native layout]. `WEB-INF/lib` jars of a WAR are not opened (no runtime WAR deployment).
+
+| Coyote (HTTP/1.1, HTTP/2)
+| xref:chappe::index.adoc[Chappe]
+| HTTP/1.1 + HTTP/2 + virtual threads.
+
+| `Realm` / `AuthMethod`
+| `IdentityStore` (`foy-api`)
+| Declare users with `FoyChappeBoot.builder().user(...)`, or implement `io.vidocq.foy.spi.security.IdentityStore`. `login-config` BASIC and FORM; see xref:usage.adoc#application-security[Application security].
+
+| JNDI lookups (`@Resource`)
+| `@Inject` via `foy-cdi-vauban`
+| Datasources / pools are CDI Vauban beans.
+
+| `Context.xml` resources
+| CDI Vauban beans
+| Foy ships no JNDI tree — port each `<Resource>` entry to a Vauban bean and inject it with `@Inject`.
+|===
+
+== From Jetty (Servlet)
+
+[cols="1,1,2",options="header"]
+|===
+| Jetty | Foy | Note
+
+| `Server` + `ServerConnector`
+| xref:chappe::index.adoc[Chappe] `Server.builder()`
+| The connector is Chappe.
+
+| `WebAppContext`
+| `FoyChappeBoot.builder().contextPath(...)`
+| WAR deploy is not supported — Foy boots embedded, programmatically.
+
+| `ServletContextHandler`
+| `VidocqServletContext` (internal)
+| Likewise.
+
+| `JettyWebSocketServletContainerInitializer`
+| ❌ Not implemented
+| WebSocket Servlet 6.1 planned, no date.
+
+| Custom Jetty `Handler`
+| Chappe `Handler`
+| The `io.vidocq.chappe.api.Handler` API is the equivalent — see xref:chappe::reference.adoc[Chappe Reference].
+|===
+
+== From Undertow
+
+[cols="1,1,2",options="header"]
+|===
+| Undertow | Foy | Note
+
+| `Undertow.builder()`
+| `FoyChappeBoot.builder()` + Chappe
+| Two-step programmatic config: Chappe for transport, Foy for Servlet.
+
+| `DeploymentInfo`
+| `WebAppModel` built from the `BeanManager` and `web.xml`, deployed by `WebAppDeployer`
+| No explicit Servlet/Filter config — annotations + `web.xml`.
+
+| Undertow `HttpHandler`
+| Chappe `Handler`
+| See xref:chappe::reference.adoc[Chappe Reference].
+|===
+
+== From Helidon Servlet
+
+No real-world migration has been documented yet — the Tomcat and Jetty tables above transpose directly (programmatic boot, Chappe transport, `IdentityStore` SPI).
+
+== Known gaps
+
+* **HTTP/2 server push** — not supported; `newPushBuilder()` returns `null` (push is deprecated in Servlet 6.1, and Chappe sends no `PUSH_PROMISE`). `103 Early Hints` are not offered either. xref:usage.adoc#http2-server-push[Details].
+* **Directory listings and `multipart/byteranges`** — the default servlet serves single files only (404 for a directory) and answers several ranges with the whole body.
+* **WebSocket Servlet 6.1 / Jakarta WebSocket 2.2** — not implemented (planned, no date).
+* **JSP** — not supported by Foy itself; a page engine such as xref:ibarra::index.adoc[Ibarra] (Jakarta Pages 4.0) plugs into the xref:reference.adoc#jsp-engine[JSP-engine service]. For dynamic pages use xref:cassini::index.adoc[Cassini] (REST) or HTML-emitting Servlets.
+* **DIGEST not supported** — it fails closed (`403`). CLIENT-CERT is supported: see xref:usage.adoc#client-cert[Client certificates].
+
+Cross-context dispatch (`ServletContext.getContext`) **is implemented** via `CrossContextRegistry` — strict contextPath match on the contexts deployed in the same JVM.
+
+== Behaviour changes for `FoyChappeBoot` embedders
+
+Applications that already embedded Foy through `FoyChappeBoot.builder()` before descriptors and pluggability landed see these changes:
+
+* **Discovery is on by default.** Every `META-INF/web-fragment.xml` on the class or module path is merged and every `ServletContainerInitializer` the ordering retains runs. A lone initializer on the path is enough to activate Foy, even without servlet, filter, listener or descriptor.
+* **Descriptor errors now fail the deployment** (`ServletException` from `build()`): a malformed `web-fragment.xml`, two fragments with the same `<name>`, conflicting values between fragments that web.xml does not settle (§8.2.3), and a url-pattern mapped to two servlets (§12.2).
+* **`<default-context-path>` changes the mount path** when the builder sets no `contextPath(...)`.
+* **`discoverPluggability(false)`** opts out of the fragment and initializer discovery, for embedders that assemble the application themselves.
+* **New builder methods:** `resourceProvider(...)` replaces the source behind `ServletContext.getResource*`; `applicationRoot(URL...)` declares the roots whose initializers always run, whatever the absolute ordering.
+* **More builder methods:** `applicationLayer(ModuleLayer)` (default `ModuleLayer.boot()`) chooses the layer the JSP engine is looked up in, and `componentSource(Function<Class<?>, URL>)` attributes discovered classes to their jar, for harnesses that load several jars from one class loader.
+* **A JSP-only application is deployed.** An application with no servlet, filter, listener, descriptor or initializer used to give an empty `Optional`; `build()` now asks the engine, `JspEngine.hasPages(ModuleLayer)` (a new default method answering `true`), and deploys when it says yes. With no engine, or an engine answering `false`, the result is still empty. Two consequences follow when an engine sits in the boot layer and keeps the default `hasPages`: every otherwise empty application now deploys, and gets the container default servlet, which serves the `META-INF/resources/` of every root over HTTP; and with two engines in the boot layer an otherwise empty application now fails the deployment instead of returning an empty `Optional`.
+
+=== Request, response and session semantics
+
+The request, response and session work (Servlet 6.1 sections 3, 5, 7, 9 and 10) changes these behaviours for embedders:
+
+* **The root context path is `""`, not `"/"`.** `getContextPath()` and `ServletContext.getContextPath()` return the empty string for an application mounted at the root (section 3.5); `contextPath("/")` is still accepted as its alias.
+* **Context paths are validated at deploy.** A context path must be empty or start with `/`, must not end with `/`, and must not contain an empty, `.` or `..` segment, a control character, a backslash, `%`, `;`, `?` or `#`; an invalid one fails the deployment with an `IllegalArgumentException`.
+* **Default session tracking modes are `{COOKIE, URL}`.** `encodeURL` and `encodeRedirectURL` now append `;jsessionid=<id>` when a session exists and the client did not send its id in a cookie. Restrict the modes with `<tracking-mode>` or `SessionCookieConfig`/`setSessionTrackingModes` if you do not want URL rewriting.
+* **The session store is consulted on every request carrying a session id** (cookie or `;jsessionid`), even when the application never calls `getSession`, so that the session's last-accessed time moves (section 7.6). A custom `SessionStore` sees a lookup per such request.
+* **A container default servlet (`foy.default`) is installed when no application servlet maps `/`.** It serves the static resources of the resource provider; with the default `ClassPathResourceProvider` that is the `META-INF/resources/` tree of **every root of the class loader** (application roots, fragment jars, then any other jar), over HTTP. To opt out, map a servlet of your own to `/`, or pass a `resourceProvider(...)` that does not expose those roots.
+* **Non-canonical request paths are answered 400.** A path that holds a raw backslash or control character, a malformed or encoded separator or NUL escape, a dot-only segment once decoded, or climbs above the context root with `..` is refused before any filter or servlet runs (section 3.5.2); a path outside the context path is answered 404.
+* **`WEB-INF/` and `META-INF/` are refused to every client request (404)**, whichever servlet the path maps to (a `*.jsp` mapping included), in any case and with trailing dots or spaces; `/WEB-INF` without a slash is a 404, not a redirect. A welcome file under these trees is never resolved. Forward, include, error and async dispatches may still target them.
+* **Dispatch paths are context-relative.** `ServletContext.getRequestDispatcher`, `ServletRequest.getRequestDispatcher` and `AsyncContext.dispatch(String)` no longer strip a leading copy of the context path: in context `/app`, `getRequestDispatcher("/app/x")` targets `/app/x` inside the application.
+* **Header values are validated.** `setHeader`, `addHeader` (and the int/date variants), `setContentType`, `setCharacterEncoding` and `addCookie` throw `IllegalArgumentException` for a header name that is not an RFC 9110 token (empty, a space, `:`, a control or non-ASCII character), and for a value containing a control character other than HTAB (CR, LF, NUL, U+0001 to U+001F, DEL) or a character above U+00FF, the rule Chappe applies on the wire (CHAPPE-008); SP, HTAB, U+0080 to U+00FF and empty values stay legal, and the message never echoes the value. An invalid trailer field is dropped with a `WARNING`. `sendRedirect` percent-encodes (UTF-8) non-ASCII characters, spaces and controls of the location, so a `Location` header never carries a line break.
+* **An unhandled exception answers a generic `500` body** (`Internal Server Error`); the exception and its message are logged, never echoed to the client.
+
+=== Streaming, async and non-blocking I/O
+
+The streaming, async and non-blocking I/O work (Servlet 6.1 sections 2.3.3, 3.7 and 5) changes these behaviours for embedders:
+
+* **Servlet code runs on a Foy virtual thread, not on Chappe's connection thread.** Filters, servlets and listeners run on `foy-request-<n>`. Chappe's `RequestContext.CURRENT` is re-bound there, but any other `ThreadLocal` or `ScopedValue` that a Chappe filter or handler set on the connection thread is not visible to servlet code: pass such state through request attributes instead.
+* **Responses above the buffer size are streamed.** A response larger than `getBufferSize()` (8192 bytes by default) is committed at the overflowing write and sent while the servlet writes; without a declared `Content-Length` it is chunked on HTTP/1.1 (before, the whole body was held until the servlet returned and sent with a `Content-Length`). `flushBuffer()` now sends the head and the buffered bytes at once. Set a `Content-Length`, or a larger `setBufferSize`, to keep a fixed-length body.
+* **An async timeout answers `500` through the error-page mechanism instead of a bare `503`.** When no `AsyncListener` completes or dispatches in `onTimeout`, the container raises an error dispatch with status `500`; an `<error-page>` for `500` now renders it.
+* **`newPushBuilder()` returns `null`.** Code that pushed resources must check for `null` (the specification allows it). `103 Early Hints` are not offered (no Servlet 6.1 API, no informational response in Chappe): send a `Link: <...>; rel=preload` header on the final response instead.
+* **A connection whose upload the application stopped reading is closed after the response.** When a `ReadListener` still waits for upload bytes at the end of the request, the response is delivered and the connection is then closed rather than kept alive.
+* **An exception after the commit aborts the response.** Once the response is streaming, a late exception can no longer turn into an error page: it is logged and the body is aborted (connection aborted on HTTP/1.x, stream reset with `RST_STREAM` `INTERNAL_ERROR` on HTTP/2), so the client sees a truncated body.
+
+=== Request listeners
+
+The request listener hardening changes these behaviours for embedders:
+
+* **Every `requestDestroyed` runs, even when one throws.** The listeners are still called in reverse registration order; the first `RuntimeException` is rethrown once they have all run, with the later ones added as suppressed exceptions (an `Error` still propagates at once).
+* **A failed `requestInitialized` is unwound.** When a listener throws from `requestInitialized`, the listeners already initialized get `requestDestroyed`, in reverse order, before the exception propagates.
+* **A filter failure on a path no servlet maps ends like any other failure.** A `RuntimeException` or `IOException` thrown by a filter there (before, only a `ServletException`) is answered with Foy's generic `500` and the request listeners get `requestDestroyed`.
+
+[#security-behaviour-changes]
+=== Security
+
+The security work (Servlet 6.1 chapter 13) changes these behaviours for embedders:
+
+* **`SecurityProvider` and `AuthenticatedUser` are removed (API break)**, replaced by `IdentityStore` and `Identity`, with no deprecated bridge. The password now comes as a `char[]` that Foy wipes after the call, the result carries a `Principal` and the roles, and the store is given to `FoyChappeBoot` instead of `DeployOptions.withSecurityProvider`:
++
+[source,java]
+----
+// Before
+SecurityProvider provider = (user, password) -> myCheck(user, password)
+        .map(roles -> new AuthenticatedUser(user, roles));
+DeployOptions options = DeployOptions.defaults(loader).withSecurityProvider(provider);
+
+// After
+FoyChappeBoot.builder().beanManager(bm)
+        .identityStore((user, password) -> myCheck(user, password).map(roles -> Identity.of(user, roles)))
+        .build();
+// or, for a fixed set of users
+FoyChappeBoot.builder().beanManager(bm).user("alice", password, "admin").build();
+----
+* **web.xml `security-constraint`s are now enforced**, as are `deny-uncovered-http-methods` and `transport-guarantee`. A resource that answered before may now answer `401` or `403`. A CONFIDENTIAL constraint over plain HTTP answers `403`, or `302` when `confidentialPort` is set; behind a TLS-terminating reverse proxy `isSecure()` is `false` and the redirect loops.
+* **Annotation constraints apply per url-pattern**, and the descriptor wins on a pattern it names exactly.
+* **The BASIC realm is `login-config/realm-name` or `Restricted`**, no longer `vidocq`.
+* **`isUserInRole` follows `security-role-ref`** of the executing servlet.
+* **`login()` sets the configured mechanism as auth type**, rotates the session id and, under FORM, keeps the identity in the session (creating one).
+* **`logout()` keeps the session**: it clears the identity only. Invalidate the session to drop its attributes.
+* **An unsupported `auth-method` now answers `403`** on protected resources (DIGEST, anything else).
+* **`setServletSecurity` returns the descriptor-constrained patterns** and throws `IllegalStateException` after initialisation.
+* **`ServletContext.declareRoles` is implemented.**
+* **Without users or a store, every login fails**, and a context built outside the deployer refuses every request: security fails closed.
+
+=== API narrowing
+
+* **`FoyChappeBoot.Mounted.servletContext()` returns `jakarta.servlet.ServletContext`**, no longer the internal `VidocqServletContext`. Code that called Foy-specific methods on it no longer compiles; standard Servlet methods (for example `getSessionTimeout()`) now work from a named module that does not read `io.vidocq.foy.core`.
+
+[#request-body-behaviour-changes]
+=== Request bodies and multipart
+
+The multipart and request body work (Servlet 6.1 sections 3.1, 3.2 and 3.12) changes these behaviours for embedders:
+
+* **`getParts()` and `getPart()` require a multipart configuration** (`@MultipartConfig`, `<multipart-config>` or `setMultipartConfig`) and throw `IllegalStateException` without one; they used to parse anyway. On a request that is not `multipart/form-data` they throw `ServletException`; they used to return no part.
+* **Multipart fields are request parameters**, on a POST to a servlet with a multipart configuration, or on any request once `getParts()` ran.
+* **`Part.write` resolves a relative name against the multipart `location`**, no longer against the working directory, and refuses a name that leaves it. `Part.delete()` deletes the part's file.
+* **Parts above `fileSizeThreshold` go to disk**, in owner-only temporary files deleted at the end of the request. The default threshold is `0`: every non-empty part goes to disk.
+* **Form bodies above 2 MiB make `getParameter*` throw `IllegalStateException`** (`maxFormBodySize`). The limit also bounds the total size of the multipart form fields exposed as parameters; file parts do not count.
+* **Bodies without `Content-Length` above 10 MiB fail the read** (`maxChunkedRequestBodySize`), for the application stream and the container parsers alike.
+* **At most 50 parts and 8 KiB of headers per part** (`maxMultipartParts`, `maxMultipartPartHeaderSize`).
+* **An uncaught request body or multipart limit answers `413`** on a synchronous dispatch, instead of `500`.
+* **`setCharacterEncoding` after a body was parsed into parameters or parts is ignored.**
+* **`setMultipartConfig(null)` throws `IllegalArgumentException`**, and a call after the context is initialised throws `IllegalStateException`.
+
+See xref:usage.adoc#file-upload[File upload] and xref:reference.adoc#request-body-limits[Request body limits].
+
+== Behaviour changes in the next version
+
+These changes may need attention:
+
+* **Wrappers: every application wrapper, HTTP or not, now reaches the forward/include target.** The dispatch wrapper sits under the application's, so a wrapper's overrides win. A framework wrapper that caches the request URI at construction time shows the original URI to the target, as on Tomcat.
+* **Wrappers: a request (and, for include, a response) that neither is nor wraps the container's object is rejected** with a `ServletException`.
+* **Wrappers: `startAsync()` throws `IllegalStateException` in an error page**, for both the zero-argument and the `(request, response)` forms.
+* **`getProtocol()` returns `HTTP/2.0` on HTTP/2** (it was `HTTP/2`), as the Servlet Javadoc requires. The `IOException` message that refuses an HTTP upgrade on HTTP/2 now reads "HTTP upgrade is not supported over HTTP/2.0".
+* **`getServletConnection().getConnectionId()` is now Chappe's decimal connection counter** for every request served by Chappe: unique for the JVM and shared by every request of a connection. The socket address pair remains only as a fallback for a `Request` that does not come from Chappe. `getProtocolRequestId()` is the stream id on HTTP/2.
+
+== Common pitfalls
+
+* **`ServletContainerInitializer`s and fragments are discovered at boot.** `ApplicationSources` loads the initializers through `ServiceLoader` (`META-INF/services` or `provides`) and the `META-INF/web-fragment.xml` of every root, then orders them per §8.2.2 and §8.2.4. Component classes themselves are still never scanned.
+* **`metadata-complete` is honoured.** With `metadata-complete="true"` annotations are ignored; otherwise `web.xml` and annotations are merged per Servlet 6.1 §8.2.3 (the descriptor wins on a same-name conflict).
+* **No runtime dynamic proxy.** Frameworks that rely on it (Spring AOP, some profiling libs) won't work as-is. Prefer APT alternatives (Vauban, Class-File API).
+* **Strict Java modules.** If a legacy uses reflective `setAccessible(true)`, it needs an explicit `--add-opens` — better to port the legacy to `@Inject`.

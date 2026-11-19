@@ -1,0 +1,103 @@
+= Migration
+:description: Coming to Ibarra from Jasper (Tomcat, GlassFish) — what will map, what will differ.
+
+[.lead]
+Ibarra's initial runtime is implemented (I1): there is no complete page engine to
+migrate to yet. This page records the intended contract so the expectation is clear.
+
+== The good news (target)
+
+Standard pages, standard actions, custom tags with TLDs, tag files and `jsp-config` work unchanged — they are the specification.
+
+== What to check (target)
+
+* **JSTL** — not provided by Ibarra. Applications using `c:`, `fmt:`, `fn:` tags need a JSTL implementation on their side.
+* **Precompilation** — the default path. Pages added to a running server after deployment need the development mode.
+* **Jasper-specific settings** — `development`, `checkInterval`, `compilerSourceVM` and other `JspServlet` init parameters have no Ibarra equivalent.
+* **`jsp:useBean beanName`** (serialized beans) — support is an open question.
+* **Tag handler pooling** — Ibarra does not pool handlers; a handler that relied on reuse between invocations must not.
+
+== Precompilation requests
+
+`jsp_precompile` now follows the Pages 4.0 protocol for generic JSP routes and
+explicit `jsp-file` aliases. A bare/empty value, `true` or `false` suppresses the
+page body; invalid decoded values return HTTP 500. Repeated values must all be
+valid. Normal requests without this parameter still execute the page. Existing
+translation failures remain HTTP 500 even for a precompilation request.
+
+== Forwarding and page output
+
+Forward before writing output when using `buffer="none"`. Ibarra now rejects a
+forward after an unbuffered write or a JSP flush, even while the Servlet response
+still reports uncommitted. This corrects the earlier loss of already emitted output.
+Empty writes do not prevent forwarding; pending buffered JSP output is discarded.
+An error page after emitted output is included with the original exception.
+
+== XML TLD namespaces in the development line
+
+Use `xmlns:f="urn:example:functions"` for a mapped library URI, or
+`xmlns:f="urn:jsptld:/tlds/functions.tld"` to force that physical descriptor.
+The earlier `urn:jsptld:urn:example:functions` form mixed these modes and is now
+rejected. Forced paths bypass aliases; plain namespaces use mappings only.
+Direct discovery does not add implicit URI entries for external descriptors.
+
+== Official runner descriptor components
+
+The TCK adapter now generates Foy component factories for root web.xml
+Servlet/filter/listener classes in WEB-INF/classes. Its synthetic application module
+requires `io.vidocq.foy.api` and provides those factories without exports or opens.
+This runner change does not change the production Maven plugin or add a new public
+Ibarra SPI. Legacy WAR libraries now assemble into that same module, retaining
+private packages even when a library and the WAR share a package. Original JARs
+remain unchanged for physical TLD references; library TLD discovery stays distinct.
+Equal output duplicates are deduplicated and conflicting bytes are rejected.
+Explicit modular/multi-release libraries, web fragments, classpath services,
+Servlet annotations and initializers still need separate adaptation.
+
+== Legacy WAR bean properties in the official runner
+
+The TCK adapter now supplies direct Peano property accessors for eligible
+legacy WAR bean classes, without exports/opens or reflective property access.
+Inherited JavaBeans properties and primitive conversion use generated calls and
+the current ELContext. Native containers keep their standard resolver behaviour.
+
+Unadapted hierarchy/signature types are recorded in bean-accessor-errors.txt;
+their real page errors remain visible. General method/static member access and
+handwritten BeanELResolver calls remain separate capabilities. Production
+applications still generate/register their own accessors through Peano's processor
+or SPI; the Ibarra Maven plugin's dependency contract is unchanged.
+
+== Compiler-provided tag IDs
+
+Classic/simple handlers implementing JspIdConsumer now receive a constant ID
+per tag occurrence during property initialization. The ID stays stable across
+requests to that generated page; handlers remain fresh per invocation.
+Repeated includes receive distinct occurrence IDs, while repeated fragment
+invocations retain their tag's ID. Application packages need no new module reads.
+
+Caller attributes targeting setJspId(String), including capitalization or named
+recipient-prefix aliases, fail translation instead of replacing the generated
+identifier. Dynamic jspId attributes on consumers are likewise rejected.
+
+== Ordinary custom-tag setter selection
+
+Ordinary tag attributes now use the handler's actual JavaBeans write method,
+including when their TLD type is omitted or differs from the property type.
+For a property with Object and String setter overloads, the String writer wins
+when it is the most-specific compatible method. The earlier Object metadata
+default no longer forces the Object overload. Incomparable overloads or a setter
+that does not fit the getter's property contract fail translation.
+
+Java keyword attribute names such as boolean, byte and static are accepted.
+Fragment and deferred-expression setter protocols retain their exact API types.
+See xref:modules/tag-handlers.adoc[Tag handlers] for the compatibility interpretation
+and Class-File binding rules.
+
+== Published Arquillian adapter
+
+The Arquillian adapter of the Pages TCK runner moved from the unpublished `ibarra-tck`
+into the published `io.vidocq.ibarra:ibarra-arquillian` module (package
+`io.vidocq.ibarra.arquillian`), so that other TCK runners can reuse it. Take it at
+`test` scope only. Without configuration it deploys exactly as before; the
+`applicationLibraries`, `jdkModules` and `applicationOpens` properties are described in
+xref:modules/arquillian-adapter.adoc[Arquillian adapter].

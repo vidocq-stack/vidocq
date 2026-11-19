@@ -1,0 +1,276 @@
+= Internals
+:description: Ibarra's planned architecture — modules, translation pipeline, Foy SPI, Peano integration.
+
+[.lead]
+How Ibarra is designed to work inside. The runtime in `ibarra-core` implements milestone I1; the full design is `PLAN.md` in {repo-ibarra}[the repository].
+
+== Modules
+
+[cols="1,1,3",options="header"]
+|===
+| Artefact | Java module | Role
+
+| `ibarra-core` | `io.vidocq.ibarra.core` | I1 runtime: factory, context, scopes, writers, dispatch and application EL context; tags planned
+| `ibarra-api` | `io.vidocq.ibarra.api` | Immutable page policy, descriptor and constructor-based index SPI
+| `ibarra-compiler` | `io.vidocq.ibarra.compiler` | Parser/model, initial Java generator and build-time compiler; I3 in progress
+| `ibarra-maven-plugin` | — | Build-only `precompile` goal — initial I4 implemented
+| `ibarra-foy` | `io.vidocq.ibarra.foy` | Initial I5 Foy binding; routing and application lifecycle
+| `ibarra-tck` | — | Official TCK runner, `-Ptck` profile only
+|===
+
+== Output writers (implemented)
+
+`BufferedJspWriter` acquires the response writer only when output must be sent.
+It uses a character buffer (8192 characters by default), flushes on overflow
+with `autoFlush=true`, and throws `IOException` on overflow otherwise.
+`clear()` fails after flushing; `clearBuffer()` discards pending buffered
+output. Closing flushes and closes the destination.
+
+`BufferedBodyContent` captures tag output without flushing to its enclosing
+writer. The body is unbounded, can be read or copied repeatedly, and can be
+cleared between iterations. Nested bodies remain independent. Its inherited
+`flush()` always throws `IOException`; closing never closes the enclosing writer.
+
+Both classes are internal and request-owned. They introduce no module exports,
+runtime dependencies, shared state or handler pooling.
+
+== Page context and factory (implemented)
+
+`IbarraPageContext` stores page attributes locally and delegates request, session
+and application scopes to the Servlet API. Session access is opt-in. Nested
+body pushes update the implicit `out` attribute; pops restore the previous writer.
+Includes route through the current writer, preserving output order and body
+capture. Forwards discard pending JSP output and reject committed responses,
+unbuffered writes and prior JSP flushes, even when a Servlet response wrapper still
+reports uncommitted. An unwritten unbuffered page may forward; zero-length writes
+do not acquire the response writer. This follows
+https://jakarta.ee/specifications/pages/4.0/jakarta-server-pages-spec-4.0.html#jsp:forward[Pages 4.0 section 5.5].
+Partial unbuffered write failures also retain the possible-output state.
+Error pages receive Servlet error attributes and the Pages exception attribute;
+after Servlet commitment or JSP output they are included without discarding output.
+Release drops request state without pooling.
+Page code flushes or closes output before releasing its context.
+
+Generated servlet service validates `jsp_precompile` before invoking `_jspService`.
+Bare/empty values, `true` and `false` suppress the page body; every other decoded
+value produces HTTP 500. Every value in a repeated parameter must be valid.
+This applies to both generic JSP routes and explicit `jsp-file` aliases, before
+PageContext/session acquisition. Translation-error servlets still report their
+retained build failure. This follows
+https://jakarta.ee/specifications/pages/4.0/jakarta-server-pages-spec-4.0.html#precompilation-protocol[Pages 4.0 section 11.4.2].
+
+`IbarraJspFactory` allocates fresh request contexts and shared application contexts.
+The future container binding installs it with `JspFactory.setDefaultFactory()`
+and removes application contexts only after requests have drained.
+
+== Application EL context (initial implementation)
+
+Application resolver registrations freeze atomically on first context creation.
+Provider lookup is lazy and happens once per application. Each page caches its
+EL context before notifying listeners so callbacks can retrieve it safely. A
+failed callback clears the cache for a later retry. Application and standard
+collection/bean resolvers precede the scoped-attribute resolver.
+
+The final not-found resolver reads the immutable page policy before listeners
+run. Strict pages reject unresolved EL lookups; explicitly resolved nulls remain
+valid. Two pages in the same application can use different policies.
+
+Every expression evaluation ends in `ELContext.convertToType`, which asks the
+resolver chain before the factory coercion. A `CompositeELResolver` would ask all
+of its resolvers. The page chain asks only the resolvers that can convert: the
+application resolvers, the provider resolver and `OptionalELResolver`, in chain
+order. The others keep `ELResolver`'s default `convertToType`, which resolves
+nothing, so the result does not change. A test checks that default on every
+resolver the chain skips.
+
+Scope, parameter, header, cookie and initialization-parameter implicit objects
+are implemented and exercised with Peano. Headers use case-insensitive lookup.
+Page type/package imports and fixed-arity TLD function bindings are generated at
+build time; runtime import mutations remain open. Some API tests also use a concrete
+factory double to isolate lifecycle semantics.
+
+== Translation pipeline (planned)
+
+Parsing, initial Java generation and build-time javac exist. Full translation
+semantics remain unfinished. Build-time Peano EL and page-index packaging are implemented.
+
+. Parse the page (standard or XML syntax) into a page model, applying `jsp-config` property groups and TLDs.
+. Generate the Java source of an `HttpJspPage`; page expressions are compiled by Peano's build-time compiler.
+. Compile with `javax.tools` in the build JVM; emit a page index registered through `ServiceLoader`.
+
+A Class-File API back end for scriptless pages (no `javac` at all) is a later option.
+
+== Page parser (implemented)
+
+`PageParser` consumes decoded source strings and produces immutable nodes for
+template text, EL expressions, directives, scripting and nested elements. It
+selects XML syntax for `.jspx`/`.tagx` and a document-level JSP root; callers can
+explicitly select syntax and supply EL defaults through `ParserOptions`.
+Page/tag EL directives apply to the whole document.
+
+Standard syntax preserves ordinary markup and HTML comments while removing
+JSP comments. XML syntax uses the JDK StAX parser, recognizes the JSP namespace
+by URI, decodes XML character references and CDATA, and preserves whitespace
+inside `jsp:text`. Node locations refer to the original source, including before
+XML decoding, with one-based lines and UTF-16 columns. `PageParseException`
+provides the location separately from its build-readable message.
+
+Parsing requires `java.xml`; generation/compilation additionally needs the
+optional `java.compiler` module. The module exports only its public API.
+Initial attribute handling and static include expansion exist. `PageGenerator`
+accepts decoded text or strictly decoded byte sources, including independently
+encoded static resources. BOMs and XML byte signatures/prologs are detected
+before parsing; encoding directives are scanned with the standard lexer rather
+than matched inside comments or EL strings. Full semantic validation remains open.
+Input DOCTYPE declarations and external entities remain unsupported; no external
+documents are read. Generated output DOCTYPE declarations use static `jsp:output`
+metadata and do not relax that input parser boundary.
+
+== Initial Java generator (I3 in progress)
+
+`PageGenerator` emits a public page and a package-private lifecycle base. Final
+Servlet entry points initialize expression fields before invoking user `jspInit`
+and preserve `jspDestroy`. Generated request code obtains/releases a PageContext,
+handles errors and flushes buffered output without flushing after a forward.
+
+The current action set includes include/forward/param, useBean/getProperty/
+setProperty (including wildcard parameter tables), text, dynamic elements and
+named attribute/body capture. Bean construction and property calls are direct;
+metadata comes from the Class-File API. Javac checks module accessibility.
+Property actions resolve the current scoped attribute rather than a stale local.
+
+=== Typed forwarding from included pages
+
+The container-neutral `PageForwardDispatcher` hook belongs to the existing
+qualified `core.binding` facade. A deployment installs it through `PageApplication`
+before serving any page contexts; the factory freezes the hook on first use and
+removes it at undeployment. Foy adapts its typed `JspEngine.ForwardDispatcher`
+without introducing a Foy dependency in core or an Ibarra dependency in Foy.
+The dispatcher owns Servlet response reset and completion; core clears only JSP
+buffers after validating every active including page's output state.
+
+Forwarding passes the current application response chain intact. Core transitions
+only its own inclusion/writer bridges; no application delegates are replaced or
+classified by implementation name. Retained writers preserve application body
+transformations. Successful routes survive PageContext release and later virtual
+thread writes; failed dispatch restores the previous inclusion routes and does
+not mark any page completed. A forwarded target starts with fresh JSP ancestry.
+Generated includes stop the source page after successful descendant forwarding,
+including inside fragments, and final cleanup avoids flushing discarded output.
+
+Error pages include after any ancestor emitted output, preserving the original
+exception. Otherwise they may forward. Servlet headers, status, asynchronous
+dispatch, flush and close policies belong to the container's typed transition;
+the writer bridge adds no asynchronous support to a servlet or filter that lacks it.
+Foy's forward-specific views retain that policy per operation. Original INCLUDE
+references retain their INCLUDE header policy outside that view.
+
+=== Property editors
+
+String literals and request parameters may use an editor declared in the bean's
+same-package `<BeanClass>BeanInfo` class. The compiler reads that class with the
+Class-File API; it never loads or initializes BeanInfo or bean classes. The
+supported metadata subset is a public concrete BeanInfo with a public no-argument
+constructor and public `getPropertyDescriptors()`, constructing literal
+`PropertyDescriptor(String, Class)` values for that bean and assigning literal
+editor classes through `setPropertyEditorClass`. Descriptor arrays, local aliases,
+instance-array caching with null guards, and equal-length `Arrays.copyOf` are
+supported. Every descriptor must name matching conventional public getter/setter
+types, including descriptors unused by the page. Dynamic calls/branches,
+custom accessor names, inherited BeanInfo metadata and other descriptor shapes
+fail at translation with a page diagnostic rather than partially applying metadata.
+When a bean has no explicit BeanInfo of its own, the compiler checks its superclass
+chain before using ordinary coercion. An explicit ancestor BeanInfo is diagnosed
+as unsupported inherited metadata, including when intermediate ancestors have
+no BeanInfo; it is never silently ignored.
+
+The selected editor must be public, concrete, implement `PropertyEditor`, and
+have a public no-argument constructor. Generated request code calls its constructor,
+`setAsText` and `getValue` directly, then calls the bean setter. Empty/missing
+request parameters do not invoke it. Failed empty-string literal conversion
+produces null; other conversion failures follow page error handling. EL uses
+EL coercion, while scripting expressions are directly assigned without automatic
+conversion. Array editors, dynamic `PropertyEditorManager` registration/search
+and bean-accepting editor constructors remain unsupported.
+
+Applications using editors must read `java.desktop`; this JDK module is not
+added to Ibarra's runtime core or compiler descriptor. The official WAR adapter
+declares the read on its generated application module and preserves it when
+registering collection accessor services. Editor support adds no external runtime
+dependency, exports, or opens.
+
+`PageCompiler` is build-only. It writes Java 25 classes and retains generated
+source under `.ibarra-sources`; compile errors map back to page locations.
+Fixtures run generated classes on the module path with direct construction.
+The core module is patched only for the unit fixture's internal factory access;
+an additional I4 fixture packages a separate application JAR and discovers its
+unexported pages through the Java module service declaration, with compiler
+modules excluded. Initial I5 also verifies HTTP deployment on Foy/Chappe.
+
+== Modular packaging (initial I4)
+
+`PagePrecompiler` emits application pages and a `PageIndex` with direct constructor
+references. The JDK Class-File API updates only the compiled module's service and
+package metadata; existing providers, exports, opens and requirements are preserved.
+The core's `PrecompiledPages` catalogue discovers indexes in a supplied module
+layer without creating servlet instances. Deployment creates and initializes pages.
+
+Compilation runs in a temporary staging area; generated Java does not enter the
+application JAR. An external ownership manifest records generated class digests
+so incremental removal cannot overwrite/delete classes replaced by application
+compilation. Generation/compilation failures retain the previous output.
+
+The xref:modules/maven-plugin.adoc[Maven goal] binds to `process-classes`, parses
+root `web.xml` JSP property groups without external documents, and compiles using
+the application module path. Maven's own plugin classpath is a build-only exception.
+
+Default EL uses build-time Peano classes and directly constructed static-final
+ValueExpressions, evaluated against each request's EL context. Provider resolver
+hooks retain generated accessor dispatch in closed application modules. The old
+interpreter path requires `withStartupEl(true)` explicitly and is unavailable in
+production packaging. Page imports resolve lazily through generated class literals.
+TLD functions use immutable Peano descriptors and generated direct static invokers.
+Shared-scope bean lookup/construction/publication use an application-owned
+reentrant lock; creator-only bodies run after unlocking.
+Typed deferred tag attributes capture variables/functions per invocation and
+scope method metadata lookup to the application loader with finally restoration.
+Runtime import changes,
+bean creation and full semantic validation remain open.
+Mixed-syntax includes/preludes/codas structure each file before expanding the
+translation unit, then apply the global EL policy. Source syntax remains available
+for text escapes and XML markup generation. Each file's `pageEncoding` is validated
+independently; only the requested page influences response encoding defaults.
+
+XML declaration metadata is collected over the translation unit before page-body
+generation. XML documents without a JSP root include a declaration by default;
+JSP roots recognized by namespace URI and local name omit it. An included resource's
+root does not change the requested document's default, while its explicit
+`jsp:output` settings contribute statically even inside an unexecuted body.
+Declarations precede all template output and use the effective response character
+encoding rather than source `pageEncoding`. Output actions emit no body instructions;
+tagdependent raw payloads are not metadata. As a conservative compatibility guard,
+differing repeated omission literals are diagnosed, including equivalent aliases.
+SYSTEM/PUBLIC DOCTYPE metadata is collected over the same structured translation
+unit, independently of runtime control flow. Each output action requires root/system
+together; PUBLIC requires SYSTEM. Identical repeated values are accepted and
+conflicts retain their source diagnostics. Generated order is XML declaration,
+DOCTYPE, then normal page content, including preserved prolog whitespace or processing
+instructions. Identifier literals retain decoded characters and use a quote delimiter
+absent from their value; no DTD lookup occurs. URI, public-ID and root-name lexical
+validity remains the page author's responsibility. XML tag-file output remains pending.
+New shared-scope beans use direct construction; existing
+typed shared beans are supported. This is not TCK certification.
+
+== Foy integration
+
+Foy API exposes the optional `JspEngine` service. Deployment opens an application
+with its `ServletContext` and Java module layer before initializers/listeners.
+The binding supplies `*.jsp` / `*.jspx` routing and fresh named JSP instances.
+Foy exposes immutable `JspConfigDescriptor` views and closes engine state after
+component destruction. Without an engine, JSP remains unmapped. TLD listeners
+use build-generated constructor factories and the normal container lifecycle;
+see xref:modules/foy-binding.adoc[the binding reference].
+
+== AOT compatibility
+
+Target: no compiler and no class loading by name at run time in production, no reflection in generated code, no `opens`.

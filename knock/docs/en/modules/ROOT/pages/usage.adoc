@@ -1,0 +1,132 @@
+= Usage patterns
+:description: Probe qualifiers, response data, aggregation rules, error handling, CDI and standalone usage.
+
+[.lead]
+This page covers how to write health checks with Knock, attach diagnostic data, understand aggregation, and read the resulting payload. Every example compiles against the MicroProfile Health 4.0 API.
+
+== Probe qualifiers
+
+Each check declares exactly one probe qualifier. The qualifier selects which endpoint reports it.
+
+[cols="1,2,2"]
+|===
+| Qualifier | Endpoint | Meaning
+
+| `@Liveness`
+| `GET /health/live`
+| The instance is running and not in an unrecoverable state. A `DOWN` liveness usually triggers a restart.
+
+| `@Readiness`
+| `GET /health/ready`
+| The instance is ready to receive traffic (dependencies reachable, caches warm).
+
+| `@Startup`
+| `GET /health/started`
+| Slow initialisation has completed. Lets orchestrators delay liveness probing.
+|===
+
+`GET /health` aggregates **all** registered checks regardless of qualifier.
+
+[NOTE]
+====
+A `HealthCheck` bean with no probe qualifier is not a health-check procedure: per MicroProfile Health §4.2 it is an ordinary CDI bean, silently ignored — neither registered nor a deployment error. Only beans carrying `@Liveness`, `@Readiness`, or `@Startup` are registered as checks.
+====
+
+== Writing a check
+
+[source,java]
+----
+@Readiness
+@ApplicationScoped
+public class BrokerCheck implements HealthCheck {
+
+    @Inject MessageBroker broker;
+
+    @Override
+    public HealthCheckResponse call() {
+        return broker.isConnected()
+            ? HealthCheckResponse.up("message-broker")
+            : HealthCheckResponse.down("message-broker");
+    }
+}
+----
+
+== Attaching data
+
+The response builder accepts typed `withData(...)` entries. Knock serialises `String`, `long`, `boolean` and `int` natively; any other type is rendered with `String.valueOf(...)`.
+
+[source,java]
+----
+return HealthCheckResponse.named("disk-space")
+        .status(freeBytes > threshold)
+        .withData("free", freeBytes)          // long  -> JSON number
+        .withData("path", "/var/lib")          // String -> JSON string
+        .withData("writable", true)            // boolean -> JSON boolean
+        .build();
+----
+
+[source,json]
+----
+{
+  "name": "disk-space",
+  "status": "UP",
+  "data": { "free": 5368709120, "path": "/var/lib", "writable": true }
+}
+----
+
+The `data` object is omitted entirely when no entry is added.
+
+== Aggregation rules
+
+The aggregate status of a probe group follows MicroProfile Health §3.2:
+
+* the global status is **DOWN** as soon as **one** check reports `DOWN`;
+* an **empty** check list yields **UP** (the probe is considered healthy);
+* an **exception** thrown by `HealthCheck.call()` is converted to a `DOWN` check **named after the exception's simple class name**, with no `data` entry — it never propagates out of the endpoint.
+
+[source,json]
+----
+{
+  "status": "DOWN",
+  "checks": [
+    { "name": "database",         "status": "UP" },
+    { "name": "ConnectException", "status": "DOWN" }
+  ]
+}
+----
+
+== Execution model
+
+Checks within a probe group are executed on a `VirtualThreadPerTaskExecutor`: each `call()` runs on its own virtual thread, so a slow check never blocks the others. No platform-thread pool is allocated and no `ThreadLocal` is used.
+
+== Standalone (Java SE)
+
+Without CDI, register checks directly and ask the facade for a report:
+
+[source,java]
+----
+HealthCheckRegistry registry = HealthCheckRegistries.newRegistry();
+registry.register(ProbeType.LIVENESS,  "database",       new DatabaseCheck());
+registry.register(ProbeType.READINESS, "message-broker", new BrokerCheck());
+
+KnockHealthService service = new KnockHealthService(registry);
+
+HealthReport live = service.report(ProbeType.LIVENESS);
+HealthReport all  = service.report(ProbeType.ALL);
+----
+
+`HealthReport` exposes `httpStatus()` (200 / 503) and `json()` (the serialised payload).
+
+== With CDI (Vauban)
+
+Add `knock-cdi-vauban` and Knock discovers every `@Liveness/@Readiness/@Startup` bean automatically: `HealthCheckRegistrar` observes `@Initialized(ApplicationScoped.class)` and registers each qualified bean by probe type, under the check's class name. The registry itself is exposed as an `@ApplicationScoped` bean (`KnockCdiHealthCheckRegistry`, injectable as `HealthCheckRegistry`). No manual registration is required — the wiring runs through the `_VaubanComponents` provider generated at compile time, without reflection.
+
+== With Jakarta REST (Cassini)
+
+Add `knock-jaxrs` and the `/health*` endpoints are published by `KnockHealthResource`. The resource maps each path to the matching `ProbeType`, calls `KnockHealthService`, and returns the JSON payload with the correct HTTP status.
+
+== See also
+
+* xref:concepts.adoc[Concepts] — the vocabulary behind these patterns.
+* xref:internals.adoc[Internals] — registry, aggregator and serialiser implementation.
+* xref:reference.adoc[Reference] — artefacts, packages and endpoints.

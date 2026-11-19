@@ -1,0 +1,140 @@
+= Concepts
+:description: Servlet vocabulary, conceptual model, what changes with Servlet 6.1.
+
+[.lead]
+Before diving into internals, let's pin down the vocabulary. The terms below come from the {spec-servlet-6-1}[Jakarta Servlet 6.1] spec as implemented by Foy.
+
+== Core vocabulary
+
+[cols="1,3"]
+|===
+| Term | Meaning in Foy
+
+| **Request** / **Response**
+| `HttpServletRequest` / `HttpServletResponse`. Implemented by `HttpServletRequestImpl` / `HttpServletResponseImpl`, which adapt xref:chappe::index.adoc[Chappe]'s `Request` / `Response` with no body copy.
+
+| **Servlet**
+| A `jakarta.servlet.Servlet` (typically an `HttpServlet`) responding to a URL mapping. Discovered through `@WebServlet` or `<servlet>` in `web.xml`.
+
+| **Filter chain**
+| Pipeline of `jakarta.servlet.Filter` traversed before the target Servlet. Built by `FilterRegistry` from `<filter-mapping>` and `@WebFilter`. Deterministic order (see xref:reference.adoc[Reference]).
+
+| **Listener**
+| A bean reacting to container lifecycle (`ServletContextListener`), session lifecycle (`HttpSessionListener`), or request lifecycle (`ServletRequestListener`). Enrolled by `ListenerRegistry` from `@WebListener`.
+
+| **`ServletContext`**
+| Implemented by `VidocqServletContext`. One per contextPath. Carries shared attributes, exposed CDI beans, `RequestDispatcher`s.
+
+| **`RequestDispatcher`**
+| `forward` / `include` mechanism. Implemented by `RequestDispatcherImpl`, reuses Chappe routing.
+
+| **Default servlet**
+| The container servlet `foy.default`, mapped to `/` when the application maps nothing there. Serves static resources and resolves welcome files; see xref:usage.adoc#default-servlet-and-static-content[Usage].
+
+| **Async**
+| `request.startAsync()` returns an `AsyncContext`. No platform pool to protect: each request runs on a *virtual thread*; async only decouples response from request on the program side.
+
+| **Multipart**
+| `@MultipartConfig` + `request.getParts()`. Streamed (RFC 7578), memory up to `fileSizeThreshold` then owner-only temporary files, deleted at the end of the request.
+|===
+
+== Metaphor: the layer above the transport
+
+xref:chappe::index.adoc[Chappe] **moves bytes**: it speaks HTTP/1.1 or HTTP/2 over TLS, manages a connection, reads a body. It does not know what a "Servlet" or a "filter" is.
+
+Foy **interprets those bytes**: it turns an HTTP connection into an `HttpServletRequest`, finds the Servlet matching the URL, walks the filter chain, writes the response. It is exactly the division the 19th-century French telegraph administration drew between *stationnaires* (relaying the Chappe code without understanding it) and *bureau directors* (interpreting the message).
+
+== Application discovery
+
+`foy-core` orchestrates the merge between annotations and the descriptor:
+
+. reading of **annotations** (`@WebServlet`, `@WebFilter`, `@WebListener`, `@MultipartConfig`) — resolved at compile time by an APT, exposed through the Vauban `BeanManager`; `WebAppDiscovery` performs that aggregation at `FoyChappeBoot` startup;
+. reading of the **descriptor** (`WEB-INF/web.xml`, supported subset — see xref:reference.adoc[Reference]) via `WebXmlParser`, producing a `WebAppDescriptor`; `DescriptorMerger` merges it with the annotation-discovered components following Servlet 6.1 §8.2.3 (the descriptor wins on a same-name conflict; `metadata-complete="true"` ignores annotations).
+
+Web fragments (`META-INF/web-fragment.xml`) and `ServletContainerInitializer`s of every jar on the class path or module path are discovered and ordered per §8.2.2 before the merge; see xref:usage.adoc#native-layout-descriptors-fragments-and-resources[the native layout] and xref:internals.adoc#discovery-and-deployment-pipeline[the pipeline].
+
+Annotated components are never found by a class scan: they are already known to Vauban at compile time. Only the descriptors and initializers are discovered at start-up.
+
+== Chappe ↔ Servlet bridge
+
+`foy-core` hosts `ChappeServletBridge` (package `io.vidocq.foy.internal.bridge`; `foy-chappe`'s `FoyChappeBoot` builds it), a Chappe `Handler` that:
+
+. exposes the Chappe `Request` as `HttpServletRequestImpl`;
+. runs the `Filter` -> `Servlet` chain on a Foy virtual thread (`foy-request-<n>`), while Chappe's connection thread waits for the response head;
+. hands Chappe the response as soon as it is committed: the head, then a live body fed by the servlet's output through a bounded pipe (`ResponsePipe`), so the client receives the body while the servlet writes it;
+. for a response that never committed (it fitted in the buffer), hands Chappe the whole buffered body at the end of the request.
+
+The four Servlet I/O models map onto that bridge:
+
+* **Blocking streams** — the default; a write blocks only when the client reads slower than the servlet writes.
+* **Async** (`AsyncContext`) — the request outlives `service()`; the response is completed by `complete()`, a dispatch, a timeout or an error.
+* **Non-blocking I/O** (`ReadListener`, `WriteListener`) — callbacks on Foy virtual threads, never on Chappe's connection thread, serialised per stream.
+* **HTTP Upgrade** (`HttpUpgradeHandler`) — after the `101` head, Chappe hands the raw connection to Foy, which exposes it as a `WebConnection`.
+
+[#application-security]
+== Application security
+
+Foy enforces the declarative security of Servlet 6.1 chapter 13 for every request it receives, before any filter or servlet runs. Recipes are in xref:usage.adoc#application-security[Usage].
+
+*Constraints.* The constraints come from `web.xml` and its fragments (`<security-constraint>`), from `@ServletSecurity` on a servlet class, and from `ServletRegistration.Dynamic.setServletSecurity`. They are compiled per url-pattern at deploy time:
+
+* A request is matched with the servlet mapping rules (exact, longest path prefix, extension, default); only the **best pattern** applies.
+* At that pattern, the constraints that cover the request method **combine**: an empty `auth-constraint` excludes (`403` for everyone), otherwise a constraint without `auth-constraint` leaves the method open, otherwise the allowed roles are unioned. `*` stands for every declared role, `**` for any authenticated user (unless the application declares a role named `**`).
+* A method no constraint covers at a constrained pattern is **uncovered**: it is open and reported at deploy time, or refused with `403` under `<deny-uncovered-http-methods/>`.
+* An annotation applies to each url-pattern of its servlet, but **the descriptor wins** on a pattern it names exactly, for every method.
+* A CONFIDENTIAL or INTEGRAL transport guarantee applies when every covering constraint asks for it; Foy treats both as "HTTPS required".
+
+*Mechanisms.* The `login-config` names one mechanism per application: BASIC (the default), FORM or CLIENT-CERT (the identity comes from the TLS client certificate, see xref:usage.adoc#client-cert[Client certificates]). DIGEST is not supported: it fails closed (`403` on protected resources). Credentials are checked against the embedder's `IdentityStore`, which returns the principal and its application roles; Foy maps no group.
+
+*Session-cached identity.* BASIC authenticates each request from its `Authorization` header. FORM is session-based: after a successful login the identity is kept in the session, out of the application's reach (it is not an attribute), and restored on each request of that session; the session id changes at login.
+
+*Role references.* `isUserInRole(name)` follows the `security-role-ref` of the servlet that is executing: a ref whose `role-name` is `name` is replaced by its `role-link`; otherwise the role is tested as it is. Declared roles come from `<security-role>`, `@DeclareRoles` and `ServletContext.declareRoles`.
+
+Jakarta Authentication and Jakarta Authorization are not implemented.
+
+== CDI: a single BeanManager
+
+`foy-cdi-vauban` connects Foy to xref:vauban::index.adoc[Vauban] through a single class: `FoyVaubanBootstrap`, which returns the current `VaubanContainer`'s `BeanManager` for `FoyChappeBoot`.
+
+* `Servlet`/`Filter`/`Listener` instances are resolved through the `BeanManager`, so they can carry `@Inject` for application beans.
+* `ServletContext`, `HttpServletRequest` and `HttpSession` are **not** exposed as CDI beans yet — no `@ApplicationScoped`/`@RequestScoped`/`@SessionScoped` producers exist for them.
+* [.tag-new]#NEW# The CDI request context is active for each request, under any container, Vauban and Weld included, so your own `@RequestScoped` beans work; the session context is active on Vauban, through `vauban-webcontexts` (xref:reference.adoc#other-containers[Other CDI containers]).
+
+Resolution is fully build-time through Vauban — no dynamic proxy, no hot-path reflection, AOT-friendly (GraalVM, Leyden CDS).
+
+== Servlet 6.1 vs 5.0 differences
+
+[cols="1,2,2"]
+|===
+| Aspect | Servlet 5.0 (Jakarta EE 9.1) | Servlet 6.1 (Jakarta EE 11)
+
+| Package
+| `jakarta.servlet.*` (rebrand)
+| `jakarta.servlet.*` (stable)
+
+| Java modules
+| Optional
+| Recommended — Foy enforces it
+
+| I/O threading
+| Platform pool + NIO `Selector`
+| Virtual threads (Foy: one VT per request, next to Chappe's connection VT)
+
+| HTTP/2 server push
+| `PushBuilder` (added in 4.0)
+| Deprecated — Foy's `newPushBuilder()` returns `null`
+
+| Legacy API
+| `SingleThreadModel`, partial `<run-as>`
+| Removed / clarified
+
+| WebSocket
+| Separate spec 2.1
+| Separate spec 2.2 — not implemented in Foy (planned, no date)
+
+| HTTP/3
+| Out of scope
+| Out of scope (transport — see xref:chappe::index.adoc[Chappe])
+|===
+
+Foy focuses on the relevant 2026 subset: no JSP, no runtime SCI through `META-INF/services`, no reflection. Libraries that depended on those features need to be ported through an explicit SPI or an APT.

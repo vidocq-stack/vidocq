@@ -1,0 +1,145 @@
+= Concepts
+:description: CDI 4.1 Lite vocabulary as Vauban materialises it — bean, scope, qualifier, producer, observer, BeanManager.
+
+[.lead]
+This page defines the dependency-injection vocabulary as Vauban materialises it. The model follows the Jakarta CDI 4.1 spec; implementation choices are described in xref:internals.adoc[Internals].
+
+== Bean
+
+A _bean_ is a class managed by the container: its lifecycle, its dependency resolution and its scope are controlled by Vauban.
+
+Three conditions are enough for a class to become a Vauban bean:
+
+. The class is annotated with a scope (`@ApplicationScoped`, `@Singleton`, `@Dependent`, `@RequestScoped`, or a scope of your own) or a stereotype. [.tag-new]#NEW# The annotation processor recognises any annotation meta-annotated `@Stereotype`, `@NormalScope` or `@Scope`, declared in the same compilation or in a library; it used to index only the classes carrying a built-in scope, `@Produces` or `@Interceptor`, so a class marked only with an application stereotype was no bean (vauban#132).
+. The class is visible from the `module-info.java` (`exports` or same module).
+. The class shows up in the bean index written at compile time by the annotation processor, or by the Maven plugin for archives it did not compile.
+
+At compile time, every bean receives two generated artefacts:
+
+* a `_Factory` — implements `io.vidocq.vauban.core.BeanFactory<T>` (a `vauban-core` type) and knows how to instantiate the bean;
+* a `_ClientProxy` — only for normal scopes; intercepts calls and delegates to the active context.
+
+== Scope
+
+A _scope_ defines an instance's lifetime and the context that holds it.
+
+[plantuml]
+....
+@startuml
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+class "Scope" as S {
+  + isNormal : boolean
+  + isPassivating : boolean
+}
+
+class "Context" as C {
+  + get(Bean) : T
+  + isActive() : boolean
+}
+
+class "Bean<T>" as B {
+  + scope : Class<? extends Annotation>
+  + qualifiers : Set<Annotation>
+  + types : Set<Type>
+}
+
+S "1" -- "1" C : associated with
+B "*" -- "1" S : declares
+@enduml
+....
+
+Implemented scopes: see xref:usage.adoc#scopes[the usage table].
+
+== Qualifier
+
+A _qualifier_ is a runtime annotation that discriminates beans of the same type. The _Default qualifier_ is implicit. CDI ships `@Default`, `@Any`, `@Named`; Vauban supports all custom qualifiers, including those with `@Nonbinding` members.
+
+== Producer
+
+A `@Produces` method or field produces a bean whose instantiation is not controlled by the container but by user code. The associated _disposer_ (`@Disposes`) runs on destruction. No dedicated class is generated per producer: the container builds the producer bean at runtime from the declaring bean (created through its `_Factory`) and invokes the producer and disposer through the module's generated `_VaubanComponents` provider, falling back to reflection only when no provider arm exists.
+
+== Observer
+
+An _observer_ is a `@Observes` or `@ObservesAsync` method that reacts to an application event. Async observers are dispatched on virtual threads. Observer resolution is static: the `EventDispatcher` consults a table built at compile time.
+
+== Interceptor
+
+An _interceptor_ wraps a method invocation (`@AroundInvoke`) or constructor (`@AroundConstruct`). Interceptor chains are resolved at compile time and stored in the bean's `_Factory`.
+
+== BeanManager
+
+The `BeanManager` is CDI's SPI façade. Vauban exposes it as `VaubanBeanManager`, read-only for application code. It allows:
+
+* programmatic bean resolution (`getBeans(Type, Qualifier...)`);
+* observer resolution;
+* access to active contexts.
+
+The historical mutable methods (`addBean`, `addObserverMethod`) are unavailable: everything is frozen at build time.
+
+== Injection graph
+
+[mermaid]
+....
+graph LR
+  subgraph Compile["Compile time"]
+    SRC[CDI-annotated<br/>source code] --> IDX[Indexer]
+    IDX --> PROC[Processor APT]
+    PROC --> FAC[(_Factory<br/>_ClientProxy<br/>_VaubanComponents)]
+  end
+  subgraph Runtime["Runtime"]
+    BOOT[VaubanContainer.builder] --> BM[BeanManager]
+    BM --> CTX[Contexts<br/>Application/Request/Dependent]
+    CTX --> INST[Managed instances]
+  end
+  FAC --> BM
+....
+
+The user never touches the `_Factory` classes. They call `VaubanContainer.builder().build()`, select a root bean, and the container does the rest.
+
+== Build Compatible Extensions
+
+CDI 4.1 introduces Build Compatible Extensions (BCEs): `@Discovery`, `@Enhancement`, `@Registration`, `@Synthesis` and `@Validation` hooks. Vauban runs them in the annotation processor at build time and records the result. [.tag-new]#NEW# Each phase runs for every extension before the next one starts, so an extension's `@Registration` sees the beans as every `@Enhancement` left them, including the classes an enhancement made beans (vauban#131). [.tag-new]#NEW# The recorded result keeps the member values of the annotations an `@Enhancement` adds, so an added `@Named("x")` or a qualifier member reaches the container (vauban#135). At boot, the container runs them only for archives the build did not process, and replays the enhancements the recorded patch does not cover. The tests under `vauban-core/src/test/java/io/vidocq/vauban/core/extensions/` exercise each hook — `BceEnhancementTest`, `BceRegistrationSynthesisTest` and `BceRuntimeReplayTest` among them.
+
+[[broken-extension-entry]][.tag-new]#NEW# The processor finds the extensions through `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension` on its processor path. A provider listed there that cannot be loaded or instantiated is skipped with a compiler warning naming the service file and the provider, and the other extensions still run; it used to fail the compilation with a `ServiceConfigurationError` (vauban#199). `vauban:generate` does the same for the `@Enhancement` phase it runs (vauban#189).
+
+An enhancement that adds `@Inject` to a field or initializer creates its injection points,
+including every initializer parameter; constructor and initializer qualifier changes retain their
+member values and identify the exact overload (vauban#139). [.tag-new]#NEW# An enhancement that adds
+`@Inject` to a constructor makes it the bean constructor, as CDI requires: the container creates the
+bean through it rather than through the no-arg constructor, and reports its parameters as injection
+points (vauban#187). This also applies to a class that gains
+its scope through enhancement. The frozen build-time patch records class and member additions,
+so boot does not need to instantiate the extension again to restore them.
+Direct generated field writes and method calls remain the first access path. For a managed class
+whose package provider grants its module lookup, non-public enhanced fields and private initializers
+need no `opens`; a declaring class without that grant still needs a supplied lookup or qualified opens.
+The frozen patch records annotation additions, not removals.
+
+The beans an extension synthesises in the processor travel in `META-INF/vauban-synthetic-metadata.properties`, never in `META-INF/vauban-beans.list`: a synthetic bean has no class of its own for the container to discover. [.tag-new]#NEW# The bean list used to name them too, so an application whose extension synthesised a bean of a JDK type (Ravel's, typed `java.lang.String`) failed to boot with a `NullPointerException` (ravel#21). [.tag-new]#NEW# A bean type given as a language-model type — `addBean(...).type(types.ofClass(info))`, for a class the compilation is still producing — is written into that metadata by name, like a `Class` type, and loaded at run time. Only the `Class` types used to be written, so the bean was typed `Object` alone at run time and its injection points were unsatisfied. A *parameterized* language-model type is still not written: the format has no notation for it (BUG-20261008-01).
+
+[.tag-new]#NEW# A synthetic observer can observe any type the language model expresses: a parameterized type with a wildcard argument (`List<? extends Number>`), a generic array (`List<String>[]`, `T[]`) or an array of a class, besides a class and a parameterized type. `addObserver` used to refuse these in `@Synthesis` with _Unsupported type for synthetic observer_. They are observed whether the container or the processor runs the extension (VAU-OBS-003, vauban#188). [.tag-new]#NEW# When the processor runs it, the metadata records the observed type in a notation the boot reads back: `java.util.List<? extends java.lang.Number>`, `java.lang.String[]`, `(N extends java.lang.Number)[]` for a type variable with its bounds. An observer of a parameterized type such as `List<String>` used to be recorded by a name the boot could not load, and was dropped at boot without a word; a value the boot cannot read now fails the deployment (VAU-OBS-005, vauban#206). [.tag-new]#NEW# The observed type may be a class the compilation is still producing, alone or as a type argument (`addObserver(types.ofClass(info))` with the `ClassInfo` from `@Registration`): the processor records it by name and the boot loads it. It used to fail the build with _Cannot resolve type_ (VAU-APT-003, vauban#210).
+
+[.tag-new]#NEW# Every value `withParam` accepts reaches the creator or the observer when the extension ran in the processor: primitive, `String`, `Class`, `Enum` and annotation arrays, a `ClassInfo` (looked up as a `Class`), an `Annotation` or `AnnotationInfo` (looked up as the annotation, every member kept) and an `InvokerInfo`. Arrays, annotations and invokers used to be dropped without a word, and `Class` and `Enum` params were lost at boot, so the creator read `null`; a synthetic observer got none of its params. A param the build cannot record now fails the build, naming the bean and the param, and a param naming a class the boot cannot load fails the deployment (vauban#130, BUG-20261008-02).
+
+[.tag-new]#NEW# The language model an extension reads comes from the Vauban index, which the processor builds from the source and the container from the class files. `ClassInfo.typeParameters()` gives the type parameters a class declares, each with its bounds (`java.lang.Object` when none is declared); it used to return an empty list (VAU-BCE-007, vauban#207). A class outside the index, such as a JDK type reached through `ClassType.declaration()`, has no type parameters there.
+
+[#extension-phase]
+=== Build time or container start [.tag-new]#NEW#
+
+CDI Lite lets an implementation run an extension at either moment and does not tell the extension which. Most extensions do the same work both times. One that checks the deployment's environment — a configuration value, a resource the application will open — would find the build machine's in the processor. `io.vidocq.vauban.api.ExtensionPhase.isBuildTime()` tells it: `true` while the annotation processor or the Maven plugin runs it, `false` when the container does. Such an extension leaves the check to the container start. Ravel does this for the values `@ConfigProperty` injects (ravel#21).
+
+The answer belongs to the calling thread, for the duration of the call that opened the phase (`ExtensionPhase.atBuildTime(...)`, a `ScopedValue` binding). A build tool that runs extensions itself opens it the same way.
+
+== Differences from CDI Full
+
+Vauban implements the _Lite_ profile. The following are absent:
+
+* runtime portable extensions (`Extension`, `BeforeBeanDiscovery`, etc.) — replaced by BCEs;
+* `@Specializes`;
+* `@ConversationScoped`;
+* passivation (`PassivationCapable`);
+* EL (Expression Language) wired into managed beans.
+
+See xref:reference.adoc#lite-vs-full[the comparison table].

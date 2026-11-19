@@ -1,0 +1,164 @@
+= TCK: MicroProfile Rest Client 4.0
+:description: Conformance status of Cyrano against the official MicroProfile Rest Client 4.0 TCK, tested scope, declared challenges.
+
+[.lead]
+This page consolidates the state of the official MicroProfile Rest Client 4.0 TCK runs against Cyrano. The day-to-day source of truth is link:https://codefloe.com/Vidocq/cyrano/src/branch/main/TCK.md[TCK.md] in the repo; this page reflects the reference snapshot.
+
+== Summary
+
+[cols="2,1,1,3"]
+|===
+| Metric | Value | Detail | Notes
+
+| Tested spec
+| MicroProfile Rest Client 4.0
+| Eclipse Microprofile
+| Artefact `org.eclipse.microprofile.rest.client:microprofile-rest-client-tck:4.0`.
+
+| TCK stack
+| TestNG + Arquillian + ShrinkWrap
+| MicroProfile standard
+| Custom Arquillian *Local* container `CyranoDeployableContainer` (test scope) + WireMock backend.
+
+| Tests executed
+| 235
+| Full suite — **zero exclusions**
+| SSL and SSE families included.
+
+| Tests passed
+| **235 / 235**
+| 100 % PASS
+| `Tests run: 235, Failures: 0, Errors: 0, Skipped: 9`.
+
+| Skipped
+| 9
+| Harness self-skips
+| Self-skips of the official Reactive Streams `PublisherVerification` harness itself (`untested_*` rules and optional failed-publisher cases when `createFailedPublisher()` is not provided by the TCK) — **not Cyrano exclusions**.
+
+| Smoke
+| 3 / 3 PASS
+| `CyranoTckSmokeTest`
+| Out-of-Arquillian, run first as a guardrail.
+|===
+
+[NOTE]
+====
+The SSL (`**/ssl/**`) and SSE (`**/sse/**`) suites were temporarily excluded during the M4 iteration; both are implemented and **re-enabled since 2026-07-13** — SSL through `CyranoSslSupport` (`trustStore`/`keyStore`/`sslContext`, mutual TLS, `hostnameVerifier` applied during the handshake) and SSE through `org.reactivestreams.Publisher` return types (WHATWG stream parser, streaming transport). No suite exclusion remains.
+====
+
+== TCK runner architecture
+
+The `cyrano-tck` module is **in-reactor, gated behind the `tck` Maven profile** (TCK harmonisation — mirroring the `vidocq-runtime-tck-*` pattern of the Vidocq runtime): a plain `mvn install` neither downloads nor runs anything TCK-related, and the release reactor never sees the module.
+
+[NOTE]
+====
+Historically `cyrano-tck` was a standalone out-of-reactor POM: ShrinkWrap Maven Resolver 3.3, transitive to the official TCK, could not parse Model 4.1.0 POMs. That constraint disappeared with the workspace-wide migration to Maven 3.9.16 / Model 4.0.0, and the MP Rest Client TCK harness builds its Arquillian deployments without the ShrinkWrap Maven resolver, so it is safe in-reactor — the same verification already backs `vidocq-runtime-tck-cyrano-restclient`.
+====
+
+Cyrano is a REST **client** implementation: no server-side JAX-RS resources need to be deployed to pass the TCK. The TCK manages its own HTTP backend through **WireMock** (`WiremockArquillianTest.setupServer()`), so the harness is built around a no-op local container plus a JVM-wide WireMock singleton:
+
+[cols="2,3"]
+|===
+| Component | Role
+
+| `CyranoDeployableContainer`
+| Arquillian *Local* container: accepts the `@Deployment` archive without deploying anything to a server, returns the `Local` protocol so tests run inside the test JVM ("as-client" mode, no bytecode enrichment). `deploy`/`undeploy` delegate CDI bootstrap to `VaubanTckBootstrap`.
+
+| `CyranoArquillianExtension`
+| Arquillian `LoadableExtension` SPI — registers the container (qualifier `cyrano` in `arquillian.xml`, selected via `arquillian.launch=cyrano`).
+
+| `VaubanTckBootstrap`
+| Boots/stops a Vauban CDI container per TCK archive: extracts `META-INF/microprofile-config.properties` from the ShrinkWrap archive, projects it through `TckConfigBridge`, registers the archive classes with `CyranoRestClientCdiExtension`.
+
+| `TckConfigBridge`
+| Exports the archive's MP Config properties as system properties so `CyranoBaseUriResolver.defaultMpConfigLookup()` finds them; cleared between deployments. No URL rewrite — the TCK fixtures already target WireMock via `wiremock.server.host`/`wiremock.server.port`.
+
+| `WireMockProbeListener`
+| TestNG listener (`META-INF/services/org.testng.ITestNGListener`) whose **static block starts WireMock at JVM boot** — Arquillian's *Local* lifecycle (`register()`/`start()`) fires too late, after `@AfterSuite`, while TCK `@BeforeMethod` hooks need the backend immediately.
+
+| `WireMockTestBackend`
+| JVM-static WireMock singleton on port **8765** (the value hardcoded in the spec's `WiremockArquillianTest.setupWireMockConnection()`, overridable via `-Dwiremock.server.port=...`), bound to `127.0.0.1`, with an admin-endpoint probe.
+|===
+
+No dependency on Weld, Undertow or any third-party container; WireMock and its transitives are test-scope fixtures of the TCK harness only.
+
+== Commands
+
+[source,bash]
+----
+# Smoke (fast — out-of-Arquillian, 3 tests)
+./run-official-tck-mp-rest-client-4.0.sh
+
+# Full official TCK suite
+./run-official-tck-mp-rest-client-4.0.sh all
+
+# Targeted test
+./run-official-tck-mp-rest-client-4.0.sh -Dtest=ConfigKeyTest
+./run-official-tck-mp-rest-client-4.0.sh -Dtest=CDIInvokeWithRegisteredProvidersTest
+----
+
+The script:
+
+. first installs the reactor locally (`./mvnw install -DskipTests -pl cyrano-api,cyrano-core,cyrano-cdi-vauban -am`);
+. invokes `./mvnw -Ptck,<profile> -pl cyrano-tck test` (`smoke` or `tck-official` profile);
+. produces a `cyrano-tck/target/tck-report.txt` report with the `Tests run: N, Failures: F, Errors: E, Skipped: S` line and the count of passed tests.
+
+Direct invocation without the script:
+
+[source,bash]
+----
+./mvnw -Ptck -pl cyrano-tck test                  # smoke
+./mvnw -Ptck,tck-official -pl cyrano-tck test     # full suite
+----
+
+== Remaining failures
+
+None. The full suite passes:
+
+[source,text]
+----
+Tests run: 235, Failures: 0, Errors: 0, Skipped: 9
+# Tests passed: 235/235
+RESULT: PASS
+----
+
+The 9 skips are self-skips of the official Reactive Streams `PublisherVerification` harness itself (its `untested_*` rules and the optional failed-publisher cases when `createFailedPublisher()` is not provided by the TCK) — not Cyrano exclusions.
+
+== Declared challenges
+
+No official challenge is open against the MP Rest Client spec — the full suite (235 tests) passes at 100 % with no exclusions.
+
+[NOTE]
+====
+The release discipline is clear (see `CLAUDE.md`): **no structural merge** on `cyrano-core`/`cyrano-cdi-vauban` without a TCK PASS on the relevant scope. Any tests disabled for spec interpretation or upstream TCK bug are documented in link:https://codefloe.com/Vidocq/cyrano/src/branch/main/TCK.md[TCK.md] with spec quote, test hash, and reactivation plan.
+====
+
+== TCK milestone history
+
+[cols="2,2,3"]
+|===
+| Milestone | Scope | Outcome
+
+| M4-3
+| `ConfigKeyTest`
+| 2 / 2 PASS — reached.
+
+| M4-5
+| QueryParamStyle, Inheritance, FeatureRegistration, EntityPart
+| 23 / 23 PASS — reached.
+
+| M4-6
+| Async + CDI context propagation + Multivalued headers + Redirect
+| Reached — perimeter excluding SSL/SSE fully green.
+
+| SSL + SSE re-activation (2026-07-13)
+| SSL (trustStore, keyStore, hostnameVerifier, mutual TLS) + SSE (`Publisher` return types)
+| **235 / 235 — 100 % of the official TCK, zero exclusions.**
+|===
+
+== Going further
+
+* xref:internals.adoc[Internals] — full pipeline of a call.
+* xref:reference.adoc#mp-config[Supported MP Config keys].
+* link:https://codefloe.com/Vidocq/cyrano/src/branch/main/TCK.md[TCK.md — detailed repo status].
+* link:https://codefloe.com/Vidocq/cyrano/src/branch/main/ROADMAP.md[ROADMAP.md — milestones].

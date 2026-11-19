@@ -1,0 +1,105 @@
+= Migration
+:description: Migrating from Weld, Quarkus ArC, or OpenWebBeans to Vauban.
+
+[CAUTION]
+====
+Vauban is at `{project-version}`. Real application migration is premature until the TCK coverage is consolidated (see xref:tck.adoc[TCK status]). This page documents model mappings and known pitfalls to prepare the transition.
+====
+
+[.lead]
+Vauban implements the CDI 4.1 Lite profile. Migrating therefore implies dropping Full-profile features when used (runtime portable extensions, `@ConversationScoped`, passivation, application-level EL).
+
+== From Quarkus ArC
+
+ArC shares Vauban's build-time philosophy. The port is conceptually direct; gaps are mostly tooling.
+
+[cols="2,2,3"]
+|===
+| ArC | Vauban | Note
+
+| Full build-time CDI
+| Full build-time CDI
+| Identical model. No paradigm shift on the application side.
+
+| Bytecode generation via Gizmo
+| Bytecode generation via Class-File API (JEP 484)
+| No ASM. Output is compatible with any JVM 25+.
+
+| `@io.quarkus.arc.Unremovable`
+| No direct equivalent
+| Vauban currently only removes unreferenced beans. // TODO@user: confirm whether a similar annotation is planned.
+
+| `@io.quarkus.arc.profile.IfBuildProfile`
+| No equivalent
+| Build-time profiling is the responsibility of the xref:vidocq::index.adoc[Vidocq Runtime] layer.
+
+| Quarkus Dev Mode
+| `vauban-junit` + standard Maven cycle
+| Vauban has no dedicated Dev Mode.
+
+| `@Startup`
+| `@Observes @Initialized(ApplicationScoped.class)`
+| Standard CDI pattern.
+|===
+
+== From Weld
+
+Weld implements the Full profile; some features used by historical applications have no Lite equivalent.
+
+Key differences:
+
+* **No runtime `AnnotatedType` lookup** — Vauban resolves everything at compile time. Code that calls `BeanManager.createAnnotatedType(Class)` must be rewritten as a Build Compatible Extension.
+* **No runtime `BeforeBeanDiscovery` / `AfterBeanDiscovery`** — replaced by the BCE phases `@Discovery` / `@Enhancement` / `@Registration` / `@Synthesis` / `@Validation`.
+* **No portable extensions** — the `Extension` interface is not loaded via `ServiceLoader` at runtime. Migrate every extension to a compile-time BCE.
+* **No `@ConversationScoped`** — refactor to `@SessionScoped`, which Vauban supports with `vauban-webcontexts` when Foy serves the requests (xref:usage.adoc#web-contexts[Web contexts]), or to an explicit application mechanism.
+
+[TODO]
+====
+Exhaustive Weld → Vauban table of supported / unsupported features. // TODO@user
+====
+
+== From OpenWebBeans
+
+OpenWebBeans is very close to Weld in API. The Weld table mostly applies. OWB-specific traits (deferred bean resolution, custom `BeanArchive`) are not supported: Vauban has a single, static discovery mode.
+
+// TODO@user: document once a real migration case shows up.
+
+== CDI 4.1 Lite pitfalls
+
+Lite-profile specifics worth knowing before migrating:
+
+* **`@Decorator`** — supported in Lite, validate against your code. // TODO@user: confirm exact coverage.
+* **`@Specializes`** — not supported. Refactor as composition or a prioritised `@Alternative`.
+* **`@Alternative` + `@Priority`** — supported; check existing priorities.
+* **Producer methods with `@Disposes`** — supported.
+* **`@Inject` field on a normal scope** — correctly resolves the client proxy (see fix VAU-INJ-001 in link:{repo-vauban}/src/branch/main/BUG.md[BUG.md]).
+* **`InjectionPoint` metadata** — supported.
+
+[#upgrading]
+== Upgrading from Vauban {release-version} [.tag-new]#NEW#
+
+What an application built on Vauban `{release-version}` may notice on the `{project-version}` line. The full list is in xref:whats-new.adoc[What's new].
+
+* **Recompile with the matching processor.** The generated classes live in your archive, so an archive compiled by an earlier processor keeps its old client proxies and intercepted subclasses until it is recompiled. See xref:internals.adoc#intercepted-methods[Which methods the intercepted subclass covers].
+* **More beans are intercepted.** An interceptor binding on an interface default method the bean does not override now applies. A `final` bean class, or a bean with a `final` method, bound only that way now fails with a `DeploymentException`. An unproxyable intercepted bean is reported as a `DeploymentException` in every case, with why it is intercepted, where a `final` class used to raise a `DefinitionException`. See xref:internals.adoc#unproxyable-intercepted[unproxyable intercepted beans].
+* **`@AroundInvoke` no longer wraps `@PostConstruct` / `@PreDestroy`.** A class-level `@Transactional`, `@Retry` or `@Timed` no longer opens a transaction, retries or records a metric around the lifecycle callbacks.
+* **Interceptors see the inherited declaration.** `InvocationContext.getMethod()` returns the superclass or interface method a call runs, not the `$$super$` bridge, and `getInterceptorBindings()` includes that declaration's bindings.
+* **Default name of a nested bean class.** `@Named` without a value on `Outer.ReportService` names the bean `reportService`, no longer `outer$ReportService`. Update any lookup by the old name. See xref:usage.adoc#qualifiers[Qualifiers].
+* **Disposers.** A producer's disposer runs once, no longer twice, and its qualified parameters resolve on their qualifiers. See xref:usage.adoc#producers-and-disposes[Producers and `@Disposes`].
+* **`beans.xml` discovery mode.** With `SeContainerInitializer` default discovery, an empty `beans.xml`, or one declaring `annotated`, now discovers only classes with a bean-defining annotation; it used to make every concrete class a bean. Declare `bean-discovery-mode="all"` to keep the old behaviour, or annotate the classes. See xref:se.adoc#bean-archives[Default discovery: bean archives].
+* **Injection failures propagate.** A failed field injection reaches the caller instead of leaving the field `null`. See xref:internals.adoc#boot-failures[Failures are reported, not swallowed].
+
+== Recommended strategy
+
+. Run the existing code on Vauban in a dedicated branch.
+. Build with the Vauban toolchain (`vauban-processor` plus the `vauban-maven-plugin` `generate` goal): the compile-time deployment validation surfaces unsatisfied or ambiguous dependencies, unproxyable beans and circular dependencies at `process-classes`.
+. Cover your injection graph with integration tests using `vauban-junit` (`@VaubanTest`).
+. Activate the CDI 4.1 Lite TCK on the application itself via `vauban-junit`.
+. Iterate on BCEs to replace portable extensions.
+. If you target GraalVM `native-image`, plan for reflection metadata: class loading by name still reflects, and so do the few annotation sites nothing describes. Annotation *matching* does not — run your tests with `-Dvauban.annotations.reflection=warn` to see exactly what is left (see xref:internals.adoc#aot[AOT compatibility]).
+
+== Going further
+
+* xref:concepts.adoc[Concepts] — vocabulary and implementation choices.
+* xref:internals.adoc[Internals] — APT pipeline, threading model.
+* link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.

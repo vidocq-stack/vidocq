@@ -1,0 +1,333 @@
+= Usage
+:description: Sub-resources, providers, filters, content negotiation, async, SSE, Vauban integration.
+
+[.lead]
+This page lists the common recipes beyond Hello World — sub-resources, providers, filters and interceptors, content negotiation, non-blocking async, SSE, and CDI integration via xref:vauban::index.adoc[Vauban].
+
+== Sub-resources and sub-resource locators
+
+[source,java]
+----
+@Path("/users")
+public class UsersResource {
+
+    // Sub-resource method
+    @GET @Produces(MediaType.APPLICATION_JSON)
+    public List<User> list() { ... }
+
+    // Sub-resource locator: returns an instance that takes over dispatching
+    @Path("/{id}")
+    public UserResource user(@PathParam("id") long id) {
+        return new UserResource(id);
+    }
+}
+
+public class UserResource {
+    private final long id;
+    public UserResource(long id) { this.id = id; }
+
+    @GET @Produces(MediaType.APPLICATION_JSON)
+    public User get() { ... }
+
+    @PUT @Consumes(MediaType.APPLICATION_JSON)
+    public Response update(User u) { ... }
+}
+----
+
+== Providers — `MessageBodyReader` / `MessageBodyWriter`
+
+Cassini ships `CassiniJsonbReaderWriter` covering `application/json` through the JSON-B API, with the implementation the application brings: xref:champollion::index.adoc[Champollion] in Vidocq (see xref:getting-started.adoc#json-implementation[the JSON-B implementation]). To add a custom format:
+
+[source,java]
+----
+@Provider
+@Produces("application/x-protobuf")
+@Consumes("application/x-protobuf")
+public class ProtobufProvider
+        implements MessageBodyReader<Message>, MessageBodyWriter<Message> {
+    // ...
+}
+----
+
+Providers are registered via `Application.getClasses()`, the `BeanProvider` (CDI), or `META-INF/services/jakarta.ws.rs.ext.MessageBodyReader`. Best-match resolution is handled by `MessageBodyRegistry` in `cassini-core`.
+
+== `ContextResolver` and `Providers`
+
+[source,java]
+----
+@Provider
+public class JsonbContextResolver implements ContextResolver<Jsonb> {
+    private final Jsonb jsonb = JsonbBuilder.create(
+        new JsonbConfig().withFormatting(true));
+
+    @Override public Jsonb getContext(Class<?> type) { return jsonb; }
+}
+----
+
+Inject `@Context Providers providers` into a resource to fetch an arbitrary `MessageBodyWriter` or `ContextResolver`.
+
+== `ExceptionMapper`
+
+[source,java]
+----
+@Provider
+public class NotFoundExceptionMapper implements ExceptionMapper<NotFoundException> {
+    @Override
+    public Response toResponse(NotFoundException e) {
+        return Response.status(Response.Status.NOT_FOUND)
+            .entity(Map.of("error", e.getMessage()))
+            .type(MediaType.APPLICATION_JSON)
+            .build();
+    }
+}
+----
+
+[#unreadable-entities]
+== Unreadable request entities [.tag-new]#NEW#
+
+When the request entity cannot be read into the resource method's entity parameter — malformed JSON, an empty body, a JSON value of the wrong shape or type for the Java type — Cassini answers `400 Bad Request` and does not call the resource method.
+
+[cols="2,3",options="header"]
+|===
+| The request entity | What Cassini does
+
+| Empty (zero bytes, or no body at all) for a type bound through JSON-B
+| The built-in JSON reader throws `NoContentException`; the runtime turns it into a `BadRequestException` wrapping it, as Jakarta REST §4.2.4 requires. `400`.
+
+| Empty, read by any reader that throws `NoContentException` — yours included
+| The same translation, the same `400`.
+
+| Malformed, or of the wrong shape or type (`{bad`, `[]` where an object is expected, `"x"` where a number is)
+| Offered first to your `ExceptionMapper` for the exception the reader threw. If none matches: `400`, and one `DEBUG` line on the `io.vidocq.cassini.entity` logger. A failure inside a `ReaderInterceptor` is treated the same way.
+
+| Readable, but the JSON-B provider cannot reach the Java type (its package is not exported to the provider, a class is missing)
+| A server error, as before: `500`, logged at `ERROR`.
+|===
+
+The default `400` has an empty body. To give it one, map `BadRequestException`; its cause is the exception the reader threw:
+
+[source,java]
+----
+@Provider
+public class BadRequestMapper implements ExceptionMapper<BadRequestException> {
+    @Override
+    public Response toResponse(BadRequestException e) {
+        return Response.status(Response.Status.BAD_REQUEST)
+            .entity(Map.of("error", "bad_request", "message", "Malformed request body"))
+            .type(MediaType.APPLICATION_JSON)
+            .build();
+    }
+}
+----
+
+A mapper for the exception the reader threw — `ExceptionMapper<JsonbException>`, or a catch-all `ExceptionMapper<RuntimeException>` — still runs first, exactly as before. What a JSON-B provider throws differs from one provider to another (Champollion throws `JsonParsingException`, `JsonbException` or `IllegalStateException`; Yasson always `JsonbException`), so mapping `BadRequestException` is the portable way to shape these answers.
+
+Logging:: No `400` in this table is logged above `DEBUG`. A malformed or mistyped entity that none of your mappers handles writes one line at `DEBUG` on the logger `io.vidocq.cassini.entity` — method, path, exception class and message — and its stack trace at `TRACE`. An empty entity (`NoContentException`) and an entity your own mapper handles write nothing. With `java.util.logging`, these are the levels `FINE` and `FINER`. Set `io.vidocq.cassini.entity.level = FINE` to enable the lines, and let the handler that prints them pass `FINE` too: the JDK's default `ConsoleHandler` stops at `INFO` (`java.util.logging.ConsoleHandler.level = FINE`).
+
+Behaviour change:: Up to {release-version}, these requests answered `500` with the parser's message as the body, and logged a full stack trace at `ERROR` each. To keep a `500` for a given exception, map that exception: your mapper runs before the `400`. An application that shaped empty-body errors by mapping the parser's exception now receives a `NoContentException` inside a `BadRequestException` instead, and should map `BadRequestException`.
+
+[#non-latin1-headers]
+== Response headers with non-Latin-1 text [.tag-new]#NEW#
+
+An HTTP header value is ISO-8859-1 text: no CR, LF, NUL or other control character, and no character above `U+00FF`. A header name is an RFC 9110 token. Chappe refuses a response header that breaks these rules, or that has a `null` value, rather than send it mangled. On the Chappe transport, Cassini then answers `500` with an empty body and logs one line at `ERROR` on the logger `io.vidocq.cassini.chappe.ChappeHttpAdapter`. The line names the header and never contains its value. [.tag-new]#NEW# `cassini-jdk-http` applies the same rule before sending anything, although the JDK `HttpServer` itself only refuses CR and LF: it answers `500` with an empty body and logs the line on `io.vidocq.cassini.jdkhttp.JdkHttpAdapter`, or on `io.vidocq.cassini.jdkhttp.JdkHttpExchange` for a streamed response, which then falls back to a buffered one (cassini#58).
+
+The usual cause is a file name with accented, Cyrillic or CJK characters, or a `€` sign, written as raw text in `Content-Disposition`. Encode such text as RFC 8187 says, in the `filename*` parameter, and keep a plain ASCII `filename` as a fallback for old clients:
+
+[source,java]
+----
+String name = "Отчёт-€.pdf";
+String encoded = URLEncoder.encode(name, StandardCharsets.UTF_8).replace("+", "%20");
+return Response.ok(file)
+    .header("Content-Disposition",
+            "attachment; filename=\"report.pdf\"; filename*=UTF-8''" + encoded)
+    .build();
+----
+
+`URLEncoder` also percent-encodes a few characters that RFC 8187 allows as they are, such as `!` or `~`. Clients decode them all the same.
+
+== Filters and interceptors
+
+[source,java]
+----
+@Provider
+@PreMatching
+public class CorsFilter implements ContainerRequestFilter {
+    @Override
+    public void filter(ContainerRequestContext ctx) {
+        ctx.getHeaders().add("Access-Control-Allow-Origin", "*");
+    }
+}
+
+@Provider
+@Logged                        // custom @NameBinding
+public class LoggingFilter implements ContainerRequestFilter, ContainerResponseFilter {
+    @Override public void filter(ContainerRequestContext req) {
+        System.out.printf("[->] %s %s%n", req.getMethod(), req.getUriInfo().getPath());
+    }
+    @Override public void filter(ContainerRequestContext req, ContainerResponseContext res) {
+        System.out.printf("[<-] %d%n", res.getStatus());
+    }
+}
+----
+
+Ordering is resolved via `@Priority` at stack startup (not per request).
+
+== Content negotiation
+
+Cassini fully implements the §3.7 best-match rules and `Request.selectVariant` (§5.1):
+
+[source,java]
+----
+@GET
+public Response negotiate(@Context Request request) {
+    var variants = Variant.mediaTypes(
+        MediaType.APPLICATION_JSON_TYPE,
+        MediaType.APPLICATION_XML_TYPE).build();
+    var best = request.selectVariant(variants);
+    if (best == null) return Response.notAcceptable(variants).build();
+    return Response.ok(payload(), best).build();
+}
+----
+
+== Async — `@Suspended AsyncResponse`
+
+[source,java]
+----
+@GET @Path("/long")
+public void longRunning(@Suspended AsyncResponse async) {
+    Thread.startVirtualThread(() -> {
+        try {
+            var result = compute();        // may block
+            async.resume(result);
+        } catch (Exception e) {
+            async.resume(e);
+        }
+    });
+}
+----
+
+Async execution leverages virtual threads (Java 25). The `CassiniAsyncContext` (public SPI in `cassini-api`, package `io.vidocq.cassini.spi.http`) drives `CompletionStage` propagation down to the transport. Real-time SSE chunked streaming shipped with milestone M2i; M2h (true non-blocking `CompletionStage` propagation) was dropped as a non-goal — blocking on a virtual thread already yields the carrier (see `ASYNC.md`). See xref:tck.adoc[TCK status].
+
+== Server-Sent Events
+
+[source,java]
+----
+@GET @Path("/events") @Produces(MediaType.SERVER_SENT_EVENTS)
+public void events(@Context SseEventSink sink, @Context Sse sse) {
+    try (sink) {
+        for (int i = 0; i < 10; i++) {
+            sink.send(sse.newEvent("tick-" + i));
+        }
+    }
+}
+----
+
+NOTE: Since milestone **M2i** (done), `CassiniSseEventSink` streams events to the wire as they are emitted: each `send()` writes a chunk through the transport's `CassiniStreamingSink` (real chunked streaming on Chappe and the JDK transport), falling back to buffered emission only on a transport without streaming support (see link:{repo-cassini}/src/branch/main/ASYNC.md[`ASYNC.md`]).
+
+== JAX-RS Client
+
+Add `cassini-client` to the path and `ClientBuilder.newClient()` returns a Cassini client (discovered via `ServiceLoader`). It is a zero-dependency Jakarta REST 4.0 Client built on `java.net.http` + virtual threads, sharing JSON-B (de)serialization with the server side.
+
+[source,java]
+----
+try (Client client = ClientBuilder.newClient()) {
+    User u = client.target("https://api.example.com")
+        .path("/users/{id}").resolveTemplate("id", 42)
+        .request(MediaType.APPLICATION_JSON)
+        .get(User.class);
+}
+----
+
+Supported: `WebTarget` URI building, `ClientRequestFilter` / `ClientResponseFilter` (`@Priority`-ordered), `ReaderInterceptor` / `WriterInterceptor`, async invocation on a virtual thread (`.async().get()`), and auto-registered `Feature`s discovered via `ServiceLoader` (e.g. MicroProfile Telemetry instrumentation — no explicit `.register()` needed).
+
+[source,java]
+----
+Response r = client.target(base).path("/orders")
+    .request()
+    .async()                       // runs on a virtual thread
+    .post(Entity.json(order))
+    .get();
+----
+
+== CDI / Vauban integration
+
+With `cassini-cdi-vauban` on the classpath (or `cassini-cdi` under another CDI container, see xref:reference.adoc#other-containers[Other CDI containers]), `VaubanBeanProvider.getResourceClasses()` walks the `BeanManager` and exposes all `@Path` / `@Provider` classes to the stack. No manual list of singletons is required.
+
+[source,java]
+----
+// From cassini-examples-vauban (Main.java):
+var container = VaubanContainer.builder()
+        .scanClasspath()                 // reads META-INF/vauban-beans.list
+        .build();                        // (generated by vauban-maven-plugin)
+
+var server = Server.builder()            // Chappe
+        .host("0.0.0.0").port(8080)
+        .handler(VaubanApp.composeHandler())   // CassiniStack.builder()… inside
+        .build();
+server.start();
+----
+
+Instead of `scanClasspath()`, beans can also be registered explicitly with `addBeanClass(TodoResource.class)`. `composeHandler()` builds the Cassini stack (`CassiniStack.builder().application(new Application() {}).build()`), which auto-detects the Vauban `BeanProvider` via `ServiceLoader`.
+
+The `CassiniScopeExtension` (BCE) automatically adds `@RequestScoped` to `@Path` classes lacking an explicit scope; a `@Path` interface, such as a Rest Client contract, gets none [.tag-new]#NEW#. See xref:internals.adoc[internals] for the diagram.
+
+[#route-table]
+== Reading the route table [.tag-new]#NEW#
+
+A host that embeds Cassini can ask a built stack what it routes, to print it at startup or show it in a console. `CassiniStack.routes()` returns the table the router resolved, in match order: when two routes match a request, the one listed first wins.
+
+[source,java]
+----
+CassiniStack stack = CassiniStack.builder().application(app).build();
+for (RouteDescription r : stack.routes()) {
+    System.out.printf("%-6s %-30s %s#%s%n",
+            r.isLocator() ? "*" : r.httpMethod(), r.path(), r.resourceClass(), r.methodName());
+}
+----
+
+For the `UsersResource` above, this prints:
+
+----
+GET    /users/{id}                    com.example.UserResource#get
+PUT    /users/{id}                    com.example.UserResource#update
+GET    /users                         com.example.UsersResource#list
+----
+
+The routes behind `user(..)` are listed with the sub-resource method that serves them, because `UserResource` is known when the stack is built. A locator declared to return `Object`, or any type Cassini cannot scan, has no such method until a request reaches it: it is listed once, with an empty `httpMethod()` (`isLocator()` is `true`), and names the locator itself.
+
+`RouteDescription` holds only strings and sets of strings — the HTTP method, the full path template, the binary name of the resource class, the method name, and the `@Produces` and `@Consumes` media types. It carries no `Class` or `Method`, so keeping it does not keep the application's class loader alive after a host has discarded it. The table is computed once, when the stack is built: reading it does no I/O, creates no resource or provider instance, and the list and its sets are immutable.
+
+[#request-statistics]
+== Reading live request figures [.tag-new]#NEW#
+
+A stack counts the requests it serves. `CassiniStack.statistics()` returns those counters, for a host that shows live figures — a console, a metrics exporter, a health page:
+
+[source,java]
+----
+CassiniStatistics stats = stack.statistics().orElseThrow();
+long served = stats.requests();
+double meanMillis = served == 0 ? 0 : stats.totalNanos() / 1e6 / served;
+System.out.printf("%d requests, %d in flight, %d server errors, mean %.2f ms, max %.2f ms%n",
+        served, stats.inFlight(), stats.responses(5), meanMillis, stats.maxNanos() / 1e6);
+----
+
+[cols="1,3"]
+|===
+| Figure | What it counts
+
+| `requests()`
+| The requests answered since the stack was built, whatever their status.
+
+| `inFlight()`
+| The requests handed to the stack and not answered yet.
+
+| `responses(statusClass)`
+| The requests answered with a `1xx` to `5xx` status, for a class from 1 to 5. A request no resource matches counts as the `404` it receives, and one whose resource method throws as the status its exception maps to.
+
+| `totalNanos()`, `maxNanos()`
+| The time spent answering, added up, and the longest single request, in nanoseconds.
+|===
+
+A request is timed from the moment the transport hands it to Cassini to the moment Cassini has written its status, headers and body: filters, routing, the resource method, exception mappers and serialisation included, the network excluded. A request suspended with `@Suspended AsyncResponse` is timed until it is resumed. A server-sent event request is timed until its resource method returns, which is not when the stream closes if the method hands the sink to another thread. The figures are totals since the stack was built, with no breakdown per route: a host that wants a rate subtracts two readings.
+
+Reading them takes no lock, does no I/O and creates no resource or provider instance, so they can be polled from any thread. Updating them allocates nothing and costs about 25 ns per request, the price of two clock reads, measured in `BENCH.md`. They are therefore on by default; `CassiniStack.builder().statistics(false)` builds a stack without them, whose `statistics()` is empty.

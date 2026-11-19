@@ -1,0 +1,336 @@
+= Reference
+:description: Maven artefacts, exported Java modules, supported annotations, `mp.jwt.*` MicroProfile Config keys, supported JOSE algorithms.
+
+[.lead]
+This page consolidates the public surface of Cervantes: artefacts to declare, exported Java modules, recognised security annotations, every `mp.jwt.*` key read by `JwtAuthConfigProducer`, and every JOSE algorithm supported by the signature and encryption engine.
+
+== Maven artefacts
+
+[cols="2,2,3"]
+|===
+| `groupId` | `artifactId` | Role
+
+| `io.vidocq.cervantes`
+| `cervantes-mp-jwt-api`
+| MP JWT 2.2 spec repackaged into a named Java module (`org.eclipse.microprofile.jwt`). No dependency.
+
+| `io.vidocq.cervantes`
+| `cervantes-api`
+| Stable public SPI — `JwtValidator`, `JwtConfig`, `KeyResolver`, `SignatureAlgorithm`, `JwtValidationException`.
+
+| `io.vidocq.cervantes`
+| `cervantes-core`
+| Pure validation engine — JWT parsing, signature verification (RS/ES), claim validation, key loading (PEM, JWKS), JWE decryption. *No* CDI, *no* JAX-RS.
+
+| `io.vidocq.cervantes`
+| `cervantes-cdi-vauban`
+| `@RequestScoped JsonWebToken` producer, `CervantesClaimExtension` BCE for `@Claim`, `JwtAuthConfigProducer` producing the `JwtValidator`.
+
+| `io.vidocq.cervantes`
+| `cervantes-jaxrs`
+| `JwtAuthenticationFilter` (`@PreMatching`, `AUTHENTICATION`), `RolesAllowedDynamicFeature` + `RolesAllowedRequestFilter`, `JwtSecurityContext`.
+
+| `io.vidocq.cervantes`
+| `cervantes-bench`
+| JMH benchmarks (vs SmallRye JWT, opt-in profile `-Pcompare-smallrye`). Not for production.
+
+| `io.vidocq.cervantes`
+| `cervantes-examples`
+| Examples (`ProtectedResource` with `@RolesAllowed` + `@Claim`).
+
+| `io.vidocq.cervantes`
+| `cervantes-tck`
+| Official MP JWT 2.2 TCK runner — in-reactor, but only under the `tck` Maven profile (a plain `mvn install` never builds it). Do not declare as an application dependency.
+|===
+
+All versions at `{project-version}`. Shared parent `io.vidocq:vidocq-parent:0.4.0-SNAPSHOT`.
+
+[#java-modules]
+== Java modules
+
+[cols="2,3"]
+|===
+| Module | Contents
+
+| `org.eclipse.microprofile.jwt`
+| Spec repackaging — annotations `@Claim`, `@LoginConfig`, interfaces `JsonWebToken`, `ClaimValue`. No `requires`.
+
+| `io.vidocq.cervantes.api`
+| `io.vidocq.cervantes.api.*` — stable SPI.
+
+| `io.vidocq.cervantes.core`
+| No unqualified export — the only export is qualified: `exports io.vidocq.cervantes.internal to io.vidocq.cervantes.cdi.vauban`. The stable SPI reaches consumers through `requires transitive io.vidocq.cervantes.api`.
+
+| `io.vidocq.cervantes.cdi.vauban`
+| `exports io.vidocq.cervantes.cdi` (`JsonWebTokenContext`, `CervantesClaimExtension`) and `exports io.vidocq.cervantes.cdi.internal` (producers and generated `_VaubanComponents`). `provides BuildCompatibleExtension` and `VaubanComponentProvider`. `requires jakarta.json` — the `@Claim` resolver maps claims to JSON-P values — and `uses org.eclipse.microprofile.config.spi.ConfigProviderResolver` [.tag-new]#NEW#. `requires io.vidocq.vauban.api` [.tag-new]#NEW#: a runtime dependency under any container, see <<other-containers>>.
+
+| `io.vidocq.cervantes.jaxrs`
+| `io.vidocq.cervantes.jaxrs.*` — filters, `SecurityContext`, `DynamicFeature`. `requires io.vidocq.vauban.api` [.tag-new]#NEW#, see <<other-containers>>.
+|===
+
+`io.vidocq.cervantes.internal` (the core engine) is exported only to `io.vidocq.cervantes.cdi.vauban` — application modules cannot read it, and any application class depending on it signals a regression to be fixed. The `io.vidocq.cervantes.cdi.internal` package, although exported for the Vauban wiring, is likewise not a supported API.
+
+[#class-path]
+=== On a class path [.tag-new]#NEW#
+
+On a class path, `provides` clauses are ignored. This is the case under Weld, in an application server, or in any WAR. So `cervantes-cdi-vauban` also lists `CervantesClaimExtension` in `META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension`. Without it, `@Claim` injection points stay unsatisfied (CERV-007).
+
+`cervantes-cdi-vauban` and `cervantes-jaxrs` are also explicit bean archives: each ships a `META-INF/beans.xml` with `bean-discovery-mode="annotated"`. A container that does not scan implicit archives, such as Weld SE by default, therefore still discovers the producers, the request context, the authentication filter and the `@RolesAllowed` feature.
+
+[#other-containers]
+=== Other CDI containers [.tag-new]#NEW#
+
+Cervantes does not need Vauban. The jars run unchanged under another CDI container, on a class path, and two integration-test modules, grouped under `cervantes-it-other-containers`, prove it on every build (cervantes#24):
+
+[cols="1,2"]
+|===
+| Module | What it runs
+
+| `cervantes-it-weld`
+| Weld SE 6.0 (CDI 4.1), class path, no Vauban, Ravel for MicroProfile Config: the authentication filter bean validates a signed bearer token and sets the security context, an application bean reads the caller through `JsonWebToken`, `@Claim` and `ClaimValue`, a request without a token stays anonymous, and a token signed by another key is rejected.
+
+| `cervantes-it-openliberty`
+| A WAR on Open Liberty 26.0.0.10, MicroProfile 7 distribution (CDI 4.0, Jakarta REST 3.1, JSON-P 2.1, MicroProfile Config 3.1), with Liberty's `mpJwt` and `appSecurity` features off: a signed token reaches a `@RolesAllowed` resource, a missing or forged token gets 401, a missing role 403, and `@PermitAll` needs no token.
+|===
+
+Neither module is published. `vauban-api` is a runtime dependency of `cervantes-cdi-vauban` and `cervantes-jaxrs`, under any container: the Vauban build weaves a `protected` constructor taking `io.vidocq.vauban.api.ProxyLink` into each normal-scoped bean (`JsonWebTokenContext`, `JsonWebTokenProducer`, the authentication filter, the `@RolesAllowed` feature). A container that cannot load that type cannot load the bean class, and Weld drops the bean with an INFO message (`WELD-000119`) before failing the deployment (CERV-008). `vauban-api` holds API types only (13 KB): no Vauban code runs outside Vauban. Its Jakarta CDI dependencies are excluded, so the container's own CDI API stays the only one.
+
+`JwtValidator` stays `@Dependent` on purpose: with no verification key configured, the producer returns `null`, which only a `@Dependent` bean may do.
+
+[WARNING]
+.Deploying on an application server
+====
+* **Keep the server's own JWT and security off** — `mpJwt` and `appSecurity` on Open Liberty. Otherwise the server authenticates the requests and enforces `@RolesAllowed` itself, before Cervantes sees them.
+* **Enable the server's CDI, Jakarta REST, JSON-P and MicroProfile Config** — `cdi-4.0`, `restfulWS-3.1`, `jsonp-2.1` and `mpConfig-3.1` on Open Liberty. Cervantes reads `mp.jwt.verify.*` through the MicroProfile Config API and parses tokens with the JSON-P API.
+* **Nothing to exclude** — the WAR carries the Cervantes jars, the MicroProfile JWT and Config APIs, the JSON-P and JSON-B APIs (through `champollion-api`) and `vauban-api` (API types only); with the features above, the server's copies are loaded first. `cervantes-it-openliberty` builds its WAR with exactly these dependencies.
+====
+
+== Recognised security annotations
+
+[cols="2,3,1"]
+|===
+| Annotation | Effect | Status
+
+| `@jakarta.annotation.security.RolesAllowed({"r1","r2"})`
+| Caller must own _at least one_ of the listed roles (a role is a string from the `groups` claim). Precedence: method > class.
+| ✅
+
+| `@jakarta.annotation.security.PermitAll`
+| Endpoint open to everyone, anonymous included. Disables inherited `@RolesAllowed`.
+| ✅
+
+| `@jakarta.annotation.security.DenyAll`
+| Endpoint always rejected with 403, whatever the token.
+| ✅
+
+| `@org.eclipse.microprofile.jwt.Claim(value="…")`
+| CDI injection qualifier. The typed value is extracted from the current `JsonWebToken`. See the type table below.
+| ✅
+
+| `@org.eclipse.microprofile.jwt.Claim(standard=Claims.email)`
+| Variant naming the claim by its MP standard enum (instead of a free string).
+| ✅
+
+| `@org.eclipse.microprofile.auth.LoginConfig(authMethod="MP-JWT")`
+| Application-level marker (spec compatibility). Cervantes accepts it without specific action — the auth filter is registered anyway.
+| ✅
+|===
+
+== Supported types for `@Claim`
+
+[cols="2,3"]
+|===
+| Java type | Semantics
+
+| `String`
+| Coercion: `JsonString.getString()`, or `toString()` for other scalars.
+
+| `Long`, `long`
+| `JsonNumber.longValue()`. Primitive field supported since Vauban VAU-INJ-PRIM.
+
+| `Integer`, `int`
+| `JsonNumber.intValueExact()`.
+
+| `Double`, `double`
+| `JsonNumber.doubleValue()`.
+
+| `Boolean`, `boolean`
+| `JsonValue.TRUE` / `JsonValue.FALSE`.
+
+| `Set<String>`
+| For array-typed claims (`groups`, `aud`). Deduplicated, insertion order preserved (`LinkedHashSet`).
+
+| `jakarta.json.JsonValue`
+| Raw value parsed by xref:champollion::index.adoc[Champollion].
+
+| `JsonString`, `JsonNumber`, `JsonObject`, `JsonArray`
+| JSON-P sub-types.
+
+| `Optional<T>`
+| Eager. Resolved once at injection. `Optional.empty()` if the claim is missing.
+
+| `org.eclipse.microprofile.jwt.ClaimValue<T>`
+| Lazy MP. `getValue()` re-reads the current request's token.
+
+| `jakarta.inject.Provider<T>`
+| Lazy CDI. `get()` re-reads the current token. (`jakarta.enterprise.inject.Instance<T>` is *not* a supported claim container — use `Provider<T>` instead.)
+
+| `java.util.function.Supplier<T>`
+| Lazy JDK. `get()` re-reads the current token.
+
+| `String` qualified `@Claim("raw_token")`
+| The original raw token — useful for propagation.
+|===
+
+== `mp.jwt.*` MicroProfile Config keys
+
+All keys are read through `ConfigProvider.getConfig()` — provided by xref:ravel::index.adoc[Ravel] in the Vidocq ecosystem.
+
+[#signature-verification]
+=== Signature verification
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `mp.jwt.verify.publickey`
+| Inline public key. Accepts X.509 PEM (`-----BEGIN PUBLIC KEY-----`) or raw base64. A PEM key may be RSA or EC [.tag-new]#NEW#: with `mp.jwt.verify.publickey.algorithm` unset, the key type is detected from the key itself (RSA is tried first, then EC); when the property is set, the key must belong to that family, or loading fails with `not a valid RSA key` / `not a valid EC key`.
+
+| `mp.jwt.verify.publickey.location`
+| Public-key location: `classpath:/…`, `file:/…`, `http://…`, `https://…`. PEM-vs-JWKS auto-detection (format regex).
+
+| `mp.jwt.verify.publickey.algorithm`
+| Expected algorithm family (`RS256`, `ES256`, …). **Unset: both RS256 and ES256 are accepted (MP JWT 2.2)** [.tag-new]#NEW#. When set, tokens announcing another family are rejected.
+
+| `mp.jwt.verify.issuer`
+| Expected issuer — string. Strictly compared to the token's `iss` claim.
+
+| `mp.jwt.verify.audiences`
+| Accepted audiences — comma-separated list. At least one intersection with `aud` required (unless empty).
+
+| `mp.jwt.verify.token.age`
+| Maximum token age, in seconds since `iat`. Optional — and applied only when the `iat` claim is present.
+|===
+
+[NOTE]
+====
+The standard `mp.jwt.verify.clock.skew` key is **not read** by this release: the clock-skew tolerance applied to `exp` and `nbf` is fixed at 60 seconds (`JwtConfig.DEFAULT_CLOCK_SKEW`). Embedders building a `JwtConfig` directly through `cervantes-api` can pass any `clockSkew` duration.
+====
+
+[#config-validated-at-start]
+[NOTE]
+====
+[.tag-new]#NEW# The configuration is validated when the container starts, never during compilation. An unrecognised `mp.jwt.verify.publickey.algorithm`, an unrecognised `mp.jwt.decrypt.key.algorithm` (only the exact, case-sensitive names `RSA-OAEP` and `RSA-OAEP-256` are accepted), an unreadable inline verification key (`mp.jwt.verify.publickey`), an unreadable file or classpath verification key location (`mp.jwt.verify.publickey.location`) or an unreadable decryption key (`mp.jwt.decrypt.key` or `mp.jwt.decrypt.key.location`, always read eagerly) fails the application at container start with a `jakarta.enterprise.inject.spi.DeploymentException` whose message names the property, the offending value and, for an algorithm, the supported values. When no verification key is configured at all, MP JWT stays off and the application starts normally; the decryption settings are then not read. An `http://` or `https://` verification key location is fetched lazily, at the first validation (see xref:migration.adoc[Migration]). A valid value only rejects JWE tokens that announce another algorithm.
+====
+
+=== Token transport
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `mp.jwt.token.header`
+| `Authorization` (default, `Bearer` scheme) or `Cookie` (extraction from a cookie named by `mp.jwt.token.cookie`).
+
+| `mp.jwt.token.cookie`
+| Cookie name carrying the token when `mp.jwt.token.header=Cookie`. Default `Bearer`.
+|===
+
+=== JWE decryption (optional)
+
+[cols="2,3"]
+|===
+| Key | Effect
+
+| `mp.jwt.decrypt.key`
+| Inline decryption private key. PKCS#8 PEM.
+
+| `mp.jwt.decrypt.key.location`
+| Decryption private-key location.
+
+| `mp.jwt.decrypt.key.algorithm`
+| Expected key-wrapping algorithm: `RSA-OAEP` or `RSA-OAEP-256` (exact names; any other value fails at container start). If set, rejects JWEs announcing anything else; if unset, either algorithm is accepted.
+|===
+
+== Supported signature algorithms
+
+[cols="1,2,3"]
+|===
+| Family | Algorithms | JDK implementation
+
+| RSA
+| `RS256`, `RS384`, `RS512`
+| `Signature.getInstance("SHA256withRSA"/…)`. Keys ≥ 2048 bits recommended.
+
+| ECDSA
+| `ES256`, `ES384`, `ES512`
+| `Signature.getInstance("SHA256withECDSA"/…)`. P-256/P-384/P-521 curves. Internal R‖S ↔ DER transcoding (`EcdsaSignatures`).
+
+| Not supported
+| `PS256`, `PS384`, `PS512` (RSA-PSS) — `HS256`, `HS384`, `HS512` (HMAC)
+| Rejected: `SignatureAlgorithm.fromJoseName` resolves only the six RS/ES values, so any other `alg` fails validation with `unsupported or missing 'alg' header`.
+|===
+
+== Supported JWE algorithms
+
+[cols="2,2,3"]
+|===
+| Step | Algorithm | Notes
+
+| Key wrapping (`alg`)
+| `RSA-OAEP`, `RSA-OAEP-256`
+| Single transformation `Cipher.getInstance("RSA/ECB/OAEPPadding")` with an explicit `OAEPParameterSpec` per algorithm (SHA-1 + MGF1/SHA-1, or SHA-256 + MGF1/SHA-256) — explicit parameters avoid the JDK trap of defaulting MGF1 to SHA-1. Both algorithms are covered by MP JWT 2.2 §9.2.4 (`mp.jwt.decrypt.key.algorithm`).
+
+| Content encryption (`enc`)
+| `A256GCM`
+| `Cipher.getInstance("AES/GCM/NoPadding")`.
+
+| (planned)
+| `A128CBC-HS256`
+| Not yet supported — to be added if a future TCK milestone requires it.
+|===
+
+== HTTP behaviour
+
+[cols="2,3"]
+|===
+| Situation | Code
+
+| No token + unannotated or `@PermitAll` endpoint
+| Endpoint runs anonymously (the filter leaves the request anonymous — pass-through).
+
+| No token + `@RolesAllowed` endpoint
+| `401 Unauthorized`.
+
+| Token present, invalid signature / expired `exp` / unexpected `iss` / unexpected `aud` / unauthorised `alg`
+| `401 Unauthorized`.
+
+| Valid token but missing required role
+| `403 Forbidden`.
+
+| Valid token and required role present
+| `200 OK` (method runs).
+
+| `@DenyAll` endpoint
+| `403 Forbidden` even with a valid token.
+|===
+
+== Compatibility
+
+* Java 25 (LTS), Maven 3.9.16.
+* JAX-RS 4.0 (xref:cassini::index.adoc[Cassini] or another compliant runtime).
+* CDI 4.1 Lite (xref:vauban::index.adoc[Vauban]) with BCE support, or any CDI 4.0 Lite container with BCE support — proven on Weld and Open Liberty, see <<other-containers>>.
+* MicroProfile Config 3.1+ (xref:ravel::index.adoc[Ravel]).
+* JSON-P 2.1 (xref:champollion::index.adoc[Champollion]).
+* No Jakarta EE Full Profile dependency.
+
+== Bugs and benchmarks
+
+* link:{repo-cervantes}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (id, symptom, minimal reproduction, status).
+* link:{repo-cervantes}/src/branch/main/BENCH.md[BENCH.md] — JMH `DefaultJwtValidator.validate` vs SmallRye JWT (M7).
+
+== Further reading
+
+* xref:concepts.adoc[Concepts] — claims, signature, JWK Set, JWE.
+* xref:internals.adoc[Internals] — pipeline and threading.
+* xref:tck.adoc[TCK] — status and execution.

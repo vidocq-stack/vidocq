@@ -1,0 +1,442 @@
+= Usage patterns
+:description: Scopes, qualifiers, producers, events, interceptors, integration with Cassini and Foy.
+
+[.lead]
+This page covers the CDI 4.1 Lite patterns Vauban supports and how they integrate with the rest of the ecosystem. Every example compiles; the entire injection bytecode is generated at `process-classes`.
+
+== Scopes
+
+CDI 4.1 Lite ships four standard scopes. Vauban supports all of them, plus `@RequestScoped` whenever a contextual transport is wired in.
+
+[cols="1,3,1"]
+|===
+| Scope | Semantics | Implemented
+
+| `@Singleton`
+| One bean per JVM, no proxy.
+| ✅
+
+| `@ApplicationScoped`
+| One bean per container, normal-scope proxy.
+| ✅
+
+| `@Dependent`
+| One instance per injection point, no proxy.
+| ✅ (default)
+
+| `@RequestScoped`
+| One instance per request, normal-scope proxy.
+| ✅ with Cassini or Foy active, or activated by your code (xref:usage.adoc#activating-the-request-context[Activating the request context]) [.tag-new]#NEW#
+
+| `@SessionScoped`
+| One instance per HTTP session.
+| ✅ with `vauban-webcontexts`, when Foy serves the request (xref:usage.adoc#web-contexts[Web contexts]) [.tag-new]#NEW#
+|===
+
+[NOTE]
+====
+Normal-scoped beans (`@ApplicationScoped`, `@RequestScoped`) get a `_ClientProxy` generated at compile time. The proxy intercepts each call and delegates to the active context. `@Dependent` and `@Singleton` beans do not.
+====
+
+=== Proxyable beans and the `ProxyLink` entry constructor
+
+Because the client proxy subclasses the bean, CDI 4.1 declares some classes _unproxyable_
+for normal scopes: `final` classes, classes with non-private `final` methods, and classes
+without a non-private no-arg constructor. Final members are reported as errors (weaving
+cannot fix them); the missing-constructor case — the common single-`@Inject`-constructor
+style — is handled automatically:
+
+**In any javac-based build (Maven, Gradle, plain `javac`, the standard Vidocq setup),
+nothing to do.** The Vauban annotation processor ships an auto-started javac plugin that,
+when compilation finishes, weaves a synthetic `(ProxyLink)` entry constructor into the
+compiled bean class and points the generated proxy's constructor at it. Your source never
+declares it. Creating the proxy then runs no bean logic — no duplicated construction side
+effects, no `NullPointerException` on dereferenced `@Inject` parameters. The
+`vauban-maven-plugin` applies the same weaving at `process-classes` as a second layer and
+for ecosystem jars that do not go through javac.
+
+**When the build output was not woven** — typically an IDE build: IntelliJ's build system
+writes classes to disk after javac finishes, which defeats the javac plugin — the
+container detects it at boot, before any bean class is loaded, and attaches the
+`vauban-weaver` agent to the current JVM: the same transformation is applied when the
+class is defined. You will see a Vauban warning listing the affected beans plus the JDK's
+standard dynamic-agent notice; behaviour is otherwise identical to a woven build. Disable
+this tier with `-Dvauban.weaving.loadtime=disabled`, or avoid it entirely in IntelliJ by
+enabling _Delegate IDE build/run actions to Maven_. See
+xref:internals.adoc#weaving-tiers[Internals — client-proxy weaving tiers] for the full
+mechanics.
+
+**In a Vauban layer, no agent at all** — under the xref:se.adoc[Java SE launcher] or `Vidocq.run`,
+the layer's class loader applies the same transformation as it defines each class, and the load-time
+tier detects it and stands down.
+
+**Without any weaving tier**, declare the entry constructor yourself
+(`io.vidocq.vauban.api.ProxyLink`, a Vauban extension comparable to Weld's relaxed
+construction):
+
+[source,java]
+----
+@ApplicationScoped
+public class Oidc {
+    private final String issuer;
+
+    @Inject
+    public Oidc(Config config) {
+        this.issuer = config.issuer();
+    }
+
+    protected Oidc(ProxyLink link) {   // client-proxy entry point — keep the body empty
+        this.issuer = null;            // javac requires blank finals to be assigned
+    }
+}
+----
+
+Either way the proxy chains to that constructor (always passing `null`), and the container
+never selects it for injection or bean instantiation. The two differ on one point. The woven
+constructor runs no field initializer at all: javac inlines initializers into the constructors it
+compiles, and this one is added once javac has finished. A hand-written one is compiled like any
+other and does run them — if you declare it yourself, keep field initializers side-effect free.
+
+[#which-proxy]
+=== Which proxy do I get, and what do I have to do? [.tag-new]#NEW#
+
+Find your situation in the left column. Most of them ask nothing of you; the few that do,
+say so in one line. The mechanics behind each row are in
+xref:internals.adoc#proxy-strategies[Internals — one strategy per case].
+
+[cols="2,2,1"]
+|===
+|Your situation |What happens |What you have to do
+
+|A normal-scoped bean you compile — an ordinary top-level class
+|The annotation processor writes `<Bean>_ClientProxy` as Java source next to your class, and
+ the in-module provider instantiates it.
+|Nothing.
+
+|The same bean, but **nested** (a `static` member class)
+|The same, with one wrinkle handled for you: the proxy is named `Outer$Inner_ClientProxy` — a
+ top-level class whose simple name contains a `$`, not a member of `Outer`, since nothing can add
+ one to a class that already exists. The provider keys it by the binary name and instantiates the
+ bean by its canonical one.
+|Nothing.
+
+|`@Produces` returning a **fully public** class of another module — even one that knows nothing
+ about CDI
+|The proxy is generated at build time in *your* producer's package.
+|Nothing.
+
+|`@Produces` returning an **interface**
+|A forwarding implementation is generated in your producer's package. It forwards to whatever
+ your producer method returns — it is not a substitute for one.
+|Return a real implementation.
+
+|`@Produces` returning a class with a **package-private or protected** overridable member, or
+ with **no accessible constructor**
+|The proxy must live in the produced type's own package. The build ships its bytes as a resource
+ and the Vauban class loader places them there at run time.
+|**Start through the Vauban launcher**
+ (xref:se.adoc[Java SE] or `Vidocq.run`). Without it the container cannot start.
+
+|A dependency jar with **no `module-info`**
+|On the module path it is an automatic module: it reads everything, exports everything, and
+ `jlink` refuses it.
+|Run `vauban:modularize` — it patches a copy with a
+ synthesized descriptor.
+
+|A `final` class, or a non-private `final` method, under a normal scope
+|CDI 4.1 §3.10 forbids it: a client proxy is a subclass, and neither can be overridden.
+|Drop `final`, or move the bean to `@Dependent`.
+|===
+
+==== What failure looks like
+
+None of these fail silently. A produced type that needs an in-package proxy, started without the
+launcher, refuses deployment and names the way out:
+
+[source,text]
+----
+Cannot reflectively access com.acme.lib.FraudScreen on the module path. Either (preferred)
+provide a generated VaubanComponentProvider for its module — the APT or packaging plugin emits
+a `_VaubanComponents` and the module declares
+`provides io.vidocq.vauban.api.VaubanComponentProvider with …;` — so the container instantiates
+it in-module without reflection; or open the package:
+`opens com.acme.lib to io.vidocq.vauban.core;`
+----
+
+An unproxyable shape is a deployment error, reported with the bean and the reason:
+
+[source,text]
+----
+Normal-scoped bean com.acme.Ledger cannot be a final class
+Normal-scoped bean com.acme.Ledger has final method charge
+----
+
+And a build that ships an in-package proxy says so, so the launcher requirement is never a
+surprise at run time:
+
+[source,text]
+----
+[WARNING] Shipped an in-package client proxy for 1 produced type(s) that cannot be proxied
+from the producer's package: [com.acme.lib.FraudScreen]. The Vauban class loader defines them
+inside the produced type's own package, which requires the application to start through
+io.vidocq.vauban.classloader.Launch or Vidocq.run, and that package to be exported. Started
+without a Vauban layer, the container falls back to opening the package at runtime and says
+so at boot.
+----
+
+[#qualifiers]
+== Qualifiers
+
+Discriminate multiple implementations of the same type.
+
+[source,java]
+----
+import jakarta.inject.Qualifier;
+import java.lang.annotation.*;
+
+@Qualifier
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.FIELD, ElementType.PARAMETER, ElementType.TYPE})
+public @interface Audit {}
+
+@ApplicationScoped @Audit
+public class AuditLogger implements Logger { /* ... */ }
+
+@ApplicationScoped
+public class Service {
+    @Inject @Audit Logger logger;
+}
+----
+
+`@Named`, `@Default`, `@Any` are supported. Custom qualifiers with `@Nonbinding` members work too.
+
+[.tag-new]#NEW# A `@Named` without a value on a `static` nested bean class takes the class's simple name, as CDI 4.1 §3.1.5 requires: `Outer.ReportService` is named `reportService`, where it used to be named `outer$ReportService`.
+
+[#producers-and-disposes]
+== Producers and `@Disposes`
+
+[source,java]
+----
+@ApplicationScoped
+public class DataSourceProducer {
+
+    @Produces @ApplicationScoped
+    public DataSource dataSource(Config config) {
+        return DataSource.builder().url(config.url()).build();
+    }
+
+    public void close(@Disposes DataSource ds) {
+        ds.close();
+    }
+}
+----
+
+The `@Disposes` callback runs when the producing bean is destroyed. No dedicated class is generated per producer method: the container invokes producers and disposers through the module's generated `_VaubanComponents` provider, with reflection only as a fallback.
+
+[.tag-new]#NEW# The disposer runs once per destroyed instance; it used to run twice, because its own call released the produced instance's context a second time. It now gets a context of its own (CDI 4.1 §6.4.2). Every parameter of a disposer other than the `@Disposes` one is an injection point, qualifiers included (CDI 4.1 §10.4.3): a qualified parameter used to fail validation as an unsatisfied dependency, or receive the `@Default` bean at run time.
+
+== Events
+
+[source,java]
+----
+public record OrderCreated(String id) {}
+
+@ApplicationScoped
+public class OrderService {
+    @Inject Event<OrderCreated> events;
+
+    public void create(String id) {
+        events.fire(new OrderCreated(id));
+    }
+}
+
+@ApplicationScoped
+public class OrderListener {
+    public void onOrder(@Observes OrderCreated event) {
+        System.out.println("new order " + event.id());
+    }
+}
+----
+
+Async observers (`@ObservesAsync`) are dispatched on the `EventDispatcher`'s internal `Executors.newVirtualThreadPerTaskExecutor()`. See xref:internals.adoc#virtual-threads[the threading model].
+
+[[lifecycle-observer-failures]]
+=== When a lifecycle observer throws [.tag-new]#NEW#
+
+The container fires `@Initialized(ApplicationScoped.class)` and `Startup` when it starts, and `Shutdown`,
+`@BeforeDestroyed(ApplicationScoped.class)` and `@Destroyed(ApplicationScoped.class)` when it closes. As CDI 4.1 §9.5
+requires, the first observer of an event that throws stops that event: the observers after it are not notified.
+What Vauban does next (vauban#97):
+
+* **At startup**, the boot fails. `build()` throws a `DeploymentException` that names the observer and the event,
+  with the observer's exception as its cause, and `VaubanContainer.current()` stays `null`: no half-initialized
+  container is left behind. An `Error` thrown by an observer propagates as it is, with the same clean-up.
+* **At shutdown**, `close()` goes on to the end, so the contexts are always destroyed.
+
+In both cases one line is logged at `WARNING` on `io.vidocq.vauban.core.container.VaubanContainer`, with the stack
+trace. It names the event and the observer (`declaring.Class.method`) and says that the remaining observers of the
+event were not notified. Up to now the exception was discarded without a trace, and the application started
+half-initialized.
+
+== Interceptors
+
+[source,java]
+----
+@InterceptorBinding
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.METHOD})
+public @interface Logged {}
+
+@Logged
+@Interceptor
+@Priority(Interceptor.Priority.APPLICATION)
+public class LoggingInterceptor {
+
+    @AroundInvoke
+    public Object around(InvocationContext ctx) throws Exception {
+        long t0 = System.nanoTime();
+        try {
+            return ctx.proceed();
+        } finally {
+            System.out.printf("%s : %d ns%n", ctx.getMethod(), System.nanoTime() - t0);
+        }
+    }
+}
+
+@ApplicationScoped @Logged
+public class Service { /* intercepted methods */ }
+----
+
+`@AroundConstruct` is also supported. Interceptor chains are resolved at compile time and stored in the generated `_Factory`.
+
+== Programmatic `Instance<T>`
+
+[source,java]
+----
+@ApplicationScoped
+public class Router {
+    @Inject Instance<Handler> handlers;
+
+    public Handler resolve(String name) {
+        return handlers.select(NamedLiteral.of(name)).get();
+    }
+}
+----
+
+`Instance<T>` enables dynamic resolution from application code while keeping the injection grid static inside the container.
+
+== Integration with Cassini (Jakarta REST)
+
+`vauban-core` is the underlying DI layer of xref:cassini::index.adoc[Cassini]. `@Path` resources are CDI beans; `@Provider` providers (`MessageBodyReader`/`Writer`) too. No configuration: Cassini consumes the Vauban `BeanManager` directly.
+
+[source,java]
+----
+@Path("/orders")
+@ApplicationScoped
+public class OrderResource {
+    @Inject OrderService service;
+
+    @POST
+    public Response create(OrderRequest req) {
+        service.create(req.id());
+        return Response.created(URI.create("/orders/" + req.id())).build();
+    }
+}
+----
+
+[#activating-the-request-context]
+=== Activating the request context [.tag-new]#NEW#
+
+Outside a request served by Cassini or Foy, a batch job, a message listener, a scheduled task, the request context is not active. CDI Lite gives two ways to activate it (CDI 4.1 §6.5.8, §6.5.9), and Vauban provides both:
+
+* **`@ActivateRequestContext`** on a bean class or method: the built-in interceptor, at priority `Interceptor.Priority.PLATFORM_BEFORE + 100`, activates the context around the call when it is not active, and deactivates it after. An active context is left as it is.
+* **`RequestContextController`**, a `@Dependent` built-in bean: `activate()` activates the context on the current thread and returns `true`, or returns `false` when it is already active; `deactivate()` deactivates it only if that controller activated it, and throws `ContextNotActiveException` when it is not active.
+
+[source,java]
+----
+@Inject RequestContextController requestContext;
+
+void runBatch() {
+    boolean activated = requestContext.activate();
+    try {
+        // @RequestScoped beans live until deactivate()
+    } finally {
+        if (activated) requestContext.deactivate();
+    }
+}
+----
+
+The context is activated per thread: two threads each have their own request and their own `@RequestScoped` instances. Activation fires `@Initialized(RequestScoped.class)`; deactivation fires `@BeforeDestroyed`, destroys the instances, then fires `@Destroyed(RequestScoped.class)`.
+
+== Integration with Foy (Jakarta Servlet)
+
+xref:foy::index.adoc[Foy] exposes servlets, filters and listeners as CDI beans, and `@SessionScoped` follows the HTTP session, through the web contexts below. `@RequestScoped` follows the HTTP request: Foy activates the request context around each request through the built-in `RequestContextController`, each request on its own thread with its own instances.
+
+[#web-contexts]
+=== Web contexts: `@SessionScoped` [.tag-new]#NEW#
+
+CDI Lite has no session context: CDI 4.1 §6.7.2 leaves it to the container that implements Servlet. `vauban-webcontexts` provides it, independent of any transport, and a web container drives it. With Foy there is nothing to do: `foy-cdi-vauban` depends on `vauban-webcontexts` and binds each request's `HttpSession` to it.
+
+* **One instance per session.** A `@SessionScoped` bean is created on first use in a session and kept in that session's attributes, one attribute per bean, so every request of the session sees it. The first session-scoped bean a request uses creates the session, as `getSession()` would.
+* **Ends with the session.** When the session is invalidated or expires, Vauban fires `@BeforeDestroyed(SessionScoped.class)`, destroys the session's instances (their `@PreDestroy` methods run, and may still use session-scoped beans), then fires `@Destroyed(SessionScoped.class)`. A new session fires `@Initialized(SessionScoped.class)`. The event payload is the `HttpSession`.
+* **Outside a request, the context is inactive**: a call to a session-scoped bean throws `ContextNotActiveException`.
+* **Not covered**: passivation. Vauban does not check at deployment that a session-scoped bean is `Serializable`, and the instances are not written out with the session. `@ConversationScoped` is not provided.
+* **The extension must be seen at build time.** `vauban-webcontexts` registers its context from a build-compatible extension. When the application is compiled with Vauban's annotation processor, `foy-cdi-vauban` on the processor path brings it along.
+
+The same scenarios, two clients, one cart each, a new cart after `invalidate()`, the events, pass on Foy with Vauban and on Foy hosting Weld's own Servlet integration, which serves as the reference (Foy's `foy-it-vauban-session` and `foy-it-weld-servlet` modules).
+
+Another web container drives the context through `WebContexts`:
+
+[source,java]
+----
+// When a request starts and ends, on the thread that serves it:
+WebContexts.activateSession(store);      // store: a SessionStore over the request's session
+WebContexts.deactivateSession();
+
+// When the web container creates and ends a session:
+WebContexts.sessionInitialized(beanManager, session);
+WebContexts.destroySession(beanManager, store, session);
+----
+
+`SessionStore` adapts the session's attributes: get, set, remove, list, and the object to lock while an instance is created, the same for every request of one session.
+
+[#jndi]
+== The JNDI `java:` namespace [.tag-new]#NEW#
+
+Code written for an application server looks its resources up by name: `new InitialContext().lookup("java:comp/env/jdbc/orders")`. `vauban-naming` answers those names from the running container, with the bean each name is declared for, such as the `@Named("orders")` `DataSource` bean. Declaring names, the four namespaces, links and what is checked at startup: xref:jndi.adoc[The JNDI java: namespace].
+
+== JUnit tests with `@VaubanTest`
+
+[source,java]
+----
+@VaubanTest
+class GreetingServiceTest {
+    @Inject GreetingService greeting;
+
+    @Test
+    void hello() {
+        assertEquals("Hello, Vauban!", greeting.hello("Vauban"));
+    }
+}
+----
+
+The extension boots a minimal container per test class. See xref:reference.adoc#junit-extension[the JUnit reference].
+
+[[test-sources-beans]]
+=== Beans in the test sources [.tag-new]#NEW#
+
+A bean can live in `src/test/java`, in the same package as the main beans, and inject them. Maven compiles a
+module twice, the main sources then the tests, and the processor runs on both. The test compilation used to emit a
+second `_VaubanComponents` and a second `META-INF/vauban-beans.list`: when the tests ran, they hid the main ones, and
+the main beans went missing (`Unsatisfied dependency` on a bean that exists). Now (vauban#101):
+
+* the test compilation names its provider `_VaubanComponentsTests`. The container finds it through the main
+  `_VaubanComponents` of the same package, so no `provides` clause is needed, and none could be written: the
+  `module-info` belongs to the main sources;
+* its `vauban-beans.list`, `vauban/required-opens.list`, `vauban-bce-runtime.list` and contexts list also carry the
+  main compilation's lines, so hiding the main ones loses nothing.
+
+The processor recognises a test compilation when the main `_VaubanComponents` it sees lies outside its own output, or
+from the usual layouts (Maven's `target/test-classes`, Gradle's `build/classes/java/test`). Another layout can name
+the main output with `-Avauban.mainOutput=<dir>`. The build-compatible extensions' binary outputs (enhancement patch,
+synthetic beans) are not merged: a test compilation that writes one next to a main one gets a warning.

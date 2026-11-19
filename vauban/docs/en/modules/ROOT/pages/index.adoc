@@ -1,0 +1,81 @@
+= Vauban
+:description: CDI 4.1 Lite container, native Java Modules, build-time code generation, zero runtime dependency.
+
+[.text-center]
+image::vauban-logo.png[Vauban,300,role=module-logo]
+
+
+[.lead]
+Vauban is a CDI 4.1 container that resolves injection at compile time. Native Java Modules, zero runtime dependency, no dynamic proxies — dependency wiring computed like artillery trajectories: drawn on paper before the first shovel of dirt is turned.
+
+== Origin of the name
+
+Sébastien Le Prestre, marquis de Vauban (1633-1707), Marshal of France, military engineer to Louis XIV. Designer of the _ceinture de fer_, author of the _Treatise on the Attack and Defence of Fortresses_. See https://fr.wikipedia.org/wiki/S%C3%A9bastien_Le_Prestre_de_Vauban[the Wikipedia article].
+
+Vauban turned defence into a mathematical art: trajectories, sapping, counter-mining, all computed in advance. The Vauban container brings the same discipline to CDI. Every `@Inject` relationship is resolved at `process-classes`. An `Indexer` enumerates beans, a `Processor` emits `_Factory` bytecode via the Class-File API. At runtime, nothing is computed — only instantiation remains. The fortifications stand before the first request hits.
+
+== At a glance
+
+[cols="1,3"]
+|===
+| Implemented spec | {spec-cdi-4-1}[Jakarta CDI 4.1 — Lite profile]
+| Repo | {repo-vauban}
+| Java | 25 (LTS)
+| Java modules | `io.vidocq.vauban.api`, `io.vidocq.vauban.core`, `io.vidocq.vauban.indexer`, `io.vidocq.vauban.processor`, `io.vidocq.vauban.junit`, `io.vidocq.vauban.classloader.spi`, `io.vidocq.vauban.classloader`, `io.vidocq.vauban.weaver`, `io.vidocq.vauban.sjar`, `io.vidocq.vauban.naming`
+| Runtime dependencies | Spec APIs only: `jakarta.cdi`, `jakarta.cdi.lang.model` and `jakarta.el` — `vauban-core` also requires the JDK's `jdk.unsupported` module
+| CDI 4.1 Lite TCK | **774/774** — see xref:tck.adoc[detailed status]
+|===
+
+== Three identifying traits
+
+. **Zero runtime dependency** — Jakarta CDI spec only. No Weld, no ArC, no Guice. The rule covers
+what Vauban *ships*: every published library depends on the Jakarta APIs it implements and on
+nothing else. Build-time tooling is held to a different standard — a Maven plugin runs on the
+build machine, never in your application, so it may take a dependency when that saves writing
+something better done elsewhere. Each one is named in the xref:reference.adoc[reference].
+. **Static code generation** — the annotation processor and the Class-File API (JEP 484), at build time. Beans are instantiated, injected and proxied by generated code living in your own packages: no bytecode generated at run time, no reflective access that needs an `opens`, no external bytecode library (ASM, Byte Buddy). What still reflects is listed under xref:internals.adoc#aot[AOT compatibility].
+. **Strict Java Modules** — every Vauban artefact has its own `module-info.java`. No classpath, no unjustified `opens`, no `add-opens` at launch.
+
+== Position in the ecosystem
+
+[mermaid]
+....
+graph TB
+  subgraph Build["Compile time (process-classes)"]
+    IDX[vauban-indexer]
+    PROC[vauban-processor<br/>APT + Class-File API]
+    PLUGIN[vauban-maven-plugin]
+    IDX --> PROC
+    PROC --> PLUGIN
+  end
+  subgraph Runtime["Runtime (generated code, no opens)"]
+    API[vauban-api<br/>version marker + generated-code SPI]
+    CORE[vauban-core<br/>VaubanContainer.builder<br/>BeanManager, contexts, events]
+    API --> CORE
+  end
+  PROC -.generates.-> FACT[_Factory<br/>_ClientProxy]
+  FACT --> CORE
+  CORE --> CASSINI[Cassini]
+  CORE --> FOY[Foy]
+  CORE --> MPS[Vidocq Runtime]
+  classDef rt fill:#e1f5fe,stroke:#0288d1
+  class CORE,API rt
+....
+
+== Quick links
+
+* xref:getting-started.adoc[Getting started]
+* xref:usage.adoc[Usage patterns]
+* xref:se.adoc[Vauban in Java SE] [.tag-new]#NEW#
+* xref:jndi.adoc[The JNDI java: namespace] [.tag-new]#NEW#
+* xref:concepts.adoc[Concepts]
+* xref:internals.adoc[Internals]
+* xref:tck.adoc[TCK status]
+* xref:performance.adoc[Performance]
+* xref:reference.adoc[Reference]
+* xref:migration.adoc[Migration]
+
+[NOTE]
+====
+No performance numbers appear inline in this page.
+====

@@ -1,0 +1,227 @@
+= Getting started
+:description: First CDI bean resolved at compile time by Vauban.
+
+[.lead]
+This page shows how to write a first `@ApplicationScoped` bean, wire it via `@Inject`, and bootstrap the container. The build generates every byte of injection bytecode: no dynamic proxies, no runtime reflection.
+
+== Prerequisites
+
+* **Java 25** — Temurin recommended. Module path enabled.
+* **Maven 3.9.16** — pinned via `.sdkmanrc` at the repo root.
+* Strict Java Modules: one `module-info.java` per Maven module.
+
+== Maven coordinates
+
+[source,xml,subs=attributes+]
+----
+<dependencies>
+    <dependency>
+        <groupId>io.vidocq.vauban</groupId>
+        <artifactId>vauban-api</artifactId>
+        <version>{project-version}</version>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.vauban</groupId>
+        <artifactId>vauban-core</artifactId>
+        <version>{project-version}</version>
+        <scope>runtime</scope>
+    </dependency>
+    <dependency>
+        <groupId>io.vidocq.vauban</groupId>
+        <artifactId>vauban-processor</artifactId>
+        <version>{project-version}</version>
+        <scope>provided</scope>
+    </dependency>
+</dependencies>
+
+<build>
+  <plugins>
+    <plugin>
+      <groupId>io.vidocq.vauban</groupId>
+      <artifactId>vauban-maven-plugin</artifactId>
+      <version>{project-version}</version>
+      <executions>
+        <execution>
+          <goals>
+            <goal>generate</goal>
+          </goals>
+        </execution>
+      </executions>
+    </plugin>
+  </plugins>
+</build>
+----
+
+== First `@ApplicationScoped` bean
+
+[source,java]
+----
+package io.example;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class GreetingService {
+    public String hello(String name) {
+        return "Hello, " + name + "!";
+    }
+}
+----
+
+== First `@Inject`
+
+[source,java]
+----
+package io.example;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
+@ApplicationScoped
+public class HelloApp {
+
+    @Inject GreetingService greeting;
+
+    public void run() {
+        System.out.println(greeting.hello("Vauban"));
+    }
+}
+----
+
+[NOTE]
+====
+Both field and constructor injection are supported. Constructor injection is recommended to ease unit testing outside the container.
+====
+
+== Minimal `module-info.java`
+
+[source,java]
+----
+module io.example {
+    requires jakarta.cdi;
+    requires io.vidocq.vauban.core;
+    exports io.example;
+}
+----
+
+== Container bootstrap
+
+[source,java]
+----
+import io.vidocq.vauban.core.container.VaubanContainer;
+
+void main() {
+    try (var container = VaubanContainer.builder().scanLocal().build()) {
+        var app = container.select(HelloApp.class);
+        app.run();
+    }
+}
+----
+
+`try-with-resources` shuts the container down cleanly: `@PreDestroy` callbacks run, contexts are purged, and `@BeforeDestroyed(ApplicationScoped.class)` then `@Destroyed(ApplicationScoped.class)` events are fired.
+
+== Build and run
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp install -DskipTests
+java --module-path target/modules --module io.example/io.example.Main
+----
+
+[TIP]
+====
+To run the application inside a Vauban layer instead of the boot layer — which is what lets a normal-scoped `@Produces` of a third-party class resolve with zero `opens`, and keeps the load-time agent out of IDE runs — start it through the launcher [.tag-new]#NEW#:
+
+[source,bash]
+----
+java --module-path target/modules --add-modules ALL-MODULE-PATH \
+     --module io.vidocq.vauban.classloader/io.vidocq.vauban.classloader.Launch io.example/io.example.Main
+----
+
+Your `Main` is unchanged. `--add-modules ALL-MODULE-PATH` is needed because, with `--module`, the launcher is the only root module. See xref:se.adoc[Vauban in Java SE].
+====
+
+The annotation processor has emitted the `_Factory` classes for each bean, and the Maven plugin's `generate` goal has written the `META-INF/vauban-beans.list` bean index — both land in `${project.build.outputDirectory}` (`target/classes`). At startup Vauban instantiates those factories and calls the generated methods: nothing reflects into your classes to build or inject a bean.
+
+== Three bean discovery modes
+
+Vauban ships three strategies, depending on context:
+
+[cols="1,3,2"]
+|===
+| Mode | Use case | API
+
+| `scanLocal()`
+| Standard single-module application
+| `VaubanContainer.builder().scanLocal().build()`
+
+| `scanClasspath()`
+| Multi-module application with transitive CDI dependencies
+| `VaubanContainer.builder().scanClasspath().build()`
+
+| [[scan-unprocessed]]`scanUnprocessedBeanArchives(onArchive)` [.tag-new]#NEW#
+| Next to `scanClasspath()`: the `beans.xml` archives that no Vauban build step indexed, such as a dependency jar compiled without the processor, and only those. An archive with `META-INF/vauban-beans.list`, a generated `VaubanComponentProvider` or `META-INF/vauban-bce-processed` is left to `scanClasspath()`, so no bean is registered twice; the discovery mode of each `beans.xml` is honoured. `onArchive` receives the root of each archive scanned, to report it. Vidocq calls it when an IDE build skipped `vidocq:generate` (Vidocq/vidocq#83).
+| `VaubanContainer.builder().scanClasspath().scanUnprocessedBeanArchives(url -> log(url)).build()`
+
+| `addBeanClass(...)`
+| Unit tests, programmatic selection
+| `VaubanContainer.builder().addBeanClass(MyBean.class).build()`
+|===
+
+== Runnable examples
+
+Everything above is a fragment. `vauban-examples/` in the repository holds the working versions,
+each module carrying one thing worth seeing. They are built by the reactor, so `./mvnw install` on
+the project runs them all.
+
+[cols="1,2"]
+|===
+| Module | What it shows
+
+| `example-lib`
+| An ordinary library module: beans, producers, a `module-info` that exports what it must and opens
+  nothing.
+
+| `example-app`
+| The application that consumes it — the smallest complete setup, on the module path.
+
+| `example-lib-securized`
+| The same library shipped as an *sjar*: exported packages stay in clear text, everything else is
+  encrypted, and the Vauban class loader decrypts at definition. A service can expose a clear
+  interface over an encrypted implementation.
+
+| `example-test`
+| The integration tests that run the above as real applications rather than unit tests.
+
+| `example-cdi1015-lib` + `example-cdi1015-app`
+| **The one to read first if you care about proxies.** A CDI-agnostic third-party library and an
+  application that produces four of its types, covering every *proxying* case in one runnable place:
+  a fully-public class and an interface (proxied from the producer's package), a type with a
+  package-private member and one with no accessible constructor (proxy placed inside the library's
+  own package by the class loader), an intercepted bean, and a nested bean. Zero `opens`
+  throughout. This is https://github.com/jakartaee/cdi/issues/1015[jakartaee/cdi#1015^], solved.
+  It has its own
+  link:{repo-vauban}/src/branch/main/vauban-examples/example-cdi1015-app/README.adoc[README^].
+
+| `example-legacy-lib` + `example-legacy-app`
+| The *packaging* case the pair above does not cover: a dependency shipped with *no*
+  `module-info`, which is an automatic module on the module path and which `jlink` refuses. The
+  application wires `vauban:modularize` in its POM — read it to see how the goal is configured —
+  and its test reads back the descriptor the build synthesized, including the
+  `requires jakarta.inject` that nothing declared and that was derived from the jar's bytecode.
+
+| `example-enhanced-app`
+| The last resort, for when no class loader will be there to place a proxy — a GraalVM native
+  image defines its classes at build time. `vauban:enhance-dependencies` writes a *copy* of the
+  dependency with the proxy already inside the library's own package, a provider beside it, and a
+  descriptor rewritten to offer that provider as a service. The test reads all three back, plus the
+  manifest entries by which the copy declares it is not the original artefact — it drops the
+  signature it can no longer honour, which is why the goal is opt-in.
+|===
+
+== Next step
+
+* xref:usage.adoc[Usage patterns] — qualifiers, producers, events, interceptors, and
+  xref:usage.adoc#which-proxy[which proxy you get in each case].
+* xref:concepts.adoc[Concepts] — bean, scope, qualifier, BeanManager.

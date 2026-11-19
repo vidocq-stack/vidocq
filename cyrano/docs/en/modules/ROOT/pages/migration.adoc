@@ -1,0 +1,145 @@
+= Migration
+:description: Migrating from SmallRye Rest Client, RESTEasy Client or Jakarta REST Client to Cyrano.
+
+[NOTE]
+====
+Cyrano is at `{project-version}` and passes the official MicroProfile Rest Client 4.0 TCK at **235 / 235 — 100 %, zero exclusions** (see xref:tck.adoc[TCK status]). This page documents the model correspondences and known pitfalls for the transition.
+====
+
+[.lead]
+Cyrano implements MicroProfile Rest Client 4.0 strictly. Migration means aligning annotations with the spec and giving up the proprietary extensions of existing implementations.
+
+[#upgrading]
+== Upgrading from {release-version} [.tag-new]#NEW#
+
+What changes for an application that moves from Cyrano {release-version} to the `{project-version}` line (full list: xref:whats-new.adoc[What's new]):
+
+* **Client methods returning `Publisher`** — declare `org.reactivestreams:reactive-streams` yourself: `cyrano-core` no longer brings it. Every other application drops an automatic module and can be linked with jlink. xref:reference.adoc#reactive-streams[Reactive Streams for `Publisher`].
+* **Interfaces without a `cyrano-processor` proxy, in a named module** — keep only `opens <package> to io.vidocq.cyrano.core`, and remove any `--add-reads io.vidocq.cyrano.core=...` or `--add-exports io.vidocq.cyrano.core/io.vidocq.cyrano.internal=...` added to make the runtime-fallback proxy work. With `cyrano-processor` on the processor path, no `opens` is needed. xref:internals.adoc#runtime-fallback[Tier 3: runtime generation].
+* **`RestClientBuilderListener`** — `onNewBuilder` now runs once per builder, where it ran up to three times. A listener that counted calls, or relied on the call from `build()`, needs updating. xref:usage.adoc#listeners[Builder and client listeners].
+* **`CompletionStage` methods** — response filters, readers and `AsyncInvocationInterceptor.applyContext` no longer run on the caller's thread when the response is already complete. Code that relied on running there (a `ThreadLocal` set by the caller, say) must propagate its context through `AsyncInvocationInterceptor`. xref:usage.adoc#async[Async — `CompletionStage<T>`].
+
+== From SmallRye Rest Client
+
+SmallRye is the implementation used by Quarkus and WildFly. Its spec fidelity is high; porting is conceptually direct.
+
+[cols="2,2,3"]
+|===
+| SmallRye | Cyrano | Note
+
+| `@RegisterRestClient`
+| `@RegisterRestClient`
+| Identical (MP spec).
+
+| `@RestClient` (qualifier)
+| `@RestClient` (qualifier)
+| Identical.
+
+| `RestClientBuilder.newBuilder()`
+| `RestClientBuilder.newBuilder()`
+| Identical. Resolved via `ServiceLoader`.
+
+| `io.vertx` or Apache HttpClient transport
+| `java.net.http.HttpClient` (JDK)
+| No Vert.x configuration. Vert.x connection-pool settings have no equivalent — the pool is internal to `HttpClient`.
+
+| `@io.smallrye.faulttolerance.api.RateLimit`
+| No equivalent in Cyrano
+| Use xref:heisenberg::index.adoc[Heisenberg] (MP Fault Tolerance) alongside.
+
+| OpenTelemetry propagation via SmallRye OTel
+| Via xref:humboldt::index.adoc[Humboldt] server-side + W3C propagator
+| To be documented.
+
+| Quarkus-style `application.properties` (`quarkus.rest-client.users-api.url=...`)
+| `users-api/mp-rest/url=...` (standard MP Config keys)
+| Namespace switch. Official MP Config keys are preserved.
+
+| `@ClientHeaderParam` + `default` method
+| Same
+| Identical.
+
+| Dev mode (hot reload)
+| Standard Maven cycle
+| No dev-mode equivalent for now.
+|===
+
+== From RESTEasy MicroProfile Rest Client
+
+RESTEasy exposes the same MP Rest Client API plus a proprietary extension layer.
+
+[cols="2,2,3"]
+|===
+| RESTEasy | Cyrano | Note
+
+| `@RegisterRestClient` + `@Path`
+| `@RegisterRestClient` + `@Path`
+| Identical.
+
+| `org.apache.http.client.HttpClient` (Apache HC 4.x or 5.x)
+| `java.net.http.HttpClient` (JDK)
+| Zero external dependency. No Apache HC config to port — JDK `HttpClient` is configured through standard MP Config keys.
+
+| `@org.jboss.resteasy.annotations.providers.multipart.PartType`
+| Not supported
+| Multipart is not covered by MP Rest Client 4.0.
+
+| `ResteasyWebTarget` (fluent API)
+| Standard `RestClientBuilder`
+| The JAX-RS Client fluent API is not the MP Rest Client operating mode (typed interface only).
+
+| `@ClientHeaderParam`
+| Same
+| Identical.
+
+| `org.jboss.resteasy.client.jaxrs.ResteasyClient`
+| `RestClientBuilder.newBuilder().build(iface)`
+| The Cyrano client is an interface proxy, not a `WebTarget`.
+
+| `@Provider` filters
+| `ClientRequestFilter` / `ClientResponseFilter` filters via `@RegisterProvider`
+| Standard JAX-RS — identical declarations.
+
+| Logging via `RestClientListener`
+| `RestClientListener` / `RestClientBuilderListener`, or `@RegisterProvider(LoggingFilter.class)` + custom filter
+| Both listener SPIs of the specification (§10.1, §10.2) are supported, found with `ServiceLoader`, from another module too: `onNewBuilder` once per builder, `onNewClient` once per `build()`. A filter covers per-client logging. See xref:usage.adoc#listeners[Builder and client listeners].
+|===
+
+== From Jakarta REST `Client` (no MicroProfile)
+
+The `jakarta.ws.rs.client.Client` + `WebTarget` mode is fluent and imperative; Cyrano is declarative via interface. Porting requires more effort.
+
+[cols="2,2,3"]
+|===
+| Jakarta REST Client | Cyrano | Note
+
+| `ClientBuilder.newClient().target(uri).path(...).request().get(...)`
+| `@RegisterRestClient` interface + `@Inject @RestClient`
+| Required refactor — extract each HTTP call into an annotated interface method.
+
+| Instance per call
+| One proxy per client, shared
+| Bonus: no connection leak, shared `HttpClient`.
+
+| `Invocation.Builder.async()`
+| Method returning `CompletionStage<T>`
+| Same semantics, more natural signature.
+
+| Imperative configuration
+| Annotations + MP Config
+| More declarative, more testable.
+|===
+
+To preserve `jakarta.ws.rs.client.Client` usage in edge cases (e.g. fully dynamic URL), it remains legal to instantiate a standard JAX-RS `Client` alongside Cyrano — the two coexist.
+
+== Known pitfalls
+
+* **`module-info.java`** — remember to add `requires io.vidocq.cyrano.mp.rest.client.api;` and `opens com.example.dto to jakarta.json.bind;` for the DTOs. This is the number-one source of `InaccessibleObjectException`.
+* **Spec repackage** — do not import `microprofile-rest-client-api` directly (automatic module → jlink-incompatible). Always go through `cyrano-mp-rest-client-api`.
+* **MP Config is required for `<configKey>/mp-rest/url`** — without xref:ravel::index.adoc[Ravel] (or another impl), only `@RegisterRestClient(baseUri=...)` works.
+
+== Going further
+
+* xref:getting-started.adoc[Getting started] — first typed client in under 50 lines.
+* xref:concepts.adoc[Concepts] — MP Rest Client vocabulary.
+* xref:tck.adoc[TCK] — current conformance status.
