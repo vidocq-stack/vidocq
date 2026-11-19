@@ -39,4 +39,7 @@ module io.vidocq.runtime.it.noether {
             with io.vidocq.runtime.it.noether._VaubanComponents;
     provides io.vidocq.noether.jpa.core.spi.ManagedAccessProvider
             with io.vidocq.runtime.it.noether._NoetherJpaAccess;
+    // The provider the unit `registry` names: the runtime finds it through the PersistenceProviderResolver.
+    provides jakarta.persistence.spi.PersistenceProvider
+            with io.vidocq.runtime.it.noether.RecordingProvider;
 }

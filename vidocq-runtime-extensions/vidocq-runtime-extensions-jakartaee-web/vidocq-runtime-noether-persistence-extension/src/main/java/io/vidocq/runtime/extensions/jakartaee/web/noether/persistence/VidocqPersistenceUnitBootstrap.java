@@ -21,6 +21,7 @@ package io.vidocq.runtime.extensions.jakartaee.web.noether.persistence;
 
 import io.vidocq.mansart.transactions.jdbc.JtaDataSource;
 import io.vidocq.noether.jpa.cdi.PersistenceUnitBootstrap;
+import io.vidocq.noether.jpa.core.spi.ContainerFactories;
 import io.vidocq.noether.jpa.core.spi.PersistenceDescriptors;
 import io.vidocq.noether.jpa.core.spi.PersistenceDescriptors.UnitTransactions;
 import io.vidocq.noether.jpa.core.spi.TransactionIntegration;
@@ -31,7 +32,6 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.literal.NamedLiteral;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.Persistence;
 import jakarta.persistence.PersistenceException;
 import jakarta.transaction.TransactionManager;
 import jakarta.transaction.TransactionSynchronizationRegistry;
@@ -81,7 +81,7 @@ public class VidocqPersistenceUnitBootstrap implements PersistenceUnitBootstrap 
             properties.put(TransactionIntegration.PROPERTY, transactions);
         }
         try {
-            return Persistence.createEntityManagerFactory(name, properties);
+            return ContainerFactories.create(name, loader, properties);
         } catch (RuntimeException e) {
             // The pool's error names no unit: a unit a vidocq.persistence.<unit>.* key declared, on the default pool,
             // is otherwise hard to tell from the one the persistence.xml declares (BUG-20261118-61).

@@ -35,6 +35,7 @@ import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.PersistenceException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -112,7 +113,9 @@ public final class NoetherPersistenceExtension implements VidocqExtension, Start
         for (Bean<?> bean : beans.getBeans(EntityManagerFactory.class, Any.Literal.INSTANCE)) {
             EntityManagerFactory factory = (EntityManagerFactory) beans.getReference(bean,
                     EntityManagerFactory.class, beans.createCreationalContext(bean));
-            units.putIfAbsent(factory.getName(), factory);
+            if (description(factory) != null) {
+                units.putIfAbsent(factory.getName(), factory);
+            }
         }
         List<UnitFacts> facts = new ArrayList<>();
         List<NoetherPersistenceLive.Unit> live = new ArrayList<>();
@@ -128,6 +131,18 @@ public final class NoetherPersistenceExtension implements VidocqExtension, Start
             LOG.log(System.Logger.Level.INFO, "Noether Persistence: no persistence unit is injected");
         } else {
             LOG.log(System.Logger.Level.INFO, "Noether Persistence: persistence units " + units.keySet() + " started");
+        }
+    }
+
+    /**
+     * Noether's description of the unit of {@code factory}, or {@code null} for a unit another provider runs (Jakarta
+     * Persistence 3.2, §9.1): its factory unwraps to no {@link UnitDescription}, and may name no unit.
+     */
+    private static UnitDescription description(EntityManagerFactory factory) {
+        try {
+            return factory.unwrap(UnitDescription.class);
+        } catch (PersistenceException _) {
+            return null;
         }
     }
 

@@ -41,4 +41,14 @@
             <property name="jakarta.persistence.schema-generation.database.action" value="drop-and-create"/>
         </properties>
     </persistence-unit>
+    <!--
+        Another provider than Noether (Jakarta Persistence 3.2, §9.1): the runtime hands the unit to that provider's
+        createContainerEntityManagerFactory, on the named pool `notes`.
+    -->
+    <persistence-unit name="registry" transaction-type="JTA">
+        <provider>io.vidocq.runtime.it.noether.RecordingProvider</provider>
+        <jta-data-source>notes</jta-data-source>
+        <class>io.vidocq.runtime.it.noether.Note</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+    </persistence-unit>
 </persistence>

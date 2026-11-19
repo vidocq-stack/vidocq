@@ -28,6 +28,31 @@ Vidocq workspace convention: short id, date, symptom, minimal repro, cause hypot
   or opened to it. `io.vidocq.runtime.core` is exported. The observer is now called through its generated code at
   every stop, and returns at once there, as the fixture intends.
 
+## BUG-20261119-93 — A unit that names another provider stops the start of the application
+
+- **Date**: 2026-11-19
+- **Status**: FIXED on `fix/third-party-provider-units`: `VidocqPersistenceUnitBootstrap` creates the factory through
+  Noether's `ContainerFactories`, and the startup report skips a factory that is not Noether's.
+- **Module**: `vidocq-runtime-noether-persistence-extension` (`VidocqPersistenceUnitBootstrap`,
+  `NoetherPersistenceExtension.onStart`)
+- **Symptom**: found by the Jakarta EE 11 Platform TCK for Persistence (`ee.pluggability`), whose units name the TCK's
+  alternate provider. A unit whose `<provider>` names another provider than Noether (Jakarta Persistence 3.2, §9.1)
+  stopped the start with `Persistence unit registry (JTA, on the pool 'notes') could not start: No Persistence provider
+  for EntityManager named registry`. Once the factory was created, the start failed again: the startup report unwrapped
+  every factory to Noether's `UnitDescription`, and the alternate provider's factory names no unit (`getName()` is
+  `null`, a `NullPointerException`) or refuses to unwrap.
+- **Minimal reproduction**: `NoetherPersistenceOtherProviderModulePathTest` (`vidocq-runtime-it-noether-persistence`),
+  unit `registry` of its `persistence.xml`, provider `RecordingProvider`.
+- **Hypothesised cause**: the bootstrap called `Persistence.createEntityManagerFactory`, the Java SE bootstrap, where a
+  provider is asked by unit name and the TCK's alternate provider declines; a container calls the provider's
+  `createContainerEntityManagerFactory` with the unit (§9.6). Noether BUG-20261119-90 adds
+  `ContainerFactories.create`, which does that for a unit of another provider.
+- **Investigations**:
+  - 2026-11-19: reproduced red with the test above: the start failed with the message above. With the bootstrap fixed
+    and the report unchanged, the start failed with `RecordingProvider unwraps to nothing`.
+  - 2026-11-19: fixed. The report counts Noether's units only: `NoetherPersistenceReportModulePathTest` still reads
+    `5 persistence units, 5 entities` with the sixth unit `registry` in the descriptor.
+
 ## BUG-20261118-94 — A dev reload no longer names a leaked thread when the application has the Ravel extension
 
 - **Date**: 2026-11-18
