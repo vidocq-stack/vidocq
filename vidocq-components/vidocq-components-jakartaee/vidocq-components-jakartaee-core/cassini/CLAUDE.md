@@ -1,0 +1,242 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Prerequisites
+
+- **Java 25** + **Maven 3.9.16** (`.sdkmanrc` provided — use `sdk env`)
+- The TCK `jakarta.ws.rs:jakarta-restful-ws-tck:4.0.1` resolves from Maven Central; the signature-test resources only ship in the EFTL bundle, which `run-official-tck-restful-4.0.sh` downloads into `cassini-tck/target/eftl` (see `cassini-tck/README.md`)
+
+## Essential commands
+
+```bash
+# Reactor build (without TCK)
+./mvnw -ntp install -DskipTests
+
+# Build with unit tests (cassini-core only)
+mvn test
+
+# TCK — smoke test only
+./run-official-tck-restful-4.0.sh
+
+# TCK — full suite (2670 tests, expected: 2539 PASS / 131 SKIP / 0 ERR)
+./run-official-tck-restful-4.0.sh all
+
+# TCK — targeted test
+./run-official-tck-restful-4.0.sh -Dtest=TestName
+```
+
+> `cassini-tck` is **in-reactor, gated behind the `tck` Maven profile** (TCK harmonisation, same pattern as the vidocq-runtime-tck-* runners): a plain `mvn install` neither downloads nor runs anything TCK-related. The historical ShrinkWrap Maven Resolver 3.3 vs Model 4.1.0 constraint is obsolete since the Maven 3.9.16 / Model 4.0.0 migration.
+
+## Architecture
+
+Cassini is a **transport-agnostic** Jakarta RESTful Web Services 4.0 implementation (Core Profile / SE-Bootstrap).
+
+```
+cassini-api          ← public HTTP SPI + stable codegen SPI (ResourceAdapter, RouteProvider, InjectionSupport - spi.gen)
+cassini-core         ← JAX-RS implementation + RuntimeAdapterGenerator (Class-File API) + AdapterRegistry + RouteRegistry
+cassini-client       ← JAX-RS 4.0 client (zero-dep ClientBuilder on java.net.http + virtual threads)
+cassini-processor    ← APT (javax.annotation.processing) — generates CassiniAdapter at compile time
+cassini-maven-plugin ← Maven plugin — pre-generates CassiniAdapter for external archives (dep JARs)
+cassini-cdi-vauban   ← Vauban CDI adapter (BeanProvider + BCE @RequestScoped, optional)
+cassini-chappe       ← Chappe adapter (reference transport, used for the TCK)
+cassini-jdk-http     ← Pure JDK adapter (com.sun.net.httpserver, zero external dependencies)
+cassini-servlet      ← Servlet adapter: the application runs as a Servlet of a Servlet container (Servlet API provided)
+cassini-tck          ← Arquillian runner + official Jakarta REST 4.0 harness
+```
+
+**Request flow:** `CassiniHttpAdapter.dispatch()` → `Invoker` (core) → resource method → `CassiniHttpResponse` → transport.
+
+### M4 codegen architecture
+
+Three levels of adapter generation (`<Class>$$CassiniAdapter`), from most preferred to fallback:
+
+1. **APT compile time (`cassini-processor`)** — source classes from the current build. AOT-safe.
+2. **Maven plugin build time (`cassini-maven-plugin:generate`, `process-classes`)** — external
+   archives (dep JARs). Calls `RuntimeAdapterGenerator.toBytecode(cls)` and writes the `.class`
+   files to disk. AOT-safe.
+3. **Runtime generator (`RuntimeAdapterGenerator.generate`)** — JVM-only fallback. Not AOT-compatible.
+   Announced by a framed WARNING (`RuntimeGeneration`): once at stack build for the resource classes
+   without a build-time adapter, then once per class generated later and not yet named.
+
+`AdapterRegistry.lookup` resolves in this order: (0) a **`ServiceLoader`-registered adapter**
+(module-path `provides io.vidocq.cassini.spi.gen.ResourceAdapter with <Class>$$CassiniAdapter`, or
+classpath `META-INF/services`), keyed by `ResourceAdapter.resourceClass()`; (1) `Class.forName(<class>$$CassiniAdapter)`
+(APT/plugin path); (2) the runtime generator; (3) the SENTINEL (reflective fallback). The
+ServiceLoader step is what lets a strict Java Modules app keep its resource package **closed** (neither
+`opens` nor `exports`): the module system instantiates the provider from the encapsulated package,
+so cassini-core never reflects into it. On every route the registry reads the per-class `methodId` map
+from the adapter's own `methodKeys()` (the method each id of its `invoke` switch calls: name plus JVM
+parameter descriptor), so `adapter.invoke()` does the typed dispatch instead of a reflective
+`Method.invoke`, and the ids cannot drift from the switch whichever generator numbered it (CASSINI-032).
+Only a provider generated before `methodKeys()` existed is numbered by `RuntimeAdapterGenerator.collectMethods`.
+On the classpath and for the TCK no provider is registered and lookup falls through to `Class.forName`.
+cassini-core `uses` both SPIs.
+
+> **Zero-export proof:** `cassini-examples-jdkhttp` (pure Mode A) keeps its `resource` package fully
+> encapsulated — `java --describe-module` shows `contains …resource` (no `opens`, no `exports`), only
+> `provides ResourceAdapter/RouteProvider with …$$CassiniAdapter/$$CassiniRoutes`. All HTTP dispatch
+> tests pass on the module-path. (Mode-B Vauban apps additionally need Vauban to instantiate the
+> normal-scoped client proxy in-module — the separate BCE-static-metadata chantier — before they can
+> drop `exports` too.) `RuntimeAdapterGenerator.toBytecode`, which the Maven plugin calls, emits
+> `resourceClass()` and `methodKeys()` like the processor, so a plugin-generated adapter is ServiceLoader-keyable
+> too.
+
+**Generated route table (M5b):** in addition to the adapter, each `@Path` class without a sub-resource
+locator gets a `<Class>$$CassiniRoutes` (SPI `RouteProvider`) exposing the route table as
+literals (`RouteDescriptor`). `RouteRegistry` resolves a provider the same way as `AdapterRegistry`
+(ServiceLoader by `RouteProvider.resourceClass()` first, then `Class.forName(<class>$$CassiniRoutes)`),
+then converts each descriptor into a `ResourceMethod` via a targeted `getMethod(...)` (inherited methods
+included) and `ResourceScanner.annotatedMethod`, which follows §3.6 to the method carrying the JAX-RS
+annotations (no class scan; the descriptor `Method`'s `setAccessible` is best-effort — a closed package
+relies on `adapter.invoke`). Every route source picks a class's resource methods with the one rule of
+`ResourceScanner.resourceMethods` (the processor applies it on the language model, CASSINI-035). Classes with locators set `hasLocators()` and fall back to
+`ResourceScanner.discover`.
+
+**Java Modules named-module rule (plugin):** adapters live in the resource package.
+Classpath JARs → write into `target/classes`. Java Modules named-module → fail build (option
+`repackageModularDependencies=true` to repackage the JAR).
+
+**Documented residual reflection (accepted exception):**
+- `ResourceScanner` at startup (JAX-RS annotation scan, only once).
+- Resource and bean instantiation (`getDeclaredConstructor().newInstance()`) — one-time, outside the hot path.
+- `InjectionSupportImpl.beanParam`: instantiation is still reflective; bean field injection goes through its generated adapter (P4), or reflective fallback if the adapter cannot be generated (closed module, private superclass).
+- Runtime fallback (SENTINEL + `FieldInjector.inject` as a safety net) in two cases: (a) closed application module that does **not** register its APT adapter as a `ServiceLoader` provider → cassini-core cannot reach `<Class>$$CassiniAdapter` (no `opens`/`exports`, no `provides`) and `privateLookupIn` fails. **Resolvable** by adding `provides ResourceAdapter with <Class>$$CassiniAdapter` (+ `RouteProvider`) to the app `module-info` — then the package stays closed and dispatch/injection run in-module (see `cassini-examples-jdkhttp`). (b) **field whose TYPE is a package-private class from ANOTHER package** than the resource (e.g. TCK `ParamEntityWithConstructor` injected into `*.locator`/`*.sub`) → `findVarHandle` requires access to the field type, impossible by language rules even for an adapter generated in the resource package; only `Field.setAccessible(true)` works around it — this one is genuinely **irreducible by codegen**. Neither case is a bug. (The M6d bug — array-type params `Annotation[]`/`byte[]` crashing generation via `ClassDesc.of(getName())` — is fixed: those provider classes are now generated.)
+- `@Context` injection into singleton providers (filters, MBW/MBR) via `FieldInjector.inject` — outside the resource hot path.
+- `@*Param` field coercion: **generated inline** by the three generators (runtime `RuntimeAdapterGenerator` = M6b, APT `cassini-processor` = M6c, plugin via `toBytecode`) for String/CharSequence, primitives+wrappers, enum (`fromString` or `Enum.valueOf`), public `valueOf`/`fromString`/ctor `(String)`, and `List`/`Set`/`SortedSet`/`Collection` collections of those types. Reflective fallback `support.param` (→ `ParamValueConverter`) only for non-inlineable forms: `PathSegment`, non-public types/members, raw collections.
+- **Method parameter** coercion: still handled through `ParamExtractor` + `ParamValueConverter` (`ParamConverterProvider`-aware resolution on first call per type, not per request). **Intentionally not inlined** — PCP precedence is what broke 23 tests on the first P1b attempt.
+
+**Two resource instantiation modes:**
+- Mode A: `new()` via `ResourceFactory.defaultFactory()` (jdk-http, standalone)
+- Mode B: DI through public SPI `BeanProvider` (`cassini-cdi-vauban` or any other ServiceLoader adapter). No `jakarta.cdi` import in `cassini-api`/`cassini-core` — strict decoupling.
+
+**`RuntimeDelegate`:** declared only in `cassini-chappe`, `cassini-jdk-http` and `cassini-servlet` through ServiceLoader. `cassini-core` contains `CassiniRuntimeDelegate` but no longer exposes it to avoid collisions.
+
+## Architectural constraints that must not be violated
+
+1. **Zero `fr.vidocq.chappe` import in `cassini-core`** — transport decoupling is a fundamental constraint (see `cassini-migration.md`).
+2. **Canonical Chappe groupId**: `io.vidocq.chappe` (not `fr.vidocq.chappe`).
+3. **TCK 2535/2535 is a contract** — every modification to `cassini-core` must preserve this score; run the TCK before committing structural changes.
+4. **`cassini-tck/pom.xml` stays on Model 4.0.0** — do not switch to 4.1.0 until ShrinkWrap is updated.
+
+5. **Architecture rules are tests** (Vidocq/vidocq#289): the test-only module `cassini-architecture-tests` runs the
+   rules of the shared `vidocq-archrules` library of `vidocq-parent` (test scope; it brings ArchUnit, Apache-2.0,
+   never shipped) on the classes of every shipped module: allowed dependencies per module, layers, no `ThreadLocal`,
+   no platform-thread pool, no reflection outside `ArchitectureRules.REFLECTIVE_FALLBACKS`. A class that must
+   reflect is added there **with its reason** from the documented residual reflection; never loosen a rule.
+
+## Conventions
+
+- **Explicit Java modules**: all modules have a `module-info.java`.
+- **Packages**: `io.vidocq.cassini.spi.*` = stable public SPI; `io.vidocq.cassini.internal.*` = internal code (may break between versions).
+- **Maven groupId**: `io.vidocq.cassini`.
+
+## Current roadmap
+
+- **M2h** — largely DONE (2026-06-11): cassini-core is ThreadLocal-free (`RequestScope` ScopedValue), `@Suspended AsyncResponse` + `CompletionStage` returns work (blocking-on-VT), CompletionCallback wired. Remaining: `CompletionStage` propagation to the transport (true non-blocking, needs a Chappe async SPI — see ASYNC.md) and ConnectionCallback disconnect notification.
+- **M2i** — DONE (2026-06-11): real chunked SSE streaming on Chappe (lazy-commit latch + thread-agnostic chunk queue, see ASYNC.md). The 3 SSE TCK challenges are lifted (2538 PASS).
+
+## Unit tests
+
+**cassini-core**: `UriTemplateTest`, `UriRouterBestMatchTest`, `MediaTypesTest`, `FormDecoderTest`,
+`ParamValueConverterTest`, `RuntimeAdapterGeneratorTest` (includes toBytecode P3),
+`AdapterRegistrySeamTest`, `EntityReadFailureTest` (request-entity read failures, cassini#39 —
+end-to-end through `DefaultCassiniHttpAdapter.dispatch` on an in-memory exchange, no socket),
+`CassiniJsonbReaderWriterTest`.
+
+**cassini-processor**: `CassiniResourceProcessorTest`.
+
+**cassini-maven-plugin**: `GenerateAdaptersMojoTest` (toBytecode round-trip, JAR named-module detection).
+
+**cassini-client**: `ClientBuilderDiscoveryTest`, `BasicGetTest`, `FiltersTest`.
+
+**cassini-chappe**: `ResponseHeaderRejectionTest` (a response header Chappe refuses: 500, one log line
+without the value, streaming pipe released — cassini#56).
+
+## Documented TCK challenges
+
+3 tests disabled via `TckChallengeExclusions` with justification in `TCK.md`:
+- 1 non-portable spec interpretation (`locatorNameTooLongAgainTest`)
+- 2 blocking multipart issues on the Jersey CLIENT side (not Cassini)
+- (lifted: the 2 SSE streaming cases in M2i, and `JAXRSSigTestIT#signatureTest` on 2026-08-27 — it now runs against the EFTL signature resources and passes)
+
+## Documentation (Antora) conventions
+
+The project documentation lives in `docs/en` as an Antora component and is
+aggregated by the **vidocq-docs** site, which provides a **shared UI bundle** (banner,
+logo, fonts, colours, footer). **Never customise the documentation UI per project** —
+all visual harmonisation is centralised in `vidocq-docs/ui-bundle`.
+
+### Gold reference
+**Vauban** is the reference implementation for documentation structure. Mirror its
+`docs/en` layout when creating or updating docs. **Chappe** (HTTP server)
+and **Vidocq** (runtime orchestrator) are *special cases*, not references: they are not
+Jakarta EE / MicroProfile spec implementations.
+
+### Repository layout
+- `docs/en/antora.yml` → `name: <project>`, `title:`, versioned per branch (`dev` prerelease on `main`, `'<version>'` on `docs/<version>`), `project-version` attribute, `nav:`, `lang: en`.
+- Pages in `modules/ROOT/pages/`, navigation in `modules/ROOT/nav.adoc`, images in
+  `modules/ROOT/images/`.
+- **English-only** (ADR 0004 in vidocq-docs): no French mirror — do not reintroduce one.
+
+### Canonical navigation (section order)
+`index` → `getting-started` → `usage` → `concepts` → `internals` → `tck` →
+`performance` → `reference` → `migration`
+
+Multi-module projects (e.g. Vidocq, Mansart) may append `modules/*` / `sub-modules/*`
+sub-pages after `migration`.
+
+### TCK / Performance rule (not mutually exclusive)
+- Every **spec implementation** — i.e. **all projects except Chappe and Vidocq** — MUST
+  have a **`tck`** section documenting TCK coverage/status.
+- Projects with a performance story (e.g. **Chappe**) keep their **`performance`** section.
+- When **both** sections exist, order them **TCK first, then Performance**.
+- **Chappe** and **Vidocq** do not require a `tck` section (not spec implementations).
+
+### `index.adoc` structure
+Follow Vauban's `index.adoc`: page title (`= <Project>`), `:description:`, a centred logo
+(`image::<project>-logo.png[...,role=module-logo]`), a `[.lead]` paragraph, then
+`== Origin of the name`, an `== At a glance` table, and ecosystem / quick-links sections.
+
+### Logo
+Provide `modules/ROOT/images/<project>-logo.png` (PNG), referenced from `index.adoc`.
+
+> When you change these documentation rules, keep `AGENTS.md` and `CLAUDE.md` in sync.
+
+## Terminology
+
+Use **Java Modules** (or **Java module** for a single module) when referring to
+the Java Platform Module System. Do **not** use the abbreviation **JPMS** — in
+prose, identifiers, or documentation.
+
+## Build compatible extensions work at build only
+
+A CDI build compatible extension works at build, and only there. `vidocq:generate` runs the extensions of an
+application once and records what they did; the packaged application loads that record instead of running them
+(Vidocq/vauban#288). An extension that breaks these rules loses work or checks in a packaged application:
+
+- compute from the deployment's classes only: no configuration value, environment variable, outside file or network
+  resource in a phase;
+- check the start environment in an observer of `jakarta.enterprise.event.Startup` that throws a
+  `DeploymentException`, fed with what the build collected (`withParam`); models: Ravel's `ConfigStartCheck`,
+  Cervantes' `JwtConfigurationCheck`;
+- add annotations, never remove them; carry data in parameters, never in fields of the extension;
+- ask `ExtensionPhase.isBuildTime()` only as a last resort, in a class of its own: an extension that asks runs again
+  at each start (Heisenberg's `InterceptorPriorityExtension`);
+- the brick's Vidocq runtime extension adds its own beans with `VaubanContainerBuilder.addHostBean`, never
+  `addBeanClass`, and its `-codegen` bundle brings the brick's CDI jar to the processor path;
+- list in `@io.vidocq.vauban.api.ClientProxies` every interface the extension registers as a synthetic bean of a
+  normal scope (`@ApplicationScoped`, `@TransactionScoped`, ...). Vauban generates client proxies at build from the
+  classes it compiles, and a synthetic bean has none: the freeze records its descriptor, not a proxy, and a deployment
+  that runs its extensions at start has no build step. Without the list, the container builds a
+  `java.lang.reflect.Proxy` at every start: every call goes through reflection, the boot is slower, nothing runs ahead
+  of time, and every application prints the `RUNTIME CODE GENERATION FALLBACK` warning (Vauban BUG-20261113-19:
+  Noether's `EntityManager` and `EntityManagerFactory`). Put it on a class of a module compiled with
+  `vauban-processor` that provides its `_VaubanComponents`: the `*-cdi-vauban` extension, or, for a
+  container-neutral brick, its Vidocq runtime extension (Vidocq's `NoetherPersistenceExtension`). Public interfaces
+  only, no class, no `@Dependent` bean;
+- test both ways: the extensions run at start (TCK, another container) and frozen (the startup report says
+  `cdi extensions  N extensions frozen at build`, and an invalid environment still stops the start).
+
+Guide: `docs/writing-a-build-compatible-extension.md` in `Vidocq/vidocq-workspace`, and Vauban's concepts page,
+"Writing an extension the build can freeze" (`docs/en/modules/ROOT/pages/concepts.adoc#writing-a-frozen-extension`).

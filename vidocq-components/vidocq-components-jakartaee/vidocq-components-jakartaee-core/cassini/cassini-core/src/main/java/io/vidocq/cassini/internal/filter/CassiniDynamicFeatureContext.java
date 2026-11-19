@@ -1,0 +1,98 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.internal.filter;
+
+import jakarta.ws.rs.core.Configuration;
+import jakarta.ws.rs.core.Feature;
+import jakarta.ws.rs.core.FeatureContext;
+
+import java.lang.reflect.Method;
+import java.util.Map;
+
+/**
+ * §6.5.5 — FeatureContext passed to DynamicFeature.configure(resourceInfo, ctx).
+ * register(Class) instantiates the class and adds it to the registry as a
+ * dynamic entry bound to {@code targetMethod}.
+ */
+public final class CassiniDynamicFeatureContext implements FeatureContext {
+
+    private final FilterRegistry registry;
+    private final Method targetMethod;
+
+    public CassiniDynamicFeatureContext(FilterRegistry registry, Method targetMethod) {
+        this.registry = registry;
+        this.targetMethod = targetMethod;
+    }
+
+    @Override public Configuration getConfiguration() {
+        return new Configuration() {
+            @Override public jakarta.ws.rs.RuntimeType getRuntimeType() { return jakarta.ws.rs.RuntimeType.SERVER; }
+            @Override public Map<String, Object> getProperties() { return Map.of(); }
+            @Override public Object getProperty(String name) { return null; }
+            @Override public java.util.Collection<String> getPropertyNames() { return java.util.List.of(); }
+            @Override public boolean isEnabled(Feature feature) { return false; }
+            @Override public boolean isEnabled(Class<? extends Feature> featureClass) { return false; }
+            @Override public boolean isRegistered(Object component) { return false; }
+            @Override public boolean isRegistered(Class<?> componentClass) { return false; }
+            @Override public Map<Class<?>, Integer> getContracts(Class<?> componentClass) { return Map.of(); }
+            @Override public java.util.Set<Class<?>> getClasses() { return java.util.Set.of(); }
+            @Override public java.util.Set<Object> getInstances() { return java.util.Set.of(); }
+        };
+    }
+
+    @Override public FeatureContext property(String name, Object value) { return this; }
+
+    @Override public FeatureContext register(Class<?> componentClass) {
+        try {
+            Object instance = componentClass.getDeclaredConstructor().newInstance();
+            registry.registerDynamic(instance, targetMethod);
+        } catch (ReflectiveOperationException _) { /* not instantiable: not registered */ }
+        return this;
+    }
+
+    @Override public FeatureContext register(Class<?> componentClass, int priority) {
+        return register(componentClass);
+    }
+
+    @Override public FeatureContext register(Class<?> componentClass, Class<?>... contracts) {
+        return register(componentClass);
+    }
+
+    @Override public FeatureContext register(Class<?> componentClass, Map<Class<?>, Integer> contracts) {
+        return register(componentClass);
+    }
+
+    @Override public FeatureContext register(Object component) {
+        registry.registerDynamic(component, targetMethod);
+        return this;
+    }
+
+    @Override public FeatureContext register(Object component, int priority) {
+        return register(component);
+    }
+
+    @Override public FeatureContext register(Object component, Class<?>... contracts) {
+        return register(component);
+    }
+
+    @Override public FeatureContext register(Object component, Map<Class<?>, Integer> contracts) {
+        return register(component);
+    }
+}

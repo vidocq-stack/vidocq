@@ -1,0 +1,1487 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.internal.gen;
+
+import io.vidocq.cassini.internal.ParamValueConverter;
+import io.vidocq.cassini.spi.gen.InjectionSupport;
+import io.vidocq.cassini.spi.gen.ParamKind;
+import io.vidocq.cassini.spi.gen.ResourceAdapter;
+import jakarta.ws.rs.BeanParam;
+import jakarta.ws.rs.CookieParam;
+import jakarta.ws.rs.DefaultValue;
+import jakarta.ws.rs.Encoded;
+import jakarta.ws.rs.FormParam;
+import jakarta.ws.rs.HeaderParam;
+import jakarta.ws.rs.MatrixParam;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
+
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.CodeBuilder;
+import java.lang.classfile.Label;
+import java.lang.classfile.instruction.SwitchCase;
+import java.lang.constant.ClassDesc;
+import java.lang.constant.ConstantDescs;
+import java.lang.constant.MethodTypeDesc;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.ArrayList; import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map; import java.util.Set;
+/**
+ * Generates {@link ResourceAdapter} implementations at runtime using the JDK 25 Class-File API.
+ *
+ * <p>For each JAX-RS resource class, this generator produces a concrete {@code ResourceAdapter}
+ * whose {@code injectFields} method reproduces exactly the semantics of
+ * {@code FieldInjector.inject(target, match, request, injectParams)} but with no per-request
+ * reflection:</p>
+ * <ul>
+ *   <li>Field metadata (annotation kind, name, encoded, defaultValue, rawType, elementType) is
+ *       collected once at generation time via reflection on the class structure.</li>
+ *   <li>Field assignment uses constant {@code VarHandle} instances resolved once in
+ *       {@code <clinit>} via {@code MethodHandles.privateLookupIn} — works for {@code private}
+ *       fields without requiring app-side {@code opens} in the unnamed/open module (TCK) case.</li>
+ *   <li>Per-request code calls {@link InjectionSupport} methods and assigns via the stored
+ *       VarHandles — zero per-request reflection.</li>
+ * </ul>
+ *
+ * <p><b>Private-field mechanism:</b> the {@code <clinit>} of the generated adapter calls
+ * {@code MethodHandles.privateLookupIn(ResourceClass.class, MethodHandles.lookup())} from
+ * <em>inside</em> the resource's own package (the adapter is defined there), so that call is
+ * trivially OK. The real Java Modules gate is at generation time, when cassini-core needs a
+ * {@code privateLookupIn} on a downstream user class:</p>
+ * <ul>
+ *   <li><b>Read edge</b> — cassini-core must read the resource's module. Impossible to declare
+ *       statically (a framework cannot {@code requires} its users), so we add it dynamically
+ *       via {@link Module#addReads(Module)}.</li>
+ *   <li><b>Opens edge</b> — the resource's module must open its package to cassini-core. This
+ *       is on the user: either {@code opens <pkg>;} (unqualified) or
+ *       {@code opens <pkg> to io.vidocq.cassini.core;}. Unnamed and open modules satisfy this
+ *       automatically.</li>
+ * </ul>
+ * <p>If the opens edge is missing, generation aborts and {@link AdapterRegistry} falls back to
+ * the reflective {@code FieldInjector} (the safety net).</p>
+ *
+ * <p><b>Adapter name:</b> {@code <ResourceClass>$$CassiniAdapter} in the same package.</p>
+ *
+ * <p><b>P1b note:</b> {@code invoke} throws {@link UnsupportedOperationException} — method
+ * dispatch remains via {@code Method.invoke} until P1b.</p>
+ */
+public final class RuntimeAdapterGenerator {
+    private static final String ADD_READS = "addReads";
+    private static final String METHOD_FROM_STRING = "fromString";
+    private static final String METHOD_VALUE_OF = "valueOf";
+    private static final String RUNTIME_EXCEPTION = "java.lang.RuntimeException";
+
+    /** Suffix appended to the resource class name to form the adapter class name. */
+    public static final String ADAPTER_SUFFIX = "$$CassiniAdapter";
+
+    // ---- ClassDesc constants for generated bytecode ----
+    private static final ClassDesc CD_Object          = ConstantDescs.CD_Object;
+    private static final ClassDesc CD_void            = ConstantDescs.CD_void;
+    private static final ClassDesc CD_boolean         = ConstantDescs.CD_boolean;
+    private static final ClassDesc CD_int             = ConstantDescs.CD_int;
+    private static final ClassDesc CD_Class           = ConstantDescs.CD_Class;
+    private static final ClassDesc CD_String          = ConstantDescs.CD_String;
+    private static final ClassDesc CD_Throwable       = ConstantDescs.CD_Throwable;
+    private static final ClassDesc CD_ExceptionInInit = ClassDesc.of("java.lang.ExceptionInInitializerError");
+    private static final ClassDesc CD_UnsupportedOp   = ClassDesc.of("java.lang.UnsupportedOperationException");
+    private static final ClassDesc CD_IllegalArgument = ClassDesc.of("java.lang.IllegalArgumentException");
+
+    private static final ClassDesc CD_ResourceAdapter  = ClassDesc.of(ResourceAdapter.class.getName());
+    private static final ClassDesc CD_InjectionSupport = ClassDesc.of(InjectionSupport.class.getName());
+    private static final ClassDesc CD_ParamKind        = ClassDesc.of(ParamKind.class.getName());
+
+    private static final ClassDesc CD_MethodHandles    = ClassDesc.of("java.lang.invoke.MethodHandles");
+    private static final ClassDesc CD_Lookup           = ClassDesc.of("java.lang.invoke.MethodHandles$Lookup");
+    private static final ClassDesc CD_VarHandle        = ClassDesc.of("java.lang.invoke.VarHandle");
+
+    // M6b: ClassDescs for inline conversion
+    private static final ClassDesc CD_List             = ClassDesc.of("java.util.List");
+    private static final ClassDesc CD_ArrayList        = ClassDesc.of("java.util.ArrayList");
+    private static final ClassDesc CD_LinkedHashSet    = ClassDesc.of("java.util.LinkedHashSet");
+    private static final ClassDesc CD_TreeSet          = ClassDesc.of("java.util.TreeSet");
+    private static final ClassDesc CD_WebAppException  = ClassDesc.of("jakarta.ws.rs.WebApplicationException");
+
+    private static final ClassDesc CD_Integer     = ClassDesc.of("java.lang.Integer");
+    private static final ClassDesc CD_Long_w      = ClassDesc.of("java.lang.Long");
+    private static final ClassDesc CD_Double_w    = ClassDesc.of("java.lang.Double");
+    private static final ClassDesc CD_Float_w     = ClassDesc.of("java.lang.Float");
+    private static final ClassDesc CD_Boolean_w   = ClassDesc.of("java.lang.Boolean");
+    private static final ClassDesc CD_Short_w     = ClassDesc.of("java.lang.Short");
+    private static final ClassDesc CD_Byte_w      = ClassDesc.of("java.lang.Byte");
+    private static final ClassDesc CD_Character_w = ClassDesc.of("java.lang.Character");
+
+    private RuntimeAdapterGenerator() {}
+
+    /**
+     * Returns the deterministic adapter class name for the given resource class.
+     *
+     * @param resourceClass the JAX-RS resource class
+     * @return the fully qualified adapter class name
+     */
+    public static String adapterClassName(Class<?> resourceClass) {
+        return resourceClass.getName() + ADAPTER_SUFFIX;
+    }
+
+    /**
+     * Generates the adapter bytecode for the given resource class WITHOUT defining the class.
+     *
+     * <p>This is the low-level bytecode-only path used by the Maven plugin to write
+     * {@code <Class>$$CassiniAdapter.class} files to disk at build time. The returned bytes
+     * are identical to what {@link #generate(Class)} would produce — both delegate here —
+     * ensuring that plugin-pre-generated adapters and runtime-generated adapters are
+     * byte-for-byte equivalent.</p>
+     *
+     * @param resourceClass the JAX-RS resource class to generate an adapter for
+     * @return the raw {@code .class} bytecode of the adapter (not yet defined in any ClassLoader)
+     */
+    public static byte[] toBytecode(Class<?> resourceClass) {
+        List<FieldDesc> fields = collectFields(resourceClass);
+        Map<Method, Integer> methodIds = collectMethods(resourceClass);
+
+        String adapterName = adapterClassName(resourceClass);
+        ClassDesc adapterCD  = ClassDesc.of(adapterName);
+        ClassDesc resourceCD = ClassDesc.of(resourceClass.getName());
+
+        boolean hasNoArgCtor = hasAccessibleNoArgCtor(resourceClass);
+
+        return ClassFile.of().build(adapterCD, clb -> {
+            clb.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER | ClassFile.ACC_FINAL);
+            clb.withInterfaceSymbols(CD_ResourceAdapter);
+
+            // One static final VarHandle per injectable field
+            for (var fd : fields) {
+                clb.withField(fd.varHandleField(), CD_VarHandle,
+                        ClassFile.ACC_PRIVATE | ClassFile.ACC_STATIC | ClassFile.ACC_FINAL);
+            }
+
+            // No-arg constructor
+            clb.withMethodBody(ConstantDescs.INIT_NAME,
+                    MethodTypeDesc.of(CD_void),
+                    ClassFile.ACC_PUBLIC,
+                    cob -> {
+                        cob.aload(0);
+                        cob.invokespecial(CD_Object, ConstantDescs.INIT_NAME,
+                                MethodTypeDesc.of(CD_void));
+                        cob.return_();
+                    });
+
+            // <clinit>: resolve VarHandles once via privateLookupIn
+            if (!fields.isEmpty()) {
+                generateStaticInitializer(clb, adapterCD, resourceCD, fields);
+            }
+
+            // injectFields(Object, InjectionSupport, boolean)
+            generateInjectFields(clb, adapterCD, fields);
+
+            // invoke(int, Object, Object[]) — P1b: direct typed dispatch
+            generateInvoke(clb, methodIds);
+            // methodKeys() — the method each id calls, read by AdapterRegistry
+            generateMethodKeys(clb, methodIds);
+
+            // newInstance() — M6a: direct new Foo() if accessible no-arg ctor exists
+            if (hasNoArgCtor) {
+                generateNewInstance(clb, resourceCD);
+            }
+            // else: leave the default UnsupportedOperationException impl from the interface
+
+            // resourceClass() — ServiceLoader keying (zero-export Java Modules apps), parity with the APT.
+            generateResourceClass(clb, resourceCD);
+        });
+    }
+
+    /** Emits {@code public String[] methodKeys()}: a new array of the {@link #methodKey keys}, by method id. */
+    private static void generateMethodKeys(java.lang.classfile.ClassBuilder clb, Map<Method, Integer> methodIds) {
+        clb.withMethodBody("methodKeys",
+                MethodTypeDesc.of(CD_String.arrayType()),
+                ClassFile.ACC_PUBLIC,
+                cob -> {
+                    cob.loadConstant(methodIds.size());
+                    cob.anewarray(CD_String);
+                    for (var entry : methodIds.entrySet()) {
+                        cob.dup();
+                        cob.loadConstant(entry.getValue());
+                        cob.loadConstant(methodKey(entry.getKey()));
+                        cob.aastore();
+                    }
+                    cob.areturn();
+                });
+    }
+
+    /** Emits {@code public Class<?> resourceClass() { return Resource.class; }} (ldc + areturn). */
+    private static void generateResourceClass(java.lang.classfile.ClassBuilder clb, ClassDesc resourceCD) {
+        clb.withMethodBody("resourceClass",
+                MethodTypeDesc.of(CD_Class),
+                ClassFile.ACC_PUBLIC,
+                cob -> {
+                    cob.ldc(resourceCD);
+                    cob.areturn();
+                });
+    }
+
+    /**
+     * Generates and defines a {@link ResourceAdapter} for the given resource class.
+     *
+     * <p>Returns the generated {@code Class<?>} which implements {@link ResourceAdapter}.
+     * The caller (typically {@link AdapterRegistry}) instantiates it via its no-arg constructor.</p>
+     *
+     * @param resourceClass the JAX-RS resource class to generate an adapter for
+     * @return the generated adapter class
+     * @throws AdapterGenerationException if the adapter class cannot be defined or initialised
+     * @throws ReflectiveOperationException if the module read-edge shim cannot be defined
+     */
+    public static Class<?> generate(Class<?> resourceClass)
+            throws AdapterGenerationException, ReflectiveOperationException {
+        String adapterName = adapterClassName(resourceClass);
+
+        // If the adapter class was already defined (e.g. from a previous call in the same JVM
+        // run, or by a concurrent thread), reuse it rather than generating it for nothing.
+        try {
+            return Class.forName(adapterName, false, resourceClass.getClassLoader());
+        } catch (ClassNotFoundException _) {
+            // Not yet defined — proceed with defineClass below.
+        }
+
+        byte[] bytecode = toBytecode(resourceClass);
+
+        // Define the adapter class in the resource's package.
+        // We need a Lookup whose package matches the adapter's package (= resource's package).
+        // MethodHandles.privateLookupIn(resourceClass, our_lookup) gives us a Lookup in the
+        // resource's package with full access (including private members of resourceClass).
+        //
+        // privateLookupIn requires two conditions in named-module land:
+        //   1. cassini-core READS the resource's module — impossible by construction:
+        //      a framework cannot `requires` its downstream user modules. We fix this at runtime
+        //      with Module.addReads, which is precisely what this API exists for: the same pattern
+        //      as Weld, Hibernate and Jersey on user beans, entities and resources.
+        //   2. The resource's module OPENS its package to cassini-core — this is on the user,
+        //      either qualified `opens <pkg> to io.vidocq.cassini.core` or unqualified `opens <pkg>`.
+        //      Open-modules and unnamed modules satisfy this automatically.
+        //
+        // If (2) is missing, privateLookupIn still throws IllegalAccessException and we abort
+        // gracefully (AdapterRegistry installs the reflective FieldInjector safety net).
+        Module here = RuntimeAdapterGenerator.class.getModule();
+        Module target = resourceClass.getModule();
+        if (here.isNamed() && target != here && !here.canRead(target)) {
+            here.addReads(target);
+        }
+        MethodHandles.Lookup resourceLookup;
+        try {
+            resourceLookup = MethodHandles.privateLookupIn(resourceClass, MethodHandles.lookup());
+        } catch (IllegalAccessException iae) {
+            // After addReads above, the only remaining cause is a missing `opens` on the package.
+            String pkg = resourceClass.getPackageName();
+            String targetName = target.isNamed() ? target.getName() : "<unnamed>";
+            throw new AdapterGenerationException("Cannot obtain privateLookupIn for " + resourceClass.getName()
+                    + " — module " + targetName + " does not open package " + pkg
+                    + " to io.vidocq.cassini.core. Add 'opens " + pkg
+                    + ";' (unqualified) or 'opens " + pkg + " to io.vidocq.cassini.core;' to "
+                    + targetName + "'s module-info.java. Falling back to reflective FieldInjector.", iae);
+        }
+
+        // The adapter implements io.vidocq.cassini.spi.gen.ResourceAdapter, so the resource's
+        // module must READ io.vidocq.cassini.api — which a spec-only user module (e.g. a scanned
+        // dependency that never `requires` anything Vidocq) legitimately does not. Class derivation
+        // would then fail with IllegalAccessError. Module.addReads is caller-sensitive (only the
+        // module itself may call it), so we bootstrap the edge from WITHIN the target module: a
+        // one-method shim defined through the same Lookup (it only references java.base, so its
+        // derivation cannot fail) adds the read edge on the target's behalf.
+        ensureTargetReads(resourceClass, resourceLookup, ResourceAdapter.class.getModule());
+
+        // defineClass requires that the new class's package matches the lookup's package.
+        // Our adapter is named <ResourceClass>$$CassiniAdapter, so it's in the resource's package.
+        Class<?> defined;
+        try {
+            defined = resourceLookup.defineClass(bytecode);
+        } catch (LinkageError le) {
+            // Concurrent definition — another thread beat us; load the already-defined class.
+            try {
+                defined = Class.forName(adapterName, false, resourceClass.getClassLoader());
+            } catch (ClassNotFoundException cnfe) {
+                // Not a concurrent definition: the definition itself failed (unreadable
+                // supertype, verification…). Surface the original LinkageError, not the CNFE.
+                AdapterGenerationException ex = new AdapterGenerationException("Adapter class definition failed for "
+                        + resourceClass.getName() + ": " + le, le);
+                ex.addSuppressed(cnfe);
+                throw ex;
+            }
+        }
+
+        // Trigger <clinit> eagerly so VarHandle failures are surfaced at generation time,
+        // not at first request — this lets AdapterRegistry install the safety-net fallback.
+        try {
+            Class.forName(defined.getName(), true, defined.getClassLoader());
+        } catch (ExceptionInInitializerError eiie) {
+            throw new AdapterGenerationException("VarHandle <clinit> failed for " + resourceClass.getName()
+                    + " (module not open?): " + eiie.getCause(), eiie.getCause());
+        }
+
+        return defined;
+    }
+
+    // ---- read-edge bootstrap for spec-only user modules ----
+
+    /** Suffix of the shim class that adds read edges from within the resource's module. */
+    static final String READS_SHIM_SUFFIX = "$$CassiniReads";
+
+    private static final ClassDesc CD_Module = ClassDesc.of("java.lang.Module");
+
+    /**
+     * Makes the resource's module read every module in {@code needed}, so that classes
+     * implementing framework interfaces can be defined into it.
+     *
+     * <p>{@link Module#addReads} is caller-sensitive — only code <em>inside</em> the module may
+     * add a read edge — so this defines a one-method shim in the resource's package through the
+     * caller-provided full-privilege {@code Lookup} and invokes it. The shim references only
+     * {@code java.base}, so its own derivation cannot fail. Idempotent and safe under
+     * concurrency: an already-defined shim is reused, and {@code addReads} is itself idempotent.</p>
+     */
+    static void ensureTargetReads(Class<?> resourceClass, MethodHandles.Lookup resourceLookup,
+            Module... needed) throws ReflectiveOperationException, AdapterGenerationException {
+        Module target = resourceClass.getModule();
+        if (!target.isNamed()) {
+            return; // the unnamed module reads everything
+        }
+        List<Module> missing = new ArrayList<>();
+        for (Module m : needed) {
+            if (m != null && m != target && !target.canRead(m)) {
+                missing.add(m);
+            }
+        }
+        if (missing.isEmpty()) {
+            return;
+        }
+
+        String shimName = resourceClass.getName() + READS_SHIM_SUFFIX;
+        Class<?> shim;
+        try {
+            shim = Class.forName(shimName, false, resourceClass.getClassLoader());
+        } catch (ClassNotFoundException _) {
+            try {
+                shim = resourceLookup.defineClass(readsShimBytecode(shimName));
+            } catch (LinkageError _) {
+                // already defined by a concurrent thread: load that definition
+                shim = Class.forName(shimName, false, resourceClass.getClassLoader());
+            }
+        }
+
+        var addReads = resourceLookup.findStatic(shim, ADD_READS,
+                MethodType.methodType(void.class, Module.class));
+        for (Module m : missing) {
+            try {
+                addReads.invoke(m);
+            } catch (Throwable t) {
+                throw new AdapterGenerationException("Read-edge bootstrap failed for module "
+                        + target.getName() + " -> " + m.getName(), t);
+            }
+        }
+    }
+
+    /**
+     * {@code public final class <Resource>$$CassiniReads { public static void addReads(Module m)
+     * { <Resource>$$CassiniReads.class.getModule().addReads(m); } }}
+     */
+    private static byte[] readsShimBytecode(String shimName) {
+        ClassDesc shimCD = ClassDesc.of(shimName);
+        return ClassFile.of().build(shimCD, clb -> {
+            clb.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER | ClassFile.ACC_FINAL);
+            clb.withMethodBody(ADD_READS,
+                    MethodTypeDesc.of(CD_void, CD_Module),
+                    ClassFile.ACC_PUBLIC | ClassFile.ACC_STATIC,
+                    cob -> {
+                        cob.ldc(shimCD);
+                        cob.invokevirtual(CD_Class, "getModule", MethodTypeDesc.of(CD_Module));
+                        cob.aload(0);
+                        cob.invokevirtual(CD_Module, ADD_READS, MethodTypeDesc.of(CD_Module, CD_Module));
+                        cob.pop();
+                        cob.return_();
+                    });
+        });
+    }
+
+    // ---- <clinit>: MethodHandles.privateLookupIn + findVarHandle per field ----
+
+    private static void generateStaticInitializer(java.lang.classfile.ClassBuilder clb,
+                                                   ClassDesc adapterCD,
+                                                   ClassDesc resourceCD,
+                                                   List<FieldDesc> fields) {
+        clb.withMethodBody(ConstantDescs.CLASS_INIT_NAME,
+                MethodTypeDesc.of(CD_void),
+                ClassFile.ACC_STATIC,
+                cob -> {
+                    Label tryStart = cob.newBoundLabel();
+                    Label tryEnd   = cob.newLabel();
+                    Label handler  = cob.newLabel();
+
+                    cob.exceptionCatch(tryStart, tryEnd, handler, CD_Throwable);
+
+                    // Lookup lookup = MethodHandles.privateLookupIn(ResourceClass.class, MethodHandles.lookup())
+                    cob.ldc(resourceCD);
+                    cob.invokestatic(CD_MethodHandles, "lookup",
+                            MethodTypeDesc.of(CD_Lookup));
+                    cob.invokestatic(CD_MethodHandles, "privateLookupIn",
+                            MethodTypeDesc.of(CD_Lookup, CD_Class, CD_Lookup));
+                    cob.astore(0); // local 0 = lookup
+
+                    // For each field: $$vh_N_name = lookup.findVarHandle(DeclaringClass, javaFieldName, FieldType)
+                    for (var fd : fields) {
+                        cob.aload(0);
+                        cob.ldc(ClassDesc.of(fd.declaringClass().getName()));
+                        cob.ldc(fd.javaFieldName());
+                        cob.ldc(classDescOf(fd.fieldType()));
+                        cob.invokevirtual(CD_Lookup, "findVarHandle",
+                                MethodTypeDesc.of(CD_VarHandle, CD_Class, CD_String, CD_Class));
+                        cob.putstatic(adapterCD, fd.varHandleField(), CD_VarHandle);
+                    }
+
+                    Label after = cob.newLabel();
+                    cob.goto_(after);
+
+                    // Handler: any Throwable is rethrown wrapped in an ExceptionInInitializerError.
+                    cob.labelBinding(tryEnd);
+                    cob.labelBinding(handler);
+                    cob.astore(1);
+                    cob.new_(CD_ExceptionInInit);
+                    cob.dup();
+                    cob.aload(1);
+                    cob.invokespecial(CD_ExceptionInInit, ConstantDescs.INIT_NAME,
+                            MethodTypeDesc.of(CD_void, CD_Throwable));
+                    cob.athrow();
+
+                    cob.labelBinding(after);
+                    cob.return_();
+                });
+    }
+
+    // ---- injectFields ----
+
+    private static void generateInjectFields(java.lang.classfile.ClassBuilder clb,
+                                              ClassDesc adapterCD,
+                                              List<FieldDesc> fields) {
+        clb.withMethodBody("injectFields",
+                MethodTypeDesc.of(CD_void, CD_Object, CD_InjectionSupport, CD_boolean),
+                ClassFile.ACC_PUBLIC,
+                cob -> {
+                    // Slots: 0=this, 1=target, 2=support, 3=injectParams, 4=value (temp)
+
+                    if (fields.isEmpty()) {
+                        cob.return_();
+                        return;
+                    }
+
+                    for (var fd : fields) emitFieldInjection(cob, adapterCD, fd);
+
+                    cob.return_();
+                });
+    }
+
+    /** Stores the value of {@code fd} through its VarHandle unless it is null; {@code @*Param} and
+     *  {@code @BeanParam} fields are skipped when {@code injectParams} is false. */
+    private static void emitFieldInjection(CodeBuilder cob, ClassDesc adapterCD, FieldDesc fd) {
+        Label afterField = cob.newLabel();
+
+        if (!fd.isContext()) {
+            // @*Param and @BeanParam fields are skipped when injectParams is false
+            cob.iload(3);
+            cob.ifeq(afterField);
+        }
+
+        emitFieldValue(cob, fd);
+
+        // value is on stack — store to slot 4
+        cob.astore(4);
+
+        // the assignment is skipped when the value is null
+        cob.aload(4);
+        cob.ifnull(afterField);
+
+        // VarHandle.set(target, value)
+        cob.getstatic(adapterCD, fd.varHandleField(), CD_VarHandle);
+        cob.aload(1); // target
+        cob.aload(4); // value
+        cob.invokevirtual(CD_VarHandle, "set",
+                MethodTypeDesc.of(CD_void, CD_Object, CD_Object));
+
+        cob.labelBinding(afterField);
+    }
+
+    /** Pushes the value of {@code fd}: from support.context/param/beanParam, or an inline conversion. */
+    private static void emitFieldValue(CodeBuilder cob, FieldDesc fd) {
+        cob.aload(2); // support
+
+        if (fd.isContext()) {
+            // support.context(FieldType.class)
+            cob.ldc(classDescOf(fd.fieldType()));
+            cob.invokeinterface(CD_InjectionSupport, "context",
+                    MethodTypeDesc.of(CD_Object, CD_Class));
+
+        } else if (fd.isBeanParam()) {
+            // support.beanParam(FieldType.class)
+            cob.ldc(classDescOf(fd.fieldType()));
+            cob.invokeinterface(CD_InjectionSupport, "beanParam",
+                    MethodTypeDesc.of(CD_Object, CD_Class));
+
+        } else {
+            // M6b: decide inline strategy at generation time
+            InlineStrategy strategy = resolveInlineStrategy(fd);
+            if (strategy == InlineStrategy.FALLBACK) {
+                // fall back to support.param(ParamKind, name, encoded, defaultValue, rawType, elementType)
+                emitSupportParam(cob, fd);
+            } else {
+                // emit inline typed conversion
+                emitInlineParam(cob, fd, strategy);
+            }
+        }
+    }
+
+    // ---- M6b: inline strategy resolution ----
+
+    /**
+     * The inline conversion strategy for a PARAM field.
+     * FALLBACK means: emit support.param(...) (reflective path).
+     * All other values trigger inline typed conversion.
+     */
+    enum InlineStrategy {
+        FALLBACK,
+        STRING,           // String / CharSequence pass-through
+        BOOLEAN, BYTE, SHORT, INT, LONG, FLOAT, DOUBLE, CHAR,  // primitives + wrappers
+        ENUM_WITH_FROM_STRING,  // enum with public static fromString(String)
+        ENUM_PLAIN,             // enum without fromString — use Enum.valueOf
+        VALUE_OF,               // public static valueOf(String)
+        FROM_STRING,            // public static fromString(String)
+        STRING_CTOR,            // public (String) constructor
+        COLLECTION_STRING,      // List/Set/SortedSet/Collection of String
+        COLLECTION_INLINE       // List/Set/SortedSet/Collection of an inlinable element type
+    }
+
+    /**
+     * Decides the inline strategy for a PARAM field at generation time.
+     * Returns FALLBACK for any type/shape we cannot safely replicate.
+     *
+     * <p>Accessibility rule: we only inline when the conversion target is reachable
+     * from the generated adapter (same package as resource class). Specifically:
+     * <ul>
+     *   <li>For {@code valueOf}/{@code fromString} we require: method is {@code public} and
+     *       the declaring class is {@code public}.</li>
+     *   <li>For String constructor we require: ctor is {@code public} and declaring class is
+     *       {@code public}.</li>
+     *   <li>Primitives/wrappers are always inlineable.</li>
+     *   <li>{@code PathSegment} — fall back (complex parse, not worth inlining).</li>
+     * </ul>
+     * </p>
+     */
+    public static InlineStrategy resolveInlineStrategy(FieldDesc fd) {
+        Class<?> raw = fd.rawType();
+
+        // Collections: delegate to element type strategy
+        if (ParamValueConverter.isListLike(raw)) {
+            Class<?> elem = fd.elementType();
+            InlineStrategy elemStrategy = resolveScalarStrategy(elem);
+            if (elemStrategy == InlineStrategy.FALLBACK) return InlineStrategy.FALLBACK;
+            if (elemStrategy == InlineStrategy.STRING) return InlineStrategy.COLLECTION_STRING;
+            return InlineStrategy.COLLECTION_INLINE;
+        }
+
+        return resolveScalarStrategy(raw);
+    }
+
+    /**
+     * Resolves the inline strategy for a scalar (non-collection) element type.
+     */
+    private static InlineStrategy resolveScalarStrategy(Class<?> type) {
+        if (type == String.class || type == CharSequence.class) return InlineStrategy.STRING;
+
+        // PathSegment: fall back (complex)
+        if (jakarta.ws.rs.core.PathSegment.class.isAssignableFrom(type)) return InlineStrategy.FALLBACK;
+
+        InlineStrategy primitive = primitiveStrategy(type);
+        if (primitive != null) return primitive;
+
+        // The type must be public for us to emit a direct invokestatic / invokespecial
+        if (!Modifier.isPublic(type.getModifiers())) return InlineStrategy.FALLBACK;
+
+        if (type.isEnum()) return enumStrategy(type);
+        return factoryStrategy(type);
+    }
+
+    /** The strategy of a primitive or wrapper type, or null for any other type. */
+    private static InlineStrategy primitiveStrategy(Class<?> type) {
+        Class<?> wrapper = type.isPrimitive() ? java.lang.invoke.MethodType.methodType(type).wrap().returnType() : type;
+        if (wrapper == Boolean.class)   return InlineStrategy.BOOLEAN;
+        if (wrapper == Byte.class)      return InlineStrategy.BYTE;
+        if (wrapper == Short.class)     return InlineStrategy.SHORT;
+        if (wrapper == Integer.class)   return InlineStrategy.INT;
+        if (wrapper == Long.class)      return InlineStrategy.LONG;
+        if (wrapper == Float.class)     return InlineStrategy.FLOAT;
+        if (wrapper == Double.class)    return InlineStrategy.DOUBLE;
+        if (wrapper == Character.class) return InlineStrategy.CHAR;
+        return null;
+    }
+
+    /** Enum: a public static fromString first (mirroring ParamValueConverter order), else valueOf. */
+    private static InlineStrategy enumStrategy(Class<?> type) {
+        try {
+            Method fs = type.getDeclaredMethod(METHOD_FROM_STRING, String.class);
+            if (Modifier.isStatic(fs.getModifiers()) && Modifier.isPublic(fs.getModifiers())) {
+                return InlineStrategy.ENUM_WITH_FROM_STRING;
+            }
+        } catch (NoSuchMethodException _) { /* no such method: the next candidate is tried */ }
+        return InlineStrategy.ENUM_PLAIN;
+    }
+
+    /** A public static valueOf(String), a public static fromString(String), then a public (String) constructor. */
+    private static InlineStrategy factoryStrategy(Class<?> type) {
+        try {
+            Method valueOf = type.getDeclaredMethod(METHOD_VALUE_OF, String.class);
+            if (Modifier.isStatic(valueOf.getModifiers()) && Modifier.isPublic(valueOf.getModifiers())) {
+                return InlineStrategy.VALUE_OF;
+            }
+        } catch (NoSuchMethodException _) { /* no such method: the next candidate is tried */ }
+
+        try {
+            Method fromString = type.getDeclaredMethod(METHOD_FROM_STRING, String.class);
+            if (Modifier.isStatic(fromString.getModifiers()) && Modifier.isPublic(fromString.getModifiers())) {
+                return InlineStrategy.FROM_STRING;
+            }
+        } catch (NoSuchMethodException _) { /* no such method: the next candidate is tried */ }
+
+        try {
+            Constructor<?> c = type.getDeclaredConstructor(String.class);
+            if (Modifier.isPublic(c.getModifiers())) {
+                return InlineStrategy.STRING_CTOR;
+            }
+        } catch (NoSuchMethodException _) { /* no String constructor either */ }
+
+        // Can't safely inline
+        return InlineStrategy.FALLBACK;
+    }
+
+    /**
+     * Emits {@code support.param(...)} call — the reflective fallback path.
+     * Stack effect: support is already loaded at slot 2 (aload 2 was done by caller).
+     * After this call, the result Object is on the stack.
+     */
+    private static void emitSupportParam(CodeBuilder cob, FieldDesc fd) {
+        cob.getstatic(CD_ParamKind, fd.paramKind().name(), CD_ParamKind);
+        cob.ldc(fd.paramAnnotationValue());
+        if (fd.encoded()) { cob.iconst_1(); } else { cob.iconst_0(); }
+        if (fd.defaultValue() != null) {
+            cob.ldc(fd.defaultValue());
+        } else {
+            cob.aconst_null();
+        }
+        cob.ldc(classDescOf(fd.rawType()));
+        cob.ldc(classDescOf(fd.elementType()));
+        cob.invokeinterface(CD_InjectionSupport, "param",
+                MethodTypeDesc.of(CD_Object,
+                        CD_ParamKind, CD_String, CD_boolean, CD_String,
+                        CD_Class, CD_Class));
+    }
+
+    /**
+     * Emits inline typed conversion bytecode for a PARAM field.
+     *
+     * <p>Slot allocations: 5=effective List&lt;String&gt;, 6=raw String (scalar), 7+=temporaries.
+     * On entry: support is on stack (caller did aload(2)).
+     * On exit: the converted value (Object, boxed for primitives) is on the stack.
+     *
+     * <p>Slot 5 always holds a {@code List&lt;String&gt;}: the raw list from the request, or
+     * a {@code List.of(defaultValue)} when the raw list is empty and a default is present.</p>
+     */
+    private static void emitInlineParam(CodeBuilder cob, FieldDesc fd, InlineStrategy strategy) {
+        // support is on stack; call rawValues → List<String>
+        cob.getstatic(CD_ParamKind, fd.paramKind().name(), CD_ParamKind);
+        cob.ldc(fd.paramAnnotationValue());
+        if (fd.encoded()) { cob.iconst_1(); } else { cob.iconst_0(); }
+        cob.invokeinterface(CD_InjectionSupport, "rawValues",
+                MethodTypeDesc.of(CD_List, CD_ParamKind, CD_String, CD_boolean));
+        cob.astore(5); // slot 5 = rawList
+
+        cob.aload(5);
+        cob.invokeinterface(CD_List, "isEmpty", MethodTypeDesc.of(ConstantDescs.CD_boolean));
+        Label notEmpty   = cob.newLabel();
+        Label afterEmpty = cob.newLabel();
+        cob.ifeq(notEmpty); // if not empty → jump to notEmpty
+
+        // Empty branch: rawList is empty
+        if (fd.defaultValue() != null) {
+            // slot 5 = List.of(defaultValue)
+            cob.ldc(fd.defaultValue());
+            cob.invokestatic(CD_List, "of", MethodTypeDesc.of(CD_List, CD_Object), true);
+            cob.astore(5);
+            cob.goto_(notEmpty);
+        } else {
+            // No default: push primitive zero or null for the field type
+            emitPrimitiveDefaultOrNull(cob, fd.rawType());
+            cob.goto_(afterEmpty);
+        }
+
+        cob.labelBinding(notEmpty);
+        // Slot 5 is a non-empty List<String>; convert it to the target type
+        emitConvertFromList(cob, fd, strategy);
+
+        cob.labelBinding(afterEmpty);
+        // value is on stack
+    }
+
+    /**
+     * Pushes {@code defaultForType} onto the stack.
+     * Primitives → boxed zero/false. References (wrappers, collections, String) → null.
+     */
+    private static void emitPrimitiveDefaultOrNull(CodeBuilder cob, Class<?> rawType) {
+        if (rawType == boolean.class) { cob.iconst_0(); emitBox(cob, boolean.class); return; }
+        if (rawType == byte.class)    { cob.iconst_0(); emitBox(cob, byte.class);    return; }
+        if (rawType == short.class)   { cob.iconst_0(); emitBox(cob, short.class);   return; }
+        if (rawType == int.class)     { cob.iconst_0(); emitBox(cob, int.class);     return; }
+        if (rawType == long.class)    { cob.lconst_0(); emitBox(cob, long.class);    return; }
+        if (rawType == float.class)   { cob.fconst_0(); emitBox(cob, float.class);   return; }
+        if (rawType == double.class)  { cob.dconst_0(); emitBox(cob, double.class);  return; }
+        if (rawType == char.class)    { cob.iconst_0(); emitBox(cob, char.class);    return; }
+        cob.aconst_null(); // reference types (wrappers, collections, String, enums, etc.)
+    }
+
+    /**
+     * Emits conversion of slot 5 (a non-empty {@code List&lt;String&gt;}) to the target type.
+     * Stack after: the converted value (Object, boxed for primitives).
+     */
+    private static void emitConvertFromList(CodeBuilder cob, FieldDesc fd, InlineStrategy strategy) {
+        if (strategy == InlineStrategy.COLLECTION_STRING || strategy == InlineStrategy.COLLECTION_INLINE) {
+            emitCollectionConversion(cob, fd);
+            return;
+        }
+
+        // Scalar: get first element of slot 5 → slot 6
+        cob.aload(5);
+        cob.ldc(0);
+        cob.invokeinterface(CD_List, "get", MethodTypeDesc.of(CD_Object, ConstantDescs.CD_int));
+        cob.checkcast(CD_String);
+        cob.astore(6); // slot 6 = raw String
+
+        ClassDesc typeCD = classDescOf(fd.elementType());
+
+        // Guard the conversion: a WebApplicationException propagates unchanged, any other
+        // RuntimeException is replaced by the coercion error.
+        //
+        // IMPORTANT: register outer exceptionCatch entries AFTER emitting (and thus registering)
+        // any inner catches from emitScalarConversion (e.g. ENUM_PLAIN's IAE handler).
+        // The JVM exception table is searched in registration order — inner catches must be
+        // listed FIRST so they take priority over the outer RuntimeException catch.
+        Label tryStart = cob.newBoundLabel();
+        Label tryEnd   = cob.newLabel();
+        Label catchWAE = cob.newLabel();
+        Label catchRE  = cob.newLabel();
+        Label afterTry = cob.newLabel();
+
+        // Emit the conversion code — this may register inner exception handlers (e.g. ENUM_PLAIN IAE).
+        // Those inner registrations happen BEFORE the outer ones below, giving them table priority.
+        cob.aload(6);
+        emitScalarConversion(cob, strategy, typeCD);
+
+        // Register outer catches AFTER inner ones so inner handlers take priority.
+        cob.exceptionCatch(tryStart, tryEnd, catchWAE, CD_WebAppException);
+        cob.exceptionCatch(tryStart, tryEnd, catchRE, ClassDesc.of(RUNTIME_EXCEPTION));
+
+        cob.goto_(afterTry);
+
+        cob.labelBinding(tryEnd);
+        cob.labelBinding(catchWAE);
+        cob.athrow();
+
+        cob.labelBinding(catchRE);
+        cob.astore(7); // save exception
+        cob.aload(2); // support
+        cob.getstatic(CD_ParamKind, fd.paramKind().name(), CD_ParamKind);
+        cob.ldc(fd.paramAnnotationValue());
+        cob.aload(7);
+        cob.invokeinterface(CD_InjectionSupport, "coercionError",
+                MethodTypeDesc.of(CD_WebAppException, CD_ParamKind, CD_String,
+                        ClassDesc.of(RUNTIME_EXCEPTION)));
+        cob.athrow();
+
+        cob.labelBinding(afterTry);
+        // converted value on stack
+    }
+
+    /**
+     * Emits scalar conversion from a String (on stack) to the target type.
+     * Stack before: String. Stack after: Object (boxed for primitives).
+     */
+    private static void emitScalarConversion(CodeBuilder cob, InlineStrategy strategy, ClassDesc typeCD) {
+        switch (strategy) {
+            case STRING -> { /* pass-through */ }
+            case BOOLEAN -> {
+                cob.invokestatic(CD_Boolean_w, "parseBoolean",
+                        MethodTypeDesc.of(ConstantDescs.CD_boolean, CD_String));
+                emitBox(cob, boolean.class);
+            }
+            case BYTE -> {
+                cob.invokestatic(CD_Byte_w, "parseByte",
+                        MethodTypeDesc.of(ConstantDescs.CD_byte, CD_String));
+                emitBox(cob, byte.class);
+            }
+            case SHORT -> {
+                cob.invokestatic(CD_Short_w, "parseShort",
+                        MethodTypeDesc.of(ConstantDescs.CD_short, CD_String));
+                emitBox(cob, short.class);
+            }
+            case INT -> {
+                cob.invokestatic(CD_Integer, "parseInt",
+                        MethodTypeDesc.of(ConstantDescs.CD_int, CD_String));
+                emitBox(cob, int.class);
+            }
+            case LONG -> {
+                cob.invokestatic(CD_Long_w, "parseLong",
+                        MethodTypeDesc.of(ConstantDescs.CD_long, CD_String));
+                emitBox(cob, long.class);
+            }
+            case FLOAT -> {
+                cob.invokestatic(CD_Float_w, "parseFloat",
+                        MethodTypeDesc.of(ConstantDescs.CD_float, CD_String));
+                emitBox(cob, float.class);
+            }
+            case DOUBLE -> {
+                cob.invokestatic(CD_Double_w, "parseDouble",
+                        MethodTypeDesc.of(ConstantDescs.CD_double, CD_String));
+                emitBox(cob, double.class);
+            }
+            case CHAR -> {
+                // dup String; check isEmpty; if empty → pop dup + throw IAE; else charAt(0) + box
+                cob.dup();
+                cob.invokevirtual(CD_String, "isEmpty", MethodTypeDesc.of(ConstantDescs.CD_boolean));
+                Label charNotEmpty = cob.newLabel();
+                cob.ifeq(charNotEmpty);
+                cob.pop(); // discard the dup'd string
+                cob.new_(CD_IllegalArgument);
+                cob.dup();
+                cob.ldc("Empty value for char");
+                cob.invokespecial(CD_IllegalArgument,
+                        ConstantDescs.INIT_NAME, MethodTypeDesc.of(CD_void, CD_String));
+                cob.athrow();
+                cob.labelBinding(charNotEmpty);
+                // stack: original String (dup was consumed by invokevirtual isEmpty result)
+                cob.iconst_0();
+                cob.invokevirtual(CD_String, "charAt",
+                        MethodTypeDesc.of(ConstantDescs.CD_char, ConstantDescs.CD_int));
+                emitBox(cob, char.class);
+            }
+            case ENUM_WITH_FROM_STRING ->
+                cob.invokestatic(typeCD, METHOD_FROM_STRING, MethodTypeDesc.of(typeCD, CD_String));
+            case ENUM_PLAIN -> {
+                // Enum.valueOf(Type.class, raw); on IAE → null (matches coerceSingle)
+                // Need: save raw in slot 8, push Class, reload raw for Enum.valueOf(Class, String)
+                Label iaeStart = cob.newBoundLabel();
+                Label iaeEnd   = cob.newLabel();
+                Label iaeCatch = cob.newLabel();
+                Label iaeAfter = cob.newLabel();
+                cob.exceptionCatch(iaeStart, iaeEnd, iaeCatch,
+                        CD_IllegalArgument);
+                cob.astore(8); // save raw String
+                cob.ldc(typeCD);
+                cob.aload(8);
+                cob.invokestatic(ClassDesc.of("java.lang.Enum"), METHOD_VALUE_OF,
+                        MethodTypeDesc.of(ClassDesc.of("java.lang.Enum"),
+                                ClassDesc.of("java.lang.Class"), CD_String));
+                cob.goto_(iaeAfter);
+                cob.labelBinding(iaeEnd);
+                cob.labelBinding(iaeCatch);
+                cob.pop(); // discard IAE
+                cob.aconst_null();
+                cob.labelBinding(iaeAfter);
+            }
+            case VALUE_OF ->
+                cob.invokestatic(typeCD, METHOD_VALUE_OF, MethodTypeDesc.of(typeCD, CD_String));
+            case FROM_STRING ->
+                cob.invokestatic(typeCD, METHOD_FROM_STRING, MethodTypeDesc.of(typeCD, CD_String));
+            case STRING_CTOR -> {
+                cob.astore(8);
+                cob.new_(typeCD);
+                cob.dup();
+                cob.aload(8);
+                cob.invokespecial(typeCD, ConstantDescs.INIT_NAME, MethodTypeDesc.of(CD_void, CD_String));
+            }
+            default -> throw new IllegalStateException("Unexpected strategy: " + strategy);
+        }
+    }
+
+    /**
+     * Emits collection conversion from slot 5 (List&lt;String&gt;) to the target collection type.
+     * Builds ArrayList/LinkedHashSet/TreeSet, converting each element inline.
+     * Stack after: the collection Object.
+     */
+    private static void emitCollectionConversion(CodeBuilder cob, FieldDesc fd) {
+        Class<?> raw = fd.rawType();
+        Class<?> elem = fd.elementType();
+        ClassDesc elemCD = classDescOf(elem);
+        InlineStrategy elemStrategy = resolveScalarStrategy(elem);
+
+        ClassDesc collImplCD;
+        if (raw == java.util.Set.class) {
+            collImplCD = CD_LinkedHashSet;
+        } else if (raw == java.util.SortedSet.class) {
+            collImplCD = CD_TreeSet;
+        } else {
+            collImplCD = CD_ArrayList;
+        }
+
+        // result = new Impl() — slot 7
+        cob.new_(collImplCD);
+        cob.dup();
+        cob.invokespecial(collImplCD, ConstantDescs.INIT_NAME, MethodTypeDesc.of(CD_void));
+        cob.astore(7);
+
+        // size in slot 8, index in slot 9
+        cob.aload(5);
+        cob.invokeinterface(CD_List, "size", MethodTypeDesc.of(ConstantDescs.CD_int));
+        cob.istore(8);
+        cob.iconst_0();
+        cob.istore(9);
+
+        Label loopCheck = cob.newBoundLabel();
+        Label loopBody  = cob.newLabel();
+        Label loopEnd   = cob.newLabel();
+
+        cob.iload(9);
+        cob.iload(8);
+        cob.if_icmplt(loopBody);
+        cob.goto_(loopEnd);
+
+        cob.labelBinding(loopBody);
+        cob.aload(5);
+        cob.iload(9);
+        cob.invokeinterface(CD_List, "get", MethodTypeDesc.of(CD_Object, ConstantDescs.CD_int));
+        cob.checkcast(CD_String);
+        // Stack: elem_str
+
+        if (elemStrategy != InlineStrategy.STRING) {
+            cob.astore(10);
+            Label eTryStart = cob.newBoundLabel();
+            Label eTryEnd   = cob.newLabel();
+            Label eCatchWAE = cob.newLabel();
+            Label eCatchRE  = cob.newLabel();
+            Label eAfterTry = cob.newLabel();
+            // Emit inner conversion FIRST so any inner catches (e.g. ENUM_PLAIN IAE) are
+            // registered before the outer RE catch — preserving inner-catch priority.
+            cob.aload(10);
+            emitScalarConversion(cob, elemStrategy, elemCD);
+            cob.exceptionCatch(eTryStart, eTryEnd, eCatchWAE, CD_WebAppException);
+            cob.exceptionCatch(eTryStart, eTryEnd, eCatchRE, ClassDesc.of(RUNTIME_EXCEPTION));
+            cob.goto_(eAfterTry);
+            cob.labelBinding(eTryEnd);
+            cob.labelBinding(eCatchWAE);
+            cob.athrow();
+            cob.labelBinding(eCatchRE);
+            cob.astore(11);
+            cob.aload(2); // support
+            cob.getstatic(CD_ParamKind, fd.paramKind().name(), CD_ParamKind);
+            cob.ldc(fd.paramAnnotationValue());
+            cob.aload(11);
+            cob.invokeinterface(CD_InjectionSupport, "coercionError",
+                    MethodTypeDesc.of(CD_WebAppException, CD_ParamKind, CD_String,
+                            ClassDesc.of(RUNTIME_EXCEPTION)));
+            cob.athrow();
+            cob.labelBinding(eAfterTry);
+        }
+        // Stack: converted elem. Load result coll and swap for add(elem).
+        // stack: ..., converted_elem
+        // aload(7): ..., converted_elem, result_coll
+        // swap:     ..., result_coll, converted_elem  → TOS=converted_elem, objectref=result_coll ✓
+        cob.aload(7);
+        cob.swap();
+        cob.invokeinterface(ClassDesc.of("java.util.Collection"), "add",
+                MethodTypeDesc.of(ConstantDescs.CD_boolean, CD_Object));
+        cob.pop();
+
+        cob.iinc(9, 1);
+        cob.goto_(loopCheck);
+
+        cob.labelBinding(loopEnd);
+        cob.aload(7); // push result collection
+    }
+
+    // ---- Method collection and invoke generation ----
+
+    /** An instance method of the resource itself: not inherited from Object, not bridge nor synthetic. */
+    private static boolean isAdaptable(Method m) {
+        return m.getDeclaringClass() != Object.class && !Modifier.isStatic(m.getModifiers())
+                && !m.isBridge() && !m.isSynthetic();
+    }
+
+    /**
+     * Collects all eligible resource methods from the class hierarchy, assigning a stable
+     * integer methodId to each. Eligibility: public, non-static, non-bridge, non-synthetic,
+     * not declared on {@code Object}, plus each bridge no such method of the same parameters stands for.
+     * All such methods are eligible because args are pre-resolved by the Invoker.
+     *
+     * <p><b>Ordering:</b> methods are sorted by {@code (declaringClassName, methodName, jvmDescriptor)},
+     * stable across JVM runs. The generated {@code methodKeys()} names the method of each id and
+     * {@code AdapterRegistry} reads the ids from it, so this numbering need not match the annotation
+     * processor's: an adapter is consistent with itself, whichever path generated it.</p>
+     *
+     * @param resourceClass the JAX-RS resource class
+     * @return ordered map of Method → methodId (0-based, canonical insertion order)
+     */
+    public static Map<Method, Integer> collectMethods(Class<?> resourceClass) {
+        List<Method> eligible = new ArrayList<>();
+        Set<String> declared = new HashSet<>();
+        for (Method m : resourceClass.getMethods()) {
+            if (isAdaptable(m)) {
+                eligible.add(m);
+                declared.add(methodKey(m));
+            }
+        }
+        // A bridge no method of the same parameters stands for is the only public form of its method: a public
+        // method of a package-private superclass is listed as the bridge the class gets, and an override
+        // through a type argument leaves the erased signature to its bridge. Calling it calls the method.
+        for (Method m : resourceClass.getMethods()) {
+            if (m.isBridge() && m.getDeclaringClass() != Object.class && !Modifier.isStatic(m.getModifiers())
+                    && declared.add(methodKey(m))) {
+                eligible.add(m);
+            }
+        }
+        // Canonical sort: (declaringClassName, methodName, JVM descriptor) — lexicographic.
+        // The JVM descriptor is built from parameter types in declared order, giving a unique
+        // key per overload. This ordering is stable across JVMs and identical to what the APT
+        // processor computes from javax.lang.model.
+        eligible.sort((a, b) -> {
+            int cmp = a.getDeclaringClass().getName().compareTo(b.getDeclaringClass().getName());
+            if (cmp != 0) return cmp;
+            cmp = a.getName().compareTo(b.getName());
+            if (cmp != 0) return cmp;
+            return jvmDescriptor(a).compareTo(jvmDescriptor(b));
+        });
+        Map<Method, Integer> result = new LinkedHashMap<>();
+        int id = 0;
+        for (Method m : eligible) {
+            result.put(m, id++);
+        }
+        return result;
+    }
+
+    /**
+     * The key of {@code m} in an adapter's {@code methodKeys()}: its name and JVM parameter descriptor, e.g.
+     * {@code put(Ljava/lang/String;)}. The annotation processor writes the same keys.
+     */
+    public static String methodKey(Method m) {
+        return m.getName() + jvmDescriptor(m);
+    }
+
+    /**
+     * Returns the JVM method descriptor for the given method (parameter types only, no return).
+     * Used as a tiebreaker in the canonical method ordering.
+     */
+    static String jvmDescriptor(Method m) {
+        StringBuilder sb = new StringBuilder("(");
+        for (Class<?> pt : m.getParameterTypes()) {
+            sb.append(classDescOf(pt).descriptorString());
+        }
+        sb.append(")");
+        return sb.toString();
+    }
+
+    /**
+     * Generates the {@code invoke(int methodId, Object target, Object[] args)} method.
+     *
+     * <p>Shape:
+     * <pre>
+     * public Object invoke(int methodId, Object target, Object[] args) throws Throwable {
+     *     switch (methodId) {
+     *         case 0: return BOX(((Owner) target).method0(CAST(args[0],T0), ...));
+     *         ...
+     *         default: throw new UnsupportedOperationException("unknown methodId: " + methodId);
+     *     }
+     * }
+     * </pre>
+     * Each case: casts target, loads each arg from the array (checkcast for reference types,
+     * unboxing for primitives), calls invokevirtual / invokeinterface, boxes the return value
+     * (or pushes null for void), then returns.</p>
+     */
+    // ClassDesc for Object[] — "[Ljava/lang/Object;" in JVM descriptor notation.
+    private static final ClassDesc CD_ObjArr = ClassDesc.ofDescriptor("[Ljava/lang/Object;");
+
+    private static void generateInvoke(java.lang.classfile.ClassBuilder clb, Map<Method, Integer> methodIds) {
+
+        clb.withMethodBody("invoke",
+                MethodTypeDesc.of(CD_Object, CD_int, CD_Object, CD_ObjArr),
+                ClassFile.ACC_PUBLIC,
+                cob -> {
+                    // Slots: 0=this, 1=methodId(int), 2=target(Object), 3=args(Object[])
+                    if (methodIds.isEmpty()) {
+                        emitDefaultCase(cob);
+                        return;
+                    }
+
+                    // Build a tableswitch: collectMethods numbers the IDs contiguously from 0.
+                    int size = methodIds.size();
+                    Label defaultLabel = cob.newLabel();
+                    Label[] caseLabels = new Label[size];
+                    for (int i = 0; i < size; i++) caseLabels[i] = cob.newLabel();
+
+                    // Build the SwitchCase list for tableswitch
+                    List<SwitchCase> switchCases = new ArrayList<>(size);
+                    for (int i = 0; i < size; i++) switchCases.add(SwitchCase.of(i, caseLabels[i]));
+
+                    cob.iload(1); // methodId
+                    cob.tableswitch(0, size - 1, defaultLabel, switchCases);
+
+                    // Emit each case body after the switch instruction
+                    for (Map.Entry<Method, Integer> entry : methodIds.entrySet()) {
+                        Method m = entry.getKey();
+                        int mid = entry.getValue();
+                        cob.labelBinding(caseLabels[mid]);
+                        emitMethodCase(cob, m);
+                        // areturn is inside emitMethodCase
+                    }
+
+                    // default: throw UnsupportedOperationException
+                    cob.labelBinding(defaultLabel);
+                    emitDefaultCase(cob);
+                });
+    }
+
+    private static void emitDefaultCase(CodeBuilder cob) {
+        cob.new_(CD_UnsupportedOp);
+        cob.dup();
+        cob.ldc("P1b: unknown methodId");
+        cob.invokespecial(CD_UnsupportedOp, ConstantDescs.INIT_NAME,
+                MethodTypeDesc.of(CD_void, CD_String));
+        cob.athrow();
+    }
+
+    /**
+     * Emits bytecode for one switch case: cast target, load+cast each arg, call, box return,
+     * then {@code areturn}.
+     */
+    private static void emitMethodCase(CodeBuilder cob, Method m) {
+        // Cast target to the concrete resource class (or the declaring class if interface)
+        Class<?> ownerClass = m.getDeclaringClass();
+        ClassDesc ownerCD = ClassDesc.of(ownerClass.getName());
+
+        // Load target (slot 2) and checkcast to the owner
+        cob.aload(2);
+        cob.checkcast(ownerCD);
+
+        // Load each argument from the args array (slot 3)
+        Class<?>[] paramTypes = m.getParameterTypes();
+        for (int i = 0; i < paramTypes.length; i++) {
+            Class<?> pt = paramTypes[i];
+            cob.aload(3); // args array
+            cob.ldc(i);
+            cob.aaload(); // args[i] as Object
+            if (pt.isPrimitive()) {
+                // Unbox: checkcast to wrapper then invoke xxxValue()
+                emitUnbox(cob, pt);
+            } else {
+                // Use classDescOf (not ClassDesc.of(getName())) so array param types are handled:
+                // an array's Class.getName() is the JVM descriptor form ("[Ljava...;", "[B"), which
+                // ClassDesc.of rejects ("Invalid class name"). classDescOf goes via describeConstable.
+                cob.checkcast(classDescOf(pt));
+            }
+        }
+
+        // Build the erased method descriptor
+        ClassDesc[] paramDescs = new ClassDesc[paramTypes.length];
+        for (int i = 0; i < paramTypes.length; i++) {
+            paramDescs[i] = classDescOf(paramTypes[i]);
+        }
+        Class<?> returnType = m.getReturnType();
+        ClassDesc returnDesc = classDescOf(returnType);
+        MethodTypeDesc mtd = MethodTypeDesc.of(returnDesc, paramDescs);
+
+        // Call: invokeinterface if declaring class is an interface, else invokevirtual
+        if (ownerClass.isInterface()) {
+            cob.invokeinterface(ownerCD, m.getName(), mtd);
+        } else {
+            cob.invokevirtual(ownerCD, m.getName(), mtd);
+        }
+
+        // Box the return value (or push null for void), then areturn
+        if (returnType == void.class) {
+            cob.aconst_null();
+        } else if (returnType.isPrimitive()) {
+            emitBox(cob, returnType);
+        }
+        // else: reference type is already on stack as Object (or subtype)
+
+        cob.areturn();
+    }
+
+    /**
+     * Emits bytecode to unbox the top-of-stack {@code Object} to the given primitive type.
+     * The object is expected to be the corresponding wrapper type at runtime.
+     */
+    private static void emitUnbox(CodeBuilder cob, Class<?> primitive) {
+        if (primitive == int.class) {
+            cob.checkcast(CD_Integer);
+            cob.invokevirtual(CD_Integer, "intValue",
+                    MethodTypeDesc.of(ConstantDescs.CD_int));
+        } else if (primitive == long.class) {
+            cob.checkcast(CD_Long_w);
+            cob.invokevirtual(CD_Long_w, "longValue",
+                    MethodTypeDesc.of(ConstantDescs.CD_long));
+        } else if (primitive == double.class) {
+            cob.checkcast(CD_Double_w);
+            cob.invokevirtual(CD_Double_w, "doubleValue",
+                    MethodTypeDesc.of(ConstantDescs.CD_double));
+        } else if (primitive == float.class) {
+            cob.checkcast(CD_Float_w);
+            cob.invokevirtual(CD_Float_w, "floatValue",
+                    MethodTypeDesc.of(ConstantDescs.CD_float));
+        } else if (primitive == boolean.class) {
+            cob.checkcast(CD_Boolean_w);
+            cob.invokevirtual(CD_Boolean_w, "booleanValue",
+                    MethodTypeDesc.of(ConstantDescs.CD_boolean));
+        } else if (primitive == short.class) {
+            cob.checkcast(CD_Short_w);
+            cob.invokevirtual(CD_Short_w, "shortValue",
+                    MethodTypeDesc.of(ConstantDescs.CD_short));
+        } else if (primitive == byte.class) {
+            cob.checkcast(CD_Byte_w);
+            cob.invokevirtual(CD_Byte_w, "byteValue",
+                    MethodTypeDesc.of(ConstantDescs.CD_byte));
+        } else if (primitive == char.class) {
+            cob.checkcast(CD_Character_w);
+            cob.invokevirtual(CD_Character_w, "charValue",
+                    MethodTypeDesc.of(ConstantDescs.CD_char));
+        }
+    }
+
+    /**
+     * Emits bytecode to box the top-of-stack primitive value to its wrapper type.
+     * Uses {@code valueOf} to leverage the JVM's integer cache.
+     */
+    private static void emitBox(CodeBuilder cob, Class<?> primitive) {
+        if (primitive == int.class) {
+            cob.invokestatic(CD_Integer, METHOD_VALUE_OF,
+                    MethodTypeDesc.of(CD_Integer, ConstantDescs.CD_int));
+        } else if (primitive == long.class) {
+            cob.invokestatic(CD_Long_w, METHOD_VALUE_OF,
+                    MethodTypeDesc.of(CD_Long_w, ConstantDescs.CD_long));
+        } else if (primitive == double.class) {
+            cob.invokestatic(CD_Double_w, METHOD_VALUE_OF,
+                    MethodTypeDesc.of(CD_Double_w, ConstantDescs.CD_double));
+        } else if (primitive == float.class) {
+            cob.invokestatic(CD_Float_w, METHOD_VALUE_OF,
+                    MethodTypeDesc.of(CD_Float_w, ConstantDescs.CD_float));
+        } else if (primitive == boolean.class) {
+            cob.invokestatic(CD_Boolean_w, METHOD_VALUE_OF,
+                    MethodTypeDesc.of(CD_Boolean_w, ConstantDescs.CD_boolean));
+        } else if (primitive == short.class) {
+            cob.invokestatic(CD_Short_w, METHOD_VALUE_OF,
+                    MethodTypeDesc.of(CD_Short_w, ConstantDescs.CD_short));
+        } else if (primitive == byte.class) {
+            cob.invokestatic(CD_Byte_w, METHOD_VALUE_OF,
+                    MethodTypeDesc.of(CD_Byte_w, ConstantDescs.CD_byte));
+        } else if (primitive == char.class) {
+            cob.invokestatic(CD_Character_w, METHOD_VALUE_OF,
+                    MethodTypeDesc.of(CD_Character_w, ConstantDescs.CD_char));
+        }
+    }
+
+    // ---- newInstance() generation (M6a) ----
+
+    /**
+     * Returns {@code true} when the resource class has an accessible no-arg constructor.
+     * Accessible means: public, OR package-private/protected (the adapter is in the same
+     * package, so it can call a non-private no-arg ctor). Private no-arg ctors are excluded
+     * because the generated adapter code would fail at classload time. An abstract class has none
+     * either: {@code new} would throw {@link InstantiationError} (CASSINI-033).
+     */
+    static boolean hasAccessibleNoArgCtor(Class<?> resourceClass) {
+        if (java.lang.reflect.Modifier.isAbstract(resourceClass.getModifiers())) {
+            return false;
+        }
+        try {
+            java.lang.reflect.Constructor<?> ctor = resourceClass.getDeclaredConstructor();
+            int mods = ctor.getModifiers();
+            // private → not accessible from the same-package adapter
+            return !java.lang.reflect.Modifier.isPrivate(mods);
+        } catch (NoSuchMethodException _) {
+            return false;
+        }
+    }
+
+    /**
+     * Generates a {@code newInstance()} override that performs {@code new ResourceClass()}.
+     *
+     * <p>Bytecode shape:
+     * <pre>
+     * public Object newInstance() {
+     *     return new ResourceClass();
+     * }
+     * </pre>
+     * Uses {@code new} + {@code dup} + {@code invokespecial <init>()V} + {@code areturn}.
+     * The adapter lives in the resource's package, so package-private ctors are callable.</p>
+     */
+    private static void generateNewInstance(java.lang.classfile.ClassBuilder clb,
+                                             ClassDesc resourceCD) {
+        clb.withMethodBody("newInstance",
+                MethodTypeDesc.of(CD_Object),
+                ClassFile.ACC_PUBLIC,
+                cob -> {
+                    cob.new_(resourceCD);
+                    cob.dup();
+                    cob.invokespecial(resourceCD, ConstantDescs.INIT_NAME,
+                            MethodTypeDesc.of(CD_void));
+                    cob.areturn();
+                });
+    }
+
+    // ---- Field collection ----
+
+    /**
+     * Collects all injectable fields from the resource class and its superclass chain.
+     * Called once at generation time; no per-request reflection.
+     */
+    static List<FieldDesc> collectFields(Class<?> resourceClass) {
+        List<FieldDesc> result = new ArrayList<>();
+        Class<?> cls = resourceClass;
+        int index = 0;
+        while (cls != null && cls != Object.class) {
+            for (Field f : cls.getDeclaredFields()) {
+                if (Modifier.isStatic(f.getModifiers())) continue;
+                FieldDesc fd = describe(f, index);
+                if (fd != null) {
+                    result.add(fd);
+                    index++;
+                }
+            }
+            cls = cls.getSuperclass();
+        }
+        return result;
+    }
+
+    private static FieldDesc describe(Field f, int index) {
+        // Sanitize field name for use as a Java identifier in the VarHandle field name
+        String vhName = "$$vh_" + index + "_" + f.getName().replace('$', '_').replace('[', '_').replace(']', '_');
+        Class<?> declaring = f.getDeclaringClass();
+        String javaName = f.getName();
+        Class<?> fType = f.getType();
+
+        if (f.isAnnotationPresent(Context.class)) {
+            return new FieldDesc(vhName, declaring, javaName, fType,
+                    FieldKind.CONTEXT, null, null, false, null, fType, fType);
+        }
+        if (f.isAnnotationPresent(BeanParam.class)) {
+            return new FieldDesc(vhName, declaring, javaName, fType,
+                    FieldKind.BEAN_PARAM, null, null, false, null, fType, fType);
+        }
+
+        boolean encoded = f.isAnnotationPresent(Encoded.class)
+                || declaring.isAnnotationPresent(Encoded.class);
+        DefaultValue dvAnn = f.getAnnotation(DefaultValue.class);
+        String defaultValue = dvAnn == null ? null : dvAnn.value();
+        Class<?> rawType = fType;
+        Class<?> elementType = ParamValueConverter.isListLike(rawType)
+                ? genericElementType(f.getGenericType()) : rawType;
+
+        PathParam pp = f.getAnnotation(PathParam.class);
+        if (pp != null) {
+            return new FieldDesc(vhName, declaring, javaName, fType,
+                    FieldKind.PARAM, ParamKind.PATH, pp.value(), encoded, defaultValue, rawType, elementType);
+        }
+        QueryParam qp = f.getAnnotation(QueryParam.class);
+        if (qp != null) {
+            return new FieldDesc(vhName, declaring, javaName, fType,
+                    FieldKind.PARAM, ParamKind.QUERY, qp.value(), encoded, defaultValue, rawType, elementType);
+        }
+        HeaderParam hp = f.getAnnotation(HeaderParam.class);
+        if (hp != null) {
+            return new FieldDesc(vhName, declaring, javaName, fType,
+                    FieldKind.PARAM, ParamKind.HEADER, hp.value(), encoded, defaultValue, rawType, elementType);
+        }
+        CookieParam cp = f.getAnnotation(CookieParam.class);
+        if (cp != null) {
+            return new FieldDesc(vhName, declaring, javaName, fType,
+                    FieldKind.PARAM, ParamKind.COOKIE, cp.value(), encoded, defaultValue, rawType, elementType);
+        }
+        MatrixParam mp = f.getAnnotation(MatrixParam.class);
+        if (mp != null) {
+            return new FieldDesc(vhName, declaring, javaName, fType,
+                    FieldKind.PARAM, ParamKind.MATRIX, mp.value(), encoded, defaultValue, rawType, elementType);
+        }
+        FormParam fp = f.getAnnotation(FormParam.class);
+        if (fp != null) {
+            return new FieldDesc(vhName, declaring, javaName, fType,
+                    FieldKind.PARAM, ParamKind.FORM, fp.value(), encoded, defaultValue, rawType, elementType);
+        }
+        return null;
+    }
+
+    private static Class<?> genericElementType(Type t) {
+        if (t instanceof ParameterizedType pt && pt.getActualTypeArguments().length == 1
+                && pt.getActualTypeArguments()[0] instanceof Class<?> c) return c;
+        return String.class;
+    }
+
+    /**
+     * Returns a {@link ClassDesc} for the given type, handling primitives and arrays correctly.
+     * Mirrors the pattern from vauban's RuntimeClientProxyGenerator.
+     */
+    static ClassDesc classDescOf(Class<?> type) {
+        var opt = type.describeConstable();
+        if (opt.isPresent()) return opt.get();
+        return ClassDesc.ofDescriptor(type.descriptorString());
+    }
+
+    // ---- Internal types ----
+
+    enum FieldKind { CONTEXT, BEAN_PARAM, PARAM }
+
+    /**
+     * Immutable descriptor of one injectable field, computed once at generation time.
+     *
+     * @param varHandleField       name of the {@code static final VarHandle} field in the adapter
+     * @param declaringClass       class that declares the Java field (for VarHandle lookup)
+     * @param javaFieldName        Java field name (for VarHandle lookup)
+     * @param fieldType            declared field type (for VarHandle lookup)
+     * @param kind                 CONTEXT, BEAN_PARAM, or PARAM
+     * @param paramKind            non-null when kind == PARAM
+     * @param paramAnnotationValue the annotation value (e.g. "id" in {@code @PathParam("id")})
+     * @param encoded              whether {@code @Encoded} is present
+     * @param defaultValue         the {@code @DefaultValue} value, or null
+     * @param rawType              the declared field type (same as fieldType for params)
+     * @param elementType          the generic element type for List/Set/SortedSet, else rawType
+     */
+    record FieldDesc(
+            String varHandleField,
+            Class<?> declaringClass,
+            String javaFieldName,
+            Class<?> fieldType,
+            FieldKind kind,
+            ParamKind paramKind,
+            String paramAnnotationValue,
+            boolean encoded,
+            String defaultValue,
+            Class<?> rawType,
+            Class<?> elementType
+    ) {
+        boolean isContext()   { return kind == FieldKind.CONTEXT; }
+        boolean isBeanParam() { return kind == FieldKind.BEAN_PARAM; }
+    }
+}

@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.cassini</groupId>
+        <artifactId>cassini-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>cassini-cdi-vauban</artifactId>
+    <name>Cassini :: CDI Vauban Adapter</name>
+    <description>Vauban CDI adapter for Cassini: a BeanProvider that reads Vauban's container directly. The default scopes of @Path and @Provider classes come from cassini-cdi.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-api</artifactId>
+        </dependency>
+        <!-- The container-neutral part: CassiniScopeExtension (the @Path/@Provider default scopes)
+             and the CDI BeanProvider this module outranks when Vauban runs (cassini#53). -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-cdi</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+
+        <!-- Ravel MicroProfile Config — optional: activates @ConfigProperty / @ConfigProperties CDI
+             when ravel-cdi-vauban is on the classpath (via BCE ServiceLoader auto-discovery) -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-cdi-vauban</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                Vauban codegen: generates META-INF/vauban-beans.list + _ClientProxy/_Factory so the
+                Vidocq runtime (scanClasspath) discovers CDI beans. BCE (CassiniScopeExtension) in an
+                exported package -> no opens. The output stays inert (Weld-safe), like knock-cdi-vauban.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!--
+                        Vauban codegen now runs as an ANNOTATION PROCESSOR on this module's own beans
+                        (the Maven plugin is reserved for freezing external, non-APT-processed jars).
+                        The main compile generates _ClientProxy/_Factory and META-INF/vauban-beans.list
+                        for the Vidocq runtime scanClasspath discovery. Build-time only: the output stays
+                        inert for a standard CDI container (Weld). The module-info already `requires
+                        io.vidocq.vauban.core` (compile scope), which transitively reads vauban-api.
+                    -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                        <!-- The descriptor of VaubanRequestScopeFilter, read at startup instead of its annotations
+                             (CASSINI-040); declared as `provides` in module-info.java. -->
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-processor</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <!-- Test fixtures are not application beans. Running the APT over them would
+                         emit a provider for nested test classes (bogus package / cannot find symbol). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Test fixtures get no generated components (no APT on testCompile): the
+                         container builds them reflectively, which needs the package open to it.
+                         Test runs only; the module itself opens nothing. -->
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>@{argLine} --add-opens io.vidocq.cassini.cdi.vauban/io.vidocq.cassini.cdi.vauban=io.vidocq.vauban.core</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,295 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.internal.context;
+
+import io.vidocq.cassini.spi.http.CassiniHttpExchange;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.PathSegment;
+import io.vidocq.cassini.internal.runtime.CassiniUriBuilder;
+import jakarta.ws.rs.core.UriBuilder;
+import jakarta.ws.rs.core.UriInfo;
+
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * {@link UriInfo} implementation backed by a {@link CassiniHttpExchange} plus the
+ * path parameters captured by the router.
+ */
+public final class CassiniUriInfo implements UriInfo {
+
+    /**
+     * Base URIs by {@code scheme://authority/base}: in practice one per listener and host, and
+     * the same for every request of a listener. Bounded: at the bound the cache is emptied and
+     * starts over, so that a client sending a new {@code Host} header on each request neither
+     * grows it nor keeps the listener's own hosts out of it.
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<String, URI> BASE_URIS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int MAX_CACHED_BASE_URIS = 256;
+
+    private final CassiniHttpExchange exchange;
+    private final String contextPath;
+    private final Map<String, List<String>> pathParams;
+
+    /**
+     * The base URI {@code scheme://authority/<contextPath>/} of a request, shared by every
+     * request with the same scheme, authority and context path.
+     */
+    public static URI baseUri(String scheme, String authority, String contextPath) throws java.net.URISyntaxException {
+        String base = contextPath == null || contextPath.isEmpty() || "/".equals(contextPath) ? "/" : contextPath + "/";
+        String key = scheme + "://" + authority + base;
+        URI cached = BASE_URIS.get(key);
+        if (cached != null) return cached;
+        URI built = new URI(scheme, authority, base, null, null);
+        if (BASE_URIS.size() >= MAX_CACHED_BASE_URIS) BASE_URIS.clear();
+        URI first = BASE_URIS.putIfAbsent(key, built);
+        return first != null ? first : built;
+    }
+
+    /** The number of base URIs kept, for the tests of the bound. */
+    public static int cachedBaseUris() {
+        return BASE_URIS.size();
+    }
+
+    public CassiniUriInfo(CassiniHttpExchange exchange, String contextPath, Map<String, List<String>> pathParams) {
+        this(exchange, contextPath, pathParams, null);
+    }
+
+    private final String matchedTemplate;
+    public CassiniUriInfo(CassiniHttpExchange exchange, String contextPath, Map<String, List<String>> pathParams,
+                          String matchedTemplate) {
+        this.exchange = exchange;
+        this.contextPath = contextPath == null ? "" : contextPath;
+        this.pathParams = pathParams == null ? Map.of() : pathParams;
+        this.matchedTemplate = matchedTemplate;
+    }
+
+    /** Path après contextPath (équivalent du {@code pathInfo} servlet). */
+    private String pathInfo() {
+        String p = exchange.requestUri().getRawPath();
+        if (p == null) return "";
+        if (!contextPath.isEmpty() && !"/".equals(contextPath) && p.startsWith(contextPath)) {
+            p = p.substring(contextPath.length());
+        }
+        return p;
+    }
+
+    @Override public String getPath() { return getPath(true); }
+
+    @Override public String getPath(boolean decode) {
+        String p = pathInfo();
+        if (p == null || p.isEmpty()) return "";
+        String out = p.startsWith("/") ? p.substring(1) : p;
+        return decode ? decodePath(out) : out;
+    }
+
+    /**
+     * Decodes the escaped octets of a path, or of one of its parts. Unlike a form, a path
+     * gives no meaning to {@code +}: it stays a {@code +} (CASSINI-029).
+     */
+    private static String decodePath(String raw) {
+        if (raw.indexOf('%') < 0) return raw;
+        try {
+            return java.net.URLDecoder.decode(raw.replace("+", "%2B"), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException _) {
+            return raw; // not decodable: kept raw
+        }
+    }
+
+    @Override public List<PathSegment> getPathSegments() { return getPathSegments(true); }
+
+    @Override public List<PathSegment> getPathSegments(boolean decode) {
+        // Split the raw path: an escaped '/' or ';' belongs to its segment (§9.2.1, CASSINI-029).
+        List<PathSegment> segs = new ArrayList<>();
+        for (String raw : getPath(false).split("/")) {
+            if (raw.isEmpty()) continue;
+            PathSegment segment = io.vidocq.cassini.internal.ParamValueConverter.parsePathSegment(raw);
+            segs.add(decode ? decoded(segment) : segment);
+        }
+        return List.copyOf(segs);
+    }
+
+    @Override public URI getRequestUri() {
+        URI u = exchange.requestUri();
+        if (u != null && u.isAbsolute()) return u;
+        return resolveAbsolute(u == null ? null : u.toString());
+    }
+
+    private URI resolveAbsolute(String pathAndQuery) {
+        try {
+            String scheme = exchange.isSecure() ? "https" : "http";
+            String host = exchange.firstHeader("Host");
+            if (host == null || host.isEmpty()) host = "127.0.0.1";
+            String pq = pathAndQuery == null ? "/" : pathAndQuery;
+            if (!pq.startsWith("/")) pq = "/" + pq;
+            return new URI(scheme + "://" + host + pq);
+        } catch (Exception _) { return exchange.requestUri(); }
+    }
+
+    @Override public UriBuilder getRequestUriBuilder() {
+        return CassiniUriBuilder.fromUri(getRequestUri());
+    }
+
+    @Override public URI getAbsolutePath() {
+        URI req = getRequestUri();
+        try {
+            return new URI(req.getScheme(), req.getAuthority(), req.getPath(), null, null);
+        } catch (Exception _) { return req; }
+    }
+
+    @Override public UriBuilder getAbsolutePathBuilder() {
+        return CassiniUriBuilder.fromUri(getAbsolutePath());
+    }
+
+    /** The base URI a pre-matching filter set, or the request's scheme and authority with the context path. */
+    @Override public URI getBaseUri() {
+        URI set = io.vidocq.cassini.internal.filter.FilteredExchange.baseUriOf(exchange);
+        if (set != null) return set;
+        URI req = getRequestUri();
+        try {
+            return baseUri(req.getScheme(), req.getAuthority(), contextPath);
+        } catch (Exception _) { return req; }
+    }
+
+    @Override public UriBuilder getBaseUriBuilder() {
+        return CassiniUriBuilder.fromUri(getBaseUri());
+    }
+
+    @Override public MultivaluedMap<String, String> getPathParameters() { return getPathParameters(true); }
+
+    @Override public MultivaluedMap<String, String> getPathParameters(boolean decode) {
+        MultivaluedMap<String, String> m = new MultivaluedHashMap<>();
+        pathParams.forEach((k, values) -> {
+            for (String v : values) {
+                String val = v;
+                if (decode && v != null && v.indexOf('%') >= 0) {
+                    try { val = java.net.URLDecoder.decode(v.replace("+", "%2B"),
+                            java.nio.charset.StandardCharsets.UTF_8); }
+                    catch (Exception _) { /* malformed escape: the raw value is kept */ }
+                }
+                m.add(k, val);
+            }
+        });
+        return m;
+    }
+
+    @Override public MultivaluedMap<String, String> getQueryParameters() { return getQueryParameters(true); }
+
+    @Override public MultivaluedMap<String, String> getQueryParameters(boolean decode) {
+        MultivaluedMap<String, String> m = new MultivaluedHashMap<>();
+        // In decode=false mode we re-read from getRawQuery(); otherwise we use
+        // the SPI helper that decodes.
+        if (!decode) {
+            addRawQueryParameters(exchange.requestUri().getRawQuery(), m);
+        } else {
+            exchange.queryParams().forEach((k, vs) -> { for (String v : vs) m.add(k, v); });
+        }
+        return m;
+    }
+
+    /** Adds the still-encoded {@code name=value} pairs of {@code rawQuery} to {@code m}. */
+    private static void addRawQueryParameters(String rawQuery, MultivaluedMap<String, String> m) {
+        if (rawQuery == null || rawQuery.isEmpty()) return;
+        for (String pair : rawQuery.split("&")) {
+            if (pair.isEmpty()) continue;
+            int eq = pair.indexOf('=');
+            String k = eq < 0 ? pair : pair.substring(0, eq);
+            String v = eq < 0 ? "" : pair.substring(eq + 1);
+            m.add(k, v);
+        }
+    }
+
+    @Override public List<String> getMatchedURIs() { return getMatchedURIs(true); }
+
+    @Override public List<String> getMatchedURIs(boolean decode) {
+        // §9.2.1: list of matched URIs, from the most specific (method)
+        // to the broadest (root resource). Minimalist: we split pathInfo
+        // into two levels (method then class) whenever there is at least
+        // one '/'.
+        String p = decode ? getPath() : getPath(false);
+        if (p == null || p.isEmpty()) return List.of();
+        int lastSlash = p.lastIndexOf('/');
+        if (lastSlash <= 0) return List.of(p);
+        String parent = p.substring(0, lastSlash);
+        return List.of(p, parent);
+    }
+
+    @Override public String getMatchedResourceTemplate() {
+        if (matchedTemplate == null) return "";
+        // §10 (jaxrs40): the returned template includes the path declared by
+        // @ApplicationPath of the Application subclass (if any).
+        var app = io.vidocq.cassini.internal.ParamExtractor.currentApplication();
+        if (app != null) {
+            jakarta.ws.rs.ApplicationPath ap = app.getClass().getAnnotation(jakarta.ws.rs.ApplicationPath.class);
+            if (ap != null && !ap.value().isEmpty()) {
+                String prefix = ap.value();
+                if (!prefix.startsWith("/")) prefix = "/" + prefix;
+                // "/" (the root) adds nothing: the template already starts with '/' (CASSINI-028).
+                if (prefix.endsWith("/")) prefix = prefix.substring(0, prefix.length() - 1);
+                return prefix + matchedTemplate;
+            }
+        }
+        return matchedTemplate;
+    }
+
+    @Override @SuppressWarnings("unchecked")
+    public List<Object> getMatchedResources() {
+        var matched = (java.util.List<Object>) exchange.getAttribute(
+                io.vidocq.cassini.internal.Invoker.ATTR_MATCHED_RESOURCES);
+        return matched == null ? List.of() : List.copyOf(matched);
+    }
+
+    @Override public URI resolve(URI uri) { return getBaseUri().resolve(uri); }
+
+    /**
+     * As the {@link UriInfo#relativize} Javadoc describes it (CASSINI-031): a relative URI is
+     * first resolved against the base URI, then relativized against the request URI's
+     * directory; without a common prefix the resolved URI is returned.
+     */
+    @Override public URI relativize(URI uri) {
+        URI target = uri.isAbsolute() ? uri : resolve(uri);
+        URI request = getRequestUri();
+        String path = request.getPath() == null ? "/" : request.getPath();
+        try {
+            URI directory = new URI(request.getScheme(), request.getAuthority(),
+                    path.substring(0, path.lastIndexOf('/') + 1), null, null);
+            return directory.relativize(target);
+        } catch (java.net.URISyntaxException _) {
+            return target;
+        }
+    }
+
+    private static PathSegment decoded(PathSegment raw) {
+        MultivaluedMap<String, String> matrix = new MultivaluedHashMap<>();
+        raw.getMatrixParameters().forEach((name, values) -> {
+            for (String value : values) matrix.add(decodePath(name), decodePath(value));
+        });
+        return new Segment(decodePath(raw.getPath()), matrix);
+    }
+
+    private record Segment(String path, MultivaluedMap<String, String> matrix) implements PathSegment {
+        @Override public String getPath() { return path; }
+        @Override public MultivaluedMap<String, String> getMatrixParameters() { return matrix; }
+    }
+}

@@ -1,0 +1,733 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.internal;
+
+import io.vidocq.cassini.internal.gen.ProviderDescriptors;
+import io.vidocq.cassini.spi.gen.ProviderDescriptor;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.StreamingOutput;
+import jakarta.ws.rs.ext.MessageBodyReader;
+import jakarta.ws.rs.ext.MessageBodyWriter;
+
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.util.Comparator;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Type;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Registry of {@link MessageBodyReader} / {@link MessageBodyWriter}
+ * used to serialize request/response entities (§4.2).
+ *
+ * <p>M2c: built-in providers for {@code String}, {@code byte[]},
+ * {@code InputStream}, {@code Reader}, {@link StreamingOutput}, {@link File}.
+ * User {@code @Provider} scanning comes in M2f.</p>
+ */
+public final class MessageBodyRegistry {
+
+    /** What a provider that declares no media type accepts or produces (§4.2.4: {@code *}{@code /*}). */
+    private static final MediaType[] ANY = {MediaType.WILDCARD_TYPE};
+
+    /**
+     * A registered provider with what its selection needs to know, resolved once at
+     * registration: the entity type it declares as its type parameter (§4.2.1) and its declared
+     * media types, {@code @Consumes} for a reader and {@code @Produces} for a writer (§4.2.4),
+     * parsed. {@code declared} is {@link #ANY} when the provider declares nothing; it is empty
+     * when every declared value was invalid, and then nothing matches it.
+     */
+    private static final class Registered<P> {
+        final P instance;
+        final Class<?> entityType;
+        final MediaType[] declared;
+
+        Registered(P instance, Class<?> registeredClass, Class<?> providerInterface, String[] declaredValues) {
+            this.instance = instance;
+            this.entityType = entityType(registeredClass, providerInterface);
+            this.declared = parseDeclared(declaredValues);
+        }
+
+        /** CASSINI-040: the type argument of the generated descriptor, else read by reflection. */
+        private static Class<?> entityType(Class<?> cls, Class<?> providerInterface) {
+            ProviderDescriptor d = ProviderDescriptors.of(cls);
+            Class<?> described = d == null ? null : d.typeArguments().get(providerInterface);
+            return described != null ? described : resolveProviderType(cls, providerInterface);
+        }
+
+        /** §4.2.1 then §4.2.4 step 1: the provider takes {@code boxed} and the requested media type. */
+        boolean applies(Class<?> boxed, MediaType requested) {
+            boolean typeApplies = entityType == null || entityType == Object.class || entityType.isAssignableFrom(boxed);
+            return typeApplies && declaredCompatible(requested);
+        }
+
+        /** §4.2.4 step 1: how specifically the declared {@code @Consumes} / {@code @Produces}
+         *  match {@code requested}: 0 = wildcard (or no annotation), 1 = type/*, 2 = type/subtype. */
+        int specificity(MediaType requested) {
+            if (requested == null) return 0;
+            int best = 0;
+            for (MediaType d : declared) {
+                if (d.isCompatible(requested) && !d.isWildcardType()) {
+                    best = Math.max(best, d.isWildcardSubtype() ? 1 : 2);
+                }
+            }
+            return best;
+        }
+
+        /** §4.2.4 step 1: without @Consumes / @Produces the provider takes any media type;
+         *  otherwise one of the declared values must be compatible with the requested one. */
+        private boolean declaredCompatible(MediaType requested) {
+            if (requested == null) return true;
+            for (MediaType d : declared) {
+                if (mediaTypeCompatible(d, requested)) return true;
+            }
+            return false;
+        }
+
+        /** RFC 6839 + §3.5: {@link MediaType#isCompatible} extended to structured syntax
+         *  suffixes ({@code application/*+xml} matches {@code application/atom+xml}). */
+        private static boolean mediaTypeCompatible(MediaType declared, MediaType requested) {
+            if (declared.isCompatible(requested)) return true;
+            boolean typeOk = declared.getType().equalsIgnoreCase(requested.getType())
+                    || declared.isWildcardType() || requested.isWildcardType();
+            if (!typeOk) return false;
+            String dSub = declared.getSubtype();
+            String rSub = requested.getSubtype();
+            if (dSub.startsWith("*+") && rSub.toLowerCase().endsWith(dSub.substring(1).toLowerCase())) return true;
+            return rSub.startsWith("*+") && dSub.toLowerCase().endsWith(rSub.substring(1).toLowerCase());
+        }
+
+        /**
+         * Parses the declared values once. No value declared means {@link #ANY}; an invalid value is
+         * skipped, as it was when the values were parsed on every call.
+         */
+        private static MediaType[] parseDeclared(String[] values) {
+            if (values == null || values.length == 0) return ANY;
+            List<MediaType> parsed = new ArrayList<>(values.length);
+            for (String s : values) {
+                try {
+                    parsed.add(MediaTypes.parse(s));
+                } catch (RuntimeException _) {
+                    // An invalid declared value matches no media type.
+                }
+            }
+            return parsed.toArray(MediaType[]::new);
+        }
+    }
+
+    private final List<Registered<MessageBodyReader<?>>> readers = new ArrayList<>();
+    private final List<Registered<MessageBodyWriter<?>>> writers = new ArrayList<>();
+
+    public MessageBodyRegistry() {
+        registerBuiltins();
+    }
+
+    public void addReader(MessageBodyReader<?> r) {
+        addReader(r, r.getClass());
+    }
+
+    /**
+     * Adds {@code r}, whose entity type, {@code @Consumes} and {@code @ConstrainedTo} are those of
+     * {@code registeredClass}: the provider class a bean provider was asked for, which its client proxy may not
+     * extend, nor declare the type argument of (CASSINI-066).
+     */
+    public void addReader(MessageBodyReader<?> r, Class<?> registeredClass) {
+        if (clientOnly(registeredClass)) return;
+        readers.add(0, registeredReader(r, registeredClass));
+    }
+
+    public void addWriter(MessageBodyWriter<?> w) {
+        addWriter(w, w.getClass());
+    }
+
+    /** As {@link #addReader(MessageBodyReader, Class)}, for a writer and its {@code @Produces}. */
+    public void addWriter(MessageBodyWriter<?> w, Class<?> registeredClass) {
+        if (clientOnly(registeredClass)) return;
+        writers.add(0, registeredWriter(w, registeredClass));
+    }
+
+    /** {@code @ConstrainedTo(CLIENT)}, from the generated descriptor when there is one (CASSINI-040). */
+    private static boolean clientOnly(Class<?> cls) {
+        ProviderDescriptor d = ProviderDescriptors.of(cls);
+        if (d != null) return jakarta.ws.rs.RuntimeType.CLIENT.name().equals(d.constrainedTo());
+        jakarta.ws.rs.ConstrainedTo ct = cls.getAnnotation(jakarta.ws.rs.ConstrainedTo.class);
+        return ct != null && ct.value() == jakarta.ws.rs.RuntimeType.CLIENT;
+    }
+
+    private static Registered<MessageBodyReader<?>> registeredReader(MessageBodyReader<?> r, Class<?> cls) {
+        ProviderDescriptor d = ProviderDescriptors.of(cls);
+        if (d != null) return new Registered<>(r, cls, MessageBodyReader.class, d.consumes());
+        Consumes consumes = cls.getAnnotation(Consumes.class);
+        return new Registered<>(r, cls, MessageBodyReader.class, consumes == null ? null : consumes.value());
+    }
+
+    /** A built-in reader, registered as its own class. */
+    private static Registered<MessageBodyReader<?>> registeredReader(MessageBodyReader<?> r) {
+        return registeredReader(r, r.getClass());
+    }
+
+    /** A built-in writer, registered as its own class. */
+    private static Registered<MessageBodyWriter<?>> registeredWriter(MessageBodyWriter<?> w) {
+        return registeredWriter(w, w.getClass());
+    }
+
+    private static Registered<MessageBodyWriter<?>> registeredWriter(MessageBodyWriter<?> w, Class<?> cls) {
+        ProviderDescriptor d = ProviderDescriptors.of(cls);
+        if (d != null) return new Registered<>(w, cls, MessageBodyWriter.class, d.produces());
+        Produces produces = cls.getAnnotation(Produces.class);
+        return new Registered<>(w, cls, MessageBodyWriter.class, produces == null ? null : produces.value());
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> Optional<MessageBodyReader<T>> findReader(Class<T> type, Type genericType,
+                                                         Annotation[] anns, MediaType mt) {
+        Class<?> boxed = box(type);
+        List<Registered<MessageBodyReader<?>>> candidates = new ArrayList<>();
+        for (Registered<MessageBodyReader<?>> reg : readers) {
+            // §4.2.1: pre-filter by generic type T of the MBR; §4.2.4 step 1: pre-filter by
+            // compatibility @Consumes ↔ media type requested. Without @Consumes, the provider is
+            // considered as @Consumes("*/*") and matches everything.
+            if (reg.applies(boxed, mt) && reg.instance.isReadable(type, genericType, anns, mt)) candidates.add(reg);
+        }
+        if (candidates.isEmpty()) return Optional.empty();
+        // §4.2.4 step 1: sort by @Consumes media type specificity.
+        // Stable sort → on ties, providers at the head of the list
+        // (user-provided, inserted at index 0) win over built-ins (at the end).
+        candidates.sort(Comparator.comparingInt(
+                (Registered<MessageBodyReader<?>> reg) -> reg.specificity(mt)
+        ).reversed());
+        return Optional.of((MessageBodyReader<T>) candidates.get(0).instance);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> Optional<MessageBodyWriter<T>> findWriter(Class<?> type, Type genericType,
+                                                         Annotation[] anns, MediaType mt) {
+        Class<?> boxed = box(type);
+        List<Registered<MessageBodyWriter<?>>> candidates = new ArrayList<>();
+        for (Registered<MessageBodyWriter<?>> reg : writers) {
+            // §4.2.1, then §4.2.4 step 1 (writer): pre-filter by compatibility @Produces ↔ mt.
+            if (reg.applies(boxed, mt) && reg.instance.isWriteable(type, genericType, anns, mt)) candidates.add(reg);
+        }
+        if (candidates.isEmpty()) return Optional.empty();
+        candidates.sort(Comparator.comparingInt(
+                (Registered<MessageBodyWriter<?>> reg) -> reg.specificity(mt)
+        ).reversed());
+        return Optional.of((MessageBodyWriter<T>) candidates.get(0).instance);
+    }
+
+    private void registerBuiltins() {
+        // Built-in providers: added at the END (user providers, added
+        // via addReader/addWriter, are at index 0 and win on equal specificity).
+        writers.add(registeredWriter(new ByteArrayWriter()));
+        writers.add(registeredWriter(new StringWriter()));
+        writers.add(registeredWriter(new StreamingOutputWriter()));
+        writers.add(registeredWriter(new InputStreamWriter()));
+        writers.add(registeredWriter(new FileWriter()));
+        writers.add(registeredWriter(new ReaderWriter()));
+        writers.add(registeredWriter(new SourceWriter()));
+        if (activationAvailable()) writers.add(registeredWriter(new DataSourceWriter()));
+        if (jaxbAvailable()) writers.add(registeredWriter(new JaxbWriter()));
+        if (jsonbAvailable()) writers.add(registeredWriter(new io.vidocq.cassini.internal.json.CassiniJsonbReaderWriter()));
+        writers.add(registeredWriter(new io.vidocq.cassini.internal.multipart.MultipartFormDataProvider()));
+        writers.add(registeredWriter(new FormUrlEncodedWriter()));
+        writers.add(registeredWriter(new PrimitiveWriter()));
+        writers.add(registeredWriter(new FallbackToStringWriter()));
+
+        readers.add(registeredReader(new ByteArrayReader()));
+        readers.add(registeredReader(new StringReader()));
+        readers.add(registeredReader(new InputStreamReaderMBR()));
+        readers.add(registeredReader(new ReaderReaderMBR()));
+        readers.add(registeredReader(new FileReader()));
+        readers.add(registeredReader(new SourceReader()));
+        if (activationAvailable()) readers.add(registeredReader(new DataSourceReader()));
+        if (jaxbAvailable()) readers.add(registeredReader(new JaxbReader()));
+        if (jsonbAvailable()) readers.add(registeredReader(new io.vidocq.cassini.internal.json.CassiniJsonbReaderWriter()));
+        readers.add(registeredReader(new io.vidocq.cassini.internal.multipart.MultipartFormDataProvider()));
+        readers.add(registeredReader(new FormUrlEncodedReader()));
+        readers.add(registeredReader(new PrimitiveReader()));
+    }
+
+    /** JSON-B (Yasson) optional: not registered if jakarta.json.bind is absent. */
+    private static boolean jsonbAvailable() {
+        return classPresent("jakarta.json.bind.Jsonb");
+    }
+
+    /** JAXB is optional: if {@code jakarta.xml.bind} is not on the
+     *  classpath, the associated MBR/MBW are not registered. */
+    private static boolean jaxbAvailable() {
+        return classPresent("jakarta.xml.bind.JAXBContext");
+    }
+
+    /** Jakarta Activation is optional: if {@code jakarta.activation} is not
+     *  on the classpath, the {@code DataSource} MBR/MBW are not registered. */
+    private static boolean activationAvailable() {
+        return classPresent("jakarta.activation.DataSource");
+    }
+
+    private static boolean classPresent(String fqcn) {
+        try {
+            Class.forName(fqcn, false, MessageBodyRegistry.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException _) {
+            return false;
+        }
+    }
+
+    private static Charset charset(MediaType mt) {
+        if (mt == null) return StandardCharsets.UTF_8;
+        String cs = mt.getParameters().get("charset");
+        try {
+            return cs == null ? StandardCharsets.UTF_8 : Charset.forName(cs);
+        } catch (Exception _) {
+            return StandardCharsets.UTF_8;
+        }
+    }
+
+    // ---- String ----
+    static final class StringWriter implements MessageBodyWriter<String> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return String.class.isAssignableFrom(t); }
+        @Override public void writeTo(String v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            s.write(v.getBytes(charset(mt)));
+        }
+    }
+    static final class StringReader implements MessageBodyReader<String> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return String.class == t; }
+        @Override public String readFrom(Class<String> t, Type gt, Annotation[] a, MediaType mt,
+                                         MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            return new String(in.readAllBytes(), charset(mt));
+        }
+    }
+
+    // ---- byte[] ----
+    static final class ByteArrayWriter implements MessageBodyWriter<byte[]> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return byte[].class == t; }
+        @Override public void writeTo(byte[] v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            s.write(v);
+        }
+    }
+    static final class ByteArrayReader implements MessageBodyReader<byte[]> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return byte[].class == t; }
+        @Override public byte[] readFrom(Class<byte[]> t, Type gt, Annotation[] a, MediaType mt,
+                                         MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            return in.readAllBytes();
+        }
+    }
+
+    // ---- InputStream ----
+    static final class InputStreamWriter implements MessageBodyWriter<InputStream> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return InputStream.class.isAssignableFrom(t); }
+        @Override public void writeTo(InputStream v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            v.transferTo(s);
+        }
+    }
+    static final class InputStreamReaderMBR implements MessageBodyReader<InputStream> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return InputStream.class == t; }
+        @Override public InputStream readFrom(Class<InputStream> t, Type gt, Annotation[] a, MediaType mt,
+                                              MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            in.transferTo(bos);
+            return new java.io.ByteArrayInputStream(bos.toByteArray());
+        }
+    }
+
+    // ---- Reader ----
+    static final class ReaderReaderMBR implements MessageBodyReader<Reader> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return Reader.class == t; }
+        @Override public Reader readFrom(Class<Reader> t, Type gt, Annotation[] a, MediaType mt,
+                                         MultivaluedMap<String, String> h, InputStream in) {
+            return new BufferedReader(new InputStreamReader(in, charset(mt)));
+        }
+    }
+
+    // ---- StreamingOutput ----
+    static final class StreamingOutputWriter implements MessageBodyWriter<StreamingOutput> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return StreamingOutput.class.isAssignableFrom(t); }
+        @Override public void writeTo(StreamingOutput v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            v.write(s);
+        }
+    }
+
+    // ---- File reader (writes to a temporary file) ----
+
+    /**
+     * A temporary file for an upload, owner-only. NIO already creates it so on a POSIX file system; the permissions
+     * are spelled out so the shared temporary directory is visibly used safely. Elsewhere (Windows) the file system's
+     * own defaults apply.
+     */
+    static java.nio.file.Path createUploadFile() throws IOException {
+        return java.nio.file.Files.createTempFile("cassini-upload-", ".bin", UPLOAD_ATTRIBUTES);
+    }
+
+    /** {@code rw-------} where the default file system has POSIX permissions, none elsewhere. */
+    private static final java.nio.file.attribute.FileAttribute<?>[] UPLOAD_ATTRIBUTES =
+            java.nio.file.FileSystems.getDefault().supportedFileAttributeViews().contains("posix")
+                    ? new java.nio.file.attribute.FileAttribute<?>[] {java.nio.file.attribute.PosixFilePermissions
+                            .asFileAttribute(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"))}
+                    : new java.nio.file.attribute.FileAttribute<?>[0];
+
+    static final class FileReader implements MessageBodyReader<File> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return File.class.isAssignableFrom(t); }
+        @Override public File readFrom(Class<File> t, Type gt, Annotation[] a, MediaType mt,
+                                       MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            java.nio.file.Path tmp = createUploadFile();
+            try (OutputStream os = java.nio.file.Files.newOutputStream(tmp)) {
+                in.transferTo(os);
+            }
+            File f = tmp.toFile();
+            f.deleteOnExit();
+            return f;
+        }
+    }
+
+    // ---- MultivaluedMap<String,String> pour application/x-www-form-urlencoded ----
+    @Consumes("application/x-www-form-urlencoded")
+    static final class FormUrlEncodedReader implements MessageBodyReader<MultivaluedMap<String, String>> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return MultivaluedMap.class.isAssignableFrom(t)
+                    && (mt == null || "application/x-www-form-urlencoded".equalsIgnoreCase(
+                            mt.getType() + "/" + mt.getSubtype()));
+        }
+        @Override public MultivaluedMap<String, String> readFrom(Class<MultivaluedMap<String, String>> t, Type gt,
+                                                                  Annotation[] a, MediaType mt,
+                                                                  MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            var parsed = FormDecoder.decode(in.readAllBytes());
+            MultivaluedMap<String, String> out = new MultivaluedHashMap<>();
+            for (var e : parsed.entrySet()) for (String v : e.getValue()) out.add(e.getKey(), v);
+            return out;
+        }
+    }
+    @Produces("application/x-www-form-urlencoded")
+    static final class FormUrlEncodedWriter implements MessageBodyWriter<MultivaluedMap<String, String>> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return MultivaluedMap.class.isAssignableFrom(t);
+        }
+        @Override public void writeTo(MultivaluedMap<String, String> v, Class<?> t, Type gt, Annotation[] a,
+                                      MediaType mt, MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            StringBuilder sb = new StringBuilder();
+            for (var e : v.entrySet()) {
+                for (String val : e.getValue()) {
+                    if (!sb.isEmpty()) sb.append('&');
+                    sb.append(java.net.URLEncoder.encode(e.getKey() == null ? "" : e.getKey(), StandardCharsets.UTF_8))
+                      .append('=').append(java.net.URLEncoder.encode(val == null ? "" : val, StandardCharsets.UTF_8));
+                }
+            }
+            s.write(sb.toString().getBytes(charset(mt)));
+        }
+    }
+
+    // ---- Fallback toString ----
+    /** Last resort: serializes any entity via {@code String.valueOf(v).getBytes(UTF-8)}.
+     *  Covers arbitrary application types (plain beans, enums, etc.) when the
+     *  client has not registered a dedicated MBW. In line with the spirit of
+     *  StringMessageBodyWriter extended to any Object. */
+    static final class FallbackToStringWriter implements MessageBodyWriter<Object> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return true; }
+        @Override public void writeTo(Object v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            s.write(String.valueOf(v).getBytes(charset(mt)));
+        }
+    }
+
+    // ---- File ----
+    static final class FileWriter implements MessageBodyWriter<File> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) { return File.class.isAssignableFrom(t); }
+        @Override public void writeTo(File v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            try (InputStream in = new FileInputStream(v)) { in.transferTo(s); }
+        }
+    }
+
+    // ---- Reader (writer) ----
+    static final class ReaderWriter implements MessageBodyWriter<Reader> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return Reader.class.isAssignableFrom(t);
+        }
+        @Override public void writeTo(Reader v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            OutputStreamWriter w = new OutputStreamWriter(s, charset(mt));
+            char[] buf = new char[4096];
+            int n;
+            while ((n = v.read(buf)) > 0) w.write(buf, 0, n);
+            w.flush();
+        }
+    }
+
+    // ---- javax.xml.transform.Source ----
+    @Produces({"application/xml", "text/xml", "application/*+xml"})
+    static final class SourceWriter implements MessageBodyWriter<javax.xml.transform.Source> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return javax.xml.transform.Source.class.isAssignableFrom(t);
+        }
+        @Override public void writeTo(javax.xml.transform.Source v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            try {
+                // The Source may hold a document the application did not write: never fetch an
+                // external DTD or stylesheet while copying it (XXE).
+                javax.xml.transform.TransformerFactory factory = javax.xml.transform.TransformerFactory.newInstance();
+                factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "");
+                factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+                javax.xml.transform.Transformer tr = factory.newTransformer();
+                tr.transform(v, new javax.xml.transform.stream.StreamResult(s));
+            } catch (javax.xml.transform.TransformerException e) {
+                throw new IOException(e);
+            }
+        }
+    }
+    @Consumes({"application/xml", "text/xml", "application/*+xml"})
+    static final class SourceReader implements MessageBodyReader<javax.xml.transform.Source> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return javax.xml.transform.Source.class.isAssignableFrom(t);
+        }
+        @Override public javax.xml.transform.Source readFrom(Class<javax.xml.transform.Source> t, Type gt,
+                                                             Annotation[] a, MediaType mt,
+                                                             MultivaluedMap<String, String> h, InputStream in) {
+            return new javax.xml.transform.stream.StreamSource(in);
+        }
+    }
+
+    // ---- jakarta.activation.DataSource ----
+    static final class DataSourceWriter implements MessageBodyWriter<jakarta.activation.DataSource> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return jakarta.activation.DataSource.class.isAssignableFrom(t);
+        }
+        @Override public void writeTo(jakarta.activation.DataSource v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            try (InputStream in = v.getInputStream()) { in.transferTo(s); }
+        }
+    }
+    static final class DataSourceReader implements MessageBodyReader<jakarta.activation.DataSource> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return jakarta.activation.DataSource.class.isAssignableFrom(t);
+        }
+        @Override public jakarta.activation.DataSource readFrom(Class<jakarta.activation.DataSource> t, Type gt,
+                                                                 Annotation[] a, MediaType mt,
+                                                                 MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            final byte[] bytes = in.readAllBytes();
+            final String ct = mt == null ? "application/octet-stream" : mt.toString();
+            return new jakarta.activation.DataSource() {
+                @Override public InputStream getInputStream() { return new java.io.ByteArrayInputStream(bytes); }
+                @Override public OutputStream getOutputStream() { throw new UnsupportedOperationException(); }
+                @Override public String getContentType() { return ct; }
+                @Override public String getName() { return ""; }
+            };
+        }
+    }
+
+    // ---- JAXB (@XmlRootElement et JAXBElement) ----
+    @Produces({"application/xml", "text/xml", "application/*+xml"})
+    static final class JaxbWriter implements MessageBodyWriter<Object> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            if (mt == null) return false;
+            if (!isXmlMediaType(mt)) return false;
+            return t.isAnnotationPresent(jakarta.xml.bind.annotation.XmlRootElement.class)
+                    || jakarta.xml.bind.JAXBElement.class.isAssignableFrom(t);
+        }
+        @Override public void writeTo(Object v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            try {
+                Class<?> ctxClass = t;
+                if (v instanceof jakarta.xml.bind.JAXBElement<?> el) {
+                    ctxClass = el.getDeclaredType();
+                }
+                jakarta.xml.bind.JAXBContext ctx = jakarta.xml.bind.JAXBContext.newInstance(ctxClass);
+                jakarta.xml.bind.Marshaller m = ctx.createMarshaller();
+                m.setProperty(jakarta.xml.bind.Marshaller.JAXB_ENCODING, charset(mt).name());
+                m.marshal(v, s);
+            } catch (jakarta.xml.bind.JAXBException e) {
+                throw new IOException(e);
+            }
+        }
+    }
+    @Consumes({"application/xml", "text/xml", "application/*+xml"})
+    static final class JaxbReader implements MessageBodyReader<Object> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            if (mt == null) return false;
+            if (!isXmlMediaType(mt)) return false;
+            return t.isAnnotationPresent(jakarta.xml.bind.annotation.XmlRootElement.class)
+                    || jakarta.xml.bind.JAXBElement.class.isAssignableFrom(t);
+        }
+        @Override public Object readFrom(Class<Object> t, Type gt, Annotation[] a, MediaType mt,
+                                         MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            try {
+                if (jakarta.xml.bind.JAXBElement.class.isAssignableFrom(t) && gt instanceof java.lang.reflect.ParameterizedType pt
+                        && pt.getActualTypeArguments().length == 1
+                        && pt.getActualTypeArguments()[0] instanceof Class<?> innerCls) {
+                    jakarta.xml.bind.JAXBContext ctx = jakarta.xml.bind.JAXBContext.newInstance(innerCls);
+                    return ctx.createUnmarshaller().unmarshal(xmlStreamReader(in), innerCls);
+                }
+                jakarta.xml.bind.JAXBContext ctx = jakarta.xml.bind.JAXBContext.newInstance(t);
+                return ctx.createUnmarshaller().unmarshal(in);
+            } catch (jakarta.xml.bind.UnmarshalException e) {
+                throw new jakarta.ws.rs.BadRequestException("Invalid XML body: " + e.getMessage());
+            } catch (Exception e) {
+                throw new jakarta.ws.rs.BadRequestException("Failed to parse XML: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * A StAX reader over a request entity that never resolves an external entity nor fetches an
+     * external DTD (XXE): the entity comes from the client.
+     */
+    static javax.xml.stream.XMLStreamReader xmlStreamReader(InputStream in) throws javax.xml.stream.XMLStreamException {
+        javax.xml.stream.XMLInputFactory factory = javax.xml.stream.XMLInputFactory.newInstance();
+        factory.setProperty(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        factory.setProperty(javax.xml.stream.XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+        return factory.createXMLStreamReader(in);
+    }
+
+    // ---- Primitives / wrappers / BigDecimal / BigInteger / Character ----
+    /** §4.2.3 : Number, Boolean, Character, primitives, BigDecimal, BigInteger
+     *  sérialisés en {@code text/plain} via {@code String.valueOf} / parse. */
+    @Produces("text/plain")
+    static final class PrimitiveWriter implements MessageBodyWriter<Object> {
+        @Override public boolean isWriteable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return isPrimitiveLike(t);
+        }
+        @Override public void writeTo(Object v, Class<?> t, Type gt, Annotation[] a, MediaType mt,
+                                      MultivaluedMap<String, Object> h, OutputStream s) throws IOException {
+            s.write(String.valueOf(v).getBytes(charset(mt)));
+        }
+    }
+    @Consumes("text/plain")
+    static final class PrimitiveReader implements MessageBodyReader<Object> {
+        @Override public boolean isReadable(Class<?> t, Type gt, Annotation[] a, MediaType mt) {
+            return isPrimitiveLike(t);
+        }
+        @Override public Object readFrom(Class<Object> t, Type gt, Annotation[] a, MediaType mt,
+                                         MultivaluedMap<String, String> h, InputStream in) throws IOException {
+            String s = new String(in.readAllBytes(), charset(mt));
+            try {
+                return parsePrimitive(t, s);
+            } catch (NumberFormatException | ArithmeticException _) {
+                // §4.2.4: an unparsable body for a standard MBR → 400.
+                throw new jakarta.ws.rs.BadRequestException(
+                        "Invalid body for " + t.getSimpleName() + ": '" + s + "'");
+            }
+        }
+
+        private static Object parsePrimitive(Class<?> type, String s) {
+            Class<?> c = type.isPrimitive() ? java.lang.invoke.MethodType.methodType(type).wrap().returnType() : type;
+            if (c == Boolean.class) return parseBoolean(s);
+            if (c == Character.class) return parseCharacter(s);
+            if (c == Byte.class) return Byte.valueOf(s);
+            if (c == Short.class) return Short.valueOf(s);
+            if (c == Integer.class) return Integer.valueOf(s);
+            if (c == Long.class) return Long.valueOf(s);
+            if (c == Float.class) return Float.valueOf(s);
+            if (c == Double.class) return Double.valueOf(s);
+            if (c == java.math.BigDecimal.class || c == Number.class) return new java.math.BigDecimal(s);
+            if (c == java.math.BigInteger.class) return new java.math.BigInteger(s);
+            return s;
+        }
+
+        private static Boolean parseBoolean(String s) {
+            // Boolean.valueOf is permissive — reject non "true/false" to
+            // be compliant with §4.2.3 (empty/invalid body → 400).
+            if (!("true".equalsIgnoreCase(s) || "false".equalsIgnoreCase(s))) {
+                throw new jakarta.ws.rs.BadRequestException("Invalid Boolean body: '" + s + "'");
+            }
+            return Boolean.valueOf(s);
+        }
+
+        private static Character parseCharacter(String s) {
+            if (s.isEmpty()) throw new jakarta.ws.rs.BadRequestException("Empty Character body");
+            return s.charAt(0);
+        }
+    }
+
+    private static boolean isPrimitiveLike(Class<?> t) {
+        if (t.isPrimitive()) return true;
+        return t == Boolean.class || t == Character.class || t == Byte.class
+                || t == Short.class || t == Integer.class || t == Long.class
+                || t == Float.class || t == Double.class
+                || t == java.math.BigDecimal.class || t == java.math.BigInteger.class
+                || t == Number.class;
+    }
+
+    private static boolean isXmlMediaType(MediaType mt) {
+        if (mt == null) return false;
+        String ty = mt.getType();
+        String st = mt.getSubtype();
+        if ("application".equalsIgnoreCase(ty) && ("xml".equalsIgnoreCase(st) || st.toLowerCase().endsWith("+xml"))) return true;
+        return "text".equalsIgnoreCase(ty) && "xml".equalsIgnoreCase(st);
+    }
+
+    /** Utilitaire : force un MultivaluedMap<String, Object> pour sortie MBW. */
+    public static MultivaluedMap<String, Object> outHeaders() {
+        return new MultivaluedHashMap<>();
+    }
+
+    /** Helper qui suppress le type-cast nécessaire au writeTo typé. */
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static void writeTo(MessageBodyWriter w, Object value, Class<?> type,
+                               Type genericType, Annotation[] anns, MediaType mt,
+                               MultivaluedMap<String, Object> headers, OutputStream os) throws IOException {
+        w.writeTo(value, type, genericType, anns, mt, headers, os);
+    }
+
+    /** Resolves the generic type T of {@code providerInterface} (MBR or MBW) for {@code cls}. */
+    static Class<?> resolveProviderType(Class<?> cls, Class<?> providerInterface) {
+        for (java.lang.reflect.Type iface : cls.getGenericInterfaces()) {
+            if (iface instanceof java.lang.reflect.ParameterizedType pt
+                    && pt.getRawType() == providerInterface
+                    && pt.getActualTypeArguments().length == 1) {
+                java.lang.reflect.Type arg = pt.getActualTypeArguments()[0];
+                if (arg instanceof Class<?> c) return c;
+                if (arg instanceof java.lang.reflect.WildcardType) return Object.class;
+                return Object.class;
+            }
+        }
+        Class<?> sup = cls.getSuperclass();
+        return (sup == null || sup == Object.class) ? null : resolveProviderType(sup, providerInterface);
+    }
+
+    /** Boxing primitif → wrapper pour comparaison de type MBR/MBW. */
+    static Class<?> box(Class<?> t) {
+        if (t == boolean.class) return Boolean.class;
+        if (t == byte.class)    return Byte.class;
+        if (t == short.class)   return Short.class;
+        if (t == int.class)     return Integer.class;
+        if (t == long.class)    return Long.class;
+        if (t == float.class)   return Float.class;
+        if (t == double.class)  return Double.class;
+        if (t == char.class)    return Character.class;
+        return t;
+    }
+}

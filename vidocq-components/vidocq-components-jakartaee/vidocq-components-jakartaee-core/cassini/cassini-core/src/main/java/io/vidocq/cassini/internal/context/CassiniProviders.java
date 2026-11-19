@@ -1,0 +1,145 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.internal.context;
+
+import io.vidocq.cassini.internal.gen.ProviderDescriptors;
+import io.vidocq.cassini.spi.gen.ProviderDescriptor;
+import io.vidocq.cassini.internal.ExceptionMapperRegistry;
+import io.vidocq.cassini.internal.MessageBodyRegistry;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.ext.ContextResolver;
+import jakarta.ws.rs.ext.ExceptionMapper;
+import jakarta.ws.rs.ext.MessageBodyReader;
+import jakarta.ws.rs.ext.MessageBodyWriter;
+import jakarta.ws.rs.ext.Providers;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Type;
+
+/**
+ * {@link Providers} §10.2 implementation — facade over the internal Cassini
+ * registries for MBR/MBW providers and ExceptionMapper.
+ * ContextResolvers are not yet registered (getContextResolver
+ * returns null).
+ */
+public final class CassiniProviders implements Providers {
+
+    private final MessageBodyRegistry bodies;
+    private final ExceptionMapperRegistry exceptionMappers;
+    private final java.util.List<ContextResolver<?>> contextResolvers;
+
+    public CassiniProviders(MessageBodyRegistry bodies, ExceptionMapperRegistry exceptionMappers) {
+        this(bodies, exceptionMappers, java.util.List.of());
+    }
+
+    public CassiniProviders(MessageBodyRegistry bodies, ExceptionMapperRegistry exceptionMappers,
+                            java.util.List<ContextResolver<?>> contextResolvers) {
+        this.bodies = bodies;
+        this.exceptionMappers = exceptionMappers;
+        this.contextResolvers = contextResolvers;
+    }
+
+    @Override
+    public <T> MessageBodyReader<T> getMessageBodyReader(Class<T> type, Type genericType,
+                                                         Annotation[] annotations, MediaType mediaType) {
+        return bodies.<T>findReader(type, genericType, annotations, mediaType).orElse(null);
+    }
+
+    @Override
+    public <T> MessageBodyWriter<T> getMessageBodyWriter(Class<T> type, Type genericType,
+                                                         Annotation[] annotations, MediaType mediaType) {
+        return bodies.<T>findWriter(type, genericType, annotations, mediaType).orElse(null);
+    }
+
+    @Override
+    public <T extends Throwable> ExceptionMapper<T> getExceptionMapper(Class<T> type) {
+        return exceptionMappers.findMapper(type);
+    }
+
+    @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public <T> ContextResolver<T> getContextResolver(Class<T> contextType, MediaType mediaType) {
+        // §4.3: select the ContextResolver whose @Produces matches the
+        // requested media type. If multiple match, pick the most specific
+        // (concrete > wildcard subtype > wildcard type). A CR without @Produces
+        // is equivalent to @Produces("*&#47;*").
+        ContextResolver<?> best = null;
+        int bestScore = -1;
+        for (ContextResolver<?> cr : contextResolvers) {
+            Class<?> param = contextType(cr.getClass());
+            int score = param != null && contextType.isAssignableFrom(param) ? producesScore(cr, mediaType) : -1;
+            if (score > bestScore) {
+                best = cr;
+                bestScore = score;
+            }
+        }
+        return (ContextResolver<T>) best;
+    }
+
+    /** How specifically the {@code @Produces} of {@code cr} matches {@code mediaType}: 0 for no
+     *  {@code @Produces} (implicit wildcard), else the best of 2 for a concrete type plus 1 for a
+     *  concrete subtype among the matching entries; -1 when none matches. */
+    private static int producesScore(ContextResolver<?> cr, MediaType mediaType) {
+        String[] produces = declaredProduces(cr.getClass());
+        // No @Produces → implicit wildcard, score 0
+        if (produces == null || produces.length == 0) return 0;
+        int score = -1;
+        for (String mt : produces) {
+            MediaType declared = io.vidocq.cassini.internal.MediaTypes.parse(mt);
+            if (mediaType == null
+                    || io.vidocq.cassini.internal.MediaTypes.matches(declared, mediaType)) {
+                // Specificity: 2 for concrete type, 1 for concrete subtype
+                int sp = (!declared.isWildcardType() ? 2 : 0)
+                        + (!declared.isWildcardSubtype() ? 1 : 0);
+                if (sp > score) score = sp;
+            }
+        }
+        return score;
+    }
+
+    /** The context type of the generated descriptor when it knows it, else read by reflection. */
+    private static Class<?> contextType(Class<?> cls) {
+        ProviderDescriptor d = ProviderDescriptors.of(cls);
+        Class<?> described = d == null ? null : d.typeArguments().get(ContextResolver.class);
+        return described != null ? described : resolveContextType(cls);
+    }
+
+    /** The {@code @Produces} values of {@code cls}: its generated descriptor first (CASSINI-040), the annotation
+     *  read by reflection otherwise; {@code null} when it declares none. */
+    private static String[] declaredProduces(Class<?> cls) {
+        ProviderDescriptor d = ProviderDescriptors.of(cls);
+        if (d != null) return d.produces();
+        jakarta.ws.rs.Produces prod = cls.getAnnotation(jakarta.ws.rs.Produces.class);
+        return prod == null ? null : prod.value();
+    }
+
+    private static Class<?> resolveContextType(Class<?> cls) {
+        for (java.lang.reflect.Type iface : cls.getGenericInterfaces()) {
+            if (iface instanceof java.lang.reflect.ParameterizedType pt
+                    && pt.getRawType() == ContextResolver.class
+                    && pt.getActualTypeArguments().length == 1
+                    && pt.getActualTypeArguments()[0] instanceof Class<?> c) {
+                return c;
+            }
+        }
+        Class<?> sup = cls.getSuperclass();
+        return sup == null || sup == Object.class ? null : resolveContextType(sup);
+    }
+}

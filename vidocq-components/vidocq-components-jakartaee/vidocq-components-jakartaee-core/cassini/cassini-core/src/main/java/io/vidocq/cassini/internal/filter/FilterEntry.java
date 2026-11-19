@@ -1,0 +1,162 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.internal.filter;
+
+import io.vidocq.cassini.internal.gen.ProviderDescriptors;
+import io.vidocq.cassini.spi.gen.ProviderDescriptor;
+import jakarta.annotation.Priority;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.AnnotatedElement;
+import java.util.HashSet;
+import java.util.Set;
+
+/**
+ * Registry entry: a filter/interceptor + its metadata
+ * (priority, pre-matching, name-binding annotations).
+ *
+ * <p>§6: the default priority is {@code Priorities.USER = 5000}. A
+ * filter without {@link Priority} uses this value.</p>
+ */
+public record FilterEntry<T>(
+        T instance,
+        Class<?> implClass,
+        int priority,
+        boolean preMatching,
+        Set<Class<? extends Annotation>> nameBindings,
+        java.lang.reflect.Method dynamicTarget) {
+
+    public static final int DEFAULT_PRIORITY = 5000;
+
+    public static <T> FilterEntry<T> of(T instance) {
+        return of(instance, instance.getClass());
+    }
+
+    /**
+     * The entry of {@code instance}, registered as {@code registeredClass}, whose annotations it reads. A bean
+     * provider may hand out a client proxy that does not extend that class: past a final method of the class, a Vauban
+     * proxy extends a class above it, or {@code Object}, and implements its interfaces (CASSINI-066).
+     */
+    public static <T> FilterEntry<T> of(T instance, Class<?> registeredClass) {
+        // CASSINI-040: the generated descriptor, when there is one, already holds what follows.
+        ProviderDescriptor described = described(registeredClass);
+        if (described != null) {
+            return new FilterEntry<>(instance, described.providerClass(), priorityOf(described),
+                    described.preMatching(), Set.copyOf(described.nameBindings()), null);
+        }
+        // §6: a filter provided by a CDI BeanProvider is a client proxy (e.g.
+        // JwtAuthenticationFilter_ClientProxy extends JwtAuthenticationFilter). @Provider /
+        // @PreMatching / @Priority / @NameBinding are not @Inherited, so we walk up the
+        // hierarchy to the @Provider class (cf. CassiniStackBuilderImpl.jaxrsAnnotatedClass)
+        // to read them — otherwise @PreMatching is read as false and the filter is
+        // classified as post-matching.
+        Class<?> cls = providerClass(registeredClass);
+        int prio = DEFAULT_PRIORITY;
+        Priority p = cls.getAnnotation(Priority.class);
+        if (p != null) prio = p.value();
+        boolean pre = cls.getAnnotation(jakarta.ws.rs.container.PreMatching.class) != null;
+        Set<Class<? extends Annotation>> bindings = collectNameBindings(cls);
+        return new FilterEntry<>(instance, cls, prio, pre, bindings, null);
+    }
+
+    /** §6.5.5: creates an entry bound to a specific target method (DynamicFeature). */
+    public static <T> FilterEntry<T> dynamicFor(T instance, java.lang.reflect.Method target) {
+        ProviderDescriptor described = described(instance.getClass());
+        if (described != null) {
+            return new FilterEntry<>(instance, described.providerClass(), priorityOf(described), false, Set.of(),
+                    target);
+        }
+        Class<?> cls = providerClass(instance.getClass());
+        int prio = DEFAULT_PRIORITY;
+        Priority p = cls.getAnnotation(Priority.class);
+        if (p != null) prio = p.value();
+        return new FilterEntry<>(instance, cls, prio, false, Set.of(), target);
+    }
+
+    /**
+     * The generated descriptor of the class or, behind a CDI client proxy, of the first superclass that has one;
+     * {@code null} when none has one, and the annotations are then read by reflection.
+     */
+    private static ProviderDescriptor described(Class<?> c) {
+        for (Class<?> cur = c; cur != null && cur != Object.class; cur = cur.getSuperclass()) {
+            ProviderDescriptor d = ProviderDescriptors.of(cur);
+            if (d != null) return d;
+        }
+        return null;
+    }
+
+    private static int priorityOf(ProviderDescriptor d) {
+        return d.priority() != null ? d.priority() : DEFAULT_PRIORITY;
+    }
+
+    /**
+     * Walks up the hierarchy to find the class carrying {@code @Provider} (the real
+     * filter class behind an optional CDI client proxy). Falls back to the original
+     * class if no superclass is annotated with {@code @Provider} (e.g. filter
+     * registered programmatically).
+     */
+    private static Class<?> providerClass(Class<?> c) {
+        // c is a class, of an instance or registered: its superclass chain always ends at Object.
+        Class<?> cur = c;
+        while (cur != Object.class && !cur.isAnnotationPresent(jakarta.ws.rs.ext.Provider.class)) {
+            cur = cur.getSuperclass();
+        }
+        return cur == Object.class ? c : cur;
+    }
+
+    /** True if the filter applies to the target method (name-bindings + dynamic target). */
+    public boolean appliesTo(AnnotatedElement method, AnnotatedElement declaringClass) {
+        // §6.5.5: dynamic binding — applies strictly to the target method.
+        if (dynamicTarget != null) {
+            return method instanceof java.lang.reflect.Method m && m.equals(dynamicTarget);
+        }
+        if (nameBindings.isEmpty()) return true; // no binding → global
+        Set<Class<? extends Annotation>> owned = new HashSet<>();
+        collectAnnotationsOfType(declaringClass, owned);
+        collectAnnotationsOfType(method, owned);
+        // §6.5.2: a @NameBinding on the Application subclass
+        // (retrieved via ParamExtractor.currentApplication) applies to
+        // all resources and all filters → global bindings.
+        var app = io.vidocq.cassini.internal.ParamExtractor.currentApplication();
+        if (app != null) {
+            collectAnnotationsOfType(app.getClass(), owned);
+        }
+        return owned.containsAll(nameBindings);
+    }
+
+    private static Set<Class<? extends Annotation>> collectNameBindings(Class<?> cls) {
+        Set<Class<? extends Annotation>> out = new HashSet<>();
+        for (Annotation a : cls.getAnnotations()) {
+            if (a.annotationType().isAnnotationPresent(jakarta.ws.rs.NameBinding.class)) {
+                out.add(a.annotationType());
+            }
+        }
+        return out;
+    }
+
+    private static void collectAnnotationsOfType(AnnotatedElement el, Set<Class<? extends Annotation>> out) {
+        if (el == null) return;
+        for (Annotation a : el.getAnnotations()) {
+            if (a.annotationType().isAnnotationPresent(jakarta.ws.rs.NameBinding.class)) {
+                out.add(a.annotationType());
+            }
+        }
+    }
+}

@@ -1,0 +1,1798 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.processor;
+
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Filer;
+import javax.annotation.processing.Messager;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedAnnotationTypes;
+import javax.annotation.processing.SupportedSourceVersion;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.NestingKind;
+import javax.lang.model.element.PackageElement;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.ArrayType;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
+import javax.tools.Diagnostic;
+import javax.tools.JavaFileObject;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Annotation processor that generates {@code <ResourceClass>$$CassiniAdapter} source files
+ * for every class annotated with {@code @jakarta.ws.rs.Path} or
+ * {@code @jakarta.ws.rs.ext.Provider}.
+ *
+ * <p>The generated source implements {@link io.vidocq.cassini.spi.gen.ResourceAdapter} and
+ * provides:</p>
+ * <ul>
+ *   <li>{@code injectFields}: VarHandle-based field injection (same semantics as
+ *       {@code RuntimeAdapterGenerator}).</li>
+ *   <li>{@code invoke}: direct typed dispatch switch over methods ordered by
+ *       {@code (declaringClassName, methodName, jvmDescriptor)};</li>
+ *   <li>{@code methodKeys}: the method each id calls, from which {@code AdapterRegistry} reads the ids,
+ *       so they need not match the ones {@code RuntimeAdapterGenerator} would number.</li>
+ * </ul>
+ *
+ * <p>Each {@code Application} subclass annotated with {@code @ApplicationPath} gets a
+ * {@code <ApplicationClass>$$CassiniApplication} implementing
+ * {@link io.vidocq.cassini.spi.gen.ApplicationDescriptor}, so a runtime finds the path without
+ * the class being a CDI bean.</p>
+ *
+ * <p>{@code AdapterRegistry.lookup} tries {@code Class.forName(beanClass + "$$CassiniAdapter")}
+ * first, so APT-generated adapters are used in preference to the runtime generator, making the
+ * application AOT-safe (GraalVM native-image, Project Leyden CDS).</p>
+ */
+@SupportedAnnotationTypes({
+        "jakarta.ws.rs.Path",
+        "jakarta.ws.rs.ext.Provider",
+        "jakarta.ws.rs.ApplicationPath"
+})
+@SupportedSourceVersion(SourceVersion.RELEASE_25)
+public class CassiniResourceProcessor extends AbstractProcessor {
+    private static final String JAVA_LANG_STRING = "java.lang.String";
+    private static final String JAKARTA_PATH = "jakarta.ws.rs.Path";
+    private static final String BEAN_PARAM = "jakarta.ws.rs.BeanParam";
+    private static final String VALUE = "value";
+    private static final String PACKAGE = "package ";
+    private static final String PUBLIC_FINAL_CLASS = "public final class ";
+    private static final String OVERRIDE = "    @Override";
+    private static final String INDENT_16 = "                ";
+    private static final String INDENT_16_QUOTE = "                \"";
+    private static final String CLOSE_METHOD = "    }";
+    private static final String DOT_CLASS = ".class";
+    private static final String INDENT_20 = "                    ";
+    private static final String CLOSE_BLOCK = "        }";
+    private static final String SET_TARGET_V = ".set(target, _v);";
+    private static final String IF_V_NOT_NULL = "if (_v != null) ";
+    private static final String INDENT_8 = "        ";
+
+    private static final String ADAPTER_SUFFIX = "$$CassiniAdapter";
+    private static final String ROUTES_SUFFIX  = "$$CassiniRoutes";
+    private static final String APPLICATION_SUFFIX = "$$CassiniApplication";
+    private static final String APPLICATION_PATH = "jakarta.ws.rs.ApplicationPath";
+
+    private Filer filer;
+    private Messager messager;
+    private Elements elements;
+    private Types types;
+
+    // Already-processed class names (binary) — avoid duplicate generation across rounds.
+    private final Set<String> processed = new HashSet<>();
+    private final Set<String> generatedAdapters = new LinkedHashSet<>();
+    private final Set<String> generatedRoutes = new LinkedHashSet<>();
+    private final Set<String> generatedApplications = new LinkedHashSet<>();
+    private final Set<String> generatedProviders = new LinkedHashSet<>();
+    private ProviderDescriptorWriter providerDescriptors;
+    /** The top-level types compiled in this build, by qualified name: only these get the adapters of reached types. */
+    private final Set<String> compiledTypes = new HashSet<>();
+
+    /** Writes {@code META-INF/services/<service>} listing {@code providers} (if any). */
+    private void writeServiceFile(String service, Set<String> providers) {
+        if (providers.isEmpty()) {
+            return;
+        }
+        try {
+            var resource = filer.createResource(javax.tools.StandardLocation.CLASS_OUTPUT, "",
+                    "META-INF/services/" + service);
+            try (var w = new java.io.PrintWriter(resource.openOutputStream(), false,
+                    java.nio.charset.StandardCharsets.UTF_8)) {
+                for (var name : providers) {
+                    w.println(name);
+                }
+            }
+        } catch (IOException e) {
+            messager.printMessage(Diagnostic.Kind.WARNING,
+                    "cassini-processor: failed to write services file for " + service
+                            + ": " + e.getMessage());
+        }
+    }
+
+    @Override
+    public synchronized void init(ProcessingEnvironment env) {
+        super.init(env);
+        this.filer = env.getFiler();
+        this.messager = env.getMessager();
+        this.elements = env.getElementUtils();
+        this.types = env.getTypeUtils();
+        this.providerDescriptors = new ProviderDescriptorWriter(filer, elements, CassiniResourceProcessor::escapeString);
+    }
+
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        if (roundEnv.processingOver()) {
+            // Class-path fallback + Vauban-layer promotion source: standard services
+            // files for the generated providers. Named modules ignore them at runtime
+            // (module mode needs `provides`), but the Vauban application layer promotes
+            // them to synthetic `provides` when it resolves the module — which is what
+            // frees applications from hand-declaring generated classes in
+            // module-info.java (the Maven plugin sealing covers pre-built jars).
+            writeServiceFile("io.vidocq.cassini.spi.gen.ResourceAdapter", generatedAdapters);
+            writeServiceFile("io.vidocq.cassini.spi.gen.RouteProvider", generatedRoutes);
+            writeServiceFile("io.vidocq.cassini.spi.gen.ApplicationDescriptor", generatedApplications);
+            writeServiceFile("io.vidocq.cassini.spi.gen.ProviderDescriptor", generatedProviders);
+            return false;
+        }
+
+        for (Element root : roundEnv.getRootElements()) {
+            if (root instanceof TypeElement t) compiledTypes.add(t.getQualifiedName().toString());
+        }
+        for (TypeElement resourceType : collectResourceTypes(annotations, roundEnv)) {
+            generateForResource(resourceType);
+        }
+
+        return false;
+    }
+
+    /**
+     * The classes annotated with the processed annotations, in round order. An
+     * {@code @ApplicationPath} class is not a resource: its descriptor is generated on the spot.
+     */
+    private Set<TypeElement> collectResourceTypes(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        Set<TypeElement> toProcess = new LinkedHashSet<>();
+        for (TypeElement annotation : annotations) {
+            boolean application = annotation.getQualifiedName().contentEquals(APPLICATION_PATH);
+            for (Element element : roundEnv.getElementsAnnotatedWith(annotation)) {
+                if (element.getKind() != ElementKind.CLASS) continue;
+                if (application) {
+                    processApplication((TypeElement) element);
+                } else {
+                    toProcess.add((TypeElement) element);
+                }
+            }
+        }
+        return toProcess;
+    }
+
+    /** Generates the adapter, and for a {@code @Path} class the route table, of a resource once. */
+    private void generateForResource(TypeElement resourceType) {
+        String binaryName = elements.getBinaryName(resourceType).toString();
+        if (processed.contains(binaryName)) return;
+        processed.add(binaryName);
+        try {
+            generateAdapter(resourceType);
+            generatedAdapters.add(binaryName + ADAPTER_SUFFIX);
+        } catch (Exception e) {
+            messager.printMessage(Diagnostic.Kind.ERROR,
+                    "cassini-processor: failed to generate adapter for "
+                            + binaryName + ": " + e.getMessage(),
+                    resourceType);
+        }
+        if (hasAnnotation(resourceType, "jakarta.ws.rs.ext.Provider")) {
+            generateProviderDescriptor(resourceType, binaryName);
+        }
+        // The @BeanParam classes and sub-resource classes it reaches get their adapter at build time too, instead
+        // of one generated at run time on their first request.
+        for (TypeElement reached : reachedTypes(resourceType)) {
+            generateForResource(reached);
+        }
+        // Only generate $$CassiniRoutes for @Path classes (not @Provider-only classes)
+        if (hasAnnotation(resourceType, JAKARTA_PATH)) {
+            try {
+                generateRoutes(resourceType);
+                generatedRoutes.add(binaryName + ROUTES_SUFFIX);
+            } catch (Exception e) {
+                messager.printMessage(Diagnostic.Kind.WARNING,
+                        "cassini-processor: failed to generate routes for "
+                                + binaryName + ": " + e.getMessage(),
+                        resourceType);
+            }
+        }
+    }
+
+    /**
+     * Generates the {@code $$CassiniProvider} descriptor of a {@code @Provider} class (CASSINI-040).
+     * Without one, Cassini reads the provider by reflection: a failure is only a warning.
+     */
+    private void generateProviderDescriptor(TypeElement providerType, String binaryName) {
+        try {
+            String name = providerDescriptors.write(providerType);
+            if (name != null) generatedProviders.add(name);
+        } catch (Exception e) {
+            messager.printMessage(Diagnostic.Kind.WARNING,
+                    "cassini-processor: failed to generate the provider descriptor of "
+                            + binaryName + ": " + e.getMessage(),
+                    providerType);
+        }
+    }
+
+    /**
+     * The classes of this build that {@code type} reaches at run time without naming them in {@code @Path} or
+     * {@code @Provider}: the types of its {@code @BeanParam} fields and parameters, and the declared return types
+     * of its sub-resource locators. An interface, {@code Object}, a class of another build or one the adapter
+     * cannot name is left out: Cassini generates its adapter at run time, as before.
+     */
+    private Set<TypeElement> reachedTypes(TypeElement type) {
+        Set<TypeElement> out = new LinkedHashSet<>();
+        for (TypeElement c = type; c != null && !isObjectType(c); c = superclassOf(c)) {
+            addBeanParams(c.getEnclosedElements(), ElementKind.FIELD, out);
+        }
+        for (ExecutableElement method : collectPublicInstanceMethods(type)) {
+            ExecutableElement m = annotatedMethod(method, type);
+            addBeanParams(m.getParameters(), ElementKind.PARAMETER, out);
+            if (resolveHttpVerb(m) == null && annotationValue(m, JAKARTA_PATH, VALUE) != null) {
+                addReached(method.getReturnType(), out);
+            }
+        }
+        return out;
+    }
+
+    /** Adds the types of the {@code @BeanParam} elements of {@code kind} among {@code elements}. */
+    private void addBeanParams(List<? extends Element> elements, ElementKind kind, Set<TypeElement> out) {
+        for (Element e : elements) {
+            if (e.getKind() == kind && hasAnnotation(e, BEAN_PARAM)) addReached(e.asType(), out);
+        }
+    }
+
+    private void addReached(TypeMirror type, Set<TypeElement> out) {
+        if (type.getKind() != TypeKind.DECLARED) return;
+        TypeElement t = (TypeElement) ((DeclaredType) type).asElement();
+        if (t.getKind() == ElementKind.CLASS && compiledTypes.contains(topLevel(t).getQualifiedName().toString())
+                && nameable(t)) {
+            out.add(t);
+        }
+    }
+
+    private static TypeElement topLevel(TypeElement type) {
+        TypeElement t = type;
+        while (t.getEnclosingElement() instanceof TypeElement outer) t = outer;
+        return t;
+    }
+
+    /** True when an adapter in the package of {@code type} can name it: no private or local class on the way. */
+    private static boolean nameable(TypeElement type) {
+        for (Element e = type; e instanceof TypeElement t; e = t.getEnclosingElement()) {
+            if (t.getModifiers().contains(Modifier.PRIVATE)
+                    || t.getNestingKind() == NestingKind.LOCAL || t.getNestingKind() == NestingKind.ANONYMOUS) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // -------------------------------------------------------------------------
+    // Source generation
+    // -------------------------------------------------------------------------
+
+    // ---- Application descriptor ---------------------------------------------
+
+    /** Generates the {@code $$CassiniApplication} of a concrete {@code Application} subclass. */
+    private void processApplication(TypeElement type) {
+        String binaryName = elements.getBinaryName(type).toString();
+        if (!generatedApplications.add(binaryName + APPLICATION_SUFFIX)) return;
+        TypeElement application = elements.getTypeElement("jakarta.ws.rs.core.Application");
+        if (application == null || !types.isSubtype(type.asType(), types.erasure(application.asType()))) {
+            generatedApplications.remove(binaryName + APPLICATION_SUFFIX);
+            messager.printMessage(Diagnostic.Kind.WARNING,
+                    "cassini-processor: @ApplicationPath on " + binaryName
+                            + ", which does not extend jakarta.ws.rs.core.Application: ignored", type);
+            return;
+        }
+        if (type.getModifiers().contains(Modifier.ABSTRACT)) {
+            generatedApplications.remove(binaryName + APPLICATION_SUFFIX);
+            return;
+        }
+        writeApplicationDescriptor(type, binaryName + APPLICATION_SUFFIX, applicationPath(type));
+    }
+
+    /** The value of the {@code @ApplicationPath} of {@code type}, or null when it has none. */
+    private static String applicationPath(TypeElement type) {
+        String path = null;
+        for (var mirror : type.getAnnotationMirrors()) {
+            if (!((TypeElement) mirror.getAnnotationType().asElement()).getQualifiedName().contentEquals(APPLICATION_PATH)) {
+                continue;
+            }
+            for (var entry : mirror.getElementValues().entrySet()) {
+                if (entry.getKey().getSimpleName().contentEquals(VALUE)) {
+                    path = (String) entry.getValue().getValue();
+                }
+            }
+        }
+        return path;
+    }
+
+    /** Writes the {@code $$CassiniApplication} source {@code name} of {@code type}. */
+    private void writeApplicationDescriptor(TypeElement type, String name, String path) {
+        int lastDot = name.lastIndexOf('.');
+        String pkg = lastDot > 0 ? name.substring(0, lastDot) : "";
+        String simple = lastDot > 0 ? name.substring(lastDot + 1) : name;
+        try {
+            JavaFileObject src = filer.createSourceFile(name, type);
+            try (PrintWriter w = new PrintWriter(src.openWriter())) {
+                if (!pkg.isEmpty()) {
+                    w.println(PACKAGE + pkg + ";");
+                    w.println();
+                }
+                w.println("/** Generated by cassini-processor: the {@code @ApplicationPath} of "
+                        + type.getSimpleName() + ". */");
+                w.println(PUBLIC_FINAL_CLASS + simple
+                        + " implements io.vidocq.cassini.spi.gen.ApplicationDescriptor {");
+                w.println("    @Override public Class<?> applicationClass() { return "
+                        + type.getQualifiedName() + ".class; }");
+                String literal = path == null ? "null" : "\"" + escapeString(path) + "\"";
+                w.println("    @Override public String applicationPath() { return " + literal + "; }");
+                w.println("}");
+            }
+        } catch (IOException e) {
+            generatedApplications.remove(name);
+            messager.printMessage(Diagnostic.Kind.ERROR,
+                    "cassini-processor: failed to generate " + name + ": " + e.getMessage(), type);
+        }
+    }
+
+    // ---- Route generation ---------------------------------------------------
+
+    /**
+     * Generates {@code <ResourceClass>$$CassiniRoutes} if the class has only direct resource
+     * methods (no sub-resource locators). If it has locators, generates a stub that returns
+     * {@code hasLocators() = true} so {@code RouteRegistry} falls back to
+     * {@code ResourceScanner}.
+     */
+    private void generateRoutes(TypeElement resourceType) throws IOException {
+        String binaryName  = elements.getBinaryName(resourceType).toString();
+        String routesName  = binaryName + ROUTES_SUFFIX;
+
+        int lastDot = routesName.lastIndexOf('.');
+        String pkg          = lastDot > 0 ? routesName.substring(0, lastDot) : "";
+        String simpleRoutes = lastDot > 0 ? routesName.substring(lastDot + 1) : routesName;
+
+        // Collect resource methods and detect locators
+        RouteCollection routes = collectRoutes(resourceType);
+
+        JavaFileObject src = filer.createSourceFile(routesName, resourceType);
+        try (PrintWriter w = new PrintWriter(src.openWriter())) {
+            emitRoutes(w, binaryName, pkg, simpleRoutes, routes);
+        }
+    }
+
+    private void emitRoutes(PrintWriter w, String resourceBinaryName,
+                            String pkg, String simpleRoutes, RouteCollection routes) {
+        if (!pkg.isEmpty()) {
+            w.println(PACKAGE + pkg + ";");
+            w.println();
+        }
+        w.println("import io.vidocq.cassini.spi.gen.RouteDescriptor;");
+        w.println("import io.vidocq.cassini.spi.gen.RouteProvider;");
+        w.println("import java.util.List;");
+        w.println();
+        w.println("/**");
+        w.println(" * APT-generated {@link RouteProvider} for {@code " + resourceBinaryName + "}.");
+        w.println(" * Do not edit — regenerated by {@code cassini-processor} on each compilation.");
+        w.println(" */");
+        w.println(PUBLIC_FINAL_CLASS + simpleRoutes + " implements RouteProvider {");
+        w.println();
+        w.println("    public " + simpleRoutes + "() {}");
+        w.println();
+
+        if (routes.hasLocators) {
+            // Has locators — signal fallback
+            w.println(OVERRIDE);
+            w.println("    public boolean hasLocators() { return true; }");
+            w.println();
+            w.println(OVERRIDE);
+            w.println("    public List<RouteDescriptor> routes() { return List.of(); }");
+        } else {
+            emitRoutesMethod(w, routes.methods);
+        }
+
+        w.println();
+        // resourceClass() — ServiceLoader keying (zero-export Java Modules apps)
+        emitResourceClass(w, resourceBinaryName);
+
+        w.println("}");
+    }
+
+    /** Emits {@code routes()} returning one {@code RouteDescriptor} per direct resource method. */
+    private void emitRoutesMethod(PrintWriter w, List<RouteMethodModel> methods) {
+        w.println(OVERRIDE);
+        w.println("    public List<RouteDescriptor> routes() {");
+        if (methods.isEmpty()) {
+            w.println("        return List.of();");
+        } else {
+            w.println("        return List.of(");
+            for (int i = 0; i < methods.size(); i++) {
+                emitRouteDescriptor(w, methods.get(i), i == methods.size() - 1);
+            }
+            w.println("        );");
+        }
+        w.println(CLOSE_METHOD);
+    }
+
+    /** Emits the {@code new RouteDescriptor(...)} of one method, followed by a comma unless last. */
+    private void emitRouteDescriptor(PrintWriter w, RouteMethodModel rm, boolean last) {
+        w.println("            new RouteDescriptor(");
+        w.println(INDENT_16 + rm.beanClassLiteral + ",");
+        w.println(INDENT_16_QUOTE + escapeString(rm.methodName) + "\",");
+        // paramTypeNames
+        if (rm.paramTypeNames.isEmpty()) {
+            w.println("                new String[0],");
+        } else {
+            w.print("                new String[]{");
+            for (int j = 0; j < rm.paramTypeNames.size(); j++) {
+                if (j > 0) w.print(", ");
+                w.print("\"" + escapeString(rm.paramTypeNames.get(j)) + "\"");
+            }
+            w.println("},");
+        }
+        w.println(INDENT_16_QUOTE + escapeString(rm.httpMethod) + "\",");
+        w.println(INDENT_16_QUOTE + escapeString(rm.pathTemplate) + "\",");
+        // produces
+        emitStringArray(w, rm.produces, INDENT_16);
+        w.println(",");
+        // consumes
+        emitStringArray(w, rm.consumes, INDENT_16);
+        w.println(",");
+        w.println(INDENT_16 + rm.classPathLiterals + ",");
+        w.println(INDENT_16 + rm.paramTypesLiteral + ",");
+        w.print(INDENT_16 + rm.annotatedClassLiteral + ")");
+        if (!last) w.println(",");
+        else w.println();
+    }
+
+    private void emitStringArray(PrintWriter w, List<String> values, String indent) {
+        if (values.isEmpty()) {
+            w.print(indent + "new String[0]");
+        } else {
+            w.print(indent + "new String[]{");
+            for (int i = 0; i < values.size(); i++) {
+                if (i > 0) w.print(", ");
+                w.print("\"" + escapeString(values.get(i)) + "\"");
+            }
+            w.print("}");
+        }
+    }
+
+    /**
+     * The parameter types of {@code method} as a {@code Class<?>[]} expression, so that the route needs no name
+     * resolved at startup (CASSINI-042); {@code "null"} when a type cannot be named from {@code pkg}, or when the
+     * declaration carrying the annotations, {@code annotated}, erases its parameters differently (a generic
+     * supertype): the route then resolves the method by name, as before.
+     */
+    private String paramTypesLiteral(ExecutableElement method, ExecutableElement annotated, PackageElement pkg) {
+        List<String> literals = new ArrayList<>();
+        for (int i = 0; i < method.getParameters().size(); i++) {
+            TypeMirror type = types.erasure(method.getParameters().get(i).asType());
+            if (!types.isSameType(type, types.erasure(annotated.getParameters().get(i).asType()))) return "null";
+            String literal = typeLiteral(type, pkg);
+            if (literal == null) return "null";
+            literals.add(literal);
+        }
+        return "new Class<?>[]{" + String.join(", ", literals) + "}";
+    }
+
+    /** The class literal of an erased type, or {@code null} when it cannot be named from {@code pkg}. */
+    private String typeLiteral(TypeMirror type, PackageElement pkg) {
+        if (type.getKind().isPrimitive()) return type.toString() + DOT_CLASS;
+        if (type instanceof ArrayType array) {
+            String component = typeLiteral(array.getComponentType(), pkg);
+            return component == null ? null : component.replace(DOT_CLASS, "[]" + DOT_CLASS);
+        }
+        if (type instanceof DeclaredType declared) return classLiteral((TypeElement) declared.asElement(), pkg);
+        return null;
+    }
+
+    /** The class literal of {@code type}, or {@code null} when a class of {@code pkg} cannot name it. */
+    private String classLiteral(TypeElement type, PackageElement pkg) {
+        for (Element e = type; e instanceof TypeElement t; e = t.getEnclosingElement()) {
+            Set<Modifier> mods = t.getModifiers();
+            if (mods.contains(Modifier.PRIVATE) || t.getNestingKind() == NestingKind.LOCAL
+                    || t.getNestingKind() == NestingKind.ANONYMOUS
+                    || (!mods.contains(Modifier.PUBLIC) && !elements.getPackageOf(t).equals(pkg))) {
+                return null;
+            }
+        }
+        return type.getQualifiedName() + DOT_CLASS;
+    }
+
+    // -------------------------------------------------------------------------
+    // Route model collection
+    // -------------------------------------------------------------------------
+
+    /** Collects resource methods and detects whether the class has locators. */
+    private RouteCollection collectRoutes(TypeElement resourceType) {
+        List<RouteMethodModel> methods = new ArrayList<>();
+
+        // Get class-level @Path, @Produces, @Consumes
+        String classPath = annotationValue(resourceType, JAKARTA_PATH, VALUE);
+        if (classPath == null) return new RouteCollection(false, List.of()); // not @Path
+        String basePath = normalizePath(classPath);
+        int classPathLiterals = countLiterals(basePath);
+        List<String> classProduces = annotationValues(resourceType, "jakarta.ws.rs.Produces", VALUE);
+        List<String> classConsumes = annotationValues(resourceType, "jakarta.ws.rs.Consumes", VALUE);
+        String resourceBinaryName = elements.getBinaryName(resourceType).toString();
+        String beanClassLiteral = resourceBinaryName.replace('$', '.') + DOT_CLASS;
+
+        // Collect all public non-static methods, the most derived first, deduplicating by signature.
+        List<ExecutableElement> allMethods = collectPublicInstanceMethods(resourceType);
+
+        for (ExecutableElement method : allMethods) {
+            // §3.6: the annotations may be those of the method it overrides or implements.
+            ExecutableElement m = annotatedMethod(method, resourceType);
+            String verb = resolveHttpVerb(m);
+            String methodPathValue = annotationValue(m, JAKARTA_PATH, VALUE);
+
+            if (verb == null) {
+                // Sub-resource locator (@Path without HTTP verb): signal fallback for the whole
+                // class. No verb, no @Path = skip.
+                if (methodPathValue != null) return new RouteCollection(true, List.of());
+                continue;
+            }
+
+            // Direct resource method
+            String fullPath = (methodPathValue == null)
+                    ? basePath
+                    : combinePaths(basePath, normalizePath(methodPathValue));
+
+            methods.add(new RouteMethodModel(
+                    beanClassLiteral,
+                    method.getSimpleName().toString(),
+                    paramTypeNames(method),
+                    verb,
+                    fullPath,
+                    orElse(annotationValues(m, "jakarta.ws.rs.Produces", VALUE), classProduces),
+                    orElse(annotationValues(m, "jakarta.ws.rs.Consumes", VALUE), classConsumes),
+                    classPathLiterals,
+                    paramTypesLiteral(method, m, elements.getPackageOf(resourceType)),
+                    java.util.Objects.requireNonNullElse(
+                            classLiteral((TypeElement) m.getEnclosingElement(), elements.getPackageOf(resourceType)),
+                            "null")
+            ));
+        }
+        return new RouteCollection(false, List.copyOf(methods));
+    }
+
+    /**
+     * §3.6, as {@code ResourceScanner.annotatedMethod} applies it at run time: the method whose JAX-RS
+     * annotations {@code m} carries. Its own, when it or one of its parameters has any; else those of the method
+     * it overrides or implements, from a superclass first, then from an interface, at any depth.
+     */
+    private ExecutableElement annotatedMethod(ExecutableElement m, TypeElement resourceType) {
+        if (hasJaxrsAnnotation(m)) return m;
+        List<TypeElement> classes = new ArrayList<>();
+        for (TypeElement c = resourceType; c != null && !isObjectType(c); c = superclassOf(c)) classes.add(c);
+        for (TypeElement c : classes) {
+            ExecutableElement found = annotatedOverridden(m, c, resourceType);
+            if (found != null) return found;
+        }
+        Deque<TypeElement> interfaces = new ArrayDeque<>();
+        classes.forEach(c -> interfaces.addAll(interfacesOf(c)));
+        Set<TypeElement> seen = new HashSet<>();
+        while (!interfaces.isEmpty()) {
+            TypeElement iface = interfaces.poll();
+            if (!seen.add(iface)) continue;
+            ExecutableElement found = annotatedOverridden(m, iface, resourceType);
+            if (found != null) return found;
+            interfaces.addAll(interfacesOf(iface));
+        }
+        return m;
+    }
+
+    /** The method of {@code type} that {@code m} is or overrides, when it carries JAX-RS annotations. */
+    private ExecutableElement annotatedOverridden(ExecutableElement m, TypeElement type, TypeElement resourceType) {
+        for (Element enc : type.getEnclosedElements()) {
+            if (enc.getKind() == ElementKind.METHOD && enc.getSimpleName().equals(m.getSimpleName())
+                    && (enc.equals(m) || elements.overrides(m, (ExecutableElement) enc, resourceType))
+                    && hasJaxrsAnnotation((ExecutableElement) enc)) {
+                return (ExecutableElement) enc;
+            }
+        }
+        return null;
+    }
+
+    /** A JAX-RS annotation on {@code m} or one of its parameters, a custom HTTP method designator included. */
+    private boolean hasJaxrsAnnotation(ExecutableElement m) {
+        if (anyJaxrs(m)) return true;
+        for (VariableElement parameter : m.getParameters()) {
+            if (anyJaxrs(parameter)) return true;
+        }
+        return false;
+    }
+
+    private boolean anyJaxrs(Element e) {
+        for (var mirror : e.getAnnotationMirrors()) {
+            TypeElement type = (TypeElement) mirror.getAnnotationType().asElement();
+            if (type.getQualifiedName().toString().startsWith("jakarta.ws.rs.")
+                    || annotationValue(type, "jakarta.ws.rs.HttpMethod", VALUE) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<TypeElement> interfacesOf(TypeElement type) {
+        List<TypeElement> out = new ArrayList<>();
+        for (TypeMirror iface : type.getInterfaces()) {
+            if (iface.getKind() == TypeKind.DECLARED
+                    && ((DeclaredType) iface).asElement() instanceof TypeElement ifaceType) {
+                out.add(ifaceType);
+            }
+        }
+        return out;
+    }
+
+    /** The method's media types, or the class ones when the method declares none. */
+    private static List<String> orElse(List<String> methodValues, List<String> classValues) {
+        return methodValues.isEmpty() ? classValues : methodValues;
+    }
+
+    /** Parameter types for targeted reflection. */
+    private List<String> paramTypeNames(ExecutableElement m) {
+        List<String> paramTypeNames = new ArrayList<>();
+        for (VariableElement param : m.getParameters()) {
+            paramTypeNames.add(jvmBinaryName(param.asType()));
+        }
+        return paramTypeNames;
+    }
+
+    /** Collects all public non-static methods visible on the type (declared + inherited). */
+    private List<ExecutableElement> collectPublicInstanceMethods(TypeElement type) {
+        Set<String> seen = new LinkedHashSet<>();
+        List<ExecutableElement> result = new ArrayList<>();
+        collectMethodsRecursive(type, seen, result);
+        return result;
+    }
+
+    private void collectMethodsRecursive(TypeElement type, Set<String> seen, List<ExecutableElement> result) {
+        if (type == null || isObjectType(type)) return;
+        for (Element enc : type.getEnclosedElements()) {
+            if (isPublicInstanceMethod(enc)
+                    && seen.add(enc.getSimpleName().toString() + buildJvmParamDescriptor((ExecutableElement) enc))) {
+                result.add((ExecutableElement) enc);
+            }
+        }
+        for (TypeElement parent : supertypes(type)) {
+            collectMethodsRecursive(parent, seen, result);
+        }
+    }
+
+    private static boolean isPublicInstanceMethod(Element enc) {
+        return enc.getKind() == ElementKind.METHOD && enc.getModifiers().contains(Modifier.PUBLIC)
+                && !enc.getModifiers().contains(Modifier.STATIC);
+    }
+
+    /** The superclass of {@code type} (if any), then its declared interfaces (for default methods). */
+    private static List<TypeElement> supertypes(TypeElement type) {
+        List<TypeElement> out = new ArrayList<>();
+        TypeElement superType = superclassOf(type);
+        if (superType != null) out.add(superType);
+        out.addAll(interfacesOf(type));
+        return out;
+    }
+
+    /**
+     * Resolves the HTTP verb for an executable element. Returns e.g. "GET", "POST", or null.
+     * Handles both built-in annotations and custom @HttpMethod meta-annotations.
+     */
+    private String resolveHttpVerb(ExecutableElement m) {
+        // Built-in verbs
+        String[] builtinAnnotations = {
+            "jakarta.ws.rs.GET", "jakarta.ws.rs.POST", "jakarta.ws.rs.PUT",
+            "jakarta.ws.rs.DELETE", "jakarta.ws.rs.HEAD", "jakarta.ws.rs.OPTIONS",
+            "jakarta.ws.rs.PATCH"
+        };
+        String[] builtinVerbs = {"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"};
+        for (int i = 0; i < builtinAnnotations.length; i++) {
+            if (hasAnnotation(m, builtinAnnotations[i])) return builtinVerbs[i];
+        }
+        // Custom @HttpMethod meta-annotations
+        for (var mirror : m.getAnnotationMirrors()) {
+            TypeElement annType = (TypeElement) mirror.getAnnotationType().asElement();
+            // Check if the annotation itself is annotated with @HttpMethod
+            String httpMethodValue = annotationValue(annType, "jakarta.ws.rs.HttpMethod", VALUE);
+            if (httpMethodValue != null) return httpMethodValue;
+        }
+        return null;
+    }
+
+    /** Returns annotation values as a list (for array-valued attributes like @Produces/"value"). */
+    @SuppressWarnings("unchecked")
+    private List<String> annotationValues(Element e, String annotationFqn, String attributeName) {
+        return e.getAnnotationMirrors().stream()
+                .filter(am -> ((TypeElement) am.getAnnotationType().asElement())
+                        .getQualifiedName().toString().equals(annotationFqn))
+                .findFirst()
+                .map(am -> am.getElementValues().entrySet().stream()
+                        .filter(entry -> entry.getKey().getSimpleName().toString().equals(attributeName))
+                        .findFirst()
+                        .map(entry -> {
+                            Object val = entry.getValue().getValue();
+                            if (val instanceof List<?> list) {
+                                List<String> result = new ArrayList<>();
+                                for (Object item : list) {
+                                    result.add(item.toString().replace("\"", ""));
+                                }
+                                return result;
+                            }
+                            return List.of(val.toString().replace("\"", ""));
+                        })
+                        .orElse(List.of()))
+                .orElse(List.of());
+    }
+
+    private static boolean isPrimitiveOrVoid(TypeMirror t) {
+        return t.getKind().isPrimitive() || t.getKind() == TypeKind.VOID;
+    }
+
+    /** The Java keyword of a primitive or void type: its {@link TypeKind} name in lower case. */
+    private static String primitiveName(TypeMirror t) {
+        return t.getKind().name().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** Returns the binary name suitable for use in a generated Class.getDeclaredMethod call. */
+    private String jvmBinaryName(TypeMirror t) {
+        if (isPrimitiveOrVoid(t)) return primitiveName(t);
+        return switch (t.getKind()) {
+            case ARRAY   -> jvmBinaryName(((ArrayType) t).getComponentType()) + "[]";
+            case DECLARED -> {
+                TypeElement te = (TypeElement) ((DeclaredType) t).asElement();
+                yield elements.getBinaryName(te).toString();
+            }
+            case TYPEVAR -> jvmBinaryName(types.erasure(t)); // erase to leftmost bound (e.g. Throwable)
+            default -> "java.lang.Object";
+        };
+    }
+
+    private static String normalizePath(String raw) {
+        if (raw == null || raw.isEmpty() || "/".equals(raw)) return "/";
+        String s = raw.startsWith("/") ? raw : "/" + raw;
+        if (s.length() > 1 && s.endsWith("/")) s = s.substring(0, s.length() - 1);
+        return s;
+    }
+
+    private static String combinePaths(String base, String sub) {
+        if ("/".equals(sub)) return base;
+        if ("/".equals(base)) return sub;
+        return base + sub;
+    }
+
+    private static int countLiterals(String path) {
+        if (path == null) return 0;
+        int n = 0;
+        int depth = 0;
+        for (int i = 0; i < path.length(); i++) {
+            char c = path.charAt(i);
+            if (c == '{') depth++;
+            else if (c == '}') { if (depth > 0) depth--; }
+            else if (depth == 0) n++;
+        }
+        return n;
+    }
+
+    // Internal models for route collection
+    private record RouteCollection(boolean hasLocators, List<RouteMethodModel> methods) {}
+
+    private record RouteMethodModel(
+            String beanClassLiteral,
+            String methodName,
+            List<String> paramTypeNames,
+            String httpMethod,
+            String pathTemplate,
+            List<String> produces,
+            List<String> consumes,
+            int classPathLiterals,
+            String paramTypesLiteral,
+            String annotatedClassLiteral
+    ) {}
+
+    // ---- Adapter generation -------------------------------------------------
+
+    private void generateAdapter(TypeElement resourceType) throws IOException {
+        String binaryName   = elements.getBinaryName(resourceType).toString();
+        String adapterName  = binaryName + ADAPTER_SUFFIX;
+
+        // Derive package and simple name from binaryName.
+        // binaryName uses '$' for nested classes — the adapter is always top-level.
+        int lastDot = adapterName.lastIndexOf('.');
+        String pkg          = lastDot > 0 ? adapterName.substring(0, lastDot) : "";
+        String simpleAdapter = lastDot > 0 ? adapterName.substring(lastDot + 1) : adapterName;
+
+        JavaFileObject src = filer.createSourceFile(adapterName, resourceType);
+        try (PrintWriter w = new PrintWriter(src.openWriter())) {
+            emitAdapter(w, resourceType, binaryName, pkg, simpleAdapter);
+        }
+    }
+
+    private void emitAdapter(PrintWriter w, TypeElement resourceType,
+                             String resourceBinaryName,
+                             String pkg, String simpleAdapter) {
+
+        List<FieldModel> fields = collectFields(resourceType);
+        List<MethodModel> methods = collectMethods(resourceType);
+        boolean hasNoArgCtor = hasAccessibleNoArgCtor(resourceType);
+
+        if (!pkg.isEmpty()) {
+            w.println(PACKAGE + pkg + ";");
+            w.println();
+        }
+
+        w.println("import io.vidocq.cassini.spi.gen.InjectionSupport;");
+        w.println("import io.vidocq.cassini.spi.gen.ParamKind;");
+        w.println("import io.vidocq.cassini.spi.gen.ResourceAdapter;");
+        w.println("import java.lang.invoke.MethodHandles;");
+        w.println("import java.lang.invoke.VarHandle;");
+        w.println();
+        w.println("/**");
+        w.println(" * APT-generated {@link ResourceAdapter} for {@code " + resourceBinaryName + "}.");
+        w.println(" * Do not edit — regenerated by {@code cassini-processor} on each compilation.");
+        w.println(" */");
+        w.println(PUBLIC_FINAL_CLASS + simpleAdapter + " implements ResourceAdapter {");
+        w.println();
+
+        // Static VarHandle fields
+        for (int i = 0; i < fields.size(); i++) {
+            FieldModel f = fields.get(i);
+            w.println("    private static final VarHandle " + f.varHandleField + ";");
+        }
+
+        // Static initializer
+        if (!fields.isEmpty()) {
+            w.println();
+            w.println("    static {");
+            w.println("        try {");
+            // Use the resource class's own module-access: MethodHandles.lookup() inside the
+            // generated class is in the resource's package (same package rule), so
+            // privateLookupIn works for private fields without requiring opens.
+            w.println("            MethodHandles.Lookup lk = MethodHandles.privateLookupIn(");
+            w.println(INDENT_20 + resourceBinaryName.replace('$', '.') + ".class,");
+            w.println("                    MethodHandles.lookup());");
+            for (FieldModel f : fields) {
+                w.println("            " + f.varHandleField + " = lk.findVarHandle(");
+                w.println(INDENT_20 + f.declaringBinaryName.replace('$', '.') + ".class,");
+                w.println("                    \"" + f.javaFieldName + "\",");
+                w.println(INDENT_20 + f.fieldTypeLiteral + ");");
+            }
+            w.println("        } catch (Throwable t) {");
+            w.println("            throw new ExceptionInInitializerError(t);");
+            w.println(CLOSE_BLOCK);
+            w.println(CLOSE_METHOD);
+        }
+
+        w.println();
+        w.println("    public " + simpleAdapter + "() {}");
+        w.println();
+
+        // injectFields
+        emitInjectFields(w, fields);
+        w.println();
+
+        // invoke
+        emitInvoke(w, methods);
+        w.println();
+
+        // newInstance() — M6a
+        emitNewInstance(w, resourceBinaryName, hasNoArgCtor);
+        w.println();
+
+        // resourceClass() — ServiceLoader keying (zero-export Java Modules apps)
+        emitResourceClass(w, resourceBinaryName);
+        w.println();
+
+        // methodKeys() — the method each id of invoke() calls, read by AdapterRegistry
+        emitMethodKeys(w, methods);
+
+        w.println("}");
+    }
+
+    /**
+     * Emits the {@code methodKeys()} override: the key of each method {@code invoke} calls, in id order. The
+     * registry reads the ids from it, so its numbering of the resource's methods never has to match this one.
+     */
+    private void emitMethodKeys(PrintWriter w, List<MethodModel> methods) {
+        w.println(OVERRIDE);
+        w.println("    public String[] methodKeys() {");
+        w.println("        return new String[] {");
+        for (MethodModel m : methods) {
+            w.println(INDENT_16 + "\"" + escapeString(m.methodName + m.jvmParamDescriptor) + "\",");
+        }
+        w.println("        };");
+        w.println(CLOSE_METHOD);
+    }
+
+    /**
+     * Emits the {@code resourceClass()} override returning the resource class literal. Used by
+     * {@code AdapterRegistry}/{@code RouteRegistry} to key {@code ServiceLoader}-registered providers,
+     * so an application that {@code provides} this generated class can keep its package closed.
+     */
+    private void emitResourceClass(PrintWriter w, String resourceBinaryName) {
+        String resourceRef = resourceBinaryName.replace('$', '.');
+        w.println(OVERRIDE);
+        w.println("    public Class<?> resourceClass() { return " + resourceRef + ".class; }");
+    }
+
+    // -------------------------------------------------------------------------
+    // injectFields emission
+    // -------------------------------------------------------------------------
+
+    private void emitInjectFields(PrintWriter w, List<FieldModel> fields) {
+        w.println(OVERRIDE);
+        w.println("    public void injectFields(Object target, InjectionSupport support, boolean injectParams) {");
+
+        if (fields.isEmpty()) {
+            w.println("        // no injectable fields");
+            w.println(CLOSE_METHOD);
+            return;
+        }
+
+        for (FieldModel f : fields) {
+            w.println("        {");
+            if (!f.isContext) {
+                w.println("            if (!injectParams) { /* skip @*Param/@BeanParam when injectParams=false */ }");
+                w.println("            else {");
+                String indent = INDENT_16;
+                emitFieldResolution(w, f, indent);
+                w.println("            }");
+            } else {
+                String indent = "            ";
+                emitFieldResolution(w, f, indent);
+            }
+            w.println(CLOSE_BLOCK);
+        }
+
+        w.println(CLOSE_METHOD);
+    }
+
+    private void emitFieldResolution(PrintWriter w, FieldModel f, String indent) {
+        if (f.isContext) {
+            w.println(indent + "Object _v = support.context(" + f.rawTypeLiteral + ");");
+            w.println(indent + IF_V_NOT_NULL + f.varHandleField + SET_TARGET_V);
+        } else if (f.isBeanParam) {
+            w.println(indent + "Object _v = support.beanParam(" + f.rawTypeLiteral + ");");
+            w.println(indent + IF_V_NOT_NULL + f.varHandleField + SET_TARGET_V);
+        } else if (f.inlineStrategy == InlineStrategy.FALLBACK) {
+            // Reflective fallback: support.param(kind, name, encoded, defaultValue, rawType, elementType)
+            w.println(indent + "Object _v = support.param(");
+            w.println(indent + "        ParamKind." + f.paramKind + ",");
+            w.println(indent + "        \"" + escapeString(f.paramAnnotationValue) + "\",");
+            w.println(indent + INDENT_8 + f.encoded + ",");
+            if (f.defaultValue != null) {
+                w.println(indent + "        \"" + escapeString(f.defaultValue) + "\",");
+            } else {
+                w.println(indent + "        null,");
+            }
+            w.println(indent + INDENT_8 + f.rawTypeLiteral + ",");
+            w.println(indent + INDENT_8 + f.elementTypeLiteral + ");");
+            w.println(indent + IF_V_NOT_NULL + f.varHandleField + SET_TARGET_V);
+        } else {
+            // M6c: inline typed coercion (mirrors RuntimeAdapterGenerator.emitInlineParam).
+            emitInlineParam(w, f, indent);
+        }
+    }
+
+    /**
+     * Emits inline typed {@code @*Param} field coercion. Mirrors the semantics of
+     * {@code RuntimeAdapterGenerator.emitInlineParam}: obtain the raw {@code List<String>} from
+     * {@code support.rawValues}, apply {@code @DefaultValue} when empty, convert (scalar or
+     * collection), wrapping each conversion in {@code try/catch} so a {@code WebApplicationException}
+     * propagates and any other {@code RuntimeException} becomes {@code support.coercionError(...)}.
+     */
+    private void emitInlineParam(PrintWriter w, FieldModel f, String indent) {
+        String kindRef = "ParamKind." + f.paramKind;
+        String nameLit = "\"" + escapeString(f.paramAnnotationValue) + "\"";
+        boolean isCollection = f.inlineStrategy == InlineStrategy.COLLECTION_STRING
+                || f.inlineStrategy == InlineStrategy.COLLECTION_INLINE;
+
+        w.println(indent + "java.util.List<String> _raw = support.rawValues(" + kindRef + ", " + nameLit + ", " + f.encoded + ");");
+        w.println(indent + "Object _v;");
+        if (f.defaultValue != null) {
+            w.println(indent + "if (_raw.isEmpty()) { _raw = java.util.List.of(\"" + escapeString(f.defaultValue) + "\"); }");
+        }
+        w.println(indent + "if (_raw.isEmpty()) {");
+        w.println(indent + "    _v = " + emptyDefaultExpr(f) + ";");
+        w.println(indent + "} else {");
+        if (isCollection) {
+            emitCollectionConvert(w, f, indent + "    ");
+        } else {
+            emitScalarConvertBlock(w, f, indent + "    ");
+        }
+        w.println(indent + "}");
+        w.println(indent + IF_V_NOT_NULL + f.varHandleField + SET_TARGET_V);
+    }
+
+    /** Boxed primitive zero for primitive fields, {@code null} for reference fields (empty, no default). */
+    private String emptyDefaultExpr(FieldModel f) {
+        if (!f.rawIsPrimitive) return "null";
+        return switch (f.rawJavaTypeName) {
+            case "boolean" -> "Boolean.valueOf(false)";
+            case "byte"    -> "Byte.valueOf((byte) 0)";
+            case "short"   -> "Short.valueOf((short) 0)";
+            case "int"     -> "Integer.valueOf(0)";
+            case "long"    -> "Long.valueOf(0L)";
+            case "float"   -> "Float.valueOf(0f)";
+            case "double"  -> "Double.valueOf(0d)";
+            case "char"    -> "Character.valueOf('\\0')";
+            default        -> "null";
+        };
+    }
+
+    /** Scalar conversion: take {@code _raw.get(0)} and convert it, assigning to {@code _v}. */
+    private void emitScalarConvertBlock(PrintWriter w, FieldModel f, String indent) {
+        w.println(indent + "String _s = _raw.get(0);");
+        if (f.elementStrategy == InlineStrategy.STRING) {
+            w.println(indent + "_v = _s;");
+            return;
+        }
+        w.println(indent + "try {");
+        emitConvertStatement(w, f.elementStrategy, f.elementJavaTypeName, "_v", "_s", indent + "    ");
+        w.println(indent + "} catch (jakarta.ws.rs.WebApplicationException _w) {");
+        w.println(indent + "    throw _w;");
+        w.println(indent + "} catch (RuntimeException _e) {");
+        w.println(indent + "    throw support.coercionError(ParamKind." + f.paramKind + ", \""
+                + escapeString(f.paramAnnotationValue) + "\", _e);");
+        w.println(indent + "}");
+    }
+
+    /** Collection conversion: build the appropriate collection, converting each element inline. */
+    private void emitCollectionConvert(PrintWriter w, FieldModel f, String indent) {
+        String impl = switch (f.rawJavaTypeName) {
+            case "java.util.Set"       -> "java.util.LinkedHashSet";
+            case "java.util.SortedSet" -> "java.util.TreeSet";
+            default                    -> "java.util.ArrayList"; // List, Collection
+        };
+        String elem = f.elementJavaTypeName;
+        w.println(indent + impl + "<" + elem + "> _c = new " + impl + "<>();");
+        w.println(indent + "for (int _i = 0; _i < _raw.size(); _i++) {");
+        w.println(indent + "    String _s = _raw.get(_i);");
+        if (f.inlineStrategy == InlineStrategy.COLLECTION_STRING) {
+            w.println(indent + "    _c.add(_s);");
+        } else {
+            w.println(indent + "    " + elem + " _ev;");
+            w.println(indent + "    try {");
+            emitConvertStatement(w, f.elementStrategy, elem, "_ev", "_s", indent + INDENT_8);
+            w.println(indent + "    } catch (jakarta.ws.rs.WebApplicationException _w) {");
+            w.println(indent + "        throw _w;");
+            w.println(indent + "    } catch (RuntimeException _e) {");
+            w.println(indent + "        throw support.coercionError(ParamKind." + f.paramKind + ", \""
+                    + escapeString(f.paramAnnotationValue) + "\", _e);");
+            w.println(indent + CLOSE_METHOD);
+            w.println(indent + "    _c.add(_ev);");
+        }
+        w.println(indent + "}");
+        w.println(indent + "_v = _c;");
+    }
+
+    /**
+     * Emits a single conversion statement assigning the converted value of {@code srcVar} (a String)
+     * to {@code targetVar}. Mirrors {@code RuntimeAdapterGenerator.emitScalarConversion}.
+     * {@code typeName} is the scalar/element Java type name (e.g. {@code com.foo.Color}).
+     */
+    private void emitConvertStatement(PrintWriter w, InlineStrategy strategy, String typeName,
+                                      String targetVar, String srcVar, String indent) {
+        switch (strategy) {
+            case STRING  -> w.println(indent + targetVar + " = " + srcVar + ";");
+            case BOOLEAN -> w.println(indent + targetVar + " = Boolean.parseBoolean(" + srcVar + ");");
+            case BYTE    -> w.println(indent + targetVar + " = Byte.parseByte(" + srcVar + ");");
+            case SHORT   -> w.println(indent + targetVar + " = Short.parseShort(" + srcVar + ");");
+            case INT     -> w.println(indent + targetVar + " = Integer.parseInt(" + srcVar + ");");
+            case LONG    -> w.println(indent + targetVar + " = Long.parseLong(" + srcVar + ");");
+            case FLOAT   -> w.println(indent + targetVar + " = Float.parseFloat(" + srcVar + ");");
+            case DOUBLE  -> w.println(indent + targetVar + " = Double.parseDouble(" + srcVar + ");");
+            case CHAR -> {
+                w.println(indent + "if (" + srcVar + ".isEmpty()) throw new IllegalArgumentException(\"Empty value for char\");");
+                w.println(indent + targetVar + " = " + srcVar + ".charAt(0);");
+            }
+            case ENUM_WITH_FROM_STRING, FROM_STRING ->
+                    w.println(indent + targetVar + " = " + typeName + ".fromString(" + srcVar + ");");
+            case VALUE_OF ->
+                    w.println(indent + targetVar + " = " + typeName + ".valueOf(" + srcVar + ");");
+            case STRING_CTOR ->
+                    w.println(indent + targetVar + " = new " + typeName + "(" + srcVar + ");");
+            case ENUM_PLAIN -> {
+                // Enum.valueOf(Type.class, raw); on IllegalArgumentException → null (matches coerceSingle)
+                w.println(indent + "try {");
+                w.println(indent + "    " + targetVar + " = Enum.valueOf(" + typeName + ".class, " + srcVar + ");");
+                w.println(indent + "} catch (IllegalArgumentException _iae) {");
+                w.println(indent + "    " + targetVar + " = null;");
+                w.println(indent + "}");
+            }
+            default -> throw new IllegalStateException("Unexpected inline strategy: " + strategy);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // invoke emission
+    // -------------------------------------------------------------------------
+
+    private void emitInvoke(PrintWriter w, List<MethodModel> methods) {
+        w.println(OVERRIDE);
+        w.println("    @SuppressWarnings(\"unchecked\")");
+        w.println("    public Object invoke(int methodId, Object target, Object[] args) throws Throwable {");
+
+        if (methods.isEmpty()) {
+            w.println("        throw new UnsupportedOperationException(\"unknown methodId: \" + methodId);");
+            w.println(CLOSE_METHOD);
+            return;
+        }
+
+        w.println("        switch (methodId) {");
+        for (int i = 0; i < methods.size(); i++) {
+            MethodModel m = methods.get(i);
+            w.println("            case " + i + ": {");
+            // cast target
+            String ownerLiteral = m.declaringBinaryName.replace('$', '.');
+            w.println(INDENT_16 + ownerLiteral + " _t = (" + ownerLiteral + ") target;");
+            // load and cast each arg
+            List<String> argExprs = new ArrayList<>();
+            for (int j = 0; j < m.paramTypes.size(); j++) {
+                ParamTypeModel pt = m.paramTypes.get(j);
+                if (pt.isPrimitive) {
+                    // unbox from Object
+                    String wrapper = primitiveWrapper(pt.javaTypeName);
+                    argExprs.add("((" + wrapper + ") args[" + j + "])." + pt.javaTypeName + "Value()");
+                } else {
+                    argExprs.add("(" + pt.javaTypeName + ") args[" + j + "]");
+                }
+            }
+            String argsStr = String.join(", ", argExprs);
+            if ("void".equals(m.returnTypeName)) {
+                w.println("                _t." + m.methodName + "(" + argsStr + ");");
+                w.println("                return null;");
+            } else if (m.returnTypeIsPrimitive) {
+                // box the return
+                String wrapper = primitiveWrapper(m.returnTypeName);
+                w.println("                return " + wrapper + ".valueOf(_t." + m.methodName + "(" + argsStr + "));");
+            } else {
+                w.println("                return _t." + m.methodName + "(" + argsStr + ");");
+            }
+            w.println("            }");
+        }
+        w.println("            default: throw new UnsupportedOperationException(\"unknown methodId: \" + methodId);");
+        w.println(CLOSE_BLOCK);
+        w.println(CLOSE_METHOD);
+    }
+
+    // -------------------------------------------------------------------------
+    // newInstance() emission (M6a)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns {@code true} when the resource type has a no-arg constructor that is accessible
+     * from the adapter's package (public or package-private/protected; NOT private).
+     * Used by the APT processor to decide whether to emit a generated {@code newInstance()}.
+     * An abstract class, and an inner class that needs an enclosing instance, has none: {@code new}
+     * would not compile (CASSINI-033).
+     */
+    private boolean hasAccessibleNoArgCtor(TypeElement resourceType) {
+        Set<Modifier> typeMods = resourceType.getModifiers();
+        if (typeMods.contains(Modifier.ABSTRACT)
+                || (resourceType.getNestingKind() == NestingKind.MEMBER && !typeMods.contains(Modifier.STATIC))) {
+            return false;
+        }
+        for (Element enc : resourceType.getEnclosedElements()) {
+            if (enc.getKind() == ElementKind.CONSTRUCTOR && ((ExecutableElement) enc).getParameters().isEmpty()) {
+                // no-arg constructor found: private → not accessible from same-package adapter
+                return !enc.getModifiers().contains(Modifier.PRIVATE);
+            }
+        }
+        // No explicit no-arg constructor: it is implicitly public when the class is public/package
+        // and there are no other constructors. Check whether the class has any explicit constructors.
+        long ctorCount = resourceType.getEnclosedElements().stream()
+                .filter(e -> e.getKind() == ElementKind.CONSTRUCTOR)
+                .count();
+        if (ctorCount == 0) {
+            // Implicit no-arg constructor exists (and has the same access as the class)
+            // Private nested class → not accessible; otherwise OK
+            return !typeMods.contains(Modifier.PRIVATE);
+        }
+        return false;
+    }
+
+    /**
+     * Emits the {@code newInstance()} override. If {@code hasNoArgCtor} is {@code true},
+     * emits {@code return new ResourceClass();}; otherwise the default interface method
+     * (throws {@link UnsupportedOperationException}) is inherited — no override emitted.
+     */
+    private void emitNewInstance(PrintWriter w, String resourceBinaryName, boolean hasNoArgCtor) {
+        if (!hasNoArgCtor) {
+            // Let the interface default (throws UnsupportedOperationException) be inherited.
+            return;
+        }
+        String resourceRef = resourceBinaryName.replace('$', '.');
+        w.println(OVERRIDE);
+        w.println("    public Object newInstance() {");
+        w.println("        return new " + resourceRef + "();");
+        w.println(CLOSE_METHOD);
+    }
+
+    // -------------------------------------------------------------------------
+    // Field model collection
+    // -------------------------------------------------------------------------
+
+    private List<FieldModel> collectFields(TypeElement resourceType) {
+        List<FieldModel> result = new ArrayList<>();
+        int index = 0;
+        // Walk hierarchy: resourceType first, then superclasses, stopping at Object.
+        TypeElement cls = resourceType;
+        while (cls != null && !isObjectType(cls)) {
+            // Sort declared fields by name for reproducibility (getDeclaredFields order is
+            // JVM-internal; javax.lang.model has the same caveat).
+            for (VariableElement ve : instanceFieldsByName(cls)) {
+                FieldModel fm = describeField(ve, cls, index);
+                if (fm != null) {
+                    result.add(fm);
+                    index++;
+                }
+            }
+            cls = superclassOf(cls);
+        }
+        return result;
+    }
+
+    /** The non-static fields {@code cls} declares, sorted by name. */
+    private static List<VariableElement> instanceFieldsByName(TypeElement cls) {
+        List<VariableElement> declared = new ArrayList<>();
+        for (Element enc : cls.getEnclosedElements()) {
+            if (enc.getKind() == ElementKind.FIELD && !enc.getModifiers().contains(Modifier.STATIC)) {
+                declared.add((VariableElement) enc);
+            }
+        }
+        declared.sort(Comparator.comparing(ve -> ve.getSimpleName().toString()));
+        return declared;
+    }
+
+    /** The superclass element of {@code cls}, or {@code null} when it has none. */
+    private static TypeElement superclassOf(TypeElement cls) {
+        TypeMirror superMirror = cls.getSuperclass();
+        if (superMirror == null || superMirror.getKind() == TypeKind.NONE) return null;
+        return ((DeclaredType) superMirror).asElement() instanceof TypeElement superType ? superType : null;
+    }
+
+    private FieldModel describeField(VariableElement ve, TypeElement declaring, int index) {
+        String javaName = ve.getSimpleName().toString();
+        String vhName = "$$vh_" + index + "_" + javaName.replace('$', '_');
+        String declaringBinary = elements.getBinaryName(declaring).toString();
+        TypeMirror fType = ve.asType();
+        String fieldTypeLiteral = classLiteral(fType);
+        String rawTypeLiteral = fieldTypeLiteral;
+        String elementTypeLiteral = fieldTypeLiteral;
+
+        // Check annotations
+        if (hasAnnotation(ve, "jakarta.ws.rs.core.Context")) {
+            return new FieldModel(vhName, declaringBinary, javaName, fieldTypeLiteral,
+                    true, false, null, null, false, null, rawTypeLiteral, elementTypeLiteral,
+                    InlineStrategy.FALLBACK, InlineStrategy.FALLBACK, null, null, false);
+        }
+        if (hasAnnotation(ve, BEAN_PARAM)) {
+            return new FieldModel(vhName, declaringBinary, javaName, fieldTypeLiteral,
+                    false, true, null, null, false, null, rawTypeLiteral, elementTypeLiteral,
+                    InlineStrategy.FALLBACK, InlineStrategy.FALLBACK, null, null, false);
+        }
+
+        boolean encoded = hasAnnotation(ve, "jakarta.ws.rs.Encoded")
+                || hasAnnotation(declaring, "jakarta.ws.rs.Encoded");
+        String defaultValue = annotationValue(ve, "jakarta.ws.rs.DefaultValue", VALUE);
+
+        // Collection element type
+        if (isListLike(fType)) {
+            elementTypeLiteral = genericElementTypeLiteral(fType);
+        }
+
+        ParamBinding binding = paramBinding(ve);
+        if (binding == null) return null; // not injectable
+        String paramKind = binding.kind();
+        String paramAnnotationValue = binding.value();
+
+        // M6c: resolve the inline coercion strategy for this @*Param field.
+        InlineStrategy inlineStrategy = resolveInlineStrategy(fType);
+        TypeMirror scalarMirror = isListLike(fType) ? collectionElementMirror(fType) : fType;
+        InlineStrategy elementStrategy = (scalarMirror != null)
+                ? resolveScalarStrategy(scalarMirror) : InlineStrategy.FALLBACK;
+        String rawJavaTypeName = javaTypeName(fType);
+        String elementJavaTypeName = (scalarMirror != null) ? javaTypeName(scalarMirror) : JAVA_LANG_STRING;
+        boolean rawIsPrimitive = fType.getKind().isPrimitive();
+
+        return new FieldModel(vhName, declaringBinary, javaName, fieldTypeLiteral,
+                false, false, paramKind, paramAnnotationValue, encoded, defaultValue,
+                rawTypeLiteral, elementTypeLiteral,
+                inlineStrategy, elementStrategy, rawJavaTypeName, elementJavaTypeName, rawIsPrimitive);
+    }
+
+    /** The {@code @*Param} annotations a field can be injected through, in lookup order, with their kind. */
+    private static final String[][] PARAM_ANNOTATIONS = {
+            {"jakarta.ws.rs.PathParam", "PATH"},
+            {"jakarta.ws.rs.QueryParam", "QUERY"},
+            {"jakarta.ws.rs.HeaderParam", "HEADER"},
+            {"jakarta.ws.rs.CookieParam", "COOKIE"},
+            {"jakarta.ws.rs.MatrixParam", "MATRIX"},
+            {"jakarta.ws.rs.FormParam", "FORM"},
+    };
+
+    /** The kind ({@code PATH}, {@code QUERY}, ...) and annotation value of a {@code @*Param} field. */
+    private record ParamBinding(String kind, String value) {}
+
+    /** The binding of the first {@code @*Param} on {@code ve}, or null when the field carries none. */
+    private ParamBinding paramBinding(VariableElement ve) {
+        for (String[] candidate : PARAM_ANNOTATIONS) {
+            String value = annotationValue(ve, candidate[0], VALUE);
+            if (value != null) {
+                return new ParamBinding(candidate[1], value);
+            }
+        }
+        return null;
+    }
+
+    // -------------------------------------------------------------------------
+    // Method model collection — a stable order; methodKeys() carries the ids
+    // -------------------------------------------------------------------------
+
+    private List<MethodModel> collectMethods(TypeElement resourceType) {
+        List<MethodModel> eligible = new ArrayList<>();
+        // getMethods() equivalent: collect all public non-static non-bridge non-synthetic
+        // methods visible on the type (including inherited), excluding Object methods.
+        collectPublicMethods(resourceType, new HashSet<>(), eligible);
+
+        // Stable sort: (declaringClassName, methodName, jvmParamDescriptor). The registry reads the
+        // ids from methodKeys(), so they need not match RuntimeAdapterGenerator.collectMethods.
+        eligible.sort(Comparator
+                .comparing((MethodModel m) -> m.declaringBinaryName)
+                .thenComparing(m -> m.methodName)
+                .thenComparing(m -> m.jvmParamDescriptor));
+
+        return eligible;
+    }
+
+    /**
+     * Recursively collects all public instance methods from {@code type} and its superclass chain,
+     * deduplicating by (name, jvmParamDescriptor) so overridden methods appear once (the override).
+     */
+    private void collectPublicMethods(TypeElement type, Set<String> seen, List<MethodModel> result) {
+        if (type == null || isObjectType(type)) return;
+
+        // Process declared methods first
+        // Bridge and synthetic methods cannot be detected in javax.lang.model, but the model
+        // normally exposes only the non-bridge overrides of covariant return types.
+        for (Element enc : type.getEnclosedElements()) {
+            if (isPublicInstanceMethod(enc)
+                    && seen.add(enc.getSimpleName().toString() + buildJvmParamDescriptor((ExecutableElement) enc))) {
+                result.add(describeMethod((ExecutableElement) enc, type));
+            }
+        }
+
+        // Recurse into the superclass, then the interfaces (for default methods)
+        for (TypeElement parent : supertypes(type)) {
+            collectPublicMethods(parent, seen, result);
+        }
+    }
+
+    private MethodModel describeMethod(ExecutableElement ee, TypeElement declaring) {
+        String methodName = ee.getSimpleName().toString();
+        String declaringBinary = elements.getBinaryName(declaring).toString();
+        String paramDesc = buildJvmParamDescriptor(ee);
+
+        List<ParamTypeModel> paramTypes = new ArrayList<>();
+        for (VariableElement param : ee.getParameters()) {
+            TypeMirror pt = param.asType();
+            String javaTypeName = javaTypeName(pt);
+            boolean isPrimitive = pt.getKind().isPrimitive();
+            paramTypes.add(new ParamTypeModel(javaTypeName, isPrimitive));
+        }
+
+        TypeMirror returnMirror = ee.getReturnType();
+        String returnTypeName = javaTypeName(returnMirror);
+        boolean returnTypeIsPrimitive = returnMirror.getKind().isPrimitive();
+
+        return new MethodModel(declaringBinary, methodName, paramDesc, paramTypes,
+                returnTypeName, returnTypeIsPrimitive);
+    }
+
+    // -------------------------------------------------------------------------
+    // Type utilities
+    // -------------------------------------------------------------------------
+
+    /**
+     * Builds the JVM parameter descriptor string for canonical ordering.
+     * Format: "(Ljava/lang/String;I)" — same logic as RuntimeAdapterGenerator.jvmDescriptor.
+     */
+    private String buildJvmParamDescriptor(ExecutableElement ee) {
+        StringBuilder sb = new StringBuilder("(");
+        for (VariableElement param : ee.getParameters()) {
+            sb.append(toJvmDescriptor(param.asType()));
+        }
+        sb.append(")");
+        return sb.toString();
+    }
+
+    private String toJvmDescriptor(TypeMirror t) {
+        if (isPrimitiveOrVoid(t)) return Class.forPrimitiveName(primitiveName(t)).descriptorString();
+        return switch (t.getKind()) {
+            case ARRAY   -> "[" + toJvmDescriptor(((ArrayType) t).getComponentType());
+            case DECLARED -> {
+                TypeElement te = (TypeElement) ((DeclaredType) t).asElement();
+                String binary = elements.getBinaryName(te).toString().replace('.', '/');
+                yield "L" + binary + ";";
+            }
+            case TYPEVAR -> toJvmDescriptor(types.erasure(t)); // erase to leftmost bound (e.g. Throwable)
+            default -> "Ljava/lang/Object;";
+        };
+    }
+
+    /** Returns the Java source name for a TypeMirror (for use in generated source). */
+    private String javaTypeName(TypeMirror t) {
+        if (isPrimitiveOrVoid(t)) return primitiveName(t);
+        return switch (t.getKind()) {
+            case ARRAY   -> javaTypeName(((ArrayType) t).getComponentType()) + "[]";
+            case DECLARED -> {
+                TypeElement te = (TypeElement) ((DeclaredType) t).asElement();
+                yield elements.getBinaryName(te).toString().replace('$', '.');
+            }
+            // A type variable erases to its leftmost bound (e.g. ExceptionMapper<E extends Throwable>
+            // → Throwable, not Object), so the generated cast matches the concrete override and the
+            // method de-dups against it. Unbounded vars still erase to Object.
+            case TYPEVAR -> javaTypeName(types.erasure(t));
+            default -> "Object";
+        };
+    }
+
+    /** Returns a {@code SomeClass.class} literal for use in generated source. */
+    private String classLiteral(TypeMirror t) {
+        if (isPrimitiveOrVoid(t)) return primitiveName(t) + DOT_CLASS;
+        return switch (t.getKind()) {
+            case ARRAY   -> {
+                // e.g. byte[].class
+                String comp = javaTypeName(((ArrayType) t).getComponentType());
+                yield comp + "[].class";
+            }
+            case DECLARED -> {
+                TypeElement te = (TypeElement) ((DeclaredType) t).asElement();
+                yield elements.getBinaryName(te).toString().replace('$', '.') + DOT_CLASS;
+            }
+            case TYPEVAR -> "Object.class";
+            default -> "Object.class";
+        };
+    }
+
+    /**
+     * Returns the element-type class literal for a collection-typed field.
+     * E.g., for {@code List<String>} returns {@code "String.class"}.
+     * Falls back to {@code "String.class"} when the type argument cannot be resolved.
+     */
+    private String genericElementTypeLiteral(TypeMirror t) {
+        if (t.getKind() == TypeKind.DECLARED) {
+            DeclaredType dt = (DeclaredType) t;
+            if (!dt.getTypeArguments().isEmpty()) {
+                TypeMirror arg = dt.getTypeArguments().get(0);
+                if (arg.getKind() == TypeKind.DECLARED) {
+                    TypeElement te = (TypeElement) ((DeclaredType) arg).asElement();
+                    return elements.getBinaryName(te).toString().replace('$', '.') + DOT_CLASS;
+                }
+            }
+        }
+        return "String.class";
+    }
+
+    private boolean isListLike(TypeMirror t) {
+        if (t.getKind() != TypeKind.DECLARED) return false;
+        TypeElement te = (TypeElement) ((DeclaredType) t).asElement();
+        String name = te.getQualifiedName().toString();
+        return "java.util.List".equals(name)
+                || "java.util.Set".equals(name)
+                || "java.util.SortedSet".equals(name)
+                || "java.util.Collection".equals(name);
+    }
+
+    // -------------------------------------------------------------------------
+    // M6c: inline coercion strategy resolution (javax.lang.model)
+    // Mirrors RuntimeAdapterGenerator.resolveInlineStrategy / resolveScalarStrategy.
+    // -------------------------------------------------------------------------
+
+    /** First type argument of a collection-typed mirror, or {@code null} for a raw collection. */
+    private TypeMirror collectionElementMirror(TypeMirror t) {
+        if (t.getKind() == TypeKind.DECLARED) {
+            DeclaredType dt = (DeclaredType) t;
+            if (!dt.getTypeArguments().isEmpty()) {
+                return dt.getTypeArguments().get(0);
+            }
+        }
+        return null;
+    }
+
+    /** Top-level strategy: FALLBACK, a scalar strategy, or COLLECTION_STRING / COLLECTION_INLINE. */
+    private InlineStrategy resolveInlineStrategy(TypeMirror fType) {
+        if (isListLike(fType)) {
+            TypeMirror elem = collectionElementMirror(fType);
+            if (elem == null) return InlineStrategy.FALLBACK; // raw collection
+            InlineStrategy es = resolveScalarStrategy(elem);
+            if (es == InlineStrategy.FALLBACK) return InlineStrategy.FALLBACK;
+            if (es == InlineStrategy.STRING) return InlineStrategy.COLLECTION_STRING;
+            return InlineStrategy.COLLECTION_INLINE;
+        }
+        return resolveScalarStrategy(fType);
+    }
+
+    /** Scalar (non-collection) strategy for a single value type. */
+    private InlineStrategy resolveScalarStrategy(TypeMirror type) {
+        switch (type.getKind()) {
+            case BOOLEAN: return InlineStrategy.BOOLEAN;
+            case BYTE:    return InlineStrategy.BYTE;
+            case SHORT:   return InlineStrategy.SHORT;
+            case INT:     return InlineStrategy.INT;
+            case LONG:    return InlineStrategy.LONG;
+            case FLOAT:   return InlineStrategy.FLOAT;
+            case DOUBLE:  return InlineStrategy.DOUBLE;
+            case CHAR:    return InlineStrategy.CHAR;
+            default: break;
+        }
+        if (type.getKind() != TypeKind.DECLARED) return InlineStrategy.FALLBACK;
+        TypeElement te = (TypeElement) ((DeclaredType) type).asElement();
+        String qn = te.getQualifiedName().toString();
+
+        // String / CharSequence pass-through
+        if (JAVA_LANG_STRING.equals(qn) || "java.lang.CharSequence".equals(qn)) {
+            return InlineStrategy.STRING;
+        }
+        // Wrappers (parse like primitives)
+        switch (qn) {
+            case "java.lang.Boolean":   return InlineStrategy.BOOLEAN;
+            case "java.lang.Byte":      return InlineStrategy.BYTE;
+            case "java.lang.Short":     return InlineStrategy.SHORT;
+            case "java.lang.Integer":   return InlineStrategy.INT;
+            case "java.lang.Long":      return InlineStrategy.LONG;
+            case "java.lang.Float":     return InlineStrategy.FLOAT;
+            case "java.lang.Double":    return InlineStrategy.DOUBLE;
+            case "java.lang.Character": return InlineStrategy.CHAR;
+            default: break;
+        }
+        // PathSegment: fall back (complex parse — not worth inlining)
+        if ("jakarta.ws.rs.core.PathSegment".equals(qn) || isPathSegment(type)) {
+            return InlineStrategy.FALLBACK;
+        }
+        // Must be publicly referenceable from the generated adapter (and all enclosing types public).
+        if (!isPublicType(te)) return InlineStrategy.FALLBACK;
+
+        // Enum: prefer public static fromString(String), else Enum.valueOf
+        if (te.getKind() == ElementKind.ENUM) {
+            return hasPublicStaticStringMethod(te, "fromString")
+                    ? InlineStrategy.ENUM_WITH_FROM_STRING
+                    : InlineStrategy.ENUM_PLAIN;
+        }
+        if (hasPublicStaticStringMethod(te, "valueOf"))   return InlineStrategy.VALUE_OF;
+        if (hasPublicStaticStringMethod(te, "fromString")) return InlineStrategy.FROM_STRING;
+        if (hasPublicStringConstructor(te))                return InlineStrategy.STRING_CTOR;
+
+        return InlineStrategy.FALLBACK;
+    }
+
+    /** True if {@code type} is (a subtype of) {@code jakarta.ws.rs.core.PathSegment}. */
+    private boolean isPathSegment(TypeMirror type) {
+        TypeElement ps = elements.getTypeElement("jakarta.ws.rs.core.PathSegment");
+        if (ps == null) return false;
+        try {
+            return types.isAssignable(types.erasure(type), types.erasure(ps.asType()));
+        } catch (RuntimeException _) {
+            return false;
+        }
+    }
+
+    /** True when the type and all its enclosing types are {@code public}. */
+    private boolean isPublicType(TypeElement te) {
+        Element e = te;
+        while (e instanceof TypeElement t) {
+            if (!t.getModifiers().contains(Modifier.PUBLIC)) return false;
+            Element enc = t.getEnclosingElement();
+            if (enc instanceof TypeElement) { e = enc; } else { break; }
+        }
+        return true;
+    }
+
+    /** True if {@code te} declares a {@code public static <Type> name(String)} method. */
+    private boolean hasPublicStaticStringMethod(TypeElement te, String name) {
+        for (Element enc : te.getEnclosedElements()) {
+            if (enc.getKind() == ElementKind.METHOD && enc.getSimpleName().contentEquals(name)
+                    && enc.getModifiers().contains(Modifier.STATIC)
+                    && takesOneString((ExecutableElement) enc)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True if {@code te} declares a {@code public <Type>(String)} constructor. */
+    private boolean hasPublicStringConstructor(TypeElement te) {
+        for (Element enc : te.getEnclosedElements()) {
+            if (enc.getKind() == ElementKind.CONSTRUCTOR && takesOneString((ExecutableElement) enc)) return true;
+        }
+        return false;
+    }
+
+    /** True for a public method or constructor whose single parameter is a {@code String}. */
+    private boolean takesOneString(ExecutableElement e) {
+        return e.getModifiers().contains(Modifier.PUBLIC) && e.getParameters().size() == 1
+                && isStringType(e.getParameters().get(0).asType());
+    }
+
+    private boolean isStringType(TypeMirror t) {
+        if (t.getKind() != TypeKind.DECLARED) return false;
+        return JAVA_LANG_STRING.equals(
+                ((TypeElement) ((DeclaredType) t).asElement()).getQualifiedName().toString());
+    }
+
+    private boolean isObjectType(TypeElement te) {
+        return "java.lang.Object".equals(te.getQualifiedName().toString());
+    }
+
+    // -------------------------------------------------------------------------
+    // Annotation utilities
+    // -------------------------------------------------------------------------
+
+    private boolean hasAnnotation(Element e, String fqn) {
+        return e.getAnnotationMirrors().stream()
+                .anyMatch(am -> ((TypeElement) am.getAnnotationType().asElement())
+                        .getQualifiedName().toString().equals(fqn));
+    }
+
+    @SuppressWarnings("unchecked")
+    private String annotationValue(Element e, String annotationFqn, String attributeName) {
+        return e.getAnnotationMirrors().stream()
+                .filter(am -> ((TypeElement) am.getAnnotationType().asElement())
+                        .getQualifiedName().toString().equals(annotationFqn))
+                .findFirst()
+                .flatMap(am -> am.getElementValues().entrySet().stream()
+                        .filter(entry -> entry.getKey().getSimpleName().toString().equals(attributeName))
+                        .findFirst()
+                        .map(entry -> entry.getValue().getValue().toString()))
+                .orElse(null);
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    private static String primitiveWrapper(String primitive) {
+        return switch (primitive) {
+            case "int"     -> "Integer";
+            case "long"    -> "Long";
+            case "double"  -> "Double";
+            case "float"   -> "Float";
+            case "boolean" -> "Boolean";
+            case "short"   -> "Short";
+            case "byte"    -> "Byte";
+            case "char"    -> "Character";
+            default        -> "Object";
+        };
+    }
+
+    private static final char LINE_SEPARATOR = 0x2028;
+    private static final char PARAGRAPH_SEPARATOR = 0x2029;
+
+    /**
+     * Escapes {@code s} for the body of a generated Java string literal: backslash, double quote,
+     * the named control escapes, and any other control character or U+2028 / U+2029 as a
+     * Unicode escape, so that any annotation value yields compilable source (CASSINI-025).
+     */
+    private static String escapeString(String s) {
+        StringBuilder out = new StringBuilder(s.length() + 8);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '\\' -> out.append("\\\\");
+                case '"' -> out.append("\\\"");
+                case '\n' -> out.append("\\n");
+                case '\r' -> out.append("\\r");
+                case '\t' -> out.append("\\t");
+                case '\b' -> out.append("\\b");
+                case '\f' -> out.append("\\f");
+                default -> {
+                    if (c < 0x20 || c == 0x7f || c == LINE_SEPARATOR || c == PARAGRAPH_SEPARATOR) {
+                        out.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        out.append(c);
+                    }
+                }
+            }
+        }
+        return out.toString();
+    }
+
+    // -------------------------------------------------------------------------
+    // Internal models
+    // -------------------------------------------------------------------------
+
+    private record FieldModel(
+            String varHandleField,
+            String declaringBinaryName,
+            String javaFieldName,
+            String fieldTypeLiteral,
+            boolean isContext,
+            boolean isBeanParam,
+            String paramKind,
+            String paramAnnotationValue,
+            boolean encoded,
+            String defaultValue,
+            String rawTypeLiteral,
+            String elementTypeLiteral,
+            // ---- M6c: inline coercion metadata (PARAM fields only) ----
+            InlineStrategy inlineStrategy,   // top-level: FALLBACK / scalar / COLLECTION_*
+            InlineStrategy elementStrategy,  // scalar strategy of the (element) type to convert
+            String rawJavaTypeName,          // e.g. "int", "java.util.List", "com.foo.Color"
+            String elementJavaTypeName,      // scalar/element java type name to reference in source
+            boolean rawIsPrimitive           // true when the field's declared type is a primitive
+    ) {}
+
+    /**
+     * Inline conversion strategy for a {@code @*Param} field — mirrors
+     * {@code RuntimeAdapterGenerator.InlineStrategy} (M6b). {@code FALLBACK} means: emit the
+     * reflective {@code support.param(...)} call; every other value triggers inline typed
+     * conversion via {@code support.rawValues(...)} + {@code support.coercionError(...)}.
+     */
+    enum InlineStrategy {
+        FALLBACK,
+        STRING,           // String / CharSequence pass-through
+        BOOLEAN, BYTE, SHORT, INT, LONG, FLOAT, DOUBLE, CHAR,  // primitives + wrappers
+        ENUM_WITH_FROM_STRING,  // enum with public static fromString(String)
+        ENUM_PLAIN,             // enum without fromString — use Enum.valueOf
+        VALUE_OF,               // public static valueOf(String)
+        FROM_STRING,            // public static fromString(String)
+        STRING_CTOR,            // public (String) constructor
+        COLLECTION_STRING,      // List/Set/SortedSet/Collection of String
+        COLLECTION_INLINE       // List/Set/SortedSet/Collection of an inlinable element type
+    }
+
+    private record MethodModel(
+            String declaringBinaryName,
+            String methodName,
+            String jvmParamDescriptor,
+            List<ParamTypeModel> paramTypes,
+            String returnTypeName,
+            boolean returnTypeIsPrimitive
+    ) {}
+
+    private record ParamTypeModel(
+            String javaTypeName,
+            boolean isPrimitive
+    ) {}
+}

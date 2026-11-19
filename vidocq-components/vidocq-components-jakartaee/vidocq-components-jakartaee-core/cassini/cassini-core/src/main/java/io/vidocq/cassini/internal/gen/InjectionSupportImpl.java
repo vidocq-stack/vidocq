@@ -1,0 +1,183 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.internal.gen;
+
+import io.vidocq.cassini.internal.FieldInjector;
+import io.vidocq.cassini.internal.MatchResult;
+import io.vidocq.cassini.internal.ParamValueConverter;
+import io.vidocq.cassini.spi.gen.InjectionSupport;
+import io.vidocq.cassini.spi.gen.ParamKind;
+import io.vidocq.cassini.spi.http.CassiniHttpExchange;
+import jakarta.ws.rs.WebApplicationException;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Per-request implementation of {@link InjectionSupport}.
+ *
+ * <p>Wraps a {@code (MatchResult, CassiniHttpExchange)} pair and delegates to
+ * the existing cassini-core helpers to keep a single source of truth:</p>
+ * <ul>
+ *   <li>{@code context(...)} delegates to {@link FieldInjector#resolveContext} (package-visible).</li>
+ *   <li>{@code param(...)} uses the same source helpers as {@code FieldInjector} /
+ *       {@code ParamExtractor} (query, cookie, matrix, form caches from exchange attributes).</li>
+ *   <li>{@code beanParam(...)} mirrors {@code ParamExtractor.instantiateBeanParam}.</li>
+ * </ul>
+ */
+public final class InjectionSupportImpl implements InjectionSupport {
+
+    private final MatchResult match;
+    private final CassiniHttpExchange request;
+
+    public InjectionSupportImpl(MatchResult match, CassiniHttpExchange request) {
+        this.match = match;
+        this.request = request;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T> T context(Class<T> type) {
+        return (T) FieldInjector.resolveContext(type, match, request);
+    }
+
+    @Override
+    public Object param(ParamKind kind, String name, boolean encoded,
+                        String defaultValue, Class<?> rawType, Class<?> elementType) {
+        List<String> values = sourceValues(kind, name, encoded);
+        List<String> effective = values;
+        if (values.isEmpty()) {
+            effective = defaultValue != null ? List.of(defaultValue) : List.of();
+        }
+        if (effective.isEmpty()) {
+            return ParamValueConverter.defaultForType(rawType);
+        }
+        try {
+            return ParamValueConverter.coerce(rawType, elementType, effective);
+        } catch (WebApplicationException wae) {
+            // §3.2: @PathParam/@QueryParam/@MatrixParam conversion failure → 404
+            boolean notFound = kind == ParamKind.PATH || kind == ParamKind.QUERY || kind == ParamKind.MATRIX;
+            if (notFound && wae.getResponse() != null && wae.getResponse().getStatus() == 400) {
+                throw new WebApplicationException(wae.getMessage(), wae.getCause(),
+                        jakarta.ws.rs.core.Response.status(404).build());
+            }
+            throw wae;
+        } catch (RuntimeException e) {
+            boolean notFound = kind == ParamKind.PATH || kind == ParamKind.QUERY || kind == ParamKind.MATRIX;
+            throw new WebApplicationException("Invalid value for param "
+                    + name + ": " + e.getMessage(), e,
+                    jakarta.ws.rs.core.Response.status(notFound ? 404 : 400).build());
+        }
+    }
+
+    private List<String> sourceValues(ParamKind kind, String name, boolean encoded) {
+        return switch (kind) {
+            case PATH -> {
+                List<String> raws = match.pathParams().getOrDefault(name, List.of());
+                if (raws.isEmpty()) yield List.of();
+                yield encoded ? raws : raws.stream().map(InjectionSupportImpl::decodePath).toList();
+            }
+            case QUERY -> {
+                Map<String, List<String>> q = FieldInjector.parsedQueryParams(request, encoded);
+                yield q.getOrDefault(name, List.of());
+            }
+            case HEADER -> request.headers(name);
+            case COOKIE -> {
+                String v = FieldInjector.cookie(request, name);
+                yield v == null ? List.of() : List.of(v);
+            }
+            case MATRIX -> FieldInjector.matrix(request, name, encoded);
+            case FORM -> {
+                Map<String, List<String>> form = FieldInjector.readForm(request, encoded);
+                yield form.getOrDefault(name, List.of());
+            }
+        };
+    }
+
+    @Override
+    public Object beanParam(Class<?> type) {
+        // P4: route @BeanParam injection through the bean's own generated adapter so that
+        // private fields in the bean's package are accessible via its VarHandle constants
+        // (avoids cross-package IllegalAccessException when the resource and bean are in
+        // different packages — the root cause of ~10-15 TCK fallback classes).
+        // The bean's adapter is generated/looked-up in the bean's package, so
+        // MethodHandles.privateLookupIn(beanType, ...) succeeds without any 'opens'.
+        var adapter = AdapterRegistry.lookup(type);
+
+        // M6a: prefer generated newInstance() over reflection for no-arg ctor case
+        Object instance;
+        if (adapter.isPresent()) {
+            try {
+                instance = adapter.get().newInstance();
+            } catch (UnsupportedOperationException _) {
+                // no no-arg ctor — fall through to reflective path
+                instance = null;
+            }
+        } else {
+            instance = null;
+        }
+        if (instance == null) {
+            try {
+                instance = type.getDeclaredConstructor().newInstance();
+            } catch (ReflectiveOperationException e) {
+                throw new WebApplicationException("Failed to instantiate @BeanParam "
+                        + type.getName() + ": " + e.getMessage(), 500);
+            }
+        }
+
+        if (adapter.isPresent()) {
+            adapter.get().injectFields(instance, this, true);
+        } else {
+            // Safety net: reflective fallback (closed named-module, or generation failed).
+            FieldInjector.inject(instance, match, request);
+        }
+        return instance;
+    }
+
+    @Override
+    public Object suspendedAsyncResponse() {
+        return request.getAttribute(
+                io.vidocq.cassini.internal.CassiniAsyncResponseImpl.ATTR_KEY);
+    }
+
+    // ---- M6b: inline-conversion facade methods ----
+
+    @Override
+    public List<String> rawValues(ParamKind kind, String name, boolean encoded) {
+        return sourceValues(kind, name, encoded);
+    }
+
+    @Override
+    public WebApplicationException coercionError(ParamKind kind, String name, RuntimeException cause) {
+        boolean notFound = kind == ParamKind.PATH || kind == ParamKind.QUERY || kind == ParamKind.MATRIX;
+        return new WebApplicationException("Invalid value for param "
+                + name + ": " + cause.getMessage(), cause,
+                jakarta.ws.rs.core.Response.status(notFound ? 404 : 400).build());
+    }
+
+    private static String decodePath(String s) {
+        if (s == null || s.indexOf('%') < 0) return s;
+        try {
+            return java.net.URLDecoder.decode(s.replace("+", "%2B"), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception _) {
+            return s;
+        }
+    }
+}

@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.cassini</groupId>
+        <artifactId>cassini-examples</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>cassini-examples-vauban</artifactId>
+    <name>Cassini :: Examples :: Vauban CDI</name>
+    <description>Cassini example with Vauban CDI integration — SeBootstrap + auto-discovery of the Vauban BeanProvider</description>
+
+    <properties>
+        <!-- Example code — never deployed to Maven Central. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
+    <dependencies>
+        <!-- Compile-time API: SeBootstrap + CDI + JSON-B -->
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+            <version>${vauban.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Vauban CDI adapter: provides BeanProvider via ServiceLoader -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-cdi-vauban</artifactId>
+        </dependency>
+
+        <!-- Ravel — MicroProfile Config 3.1: @ConfigProperty, @ConfigProperties CDI -->
+        <dependency>
+            <groupId>io.vidocq.ravel</groupId>
+            <artifactId>ravel-cdi-vauban</artifactId>
+            <version>${ravel.version}</version>
+        </dependency>
+
+        <!-- Chappe transport: used directly (static composite handler + Cassini) -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-chappe</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- JSON-B runtime (compile + test) -->
+        <dependency><groupId>io.vidocq.champollion</groupId><artifactId>champollion-jsonb</artifactId>
+            </dependency>
+        <dependency><groupId>io.vidocq.champollion</groupId><artifactId>champollion-jsonp</artifactId>
+            </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Vauban codegen runs as an ANNOTATION PROCESSOR on this example's own beans
+                 (@ApplicationScoped service + @Path resources). It generates _ClientProxy/_Factory,
+                 an in-module _VaubanComponents per bean package and META-INF/vauban-beans.list, which
+                 the Vauban runtime reads via scanClasspath() — works in a Java Modules named module too
+                 (META-INF/ resources stay accessible). Build-time only, inert under a standard CDI
+                 container (Weld). The Maven plugin is reserved for freezing external dependency jars.
+                 The module-info already `requires io.vidocq.vauban.core` (which reads vauban-api
+                 transitively), so no extra dependency is needed. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${vauban.version}</version>
+                        </path>
+                        <!-- cassini-processor generates <Resource>$$CassiniAdapter + $$CassiniRoutes at
+                             build time, so cassini.core dispatches/injects through the in-package adapter
+                             (no reflective setAccessible) — together with Mode-B instantiation by Vauban,
+                             this removes the need to open the resource package to cassini.core. -->
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-processor</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-api</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                        <path>
+                            <groupId>jakarta.ws.rs</groupId>
+                            <artifactId>jakarta.ws.rs-api</artifactId>
+                            <version>${jakarta.ws.rs.version}</version>
+                        </path>
+                        <!-- Ravel's extension runs in the compiler: it registers the beans behind
+                             ConfigDemoResource's @ConfigProperty points, so Vauban's compile-time
+                             validation stays on. The values are checked when the container starts
+                             (Vidocq/ravel#21). -->
+                        <path>
+                            <groupId>io.vidocq.ravel</groupId>
+                            <artifactId>ravel-cdi-vauban</artifactId>
+                            <version>${ravel.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <!-- Test fixtures are not application beans. Running the APT over them would
+                         emit a provider for nested test classes (bogus package / cannot find symbol). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>@{argLine} --add-reads io.vidocq.cassini.examples.vauban=ALL-UNNAMED</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

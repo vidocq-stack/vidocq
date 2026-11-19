@@ -1,0 +1,263 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.internal.filter;
+
+import io.vidocq.cassini.internal.gen.ProviderDescriptors;
+import io.vidocq.cassini.spi.gen.ProviderDescriptor;
+
+import jakarta.ws.rs.container.ContainerRequestFilter;
+import jakarta.ws.rs.container.ContainerResponseFilter;
+import jakarta.ws.rs.ext.ParamConverterProvider;
+import jakarta.ws.rs.ext.ContextResolver;
+import jakarta.ws.rs.ext.ReaderInterceptor;
+import jakarta.ws.rs.ext.WriterInterceptor;
+
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.locks.ReentrantLock;
+
+/**
+ * Registry of {@link ContainerRequestFilter} / {@link ContainerResponseFilter}
+ * registered manually or via scan. Exposes lists sorted by priority.
+ *
+ * <p>§6.2: request filters execute in ascending priority order;
+ * response filters in descending order.</p>
+ *
+ * <p>The filters and interceptors are registered while the stack is built, and later only by a dynamic feature,
+ * for a resource method a sub-resource locator reached at run time (CASSINI-052). Their lists are copied on write, so
+ * that a request that reads one meanwhile reads it whole.</p>
+ */
+public final class FilterRegistry {
+
+    private final List<FilterEntry<ContainerRequestFilter>> requestFilters = new CopyOnWriteArrayList<>();
+    /** The pre-matching and post-matching request filters, read several times per request: rebuilt
+     *  when a request filter is registered, never on a read. Unmodifiable lists: a request that reads one while a
+     *  dynamic feature registers a filter for another method gets the former list or the new one, both whole. */
+    private List<FilterEntry<ContainerRequestFilter>> preMatchingView = List.of();
+    private List<FilterEntry<ContainerRequestFilter>> postMatchingView = List.of();
+    private final List<FilterEntry<ContainerResponseFilter>> responseFilters = new CopyOnWriteArrayList<>();
+    private final List<FilterEntry<ReaderInterceptor>> readerInterceptors = new CopyOnWriteArrayList<>();
+    private final List<FilterEntry<WriterInterceptor>> writerInterceptors = new CopyOnWriteArrayList<>();
+    private final List<ContextResolver<?>> contextResolvers = new ArrayList<>();
+    private final List<ParamConverterProvider> paramConverterProviders = new ArrayList<>();
+    /** The priority of each converter provider, read on the class it was registered as (CASSINI-066). */
+    private final Map<ParamConverterProvider, Integer> converterPriorities = new IdentityHashMap<>();
+    private final List<jakarta.ws.rs.container.DynamicFeature> dynamicFeatures = new ArrayList<>();
+
+    /** A resource method, as a dynamic feature sees it: its resource class and its Java method. */
+    private record ResourceKey(Class<?> resourceClass, Method method) { }
+
+    /** The resource methods the dynamic features already ran for (§6.5.3: once per resource method). */
+    private final Set<ResourceKey> configured = ConcurrentHashMap.newKeySet();
+    /** Held while the dynamic features run, so that two requests reaching a new method configure it once. */
+    private final ReentrantLock configuring = new ReentrantLock();
+
+    public void addDynamicFeature(jakarta.ws.rs.container.DynamicFeature df) { dynamicFeatures.add(df); }
+    public List<jakarta.ws.rs.container.DynamicFeature> dynamicFeatures() { return dynamicFeatures; }
+
+    /** §6.5.5: registers an instance as a filter/interceptor bound to
+     *  a specific resource method (dynamic binding). */
+    public void registerDynamic(Object instance, java.lang.reflect.Method target) {
+        if (instance instanceof ContainerRequestFilter r) {
+            requestFilters.add(FilterEntry.dynamicFor(r, target));
+            requestFilters.sort(Comparator.comparingInt(FilterEntry::priority));
+            splitRequestFilters();
+        }
+        if (instance instanceof ContainerResponseFilter r) {
+            responseFilters.add(FilterEntry.dynamicFor(r, target));
+            responseFilters.sort(Comparator.comparingInt(FilterEntry<ContainerResponseFilter>::priority).reversed());
+        }
+        if (instance instanceof ReaderInterceptor r) {
+            readerInterceptors.add(FilterEntry.dynamicFor(r, target));
+            readerInterceptors.sort(Comparator.comparingInt(FilterEntry::priority));
+        }
+        if (instance instanceof WriterInterceptor r) {
+            writerInterceptors.add(FilterEntry.dynamicFor(r, target));
+            writerInterceptors.sort(Comparator.comparingInt(FilterEntry::priority));
+        }
+    }
+
+    public void addRequest(ContainerRequestFilter filter) {
+        addRequest(filter, filter.getClass());
+    }
+
+    /** Adds {@code filter}, whose annotations are those of {@code registeredClass} (CASSINI-066). */
+    public void addRequest(ContainerRequestFilter filter, Class<?> registeredClass) {
+        requestFilters.add(FilterEntry.of(filter, registeredClass));
+        requestFilters.sort(Comparator.comparingInt(FilterEntry::priority));
+        splitRequestFilters();
+    }
+
+    private void splitRequestFilters() {
+        preMatchingView = requestFilters.stream().filter(FilterEntry::preMatching).toList();
+        postMatchingView = requestFilters.stream().filter(f -> !f.preMatching()).toList();
+    }
+
+    public void addResponse(ContainerResponseFilter filter) {
+        addResponse(filter, filter.getClass());
+    }
+
+    /** Adds {@code filter}, whose annotations are those of {@code registeredClass} (CASSINI-066). */
+    public void addResponse(ContainerResponseFilter filter, Class<?> registeredClass) {
+        responseFilters.add(FilterEntry.of(filter, registeredClass));
+        responseFilters.sort(Comparator.comparingInt(FilterEntry<ContainerResponseFilter>::priority).reversed());
+    }
+
+    /** Registers a filter by its type, regardless of request/response.
+     *  If the instance implements both, it is added to both lists. */
+    public void register(Object instance) {
+        register(instance, instance.getClass());
+    }
+
+    /**
+     * Registers {@code instance} as {@link #register(Object)} does, its annotations read on
+     * {@code registeredClass}: the provider class a bean provider was asked for, which its client proxy may not
+     * extend (CASSINI-066).
+     */
+    public void register(Object instance, Class<?> registeredClass) {
+        if (instance instanceof ContainerRequestFilter r) addRequest(r, registeredClass);
+        if (instance instanceof ContainerResponseFilter r) addResponse(r, registeredClass);
+        if (instance instanceof ReaderInterceptor r) addInterceptor(readerInterceptors, r, registeredClass);
+        if (instance instanceof WriterInterceptor r) addInterceptor(writerInterceptors, r, registeredClass);
+        if (instance instanceof ContextResolver<?> r) addContextResolver(r);
+        if (instance instanceof ParamConverterProvider p) addParamConverterProvider(p, registeredClass);
+        if (instance instanceof jakarta.ws.rs.container.DynamicFeature df) addDynamicFeature(df);
+    }
+
+    /** §6.5.3: executes all DynamicFeatures for each given resource method.
+     *  Filters/interceptors registered via featureContext.register
+     *  will be bound to this method (dynamic binding). */
+    public void applyDynamicFeatures(Collection<io.vidocq.cassini.internal.ResourceMethod> routes) {
+        if (dynamicFeatures.isEmpty()) return;
+        for (var route : routes) {
+            applyDynamicFeatures(route);
+        }
+    }
+
+    /**
+     * §6.5.3: runs the dynamic features for the resource method of {@code route}, once per resource class and
+     * method: at startup for the routes scanned then, at its first request for a method of a class that a
+     * sub-resource locator returns at run time (§3.4.1, CASSINI-052). A route several locators lead to is configured
+     * once, and the route that stands for a locator returning {@code Object} is no resource method: the features
+     * never see it.
+     */
+    public void applyDynamicFeatures(io.vidocq.cassini.internal.ResourceMethod route) {
+        if (dynamicFeatures.isEmpty() || route.dynamicLocator() || route.javaMethod() == null) return;
+        ResourceKey key = new ResourceKey(route.beanClass(), route.javaMethod());
+        if (configured.contains(key)) return;
+        configuring.lock();
+        try {
+            // Noted once the features ran: a request that finds the method configured finds its filters too.
+            if (!configured.contains(key)) {
+                configure(key);
+                configured.add(key);
+            }
+        } finally {
+            configuring.unlock();
+        }
+    }
+
+    private void configure(ResourceKey key) {
+        Method m = key.method();
+        Class<?> c = key.resourceClass();
+        jakarta.ws.rs.container.ResourceInfo ri = new jakarta.ws.rs.container.ResourceInfo() {
+            @Override public Method getResourceMethod() { return m; }
+            @Override public Class<?> getResourceClass() { return c; }
+        };
+        for (var df : dynamicFeatures) {
+            try { df.configure(ri, new CassiniDynamicFeatureContext(this, m)); }
+            catch (RuntimeException _) { /* a failing feature registers nothing */ }
+        }
+    }
+
+    public void addContextResolver(ContextResolver<?> r) { contextResolvers.add(r); }
+    public List<ContextResolver<?>> contextResolvers() { return contextResolvers; }
+
+    public void addParamConverterProvider(ParamConverterProvider p) {
+        addParamConverterProvider(p, p.getClass());
+    }
+
+    /** Adds {@code p}, whose {@code @Priority} is that of {@code registeredClass} (CASSINI-066). */
+    public void addParamConverterProvider(ParamConverterProvider p, Class<?> registeredClass) {
+        converterPriorities.put(p, priorityOf(registeredClass));
+        paramConverterProviders.add(p);
+        // §4.1.4 : sort by @Priority ascending (high priority = low value).
+        paramConverterProviders.sort(Comparator.comparingInt(converterPriorities::get));
+    }
+    public List<ParamConverterProvider> paramConverterProviders() { return paramConverterProviders; }
+
+    private static int priorityOf(Class<?> registeredClass) {
+        // CASSINI-040: the generated descriptor first, the annotation read by reflection otherwise.
+        ProviderDescriptor d = ProviderDescriptors.of(registeredClass);
+        if (d != null) return d.priority() == null ? jakarta.ws.rs.Priorities.USER : d.priority();
+        jakarta.annotation.Priority p = registeredClass.getAnnotation(jakarta.annotation.Priority.class);
+        return p == null ? jakarta.ws.rs.Priorities.USER : p.value();
+    }
+
+    public void addReaderInterceptor(ReaderInterceptor i) {
+        addInterceptor(readerInterceptors, i, i.getClass());
+    }
+
+    public void addWriterInterceptor(WriterInterceptor i) {
+        addInterceptor(writerInterceptors, i, i.getClass());
+    }
+
+    private static <T> void addInterceptor(List<FilterEntry<T>> interceptors, T interceptor, Class<?> registeredClass) {
+        interceptors.add(FilterEntry.of(interceptor, registeredClass));
+        interceptors.sort(Comparator.comparingInt(FilterEntry::priority));
+    }
+
+    public List<FilterEntry<ReaderInterceptor>> readerInterceptors() { return readerInterceptors; }
+    public List<FilterEntry<WriterInterceptor>> writerInterceptors() { return writerInterceptors; }
+
+    /** §6.5.3 : filtre les reader interceptors par @NameBinding sur la méthode/classe cible. */
+    public List<FilterEntry<ReaderInterceptor>> readerInterceptorsFor(java.lang.reflect.Method m, Class<?> cls) {
+        if (readerInterceptors.isEmpty()) return readerInterceptors;
+        return readerInterceptors.stream().filter(e -> e.appliesTo(m, cls)).toList();
+    }
+
+    /** §6.5.3 : filtre les writer interceptors par @NameBinding sur la méthode/classe cible. */
+    public List<FilterEntry<WriterInterceptor>> writerInterceptorsFor(java.lang.reflect.Method m, Class<?> cls) {
+        if (writerInterceptors.isEmpty()) return writerInterceptors;
+        return writerInterceptors.stream().filter(e -> e.appliesTo(m, cls)).toList();
+    }
+
+    public List<FilterEntry<ContainerRequestFilter>> requestFilters() { return requestFilters; }
+    public List<FilterEntry<ContainerResponseFilter>> responseFilters() { return responseFilters; }
+
+    /** The pre-matching request filters, in priority order (read-only). */
+    public List<FilterEntry<ContainerRequestFilter>> preMatching() {
+        return preMatchingView;
+    }
+
+    /** The post-matching request filters, in priority order (read-only). */
+    public List<FilterEntry<ContainerRequestFilter>> postMatching() {
+        return postMatchingView;
+    }
+
+}

@@ -1,0 +1,183 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.internal.json;
+
+import io.vidocq.cassini.internal.ParamExtractor;
+import jakarta.json.bind.Jsonb;
+import jakarta.json.bind.JsonbBuilder;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.NoContentException;
+import jakarta.ws.rs.ext.ContextResolver;
+import jakarta.ws.rs.ext.MessageBodyReader;
+import jakarta.ws.rs.ext.MessageBodyWriter;
+import jakarta.ws.rs.ext.Providers;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.PushbackInputStream;
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Type;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * §4.2.3 / Core Profile: MBR/MBW for {@code application/json} (and the
+ * compatible suffix {@code application/*+json}) backed by Jakarta JSON
+ * Binding, through whichever implementation {@link JsonbBuilder} finds.
+ *
+ * <p>§9.2: if the application provides a {@link ContextResolver}{@code <Jsonb>}
+ * for the target type, its {@link Jsonb} is used. Otherwise, a default instance
+ * created via {@link JsonbBuilder#create()} is used.</p>
+ */
+@Consumes({"application/json", "application/*+json", "text/json"})
+@Produces({"application/json", "application/*+json", "text/json"})
+public final class CassiniJsonbReaderWriter
+        implements MessageBodyReader<Object>, MessageBodyWriter<Object> {
+
+    /**
+     * Created on first use, not when the class loads: Cassini depends on the JSON-B API only, and
+     * the implementation comes from the application or its runtime (Champollion in Vidocq). A
+     * deployment without one still starts and serves everything but JSON.
+     *
+     * <p>The instance is built under the context class loader of the first JSON request, so it holds the
+     * generated bindings of the application layer then current: the host drops it when that layer stops
+     * ({@link #resetDefaultJsonb()}, called by {@code CassiniMaintenance}), or a hot reload would keep
+     * the discarded layer reachable from this static. A benign race may build two instances on the first
+     * use, one wins.</p>
+     */
+    private static final AtomicReference<Jsonb> DEFAULT_JSONB = new AtomicReference<>();
+
+    private static Jsonb defaultJsonb() {
+        Jsonb jsonb = DEFAULT_JSONB.get();
+        if (jsonb != null) {
+            return jsonb;
+        }
+        DEFAULT_JSONB.compareAndSet(null, JsonbBuilder.create());
+        return DEFAULT_JSONB.get();
+    }
+
+    /** Forgets the default instance: the next JSON request builds one for the layer then current. */
+    public static void resetDefaultJsonb() {
+        DEFAULT_JSONB.set(null);
+    }
+
+    /**
+     * §4.2.3: {@code DataSource} has its own dedicated MBR/MBW when Jakarta Activation is present.
+     * Looked up once: a deployment without it must not pay a {@code ClassNotFoundException} on
+     * every {@link #isWriteable} / {@link #isReadable} call, that is on every JSON request.
+     */
+    private static final Class<?> DATA_SOURCE = dataSourceClass();
+
+    /** {@code jakarta.activation.DataSource}, or {@code null} when Jakarta Activation is absent. */
+    private static Class<?> dataSourceClass() {
+        try {
+            return Class.forName("jakarta.activation.DataSource", false, CassiniJsonbReaderWriter.class.getClassLoader());
+        } catch (ClassNotFoundException | LinkageError _) {
+            return null;
+        }
+    }
+
+    @Override
+    public boolean isReadable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
+        return isJson(mediaType) && !isExcluded(type);
+    }
+
+    @Override
+    public Object readFrom(Class<Object> type, Type genericType, Annotation[] annotations,
+                           MediaType mediaType, MultivaluedMap<String, String> httpHeaders,
+                           InputStream entityStream) throws IOException, WebApplicationException {
+        // MessageBodyReader#readFrom: a type with no zero-length representation
+        // answers an empty stream with a NoContentException, which the server
+        // runtime turns into a 400 (§4.2.4) — instead of letting the JSON parser
+        // fail on empty input. A record or a POJO has no such representation.
+        // Jersey makes the same choice; RESTEasy returns null. cassini#39.
+        PushbackInputStream in = new PushbackInputStream(entityStream, 1);
+        int first = in.read();
+        if (first == -1) {
+            throw new NoContentException("Empty JSON entity");
+        }
+        in.unread(first);
+        Jsonb jsonb = resolveJsonb(type, mediaType);
+        return jsonb.fromJson(in, genericType == null ? type : genericType);
+    }
+
+    @Override
+    public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
+        return isJson(mediaType) && !isExcluded(type);
+    }
+
+    @Override
+    public void writeTo(Object o, Class<?> type, Type genericType, Annotation[] annotations,
+                        MediaType mediaType, MultivaluedMap<String, Object> httpHeaders,
+                        OutputStream entityStream) throws IOException, WebApplicationException {
+        Jsonb jsonb = resolveJsonb(type, mediaType);
+        jsonb.toJson(o, genericType == null ? type : genericType, entityStream);
+    }
+
+    private Jsonb resolveJsonb(Class<?> type, MediaType mt) {
+        // Direct lookup via the ThreadLocal Providers exposed by ParamExtractor —
+        // avoids depending on the @Context injection cycle (which may not
+        // occur on some code paths, notably writeFromContext).
+        Providers providers = ParamExtractor.currentProviders();
+        if (providers != null) {
+            try {
+                ContextResolver<Jsonb> r = providers.getContextResolver(Jsonb.class, mt);
+                if (r != null) {
+                    Jsonb j = r.getContext(type);
+                    if (j != null) return j;
+                }
+            } catch (RuntimeException _) { /* a failing ContextResolver falls back to the default Jsonb */ }
+        }
+        return defaultJsonb();
+    }
+
+    private static boolean isJson(MediaType mt) {
+        if (mt == null) return false;
+        // Reject wildcards (*/* or type/*): §4.2.3 Core Profile, the built-in
+        // JSON-B MBR/MBW must only engage on explicit JSON media types so it
+        // does not shadow user-provided MBWs without @Produces (= wildcard).
+        if (mt.isWildcardType() || mt.isWildcardSubtype()) return false;
+        if (mt.isCompatible(MediaType.APPLICATION_JSON_TYPE)) return true;
+        // +json suffix (RFC 6839): application/foo+json, etc.
+        String sub = mt.getSubtype();
+        return sub != null && sub.toLowerCase().endsWith("+json");
+    }
+
+    /** Avoid capturing types that have a dedicated MBR/MBW — otherwise the
+     *  Cassini scan could prioritize this JSON over built-ins (String, byte[],
+     *  InputStream, etc.) due to @Consumes/@Produces matching.
+     *  §4.2.4: use isAssignableFrom to also cover subtypes
+     *  (e.g. ByteArrayInputStream, FileInputStream...). */
+    private static boolean isExcluded(Class<?> type) {
+        if (type == null) return true;
+        if (type == byte[].class) return true;
+        if (CharSequence.class.isAssignableFrom(type)) return true;
+        if (InputStream.class.isAssignableFrom(type)) return true;
+        if (java.io.Reader.class.isAssignableFrom(type)) return true;
+        if (jakarta.ws.rs.core.StreamingOutput.class.isAssignableFrom(type)) return true;
+        if (java.io.File.class.isAssignableFrom(type)) return true;
+        if (javax.xml.transform.Source.class.isAssignableFrom(type)) return true;
+        return DATA_SOURCE != null && DATA_SOURCE.isAssignableFrom(type);
+    }
+}

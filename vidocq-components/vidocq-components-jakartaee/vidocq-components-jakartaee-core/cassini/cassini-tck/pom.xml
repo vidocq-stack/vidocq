@@ -1,0 +1,429 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    In-reactor TCK runner, gated by the `tck` Maven profile of cassini-parent
+    (TCK harmonisation — same pattern as the vidocq-runtime-tck-* runners and
+    the dirac pilot): a plain `mvn install` neither downloads nor runs anything
+    TCK-related.
+
+    History: this module used to be a STANDALONE out-of-reactor POM to work
+    around ShrinkWrap Maven Resolver 3.3 (could not parse Model 4.1.0 POMs).
+    That constraint disappeared with the Maven 3.9.16 / Model 4.0.0 migration.
+
+    Execution goes through the script (thin wrapper over the reactor):
+        ./run-official-tck-restful-4.0.sh                       (smoke test)
+        ./run-official-tck-restful-4.0.sh all                   (full suite)
+        ./run-official-tck-restful-4.0.sh -Dtest=SomeTests      (targeted class)
+
+    Or directly:
+        ./mvnw -Ptck,tck-official -pl cassini-tck verify        (full suite)
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.cassini</groupId>
+        <artifactId>cassini-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>cassini-tck</artifactId>
+    <packaging>jar</packaging>
+
+    <name>Cassini :: TCK Runner</name>
+    <description>Jakarta RESTful Web Services 4.0 conformance harness — entry point for the official TCK</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>25</maven.compiler.release>
+        <cassini.version>0.4.0-SNAPSHOT</cassini.version>
+        <chappe.version>0.4.0-SNAPSHOT</chappe.version>
+        <!-- EFTL TCK jar (from jakarta-restful-ws-tck-4.0.1.zip) — only source of the signature
+             test resources; downloaded into target/eftl by run-official-tck-restful-4.0.sh. -->
+        <tck.eftl.jar>${project.build.directory}/eftl/restful-ws-tck/artifacts/jakarta-restful-ws-tck-4.0.1.jar</tck.eftl.jar>
+        <!-- TCK harness: never released. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>vidocq-snapshots</id>
+            <url>https://repo.vidocq.dev/snapshots</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <!-- The embedded harness this runner drives. It used to live in this module,
+             but other bricks need it too and this module is never deployed — so it
+             moved to the published cassini-testing. See cassini#36. -->
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-testing</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-core</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.cassini</groupId>
+            <artifactId>cassini-chappe</artifactId>
+            <version>${cassini.version}</version>
+        </dependency>
+        <!-- The JSON-P and JSON-B implementations: cassini-core depends on their APIs only
+             (Vidocq/vidocq-workspace#17), so the runner picks them, as the Vidocq REST
+             extension does. -->
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonb</artifactId>
+            <version>${champollion.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.champollion</groupId>
+            <artifactId>champollion-jsonp</artifactId>
+            <version>${champollion.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-api</artifactId>
+            <version>${chappe.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+            <version>${chappe.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <!-- CDI API: cassini-core declares Invoker.forBeanManager(BeanManager).
+             The TCK harness calls this method, so the JAR is required at compile time. -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+            <version>4.1.0</version>
+        </dependency>
+        <!-- Servlet API: some TCK resources declare @Context HttpServletRequest.
+             Cassini does not support servlet injection, but without the API on the classpath
+             the reflective scan (Class.getDeclaredMethods) crashes with NoClassDefFoundError. -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>6.1.0</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.arquillian.container</groupId>
+            <artifactId>arquillian-container-spi</artifactId>
+            <version>1.8.0.Final</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Jersey CLIENT in test scope (outside the tck-official profile):
+             the test/AutoDiscover and MultipartBoundaryFilter classes depend
+             on the jersey-common API (AutoDiscoverable). At TCK runtime, the
+             tck-official profile re-installs the full versions. -->
+        <dependency>
+            <groupId>org.glassfish.jersey.core</groupId>
+            <artifactId>jersey-common</artifactId>
+            <version>4.0.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <release>25</release>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.5</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <!-- Wire cassini-processor on the annotation-processor path.
+                     This generates compile-time $$CassiniAdapter for @Path and @Provider
+                     classes in this module. AdapterRegistry.lookup uses Class.forName
+                     (APT path) before the runtime Class-File generator — AOT-safe.
+                     Note: annotationProcessorPaths is deprecated in compiler 4.x but
+                     still functional; the type=processor alternative causes a javac ICE
+                     with Java Modules named-module processors on Java 25. -->
+                <configuration>
+                    <release>25</release>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-processor</artifactId>
+                            <version>${cassini.version}</version>
+                        </path>
+                        <path>
+                            <groupId>io.vidocq.cassini</groupId>
+                            <artifactId>cassini-api</artifactId>
+                            <version>${cassini.version}</version>
+                        </path>
+                        <path>
+                            <groupId>jakarta.ws.rs</groupId>
+                            <artifactId>jakarta.ws.rs-api</artifactId>
+                            <version>4.0.0</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>tck-official</id>
+            <build>
+                <plugins>
+                    <!--
+                        P3: cassini-maven-plugin:generate pre-generates $$CassiniAdapter
+                        bytecode for @Path/@Provider classes arriving in the TCK jar
+                        (jakarta-restful-ws-tck) — an external pre-compiled archive that
+                        the APT processor cannot reach. This closes AOT coverage:
+                        AdapterRegistry.lookup tries Class.forName first, so plugin-generated
+                        adapters are picked up without invoking the runtime Class-File generator.
+                    -->
+                    <plugin>
+                        <groupId>io.vidocq.cassini</groupId>
+                        <artifactId>cassini-maven-plugin</artifactId>
+                        <version>${cassini.version}</version>
+                        <executions>
+                            <execution>
+                                <id>generate-tck-adapters</id>
+                                <phase>process-test-classes</phase>
+                                <goals>
+                                    <goal>generate</goal>
+                                </goals>
+                                <configuration>
+                                    <!-- Scan dependency JARs, specifically the TCK archive.
+                                         The TCK jar (jakarta-restful-ws-tck) is a plain classpath
+                                         jar (no module-info) so no repackaging is needed. -->
+                                    <scope>dependencies</scope>
+                                    <includeArtifacts>
+                                        <includeArtifact>jakarta.ws.rs:jakarta-restful-ws-tck</includeArtifact>
+                                    </includeArtifacts>
+                                    <!-- Write adapters to test-classes so they are on the
+                                         surefire test classpath alongside the TCK jar -->
+                                    <outputDirectory>${project.build.testOutputDirectory}</outputDirectory>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <!-- Signature test resources (sig-test.map, sig-test-pkg-list.txt,
+                         jakarta.ws.rs.sig_4.0.0) ship only in the EFTL TCK jar, not in the Maven
+                         Central artifact. When the EFTL jar is present (fetched into target/eftl by
+                         run-official-tck-restful-4.0.sh, or given via -Dtck.eftl.jar=…), copy those
+                         resources onto the test classpath so JAXRSSigTestIT can run. Nothing under
+                         the EFTL licence is checked into the repository. -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>unpack-eftl-signature-resources</id>
+                                <phase>process-test-resources</phase>
+                                <goals><goal>run</goal></goals>
+                                <configuration>
+                                    <target>
+                                        <available file="${tck.eftl.jar}" property="tck.eftl.jar.present"/>
+                                        <echo unless:set="tck.eftl.jar.present" xmlns:unless="ant:unless">EFTL TCK jar not found at ${tck.eftl.jar} — JAXRSSigTestIT will not find its signature resources (run ./run-official-tck-restful-4.0.sh, which downloads it).</echo>
+                                        <unzip if:set="tck.eftl.jar.present" xmlns:if="ant:if" src="${tck.eftl.jar}" dest="${project.build.directory}/test-classes">
+                                            <patternset includes="ee/jakarta/tck/ws/rs/signaturetest/**"/>
+                                        </unzip>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>copy-tck-workdir-pom</id>
+                                <phase>process-test-resources</phase>
+                                <goals><goal>copy-resources</goal></goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/tck-workdir</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>${project.basedir}/src/test/tck-resources</directory>
+                                            <includes><include>pom.xml</include></includes>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <useModulePath>false</useModulePath>
+                            <dependenciesToScan>
+                                <dependency>jakarta.ws.rs:jakarta-restful-ws-tck</dependency>
+                            </dependenciesToScan>
+                            <!-- Jakarta EE Core Profile / SE-Bootstrap profile: standalone
+                                 Jakarta RESTful Web Services 4.0 certification without a Servlet container or JAXB.
+                                 M2h tags (async, sse-streaming) are prepared for future activation.
+                                 - servlet       : requires HttpServletRequest, outside SE scope
+                                 - xml_binding   : requires JAXB runtime, outside Core Profile
+                                 - async         : non-blocking refactor (M2h, outside MVP scope)
+                                 - sse-streaming : chunked SSE streaming (M2i, outside MVP scope) -->
+                            <excludedGroups>servlet,xml_binding</excludedGroups>
+                            <includes>
+                                <include>**/*IT.class</include>
+                                <include>**/*Test.class</include>
+                                <include>**/*Tests.class</include>
+                            </includes>
+                            <workingDirectory>${project.build.directory}/tck-workdir</workingDirectory>
+                            <trimStackTrace>false</trimStackTrace>
+                            <redirectTestOutputToFile>false</redirectTestOutputToFile>
+                            <useFile>false</useFile>
+                            <systemPropertyVariables>
+                                <webServerHost>127.0.0.1</webServerHost>
+                                <webServerPort>8080</webServerPort>
+                                <ts_home>${project.build.directory}/test-classes</ts_home>
+                                <user>j2ee</user>
+                                <password>j2ee</password>
+                                <authuser>javajoe</authuser>
+                                <authpassword>javajoe</authpassword>
+                                <jimage.dir>${project.build.directory}/jimage</jimage.dir>
+                                <sigTestClasspath>${user.home}/.m2/repository/jakarta/ws/rs/jakarta.ws.rs-api/4.0.0/jakarta.ws.rs-api-4.0.0.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</sigTestClasspath>
+                                <!-- JAXRSSigTestIT reads the prefixed name (SigTestData#getSigTestClasspath
+                                     reads the plain one); both are set so the signature test resolves the API
+                                     jar plus the JDK modules it extracts into jimage.dir. -->
+                                <signature.sigTestClasspath>${user.home}/.m2/repository/jakarta/ws/rs/jakarta.ws.rs-api/4.0.0/jakarta.ws.rs-api-4.0.0.jar${path.separator}${project.build.directory}/jimage/java.base${path.separator}${project.build.directory}/jimage/java.xml</signature.sigTestClasspath>
+                                <jakarta.ws.rs.ext.RuntimeDelegate>io.vidocq.cassini.chappe.ChappeRuntimeDelegate</jakarta.ws.rs.ext.RuntimeDelegate>
+                            </systemPropertyVariables>
+                            <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                            <argLine>@{argLine} -Djdk.httpclient.allowRestrictedHeaders=host,connection,content-length,expect,upgrade,origin,date,via,cookie</argLine>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+            <dependencies>
+                <dependency>
+                    <groupId>jakarta.ws.rs</groupId>
+                    <artifactId>jakarta-restful-ws-tck</artifactId>
+                    <version>4.0.1</version>
+                    <scope>test</scope>
+                </dependency>
+                <!-- Jersey CLIENT: the TCK is server-side, but uses a Client
+                     to drive the server under test. Cassini does not have a Client. -->
+                <dependency>
+                    <groupId>org.glassfish.jersey.core</groupId>
+                    <artifactId>jersey-client</artifactId>
+                    <version>4.0.2</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.glassfish.jersey.inject</groupId>
+                    <artifactId>jersey-hk2</artifactId>
+                    <version>4.0.2</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.glassfish.jersey.media</groupId>
+                    <artifactId>jersey-media-jaxb</artifactId>
+                    <version>4.0.2</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.glassfish.jaxb</groupId>
+                    <artifactId>jaxb-runtime</artifactId>
+                    <version>4.0.5</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.glassfish.jersey.media</groupId>
+                    <artifactId>jersey-media-sse</artifactId>
+                    <version>4.0.2</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.glassfish.jersey.media</groupId>
+                    <artifactId>jersey-media-json-binding</artifactId>
+                    <version>4.0.2</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.tck</groupId>
+                    <artifactId>sigtest-maven-plugin</artifactId>
+                    <version>2.5</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.shrinkwrap</groupId>
+                    <artifactId>shrinkwrap-api</artifactId>
+                    <version>1.2.6</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.jboss.shrinkwrap</groupId>
+                    <artifactId>shrinkwrap-impl-base</artifactId>
+                    <version>1.2.6</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-api</artifactId>
+                    <version>2.0.16</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-simple</artifactId>
+                    <version>2.0.16</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>junit</groupId>
+                    <artifactId>junit</artifactId>
+                    <version>4.13.2</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+</project>

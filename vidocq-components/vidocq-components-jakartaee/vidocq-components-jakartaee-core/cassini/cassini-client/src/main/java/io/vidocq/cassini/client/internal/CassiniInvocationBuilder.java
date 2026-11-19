@@ -1,0 +1,476 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.client.internal;
+
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.ClientErrorException;
+import jakarta.ws.rs.ForbiddenException;
+import jakarta.ws.rs.InternalServerErrorException;
+import jakarta.ws.rs.NotAcceptableException;
+import jakarta.ws.rs.NotAuthorizedException;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.NotSupportedException;
+import jakarta.ws.rs.ProcessingException;
+import jakarta.ws.rs.RedirectionException;
+import jakarta.ws.rs.ServerErrorException;
+import jakarta.ws.rs.ServiceUnavailableException;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.client.AsyncInvoker;
+import jakarta.ws.rs.client.ClientRequestFilter;
+import jakarta.ws.rs.client.ClientResponseFilter;
+import jakarta.ws.rs.client.CompletionStageRxInvoker;
+import jakarta.ws.rs.client.Entity;
+import jakarta.ws.rs.client.Invocation;
+import jakarta.ws.rs.client.RxInvoker;
+import jakarta.ws.rs.client.RxInvokerProvider;
+import jakarta.ws.rs.core.CacheControl;
+import jakarta.ws.rs.core.Cookie;
+import jakarta.ws.rs.core.GenericType;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.StreamingOutput;
+import jakarta.ws.rs.ext.RuntimeDelegate;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.Reader;
+import java.io.StringWriter;
+import java.net.URI;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.function.Function;
+
+final class CassiniInvocationBuilder implements Invocation.Builder {
+
+    private final CassiniClient client;
+    private final CassiniClientConfiguration configuration;
+    private final URI uri;
+    private final MultivaluedMap<String, Object> headers = ClientHeaders.map();
+    /** Request properties, handed to the {@code ClientRequestContext} of each invocation (CASSINI-023). */
+    private final Map<String, Object> properties = new HashMap<>();
+
+    CassiniInvocationBuilder(CassiniClient client, CassiniClientConfiguration configuration, URI uri,
+                             String[] acceptedTypes) {
+        this.client = client;
+        this.configuration = configuration;
+        this.uri = uri;
+        if (acceptedTypes != null && acceptedTypes.length > 0) {
+            for (String type : acceptedTypes) headers.add(HttpHeaders.ACCEPT, type);
+        }
+    }
+
+    // ---- SyncInvoker ----------------------------------------------------------------------
+
+    @Override public Response get() { return invoke("GET", null); }
+    @Override public <T> T get(Class<T> responseType) { return readTyped(get(), responseType); }
+    @Override public <T> T get(GenericType<T> responseType) { return readTyped(get(), responseType); }
+
+    @Override public Response put(Entity<?> entity) { return invoke("PUT", entity); }
+    @Override public <T> T put(Entity<?> entity, Class<T> responseType) { return readTyped(put(entity), responseType); }
+    @Override public <T> T put(Entity<?> entity, GenericType<T> responseType) { return readTyped(put(entity), responseType); }
+
+    @Override public Response post(Entity<?> entity) { return invoke("POST", entity); }
+    @Override public <T> T post(Entity<?> entity, Class<T> responseType) { return readTyped(post(entity), responseType); }
+    @Override public <T> T post(Entity<?> entity, GenericType<T> responseType) { return readTyped(post(entity), responseType); }
+
+    @Override public Response delete() { return invoke("DELETE", null); }
+    @Override public <T> T delete(Class<T> responseType) { return readTyped(delete(), responseType); }
+    @Override public <T> T delete(GenericType<T> responseType) { return readTyped(delete(), responseType); }
+
+    @Override public Response head() { return invoke("HEAD", null); }
+
+    @Override public Response options() { return invoke("OPTIONS", null); }
+    @Override public <T> T options(Class<T> responseType) { return readTyped(options(), responseType); }
+    @Override public <T> T options(GenericType<T> responseType) { return readTyped(options(), responseType); }
+
+    @Override public Response trace() { return invoke("TRACE", null); }
+    @Override public <T> T trace(Class<T> responseType) { return readTyped(trace(), responseType); }
+    @Override public <T> T trace(GenericType<T> responseType) { return readTyped(trace(), responseType); }
+
+    @Override public Response method(String name) { return invoke(name, null); }
+    @Override public <T> T method(String name, Class<T> responseType) { return readTyped(method(name), responseType); }
+    @Override public <T> T method(String name, GenericType<T> responseType) { return readTyped(method(name), responseType); }
+    @Override public Response method(String name, Entity<?> entity) { return invoke(name, entity); }
+    @Override public <T> T method(String name, Entity<?> entity, Class<T> responseType) { return readTyped(method(name, entity), responseType); }
+    @Override public <T> T method(String name, Entity<?> entity, GenericType<T> responseType) { return readTyped(method(name, entity), responseType); }
+
+    // ---- Invocation.Builder ---------------------------------------------------------------
+
+    @Override public Invocation build(String method) { return new CassiniInvocation(this, method, null); }
+    @Override public Invocation build(String method, Entity<?> entity) { return new CassiniInvocation(this, method, entity); }
+    @Override public Invocation buildGet() { return build("GET"); }
+    @Override public Invocation buildDelete() { return build("DELETE"); }
+    @Override public Invocation buildPost(Entity<?> entity) { return build("POST", entity); }
+    @Override public Invocation buildPut(Entity<?> entity) { return build("PUT", entity); }
+
+    @Override
+    public AsyncInvoker async() {
+        return new CassiniAsyncInvoker(this);
+    }
+
+    @Override
+    public Invocation.Builder accept(String... mediaTypes) {
+        headers.remove(HttpHeaders.ACCEPT);
+        for (String t : mediaTypes) headers.add(HttpHeaders.ACCEPT, t);
+        return this;
+    }
+
+    @Override
+    public Invocation.Builder accept(MediaType... mediaTypes) {
+        headers.remove(HttpHeaders.ACCEPT);
+        for (MediaType t : mediaTypes) headers.add(HttpHeaders.ACCEPT, t.toString());
+        return this;
+    }
+
+    @Override
+    public Invocation.Builder acceptLanguage(Locale... locales) {
+        headers.remove(HttpHeaders.ACCEPT_LANGUAGE);
+        for (Locale l : locales) headers.add(HttpHeaders.ACCEPT_LANGUAGE, l.toLanguageTag());
+        return this;
+    }
+
+    @Override
+    public Invocation.Builder acceptLanguage(String... locales) {
+        headers.remove(HttpHeaders.ACCEPT_LANGUAGE);
+        for (String l : locales) headers.add(HttpHeaders.ACCEPT_LANGUAGE, l);
+        return this;
+    }
+
+    @Override
+    public Invocation.Builder acceptEncoding(String... encodings) {
+        headers.remove(HttpHeaders.ACCEPT_ENCODING);
+        for (String e : encodings) headers.add(HttpHeaders.ACCEPT_ENCODING, e);
+        return this;
+    }
+
+    @Override
+    public Invocation.Builder cookie(Cookie cookie) {
+        headers.add(HttpHeaders.COOKIE, RuntimeDelegate.getInstance().createHeaderDelegate(Cookie.class).toString(cookie));
+        return this;
+    }
+
+    @Override
+    public Invocation.Builder cookie(String name, String value) {
+        headers.add(HttpHeaders.COOKIE, name + "=" + value);
+        return this;
+    }
+
+    @Override
+    public Invocation.Builder cacheControl(CacheControl cacheControl) {
+        headers.add(HttpHeaders.CACHE_CONTROL,
+                RuntimeDelegate.getInstance().createHeaderDelegate(CacheControl.class).toString(cacheControl));
+        return this;
+    }
+
+    @Override
+    public Invocation.Builder header(String name, Object value) {
+        if (value == null) headers.remove(name);
+        else headers.add(name, value);
+        return this;
+    }
+
+    @Override
+    public Invocation.Builder headers(MultivaluedMap<String, Object> headers) {
+        this.headers.clear();
+        if (headers != null) this.headers.putAll(headers);
+        return this;
+    }
+
+    @Override
+    public Invocation.Builder property(String name, Object value) {
+        if (value == null) properties.remove(name);
+        else properties.put(name, value);
+        return this;
+    }
+
+    @Override
+    public CompletionStageRxInvoker rx() {
+        return new CassiniRxInvoker(this);
+    }
+
+    @Override
+    public <T extends RxInvoker> T rx(Class<T> clazz) {
+        Objects.requireNonNull(clazz, "clazz");
+        CompletionStageRxInvoker builtIn = rx();
+        if (clazz.isInstance(builtIn)) return clazz.cast(builtIn);
+        for (Object component : client.cassiniConfiguration().getInstances()) {
+            if (component instanceof RxInvokerProvider<?> provider && provider.isProviderFor(clazz)) {
+                return clazz.cast(provider.getRxInvoker(this, client.executor()));
+            }
+        }
+        throw new IllegalStateException("No RxInvokerProvider registered for " + clazz.getName());
+    }
+
+    // ---- Internal -------------------------------------------------------------------------
+
+    /**
+     * Reads the entity of a typed invocation: {@code Response.class} gets the response itself,
+     * any other type a {@link WebApplicationException} when the status is not successful
+     * ({@code SyncInvoker} / {@code AsyncInvoker} contracts, CASSINI-021).
+     */
+    @SuppressWarnings("unchecked")
+    static <T> T readTyped(Response response, Class<T> type) {
+        if (type == Response.class) return (T) response;
+        if (response.getStatusInfo().getFamily() != Response.Status.Family.SUCCESSFUL) {
+            throw errorFor(response);
+        }
+        return response.readEntity(type);
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T> T readTyped(Response response, GenericType<T> type) {
+        if (type.getRawType() == Response.class) return (T) response;
+        if (response.getStatusInfo().getFamily() != Response.Status.Family.SUCCESSFUL) {
+            throw errorFor(response);
+        }
+        return response.readEntity(type);
+    }
+
+    /** The most specific {@link WebApplicationException} for a status that is not successful. */
+    static WebApplicationException errorFor(Response response) {
+        return switch (response.getStatus()) {
+            case 400 -> new BadRequestException(response);
+            case 401 -> new NotAuthorizedException(response);
+            case 403 -> new ForbiddenException(response);
+            case 404 -> new NotFoundException(response);
+            case 406 -> new NotAcceptableException(response);
+            case 415 -> new NotSupportedException(response);
+            case 500 -> new InternalServerErrorException(response);
+            case 503 -> new ServiceUnavailableException(response);
+            default -> switch (response.getStatusInfo().getFamily()) {
+                case REDIRECTION -> new RedirectionException(response);
+                case CLIENT_ERROR -> new ClientErrorException(response);
+                case SERVER_ERROR -> new ServerErrorException(response);
+                default -> new WebApplicationException(response);
+            };
+        };
+    }
+
+    /**
+     * JAX-RS §6.3 compliant invocation pipeline:
+     * <ol>
+     *   <li>Build a mutable {@link CassiniClientRequestContext} from the invocation builder</li>
+     *   <li>Execute each {@link ClientRequestFilter} (ASC priority). If {@code abortWith()}
+     *       is called → skip transport and build the response context from the Response</li>
+     *   <li>Otherwise: perform the real HTTP call (URI / method / headers / body read from the ctx,
+     *       possibly mutated by filters)</li>
+     *   <li>Build {@link CassiniClientResponseContext} (headers + status + body buffered)</li>
+     *   <li>Execute each {@link ClientResponseFilter} (DESC priority)</li>
+     *   <li>Return the {@link CassiniClientResponse} built from the final ctx</li>
+     * </ol>
+     */
+    void ensureOpen() { client.ensureOpen(); }
+
+    ExecutorService executor() { return client.executor(); }
+
+    /**
+     * Runs {@link #invoke} on {@code executor}, with the caller's OpenTelemetry context re-attached
+     * (see {@link AsyncContextPropagator}); a closed client refuses before anything is scheduled.
+     * Shared by the asynchronous and the reactive invokers.
+     */
+    <T> CompletableFuture<T> supplyAsync(Executor executor, String method, Entity<?> entity,
+                                         Function<Response, T> reader) {
+        ensureOpen();
+        Object ctx = AsyncContextPropagator.capture();
+        return CompletableFuture.supplyAsync(() -> {
+            try (var _ = AsyncContextPropagator.activate(ctx)) {
+                return reader.apply(invoke(method, entity));
+            }
+        }, executor);
+    }
+
+    Response invoke(String method, Entity<?> entity) {
+        ensureOpen();
+        MediaType entityMediaType = entity == null ? null : entity.getMediaType();
+        Object entityValue = entity == null ? null : entity.getEntity();
+        CassiniClientRequestContext reqCtx = new CassiniClientRequestContext(
+                client, configuration, uri, method, headers, entityValue, entityMediaType);
+        properties.forEach(reqCtx::setProperty);
+
+        List<ClientRequestFilter> requestFilters = configuration.getRequestFilters();
+        for (ClientRequestFilter f : requestFilters) {
+            try { f.filter(reqCtx); }
+            catch (IOException e) { throw new ProcessingException("ClientRequestFilter " + f.getClass().getName() + " failed", e); }
+            if (reqCtx.abortResponse() != null) break;
+        }
+
+        CassiniClientResponseContext respCtx;
+        if (reqCtx.abortResponse() != null) {
+            respCtx = CassiniClientResponseContext.fromAborted(reqCtx.abortResponse());
+        } else {
+            respCtx = sendHttp(reqCtx);
+        }
+
+        List<ClientResponseFilter> responseFilters = configuration.getResponseFilters();
+        for (ClientResponseFilter f : responseFilters) {
+            try { f.filter(reqCtx, respCtx); }
+            catch (IOException e) { throw new ProcessingException("ClientResponseFilter " + f.getClass().getName() + " failed", e); }
+        }
+
+        Response response = respCtx.toResponse();
+        if (response instanceof CassiniClientResponse ccr) {
+            // Hand the client's registered providers to the response so readEntity(Pojo)
+            // can resolve a ContextResolver<Jsonb> exactly like the request path.
+            ccr.setProviders(configuration.getInstances());
+        }
+        return response;
+    }
+
+    private CassiniClientResponseContext sendHttp(CassiniClientRequestContext reqCtx) {
+        try {
+            HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(reqCtx.getUri());
+            long readMs = configuration.getReadTimeoutMs();
+            if (readMs > 0) requestBuilder.timeout(Duration.ofMillis(readMs));
+
+            applyHeaders(requestBuilder, reqCtx.getHeaders());
+            applyBody(requestBuilder, reqCtx);
+
+            HttpResponse<byte[]> httpResponse = client.httpClient().send(
+                    requestBuilder.build(),
+                    HttpResponse.BodyHandlers.ofByteArray());
+            return CassiniClientResponseContext.from(httpResponse);
+        } catch (IOException e) {
+            throw new ProcessingException("HTTP I/O failed for " + reqCtx.getMethod() + " " + reqCtx.getUri(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ProcessingException("Interrupted during " + reqCtx.getMethod() + " " + reqCtx.getUri(), e);
+        }
+    }
+
+    private void applyHeaders(HttpRequest.Builder builder, MultivaluedMap<String, Object> hdrs) {
+        for (var entry : hdrs.entrySet()) {
+            String name = entry.getKey();
+            if (isRestricted(name)) continue;
+            // RFC 7230 §3.2.2: multiple values of the same header are equivalent to a
+            // single comma-separated value. Emit one combined header — some servers
+            // only read the first line (e.g. an Accept: application/json, text/plain
+            // negotiation would otherwise lose text/plain).
+            // Cookie pairs are the exception: RFC 6265 §5.4 joins them with "; " (CASSINI-024).
+            String separator = HttpHeaders.COOKIE.equalsIgnoreCase(name) ? "; " : ", ";
+            StringBuilder joined = new StringBuilder();
+            for (Object v : entry.getValue()) {
+                if (v == null) continue;
+                if (!joined.isEmpty()) joined.append(separator);
+                joined.append(v);
+            }
+            if (!joined.isEmpty()) builder.header(name, joined.toString());
+        }
+    }
+
+    private void applyBody(HttpRequest.Builder builder, CassiniClientRequestContext reqCtx) throws IOException {
+        String method = reqCtx.getMethod();
+        Object entityValue = reqCtx.getOriginalEntity();
+        MediaType mediaType = reqCtx.getEntityMediaType();
+        if (entityValue == null) {
+            builder.method(method, HttpRequest.BodyPublishers.noBody());
+            return;
+        }
+        // A filter that wrapped the entity stream sees every byte of the entity, a streamed one included.
+        boolean throughFilterStream = reqCtx.entityStreamReplaced();
+        if (!throughFilterStream) {
+            HttpRequest.BodyPublisher streamed = streamingPublisher(entityValue);
+            if (streamed != null) {
+                sendStream(builder, method, mediaType, streamed);
+                return;
+            }
+        }
+        byte[] payload = entityBytes(entityValue, mediaType);
+        if (throughFilterStream) {
+            try (var out = reqCtx.getEntityStream()) {
+                out.write(payload);
+            }
+            payload = reqCtx.bufferedEntity();
+        }
+        if (mediaType != null) {
+            builder.header(HttpHeaders.CONTENT_TYPE, mediaType.toString());
+        }
+        builder.method(method, HttpRequest.BodyPublishers.ofByteArray(payload));
+    }
+
+    /**
+     * Jakarta REST 4.0 §4.2.4: the standard entity providers write an {@code InputStream} as its
+     * content whatever the media type (CASSINI-024). It is handed to the {@code HttpClient} as is,
+     * so a large upload is not buffered; {@code null} for any other entity (a {@code File} is read in full).
+     */
+    private static HttpRequest.BodyPublisher streamingPublisher(Object entityValue) {
+        if (entityValue instanceof InputStream in) return HttpRequest.BodyPublishers.ofInputStream(() -> in);
+        return null;
+    }
+
+    /** The bytes of an entity, whatever its type (a stream or a file is read in full). */
+    private byte[] entityBytes(Object entityValue, MediaType mediaType) throws IOException {
+        if (entityValue instanceof byte[] b) return b;
+        if (entityValue instanceof String s) return s.getBytes(StandardCharsets.UTF_8);
+        if (entityValue instanceof InputStream in) {
+            try (in) {
+                return in.readAllBytes();
+            }
+        }
+        if (entityValue instanceof Reader reader) {
+            try (reader) {
+                var text = new StringWriter();
+                reader.transferTo(text);
+                return text.toString().getBytes(StandardCharsets.UTF_8);
+            }
+        }
+        if (entityValue instanceof File file) return java.nio.file.Files.readAllBytes(file.toPath());
+        if (entityValue instanceof StreamingOutput streaming) {
+            var buffer = new ByteArrayOutputStream();
+            streaming.write(buffer);
+            return buffer.toByteArray();
+        }
+        if (ClientEntityJsonb.isJson(mediaType) && !ClientEntityJsonb.isSimple(entityValue.getClass())) {
+            // §4.2.3: serialise a POJO request entity through JSON-B, honouring a
+            // registered ContextResolver<Jsonb> — mirrors the server-side MBW.
+            var jsonb = ClientEntityJsonb.resolve(
+                    client.cassiniConfiguration().getInstances(), entityValue.getClass(), mediaType);
+            return jsonb.toJson(entityValue, entityValue.getClass()).getBytes(StandardCharsets.UTF_8);
+        }
+        return entityValue.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static void sendStream(HttpRequest.Builder builder, String method, MediaType mediaType,
+                                   HttpRequest.BodyPublisher publisher) {
+        if (mediaType != null) {
+            builder.header(HttpHeaders.CONTENT_TYPE, mediaType.toString());
+        }
+        builder.method(method, publisher);
+    }
+
+    private static boolean isRestricted(String name) {
+        String n = name.toLowerCase(Locale.ROOT);
+        return n.equals("connection") || n.equals("content-length") || n.equals("expect")
+                || n.equals("host") || n.equals("upgrade");
+    }
+}

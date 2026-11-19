@@ -1,0 +1,217 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.internal.context;
+
+import io.vidocq.cassini.internal.HeaderMaps;
+import io.vidocq.cassini.internal.MediaTypes;
+import io.vidocq.cassini.spi.http.CassiniHttpExchange;
+import jakarta.ws.rs.core.Cookie;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.MultivaluedMap;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+/**
+ * Implémentation {@link HttpHeaders} adossée à un {@link CassiniHttpExchange}.
+ */
+public final class CassiniHttpHeaders implements HttpHeaders {
+
+    /** What {@link #getAcceptableLanguages()} answers without an {@code Accept-Language}: a single
+     *  wildcard locale, per the {@code HttpHeaders} Javadoc (CASSINI-015). */
+    private static final List<Locale> ANY_LANGUAGE = List.of(Locale.of("*"));
+
+    private final CassiniHttpExchange exchange;
+
+    public CassiniHttpHeaders(CassiniHttpExchange exchange) {
+        this.exchange = exchange;
+    }
+
+    @Override public List<String> getRequestHeader(String name) { return exchange.headers(name); }
+
+    @Override public String getHeaderString(String name) {
+        List<String> all = exchange.headers(name);
+        return all.isEmpty() ? null : String.join(",", all);
+    }
+
+    @Override public boolean containsHeaderString(String n, String valueSep, java.util.function.Predicate<String> match) {
+        for (String v : exchange.headers(n)) {
+            for (String tok : v.split(valueSep)) if (match.test(tok.trim())) return true;
+        }
+        return false;
+    }
+
+    @Override public boolean containsHeaderString(String n, java.util.function.Predicate<String> match) {
+        return containsHeaderString(n, ",", match);
+    }
+
+    @Override public MultivaluedMap<String, String> getRequestHeaders() {
+        return HeaderMaps.copyOf(exchange.requestHeaders());
+    }
+
+    @Override public List<MediaType> getAcceptableMediaTypes() {
+        // §6.7.4.7: the returned list is sorted by descending q-value.
+        List<MediaType> list = MediaTypes.parseList(exchange.firstHeader("Accept"));
+        java.util.List<MediaType> mut = new java.util.ArrayList<>(list);
+        mut.sort((a, b) -> Double.compare(qValue(b), qValue(a)));
+        return mut;
+    }
+
+    @Override public List<Locale> getAcceptableLanguages() {
+        // §6.7.4.7: sort by descending q-value.
+        String raw = exchange.firstHeader("Accept-Language");
+        if (raw == null || raw.isBlank()) return ANY_LANGUAGE;
+        java.util.List<java.util.Map.Entry<Locale, Double>> entries = new java.util.ArrayList<>();
+        for (String tok : raw.split(",")) {
+            int semi = tok.indexOf(';');
+            String tag = (semi < 0 ? tok : tok.substring(0, semi)).trim();
+            if (tag.isEmpty()) continue;
+            double q = semi < 0 ? 1.0 : languageQ(tok.substring(semi + 1));
+            entries.add(java.util.Map.entry(Locale.forLanguageTag(tag), q));
+        }
+        entries.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
+        java.util.List<Locale> out = new java.util.ArrayList<>(entries.size());
+        for (var e : entries) out.add(e.getKey());
+        return out;
+    }
+
+    /** The {@code q} parameter among the {@code ;}-separated parameters of a language range, 1.0 if absent or malformed. */
+    private static double languageQ(String params) {
+        double q = 1.0;
+        for (String p : params.split(";")) {
+            String pt = p.trim();
+            if (pt.startsWith("q=")) {
+                try { q = Double.parseDouble(pt.substring(2)); } catch (NumberFormatException _) {
+                    // a malformed q keeps the previous value
+                }
+            }
+        }
+        return q;
+    }
+
+    private static double qValue(MediaType mt) {
+        String q = mt.getParameters().get("q");
+        if (q == null) return 1.0;
+        try { return Double.parseDouble(q); } catch (NumberFormatException _) { return 1.0; }
+    }
+
+    @Override public MediaType getMediaType() {
+        // §3.6.4 / §6.7.4: null if no Content-Type
+        // (do NOT fall back to WILDCARD as MediaTypes.parse does).
+        String raw = exchange.firstHeader("Content-Type");
+        if (raw == null || raw.isBlank()) return null;
+        return MediaTypes.parse(raw);
+    }
+
+    @Override public Locale getLanguage() {
+        String raw = exchange.firstHeader("Content-Language");
+        if (raw == null) return null;
+        // §4.3: we also accept the Java convention "en_US" in addition to
+        // RFC 5646 "en-US" — Locale.forLanguageTag expects dashes,
+        // otherwise it returns Locale.ROOT.
+        return Locale.forLanguageTag(raw.replace('_', '-'));
+    }
+
+    @Override public Map<String, Cookie> getCookies() {
+        // §4.3.2 / RFC 2109: a Cookie header may combine multiple cookies
+        // separated by ';' with $Version/$Path/$Domain attributes that apply
+        // to the following ($Version) or preceding ($Path/$Domain) cookie.
+        Map<String, Cookie> out = new HashMap<>();
+        for (String header : exchange.headers("Cookie")) parseCookieHeader(header, out);
+        return out;
+    }
+
+    /** Parses one {@code Cookie} header into {@code out}, applying the RFC 2109 attributes. */
+    private static void parseCookieHeader(String header, Map<String, Cookie> out) {
+        int currentVersion = 0;
+        String pendingName = null;
+        String pendingValue = null;
+        String pendingPath = null;
+        String pendingDomain = null;
+        for (String pair : header.split(";")) {
+            int eq = pair.indexOf('=');
+            if (eq < 0) continue;
+            String n = pair.substring(0, eq).trim();
+            String v = unquote(pair.substring(eq + 1).trim());
+            if ("$Version".equalsIgnoreCase(n)) {
+                currentVersion = parseVersion(v, currentVersion);
+            } else if ("$Path".equalsIgnoreCase(n)) {
+                pendingPath = v;
+            } else if ("$Domain".equalsIgnoreCase(n)) {
+                pendingDomain = v;
+            } else {
+                if (pendingName != null) {
+                    flushCookie(out, pendingName, pendingValue, currentVersion, pendingPath, pendingDomain);
+                    pendingPath = null;
+                    pendingDomain = null;
+                }
+                pendingName = n;
+                pendingValue = v;
+            }
+        }
+        if (pendingName != null) {
+            flushCookie(out, pendingName, pendingValue, currentVersion, pendingPath, pendingDomain);
+        }
+    }
+
+    private static String unquote(String v) {
+        if (v.length() >= 2 && v.charAt(0) == '"' && v.charAt(v.length() - 1) == '"') {
+            return v.substring(1, v.length() - 1);
+        }
+        return v;
+    }
+
+    /** {@code $Version} as a number; a malformed value keeps {@code current}. */
+    private static int parseVersion(String v, int current) {
+        try {
+            return Integer.parseInt(v);
+        } catch (NumberFormatException _) {
+            return current;
+        }
+    }
+
+    private static void flushCookie(Map<String, Cookie> out, String name, String value,
+                                    int version, String path, String domain) {
+        Cookie.Builder b = new Cookie.Builder(name).value(value).version(version);
+        if (path != null) b.path(path);
+        if (domain != null) b.domain(domain);
+        out.put(name, b.build());
+    }
+
+    @Override public Date getDate() {
+        String raw = exchange.firstHeader("Date");
+        if (raw == null) return null;
+        try {
+            SimpleDateFormat fmt = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", Locale.US);
+            return fmt.parse(raw);
+        } catch (Exception _) { return null; }
+    }
+
+    @Override public int getLength() {
+        String raw = exchange.firstHeader("Content-Length");
+        if (raw == null) return -1;
+        try { return Integer.parseInt(raw); } catch (NumberFormatException _) { return -1; }
+    }
+}

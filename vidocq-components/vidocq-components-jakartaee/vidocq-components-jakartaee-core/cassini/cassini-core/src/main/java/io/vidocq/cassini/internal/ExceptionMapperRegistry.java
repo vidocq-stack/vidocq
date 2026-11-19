@@ -1,0 +1,152 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.internal;
+
+import io.vidocq.cassini.internal.gen.ProviderDescriptors;
+import io.vidocq.cassini.spi.gen.ProviderDescriptor;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.ext.ExceptionMapper;
+
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Registry of {@link ExceptionMapper}s annotated with {@code @Provider}.
+ *
+ * <p>Mapper selection (§4.4): prefer the mapper whose parameterized exception type
+ * is the most specific (closest to the concrete class) among those that match.</p>
+ */
+public final class ExceptionMapperRegistry {
+
+    private final List<Registration<?>> mappers = new ArrayList<>();
+
+    /** A mapper, the exception type it maps, and the class whose {@code @Priority} it has (CASSINI-066). */
+    public record Registration<T extends Throwable>(Class<T> exceptionType, ExceptionMapper<T> mapper,
+                                                    Class<?> registeredClass) {
+        public Registration(Class<T> exceptionType, ExceptionMapper<T> mapper) {
+            this(exceptionType, mapper, mapper.getClass());
+        }
+    }
+
+    public <T extends Throwable> void register(Class<T> exceptionType, ExceptionMapper<T> mapper) {
+        mappers.add(new Registration<>(exceptionType, mapper));
+    }
+
+    /** Registers a {@code @Provider} instance implementing {@link ExceptionMapper} if applicable.
+     *  Resolves the exception type via generic interfaces. */
+    public void register(Object instance) {
+        register(instance, instance.getClass());
+    }
+
+    /**
+     * Registers {@code instance} as {@link #register(Object)} does, its exception type and priority read on
+     * {@code registeredClass}: the provider class a bean provider was asked for, which its client proxy may not
+     * extend, nor declare the type argument of (CASSINI-066).
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void register(Object instance, Class<?> registeredClass) {
+        if (!(instance instanceof ExceptionMapper)) return;
+        Class<? extends Throwable> excType = exceptionType(registeredClass);
+        if (excType == null) return;
+        mappers.add(new Registration(excType, (ExceptionMapper) instance, registeredClass));
+    }
+
+    /** §4.4: if an ExceptionMapper itself throws an exception during
+     *  its own execution, that exception must not be mapped again —
+     *  it must propagate as a 500. Lexically-scoped reentrancy flag
+     *  (M2h: ScopedValue rebinding — works on any thread, nothing to reset). */
+    private static final ScopedValue<Boolean> MAPPING = ScopedValue.newInstance();
+
+    public Optional<Response> map(Throwable t) {
+        if (MAPPING.isBound()) return Optional.empty(); // only ever bound to true, while a mapper runs
+        Registration<?> best = null;
+        for (Registration<?> r : mappers) {
+            if (r.exceptionType().isInstance(t)) {
+                if (best == null) {
+                    best = r;
+                } else if (best.exceptionType() == r.exceptionType()) {
+                    // §4.4 / §4.1.4: same exception type → lower priority wins.
+                    if (priorityOf(r.registeredClass()) < priorityOf(best.registeredClass())) best = r;
+                } else if (best.exceptionType().isAssignableFrom(r.exceptionType())) {
+                    best = r;
+                }
+            }
+        }
+        if (best == null) return Optional.empty();
+        final Registration<?> chosen = best;
+        return ScopedValue.where(MAPPING, true).call(() -> {
+            @SuppressWarnings({"rawtypes", "unchecked"})
+            Response r = ((ExceptionMapper) chosen.mapper()).toResponse(t);
+            return Optional.ofNullable(r);
+        });
+    }
+
+    /** §10.2: returns the most specific mapper for {@code type} without executing it. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public <T extends Throwable> ExceptionMapper<T> findMapper(Class<T> type) {
+        Registration<?> best = null;
+        for (Registration<?> r : mappers) {
+            if (r.exceptionType().isAssignableFrom(type)
+                    && (best == null || best.exceptionType().isAssignableFrom(r.exceptionType()))) {
+                best = r;
+            }
+        }
+        return best == null ? null : (ExceptionMapper<T>) best.mapper();
+    }
+
+    public int size() { return mappers.size(); }
+
+    private static int priorityOf(Class<?> registeredClass) {
+        // CASSINI-040: the generated descriptor first, the annotation read by reflection otherwise.
+        ProviderDescriptor d = ProviderDescriptors.of(registeredClass);
+        if (d != null) return d.priority() == null ? jakarta.ws.rs.Priorities.USER : d.priority();
+        jakarta.annotation.Priority p = registeredClass.getAnnotation(jakarta.annotation.Priority.class);
+        return p == null ? jakarta.ws.rs.Priorities.USER : p.value();
+    }
+
+    /** The exception type of the generated descriptor when it knows it, else read by reflection. */
+    @SuppressWarnings("unchecked")
+    private static Class<? extends Throwable> exceptionType(Class<?> mapperClass) {
+        ProviderDescriptor d = ProviderDescriptors.of(mapperClass);
+        Class<?> described = d == null ? null : d.typeArguments().get(ExceptionMapper.class);
+        if (described != null && Throwable.class.isAssignableFrom(described)) {
+            return (Class<? extends Throwable>) described;
+        }
+        return resolveExceptionType(mapperClass);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Class<? extends Throwable> resolveExceptionType(Class<?> mapperClass) {
+        for (Type iface : mapperClass.getGenericInterfaces()) {
+            if (iface instanceof ParameterizedType pt
+                    && pt.getRawType() == ExceptionMapper.class
+                    && pt.getActualTypeArguments().length == 1
+                    && pt.getActualTypeArguments()[0] instanceof Class<?> c
+                    && Throwable.class.isAssignableFrom(c)) {
+                return (Class<? extends Throwable>) c;
+            }
+        }
+        Class<?> sup = mapperClass.getSuperclass();
+        return sup == null || sup == Object.class ? null : resolveExceptionType(sup);
+    }
+}

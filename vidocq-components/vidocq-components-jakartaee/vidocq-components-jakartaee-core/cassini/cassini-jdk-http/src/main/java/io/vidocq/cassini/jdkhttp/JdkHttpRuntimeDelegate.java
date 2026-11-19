@@ -1,0 +1,118 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.jdkhttp;
+
+import com.sun.net.httpserver.HttpServer;
+import io.vidocq.cassini.internal.runtime.CassiniRuntimeDelegate;
+import io.vidocq.cassini.spi.http.CassiniStack;
+import jakarta.ws.rs.SeBootstrap;
+import jakarta.ws.rs.core.Application;
+
+import java.net.InetSocketAddress;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+
+/**
+ * {@link jakarta.ws.rs.ext.RuntimeDelegate} for the JDK HttpServer transport.
+ *
+ * <p>Extends {@link CassiniRuntimeDelegate} (UriBuilder /
+ * ResponseBuilder / HeaderDelegate boilerplate) and implements {@code bootstrap()}
+ * to start a JDK {@link HttpServer}.</p>
+ *
+ * <p>Selected via ServiceLoader: {@code provides RuntimeDelegate with ...}
+ * in {@code module-info.java}. <b>Possible conflict</b> if {@code cassini-chappe}
+ * is also on the classpath — use
+ * {@code -Djakarta.ws.rs.ext.RuntimeDelegate=io.vidocq.cassini.jdkhttp.JdkHttpRuntimeDelegate}
+ * to force the choice.</p>
+ */
+public final class JdkHttpRuntimeDelegate extends CassiniRuntimeDelegate {
+
+    @Override
+    public CompletionStage<SeBootstrap.Instance> bootstrap(Application application,
+                                                           SeBootstrap.Configuration config) {
+        return CompletableFuture.supplyAsync(() -> new JdkSeBootstrapInstance(application, config));
+    }
+
+    @Override
+    public CompletionStage<SeBootstrap.Instance> bootstrap(Class<? extends Application> clazz,
+                                                            SeBootstrap.Configuration config) {
+        try {
+            return bootstrap(clazz.getDeclaredConstructor().newInstance(), config);
+        } catch (ReflectiveOperationException e) {
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+
+    private static final class JdkSeBootstrapInstance implements SeBootstrap.Instance {
+        private static final String LOOPBACK = "127.0.0.1";
+
+        private final SeBootstrap.Configuration config;
+        private final HttpServer server;
+
+        JdkSeBootstrapInstance(Application application, SeBootstrap.Configuration requested) {
+            Object p = requested.property(SeBootstrap.Configuration.PORT);
+            int port = p instanceof Number n ? n.intValue() : SeBootstrap.Configuration.DEFAULT_PORT;
+            try {
+                var stack = CassiniStack.builder().application(application).build();
+                var adapter = new JdkHttpAdapter(stack.adapter());
+                // No port, or FREE_PORT: the server binds a free port itself, on the loopback address of the
+                // "localhost" the configuration reports (CASSINI-049). A port picked beforehand could be taken
+                // before the bind. And on macOS a bind of every address, even on port 0, can land beside a
+                // listener on 127.0.0.1, which then keeps the clients of 127.0.0.1.
+                this.server = port > 0 ? adapter.serve(port)
+                        : adapter.serve(new InetSocketAddress(LOOPBACK, SeBootstrap.Configuration.FREE_PORT));
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+            int actualPort = server.getAddress().getPort();
+            java.util.Map<String, Object> effective = new java.util.HashMap<>();
+            for (String k : new String[]{SeBootstrap.Configuration.PROTOCOL,
+                    SeBootstrap.Configuration.HOST, SeBootstrap.Configuration.PORT,
+                    SeBootstrap.Configuration.ROOT_PATH}) {
+                Object v = requested.property(k);
+                if (v != null) effective.put(k, v);
+            }
+            effective.put(SeBootstrap.Configuration.PORT, actualPort);
+            effective.put(SeBootstrap.Configuration.HOST, "localhost");
+            this.config = new SeBootstrap.Configuration() {
+                final java.util.Map<String, Object> props = java.util.Map.copyOf(effective);
+                @Override public Object property(String name) { return props.get(name); }
+            };
+        }
+
+        @Override public SeBootstrap.Configuration configuration() { return config; }
+
+        @Override public CompletionStage<StopResult> stop() {
+            return CompletableFuture.supplyAsync(() -> {
+                server.stop(0);
+                return new StopResult() {
+                    @Override public <T> T unwrap(Class<T> nativeClass) {
+                        throw new IllegalArgumentException();
+                    }
+                };
+            });
+        }
+
+        @Override public <T> T unwrap(Class<T> nativeClass) {
+            if (nativeClass.isInstance(server)) return nativeClass.cast(server);
+            throw new IllegalArgumentException("Cannot unwrap to " + nativeClass);
+        }
+    }
+}

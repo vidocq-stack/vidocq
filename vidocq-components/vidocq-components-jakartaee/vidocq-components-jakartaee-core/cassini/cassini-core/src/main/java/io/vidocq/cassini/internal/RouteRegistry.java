@@ -1,0 +1,309 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.cassini.internal;
+
+import io.vidocq.cassini.spi.gen.RouteDescriptor;
+import io.vidocq.cassini.spi.gen.RouteProvider;
+
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.ServiceLoader;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+/**
+ * Resolves the route table for a set of {@code @Path} resource classes.
+ *
+ * <h2>Lookup sequence per class</h2>
+ * <ol>
+ *   <li>A {@link ServiceLoader}-registered {@link RouteProvider} (module-path {@code provides
+ *       io.vidocq.cassini.spi.gen.RouteProvider with <Class>$$CassiniRoutes} or a classpath
+ *       {@code META-INF/services} entry), keyed by {@link RouteProvider#resourceClass()}. Lets a
+ *       strict Java Modules app keep its resource package <em>closed</em> — the module system instantiates
+ *       the provider, so no {@code Class.forName} into the package.</li>
+ *   <li>Try {@code Class.forName(cls.getName() + "$$CassiniRoutes")} — if present AND
+ *       {@link RouteProvider#hasLocators()} is {@code false}, convert its
+ *       {@link RouteDescriptor}s to {@link ResourceMethod}s and use them.</li>
+ *   <li>Fallback: {@link ResourceScanner#discover(Class...)} for that class.</li>
+ * </ol>
+ *
+ * <p>The conversion from {@link RouteDescriptor} to {@link ResourceMethod} performs a
+ * targeted {@code beanClass.getDeclaredMethod(name, paramTypes)} call (not an annotation
+ * scan) plus {@code UriTemplate.compile(pathTemplate)}. This is trivially
+ * AOT-registerable (GraalVM {@code reflect-config.json}) unlike a full annotation scan.</p>
+ *
+ * <p>Thread safety: this class is used only at startup (single-threaded build phase).</p>
+ */
+public final class RouteRegistry {
+
+    private static final Logger LOG = Logger.getLogger(RouteRegistry.class.getName());
+    private static final String ROUTES_SUFFIX = "$$CassiniRoutes";
+    private static final String LOG_PREFIX = "RouteRegistry: ";
+
+    /** Classes that used generated routes (pre-generated path). */
+    private static final AtomicInteger PRE_GENERATED_HITS = new AtomicInteger();
+    /** Classes that fell back to ResourceScanner. */
+    private static final AtomicInteger SCANNER_FALLBACK_HITS = new AtomicInteger();
+
+    public static int preGeneratedHits() { return PRE_GENERATED_HITS.get(); }
+    public static int scannerFallbackHits() { return SCANNER_FALLBACK_HITS.get(); }
+    public static void resetCounters() { PRE_GENERATED_HITS.set(0); SCANNER_FALLBACK_HITS.set(0); }
+
+    /**
+     * Lazily built map of {@code resourceClass → ServiceLoader-registered RouteProvider}. Built once
+     * from {@code ServiceLoader.load(RouteProvider.class)}; {@code null} until the first scan. Empty
+     * on the classpath / TCK (no {@code provides}), so the lookup falls through transparently.
+     */
+    private static final java.util.concurrent.atomic.AtomicReference<Map<Class<?>, RouteProvider>> SERVICE_PROVIDERS =
+            new java.util.concurrent.atomic.AtomicReference<>();
+
+    private RouteRegistry() {}
+
+    /**
+     * Discovers routes for all given {@code @Path} classes, using generated providers
+     * where available and falling back to {@link ResourceScanner} per class.
+     *
+     * @param pathClasses the set of {@code @Path} resource classes
+     * @return the aggregated list of {@link ResourceMethod}s
+     */
+    public static List<ResourceMethod> discover(Class<?>... pathClasses) {
+        List<ResourceMethod> out = new ArrayList<>();
+        for (Class<?> cls : pathClasses) {
+            List<ResourceMethod> classRoutes = discoverClass(cls);
+            out.addAll(classRoutes);
+        }
+        return out;
+    }
+
+    private static List<ResourceMethod> discoverClass(Class<?> cls) {
+        // 1. ServiceLoader-registered provider (module-path `provides` / META-INF/services).
+        //    The module system instantiates it even from a CLOSED package — no `opens`/`exports`.
+        RouteProvider svc = serviceProviders().get(cls);
+        if (svc != null) {
+            LOG.fine(() -> LOG_PREFIX + cls.getName() + " used ServiceLoader-registered routes");
+            return fromProvider(svc, cls);
+        }
+
+        // 2. Try pre-generated $$CassiniRoutes by name
+        String providerName = cls.getName() + ROUTES_SUFFIX;
+        try {
+            Class<?> providerClass = Class.forName(providerName, false, cls.getClassLoader());
+            RouteProvider provider = (RouteProvider) providerClass.getDeclaredConstructor().newInstance();
+            return fromProvider(provider, cls);
+        } catch (ClassNotFoundException _) {
+            // No pre-generated provider — fall through to scanner
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, e, () -> LOG_PREFIX + "failed to use generated routes for "
+                    + cls.getName() + " — falling back to ResourceScanner: " + e.getMessage());
+        }
+
+        // 3. Fallback: ResourceScanner
+        SCANNER_FALLBACK_HITS.incrementAndGet();
+        LOG.fine(() -> LOG_PREFIX + cls.getName() + " used ResourceScanner (no generated provider)");
+        return ResourceScanner.discover(cls);
+    }
+
+    /**
+     * Converts a {@link RouteProvider}'s descriptors to {@link ResourceMethod}s, or falls back to
+     * {@link ResourceScanner} when the class declares sub-resource locators. Shared by the
+     * ServiceLoader and {@code Class.forName} branches.
+     */
+    private static List<ResourceMethod> fromProvider(RouteProvider provider, Class<?> cls) {
+        if (provider.hasLocators()) {
+            // Class has locators — fall back to full scanner for correctness
+            LOG.fine(() -> LOG_PREFIX + cls.getName() + " has locators, falling back to ResourceScanner");
+            SCANNER_FALLBACK_HITS.incrementAndGet();
+            return ResourceScanner.discover(cls);
+        }
+        List<ResourceMethod> routes = convertDescriptors(provider.routes(), cls);
+        PRE_GENERATED_HITS.incrementAndGet();
+        LOG.fine(() -> LOG_PREFIX + cls.getName() + " used generated routes (" + routes.size() + " methods)");
+        return routes;
+    }
+
+    /**
+     * Returns the {@code resourceClass → RouteProvider} map of {@link ServiceLoader}-registered
+     * providers, building it once on first use (double-checked locking). Empty when none is
+     * registered (classpath / TCK), so the lookup falls through to {@code Class.forName} / scanner.
+     */
+    private static Map<Class<?>, RouteProvider> serviceProviders() {
+        Map<Class<?>, RouteProvider> m = SERVICE_PROVIDERS.get();
+        if (m == null) {
+            synchronized (RouteRegistry.class) {
+                m = SERVICE_PROVIDERS.get();
+                if (m == null) {
+                    m = loadServiceProviders();
+                    SERVICE_PROVIDERS.set(m);
+                }
+            }
+        }
+        return m;
+    }
+
+    private static Map<Class<?>, RouteProvider> loadServiceProviders() {
+        Map<Class<?>, RouteProvider> map = new HashMap<>();
+        Iterator<RouteProvider> it = ServiceLoader.load(RouteProvider.class).iterator();
+        for (RouteProvider p = nextProvider(it); p != null; p = nextProvider(it)) {
+            Class<?> rc = resourceClassOf(p);
+            if (rc != null) {
+                map.putIfAbsent(rc, p);
+            }
+        }
+        if (!map.isEmpty()) {
+            LOG.fine(() -> LOG_PREFIX + map.size() + " ServiceLoader-registered route provider(s)");
+        }
+        return map;
+    }
+
+    /** The next provider, or {@code null} at the end of the scan or when a provider fails to load:
+     *  the iterator state is undefined after a load error, so the scan stops there. */
+    private static RouteProvider nextProvider(Iterator<RouteProvider> it) {
+        try {
+            return it.hasNext() ? it.next() : null;
+        } catch (java.util.ServiceConfigurationError e) {
+            LOG.log(Level.FINE, e, () -> "RouteProvider ServiceLoader scan stopped early: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /** The resource class {@code p} serves, or {@code null} when it cannot tell (the provider is skipped). */
+    private static Class<?> resourceClassOf(RouteProvider p) {
+        try {
+            return p.resourceClass();
+        } catch (RuntimeException | LinkageError t) {
+            LOG.log(Level.FINE, t, () -> "Skipping RouteProvider " + p.getClass().getName()
+                    + " (resourceClass() failed): " + t.getMessage());
+            return null;
+        }
+    }
+
+    /** Discards the cached ServiceLoader provider map so the next discover rebuilds it (tests). */
+    static void resetServiceProviders() {
+        SERVICE_PROVIDERS.set(null);
+    }
+
+    /**
+     * Full reset of the route-discovery caches. Public for
+     * {@code io.vidocq.cassini.runtime.CassiniMaintenance} (dev-mode hot reload: the
+     * application classes are re-defined in a fresh module layer, so providers keyed by
+     * the old {@code Class} objects must be rebuilt).
+     */
+    public static void resetAll() {
+        SERVICE_PROVIDERS.set(null);
+    }
+
+    /**
+     * Converts {@link RouteDescriptor}s to {@link ResourceMethod}s.
+     * Uses targeted {@code getDeclaredMethod} (not a scan) and {@code UriTemplate.compile}.
+     */
+    private static List<ResourceMethod> convertDescriptors(List<RouteDescriptor> descriptors, Class<?> rootCls) {
+        List<ResourceMethod> routes = new ArrayList<>(descriptors.size());
+        for (RouteDescriptor d : descriptors) {
+            try {
+                Method m = resolveMethod(d);
+                // Best-effort: a CLOSED resource package (zero-export Java Modules app) rejects setAccessible,
+                // but the generated adapter's invoke() handles dispatch, so reflective access is not
+                // required. Only the reflective-fallback path (methodId == -1) would need it.
+                // false for an encapsulated package (InaccessibleObjectException): adapter.invoke() covers it.
+                m.trySetAccessible();
+                Set<String> produces = toSet(d.produces());
+                Set<String> consumes = toSet(d.consumes());
+                routes.add(new ResourceMethod(
+                        d.beanClass(), m, d.httpMethod(),
+                        UriTemplate.compile(d.pathTemplate()),
+                        produces, consumes,
+                        null, null, d.classPathLiterals()));
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, e, () -> LOG_PREFIX + "failed to resolve method "
+                        + d.beanClass().getName() + "." + d.methodName()
+                        + " — falling back to ResourceScanner for class " + rootCls.getName());
+                // If any method fails, fall back to the scanner for the whole class
+                SCANNER_FALLBACK_HITS.incrementAndGet();
+                if (PRE_GENERATED_HITS.get() > 0) PRE_GENERATED_HITS.decrementAndGet();
+                return ResourceScanner.discover(rootCls);
+            }
+        }
+        return routes;
+    }
+
+    /**
+     * The method of {@code d}, declared where its JAX-RS annotations are. The class literals the processor
+     * generated name it directly (CASSINI-042); without them, its parameter types are resolved by name and its
+     * annotations found by scanning, as before.
+     */
+    static Method resolveMethod(RouteDescriptor d) throws ReflectiveOperationException {
+        if (d.annotatedClass() != null && d.paramTypes() != null) {
+            return d.annotatedClass().getDeclaredMethod(d.methodName(), d.paramTypes());
+        }
+        return resolveMethod(d.beanClass(), d.methodName(), d.paramTypeNames());
+    }
+
+    private static Method resolveMethod(Class<?> beanClass, String methodName, String[] paramTypeNames)
+            throws ReflectiveOperationException {
+        Class<?>[] paramTypes = new Class<?>[paramTypeNames.length];
+        for (int i = 0; i < paramTypeNames.length; i++) {
+            paramTypes[i] = resolveType(paramTypeNames[i], beanClass.getClassLoader());
+        }
+        Method method;
+        try {
+            method = beanClass.getMethod(methodName, paramTypes);
+        } catch (NoSuchMethodException _) {
+            method = beanClass.getDeclaredMethod(methodName, paramTypes);
+        }
+        // §3.6: the parameters' annotations may be those of the method it overrides or implements.
+        return ResourceScanner.annotatedMethod(method, beanClass);
+    }
+
+    private static Class<?> resolveType(String name, ClassLoader cl) throws ClassNotFoundException {
+        return switch (name) {
+            case "boolean" -> boolean.class;
+            case "byte"    -> byte.class;
+            case "short"   -> short.class;
+            case "int"     -> int.class;
+            case "long"    -> long.class;
+            case "float"   -> float.class;
+            case "double"  -> double.class;
+            case "char"    -> char.class;
+            case "void"    -> void.class;
+            default        -> name.endsWith("[]")
+                    ? resolveArrayType(name, cl)
+                    : Class.forName(name, false, cl);
+        };
+    }
+
+    private static Class<?> resolveArrayType(String name, ClassLoader cl) throws ClassNotFoundException {
+        // Convert "int[]" → "[I", "java.lang.String[]" → "[Ljava.lang.String;"
+        String component = name.substring(0, name.length() - 2);
+        Class<?> comp = resolveType(component, cl);
+        return java.lang.reflect.Array.newInstance(comp, 0).getClass();
+    }
+
+    private static Set<String> toSet(String[] arr) {
+        if (arr == null || arr.length == 0) return Set.of();
+        return new LinkedHashSet<>(java.util.Arrays.asList(arr));
+    }
+}
