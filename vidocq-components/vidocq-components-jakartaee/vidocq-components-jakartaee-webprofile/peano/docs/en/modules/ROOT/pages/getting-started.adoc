@@ -1,0 +1,313 @@
+= Getting started
+:description: Maven coordinates and a first constant expression through the Jakarta EL API.
+
+[.lead]
+Peano's development build evaluates constants and resolver-backed value expressions
+through the Jakarta EL API, including functions, method expressions and assignments.
+Lambdas, list/set/map construction and lazy chapter 2 collection pipelines are implemented.
+
+== Reflection policy
+
+To verify that generated tables cover member access, start the application with
+`-Dpeano.reflection=deny`. Peano then reports the target type whenever evaluation would
+enter its reflective member fallback. The default allow mode preserves Jakarta API
+fallback behavior. Custom resolvers, generated tables and direct collection access
+continue to work in deny mode.
+
+== Custom text conversion and legacy editors
+
+Register custom conversions with ELManager.addELResolver or StandardELContext.addELResolver.
+An application's resolver can use its own legacy PropertyEditor when the application
+explicitly requires java.desktop; Peano's core modules keep no such dependency.
+Inside that resolver, implement the conversion method with a fresh editor per call:
+
+[source,java]
+----
+public <T> T convertToType(ELContext context, Object value, Class<T> target) {
+    if (target != Value.class || !(value instanceof String text)) return null;
+    context.setPropertyResolved(true);
+    var editor = new ValueEditor();
+    try {
+        editor.setAsText(text);
+        return target.cast(editor.getValue());
+    } catch (RuntimeException failure) {
+        if (text.isEmpty()) return null;
+        throw new ELException("Cannot convert text to Value", failure);
+    }
+}
+----
+
+Value and ValueEditor belong to the application. Other resolver operations remain
+unresolved. Factory coercion does not inherit a context-local converter.
+For automatic PropertyEditorManager discovery in both factory and context conversion,
+build with `-Pbeans-compat` and include `peano-beans-compat` on the runtime module path.
+Only this optional module requires java.desktop; see xref:reference.adoc[the compatibility rules].
+
+== Prerequisites
+
+* **Java 25** — Temurin recommended. Module path enabled.
+* **Maven 3.9.16** — pinned via `.sdkmanrc` at the repo root.
+* Strict Java Modules: one `module-info.java` per Maven module.
+
+== Maven coordinates (development build)
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.peano</groupId>
+    <artifactId>peano-core</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
+
+`peano-core` brings the Jakarta Expression Language API (`jakarta.el-api` 6.0.1) transitively: the application does not declare it. To keep application code compiling against the specification alone, declare `peano-core` with `<scope>runtime</scope>` and add `jakarta.el:jakarta.el-api` yourself, since a runtime-scoped dependency hides its own dependencies from the compiler.
+
+Your code compiles against `jakarta.el` only; Peano is found at run time through `ServiceLoader`.
+
+== A first expression (implemented)
+
+[source,java]
+----
+// module-info.java
+module com.example.app {
+    requires jakarta.el;
+}
+----
+
+[source,java]
+----
+import jakarta.el.ExpressionFactory;
+import jakarta.el.StandardELContext;
+
+ExpressionFactory factory = ExpressionFactory.newInstance();
+StandardELContext context = new StandardELContext(factory);
+Object result = factory.createValueExpression(context, "${1 + 2 * 3}", Object.class)
+        .getValue(context); // Long value 7
+----
+
+The provider is discovered on the module path without exporting its implementation package.
+An independent named-consumer test compiles against the API alone and verifies this bootstrap.
+
+== Navigating a model (implemented)
+
+[source,java]
+----
+var order = new java.util.HashMap<String, Object>();
+order.put("total", 100L);
+context.getVariableMapper().setVariable("order",
+        factory.createValueExpression(order, Object.class));
+Object total = factory.createValueExpression(context, "${order.total * 1.2}", Object.class)
+        .getValue(context); // Double value 120.0
+factory.createValueExpression(context, "${order.total}", Object.class)
+        .setValue(context, 200L);
+----
+
+Variable mappings are captured when expressions are created. Their referenced values
+can remain mutable, as this map does. The context's standard resolvers handle navigation.
+Bean and record access obey Java module export boundaries; application resolvers can
+access their own non-exported types without opening packages.
+
+The current provider reports unsupported later-milestone evaluation rather than
+returning a placeholder value. Primitive-array writes remain an upstream API
+limitation tracked in BUG.md.
+
+== Functions and methods (implemented)
+
+[source,java]
+----
+context.getFunctionMapper().mapFunction("f", "max",
+        Math.class.getMethod("max", int.class, int.class));
+Object maximum = factory.createValueExpression(context, "${f:max(2,3)}", Object.class)
+        .getValue(context); // Integer value 3
+context.getVariableMapper().setVariable("text",
+        factory.createValueExpression("Peano", Object.class));
+var method = factory.createMethodExpression(context, "#{text.substring(1,3)}",
+        String.class, null);
+Object text = method.invoke(context, null); // "ea"
+Object assigned = factory.createValueExpression(context, "${a = b = 42; a + b}", Object.class)
+        .getValue(context); // Long value 84
+----
+
+Function mappings are captured at expression creation. Inline method parameters override
+the parameters passed to invoke. Bare method expressions require explicit parameter types.
+MethodInfo and MethodReference use generated data for selected models, including
+closed application packages. Other models retain the documented API-accessible
+public-member metadata fallback.
+
+== Lambdas and collections (implemented)
+
+[source,java]
+----
+var el = new jakarta.el.ELProcessor();
+Object sum = el.eval("((x,y)->x+y)(3,4)"); // Long value 7
+Object factorial = el.eval("fact=n->n==0?1:n*fact(n-1); fact(5)"); // Long value 120
+Object values = el.eval("{'total': [1,2+3], 'labels': {'a','b'}}");
+Object filtered = el.eval("[3,2,4,2].stream().filter(x->x%2==0)"
+        + ".map(x->x*2).distinct().sorted((a,b)->b-a).toList()"); // [8,4]
+Object average = el.eval("[1,2,3].stream().average().get()"); // Double value 2.0
+Object fallback = el.eval("[].stream().findFirst().orElseGet(()->42)"); // Long value 42
+----
+
+Lambda parameters are read-only bindings; closures retain enclosing argument values.
+Constructed collections are fresh and mutable. Stream callbacks run when a terminal
+operation consumes elements. Aggregate/search results use EL optional values:
+call get(), orElse(value), orElseGet(lambda) or ifPresent(lambda).
+Unlike Java streams, anyMatch/allMatch/noneMatch return an empty optional on empty input.
+The standard Java Predicate interface has a compiled adapter:
+
+[source,java]
+----
+java.util.function.Predicate<Object> predicate =
+        el.getValue("x->x>5", java.util.function.Predicate.class);
+boolean accepted = predicate.test(6); // true
+----
+
+The same conversion supports all 43 java.util.function interfaces, Runnable, Callable
+and Comparator, including primitive specializations. Default methods retain Java
+behavior. Custom application interfaces use the generated adapters described below.
+
+== Observing and saving an expression (implemented)
+
+[source,java]
+----
+var factory = jakarta.el.ExpressionFactory.newInstance();
+var context = new jakarta.el.StandardELContext(factory);
+context.addEvaluationListener(new jakarta.el.EvaluationListener() {
+    @Override
+    public void beforeEvaluation(jakarta.el.ELContext current, String expression) {
+        System.out.println("Evaluating " + expression);
+    }
+});
+var expression = factory.createValueExpression(context, "${1+2}", Object.class);
+var bytes = new java.io.ByteArrayOutputStream();
+try (var output = new java.io.ObjectOutputStream(bytes)) {
+    output.writeObject(expression);
+}
+jakarta.el.ValueExpression restored;
+try (var input = new java.io.ObjectInputStream(
+        new java.io.ByteArrayInputStream(bytes.toByteArray()))) {
+    restored = (jakarta.el.ValueExpression) input.readObject();
+}
+Object result = restored.getValue(context); // Long value 3; listener runs on this context
+----
+
+Captured bindings survive serialization. Captured object values must be serializable;
+contexts and listeners are supplied when the restored expression is evaluated.
+
+== Registering application accessor tables (P6 foundation)
+
+An application that supplies direct tables compiles against peano-api and registers
+its public AccessorProvider implementation through its own Java module:
+
+[source,java]
+----
+module com.example.app {
+    requires io.vidocq.peano.api;
+    provides io.vidocq.peano.spi.AccessorProvider with com.example.model.ApplicationTables;
+}
+----
+
+ApplicationTables returns AccessorTable instances. Each table implements the ELResolver
+operations with direct calls for one class or interface (a subtype with no table of its own
+uses its nearest supertype's table, see the Reference page) and claims handled properties
+through ELContext.setPropertyResolved(base, property), including null results.
+Unknown operations stay unresolved. The model/provider package needs no exports or opens.
+StandardELContext and ELProcessor discover the tables automatically; custom resolvers
+keep their precedence. Tables and providers must support concurrent use.
+
+The processor generates property tables using this contract.
+
+== Generating property tables at compilation (implemented)
+
+[source,java]
+----
+package com.example.model;
+
+@io.vidocq.peano.annotation.ELAccessible
+public class Order {
+    private int quantity;
+    public int getQuantity() { return quantity; }
+    public void setQuantity(int quantity) { this.quantity = quantity; }
+}
+----
+
+Register the deterministic generated provider name. Accessible source descendants
+in the same compilation also receive providers: register each descendant's generated
+fragment when that runtime type is used. Binary descendants are not scanned.
+
+For custom callbacks, select a non-sealed interface annotated with
+java.lang.FunctionalInterface in the same way. Its provider converts EL lambdas through
+ELContext.convertToType or ExpressionFactory.coerceToType. Primitive, reference and
+void returns are supported; generic functional methods are diagnosed. Register each
+selected interface's provider, just as for a bean. Unselected child interfaces are
+not inferred.
+
+[source,java]
+----
+module com.example.app {
+    requires io.vidocq.peano.api;
+    provides io.vidocq.peano.spi.AccessorProvider
+        with com.example.model.Order__PeanoAccessors;
+}
+----
+
+Set PEANO_PROCESSOR, PEANO_API and JAKARTA_EL_API to their jar files or compiled
+module directories. Compile one application module at a time:
+
+[source,bash]
+----
+javac --module-path "$PEANO_API:$JAKARTA_EL_API" \
+      --processor-module-path "$PEANO_PROCESSOR:$PEANO_API:$JAKARTA_EL_API" \
+      -proc:full -s target/generated-sources/annotations -d target/classes \
+      src/main/java/module-info.java src/main/java/com/example/model/Order.java
+----
+
+To select unannotated owned types, pass
+`-Apeano.accessorTypes=com.example.model.Order,com.example.model.Other`.
+Names produced by another annotation processor can resolve in later processing rounds.
+Each generated provider has a matching registration fragment under
+META-INF/peano/accessor-providers in the class output directory.
+The providers are also listed in `META-INF/services/io.vidocq.peano.spi.AccessorProvider`,
+so a container that turns an application module's services files into `provides` directives, such as
+the Vidocq application layer, or the class path, finds them when no build step merged the fragments
+(an IDE build). An incremental build keeps the providers whose class is still in the output.
+The processor itself is needed only at compilation.
+
+Public getters/setters, primitive boolean is-getter precedence, acronym properties,
+inherited properties, write-only setters and read-only record components are supported.
+Type-variable bean properties and ambiguous write-only setters have explicit diagnostics.
+Public method invocation and metadata are generated too; subclass dispatch remains later P6 work.
+
+== Generated methods and references (implemented)
+
+Selected models expose public instance and static methods through direct generated
+calls, including overloads, void methods and typed varargs. MethodReference contains
+the declared signature, raw evaluated parameters and runtime annotation literals.
+Retrieving metadata does not invoke the referenced method.
+
+For an owned selected bean with `public int add(int a, int b)`:
+
+[source,java]
+----
+var expression = factory.createMethodExpression(context, "#{bean.add(2,3)}", int.class, null);
+var reference = expression.getMethodReference(context); // no add invocation
+Object sum = expression.invoke(context, null); // Integer value 5
+----
+
+The same tables support static calls through ELClass and captured FunctionMapper
+methods. Annotation member arrays are defensive; generated literals follow Java's
+annotation equality/hashCode rules. The processor performs no runtime reflection
+or proxy generation for these paths.
+
+Methods declared by Object and constructors retain the API fallback.
+Metadata types must be accessible from the generated provider's application package
+and module. Specialized inherited generic parameter types receive a diagnostic;
+their generated dispatch is a later slice.
+
+== Building Peano from source
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp install
+----

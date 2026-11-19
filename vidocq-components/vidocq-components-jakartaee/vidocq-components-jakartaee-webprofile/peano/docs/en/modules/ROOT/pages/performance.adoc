@@ -1,0 +1,114 @@
+= Performance
+:description: Modular JMH measurements of Peano interpreted/compiled evaluation and Expressly.
+
+[.lead]
+The opt-in peano-bench module compares interpreted Peano, build-time compiled Peano
+and Expressly using arithmetic, property, lambda and collection fixtures. Semantic agreement is checked before
+timing. Baseline, final combined results and raw samples are recorded in
+link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md]; they are exploratory workstation measurements.
+
+== Run the harness
+
+[source,bash]
+----
+sdk env
+./mvnw -ntp -Pbench -pl peano-bench -am package
+./run-bench.sh 'io.vidocq.peano.bench.(CreationBenchmark.create|EvaluationBenchmark.evaluate)$' -rf json -rff peano-bench/target/results.json
+----
+
+Execution and JMH forks stay on the module path. The expression compiler runs during
+process-classes and is absent from benchmark execution. Default builds omit this module;
+its JMH/Expressly dependencies and artifacts are never published with Peano.
+Repeated creation includes implementation caches; it does not isolate uncached parsing.
+
+== Measurement scope
+
+The optimization campaign records a longer baseline and focused comparisons in
+link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md], with its decisions in
+link:{repo-peano}/src/branch/main/OPTIMS.md[OPTIMS.md]. Creation now uses factory-owned
+bounded analysis reuse. Measurements distinguish repeated hits, a rotating source
+set, unique misses and cold factory/context setup. Warm gains must be assessed
+alongside miss penalties and retained estimated weight; no general startup gain is claimed.
+
+The retained changes are factory-local bounded creation analysis, stateless arithmetic
+helpers and lazy empty lambda capture maps. Numeric preparation, collection rebuilding
+and startup/catalog caching remain deferred. The final comparison uses five one-second
+warmups, eight one-second measurements and three forks. The ledger includes errors,
+unchanged comparison controls, allocation reductions and cold/unique-source penalties.
+Its compiled arithmetic baseline was noisy; the reported mean delta is descriptive.
+
+* Interpreted vs compiled evaluation of the same expressions.
+* Generated-accessor resolution vs the spec's reflective `BeanELResolver`.
+* A reference baseline on Expressly (the Jakarta EE compatible implementation) with the same corpus; it is not a ranking.
+
+The corpus includes a shared public-getter model: Peano uses its generated table,
+while Expressly uses reflective BeanELResolver access. The model package has a qualified
+export to jakarta.el for that baseline, with no opens. Creation includes implementation
+caches. Optional evaluation fixtures also cover larger integral operands, Double and
+BigDecimal arithmetic, nested closures, 32-element sets/maps and map property access.
+Select them with `-p fixture=arithmeticLarge,arithmeticDouble,arithmeticDecimal,nestedLambda,set,map,mapProperty`.
+
+`SourceCreationBenchmark.create` compares repeated sources, a rotating set of 64
+prebuilt sources and monotonically unique sources. Unique-source construction is inside
+the timer; `SourceCreationBenchmark.sourceGeneration` is a diagnostic control, not a
+value to subtract from independently measured creation means. Contexts and factories
+are retained per benchmark thread, with independently captured bindings.
+
+`ConcurrentCreationBenchmark.create` instead shares one factory across threads and
+keeps each mutable context caller-owned. Select `-t 1` or `-t 4` with
+`-p workload=shared,rotating,unique`. Unique sources have disjoint per-thread ranges
+and include string construction; differing literal lengths limit contention comparisons.
+The ledger records separate GC diagnostics; there is no pre-change concurrent speedup
+claim. Per-operation JMH average times are not aggregate throughput.
+
+`StartupBenchmark` separates factory discovery/construction, context setup using a
+retained factory, and first evaluation with a new factory/context. These are setup
+workloads, not process startup or retained-expression evaluation measurements.
+Use JMH's `-prof gc` and `-prof jfr` in separate diagnostic runs; profiling results
+must be compared under their own unchanged protocol. Stream pipelines and larger
+application corpora remain future measurements.
+
+JFR's default profile captures environment variables and process metadata. Keep its
+raw recordings local under target. Before archiving, run `./scrub-bench-profiles.sh
+<input-directory> <new-output-directory>` and publish only the filtered output. The
+script retains CPU/allocation events and verifies their event allowlist. Filtering
+current files cannot remove values already present in Git history (BENCH-004).
+The bench-profile test suite also rejects unapproved archived events without printing
+their values. Its JDK `jdk.jfr` dependency is confined to the non-published benchmark module.
+Every figure is recorded in
+link:{repo-peano}/src/branch/main/BENCH.md[BENCH.md] with hardware, JVM and exact command.
+
+== Creation component diagnostics
+
+`./run-analysis-bench.sh` measures uncached parsing, identity normalization, variable
+capture and function capture separately. Build the bench profile first. Its sources
+live under `peano-bench/src/analysis`, outside normal Maven source roots. The script
+uses the existing build-only JMH annotation processor and compiles into a fresh
+temporary directory under target for each invocation.
+
+Diagnostic parent and fork JVMs patch those classes into the core module and add reads
+and qualified exports only to `jmh.core`. These flags are confined to this command;
+shipped module descriptors, application access and published jars remain unchanged.
+Results diagnose components and must not be summed into a predicted full creation cost.
+The full ExpressionFactory benchmark remains the acceptance workload.
+
+== Cache retention diagnostic
+
+Build the bench profile first, then run the isolated probe with the pinned JDK:
+
+[source,bash]
+----
+./run-cache-retention.sh 0
+./run-cache-retention.sh 128
+----
+
+The probe warms both modes, retains a cache, creates 4096 distinct small sources and
+reports post-full-GC heap differences, entry count and estimated artifact weight.
+The empty cache shell exists before the baseline and is excluded from that difference.
+Repeat in alternating fresh JVMs. Zero slots is the disabled control. These differences
+are collector-dependent diagnostic observations, not exact object sizes or worst-case
+heap limits. The script fixes a 128 MiB heap and SerialGC for reproducibility.
+
+Probe sources stay outside normal Maven roots and compile into a disposable target
+directory. Only the command patches core and adds a read edge to the JDK java.management
+module. Published descriptors and runtime dependencies remain unchanged.

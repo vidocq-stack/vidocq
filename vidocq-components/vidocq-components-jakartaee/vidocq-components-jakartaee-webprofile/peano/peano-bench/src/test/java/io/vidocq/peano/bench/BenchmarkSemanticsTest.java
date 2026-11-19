@@ -1,0 +1,80 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+
+package io.vidocq.peano.bench;
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class BenchmarkSemanticsTest {
+    @Test void concurrentCreationUsesASharedFactoryAndIndependentContexts() {
+        var shared=new ConcurrentCreationBenchmark.SharedFactory(); shared.engine="peano"; shared.setup();
+        for (String workload:new String[]{"shared","rotating","unique"}) {
+            var first=new ConcurrentCreationBenchmark.Caller(); first.workload=workload; first.setup(shared);
+            var second=new ConcurrentCreationBenchmark.Caller(); second.workload=workload; second.setup(shared);
+            assertNotSame(first.context,second.context);
+            var benchmark=new ConcurrentCreationBenchmark();
+            for (int i=0;i<70;i++) {
+                var left=benchmark.create(shared,first); var right=benchmark.create(shared,second);
+                assertEquals(7L+first.operand,left.<Object>getValue(first.context));
+                assertEquals(7L+second.operand,right.<Object>getValue(second.context));
+                if (workload.equals("unique")) assertNotEquals(left.getExpressionString(),right.getExpressionString());
+            }
+        }
+    }
+
+    @Test void conversionUsesTheSelectedFactory() {
+        for (String engine:new String[]{"peano","expressly"}) {
+            var factory=Fixtures.factory(engine);
+            assertSame(factory,Fixtures.context(factory).getContext(jakarta.el.ExpressionFactory.class));
+        }
+    }
+    @Test void allEvaluationEnginesProduceTheSameResult() throws Exception {
+        for (String engine:new String[]{"peano","expressly","compiled"}) {
+            for (String fixture:new String[]{"arithmetic","property","lambda","collection",
+                    "arithmeticLarge","arithmeticDouble","arithmeticDecimal","nestedLambda","set","map","mapProperty"}) {
+                var state=new EvaluationBenchmark(); state.engine=engine; state.fixture=fixture; state.setup();
+                assertEquals(Fixtures.expected(fixture),state.evaluate(),engine+":"+fixture);
+            }
+        }
+    }
+
+    @Test void creationWorkloadsKeepBindingsAndCreateValidSources() {
+        for (String engine:new String[]{"peano","expressly"}) {
+            for (String workload:new String[]{"repeated","rotating","unique"}) {
+                var state=new SourceCreationBenchmark(); state.engine=engine; state.workload=workload; state.setup();
+                for (int i=0;i<130;i++) {
+                    var expression=state.create();
+                    assertEquals(7L+state.lastOperand(),expression.<Object>getValue(state.context()));
+                }
+            }
+        }
+    }
+
+    @Test void coldCreationIncludesTheCorrectProviderContext() {
+        for (String engine:new String[]{"peano","expressly"}) {
+            var state=new StartupBenchmark(); state.engine=engine; state.setup();
+            var context=state.createContext();
+            assertNotNull(context.getContext(jakarta.el.ExpressionFactory.class));
+            assertNotNull(state.createFactory());
+            assertEquals(27L,state.firstEvaluation());
+        }
+    }
+}

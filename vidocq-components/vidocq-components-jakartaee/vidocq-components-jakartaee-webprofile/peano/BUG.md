@@ -1,0 +1,759 @@
+# BUG.md — Peano
+
+Reproducible bugs (internal issue, regression, incorrect behavior not yet fixed).
+Entry format: `short id · date · symptom · minimal repro · cause hypothesis · status`.
+
+## EL-025 · 2026-11-17 · A proxy unwrapper brought by an application layer kept that layer reachable
+
+- Symptom: latent leak listed by the layer audit (Vidocq/vidocq#631). When an application jar names a
+  `ProxyUnwrapper` of its own in `META-INF/services`, each hot reload of `vidocq dev` registers the unwrapper class of
+  the new layer and the discarded layer stays reachable: one more class loader alive per reload. No application
+  measured so far brings one (the unwrapper of Vauban's proxies comes from the runtime layer), so the leak was not
+  seen in a heap dump.
+- Minimal reproduction: `CatalogLayerLeakTest.aDiscardedLayerThatBroughtAProxyUnwrapperIsCollectable` (a layer whose
+  services file names its own unwrapper, an expression evaluated on the layer's proxy under it, the layer dropped:
+  its `WeakReference<ClassLoader>` is still set after a collection loop).
+- Cause: `ProxyUnwrappers.UNWRAPPERS`, a static list of `peano-api`, held each registered unwrapper strongly and
+  nothing removes one. `peano-api` belongs to the runtime layer, which outlives every application layer.
+- Status: fixed. Each unwrapper is held by its own class, in a `ClassValue` (the idiom of EL-023 for the catalogs):
+  it lives as long as the class loader that defined it. The static list keeps weak references in registration order
+  and drops the cleared ones at the next registration.
+  `CatalogLayerLeakTest.theProxyUnwrapperOfALiveLayerOutlivesACollection` checks the other side: an unwrapper nobody
+  else holds still answers after a collection while its layer lives.
+
+## EL-024 · 2026-11-08 · AccessorCatalogs handed its catalog to a ClassValue through a ThreadLocal
+
+- Symptom: AGENTS.md constraint 6 (no `ThreadLocal`) was broken by `AccessorCatalogs.PENDING`, found by the shared
+  architecture rule `NO_THREAD_LOCAL` of `peano-architecture-tests` (Vidocq/vidocq#289). It was set and removed within one
+  call, so nothing leaked across virtual threads; the constraint is categorical.
+- Minimal reproduction: `ArchitectureRulesTest.theShippedClassesKeepTheRule` with `NO_THREAD_LOCAL`.
+- Cause: the `ClassValue` computation only knows the anchor class, so the freshly loaded catalog was passed through a
+  `ThreadLocal` (EL-023 fix).
+- Status: fixed. The catalog travels in a `ConcurrentHashMap` keyed by the anchor class, held only while `of` computes
+  the `ClassValue`; a racing caller that finds it removed loads an equivalent catalog itself.
+
+## EL-023 · 2026-11-02 · The first expression factory kept every discarded application layer of `vidocq dev` reachable
+
+- Symptom: after N hot reloads of `vidocq dev`, N+1 application class loaders stayed alive (about 0.8 MB heap per
+  reload). Heap dump of the static audit (vidocq-workspace#40 item 25): `jakarta.el.ELManager.exprFactory` ->
+  `PeanoExpressionFactory` -> its `owner` class loader and its accessor catalog, both of the first layer. After a
+  reload the factory also found `owner` different from the context class loader and loaded the catalog again on
+  every evaluation.
+- Minimal reproduction: `CatalogLayerLeakTest` (a factory created under a first layer's loader, the layer dropped,
+  `WeakReference<ClassLoader>` still set after a collection loop; a later layer's catalog loaded again at each call).
+- Cause: the factory stored the loader and the catalog of the application it was created under; the Jakarta EL API
+  keeps that factory in a static field for the life of the JVM. The per-class lookup cache of the catalog also held
+  the runtime classes it had seen in a plain map.
+- Status: fixed on branch `fix/layer-leak-peano`: the factory holds nothing of an application. `AccessorCatalogs.of(loader)`
+  loads each loader's catalog once and keeps it in a `ClassValue` of one of the layer's own table classes (reachable
+  from the layer alone, collected with it); a catalog whose tables all come from ancestors is kept against the
+  loader. The lookup cache of a catalog is held by the runtime classes themselves. The reflective fallback is unchanged.
+
+## EL-022 · 2026-11-02 · A page's @Named bean was read by reflection unless annotated @ELAccessible
+
+- Symptom: in a Vidocq application, `${cart.lines}` on a CDI `@Named` bean, and on the types its properties hold,
+  went through the reflective `BeanELResolver`: the processor only generated accessor tables for types selected
+  by `@ELAccessible` or `peano.accessorTypes`. A normal-scoped bean was not served by its table either, even when
+  selected: EL receives the container's client proxy, a subclass, and generated tables accepted their exact class only.
+  Found by the reflection audit of the standard Vidocq path (2026-11-02).
+- Minimal reproduction: `PropertyProcessorTest.selectsNamedBeansAndTheApplicationTypesTheirPropertiesHoldWithoutAnnotation`;
+  `ProxyUnwrapperTest.aRegisteredUnwrapperLetsTheBeanTableServeItsProxyAndNothingElse`.
+- Cause: selection was explicit only; the exact-class check had no notion of a container proxy.
+- Status: fixed on branch `feat/el-auto-accessors`: the processor also selects the classes and producer methods
+  annotated `@jakarta.inject.Named` or `@jakarta.enterprise.inject.Model` and, transitively from them and from the
+  explicitly selected types, the application classes and records their properties hold (through collections, maps, optionals and arrays); a type that cannot
+  get a table is left to the reflective fallback without an error; `-Apeano.autoAccessors=false` turns the
+  selection off. Generated tables check their target through `AccessorTable.serves`, which also accepts a
+  container proxy a registered `ProxyUnwrapper` (found with the accessor providers) names.
+
+## EL-021 · 2026-10-29 · MethodDescriptor text hid its parameter types and annotations
+
+- Symptom: `io.vidocq.peano.spi.MethodDescriptor.toString()` printed array identities
+  (`parameterTypes=[Ljava.lang.Class;@7c541c15`, `annotations=[Ljava.lang.annotation.Annotation;@...`),
+  so two equal descriptors (equality already compares array contents) printed differently and
+  diagnostics never showed the signature. Reported by SonarQube as `java:S6218` on main.
+- Minimal reproduction: `new MethodDescriptor("m", String.class, new Class<?>[]{int.class},
+  false, false, new Annotation[0]).toString()` differs from the same call made a second time.
+- Cause: the record overrode `equals`/`hashCode` with `Arrays` but kept the generated
+  `toString`, which prints array components by identity.
+- Status: fixed on branch `fix/sonar-peano-zero`: `toString` prints both arrays with
+  `Arrays.toString` (the record format is otherwise unchanged); `equals` now uses a record
+  deconstruction pattern. No signature change.
+- Evidence: MethodSelectionTest.descriptorTextShowsTheArrayContentsLikeEqualityDoes failed
+  (identity hashes) before the fix and passes after it.
+
+## COMP-010 · 2026-10-24 · Constant compiled expressions lacked the (ELContext, Class) constructor
+
+- Symptom: an Ibarra page passing a constant EL expression to a deferred-value tag attribute
+  (`<c:set var="x" value="${1}"/>`, `${'a'}`, `${true}`, `${null}`, `${1+2}`, `a${1}`,
+  `#{1}`, ...) failed to compile: "constructor $ExpressionN in class $ExpressionN cannot be
+  applied to given types; required: java.lang.Class; found: jakarta.el.ELContext,java.lang.Class".
+  Found by the Bodoni B5 official Tags TCK run (`spec.sql.result`, 4 tests, e.g.
+  `positiveResultGetRowsUpperCaseTest`); Ibarra symptom entry IBARRA-156.
+- Minimal reproduction: `ExpressionCompiler.compile("demo.C", "${1}")`, then compile
+  `new demo.C(context, Object.class)` against it: javac rejects the call. `${x}` or `${a.b}`
+  compile, because those trees take another emission path.
+- Cause: the constructor contract depended on the tree shape. The constant path of
+  ExpressionCompiler.compile emitted only `<init>(Class)`, while root, property, function and
+  lambda trees (and every compiled method expression, literal included) also emitted the
+  `(ELContext, Class)` creation-context form. Ibarra builds deferred-value attributes with
+  `pageContext.getELContext()` so that resolved trees keep creation-time bindings (IBARRA-077),
+  and cannot tell a constant tree apart without re-parsing EL.
+- Status: fixed on branch `fix/deferred-constant-ctor` (Ibarra regression test on the same
+  companion branch). Constant classes now also declare `(ELContext, Class)`: the context is
+  null-checked (NullPointerException "creationContext", like the other shapes) and dropped;
+  no field is added, so equality, hashCode, the serialized form and serialVersionUID are
+  unchanged and no emission-schema bump is needed. Constant and resolved trees share one
+  constructor-pair emitter. The Javadoc, reference page and PLAN.md now state the uniform
+  contract: every compiled value expression class has both constructors.
+- Evidence: ExpressionCompilerTest
+  `constantsAcceptTheCreationContextConstructorWithoutChangingTheirMeaning` (15 constant and
+  literal templates in an API-only consumer: same value, type, literal flag, expression string,
+  expected type, equality/hashCode, byte-identical serialization, null-context NPE) failed at
+  javac with the TCK's signature before the change; `everyCompiledExpressionDeclaresBothConstructorForms`
+  (constant, root, property, function, lambda and method outputs) failed on the constant
+  outputs before the change.
+
+## EL-018 · 2026-10-22 · Deny mode cannot read Map entries or interface-typed beans
+
+- Symptom: under -Dpeano.reflection=deny, `${e.key}` on a Map.Entry fails with
+  "ELException: Reflection fallback denied for java.util.KeyValueHolder" (or
+  HashMap$Node, Collections$UnmodifiableMap$UnmodifiableEntrySet$UnmodifiableEntry).
+  Found by Bodoni, Vidocq/bodoni BOD-001: JSTL forEach over a map, and
+  `${status.index}` on a LoopTagStatus implemented by an anonymous JSTL API class.
+- Minimal reproduction: deny mode, bind `e` to `Map.of("a", 1).entrySet().iterator().next()`,
+  evaluate `${e.key}`.
+- Cause: GeneratedAccessorELResolver selected a table with tables.get(base.getClass()),
+  the exact runtime class only. No table can be written for a private or anonymous class,
+  and Peano shipped no Map.Entry table.
+- Status: fixed. Instance bases now try the tables of the exact class, then the superclasses
+  nearest first, then the interfaces breadth-first, until one resolves the operation (a
+  generated exact-class table no longer hides an interface table); the ordered list is cached
+  per runtime class
+  (ELClass bases and functional conversion stay exact). peano-core registers a built-in
+  Map.Entry table aligned with the API BeanELResolver (key and value read-only, getKey(),
+  getValue() and setValue(Object) callable, other method shapes left unresolved) that an
+  application Map.Entry table replaces. The LoopTagStatus table itself belongs to Bodoni
+  (bodoni-peano).
+- Evidence: MapEntryAccessTest (deny mode, Map.of, HashMap and unmodifiable entries,
+  writes, unknown-type guard message) and GeneratedAccessorResolverTest (interface,
+  superclass, precedence, breadth-first order, built-in override, fall-through behind an
+  exact-only superclass table in deny mode) failed before the change,
+  except the guard-message and negative-lookup cases, which pin unchanged behaviour.
+  A review found the first version of the table writable on value and claiming application
+  overloads such as getValue(String) (MethodNotFoundException in allow mode); the follow-up
+  MapEntryAccessorTableTest (differential against BeanELResolver on HashMap, Map.of and
+  SimpleEntry entries) and the entry-overload module fixture failed before that fix.
+
+## EL-019 · 2026-10-22 · Every ELContext rebuilds the accessor tables and the lookup cache
+
+- Symptom: each StandardELContext, ELProcessor or ELManager gets a fresh
+  GeneratedAccessorELResolver: a full ServiceLoader scan of AccessorProvider, then, per
+  distinct runtime class, a supertype walk (getInterfaces copies, a queue, a set, a list)
+  before the per-resolver cache helps. GeneratedAccessorELResolver.adapt also builds a new
+  resolver, with its ServiceLoader scan, on every factory lambda coercion.
+- Minimal reproduction: StandardELContext(ExpressionFactory) calls
+  factory.getStreamELResolver() in its constructor (javap), and
+  PeanoExpressionFactory.getStreamELResolver returns new GeneratedAccessorELResolver().
+  Evaluate `${e.key}` in two new contexts: both run the lookup for the entry class.
+- Cause: the table map and the matching-table cache are owned by the resolver instance,
+  which is per context, instead of by the factory. The ServiceLoader scan per context
+  predates EL-018; the hierarchy walk per context and class comes with it.
+- Status: fixed (2026-10-22). AccessorCatalog holds the tables and the lookup cache.
+  PeanoExpressionFactory loads one lazily from the context class loader it was created
+  under and shares it with every resolver it returns and with coerceToType's lambda
+  adaptation. A context created under another context class loader gets its own catalog,
+  so a factory shared across applications never serves one application's tables to
+  another. Function calls and method metadata, which reach the tables outside the resolver
+  chain, bind a resolver over the creating factory's catalog. Compiled expressions keep their
+  snapshot per generated expression class (ClassValue) instead of per context. Regression
+  tests: FactoryAccessorCatalogTest, FactoryCoercionCatalogTest, and the function-app fixture
+  of FunctionExpressionCompilerTest. Figures: BENCH.md, 2026-10-22 EL-019 entry
+  (ContextBenchmark). Residual: a factory shared across applications keeps the first one's
+  class loader reachable (internals page).
+
+## EL-020 · 2026-10-22 · Deny mode throws from getCommonPropertyType after a table answered
+
+- Symptom: under -Dpeano.reflection=deny,
+  context.getELResolver().getCommonPropertyType(context, entry) on a HashMap$Node throws
+  "Reflection fallback denied for java.util.HashMap$Node", although the built-in Map.Entry
+  table answered String.class. Generated tables hit the same failure.
+- Minimal reproduction: deny mode, StandardELContext over the Peano factory, call
+  getCommonPropertyType on the resolver chain with any base that has a table.
+- Cause: CompositeELResolver.getCommonPropertyType queries every resolver (there is no
+  resolution flag for it), so ReflectionGuard.getCommonPropertyType runs after the table and
+  applies the member-access guard to what is only metadata.
+- Status: fixed (2026-10-22). ReflectionGuard.getCommonPropertyType returns null without
+  checking the policy, as it performs no reflective member access; the composite then returns
+  what the other resolvers report, as in allow mode. Regression test:
+  MapEntryAccessTest.commonPropertyTypeIsMetadataNotMemberAccess.
+
+## CI-003 · 2026-10-11 · Forge branch updates create unsigned merge commits
+
+- Symptom: PR #47 governance checks failed in run 36980, skipping pr-validate,
+  although its official EL TCK remained green.
+- Minimal reproduction: update the PR branch from main through the forge UI;
+  commit c1d07309552915560bf043b610dd56d6e6721771 is an unsigned server merge.
+- Cause: the forge's merge action does not create a maintainer GPG signature,
+  which the shared governance gate requires for every commit in the PR range.
+- Status: fixed by locally rebasing the original signed feature commit onto
+  main with --gpg-sign and replacing the server merge using an explicit lease.
+  The rebased source tree matches the server merge; no runtime behavior changes.
+  Future updates must use a locally signed rebase or the project's signing bot.
+
+## API-004 · 2026-10-11 · Null lambda argument exposes an outer same-name value
+
+- Symptom: a nullable inner lambda argument does not mask a non-null outer argument.
+- Minimal reproduction: on EL API 6.0.1, enter a scope {seed=7}, then {seed=null};
+  getLambdaArgument("seed") returns 7 rather than null while isLambdaArgument is true.
+- Cause: API ELContext lookup continues through outer maps when map.get returns null
+  instead of distinguishing an absent entry from a present null value.
+- Status: upstream limitation, predating OPT-05. No API replacement or reflective
+  access to private scope state is introduced by the allocation optimization.
+- Evidence: the direct API regression failed with expected null / actual 7. The
+  desired-behavior case remains disabled with this id in LambdaCaptureEffectsTest;
+  nullable capture snapshots and scope cleanup otherwise pass their active cases.
+
+## BENCH-004 · 2026-10-11 · Published JFR files contained environment secrets
+
+- Symptom: raw profiles published with OPT-00 included initial environment records
+  containing GEMINI_API_KEY and SONAR_TOKEN values, as well as process/system metadata.
+- Minimal reproduction: record the default JDK JFR profile in a process inheriting
+  environment variables, then inspect jdk.InitialEnvironmentVariable events.
+- Cause: default JFR profile settings capture metadata beyond CPU/allocation events;
+  the recordings were archived without filtering their contents.
+- Status: current artifacts mitigated by retaining only ExecutionSample and
+  ObjectAllocationSample events. Historical credentials require revocation by the
+  maintainer; deleting current events does not erase previously pushed Git history.
+- Evidence: filtered recordings contain no environment/system-property events or
+  bytes matching the affected values. CPU/allocation event counts remain unchanged.
+  scrub-bench-profiles.sh enforces the event allowlist before future publication.
+  Bench-profile tests reject unapproved archive events and report only their types.
+
+## BENCH-003 · 2026-10-11 · Component benchmark forks repeated module patch options
+
+- Symptom: the diagnostic benchmark listed successfully but its first fork failed
+  during boot-layer initialization: core was specified more than once to --patch-module.
+- Minimal reproduction: run run-analysis-bench.sh with a fork after the initial
+  launcher used -jvmArgsAppend to repeat its parent module patch configuration.
+- Cause: JMH inherited the parent's patch option and appended the same patch again.
+- Status: resolved before publication. Explicit -jvmArgs supplies the complete fork
+  configuration once. Each invocation also uses a fresh target directory to prevent
+  stale generated metadata and concurrent compilation contamination.
+- Evidence: the original fork failed before measurement; the corrected component
+  run exercises the patched named module in separate JVMs. Raw successful results
+  are referenced in BENCH.md; the failed run is excluded from performance comparisons.
+
+## COMP-002 · 2026-10-11 · Serialized expressions accepted changed emitted bodies
+
+- Symptom: a serialized compiled expression could restore its old source metadata
+  against a regenerated class evaluating a different expression.
+- Minimal reproduction: serialize demo.E2 compiled from ${42}; replace E2 with
+  bytecode compiled from ${43}; restore the old stream in a fresh JVM.
+- Cause: every emitted class used the same fixed serialVersionUID value.
+- Status: resolved. Each UID derives from canonical parsed identity and an emission
+  schema tag. Equivalent source forms remain compatible; changed ASTs are rejected
+  by InvalidClassException. The initial fixed-UID prototype artifacts need regeneration.
+- Evidence: the stale-artifact test failed before the fingerprint and now rejects
+  changed bytecode, while a ${42} to #{ 42 } equivalent redeployment succeeds.
+
+## COMP-001 · 2026-10-11 · Class-File limits leaked generic builder errors
+
+- Symptom: compiling a valid oversized literal template threw IllegalArgumentException
+  without identifying the expression class.
+- Minimal reproduction: compile demo.Large from a 70,000-character literal string.
+- Cause: the Class-File builder's UTF-8 constant limit escaped the compiler boundary.
+- Status: resolved. Builder failures become ELException diagnostics naming the class,
+  retaining the original cause. Invalid binary names retain IllegalArgumentException.
+- Evidence: the oversized-template regression failed before the diagnostic wrapper
+  and now passes.
+
+## EL-017 · 2026-10-11 · API static fallback requires an ExpressionFactory provider
+
+- Symptom: API-only compiled runtime invokes an unregistered mapped Math function
+  through StaticFieldELResolver and fails with ExceptionInInitializerError.
+- Minimal reproduction: map Math.abs(long), omit core/other ExpressionFactory providers
+  and invoke the compiled function in allow mode without a matching accessor table.
+- Cause: Jakarta EL 6.0.1 ELUtil initializes an ExpressionFactory while matching
+  primitive/boxed arguments, even when the caller context supplies conversion.
+- Status: documented upstream prerequisite. Direct registered tables work with API alone;
+  allowed API reflection fallback needs Peano core or another ExpressionFactory provider.
+- Evidence: isolated direct-table allow/deny consumers and an additional core-backed
+  fallback consumer verify both boundaries; no alternative member-reflection path is added.
+
+## CI-002 · 2026-10-11 · Adoptium DNS failed before optional-profile tests
+
+- Symptom: the main optional-editor-compatibility job failed during JDK setup after PR #39.
+- Minimal reproduction: push job 81398 at commit 7a6754b reports
+  getaddrinfo EAI_AGAIN api.adoptium.net before Maven starts.
+- Cause: external runner DNS availability during the Adoptium API request.
+- Status: resolved through signed retry e2710c5 and PR #40; the main optional-profile
+  job, TCK and benchmark checks pass. No implementation change was needed.
+  All five PR checks passed, as did main build/deployment, TCK and benchmark validation.
+- Evidence: run 36666 startup log; the published processor snapshot contains the Maven
+  service resource and the real named Maven consumer passes allow/deny modes.
+
+## PROC-001 · 2026-10-11 · Maven processor paths did not discover the accessor processor
+
+- Symptom: a Maven application compiled its annotated model without producing accessor tables.
+- Minimal reproduction: use peano-processor on Maven's annotationProcessorPaths;
+  javac -processorpath with a named @ELAccessible application produces no provider fragment.
+- Cause: the processor service existed only in module-info.java, which Maven's
+  annotation processor classloader ignores.
+- Status: resolved with the maintainer-approved build-only Maven discovery exception.
+  A service resource complements the existing named-module declaration. Runtime
+  applications and generated tables remain modular.
+- Evidence: processor-path discovery regression red/green; modular processor tests
+  continue to verify closed application packages and allow/deny runtime consumers.
+- Related: Vidocq VIDOCQ-PEANO-003.
+
+## BENCH-002 · 2026-10-11 · Benchmark conversions could select a global factory
+
+- Symptom: the prototype selected an expression factory per engine but API context
+  conversion could fall back to a different globally discovered provider.
+- Minimal reproduction: create StandardELContext(selectedFactory) and query
+  getContext(ExpressionFactory.class); the prototype returned null with both providers installed.
+- Cause: StandardELContext does not store its constructor factory under the context key
+  used by ELContext.convertToType; absent that key, conversion uses ELManager's factory.
+- Status: resolved before publication by explicitly associating the selected factory.
+  A regression checks both providers. Initial prototype timings are retained as
+  diagnostic artifacts, excluded from the valid baseline; corrected timings are rerun.
+- Evidence: BenchmarkSemanticsTest.conversionUsesTheSelectedFactory red/green and API bytecode.
+
+## BENCH-001 · 2026-10-11 · Modular benchmark prototype lacked launch/readability wiring
+
+- Symptom: expression generation launched Java with an empty module path; after that
+  correction, loading GeneratedArithmetic failed its superclass access check.
+- Minimal reproduction: build the initial peano-bench prototype with the bench profile.
+  The exec step reported "--module-path requires module path specification"; the
+  semantic test then reported that the benchmark module did not read peano-api.
+- Cause: exec-maven-plugin requires its modulepath argument object, and emitted API
+  protocol subclasses require an explicit benchmark module read edge to peano-api.
+- Status: resolved before publication using modulepath and requires io.vidocq.peano.api.
+  Semantic tests and trial assertions verify named modules and compiler absence.
+
+## COMP-009 · 2026-10-11 · Literal method compilation retained delimiter escapes
+
+- Symptom: a compiled literal MethodExpression returned a backslash that the interpreter removed.
+- Minimal reproduction: compile the literal source \\${owner.sum}; invoke with expected String.
+  The prototype returned \\${owner.sum}, while the interpreter returns ${owner.sum}.
+- Cause: literal emission and identity used the raw source instead of parsed Template.Text.
+- Status: resolved before publication; emission and identity now use decoded literal text.
+- Evidence: independent API-only escaped-literal regression fixture.
+
+## COMP-008 · 2026-10-11 · Mapped function calls recreated accessor providers
+
+- Symptom: repeated mapped-function evaluation recreated providers and their catalogs
+  in the same evaluation context instead of reusing the registered tables.
+- Minimal reproduction: call getValue and getType on one mapped function and count
+  provider constructor calls; initial implementation constructed the provider twice.
+- Cause: registered-table discovery ran afresh for every invocation.
+- Status: resolved by an immutable catalog in ELContext, refreshed when the context
+  class loader changes. No global mutable cache or expression context field is added.
+- Evidence: isolated consumers verify initial reuse and loader-change refresh/reuse.
+
+## COMP-007 · 2026-10-11 · Expression instances shared nonempty text literals
+
+- Symptom: two instances of the same compiled literal class shared their text value,
+  skipping String conversions when those values were compared through captured bindings.
+- Minimal reproduction: bind left/right to separate instances of a compiled `${'hello'}`
+  expression; evaluate `${left==right}` with String conversion returning different values.
+- Cause: private static constants preserved per-node identity but shared it across instances.
+- Status: resolved by constructor-initialized private final instance literals. Values stay
+  stable per expression and distinct across instances. Emission schema v3 rejects older
+  serialized artifacts; regenerate pre-v3 classes before redeployment.
+- Evidence: interpreter oracle returns false after two conversions; independent emitted
+  consumer failed with true/zero conversions before the fix and now matches the oracle.
+
+## CI-001 · 2026-10-11 · Runner Docker daemon unavailable at job startup
+
+- Symptom: PR #29 governance and optional-profile jobs failed before checkout or tests.
+- Minimal reproduction: jobs 81029, 81031 and 81032 at commit 20ea0b7 report
+  "Cannot connect to the Docker daemon at tcp://[::1]:2376". The TCK job passed.
+- Cause: external runner Docker availability; no repository command had executed.
+- Status: resolved after retrying the same validated tree through signed commit
+  de2b5b8. Governance, full PR validation, optional profile and TCK passed before merge.
+- Evidence: actions runs 36421–36423 startup logs; local reactor and official TCK pass.
+- Recurrence: PR #34 TCK job 81191 at commit 5edc17a failed with the same Docker
+  startup error before tests. Signed retry 27d75be passed all four merge checks;
+  PR #34 was then merged. No source change was needed for either incident.
+  PR #40 jobs 81414, 81415 and 81417 hit the same startup failure at e515c80;
+  signed retry e2710c5 passed all five PR checks before merge.
+- Further recurrence: PR #35 TCK job 81224 failed with the same startup error;
+  signed retry 8165319 passed all PR checks before merge.
+
+## COMP-006 · 2026-10-11 · Property helper calls needed emitted class loading to verify
+
+- Lambda follow-up: inherited protected helper calls must name the generated class's
+  immediate API superclass. Naming a more distant superclass caused standalone
+  verification to load the absent generated class. Lambda-bearing expressions now
+  name CompiledLambdaValueExpression; Class-File verification and independent JVMs pass.
+
+- Symptom: standalone Class-File verification could not resolve the unloaded generated
+  class while validating invokevirtual calls to its superclass's protected helpers.
+- Minimal reproduction: compile `${bean[nil]}` and verify the returned bytes before loading.
+- Cause: generic virtual receiver verification requested an unavailable class hierarchy.
+- Status: resolved with invokespecial calls to the final superclass helpers; runtime
+  semantics remain direct parent dispatch and require no class loading during emission.
+- Evidence: property consumer verifies all emitted classes before writing or compiling
+  its module, then runs independently in both reflection modes.
+
+## COMP-005 · 2026-10-11 · Integral equality unboxed custom null conversions
+
+- Symptom: a custom converter returning null for the right Long operand raised an
+  error instead of false; null on the left skipped the right conversion.
+- Minimal reproduction: evaluate `${1==2}` with Long conversion returning null.
+- Cause: emitted equality used primitive lcmp instead of the interpreter's Long.equals.
+- Status: resolved by converting both operands before invoking Long.equals. Ordered
+  comparisons retain primitive comparison and their existing unboxing order.
+- Evidence: independent consumer checks right-null false and left-null error/call order.
+
+## COMP-004 · 2026-10-11 · Interned text operands skipped equality conversions
+
+- Symptom: emitted equality between distinct nonempty string literals skipped the
+  context conversions performed by the interpreter.
+- Minimal reproduction: evaluate `${'x'=='x'}` with a context recording String conversion.
+- Cause: ldc interned both strings, incorrectly triggering the reference-identity shortcut.
+- Status: resolved by initializing a distinct String for each nonempty parsed literal.
+  The initial static constants were subsequently scoped per instance (COMP-007).
+  Each literal retains stable identity across evaluations; current emission schema v3
+  rejects older streams and requires regenerating pre-v3 application classes.
+- Evidence: independent consumer checks both String conversions and the no-conversion
+  identity shortcut for cached integers; all generated classes pass verification.
+
+## COMP-003 · 2026-10-11 · Discarded numeric overflow failed during compilation
+
+- Symptom: compiling a lazy logical expression rejected an overflowing numeric literal
+  even when evaluation would discard that operand.
+- Minimal reproduction: compile and evaluate `${true or 9223372036854775808}`.
+- Cause: compiler validation parsed every literal before emitted branch selection.
+- Status: resolved by emitting numeric failures at their evaluation site. A discarded
+  operand raises no error; a selected invalid literal raises ELException with a
+  NumberFormatException cause, matching the interpreter.
+- Evidence: independent named-consumer tests cover discarded positive and negative
+  overflow plus selected overflow, and verify emitted class files.
+
+## EL-016 · 2026-10-11 · Registered legacy property editors are not discovered
+
+- Symptom: factory coercion of nonempty text to a custom target fails even after
+  PropertyEditorManager registers a matching editor and java.desktop is resolved.
+- Minimal reproduction: run the property-editor named-consumer fixture. Register
+  ValueEditor for Value, then call factory.coerceToType("7", Value.class).
+- Cause: Peano intentionally has no java.beans dependency or editor-registry lookup.
+  EL 6.0 section 1.25.9 describes the editor path; section 1.25 permits custom converters.
+- Status: resolved by the approved opt-in peano-beans-compat artifact. Installing it
+  enables registered editors for factory and context conversion. Without it, discovery
+  remains unavailable by design and explicit application converters remain supported.
+- Evidence: CompatibilityModuleTest covers presence/absence, both reflection modes,
+  registry changes, input failures, resolver precedence and fresh concurrent editors.
+- Evidence: PropertyProcessorTest's editor integration scenario verifies the missing
+  factory lookup and the working explicit converter, including empty/invalid input.
+
+## APT-007 · 2026-10-10 · Unselected child interfaces caused adapter diagnostics
+
+- Symptom: selecting a functional root caused an unrelated unselected child interface
+  to fail the functional annotation requirement during generation.
+- Minimal reproduction: selected @FunctionalInterface Source with get(); unselected
+  Unselected extends Source adds another abstract method.
+- Cause: class-family discovery also selected every source subinterface.
+- Status: resolved. Implicit family traversal skips interfaces; explicit interface
+  selection retains validation and unresolved-hierarchy deferral.
+- Evidence: the closed-module callback fixture failed compilation before the fix
+  and now compiles and runs with the unselected interface present.
+
+## APT-005 · 2026-10-10 · Static hiding generated duplicate signatures
+
+- Symptom: a generated child table rejected a hidden static method as ambiguous.
+- Minimal reproduction: Bean and Derived both declare public static getStaticValue;
+  evaluate Derived.getStaticValue through its generated table.
+- Cause: the compiler member list included both declarations and generation retained both.
+- Status: resolved. Signature deduplication preserves overriding or hiding declarations.
+- Evidence: the closed-module fixture failed with MethodNotFoundException before the fix.
+
+## APT-006 · 2026-10-10 · Later-generated parent lost inherited accessors
+
+- Symptom: a selected child table omitted properties inherited from a generated parent.
+- Minimal reproduction: selected Model extends Later; another processor emits Later
+  with public getValue returning 7 after the initial round.
+- Cause: the table was emitted while its superclass was an unresolved error type.
+- Status: resolved. Unresolved hierarchies defer emission and are retried each round.
+- Evidence: the named-module runtime test failed its inherited-property assertion
+  before the fix and now reads 7 through the generated table.
+
+## APT-004 · 2026-10-10 · Application names shadowed generated Java types
+
+- Symptom: selected models named Class, Object or String prevented generated
+  providers from compiling; wrapper names also broke annotation literal helpers.
+- Minimal reproduction: select demo.Class in a named application module.
+- Cause: generated source used unqualified java.lang names inside the model package.
+- Status: resolved in both property and method generators. All emitted Java platform
+  type/wrapper/annotation names are qualified.
+- Evidence: a nine-name compilation regression was red and is green, including
+  floating annotation values in a model named Float.
+
+## EL-015 · 2026-10-10 · Mapped static functions bypassed generated accessors
+
+- Symptom: a captured public static function on a generated closed model failed
+  through the API reflective resolver despite a directly callable generated table.
+- Minimal reproduction: map a public selected model's getStaticValue method and
+  evaluate f:value() while the model package is not exported.
+- Cause: captured functions invoked the API StaticFieldELResolver directly.
+- Status: resolved. Captured owner/name/descriptor first dispatches through its
+  registered table; unresolved functions retain the documented API fallback.
+- Evidence: the named consumer failed before direct registered dispatch and now passes.
+
+## APT-001 · 2026-10-10 · Module-qualified resource path rejected
+
+- Symptom: provider source was generated but its registration resource failed
+  with a FilerException during single-module javac compilation.
+- Minimal reproduction: compile an annotated model with -d pointing to a plain
+  class-output directory and a module-prefixed createResource package.
+- Cause: CLASS_OUTPUT is not a multi-module output location in this compilation mode.
+- Status: resolved. Sources retain explicit module ownership; fragments use the
+  single compilation's unqualified class-output resource location.
+- Evidence: positive processor integration cases were red with the FilerException
+  and now compile and verify all registration fragments.
+
+## APT-002 · 2026-10-10 · Boolean get-getter replaced is-getter
+
+- Symptom: generated ready property called getReady instead of primitive-boolean
+  isReady when both methods existed.
+- Minimal reproduction: a bean whose isReady returns true and getReady returns false.
+- Cause: equal primitive return types passed the subtype replacement condition.
+- Status: resolved. An existing primitive-boolean is-getter keeps precedence.
+- Evidence: the named consumer failed its boolean precedence assertion before the fix.
+
+## APT-003 · 2026-10-10 · Explicit generated model diagnosed before later rounds
+
+- Symptom: explicit selection of a model generated by another processor failed
+  with Unknown accessor type before that processor's output reached the next round.
+- Minimal reproduction: select demo.Later and run Peano before a second processor
+  that generates demo.Later in its first round.
+- Cause: configured names were resolved only once and immediately diagnosed.
+- Status: resolved. Pending names are retried; genuinely missing types are diagnosed
+  only when annotation processing completes.
+- Evidence: the two-processor regression was red and now generates the provider.
+
+## TCK-001 · 2026-10-10 · Official profile executed no tests
+
+- Symptom: the official profile could report BUILD SUCCESS without executing the suite.
+- Minimal reproduction: install the official artifact and run the old
+  `./mvnw -Ptck,tck-official -pl peano-tck test` configuration.
+- Cause: Surefire's default discovery excludes upstream ELClientIT/ELSigTestIT names.
+- Status: resolved. Explicit *IT inclusion and failIfNoTests are configured;
+  the script also rejects empty/unknown selections. No tests were excluded.
+- Evidence: the pre-change run with failIfNoTests enabled was red with
+  "No tests were executed"; the configured full suite executes 361 cases.
+
+## TCK-002 · 2026-10-10 · Missing mapper and signature harness properties
+
+- Symptom: mapper cases failed with null VariableMapper; signature testing had
+  an empty test classpath and an invalid jimage extraction directory.
+- Minimal reproduction: run the unconfigured official suite after enabling *IT discovery.
+- Cause: upstream contexts instantiate the class named by variable.mapper, and
+  signature tests require sigTestClasspath and jimage.dir.
+- Status: resolved. Test-only StandardVariableMapper delegates to the API's actual
+  mapper. Signature configuration supplies the API jar and extracted JDK classes.
+- Evidence: mapper cases and ELSigTestIT pass in the full 361-test run.
+
+## EL-009 · 2026-10-10 · Dynamic root writes queried current bean types
+
+- Symptom: reassignment of a null bean name failed with a wrapped NPE; dynamic
+  namespace writes could coerce to a type inferred from a previous value.
+- Minimal reproduction: define bean a as null, then evaluate `a=1; a=2.5; a`.
+- Cause: root writes queried BeanNameELResolver.getType before setValue, triggering
+  API-003 and applying a property-type inference to dynamic namespace entries.
+- Status: resolved. Root writes pass their original value to the resolver.
+  Non-root property writes still use their declared writable type.
+- Evidence: OfficialCompatibilityTest and all assignment/semicolon TCK cases pass.
+
+## EL-010 · 2026-10-10 · Expression identity used raw source text
+
+- Symptom: equivalent expressions differing only by whitespace, operator aliases
+  or immediate/deferred delimiters compared unequal.
+- Minimal reproduction: compare expressions `${A<B}` and `#{ A lt B }`.
+- Cause: equals/hashCode used the original expression string.
+- Status: resolved through normalized immutable syntax. Operand order, expected
+  types and captured bindings remain significant; diagnostics retain original source.
+- Evidence: regression cases and official valueExpressionEqualsTest pass.
+
+## EL-011 · 2026-10-10 · Void literal method expression failed too early
+
+- Symptom: creation rejected a literal MethodExpression with expected void return type.
+- Minimal reproduction: create a method expression from "literal" with return
+  type void and an empty parameter-type array.
+- Cause: the void check ran during construction instead of invocation.
+- Status: resolved. Creation and metadata work; invocation raises ELException,
+  matching MethodExpression.invoke's API contract.
+- Evidence: updated red regression and official negativeMethodExpressionTest pass.
+
+## EL-012 · 2026-10-10 · Unspecified conversion target rejected
+
+- Symptom: ExpressionFactory.coerceToType(null, null) threw NullPointerException.
+- Minimal reproduction: call the method with a null target type.
+- Cause: Coercions required a non-null target before applying conversion rules.
+- Status: resolved. An unspecified target preserves the original value.
+- Evidence: UnspecifiedConversionTest and official coerceToTypeTest pass.
+
+## EL-013 · 2026-10-10 · Bare methods required an invocation-aware custom chain
+
+- Symptom: a bare MethodExpression could report correct metadata but fail to invoke
+  a public method when its custom resolver chain only resolved the target.
+- Minimal reproduction: bind a Vector and invoke `#{vect.add}` using an empty invocation chain.
+- Cause: invocation stopped at the unresolved chain instead of invoking the method
+  found under section 1.6's bare-reference rules.
+- Status: resolved through API BeanELResolver/StaticFieldELResolver fallback for bare
+  references only. Custom resolver errors and claims keep precedence; inline calls
+  retain the chain's invocation contract and module access remains enforced.
+- Evidence: regression and official positiveMethodExpressionTest pass.
+
+## EL-014 · 2026-10-10 · Lambda could not convert to Java Predicate
+
+- Symptom: a Java method taking Predicate rejected an EL lambda with ELException.
+- Minimal reproduction: request Predicate.class for `x->x>5` with ELProcessor.getValue.
+- Cause: functional-interface coercion had no compiled adapter.
+- Status: Predicate case resolved through a statically compiled private implementation.
+  Arbitrary functional interfaces remain planned for build-time generation.
+- Evidence: PredicateConversionTest, named-consumer check and the official lambda
+  coercion case pass; no proxy or runtime bytecode generation is used.
+
+## API-003 · 2026-10-10 · BeanNameELResolver null bean type query
+
+- Symptom: getType on a resolved writable name holding null throws NullPointerException.
+- Minimal reproduction: define bean a as null with ELProcessor and ask its context's
+  resolver for getType(context, null, "a").
+- Cause: jakarta.el 6.0.1 BeanNameELResolver calls getBean(name).getClass() without
+  a null check.
+- Status: open, upstream API limitation. Peano wraps direct metadata failures.
+  Dynamic root writes avoid the unnecessary type query (EL-009).
+- Evidence: BeanNameELResolver.java:162 in the official assignment/semicolon failures.
+
+## EL-007 · 2026-10-10 · Evaluation boundary notifications missing
+
+- Symptom: EvaluationListener received resolver property events but no expression
+  before/after events.
+- Minimal reproduction: register a listener on StandardELContext and evaluate
+  a ValueExpression created from `${1+2}`.
+- Cause: expression entry points did not call the Jakarta context notification hooks.
+- Status: resolved during P5. Text value evaluation, method invocation and method
+  references notify before evaluation and after success. Writes/metadata preserve
+  reference behavior, and object variable bindings emit no synthetic boundary.
+- Evidence: four EvaluationEventsTest scenarios were red before the implementation.
+
+## EL-008 · 2026-10-10 · Parsed expressions could not be serialized
+
+- Symptom: ObjectOutputStream rejected value/method expressions with
+  NotSerializableException for Template, Ast.Call or java.lang.reflect.Method.
+- Minimal reproduction: write a parsed `${1+2}` expression to ObjectOutputStream.
+- Cause: default serialization traversed the parser tree and reflective function objects.
+- Status: resolved during P5 through a source/binding serialization proxy. Public
+  function descriptors preserve overloads, while the receiving context owns execution.
+  Nonserializable captured user objects still fail with NotSerializableException.
+- Evidence: four ExpressionSerializationTest scenarios failed before the proxy;
+  named-consumer round trips also pass without adding exports or opens.
+
+## EL-006 · 2026-10-10 · Null stream callback results unboxed incorrectly
+
+- Symptom: a predicate returning null caused a wrapped NullPointerException instead
+  of excluding the element; null limit/comparator values had the same unboxing issue.
+- Minimal reproduction: evaluate `[1,2].stream().filter(x->null).toList()`.
+- Cause: stream dispatch requested nullable wrapper conversions and then unboxed
+  the returned null, instead of requesting primitive EL conversion defaults.
+- Status: resolved during P4. Predicate, limit and comparator operands convert through
+  ELContext to boolean, long and int respectively. Regression tests cover all three.
+- Evidence: StreamOperationsTest was red with the null predicate and is green after
+  the primitive conversion change.
+
+## CI-001 · 2026-10-10 · Missing producer dependency graph
+
+- Symptom: PR #2 passes the Maven install and all 18 unit tests, then fails the
+  downstream impact step with HTTP 404.
+- Minimal reproduction: request
+  `https://codefloe.com/Vidocq/dep-graph/raw/branch/main/data/Vidocq_peano.json`.
+  The global `graph/inverted.json` and `scripts/resolve_impact.py` both return 200.
+- Cause: the new Peano repository has not published its producer metadata;
+  the dependency update workflow has no prior run.
+- Status: resolved. Workflow run 8 (`update-dep-graph.yml` on `main`) initialized
+  the producer metadata. PR validation run 9 passes both governance and the
+  complete build/downstream validation on commit `1d4065d`.
+- Evidence: PR validation run 7, job `pr-validate`, fails after `BUILD SUCCESS`.
+
+## EL-001 · 2026-10-10 · Asymmetric empty-string enum equality
+
+- Symptom: comparing an empty string with an enum on the right throws ELException,
+  while the reversed operands correctly return false.
+- Minimal reproduction: `Comparison.equal("", Color.RED)` with any enum `Color`.
+- Cause: empty-string-to-enum conversion returns null (EL 6.0 section 1.25.6);
+  the equality branch invoked equals on that null result.
+- Status: resolved during P1 implementation. Compare from the enum value;
+  regression assertions cover both operand orders in ComparisonTest.
+
+## API-001 · 2026-10-10 · Primitive array writes rejected by the API resolver
+
+- Symptom: writing an Integer value into an int[] through jakarta.el 6.0.1's
+  ArrayELResolver throws ClassCastException, although the element is compatible.
+- Minimal reproduction: call `new ArrayELResolver().setValue(context, new int[1], 0, 42)`
+  with a non-null ELContext. Peano's ValueExpression delegates the same operation.
+- Cause: ArrayELResolver checks `componentType.isAssignableFrom(value.getClass())`
+  before Array.set; primitive `int.class` is not assignable from `Integer.class`.
+- Status: open, upstream API limitation. Peano reports ELException with the
+  ClassCastException cause. Object-array writes and primitive-array
+  reads work. No fallback bypasses user resolvers or swallows their exceptions.
+- Evidence: ArrayELResolver.java:219 in the 6.0.1 API stack, and the setValue bytecode
+  checks the primitive component type before invoking Array.set.
+
+## EL-002 · 2026-10-10 · Resolver runtime failure leaked outside the EL contract
+
+- Symptom: a custom resolver throwing IllegalStateException leaked that exception
+  directly from ValueExpression instead of an ELException with a cause.
+- Minimal reproduction: evaluate a property with an ELResolver whose getValue
+  throws IllegalStateException; repeat with setValue.
+- Cause: engine resolver calls did not wrap non-EL runtime exceptions.
+- Status: resolved during P2; guarded resolver calls preserve ELException subclasses
+  and wrap other runtime failures. Regression tests verify read/write causes.
+
+## EL-003 · 2026-10-10 · Property writes omitted actual-type coercion
+
+- Symptom: setting a String value into an Integer[] element failed rather than
+  converting the value to Integer; a typed custom property received the raw value.
+- Minimal reproduction: create a ValueExpression for an Integer[] element with
+  expected type String, then setValue(context, "42").
+- Cause: writes delegated the raw value without using the actual writable type
+  required by EL 6.0 section 1.2.1.1.
+- Status: resolved during P3. Query the terminal resolver type, convert through
+  ELContext and then setValue. AssignmentExpressionTest covers object arrays and
+  a typed custom property; API-001 remains independent.
+
+## EL-004 · 2026-10-10 · Literal method aliases skipped inherited return checks
+
+- Symptom: a MethodExpression variable holding a Long-valued literal was invoked
+  through an alias expecting String without rejecting the signature mismatch.
+- Minimal reproduction: bind createMethodExpression(context, "42", Long.class, [])
+  as a variable, then invoke an alias expecting String.
+- Cause: the literal invocation branch ignored return-type constraints accumulated
+  through MethodExpression-valued variables.
+- Status: resolved during P3; literal aliases validate inherited return constraints.
+  MethodExpressionTest contains the regression assertion.
+
+## EL-005 · 2026-10-10 · Primitive/wrapper overload metadata lost exact descriptors
+
+- Symptom: metadata for overloads boxed(int) and boxed(Integer) selected the same
+  descriptor regardless of the caller's explicit expected parameter type.
+- Minimal reproduction: request each overload from the independent PublicRecord fixture
+  through getMethodInfo/getMethodReference and invoke it.
+- Cause: matching boxed parameter types counted as exact, and identical boxed types
+  were treated as strict specificity in both directions.
+- Status: resolved during P3 after a red module fixture. Exact declared types take
+  precedence over boxing; equal boxed types cannot dominate each other.
+
+## API-002 · 2026-10-10 · Inaccessible method fallback produces NullPointerException
+
+- Symptom: BeanELResolver.invoke on a public method in a non-exported package
+  throws NullPointerException instead of MethodNotFoundException.
+- Minimal reproduction: invoke HiddenBean.greet in the independent bootstrap fixture
+  through a fresh StandardELContext without its application resolver.
+- Cause: ELUtil.findMethod returns null for an inaccessible method, then
+  ELUtil.invokeMethod dereferences that null at ELUtil.java:213.
+- Status: open, jakarta.el 6.0.1 API limitation. Peano wraps the NPE in ELException
+  with the original cause. Invocation remains blocked; custom resolver invocation works.
+  The fixture accepts the current wrapped NPE or a future corrected MethodNotFoundException.

@@ -1,0 +1,38 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+
+/**
+ * Peano — Jakarta Expression Language 6.0 implementation.
+ *
+ * <p>The engine stays unexported. Syntax is exported only to the build-time compiler.
+ * Discovery happens through the ExpressionFactory service provider,
+ * which the module system allows without an export.
+ */
+// The qualified target is built later in the Maven reactor and is absent during core compilation.
+@SuppressWarnings("module")
+module io.vidocq.peano.core {
+    requires transitive jakarta.el;
+    requires io.vidocq.peano.api;
+    exports io.vidocq.peano.core.internal.syntax to io.vidocq.peano.compiler;
+    uses io.vidocq.peano.spi.AccessorProvider;
+    uses io.vidocq.peano.spi.ProxyUnwrapper;
+    uses io.vidocq.peano.spi.TypeConversionProvider;
+    provides jakarta.el.ExpressionFactory with io.vidocq.peano.core.internal.PeanoExpressionFactory;
+}
