@@ -1,0 +1,157 @@
+= Getting started
+:description: Install Chappe, start a server, write the first handler, smoke-test with wrk.
+
+[.lead]
+This page boots a Chappe HTTP server in under 30 lines of Java, then walks through a typed handler, static file serving, and a minimal `wrk` load test.
+
+== Prerequisites
+
+* **Java 25** — Temurin recommended.
+* **Maven 3.9.16** — pinned via `.sdkmanrc` at the root of the `chappe` repo.
+* `sdk env` from the repo root loads the right JDK and Maven. If another Maven version is active in the shell, switch to the pinned one: `sdk use maven 3.9.16`.
+* Optional: `wrk` for the final load test (`brew install wrk` or equivalent).
+
+== Maven coordinates
+
+[source,xml,subs=attributes+]
+----
+<dependency>
+    <groupId>io.vidocq.chappe</groupId>
+    <artifactId>chappe-api</artifactId>
+    <version>{project-version}</version>
+</dependency>
+<dependency>
+    <groupId>io.vidocq.chappe</groupId>
+    <artifactId>chappe-core</artifactId>
+    <version>{project-version}</version>
+    <scope>runtime</scope>
+</dependency>
+<dependency>
+    <groupId>io.vidocq.chappe</groupId>
+    <artifactId>chappe-http</artifactId>
+    <version>{project-version}</version>
+    <scope>runtime</scope>
+</dependency>
+----
+
+`chappe-api` is the public API, compiled at `compile` scope. `chappe-core` (server engine) and `chappe-http` (HTTP/1.1 and HTTP/2 protocols) sit at `runtime` scope, discovered via `ServiceLoader` (`ServerProvider`).
+
+== Hello world
+
+[source,java]
+----
+import io.vidocq.chappe.api.*;
+
+void main() {
+    var router = Router.builder()
+        .get("/", _ -> Response.ok("Hello, Chappe!"))
+        .get("/users/{id}", req -> Response.ok("User " + req.pathParams().get("id")))
+        .build();
+
+    try (var server = Server.builder()
+            .port(8080)
+            .handler(router)
+            .build()) {
+        server.start();
+        Thread.currentThread().join();
+    }
+}
+----
+
+`Server` is `AutoCloseable`; `start()` opens the listening socket and spawns the accept loop on a virtual thread.
+
+[NOTE]
+====
+`void main()` (no `String[] args`) is valid Java 25 thanks to JEP 512 (Compact Source Files). For a standard entry point, write `public static void main(String[] args)`.
+====
+
+== First typed handler
+
+To read a JSON body, write a POST, and return an explicit status:
+
+[source,java]
+----
+import io.vidocq.chappe.api.*;
+import java.nio.charset.StandardCharsets;
+
+Router api = Router.builder()
+    .post("/users", req -> {
+        var body = new String(
+            req.body().asInputStream().readAllBytes(),
+            StandardCharsets.UTF_8
+        );
+        return Response.builder()
+            .status(StatusCode.CREATED)
+            .header("Content-Type", "application/json")
+            .body("{\"received\": " + body + "}")
+            .build();
+    })
+    .delete("/users/{id}", req -> Response.of(StatusCode.NO_CONTENT))
+    .build();
+----
+
+== Serving a static directory
+
+[source,java]
+----
+var staticHandler = StaticFileHandler.builder()
+    .addPath(java.nio.file.Path.of("./public"))
+    .addClasspath("static")
+    .cacheInMemory(true)
+    .cacheControl("max-age=3600, public")
+    .build();
+
+Server.builder().port(8080).handler(staticHandler).build().start();
+----
+
+`StaticFileHandler` auto-detects MIME (26+ types), answers `304 Not Modified` on `If-Modified-Since` or `If-None-Match`, and blocks path traversal.
+
+== Build and run
+
+[source,bash]
+----
+sdk env                        # loads JDK 25 + Maven 3.9.16
+./mvnw -ntp install -DskipTests
+java \
+     --module-path target/lib:target/myapp.jar \
+     --module myapp/io.example.Main
+----
+
+== Smoke test with `wrk`
+
+Once the server is listening on 8080, confirm it sustains a minimal load:
+
+[source,bash]
+----
+wrk -t4 -c100 -d10s http://localhost:8080/
+----
+
+For measured figures, with their hardware and exact commands, see link:{repo-chappe}/blob/main/BENCH.md[BENCH.md].
+
+== Diagram: starting a server
+
+[mermaid]
+....
+sequenceDiagram
+    autonumber
+    participant App as Application
+    participant Server as Server (chappe-core)
+    participant Acceptor as Acceptor VT
+    participant OS as OS / TCP
+    App->>Server: Server.builder().port(8080).handler(router).build()
+    App->>Server: server.start()
+    Server->>OS: bind(8080), listen()
+    Server->>Acceptor: spawn virtual thread
+    loop per connection
+        OS-->>Acceptor: accept()
+        Acceptor->>Acceptor: spawn virtual thread<br/>per connection
+    end
+    App->>Server: server.close()
+    Server->>OS: close()
+....
+
+== Next steps
+
+* xref:usage.adoc[Usage] — TLS, HTTP/2, content negotiation, virtual hosts, CLI.
+* xref:concepts.adoc[Concepts] — `RequestContext`, `Filter`, `Body`, mount.
+* xref:internals.adoc[Internals] — HTTP/1.1, HTTP/2, HTTP/3 pipelines.

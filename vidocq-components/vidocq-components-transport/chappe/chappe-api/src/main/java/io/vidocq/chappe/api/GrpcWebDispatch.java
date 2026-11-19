@@ -1,0 +1,73 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.api;
+
+import java.util.Objects;
+
+/**
+ * Marker response telling the HTTP/2 transport that a <b>gRPC-Web</b> call must be
+ * dispatched to a {@link GrpcHandler}.
+ * <p>
+ * gRPC-Web (PROTOCOL-WEB.md) is a browser-compatible variant of gRPC: HTTP/2
+ * trailers are not exposed to JavaScript, so the "trailers" are serialized
+ * inline as a special DATA frame ({@code 0x80} prefix). Two content types:
+ * <ul>
+ *   <li>{@code application/grpc-web} — binary (the protobuf payload is transported as-is)</li>
+ *   <li>{@code application/grpc-web-text} — Base64 (each request/response chunk is
+ *       Base64-encoded, for text-only transports such as XHR.responseText)</li>
+ * </ul>
+ *
+ * <p>Built by {@link Router.Builder#grpcWeb(String, GrpcHandler)} and recognized by
+ * {@code chappe-http} via {@code instanceof}. An application does not need to
+ * instantiate it directly.
+ *
+ * @param handler the handler the call is dispatched to
+ * @param mode the body encoding of the call
+ */
+public record GrpcWebDispatch(GrpcHandler handler, Mode mode) implements Response {
+
+    /** Body encoding mode: binary or Base64. */
+    public enum Mode {
+        /** {@code application/grpc-web} : payload binaire brut. */
+        BINARY,
+        /** {@code application/grpc-web-text}: Base64 payload (each chunk independently). */
+        TEXT
+    }
+
+    public GrpcWebDispatch {
+        Objects.requireNonNull(handler, "handler");
+        Objects.requireNonNull(mode, "mode");
+    }
+
+    @Override
+    public StatusCode status() {
+        return StatusCode.OK;
+    }
+
+    @Override
+    public Headers headers() {
+        return Headers.empty();
+    }
+
+    @Override
+    public Body body() {
+        return Body.empty();
+    }
+}

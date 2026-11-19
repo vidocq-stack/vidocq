@@ -1,0 +1,32 @@
+= Performance
+:description: Where Chappe's measured figures are recorded, and what Chappe does and does not claim.
+
+[.lead]
+Chappe's goal is a transport that holds under load and over time. It does not
+claim a ranking against other HTTP servers: it is enough to know that it is
+good enough for production.
+
+== Where the figures are
+
+* link:{repo-chappe}/blob/main/BENCH.md[BENCH.md] holds the current entries:
+  date, hardware and JVM, exact command, raw results and the delta against the
+  previous run.
+* link:{repo-chappe}/blob/main/BENCHMARKS.md[BENCHMARKS.md] keeps the earlier
+  in-process and shootout runs and their detailed methodology. Those runs
+  predate the current harness and are history, not a statement about the
+  current release.
+
+== Reproducibility
+
+[source,bash]
+----
+# Multi-runtime shootout harness (needs the bench host, see BENCH.md)
+./chappe-bench/docker/run-remote.sh shootout
+
+# Without native build (if GraalVM 25 unavailable)
+./chappe-bench/docker/run-remote.sh shootout-jvm-only
+----
+
+The Dockerfiles, harness and JFR profiling suite are in the
+link:{repo-chappe}/tree/main/chappe-bench/docker/shootout[`chappe-bench/docker/shootout`]
+folder.

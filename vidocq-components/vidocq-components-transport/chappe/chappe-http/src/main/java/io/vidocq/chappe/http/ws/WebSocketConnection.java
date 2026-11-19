@@ -1,0 +1,544 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.http.ws;
+
+import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
+
+import io.vidocq.chappe.api.CloseCodes;
+import io.vidocq.chappe.api.Request;
+import io.vidocq.chappe.api.WebSocket;
+import io.vidocq.chappe.api.WebSocketHandler;
+
+/**
+ * Active WebSocket connection — implements {@link WebSocket} and the server I/O loop.
+ * <p>
+ * Executed on the virtual thread initially allocated to the HTTP connection by {@code chappe-core}.
+ * Writes are serialized via {@link #writeLock}: multiple threads (for example an application timer
+ * calling {@code sendText}) can write without risking frame interleaving (RFC 6455 §5.4).
+ * All incoming frames are dispatched to the {@link WebSocketHandler} on that same thread —
+ * no synchronization is required for handler-side reads.
+ */
+public final class WebSocketConnection implements WebSocket {
+
+    private static final System.Logger LOG = System.getLogger(WebSocketConnection.class.getName());
+
+    private static final long DEFAULT_MAX_PAYLOAD = 64L * 1024 * 1024; // 64 MiB
+    private static final int MAX_MESSAGE_SIZE = (int) DEFAULT_MAX_PAYLOAD;
+
+    private final ReadableByteChannel readChannel;
+    private final WritableByteChannel writeChannel;
+    private final Closeable closeable;
+    private final Closeable abortCloseable;
+    private final ByteBuffer readBuffer;
+    private final WebSocketHandler handler;
+    private final Request handshake;
+    private final String subprotocol;
+    private final boolean secure;
+    private final InetSocketAddress remoteAddress;
+
+    private final ReentrantLock writeLock = new ReentrantLock();
+    private final Map<String, Object> attributes = new LinkedHashMap<>();
+    private final WebSocketFrameReader reader = new WebSocketFrameReader(DEFAULT_MAX_PAYLOAD);
+
+    private final Runnable onCloseSent;
+
+    private volatile boolean open = true;
+    private volatile boolean closeSent;
+    private volatile boolean closeReceived;
+    private volatile boolean aborted;
+    private int receivedCloseCode = CloseCodes.NO_STATUS_RCVD;
+    private String receivedCloseReason = "";
+
+    // Data message being assembled, read by the reading thread only.
+    private int currentDataOpcode = -1;
+    /** Not {@code null} exactly while a message is being assembled. */
+    private ByteArrayOutputStream messageBuf;
+
+    public WebSocketConnection(
+            ReadableByteChannel readChannel,
+            WritableByteChannel writeChannel,
+            Closeable closeable,
+            ByteBuffer readBuffer,
+            WebSocketHandler handler,
+            Request handshake,
+            String subprotocol) {
+        this(
+                new WebSocketChannels(readChannel, writeChannel, closeable, readBuffer, closeable),
+                handler,
+                handshake,
+                subprotocol,
+                () -> {});
+    }
+
+    /**
+     * @param channels the I/O the connection runs on
+     * @param onCloseSent runs at most once, after a {@code close()} or {@code sendClose()} call that sent the Close
+     *     frame, on that call's thread; a Close the connection sends itself (the echo of the peer's Close, a
+     *     protocol error) does not run it. The caller bounds the wait for the peer's Close with it (CHAPPE-056)
+     */
+    public WebSocketConnection(
+            WebSocketChannels channels,
+            WebSocketHandler handler,
+            Request handshake,
+            String subprotocol,
+            Runnable onCloseSent) {
+        this.onCloseSent = onCloseSent;
+        this.readChannel = channels.readChannel();
+        this.writeChannel = channels.writeChannel();
+        this.closeable = channels.closeable();
+        this.abortCloseable = channels.abortCloseable();
+        this.readBuffer = channels.readBuffer();
+        this.handler = handler;
+        this.handshake = handshake;
+        this.subprotocol = subprotocol;
+        this.secure = handshake.isSecure();
+        this.remoteAddress = handshake.remoteAddress();
+    }
+
+    /**
+     * Read loop — blocks until closure (Close handshake or EOF).
+     * Called by {@code HttpConnection} after {@link WebSocketHandshake#writeResponse}.
+     */
+    public void run() {
+        try {
+            handler.onOpen(this, handshake);
+        } catch (Exception e) {
+            safeError(e);
+            forceClose(CloseCodes.INTERNAL_ERROR, "onOpen failed");
+            return;
+        }
+
+        try {
+            readLoop();
+        } catch (WebSocketProtocolException pe) {
+            safeError(pe);
+            sendCloseSilent(pe.closeCode(), pe.getMessage());
+        } catch (IOException ioe) {
+            // The read an abort cut is the abort itself, not an error of the session (CHAPPE-060).
+            if (!aborted) safeError(ioe);
+            receivedCloseCode = CloseCodes.ABNORMAL_CLOSURE;
+        } catch (Throwable t) {
+            // Intentional boundary: an Error from the application's handler must still close the
+            // WebSocket with 1011 (RFC 6455 §7.4.1) and report onError.
+            safeError(t);
+            sendCloseSilent(CloseCodes.INTERNAL_ERROR, "handler error");
+        } finally {
+            // An abort ends the session abnormally, unless the peer's Close frame had already arrived; the
+            // loop may also have stopped on the abort without a read failing (a handler call that returned).
+            if (aborted && !closeReceived) receivedCloseCode = CloseCodes.ABNORMAL_CLOSURE;
+            notifyClose();
+            forceClose();
+        }
+    }
+
+    /** Reads and handles frames until the close handshake, or the peer's EOF without a Close frame. */
+    private void readLoop() throws Exception {
+        boolean connected = true;
+        while (connected && open && !closeReceived) {
+            WebSocketFrame frame = readFrameOrNull();
+            if (frame == null) {
+                // Peer closed TCP without Close frame — abnormal closure.
+                receivedCloseCode = CloseCodes.ABNORMAL_CLOSURE;
+                connected = false;
+            } else if (frame.isControl()) {
+                handleControl(frame);
+            } else {
+                handleData(frame);
+            }
+        }
+    }
+
+    /** The next frame, {@code null} when the peer closed TCP without a Close frame. */
+    private WebSocketFrame readFrameOrNull() throws IOException {
+        try {
+            return reader.readFrame(readBuffer, readChannel);
+        } catch (EOFException _) {
+            return null;
+        }
+    }
+
+    // -- Data frames (TEXT / BINARY / CONTINUATION) --
+    private void handleData(WebSocketFrame frame) throws Exception {
+        if (frame.opcode() == WebSocketFrame.OP_CONTINUATION) {
+            if (messageBuf == null) {
+                throw new WebSocketProtocolException(
+                        CloseCodes.PROTOCOL_ERROR, "CONTINUATION without prior data frame");
+            }
+        } else {
+            if (messageBuf != null) {
+                throw new WebSocketProtocolException(
+                        CloseCodes.PROTOCOL_ERROR, "New data frame while previous message incomplete");
+            }
+            currentDataOpcode = frame.opcode();
+            messageBuf = new ByteArrayOutputStream();
+        }
+
+        int payloadLen = frame.payload().remaining();
+        if (messageBuf.size() + payloadLen > MAX_MESSAGE_SIZE) {
+            throw new WebSocketProtocolException(
+                    CloseCodes.MESSAGE_TOO_BIG, "Re-assembled message exceeds " + MAX_MESSAGE_SIZE);
+        }
+        var bytes = new byte[payloadLen];
+        frame.payload().get(bytes);
+        messageBuf.write(bytes);
+
+        if (frame.fin()) {
+            var full = messageBuf.toByteArray();
+            int op = currentDataOpcode;
+            currentDataOpcode = -1;
+            messageBuf = null;
+            dispatchMessage(op, full);
+        }
+    }
+
+    /** Reports the end of the session to the handler; a failure of its {@code onClose} goes to {@code onError}. */
+    private void notifyClose() {
+        try {
+            handler.onClose(this, receivedCloseCode, receivedCloseReason);
+        } catch (Exception e) {
+            safeError(e);
+        }
+    }
+
+    // -- Dispatch a full data frame --
+    private void dispatchMessage(int opcode, byte[] payload) throws Exception {
+        if (opcode == WebSocketFrame.OP_TEXT) {
+            String text;
+            try {
+                var decoder = StandardCharsets.UTF_8
+                        .newDecoder()
+                        .onMalformedInput(CodingErrorAction.REPORT)
+                        .onUnmappableCharacter(CodingErrorAction.REPORT);
+                text = decoder.decode(ByteBuffer.wrap(payload)).toString();
+            } catch (CharacterCodingException _) {
+                throw new WebSocketProtocolException(CloseCodes.INVALID_PAYLOAD_DATA, "Invalid UTF-8 in TEXT frame");
+            }
+            handler.onText(this, text);
+        } else {
+            handler.onBinary(this, ByteBuffer.wrap(payload));
+        }
+    }
+
+    // -- Control frames --
+    private void handleControl(WebSocketFrame frame) throws Exception {
+        switch (frame.opcode()) {
+            case WebSocketFrame.OP_PING -> {
+                // RFC §5.5.2: reply with PONG using exactly the same payload, also once this side's Close went out:
+                // the RFC asks for one until the peer's Close is received, and that Close ends this loop.
+                var pongPayload = frame.payload().duplicate();
+                writeLocked(() -> WebSocketFrameWriter.writeFrame(writeChannel, WebSocketFrame.OP_PONG, pongPayload));
+                handler.onPing(this, frame.payload().duplicate());
+            }
+            case WebSocketFrame.OP_PONG -> handler.onPong(this, frame.payload());
+            case WebSocketFrame.OP_CLOSE -> handleClose(frame);
+            default ->
+                throw new WebSocketProtocolException(
+                        CloseCodes.PROTOCOL_ERROR,
+                        "Unexpected control opcode 0x" + Integer.toHexString(frame.opcode()));
+        }
+    }
+
+    private void handleClose(WebSocketFrame frame) throws IOException {
+        var p = frame.payload();
+        int code = CloseCodes.NO_STATUS_RCVD;
+        String reason = "";
+        if (p.remaining() == 1) {
+            throw new WebSocketProtocolException(CloseCodes.PROTOCOL_ERROR, "Close payload must be 0 or ≥ 2 bytes");
+        }
+        if (p.remaining() >= 2) {
+            code = ((p.get() & 0xFF) << 8) | (p.get() & 0xFF);
+            if (!CloseCodes.isValidOnWire(code)) {
+                // §7.4.1: invalid received code -> PROTOCOL_ERROR
+                throw new WebSocketProtocolException(CloseCodes.PROTOCOL_ERROR, "Invalid close code: " + code);
+            }
+            if (p.hasRemaining()) {
+                var reasonBytes = new byte[p.remaining()];
+                p.get(reasonBytes);
+                try {
+                    reason = StandardCharsets.UTF_8
+                            .newDecoder()
+                            .onMalformedInput(CodingErrorAction.REPORT)
+                            .onUnmappableCharacter(CodingErrorAction.REPORT)
+                            .decode(ByteBuffer.wrap(reasonBytes))
+                            .toString();
+                } catch (CharacterCodingException _) {
+                    throw new WebSocketProtocolException(
+                            CloseCodes.INVALID_PAYLOAD_DATA, "Invalid UTF-8 in Close reason");
+                }
+            }
+        }
+        receivedCloseCode = code;
+        receivedCloseReason = reason;
+        closeReceived = true;
+        // Echo close if we did not already initiate it.
+        if (!closeSent) {
+            sendCloseSilent(code == CloseCodes.NO_STATUS_RCVD ? CloseCodes.NORMAL_CLOSURE : code, "");
+        }
+    }
+
+    // -- WebSocket implementation --
+
+    @Override
+    public void sendText(String message) throws IOException {
+        checkOpen();
+        sendFrame(WebSocketFrame.OP_TEXT, StandardCharsets.UTF_8.encode(message));
+    }
+
+    @Override
+    public void sendBinary(ByteBuffer payload) throws IOException {
+        checkOpen();
+        sendFrame(WebSocketFrame.OP_BINARY, payload);
+    }
+
+    /**
+     * Writes a frame of the application, unless the Close frame was sent, or the connection aborted, while this
+     * call waited for {@code writeLock}: no data frame follows the Close frame (RFC 6455 §5.5.1), nor a ping or a
+     * pong of the application. Once the Close frame went out, no write of the application holds {@code writeLock}
+     * past this check; only the automatic Pong of a Ping the peer sent before its Close may (RFC 6455 §5.5.2).
+     */
+    private void sendFrame(int opcode, ByteBuffer payload) throws IOException {
+        writeLocked(() -> {
+            if (writesClosed()) throw new IOException("WebSocket closed");
+            WebSocketFrameWriter.writeFrame(writeChannel, opcode, payload);
+        });
+    }
+
+    /** Whether nothing more may be written: this side's Close frame went out, or the connection was aborted. */
+    private boolean writesClosed() {
+        return closeSent || aborted;
+    }
+
+    @Override
+    public void sendPing(ByteBuffer payload) throws IOException {
+        checkOpen();
+        if (payload.remaining() > 125) {
+            throw new IOException("PING payload must be ≤ 125 bytes");
+        }
+        sendFrame(WebSocketFrame.OP_PING, payload);
+    }
+
+    @Override
+    public void sendPong(ByteBuffer payload) throws IOException {
+        checkOpen();
+        if (payload.remaining() > 125) {
+            throw new IOException("PONG payload must be ≤ 125 bytes");
+        }
+        sendFrame(WebSocketFrame.OP_PONG, payload);
+    }
+
+    /** Sends the Close frame as {@link #sendClose(int, String)} does; whether it sent it does not matter here. */
+    @Override
+    public void close(int code, String reason) throws IOException {
+        sendClose(code, reason);
+    }
+
+    /**
+     * Does nothing once the connection was aborted, also when this call was queued on {@link #writeLock} at the
+     * abort, or writing its Close frame when the abort cut that write (CHAPPE-060). Nor does it once the peer's
+     * Close was read: the read thread echoes it, so the caller hears that the peer closed first.
+     *
+     * @return whether this call sent the Close frame
+     */
+    @Override
+    public boolean sendClose(int code, String reason) throws IOException {
+        boolean sent;
+        try {
+            sent = sendCloseFrame(code, reason, true);
+        } catch (IOException e) {
+            // The abort cut the Close frame's write: the connection is closed, which is what this call asked for.
+            if (!aborted) throw e;
+            return false;
+        }
+        if (sent) onCloseSent.run();
+        return sent;
+    }
+
+    /**
+     * Sends the Close frame unless one was sent already or the connection was aborted, and, for a close of the
+     * application, unless the peer's Close was read: the read thread echoes that one. The check, the write and
+     * {@code closeSent} are one step under {@code writeLock}, so two threads never send two frames.
+     *
+     * @param local a close of the application ({@link #sendClose(int, String)}), not one the connection sends itself
+     * @return {@code true} when this call sent the frame
+     */
+    private boolean sendCloseFrame(int code, String reason, boolean local) throws IOException {
+        if (closeTaken(local)) return false;
+        var payload = buildClosePayload(code, reason);
+        var sent = new boolean[1];
+        writeLocked(() -> {
+            if (closeTaken(local)) return;
+            WebSocketFrameWriter.writeFrame(writeChannel, WebSocketFrame.OP_CLOSE, payload);
+            closeSent = true;
+            sent[0] = true;
+        });
+        return sent[0];
+    }
+
+    /**
+     * Whether a close may no longer send its frame: one went out, the connection was aborted, or, for a close of
+     * the application, the peer's Close arrived.
+     */
+    private boolean closeTaken(boolean local) {
+        return writesClosed() || (local && closeReceived);
+    }
+
+    /**
+     * Marks the connection closed and closes it with {@code abortCloseable}, without {@link #writeLock}, which a
+     * send blocked on a peer that does not read holds: that send fails with an {@link IOException}, and so does
+     * the read loop's read; {@link #run} then reports 1006 to {@code onClose}, once. A {@link #close} from then on
+     * does nothing (CHAPPE-060).
+     */
+    @Override
+    public void abort() {
+        aborted = true;
+        open = false;
+        closeQuietly(abortCloseable);
+    }
+
+    @Override
+    public boolean isOpen() {
+        return open && !closeSent && !closeReceived;
+    }
+
+    @Override
+    public InetSocketAddress remoteAddress() {
+        return remoteAddress;
+    }
+
+    @Override
+    public boolean isSecure() {
+        return secure;
+    }
+
+    @Override
+    public String subprotocol() {
+        return subprotocol;
+    }
+
+    @Override
+    public Object attribute(String key) {
+        return attributes.get(key);
+    }
+
+    @Override
+    public WebSocket attribute(String key, Object value) {
+        if (value == null) attributes.remove(key);
+        else attributes.put(key, value);
+        return this;
+    }
+
+    // -- Helpers --
+
+    private void checkOpen() throws IOException {
+        if (!open || closeSent) throw new IOException("WebSocket closed");
+    }
+
+    private static ByteBuffer buildClosePayload(int code, String reason) {
+        byte[] reasonBytes = reason == null ? new byte[0] : reason.getBytes(StandardCharsets.UTF_8);
+        if (reasonBytes.length > 123) {
+            // Truncate: max 125 for frame payload, 2 bytes reserved for code.
+            var truncated = new byte[123];
+            System.arraycopy(reasonBytes, 0, truncated, 0, 123);
+            reasonBytes = truncated;
+        }
+        var buf = ByteBuffer.allocate(2 + reasonBytes.length);
+        buf.putShort((short) code);
+        buf.put(reasonBytes);
+        buf.flip();
+        return buf;
+    }
+
+    private void sendCloseSilent(int code, String reason) {
+        try {
+            sendCloseFrame(code, reason, false);
+        } catch (IOException _) {
+            // Ignore — TCP is already broken.
+        }
+    }
+
+    private void forceClose(int code, String reason) {
+        sendCloseSilent(code, reason);
+        forceClose();
+    }
+
+    private void forceClose() {
+        open = false;
+        closeQuietly(closeable);
+    }
+
+    private static void closeQuietly(Closeable connection) {
+        try {
+            connection.close();
+        } catch (IOException _) {
+            // Ignore: the connection is gone either way
+        }
+    }
+
+    @FunctionalInterface
+    private interface IoTask {
+        void run() throws IOException;
+    }
+
+    private void writeLocked(IoTask task) throws IOException {
+        try {
+            writeLock.lockInterruptibly();
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
+            throw new InterruptedIOException("Interrupted while acquiring WebSocket write lock");
+        }
+        try {
+            task.run();
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    private void safeError(Throwable t) {
+        // Surface the failure through the framework log before delegating: a WebSocketHandler is not
+        // required to override onError (its default is a no-op), so without this an exception thrown by
+        // a handler callback would vanish without a trace. Routine network/protocol noise (peer dropped
+        // the connection, client protocol violation) stays at DEBUG; an unexpected handler-side failure
+        // is logged at WARNING so it is actually visible.
+        if (t instanceof IOException || t instanceof WebSocketProtocolException) {
+            LOG.log(System.Logger.Level.DEBUG, "WebSocket connection closed on error", t);
+        } else {
+            LOG.log(System.Logger.Level.WARNING, "WebSocket handler error", t);
+        }
+        try {
+            handler.onError(this, t);
+        } catch (Throwable _) {
+            // Ignore — application raised an error in onError
+        }
+    }
+}

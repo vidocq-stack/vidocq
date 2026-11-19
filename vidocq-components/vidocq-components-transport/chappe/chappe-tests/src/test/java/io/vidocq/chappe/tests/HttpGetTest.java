@@ -1,0 +1,131 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.tests;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
+import io.vidocq.chappe.api.Response;
+import io.vidocq.chappe.api.Router;
+import io.vidocq.chappe.api.Server;
+import io.vidocq.chappe.api.StatusCode;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+
+class HttpGetTest {
+
+    private Server server;
+    private HttpClient client;
+    private String baseUrl;
+
+    @BeforeEach
+    void setUp() {
+        var router = Router.builder()
+                .get("/", _ -> Response.ok("Hello, Chappe!"))
+                .get("/echo-path", req -> Response.ok(req.path()))
+                .get("/echo-query", req -> {
+                    var name = req.queryParam("name").orElse("unknown");
+                    return Response.ok("name=" + name);
+                })
+                .get("/echo-header", req -> {
+                    var custom = req.header("X-Custom").orElse("missing");
+                    return Response.ok("header=" + custom);
+                })
+                .get("/json", _ -> Response.builder()
+                        .status(StatusCode.OK)
+                        .header("Content-Type", "application/json")
+                        .body("{\"status\":\"ok\"}")
+                        .build())
+                .build();
+
+        server = Server.builder().port(0).handler(router).build();
+        server.start();
+        baseUrl = "http://127.0.0.1:" + server.port();
+        client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (server != null) server.stop();
+    }
+
+    @ParameterizedTest(name = "GET {0}")
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "/ | Hello, Chappe!",
+                "/echo-path | /echo-path",
+                "/echo-query?name=chappe | name=chappe",
+            })
+    void getReturnsTheExpectedBody(String path, String expectedBody) throws IOException, InterruptedException {
+        var response = get(path);
+        assertEquals(200, response.statusCode());
+        assertEquals(expectedBody, response.body());
+    }
+
+    @Test
+    void getNotFound() throws IOException, InterruptedException {
+        var response = get("/does-not-exist");
+        assertEquals(404, response.statusCode());
+    }
+
+    @Test
+    void getWithCustomHeader() throws IOException, InterruptedException {
+        var request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/echo-header"))
+                .header("X-Custom", "test-value")
+                .GET()
+                .build();
+        var response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        assertEquals("header=test-value", response.body());
+    }
+
+    @Test
+    void getJsonResponse() throws IOException, InterruptedException {
+        var response = get("/json");
+        assertEquals(200, response.statusCode());
+        assertEquals("{\"status\":\"ok\"}", response.body());
+        assertTrue(response.headers().firstValue("Content-Type").orElse("").contains("application/json"));
+    }
+
+    @Test
+    void responseHasContentLength() throws IOException, InterruptedException {
+        var response = get("/");
+        var cl = response.headers().firstValue("Content-Length");
+        assertTrue(cl.isPresent(), "Content-Length header should be present");
+        assertEquals("Hello, Chappe!".length(), Integer.parseInt(cl.get()));
+    }
+
+    private HttpResponse<String> get(String path) throws IOException, InterruptedException {
+        var request =
+                HttpRequest.newBuilder().uri(URI.create(baseUrl + path)).GET().build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+}

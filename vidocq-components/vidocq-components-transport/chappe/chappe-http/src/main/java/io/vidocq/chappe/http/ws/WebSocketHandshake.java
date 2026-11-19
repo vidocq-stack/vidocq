@@ -1,0 +1,120 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.http.ws;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.WritableByteChannel;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
+
+import io.vidocq.chappe.api.BuildInfo;
+import io.vidocq.chappe.api.Headers;
+
+/**
+ * WebSocket handshake — RFC 6455 §4.2.2.
+ * <p>
+ * Computes {@code Sec-WebSocket-Accept} and writes the {@code 101 Switching Protocols} response.
+ * Validation of incoming headers (Upgrade, Connection, Version, Key) is performed upstream
+ * in {@code DefaultRouterBuilder#webSocket}.
+ */
+public final class WebSocketHandshake {
+
+    /** RFC 6455 §1.3 "Magic GUID" — concatenated to {@code Sec-WebSocket-Key} before SHA-1. */
+    public static final String GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+    // The 101 names Chappe as every response does: without its version by default, with its build when the
+    // server exposes it (ServerConfig.exposeBuildInfo).
+    private static final byte[] PROLOGUE_DISCREET = """
+            HTTP/1.1 101 Switching Protocols\r
+            Upgrade: websocket\r
+            Connection: Upgrade\r
+            Server: Chappe\r
+            """.getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] PROLOGUE_BUILD = ("HTTP/1.1 101 Switching Protocols\r\n"
+                    + "Upgrade: websocket\r\n"
+                    + "Connection: Upgrade\r\n"
+                    + "Server: " + BuildInfo.serverHeader() + "\r\n"
+                    + "X-Chappe-Build: " + BuildInfo.serverHeader() + "\r\n")
+            .getBytes(StandardCharsets.US_ASCII);
+
+    /** Calcule {@code Sec-WebSocket-Accept = base64(sha1(key + GUID))}. */
+    public static String computeAccept(String secWebSocketKey) {
+        try {
+            var sha1 = MessageDigest.getInstance("SHA-1");
+            sha1.update((secWebSocketKey + GUID).getBytes(StandardCharsets.US_ASCII));
+            return Base64.getEncoder().encodeToString(sha1.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new AssertionError("SHA-1 missing from JDK", e);
+        }
+    }
+
+    /** Writes the 101 response with the computed accept value and an optional subprotocol. */
+    public static void writeResponse(WritableByteChannel channel, String secWebSocketKey, String subprotocol)
+            throws IOException {
+        writeResponse(channel, secWebSocketKey, subprotocol, false);
+    }
+
+    /**
+     * Writes the {@code 101 Switching Protocols} response, naming Chappe with its version and build when
+     * {@code exposeBuildInfo} is {@code true}, as every response does then.
+     */
+    public static void writeResponse(
+            WritableByteChannel channel, String secWebSocketKey, String subprotocol, boolean exposeBuildInfo)
+            throws IOException {
+        writeResponse(channel, secWebSocketKey, subprotocol, Headers.empty(), exposeBuildInfo);
+    }
+
+    /**
+     * Writes the {@code 101 Switching Protocols} response with {@code extraHeaders} after the headers of the
+     * handshake itself, which the caller has validated (see {@code WebSocketUpgrade#headers()}).
+     */
+    public static void writeResponse(
+            WritableByteChannel channel,
+            String secWebSocketKey,
+            String subprotocol,
+            Headers extraHeaders,
+            boolean exposeBuildInfo)
+            throws IOException {
+        byte[] prologue = exposeBuildInfo ? PROLOGUE_BUILD : PROLOGUE_DISCREET;
+        var accept = computeAccept(secWebSocketKey);
+        var sb = new StringBuilder(accept.length() + 64);
+        sb.append("Sec-WebSocket-Accept: ").append(accept).append("\r\n");
+        if (subprotocol != null && !subprotocol.isEmpty()) {
+            sb.append("Sec-WebSocket-Protocol: ").append(subprotocol).append("\r\n");
+        }
+        for (var header : extraHeaders) {
+            sb.append(header.name()).append(": ").append(header.value()).append("\r\n");
+        }
+        sb.append("\r\n");
+        // Field values are one byte per char (HeaderFields.isFieldValue).
+        var tail = sb.toString().getBytes(StandardCharsets.ISO_8859_1);
+
+        var buf = ByteBuffer.allocate(prologue.length + tail.length);
+        buf.put(prologue).put(tail).flip();
+        while (buf.hasRemaining()) {
+            channel.write(buf);
+        }
+    }
+
+    private WebSocketHandshake() {}
+}

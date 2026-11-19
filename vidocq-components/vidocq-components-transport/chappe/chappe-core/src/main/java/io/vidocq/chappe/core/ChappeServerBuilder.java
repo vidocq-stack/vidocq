@@ -1,0 +1,163 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.core;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.Objects;
+
+import javax.net.ssl.SSLContext;
+
+import io.vidocq.chappe.api.ClientAuth;
+import io.vidocq.chappe.api.Handler;
+import io.vidocq.chappe.api.Server;
+import io.vidocq.chappe.api.ServerConfig;
+
+/**
+ * Implementation of {@link Server.Builder} — accumulates configuration
+ * and produces a {@link ChappeServer}.
+ */
+final class ChappeServerBuilder implements Server.Builder {
+
+    private String host = ServerConfig.DEFAULT.host();
+    private int port = ServerConfig.DEFAULT.port();
+    private int backlog = ServerConfig.DEFAULT.backlog();
+    private Duration readTimeout = ServerConfig.DEFAULT.readTimeout();
+    private Duration writeTimeout = ServerConfig.DEFAULT.writeTimeout();
+    private Duration idleTimeout = ServerConfig.DEFAULT.idleTimeout();
+    private long maxRequestSize = ServerConfig.DEFAULT.maxRequestSize();
+    private int maxHeaderSize = ServerConfig.DEFAULT.maxHeaderSize();
+    private long maxDrainSize = ServerConfig.DEFAULT.maxDrainSize();
+    private SSLContext sslContext;
+    private ClientAuth clientAuth = ServerConfig.DEFAULT.clientAuth();
+    private List<String> alpnProtocols = ServerConfig.DEFAULT.alpnProtocols();
+    private Duration shutdownGracePeriod = ServerConfig.DEFAULT.shutdownGracePeriod();
+    private boolean exposeBuildInfo = ServerConfig.DEFAULT.exposeBuildInfo();
+    private Handler handler;
+
+    @Override
+    public Server.Builder port(int port) {
+        this.port = port;
+        return this;
+    }
+
+    @Override
+    public Server.Builder host(String host) {
+        this.host = host;
+        return this;
+    }
+
+    @Override
+    public Server.Builder handler(Handler handler) {
+        this.handler = handler;
+        return this;
+    }
+
+    @Override
+    public Server.Builder backlog(int backlog) {
+        this.backlog = backlog;
+        return this;
+    }
+
+    @Override
+    public Server.Builder readTimeout(Duration timeout) {
+        this.readTimeout = timeout;
+        return this;
+    }
+
+    @Override
+    public Server.Builder writeTimeout(Duration timeout) {
+        this.writeTimeout = timeout;
+        return this;
+    }
+
+    @Override
+    public Server.Builder idleTimeout(Duration timeout) {
+        this.idleTimeout = timeout;
+        return this;
+    }
+
+    @Override
+    public Server.Builder maxRequestSize(long bytes) {
+        this.maxRequestSize = bytes;
+        return this;
+    }
+
+    @Override
+    public Server.Builder maxHeaderSize(int bytes) {
+        this.maxHeaderSize = bytes;
+        return this;
+    }
+
+    @Override
+    public Server.Builder maxDrainSize(long bytes) {
+        if (bytes < 0) throw new IllegalArgumentException("maxDrainSize must be >= 0, got " + bytes);
+        this.maxDrainSize = bytes;
+        return this;
+    }
+
+    @Override
+    public Server.Builder tls(SSLContext sslContext, ClientAuth clientAuth) {
+        this.sslContext = sslContext;
+        this.clientAuth = Objects.requireNonNull(clientAuth, "clientAuth");
+        return this;
+    }
+
+    @Override
+    public Server.Builder alpnProtocols(String... protocols) {
+        this.alpnProtocols = List.of(protocols);
+        return this;
+    }
+
+    @Override
+    public Server.Builder shutdownGracePeriod(Duration duration) {
+        this.shutdownGracePeriod = duration;
+        return this;
+    }
+
+    @Override
+    public Server.Builder exposeBuildInfo(boolean expose) {
+        this.exposeBuildInfo = expose;
+        return this;
+    }
+
+    @Override
+    public Server build() {
+        if (handler == null) {
+            throw new IllegalStateException("Handler is required — call handler(Handler) before build()");
+        }
+        var config = new ServerConfig(
+                host,
+                port,
+                backlog,
+                readTimeout,
+                writeTimeout,
+                idleTimeout,
+                maxRequestSize,
+                maxHeaderSize,
+                maxDrainSize,
+                sslContext,
+                clientAuth,
+                alpnProtocols,
+                shutdownGracePeriod,
+                exposeBuildInfo);
+        return new ChappeServer(config, handler);
+    }
+}

@@ -1,0 +1,399 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.api;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.zip.GZIPOutputStream;
+
+import io.vidocq.chappe.api.internal.HeaderFields;
+
+/**
+ * HTTP filter (middleware) — transforms a {@link Handler} into another.
+ * <p>
+ * Filters compose naturally:
+ * <pre>{@code
+ * Filter logging = next -> request -> {
+ *     System.out.println(request.method() + " " + request.path());
+ *     return next.handle(request);
+ * };
+ *
+ * Filter auth = next -> request -> {
+ *     if (request.header("Authorization").isEmpty()) {
+ *         return Response.of(StatusCode.UNAUTHORIZED);
+ *     }
+ *     return next.handle(request);
+ * };
+ *
+ * // Compose: logging runs before auth
+ * Handler secured = logging.andThen(auth).apply(myHandler);
+ * }</pre>
+ *
+ * <h2>Helpers</h2>
+ * <ul>
+ *   <li>{@link #addHeader(String, String)} — injects a header on every response.</li>
+ *   <li>{@link #addHeaderIf(BooleanSupplier, String, String)} — conditional header.</li>
+ *   <li>{@link #addHeaderIfEnv(String, String, String, String)} — header based on environment variable.</li>
+ * </ul>
+ */
+@FunctionalInterface
+public interface Filter {
+
+    /**
+     * Named system logger used by the default {@link #accessLog()} sink — {@code io.vidocq.chappe.access}.
+     * Configure it through {@code java.util.logging} (or any {@link System.LoggerFinder}) to redirect
+     * the access log elsewhere. For the historical "stdout captured by Docker/Portainer" behaviour,
+     * use {@code accessLog(System.out::println)} explicitly.
+     */
+    System.Logger ACCESS_LOG = System.getLogger("io.vidocq.chappe.access");
+
+    /**
+     * Wraps the handler {@code next} with additional behaviour.
+     *
+     * @param next the next handler in the chain
+     * @return a new decorated handler
+     */
+    Handler apply(Handler next);
+
+    /**
+     * Composes this filter with another: {@code this} runs before {@code after}.
+     *
+     * @param after the filter to apply after this one
+     * @return a composed filter
+     */
+    default Filter andThen(Filter after) {
+        return next -> this.apply(after.apply(next));
+    }
+
+    /**
+     * Filter that adds a header to every response, unconditionally.
+     *
+     * @param name  header name
+     * @param value header value
+     * @return filter that injects the header
+     */
+    static Filter addHeader(String name, String value) {
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(value, "value");
+        return addHeaderIf(() -> true, name, value);
+    }
+
+    /**
+     * Filter that adds a header if {@code predicate} returns {@code true}.
+     * The predicate is re-evaluated for every request.
+     *
+     * @param predicate add condition (evaluated per-request)
+     * @param name      header name
+     * @param value     header value
+     * @return filter that conditionally injects the header
+     */
+    static Filter addHeaderIf(BooleanSupplier predicate, String name, String value) {
+        Objects.requireNonNull(predicate, "predicate");
+        Objects.requireNonNull(name, "name");
+        Objects.requireNonNull(value, "value");
+        HeaderFields.requireValid("header", name, value); // fail at configuration time (CHAPPE-008)
+        return next -> request -> {
+            Response r = next.handle(request);
+            if (!predicate.getAsBoolean()) return r;
+            Headers.Builder hb = Headers.builder();
+            for (Headers.Entry e : r.headers()) {
+                hb.add(e.name(), e.value());
+            }
+            hb.add(name, value);
+            return withHeaders(r, hb.build(), r.body());
+        };
+    }
+
+    /**
+     * Filter that adds a header if the environment variable {@code envVar}
+     * has the value {@code expectedValue} (strict case-sensitive comparison).
+     *
+     * @param envVar        name of the environment variable to inspect
+     * @param expectedValue expected value (the variable must be strictly equal)
+     * @param name          name of the header to add
+     * @param value         value of the header to add
+     * @return filter conditional on the environment
+     */
+    static Filter addHeaderIfEnv(String envVar, String expectedValue, String name, String value) {
+        Objects.requireNonNull(envVar, "envVar");
+        Objects.requireNonNull(expectedValue, "expectedValue");
+        return addHeaderIf(() -> expectedValue.equals(System.getenv(envVar)), name, value);
+    }
+
+    /** Default threshold below which on-the-fly compression is not applied. */
+    int GZIP_DEFAULT_THRESHOLD = 1024;
+
+    /**
+     * On-the-fly {@code Content-Encoding: gzip} compression filter, negotiated
+     * via {@code Accept-Encoding}. Default threshold: {@value #GZIP_DEFAULT_THRESHOLD} bytes.
+     */
+    static Filter gzip() {
+        return gzip(GZIP_DEFAULT_THRESHOLD);
+    }
+
+    /**
+     * Variant of {@link #gzip()} with a configurable threshold.
+     * Responses whose declared size is strictly below the threshold
+     * are not compressed (overhead not worthwhile).
+     */
+    static Filter gzip(int threshold) {
+        return next -> request -> {
+            String acceptEnc = request.header("Accept-Encoding").orElse(null);
+            Response r = next.handle(request);
+            return shouldGzip(acceptEnc, r, threshold) ? gzipped(r) : r;
+        };
+    }
+
+    /**
+     * Whether {@link #gzip(int)} compresses the response: the client accepts gzip, the response is
+     * not encoded yet, does not forbid transformations, has a compressible type and is not known
+     * to be below the threshold.
+     */
+    private static boolean shouldGzip(String acceptEncoding, Response r, int threshold) {
+        if (!AcceptEncoding.accepts(acceptEncoding, "gzip")) return false;
+        if (r.headers().contains("Content-Encoding")) return false;
+        String cc = r.headers().firstOrNull("Cache-Control");
+        if (cc != null && cc.toLowerCase(Locale.ROOT).contains("no-transform")) return false;
+        if (!isCompressible(r.headers().firstOrNull("Content-Type"))) return false;
+        long len = r.body().contentLength();
+        return len < 0 || len >= threshold;
+    }
+
+    /** The response with its body gzipped, without {@code Content-Length}, with {@code Content-Encoding} and {@code Vary}. */
+    private static Response gzipped(Response r) throws IOException {
+        byte[] compressed;
+        try (var in = r.body().asInputStream();
+                var bos = new ByteArrayOutputStream();
+                var gout = new GZIPOutputStream(bos)) {
+            in.transferTo(gout);
+            gout.finish();
+            compressed = bos.toByteArray();
+        }
+
+        Headers.Builder hb = Headers.builder();
+        for (Headers.Entry e : r.headers()) {
+            if (!e.name().equalsIgnoreCase("Content-Length")) {
+                hb.add(e.name(), e.value());
+            }
+        }
+        hb.add("Content-Encoding", "gzip");
+        hb.add("Vary", "Accept-Encoding");
+        return withHeaders(r, hb.build(), Body.of(compressed));
+    }
+
+    /** Apache date format: {@code [day/Mon/yyyy:HH:mm:ss +0000]}. */
+    DateTimeFormatter ACCESS_LOG_DATE = DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss xx", Locale.ROOT);
+
+    /**
+     * Access log filter in extended Apache Combined Log Format (CLF).
+     * <p>
+     * Each line is emitted at {@link System.Logger.Level#INFO INFO} on the named logger
+     * {@link #ACCESS_LOG io.vidocq.chappe.access}:
+     * <pre>
+     * 127.0.0.1 - yann.blazart@gmail.com [09/May/2026:18:50:54 +0000] "GET /a.png HTTP/1.1" 200 877719 12ms
+     * </pre>
+     * For the cloud-native "stdout captured by Docker/Portainer" convention, use
+     * {@code accessLog(System.out::println)} explicitly, or configure JUL to bind
+     * {@code io.vidocq.chappe.access} to a {@code ConsoleHandler} on {@link System#out}.
+     * <ul>
+     *   <li>The client IP is read from {@code X-Forwarded-For} (first hop) or
+     *       {@code X-Real-IP}, but only when the direct peer is a trusted proxy: a loopback,
+     *       private or link-local address, or a CIDR given to
+     *       {@link #accessLog(Consumer, Collection)}. A client talking to chappe directly cannot
+     *       forge its IP with those headers.</li>
+     *   <li>The user is read from {@code X-Forwarded-User} or {@code Gap-Auth}
+     *       (oauth2-proxy), under the same trusted-proxy condition, otherwise {@code "-"}.</li>
+     *   <li>The body size is the one declared by {@code Response.body().contentLength()}
+     *       (may be {@code -1} for streamed/chunked bodies, indicated as {@code "-"}).</li>
+     *   <li>Quotes, backslashes and control characters in the logged values are escaped, so one
+     *       request can never forge extra fields in a log line.</li>
+     * </ul>
+     */
+    static Filter accessLog() {
+        return accessLog(line -> ACCESS_LOG.log(System.Logger.Level.INFO, line));
+    }
+
+    /** Variant of {@link #accessLog()} with a custom sink. */
+    static Filter accessLog(Consumer<String> sink) {
+        return accessLog(sink, List.of());
+    }
+
+    /**
+     * Variant of {@link #accessLog(Consumer)} with an explicit list of trusted proxies in CIDR
+     * notation (e.g. {@code "10.0.0.0/8"}, {@code "192.168.1.7"}). The forwarding headers
+     * {@code X-Forwarded-For}, {@code X-Real-IP}, {@code X-Forwarded-User} and {@code Gap-Auth}
+     * are honored only when the direct peer matches one of these CIDRs (or is a loopback/private/
+     * link-local address, the default of {@link #accessLog(Consumer)}); any other client gets its
+     * socket address in the log, so it cannot spoof its IP or user.
+     *
+     * @param sink              log line sink
+     * @param trustedProxyCidrs trusted proxy networks in CIDR notation; empty keeps the default
+     *                          loopback/private/link-local heuristic
+     */
+    static Filter accessLog(Consumer<String> sink, Collection<String> trustedProxyCidrs) {
+        Objects.requireNonNull(sink, "sink");
+        Objects.requireNonNull(trustedProxyCidrs, "trustedProxyCidrs");
+        List<Cidr> cidrs = new ArrayList<>();
+        for (var c : trustedProxyCidrs) {
+            cidrs.add(Cidr.parse(c));
+        }
+        return next -> request -> {
+            long startNanos = System.nanoTime();
+            boolean answered = false;
+            try {
+                Response response = next.handle(request);
+                int status = response.status().code();
+                answered = true;
+                long size = response.body().contentLength();
+                logLine(sink, request, status, size, startNanos, cidrs);
+                return response;
+            } finally {
+                // A failure is logged as a 500 and goes on unchanged, checked or not (CHAPPE-049).
+                if (!answered) {
+                    logLine(sink, request, 500, -1, startNanos, cidrs);
+                }
+            }
+        };
+    }
+
+    private static void logLine(
+            Consumer<String> sink, Request req, int status, long size, long startNanos, List<Cidr> trustedCidrs) {
+        long durMs = (System.nanoTime() - startNanos) / 1_000_000L;
+        String ts = ZonedDateTime.now(ZoneOffset.UTC).format(ACCESS_LOG_DATE);
+        String ip = clientIp(req, trustedCidrs);
+        String user = clientUser(req, trustedCidrs);
+        String sizeStr = size < 0 ? "-" : Long.toString(size);
+        sink.accept(logSafe(ip) + " - " + logSafe(user) + " [" + ts + "] \""
+                + logSafe(req.method().toString()) + " " + logSafe(req.path()) + " "
+                + logSafe(req.version().wireFormat()) + "\" "
+                + status + " " + sizeStr + " " + durMs + "ms");
+    }
+
+    /** Escapes a value interpolated into the log line: quotes, backslashes and control chars. */
+    private static String logSafe(String s) {
+        if (s == null) return "-";
+        var sb = new StringBuilder(s.length() + 8);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '"') sb.append("\\\"");
+            else if (c == '\\') sb.append("\\\\");
+            else if (c < 0x20 || c == 0x7F) sb.append(String.format("\\u%04x", (int) c));
+            else sb.append(c);
+        }
+        return sb.toString();
+    }
+
+    /** Whether the direct peer of this request is a trusted proxy for the forwarding headers. */
+    private static boolean trustsForwardingHeaders(Request req, List<Cidr> trustedCidrs) {
+        var ra = req.remoteAddress();
+        if (ra == null || ra.getAddress() == null) return false;
+        InetAddress addr = ra.getAddress();
+        for (var cidr : trustedCidrs) {
+            if (cidr.matches(addr)) return true;
+        }
+        return addr.isLoopbackAddress()
+                || addr.isAnyLocalAddress()
+                || addr.isSiteLocalAddress()
+                || addr.isLinkLocalAddress();
+    }
+
+    private static String clientIp(Request req, List<Cidr> trustedCidrs) {
+        if (trustsForwardingHeaders(req, trustedCidrs)) {
+            String xff = req.header("X-Forwarded-For").orElse(null);
+            if (xff != null && !xff.isEmpty()) {
+                int comma = xff.indexOf(',');
+                return (comma < 0 ? xff : xff.substring(0, comma)).trim();
+            }
+            String xri = req.header("X-Real-IP").orElse(null);
+            if (xri != null && !xri.isEmpty()) return xri.trim();
+        }
+        var ra = req.remoteAddress();
+        return ra != null && ra.getAddress() != null ? ra.getAddress().getHostAddress() : "-";
+    }
+
+    private static String clientUser(Request req, List<Cidr> trustedCidrs) {
+        if (trustsForwardingHeaders(req, trustedCidrs)) {
+            String u = req.header("X-Forwarded-User").orElse(null);
+            if (u != null && !u.isEmpty()) return u;
+            u = req.header("Gap-Auth").orElse(null);
+            if (u != null && !u.isEmpty()) return u;
+        }
+        return "-";
+    }
+
+    /** "Compressible" heuristic based on {@code Content-Type}. */
+    private static boolean isCompressible(String contentType) {
+        if (contentType == null) return false;
+        String ct = contentType.toLowerCase(Locale.ROOT);
+        if (ct.startsWith("text/")) return true;
+        if (ct.startsWith("image/svg+xml")) return true;
+        // Heuristic for text-like subtypes: json, xml, javascript, wasm, manifest+json...
+        return ct.startsWith("application/json")
+                || ct.startsWith("application/xml")
+                || ct.startsWith("application/javascript")
+                || ct.startsWith("application/x-javascript")
+                || ct.startsWith("application/wasm")
+                || ct.startsWith("application/manifest+json")
+                || ct.startsWith("application/ld+json")
+                || ct.startsWith("application/xhtml+xml")
+                || ct.endsWith("+json")
+                || ct.endsWith("+xml");
+    }
+
+    /**
+     * {@code original} with other headers and body, and the same status and trailers. The trailers are
+     * still asked of {@code original}, once the body has been read, so trailers computed from the body
+     * survive the filter (CHAPPE-019); rebuilding the response used to drop them.
+     */
+    private static Response withHeaders(Response original, Headers headers, Body body) {
+        return new Response() {
+            @Override
+            public StatusCode status() {
+                return original.status();
+            }
+
+            @Override
+            public Headers headers() {
+                return headers;
+            }
+
+            @Override
+            public Body body() {
+                return body;
+            }
+
+            @Override
+            public Headers trailers() {
+                return original.trailers();
+            }
+        };
+    }
+}

@@ -1,0 +1,131 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.api;
+
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.Flow;
+
+/**
+ * HTTP body (request or response).
+ * <p>
+ * Two access modes:
+ * <ul>
+ *   <li>{@link #asInputStream()} — blocking read, natural with virtual threads</li>
+ *   <li>{@link #asPublisher()} — reactive streaming for HTTP/2 and large payloads</li>
+ * </ul>
+ */
+public interface Body {
+
+    /**
+     * Content length in bytes, or {@code -1} if unknown
+     * (chunked transfer, streaming).
+     */
+    long contentLength();
+
+    /** Blocking access to the body as an InputStream. */
+    InputStream asInputStream();
+
+    /** Reactive access to the body as a Publisher of ByteBuffers. */
+    Flow.Publisher<ByteBuffer> asPublisher();
+
+    /**
+     * Releases what a response body holds once the server is done with it. The server calls it
+     * on every exit after a handler returned a response: after the body was fully written, when
+     * writing the head or the body failed, when the body is never read (HEAD, 204, 304, a refused
+     * upgrade), and when an HTTP/2 stream is reset or its connection ends — possibly from another
+     * thread while a read is blocked. A live body (an {@code InputStream} fed by a producer) is
+     * closed, so a producer waiting for its reader is released.
+     * <p>
+     * Idempotent and never throws. The default releases nothing.
+     */
+    default void release() {}
+
+    /** Empty body (singleton). */
+    static Body empty() {
+        return EmptyBody.INSTANCE;
+    }
+
+    /** Body from a byte array. */
+    static Body of(byte[] bytes) {
+        if (bytes.length == 0) {
+            return empty();
+        }
+        return new ByteArrayBody(bytes);
+    }
+
+    /** Body from a string with the specified encoding. */
+    static Body of(String text, Charset charset) {
+        return of(text.getBytes(charset));
+    }
+
+    /** Body from a UTF-8 string. */
+    static Body of(String text) {
+        return of(text, StandardCharsets.UTF_8);
+    }
+
+    /** Body from an InputStream with a known length. */
+    static Body of(InputStream stream, long contentLength) {
+        return new InputStreamBody(stream, contentLength);
+    }
+
+    /** Body from an InputStream of unknown length. */
+    static Body of(InputStream stream) {
+        return of(stream, -1);
+    }
+
+    /** Body backed by a file. Zero-copy via FileChannel.transferTo when possible. */
+    static Body ofFile(java.nio.file.Path path) {
+        return new FileBody(path, 0, -1);
+    }
+
+    /** Body backed by a file range (for HTTP Range support). */
+    static Body ofFile(java.nio.file.Path path, long offset, long length) {
+        return new FileBody(path, offset, length);
+    }
+
+    /** Body from a writer callback. Invoked lazily on a virtual thread. Content-Length unknown (chunked). */
+    static Body ofOutputStream(java.util.function.Consumer<java.io.OutputStream> writer) {
+        return new OutputStreamBody(writer);
+    }
+
+    /**
+     * Body streamed from an InputStream of unknown length.
+     * <p>
+     * Chappe sends this body using chunked transfer (HTTP/1.1) or successive DATA frames
+     * (HTTP/2), without buffering the entire content. EOF on the stream closes the response.
+     * <p>
+     * Typical SSE usage with a PipedInputStream:
+     * <pre>{@code
+     *   var pis = new PipedInputStream(8192);
+     *   var pos = new PipedOutputStream(pis);
+     *   Thread.startVirtualThread(() -> { /* write SSE events to pos *\/ });
+     *   return Response.builder()
+     *       .header("Content-Type", "text/event-stream")
+     *       .body(Body.streaming(pis))
+     *       .build();
+     * }</pre>
+     */
+    static Body streaming(InputStream in) {
+        return of(in, -1);
+    }
+}

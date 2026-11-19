@@ -1,0 +1,825 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.http;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.SocketChannel;
+import java.nio.channels.WritableByteChannel;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+import io.vidocq.chappe.api.*;
+import io.vidocq.chappe.http.ws.WebSocketChannels;
+import io.vidocq.chappe.http.ws.WebSocketConnection;
+import io.vidocq.chappe.http.ws.WebSocketHandshake;
+
+/**
+ * HTTP/1.1 connection handler — keep-alive loop.
+ * <p>
+ * Executed on a virtual thread by {@code chappe-core}.
+ * Orchestrates: parse → body setup → dispatch handler → write response → loop.
+ */
+public final class HttpConnection {
+
+    private static final System.Logger LOG = System.getLogger(HttpConnection.class.getName());
+
+    private static final int BUFFER_SIZE = 16 * 1024; // 16 KB
+
+    private final ReadableByteChannel readChannel;
+    /** The one thread that bounds this connection's waits: the next request, a body read, a response write. */
+    private final ConnectionWatchdog watchdog;
+    /** {@code config.idleTimeout()} in nanoseconds, the bound of the wait for a next request. */
+    private final long idleTimeoutNanos;
+    /** {@link #readChannel} bounded by {@code readTimeout}: request bodies are read from it (CHAPPE-022). */
+    private final ReadableByteChannel bodyChannel;
+
+    private final WritableByteChannel writeChannel;
+    private final Closeable closeable;
+    private final Handler handler;
+    private final ServerConfig config;
+    private final ByteBuffer readBuffer;
+    private final ByteBuffer writeBuffer;
+    private final HttpRequestParser parser;
+    private final HttpResponseWriter writer;
+    private final HttpRequestImpl request;
+    private final RequestContext context;
+    private volatile boolean open = true;
+
+    /** Set when the loop ends after a response on a live connection: close in stages. */
+    private boolean lingerOnClose;
+
+    // --- Client-disconnect probe (Request.onDisconnect) ---
+    private volatile boolean bodyPending;
+    private volatile boolean probeArmed;
+    private volatile Runnable disconnectCallback;
+    private volatile Thread probeThread;
+
+    /**
+     * The channels a connection reads from, writes to and closes: the socket itself in clear text, the
+     * {@link SslHandler} over TLS.
+     */
+    public record Channels(ReadableByteChannel read, WritableByteChannel write, Closeable closeable) {
+
+        /** The three roles played by one channel. */
+        public static <C extends ReadableByteChannel & WritableByteChannel> Channels of(C channel) {
+            return new Channels(channel, channel, channel);
+        }
+    }
+
+    public HttpConnection(SocketChannel channel, Handler handler, ServerConfig config) {
+        this(Channels.of(channel), ConnectionInfo.of(channel, null), handler, config, null, null);
+    }
+
+    public HttpConnection(SocketChannel channel, Handler handler, ServerConfig config, ByteBuffer prefilledBuffer) {
+        this(Channels.of(channel), ConnectionInfo.of(channel, null), handler, config, prefilledBuffer, null);
+    }
+
+    /**
+     * Full constructor: separate channels (an {@link SslHandler} over TLS) and the connection
+     * metadata every request of this connection reports.
+     */
+    public HttpConnection(
+            Channels channels,
+            ConnectionInfo connectionInfo,
+            Handler handler,
+            ServerConfig config,
+            ByteBuffer prefilledBuffer,
+            ByteBuffer writeBuffer) {
+        this.readChannel = channels.read();
+        this.writeChannel = channels.write();
+        this.closeable = channels.closeable();
+        this.handler = handler;
+        this.config = config;
+        this.watchdog = new ConnectionWatchdog(closeable);
+        this.idleTimeoutNanos = ConnectionWatchdog.nanos(config.idleTimeout());
+        this.bodyChannel = TimedReadChannel.of(readChannel, watchdog, config.readTimeout());
+        if (prefilledBuffer != null) {
+            this.readBuffer = prefilledBuffer;
+        } else {
+            this.readBuffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
+            readBuffer.flip();
+        }
+        this.writeBuffer = writeBuffer != null ? writeBuffer : ByteBuffer.allocateDirect(BUFFER_SIZE);
+        this.parser = new HttpRequestParser();
+        this.writer = new HttpResponseWriter(config.exposeBuildInfo());
+        writer.boundWritesBy(watchdog);
+        this.request = new HttpRequestImpl();
+        this.context = new RequestContext(request);
+
+        // Connection-level metadata, once: reset() keeps it across keep-alive requests.
+        request.initConnectionInfo(connectionInfo);
+        request.disconnectArmer(this::armDisconnectProbe);
+    }
+
+    /**
+     * Entry point — called by chappe-core on a virtual thread.
+     * Loops until the connection is closed or an error occurs.
+     */
+    public void run() {
+        try {
+            boolean next = true;
+            while (next && open) {
+                next = exchange();
+            }
+        } catch (IOException _) {
+            // Lost connection — silent
+            lingerOnClose = false;
+        } finally {
+            if (lingerOnClose) {
+                lingeringClose();
+            } else {
+                close();
+            }
+        }
+    }
+
+    /**
+     * One request/response exchange on the connection.
+     *
+     * @return {@code true} when the connection may serve a next request; {@code false} when it must
+     *         close ({@link #lingerOnClose} tells how) or was taken over by an upgrade
+     */
+    private boolean exchange() throws IOException {
+        parser.reset();
+        request.reset();
+
+        // 0-2. Request head: idle wait, request-line and headers, Host header.
+        if (!readRequestHead()) {
+            return false;
+        }
+
+        // 3. Setup body. It reads nothing yet, so a refused body (a bad or oversized
+        // Content-Length) is answered with its final status instead of 100 Continue.
+        RequestBodyInputStream bodyStream;
+        try {
+            bodyStream = setupBody();
+        } catch (BadBodyException e) {
+            sendError(e.status(), e.getMessage());
+            return false;
+        }
+
+        // 4. Expect: 100-continue (RFC 9110 §10.1.1)
+        if ("100-continue".equalsIgnoreCase(request.headers().firstOrNull("Expect"))) {
+            sendContinue();
+        }
+        if (bodyStream != null) {
+            request.body = Body.of(bodyStream, contentLength());
+        }
+        bodyPending = bodyStream != null;
+
+        // 5. Dispatch to handler with ScopedValue binding
+        boolean keepAlive = isKeepAlive();
+        Response handled = dispatch(bodyStream);
+
+        // From here on, the handler's response body is released on every exit: written,
+        // failed while writing the head or the body, never read (HEAD, 204, 304), or
+        // replaced. A live body's producer must never wait for a reader that is gone.
+        try {
+            if (!respond(handled, bodyStream, keepAlive)) {
+                return false;
+            }
+        } finally {
+            releaseBody(handled);
+        }
+
+        return afterResponse(bodyStream, keepAlive);
+    }
+
+    /**
+     * Steps 0 to 2: waits for the next request, parses its request-line and headers, and checks
+     * its Host header.
+     *
+     * @return {@code false} when the connection must close: EOF, idle timeout, or a malformed
+     *         request already answered
+     */
+    private boolean readRequestHead() throws IOException {
+        // 0. Idle wait: block at most config.idleTimeout() for the first
+        // byte of the next request. SO_TIMEOUT is a silent no-op on
+        // blocking SocketChannel reads, so without this an idle
+        // keep-alive (or never-sending) client held the connection
+        // forever. Clients reading the response to EOF also rely on
+        // this close (Servlet TCK 6.1.0 TrailerTest).
+        if (!awaitNextRequest()) {
+            return false;
+        }
+
+        // 1. Parse request (request-line + headers)
+        ParseResult result;
+        try {
+            result = parser.parse(readBuffer, readChannel, request, config);
+        } catch (ParseException e) {
+            sendError(e.statusCode(), e.getMessage());
+            return false;
+        }
+        if (result == ParseResult.CONNECTION_CLOSED) {
+            return false;
+        }
+
+        // 2. Validation Host header (RFC 9112 §3.2)
+        if (request.version() == HttpVersion.HTTP_1_1) {
+            var hostValues = request.headers().all("Host");
+            if (hostValues.isEmpty()) {
+                sendError(StatusCode.BAD_REQUEST, "Missing Host header");
+                return false;
+            }
+            if (hostValues.size() > 1) {
+                sendError(StatusCode.BAD_REQUEST, "Multiple Host headers");
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Sends {@code 100 Continue} before the handler reads the body. */
+    private void sendContinue() throws IOException {
+        var continueBytes = "HTTP/1.1 100 Continue\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+        var buf = ByteBuffer.wrap(continueBytes);
+        while (buf.hasRemaining()) {
+            writeChannel.write(buf);
+        }
+    }
+
+    /**
+     * Step 5: calls the handler with {@link RequestContext#CURRENT} bound; never throws. A failure of the
+     * application is answered and logged: an exception, but also a class that does not link, a failed
+     * assertion or a recursion too deep, which would otherwise end the connection without a response
+     * (CHAPPE-054). Only an error of the virtual machine itself, such as running out of memory, goes on.
+     */
+    private Response dispatch(RequestBodyInputStream bodyStream) {
+        try {
+            return ScopedValue.where(RequestContext.CURRENT, context).call(() -> handler.handle(request));
+        } catch (Exception | LinkageError | AssertionError | StackOverflowError e) {
+            // Nothing is written yet: a cap failure that escapes the handler, as is or wrapped,
+            // is answered 413 as over HTTP/2, and the connection closes after it (step 7).
+            if (bodyTooLarge(e, bodyStream)) {
+                return Response.of(StatusCode.PAYLOAD_TOO_LARGE);
+            }
+            LOG.log(
+                    System.Logger.Level.WARNING,
+                    "The handler of " + request.method() + " " + request.path() + " failed, answered 500",
+                    e);
+            return Response.builder()
+                    .status(StatusCode.INTERNAL_SERVER_ERROR)
+                    .body("Internal Server Error")
+                    .build();
+        } finally {
+            // The probe shares the parse buffer: it must be fully stopped
+            // before the loop resumes channel reads (next request parse,
+            // WebSocket takeover) or response writing.
+            disarmDisconnectProbe();
+        }
+    }
+
+    /**
+     * Step 6: answers the request with the handler's response, or hands the connection over to an
+     * upgrade.
+     *
+     * @return {@code false} when the connection must close or was taken over
+     */
+    private boolean respond(Response handled, RequestBodyInputStream bodyStream, boolean keepAlive) throws IOException {
+        // 4a-bis. gRPC requires HTTP/2 — defensive rejection on HTTP/1.1 layer.
+        // In practice router already returns 505 (see DefaultRouterBuilder.grpc()),
+        // this check only acts as guardrail if an extension builds GrpcDispatch elsewhere.
+        Response response =
+                handled instanceof GrpcDispatch ? Response.of(StatusCode.HTTP_VERSION_NOT_SUPPORTED) : handled;
+
+        // An upgrade drains the request body before taking the connection over. After a
+        // failed body read (or a closed read channel) the byte stream position is unknown,
+        // and a body longer than maxDrainSize is not worth reading: close the connection,
+        // no upgrade head (CHAPPE-013, CHAPPE-021), gracefully while the channel is still
+        // open (CHAPPE-014).
+        if ((response instanceof WebSocketUpgrade || response instanceof ConnectionUpgrade)
+                && bodyStream != null
+                && (bodyReadFailed(bodyStream) || !readChannel.isOpen() || !drained(bodyStream))) {
+            lingerOnClose = readChannel.isOpen();
+            return false;
+        }
+
+        // 6a. WebSocket upgrade: switch to frame mode and end HTTP loop.
+        if (response instanceof WebSocketUpgrade upgrade) {
+            runWebSocket(upgrade);
+            return false; // closeable already closed by WebSocketConnection
+        }
+
+        // 6b. Generic connection upgrade: write the application's head, then hand the
+        // raw streams over and park until the application closes the connection.
+        if (response instanceof ConnectionUpgrade upgrade) {
+            runUpgrade(upgrade);
+            return false; // run() closes the connection (idempotent)
+        }
+
+        // 6c. Write response. A head that cannot be written as is (a custom Response
+        // bypassing the builder's checks) is refused before any byte: answer 500 and
+        // close instead of a truncated or injected head (CHAPPE-008).
+        try {
+            writer.write(response, writeBuffer, writeChannel, keepAlive, request.method(), config.writeTimeout());
+        } catch (InvalidResponseHeadException e) {
+            LOG.log(System.Logger.Level.WARNING, "Refusing an invalid response head: " + e.getMessage());
+            sendError(StatusCode.INTERNAL_SERVER_ERROR, "Internal Server Error");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Step 6a: writes the handshake response and runs the WebSocket session on this thread. Every
+     * write of the session, the {@code 101} included, is bounded by {@code writeTimeout} (CHAPPE-055).
+     */
+    private void runWebSocket(WebSocketUpgrade upgrade) throws IOException {
+        var key = request.headers().firstOrNull("Sec-WebSocket-Key");
+        var timedWriteChannel = TimedWriteChannel.of(writeChannel, watchdog, config.writeTimeout());
+        WebSocketHandshake.writeResponse(
+                timedWriteChannel, key, upgrade.subprotocol(), upgrade.headers(), config.exposeBuildInfo());
+        // Prefer the matched handshake request (carries route pathParams) over the raw one.
+        var handshakeReq = upgrade.handshakeRequest() != null ? upgrade.handshakeRequest() : request;
+        // An abort sends nothing: over TLS it closes the socket under the SslHandler, no close_notify (CHAPPE-060).
+        Closeable abortCloseable = closeable instanceof SslHandler ssl ? ssl::abort : closeable;
+        var wsConn = new WebSocketConnection(
+                new WebSocketChannels(readChannel, timedWriteChannel, closeable, readBuffer, abortCloseable),
+                upgrade.handler(),
+                handshakeReq,
+                upgrade.subprotocol(),
+                this::boundCloseHandshake);
+        wsConn.run();
+    }
+
+    /**
+     * After the server sent its Close frame, the peer has {@code readTimeout} to answer with its own:
+     * past it the watchdog closes the connection and the read loop reports 1006 (CHAPPE-056). Runs at
+     * most once, as the Close frame is sent once.
+     */
+    private void boundCloseHandshake() {
+        long timeout = ConnectionWatchdog.nanos(config.readTimeout());
+        if (timeout > 0) watchdog.armRead(timeout);
+    }
+
+    /**
+     * Steps 7 to 9, once the response is written: whether the connection may read a next request.
+     *
+     * @return {@code false} when the connection must close, with {@link #lingerOnClose} set
+     */
+    private boolean afterResponse(RequestBodyInputStream bodyStream, boolean keepAlive) {
+        // 7. A body read that failed (truncated, reset, an interrupt that closed the
+        // channel) leaves the byte stream at an unknown position: never drain it nor parse
+        // a next request from it, close the connection (CHAPPE-013). Close it gracefully
+        // while the channel is still open (CHAPPE-014): the client may still be uploading,
+        // and a close with its bytes unread would reset the connection and could destroy
+        // the response it has not read yet. The lingering close only discards input.
+        if (bodyStream != null && (bodyReadFailed(bodyStream) || !readChannel.isOpen())) {
+            lingerOnClose = readChannel.isOpen();
+            return false;
+        }
+
+        // 8. Drain the unread body (for keep-alive), within maxDrainSize. A drain that fails
+        // (bad framing, a body cut short) is a failed body read too, and a body longer than
+        // the budget is not worth reading (CHAPPE-021): same graceful close, no next request.
+        if (bodyStream != null && !drained(bodyStream)) {
+            lingerOnClose = readChannel.isOpen();
+            return false;
+        }
+
+        // 9. Check keep-alive
+        if (!keepAlive) {
+            lingerOnClose = true;
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Lingering close (RFC 9112 §9.6), see {@link LingeringClose}: plaintext
+     * half-closes and drains the socket; TLS sends its close_notify first.
+     */
+    private void lingeringClose() {
+        if (open) {
+            if (readChannel instanceof SocketChannel sc) {
+                LingeringClose.halfCloseAndDrain(sc, readBuffer);
+            } else if (closeable instanceof SslHandler ssl) {
+                ssl.closeNotifyAndDrain(readBuffer);
+            }
+        }
+        close();
+    }
+
+    /**
+     * Whether a handler failure comes from the request body cap: the exception, or one of its causes,
+     * is a {@link RequestBodyTooLargeException}, or a read of this body threw one (CHAPPE-020).
+     */
+    private static boolean bodyTooLarge(Throwable failure, RequestBodyInputStream bodyStream) {
+        if (bodyStream != null && bodyStream.failedTooLarge()) return true;
+        Throwable t = failure;
+        for (int depth = 0; t != null && depth < 16; depth++, t = t.getCause()) { // bounded: a cause cycle
+            if (t instanceof RequestBodyTooLargeException) return true;
+        }
+        return false;
+    }
+
+    /** Whether reading the request body failed (a truncated or broken body leaves the stream unusable). */
+    private static boolean bodyReadFailed(RequestBodyInputStream bodyStream) {
+        return bodyStream.failed();
+    }
+
+    /**
+     * Drains what the handler left of the request body, within {@code config.maxDrainSize()}
+     * (CHAPPE-021). {@code false} when the budget ran out or the read failed: the connection must
+     * then close instead of reading a next request or switching protocols.
+     */
+    private boolean drained(RequestBodyInputStream bodyStream) {
+        try {
+            return HttpBodyReader.drain(bodyStream, config.maxDrainSize());
+        } catch (IOException _) {
+            return false;
+        }
+    }
+
+    /** {@link Body#release() Releases} the body of a response the handler returned; never throws. */
+    private static void releaseBody(Response response) {
+        try {
+            Body body = response.body();
+            if (body != null) body.release();
+        } catch (RuntimeException _) {
+            // best-effort: a release failure must not hide the exchange's outcome
+        }
+    }
+
+    /** Closes the connection. */
+    public void close() {
+        open = false;
+        disarmDisconnectProbe();
+        watchdog.stop();
+        try {
+            closeable.close();
+        } catch (IOException _) {
+            // Ignore
+        }
+    }
+
+    // --- Client-disconnect probe (Request.onDisconnect) ---
+
+    /**
+     * Arms a best-effort client-disconnect probe for the request currently
+     * being handled. Plaintext HTTP/1.1 only ({@code readChannel} must be the
+     * raw {@link SocketChannel} so the probe can switch to non-blocking reads),
+     * and only when the request body is absent — the probe reads into the
+     * shared parse buffer, which would race a concurrent body consumer.
+     */
+    private boolean armDisconnectProbe(Runnable callback) {
+        if (!(readChannel instanceof SocketChannel)) return false; // TLS / wrapped channel
+        if (bodyPending || !open || probeArmed) return false;
+        disconnectCallback = callback;
+        probeArmed = true;
+        probeThread = Thread.ofVirtual().name("chappe-disconnect-probe").start(this::probeLoop);
+        return true;
+    }
+
+    /**
+     * Polls the socket every 100 ms with a non-blocking, non-destructive read
+     * into the parse buffer: EOF (FIN) or an IOException (RST) means the
+     * client is gone → fire the callback. Pipelined bytes that arrive early
+     * are simply kept in the buffer for the next parse iteration.
+     */
+    private void probeLoop() {
+        var sc = (SocketChannel) readChannel;
+        try {
+            while (probeArmed && open) {
+                int n;
+                sc.configureBlocking(false);
+                try {
+                    n = ReadBuffers.compactAndRead(readBuffer, sc);
+                } finally {
+                    sc.configureBlocking(true);
+                }
+                if (n == -1) {
+                    fireDisconnect();
+                    return;
+                }
+                Thread.sleep(100);
+            }
+        } catch (IOException _) {
+            fireDisconnect(); // hard close / connection reset
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void fireDisconnect() {
+        if (!probeArmed) return;
+        probeArmed = false;
+        Runnable cb = disconnectCallback;
+        disconnectCallback = null;
+        if (cb != null) {
+            try {
+                cb.run();
+            } catch (RuntimeException _) {
+                // listener failure must not take the connection down
+            }
+        }
+    }
+
+    /** Stops the probe and waits for it to release the parse buffer/channel. */
+    private void disarmDisconnectProbe() {
+        probeArmed = false;
+        disconnectCallback = null;
+        Thread t = probeThread;
+        probeThread = null;
+        if (t != null) {
+            try {
+                t.join(500); // probe wakes within its 100 ms poll interval
+            } catch (InterruptedException _) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    // --- Generic connection upgrade ---
+
+    /**
+     * Takes the connection over for a {@link ConnectionUpgrade} (the request body is already
+     * drained): writes the status line and the application's headers, then calls
+     * {@link UpgradeHandler#onUpgrade} on this thread. Bytes already read past the request head
+     * are copied out of the pooled {@code readBuffer} and are the first bytes of the upgraded
+     * input.
+     * <p>
+     * The connection stays open after {@code onUpgrade} returns: this thread parks until
+     * {@link UpgradedConnection#close()} is called (by the application, from any thread). An
+     * exception from {@code onUpgrade}, or an interruption of the parked thread (server stop),
+     * closes it. The idle timeout no longer applies once the connection is upgraded; end of
+     * stream on the input does not close it either — the application decides.
+     */
+    private void runUpgrade(ConnectionUpgrade upgrade) throws IOException {
+        writer.writeUpgradeHead(upgrade.status(), upgrade.headers(), writeBuffer, writeChannel, config.writeTimeout());
+        try (var conn = new UpgradedConnectionImpl(readChannel, writeChannel, readBuffer, closeable, request)) {
+            serveUpgraded(upgrade.handler(), conn);
+        }
+    }
+
+    /**
+     * Runs the upgrade handler and parks until the connection is closed; a handler failure or an
+     * interruption returns at once, and the caller closes the connection.
+     */
+    private static void serveUpgraded(UpgradeHandler handler, UpgradedConnectionImpl conn) {
+        try {
+            handler.onUpgrade(conn);
+            conn.awaitClose();
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            LOG.log(System.Logger.Level.WARNING, "Upgrade handler error, closing the connection", e);
+        }
+    }
+
+    // --- Internal helpers ---
+
+    /**
+     * Waits for the first byte of the next request, bounded by
+     * {@code config.idleTimeout()}.
+     *
+     * <p>Bytes already buffered (pipelining) are served first. Otherwise one
+     * blocking read, bounded by the connection's {@link ConnectionWatchdog}:
+     * it closes the connection at the deadline, which wakes the read
+     * ({@code AsynchronousCloseException}) — the Loom-friendly way to bound a
+     * blocking read; {@code Selector.select} would pin the carrier thread and
+     * {@code SO_TIMEOUT} does not apply to channel reads.</p>
+     *
+     * <p>No non-blocking probe read comes first: a blocking read on a virtual
+     * thread already tries the socket without blocking before it parks, so a
+     * probe only added a read and two switches of the blocking mode per
+     * request. The probe paid off when every bounded wait started its own
+     * watchdog thread; arming the per-connection watchdog is a field write
+     * and a compare-and-set.</p>
+     *
+     * @return {@code true} when request bytes are available; {@code false} on
+     *         EOF, idle timeout or interruption (caller closes the connection)
+     */
+    private boolean awaitNextRequest() {
+        if (readBuffer.hasRemaining()) return true; // pipelined bytes
+        if (!(readChannel instanceof SocketChannel)) {
+            return true; // TLS/wrapped channel: keep historical behavior for now
+        }
+        readBuffer.compact();
+        try {
+            return readBoundedByIdleTimeout();
+        } finally {
+            readBuffer.flip(); // a failed read leaves the buffer in read mode (CHAPPE-013)
+        }
+    }
+
+    /** One blocking read of the next request's first bytes, bounded by {@link #idleTimeoutNanos}. */
+    private boolean readBoundedByIdleTimeout() {
+        ConnectionWatchdog.Deadline deadline = watchdog.armRead(idleTimeoutNanos);
+        if (deadline == null) return false; // the watchdog already closed the connection
+        int n;
+        try {
+            n = readChannel.read(readBuffer);
+        } catch (IOException _) {
+            watchdog.disarmRead(deadline);
+            return false; // closed by the watchdog (idle timeout) or connection lost
+        }
+        return watchdog.disarmRead(deadline) && n > 0;
+    }
+
+    /**
+     * Sets up the request body.
+     *
+     * <p>Framing must never be ambiguous (RFC 9112 §6.3, anti request-smuggling): a request with
+     * both {@code Transfer-Encoding} and {@code Content-Length}, a {@code Transfer-Encoding}
+     * whose final coding is not {@code chunked}, or conflicting/non-canonical
+     * {@code Content-Length} values is rejected with 400 and the connection is closed, so a front
+     * proxy and chappe can never disagree on where the body ends.</p>
+     *
+     * @return the body InputStream, or null if there is no body
+     * @throws BadBodyException if the framing is invalid or the body exceeds the limit
+     */
+    private RequestBodyInputStream setupBody() throws BadBodyException {
+        var headers = request.headers();
+        var transferEncodings = headers.all("Transfer-Encoding");
+        var contentLengths = headers.all("Content-Length");
+
+        if (!transferEncodings.isEmpty()) {
+            if (!contentLengths.isEmpty()) {
+                throw new BadBodyException("Transfer-Encoding and Content-Length are mutually exclusive");
+            }
+            return chunkedRequestBody(transferEncodings);
+        }
+
+        if (!contentLengths.isEmpty()) {
+            long cl = parseContentLength(contentLengths);
+            if (cl == 0) return null;
+            if (cl > config.maxRequestSize()) {
+                // RFC 9110 §15.5.14: the body is refused for its size, not for its framing.
+                throw new BadBodyException(
+                        StatusCode.PAYLOAD_TOO_LARGE,
+                        "Content-Length " + cl + " exceeds max " + config.maxRequestSize());
+            }
+            return HttpBodyReader.fixedLength(readBuffer, bodyChannel, cl);
+        }
+
+        return null;
+    }
+
+    /**
+     * Validates the Transfer-Encoding codings (RFC 9112 §6.3) and returns the chunked body reader.
+     *
+     * @throws BadBodyException if the request is not HTTP/1.1, the final coding is not
+     *         {@code chunked}, or a preceding coding is unsupported
+     */
+    private RequestBodyInputStream chunkedRequestBody(List<String> transferEncodings) throws BadBodyException {
+        if (request.version() != HttpVersion.HTTP_1_1) {
+            throw new BadBodyException("Transfer-Encoding requires HTTP/1.1");
+        }
+        var codings = transferCodings(transferEncodings);
+        if (codings.isEmpty() || !"chunked".equals(codings.get(codings.size() - 1))) {
+            throw new BadBodyException("the final Transfer-Encoding coding must be 'chunked'");
+        }
+        for (int i = 0; i < codings.size() - 1; i++) {
+            // RFC 9112 §6.3: an unsupported transfer coding → 501, not a silent ignore.
+            if (!"identity".equals(codings.get(i))) {
+                throw new BadBodyException(
+                        StatusCode.NOT_IMPLEMENTED, "unsupported transfer coding: " + codings.get(i));
+            }
+        }
+        return HttpBodyReader.chunked(readBuffer, bodyChannel, request::setTrailers, config.maxRequestSize());
+    }
+
+    /**
+     * Splits a comma-separated list header value without regex (a literal ',' split keeps the
+     * empty elements; the callers decide to ignore or reject them, RFC 9110 §5.6.1).
+     */
+    private static List<String> splitListItems(String value) {
+        var items = new ArrayList<String>();
+        int start = 0;
+        for (int i = value.indexOf(','); i >= 0; i = value.indexOf(',', start)) {
+            items.add(value.substring(start, i));
+            start = i + 1;
+        }
+        items.add(value.substring(start));
+        return items;
+    }
+
+    /** Splits the Transfer-Encoding header values into their codings, lower-cased and trimmed. */
+    private static List<String> transferCodings(List<String> transferEncodings) {
+        var codings = new ArrayList<String>();
+        for (var value : transferEncodings) {
+            for (var token : splitListItems(value)) {
+                var coding = token.trim().toLowerCase(Locale.ROOT);
+                if (!coding.isEmpty()) codings.add(coding);
+            }
+        }
+        return codings;
+    }
+
+    /**
+     * Parses the Content-Length header values (RFC 9112 §6.3): several values are acceptable only
+     * when they are all identical, and each must be canonical — digits only, no sign, no leading
+     * zero — so every intermediary parses the same length.
+     */
+    private static long parseContentLength(List<String> contentLengths) throws BadBodyException {
+        long cl = -1;
+        boolean seen = false;
+        for (var value : contentLengths) {
+            for (var token : splitListItems(value)) {
+                var t = token.trim();
+                if (!isCanonicalNonNegativeLong(t)) {
+                    throw new BadBodyException("Invalid Content-Length: " + t);
+                }
+                long v;
+                try {
+                    v = Long.parseLong(t);
+                } catch (NumberFormatException _) {
+                    throw new BadBodyException("Content-Length out of range: " + t);
+                }
+                if (!seen) {
+                    cl = v;
+                    seen = true;
+                } else if (cl != v) {
+                    throw new BadBodyException("Conflicting Content-Length values");
+                }
+            }
+        }
+        return cl;
+    }
+
+    /** Canonical decimal form of a non-negative long: digits only, no leading zero unless "0". */
+    private static boolean isCanonicalNonNegativeLong(String t) {
+        if (t.isEmpty() || t.length() > 19) return false;
+        for (int i = 0; i < t.length(); i++) {
+            char c = t.charAt(i);
+            if (c < '0' || c > '9') return false;
+        }
+        return t.equals("0") || t.charAt(0) != '0';
+    }
+
+    private static final class BadBodyException extends Exception {
+        private final transient StatusCode status;
+
+        BadBodyException(String message) {
+            this(StatusCode.BAD_REQUEST, message);
+        }
+
+        BadBodyException(StatusCode status, String message) {
+            super(message);
+            this.status = status;
+        }
+
+        StatusCode status() {
+            return status;
+        }
+    }
+
+    private long contentLength() {
+        var headers = request.headers();
+        var transferEncoding = headers.firstOrNull("Transfer-Encoding");
+        if ("chunked".equalsIgnoreCase(transferEncoding)) return -1;
+
+        return headers.first("Content-Length")
+                .map(s -> {
+                    try {
+                        return Long.parseLong(s);
+                    } catch (NumberFormatException _) {
+                        return -1L;
+                    }
+                })
+                .orElse(-1L);
+    }
+
+    private boolean isKeepAlive() {
+        var connection = request.headers().firstOrNull("Connection");
+        if (request.version() == HttpVersion.HTTP_1_1) {
+            // HTTP/1.1: keep-alive by default, unless Connection: close
+            return !"close".equalsIgnoreCase(connection);
+        }
+        // HTTP/1.0: close by default, unless Connection: keep-alive
+        return "keep-alive".equalsIgnoreCase(connection);
+    }
+
+    private void sendError(StatusCode status, String message) {
+        lingerOnClose = true;
+        try {
+            writer.writeError(status, message, writeBuffer, writeChannel, config.writeTimeout());
+        } catch (IOException _) {
+            // Connection already lost
+        }
+    }
+}

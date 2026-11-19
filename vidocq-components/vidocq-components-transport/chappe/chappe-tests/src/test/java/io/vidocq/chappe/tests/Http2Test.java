@@ -1,0 +1,143 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.tests;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+
+import io.vidocq.chappe.api.Response;
+import io.vidocq.chappe.api.Router;
+import io.vidocq.chappe.api.Server;
+import io.vidocq.chappe.api.StatusCode;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+
+/**
+ * HTTP/2 integration tests (cleartext h2c).
+ * <p>
+ * Uses {@code HttpClient} with {@code HTTP_2}, which performs automatic h2c
+ * upgrade, or sends the HTTP/2 preface directly.
+ */
+class Http2Test {
+
+    private Server server;
+    private HttpClient client;
+    private String baseUrl;
+    private int port;
+
+    @BeforeEach
+    void setUp() {
+        var router = Router.builder()
+                .get("/", _ -> Response.ok("Hello HTTP/2!"))
+                .get("/echo-path", req -> Response.ok(req.path()))
+                .post("/echo", req -> {
+                    var body = new String(req.body().asInputStream().readAllBytes(), StandardCharsets.UTF_8);
+                    return Response.ok(body);
+                })
+                .get("/json", _ -> Response.builder()
+                        .status(StatusCode.OK)
+                        .header("Content-Type", "application/json")
+                        .body("{\"protocol\":\"h2c\"}")
+                        .build())
+                .get("/large", _ -> {
+                    // 100 KB response to test flow control
+                    var data = "x".repeat(100_000);
+                    return Response.ok(data);
+                })
+                .build();
+
+        server = Server.builder().port(0).handler(router).build();
+        server.start();
+        port = server.port();
+        baseUrl = "http://127.0.0.1:" + port;
+
+        // HttpClient with HTTP/2 — performs h2c prior knowledge
+        client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).build();
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (server != null) server.stop();
+    }
+
+    @ParameterizedTest(name = "GET {0}")
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "/ | Hello HTTP/2!",
+                "/echo-path | /echo-path",
+                "/json | {\"protocol\":\"h2c\"}",
+            })
+    void http2Get(String path, String expectedBody) throws IOException, InterruptedException {
+        var response = get(path);
+        assertEquals(200, response.statusCode());
+        assertEquals(expectedBody, response.body());
+    }
+
+    @Test
+    void http2PostWithBody() throws IOException, InterruptedException {
+        var request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/echo"))
+                .POST(HttpRequest.BodyPublishers.ofString("http2 body"))
+                .build();
+        var response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode());
+        assertEquals("http2 body", response.body());
+    }
+
+    @Test
+    void http2LargeResponse() throws IOException, InterruptedException {
+        var response = get("/large");
+        assertEquals(200, response.statusCode());
+        assertEquals(100_000, response.body().length());
+    }
+
+    @Test
+    void http2MultipleRequests() throws IOException, InterruptedException {
+        // HTTP/2 multiplexes over the same connection
+        for (int i = 0; i < 5; i++) {
+            var response = get("/");
+            assertEquals(200, response.statusCode());
+            assertEquals("Hello HTTP/2!", response.body());
+        }
+    }
+
+    @Test
+    void http2NotFound() throws IOException, InterruptedException {
+        var response = get("/does-not-exist");
+        assertEquals(404, response.statusCode());
+    }
+
+    private HttpResponse<String> get(String path) throws IOException, InterruptedException {
+        var request =
+                HttpRequest.newBuilder().uri(URI.create(baseUrl + path)).GET().build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+}

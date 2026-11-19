@@ -1,0 +1,103 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.http.h2;
+
+import java.nio.ByteBuffer;
+
+/**
+ * HTTP/2 settings (RFC 9113, Section 6.5).
+ */
+public record Http2Settings(
+        int headerTableSize,
+        boolean enablePush,
+        int maxConcurrentStreams,
+        int initialWindowSize,
+        int maxFrameSize,
+        int maxHeaderListSize) {
+
+    // Setting identifiers (RFC 9113, Section 6.5.1)
+    public static final int HEADER_TABLE_SIZE = 0x1;
+    public static final int ENABLE_PUSH = 0x2;
+    public static final int MAX_CONCURRENT_STREAMS = 0x3;
+    public static final int INITIAL_WINDOW_SIZE = 0x4;
+    public static final int MAX_FRAME_SIZE = 0x5;
+    public static final int MAX_HEADER_LIST_SIZE = 0x6;
+
+    public static final Http2Settings DEFAULT = new Http2Settings(4096, false, 100, 65535, 16384, 8192);
+
+    /**
+     * The settings a server advertises: {@link #DEFAULT}, with {@code maxHeaderListSize} as its
+     * SETTINGS_MAX_HEADER_LIST_SIZE.
+     */
+    public static Http2Settings serverDefaults(int maxHeaderListSize) {
+        return new Http2Settings(
+                DEFAULT.headerTableSize,
+                DEFAULT.enablePush,
+                DEFAULT.maxConcurrentStreams,
+                DEFAULT.initialWindowSize,
+                DEFAULT.maxFrameSize,
+                maxHeaderListSize);
+    }
+
+    /** Parses a SETTINGS payload and returns the updated settings. */
+    public Http2Settings applyFrom(ByteBuffer payload, int length) {
+        int htSize = headerTableSize;
+        boolean push = enablePush;
+        int maxStreams = maxConcurrentStreams;
+        int winSize = initialWindowSize;
+        int maxFrame = maxFrameSize;
+        int maxHeader = maxHeaderListSize;
+
+        for (int i = 0; i < length; i += 6) {
+            int id = payload.getShort() & 0xFFFF;
+            int value = payload.getInt();
+            switch (id) {
+                case HEADER_TABLE_SIZE -> htSize = value;
+                case ENABLE_PUSH -> push = (value != 0);
+                case MAX_CONCURRENT_STREAMS -> maxStreams = value;
+                case INITIAL_WINDOW_SIZE -> winSize = value;
+                case MAX_FRAME_SIZE -> maxFrame = value;
+                case MAX_HEADER_LIST_SIZE -> maxHeader = value;
+                default -> {
+                    // an unknown setting is ignored (RFC 9113 §6.5.2)
+                }
+            }
+        }
+        return new Http2Settings(htSize, push, maxStreams, winSize, maxFrame, maxHeader);
+    }
+
+    /** Encodes the server settings into a buffer. */
+    public void writeTo(ByteBuffer buf) {
+        putSetting(buf, MAX_CONCURRENT_STREAMS, maxConcurrentStreams);
+        putSetting(buf, INITIAL_WINDOW_SIZE, initialWindowSize);
+        putSetting(buf, MAX_FRAME_SIZE, maxFrameSize);
+        putSetting(buf, MAX_HEADER_LIST_SIZE, maxHeaderListSize);
+    }
+
+    /** Number of bytes written by {@link #writeTo}. */
+    public int wireSize() {
+        return 4 * 6; // 4 settings x 6 bytes each
+    }
+
+    private static void putSetting(ByteBuffer buf, int id, int value) {
+        buf.putShort((short) id);
+        buf.putInt(value);
+    }
+}

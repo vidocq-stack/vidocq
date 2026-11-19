@@ -1,0 +1,190 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.conformance;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.nio.charset.StandardCharsets;
+
+import io.vidocq.chappe.api.Response;
+import io.vidocq.chappe.api.Router;
+import io.vidocq.chappe.api.Server;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+
+/**
+ * HTTP/1.1 conformance tests for the request line.
+ * RFC 9112, Section 3.
+ */
+class Http11RequestLineTest {
+
+    private Server server;
+    private int port;
+
+    @BeforeEach
+    void setUp() {
+        var router = Router.builder()
+                .get("/", _ -> Response.ok("OK"))
+                .post("/echo", req -> {
+                    byte[] body = req.body().asInputStream().readAllBytes();
+                    return Response.ok(new String(body, StandardCharsets.UTF_8));
+                })
+                .put("/echo", req -> {
+                    byte[] body = req.body().asInputStream().readAllBytes();
+                    return Response.ok(new String(body, StandardCharsets.UTF_8));
+                })
+                .delete("/echo", _ -> Response.ok("deleted"))
+                .patch("/echo", req -> {
+                    byte[] body = req.body().asInputStream().readAllBytes();
+                    return Response.ok(new String(body, StandardCharsets.UTF_8));
+                })
+                .head("/", _ -> Response.ok())
+                .options("/", _ -> Response.ok("options"))
+                .build();
+
+        server = Server.builder().port(0).handler(router).build();
+        server.start();
+        port = server.port();
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (server != null) {
+            server.stop();
+        }
+    }
+
+    @Test
+    void validGetRequest() {
+        String response = RawHttp.sendAndReceive(port, """
+                GET / HTTP/1.1\r
+                Host: localhost\r
+                \r
+                """);
+
+        assertEquals(200, RawHttp.extractStatusCode(response));
+        assertEquals("OK", RawHttp.extractBody(response));
+    }
+
+    @Test
+    void validPostRequest() {
+        String body = "Hello, Chappe!";
+        String response = RawHttp.sendAndReceive(
+                port,
+                "POST /echo HTTP/1.1\r\n" + "Host: localhost\r\n"
+                        + "Content-Length: "
+                        + body.length() + "\r\n" + "\r\n"
+                        + body);
+
+        assertEquals(200, RawHttp.extractStatusCode(response));
+        assertEquals(body, RawHttp.extractBody(response));
+    }
+
+    @ParameterizedTest(name = "{0} {1}")
+    @CsvSource({"GET, /", "DELETE, /echo", "OPTIONS, /"})
+    void allMethodsWithoutBody(String method, String path) {
+        String response = RawHttp.sendAndReceive(port, """
+                %s %s HTTP/1.1\r
+                Host: localhost\r
+                \r
+                """.formatted(method, path));
+        assertEquals(200, RawHttp.extractStatusCode(response));
+    }
+
+    @ParameterizedTest(name = "{0} {1}")
+    @CsvSource({"POST, /echo, test", "PUT, /echo, test", "PATCH, /echo, patch"})
+    void allMethodsWithBody(String method, String path, String body) {
+        String response = RawHttp.sendAndReceive(
+                port,
+                method + " " + path + " HTTP/1.1\r\n" + "Host: localhost\r\n"
+                        + "Content-Length: "
+                        + body.length() + "\r\n" + "\r\n"
+                        + body);
+        assertEquals(200, RawHttp.extractStatusCode(response));
+    }
+
+    @Test
+    void allMethodsHead() {
+        String response = RawHttp.sendAndReceive(port, """
+                HEAD / HTTP/1.1\r
+                Host: localhost\r
+                \r
+                """);
+        assertEquals(200, RawHttp.extractStatusCode(response));
+        // HEAD responses must not contain a body
+        assertEquals("", RawHttp.extractBody(response));
+    }
+
+    @Test
+    void unknownMethod() {
+        String response = RawHttp.sendAndReceive(port, """
+                FOOBAR / HTTP/1.1\r
+                Host: localhost\r
+                \r
+                """);
+
+        // Unknown method should return 501 Not Implemented
+        int status = RawHttp.extractStatusCode(response);
+        assertEquals(501, status, "Unknown method FOOBAR should return 501 Not Implemented");
+    }
+
+    @Test
+    void http10Version() {
+        String response = RawHttp.sendAndReceive(port, """
+                GET / HTTP/1.0\r
+                Host: localhost\r
+                \r
+                """);
+
+        assertEquals(200, RawHttp.extractStatusCode(response));
+        // HTTP/1.0 default is Connection: close
+        String connection = RawHttp.extractHeader(response, "Connection");
+        assertEquals("close", connection, "HTTP/1.0 response should have Connection: close");
+    }
+
+    @Test
+    void unsupportedVersion() {
+        String response = RawHttp.sendAndReceive(port, """
+                GET / HTTP/2.0\r
+                Host: localhost\r
+                \r
+                """);
+
+        int status = RawHttp.extractStatusCode(response);
+        assertEquals(400, status, "Unsupported HTTP version should return 400 Bad Request");
+    }
+
+    @Test
+    void missingHostHeader() {
+        // RFC 9112 requires Host header for HTTP/1.1, but we are lenient for now
+        String response = RawHttp.sendAndReceive(port, """
+                GET / HTTP/1.1\r
+                \r
+                """);
+
+        int status = RawHttp.extractStatusCode(response);
+        // Should still work (lenient mode)
+        assertTrue(status >= 200 && status < 500, "Missing Host header should still work (lenient): got " + status);
+    }
+}

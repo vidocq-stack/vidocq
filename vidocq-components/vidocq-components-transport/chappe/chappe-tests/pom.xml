@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.chappe</groupId>
+        <artifactId>chappe-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>chappe-tests</artifactId>
+
+    <properties>
+        <!--
+            Integration tests: never released as a dependency. We disable every release-time
+            attachment (sources/javadoc/GPG) plus the deploy goal AND we override the
+            central-publishing-maven-plugin to skip publish — the latter is required
+            because central-publishing replaces maven-deploy-plugin via extensions=true
+            and ignores `maven.deploy.skip`. See vauban-examples for the same pattern.
+        -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
+
+    <name>Chappe Tests</name>
+    <description>Tests d'intégration du serveur HTTP Chappe</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.chappe</groupId>
+            <artifactId>chappe-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- The architecture rules as tests (Vidocq/vidocq#289): the shared vidocq-archrules library of
+             vidocq-parent, test scope only, never shipped, the second exception to Chappe's zero-dependency rule
+             after JUnit (CLAUDE.md). It brings ArchUnit's core (Apache-2.0, slf4j-api). -->
+        <dependency>
+            <groupId>io.vidocq</groupId>
+            <artifactId>vidocq-archrules</artifactId>
+            <version>0.4.0-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

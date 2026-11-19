@@ -1,0 +1,160 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.api;
+
+import java.net.InetSocketAddress;
+import java.time.Duration;
+import java.util.ServiceLoader;
+
+import javax.net.ssl.SSLContext;
+
+/**
+ * HTTP server — entry point for starting and stopping the server.
+ * <p>
+ * Implements {@link AutoCloseable} to support {@code try-with-resources}.
+ *
+ * <pre>{@code
+ * try (var server = Server.builder()
+ *         .port(8080)
+ *         .handler(myRouter)
+ *         .build()) {
+ *     server.start();
+ *     // The server handles requests...
+ * } // stop() called automatically
+ * }</pre>
+ */
+public interface Server extends AutoCloseable {
+
+    /** Starts the server (bind + accept). Non-blocking. */
+    void start();
+
+    /** Gracefully stops the server (drains active connections). */
+    void stop();
+
+    /** Equivalent to {@link #stop()}. */
+    @Override
+    default void close() {
+        stop();
+    }
+
+    /** {@code true} if the server is running. */
+    boolean isRunning();
+
+    /** Actual port the server is listening on (useful with port 0). */
+    int port();
+
+    /** Full local address of the server. */
+    InetSocketAddress localAddress();
+
+    /** Server configuration. */
+    ServerConfig config();
+
+    /** Creates a new builder via {@link ServiceLoader} ({@link ServerProvider}). */
+    static Builder builder() {
+        return ServiceLoader.load(ServerProvider.class)
+                .findFirst()
+                .orElseThrow(
+                        () -> new IllegalStateException("No ServerProvider found — add chappe-core to the module path"))
+                .newBuilder();
+    }
+
+    /** Fluent builder for configuring and constructing a {@link Server}. */
+    interface Builder {
+
+        Builder port(int port);
+
+        Builder host(String host);
+
+        Builder handler(Handler handler);
+
+        Builder backlog(int backlog);
+
+        /**
+         * Bound on each blocking read of a request body, HTTP/1.1 or HTTP/2 (default: 30s); see {@link
+         * ServerConfig#readTimeout()}. {@link Duration#ZERO} or a negative value disables it.
+         */
+        Builder readTimeout(Duration timeout);
+
+        /**
+         * Bound on a single blocking write — how long the socket may refuse to accept
+         * bytes we are trying to send. Does not bound idle time on a response with
+         * nothing in flight (e.g. gaps between Server-Sent Events); see {@link
+         * ServerConfig#writeTimeout()}. {@link Duration#ZERO} or a negative value means no bound
+         * for responses; the writes of a TLS close stay bounded (2 s).
+         */
+        Builder writeTimeout(Duration timeout);
+
+        /**
+         * Idle timeout before closing the connection; also the total deadline of the whole TLS
+         * handshake. Use a positive value: zero or negative removes the handshake deadline but
+         * does not disable the idle bound. See {@link ServerConfig#idleTimeout()}.
+         */
+        Builder idleTimeout(Duration timeout);
+
+        Builder maxRequestSize(long bytes);
+
+        Builder maxHeaderSize(int bytes);
+
+        /**
+         * Most bytes of a request body the handler left unread that the server reads and discards
+         * to keep an HTTP/1.1 connection (default: 1 MiB). Past it the connection is closed instead.
+         * {@code 0} closes the connection whenever a body was left unread.
+         *
+         * @throws IllegalArgumentException if {@code bytes} is negative
+         */
+        Builder maxDrainSize(long bytes);
+
+        /**
+         * Configures TLS with the given {@link SSLContext}; clients are not asked for a
+         * certificate. Same as {@code tls(sslContext, ClientAuth.NONE)}.
+         */
+        default Builder tls(SSLContext sslContext) {
+            return tls(sslContext, ClientAuth.NONE);
+        }
+
+        /**
+         * Configures TLS with the given {@link SSLContext} and client certificate mode. The
+         * mode applies to every connection of this listener; the context's trust managers
+         * validate the client certificate. {@link #build()} fails with an
+         * {@link IllegalArgumentException} when {@code clientAuth} is not {@link ClientAuth#NONE}
+         * and {@code sslContext} is {@code null}.
+         *
+         * @throws NullPointerException if {@code clientAuth} is {@code null}
+         */
+        Builder tls(SSLContext sslContext, ClientAuth clientAuth);
+
+        /** ALPN protocols to negotiate (default: {@code ["h2", "http/1.1"]}). */
+        Builder alpnProtocols(String... protocols);
+
+        /** Drain delay before forced closure on stop (default: 30s). */
+        Builder shutdownGracePeriod(Duration duration);
+
+        /**
+         * Whether responses carry Chappe's version and build: {@code Server: Chappe/<version>+<commit> (<build
+         * time>)}, and {@code X-Chappe-Build} with the same value, a name reverse proxies leave alone. Off by
+         * default: responses then say {@code Server: Chappe} and nothing more, so that a public server does not
+         * tell which version to aim at. Turn it on to identify a binary behind a proxy, not on a server the
+         * internet reaches.
+         */
+        Builder exposeBuildInfo(boolean expose);
+
+        Server build();
+    }
+}

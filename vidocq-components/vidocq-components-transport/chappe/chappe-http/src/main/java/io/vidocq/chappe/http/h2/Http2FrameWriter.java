@@ -1,0 +1,341 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.chappe.http.h2;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.WritableByteChannel;
+import java.time.Duration;
+import java.util.concurrent.locks.ReentrantLock;
+
+import io.vidocq.chappe.http.BoundedWrites;
+
+/**
+ * Writes HTTP/2 frames to a {@link WritableByteChannel}.
+ * <p>
+ * Uses a {@link ReentrantLock} instead of {@code synchronized} to avoid
+ * pinning virtual threads.
+ * <p>
+ * Thread-safe: multiple virtual threads can call the write methods
+ * concurrently. The lock guarantees that frames are not interleaved.
+ * <p>
+ * When built with a positive {@code writeTimeout}, each write of a flushed frame buffer (at most
+ * its capacity, 16 KiB in a connection) is bounded: a write that does not return within
+ * {@code writeTimeout} gets {@code closeable} closed, which fails the stalled write and every
+ * writer after it, and so ends the whole connection. On a plain socket a partial write returns and
+ * re-arms the deadline; over TLS one write wraps and sends the whole buffer, so the bound covers the
+ * whole flush. {@code null}, zero or negative means no bound.
+ */
+public final class Http2FrameWriter {
+
+    private static final int FRAME_HEADER_SIZE = 9;
+    static final int DEFAULT_MAX_FRAME_SIZE = 16_384;
+
+    private final ByteBuffer writeBuffer;
+    private final WritableByteChannel channel;
+    private final ReentrantLock writeLock = new ReentrantLock();
+    private final int maxFrameSize;
+    private final Duration writeTimeout;
+    private final Closeable closeable;
+
+    public Http2FrameWriter(ByteBuffer writeBuffer, WritableByteChannel channel) {
+        this(writeBuffer, channel, DEFAULT_MAX_FRAME_SIZE);
+    }
+
+    public Http2FrameWriter(ByteBuffer writeBuffer, WritableByteChannel channel, int maxFrameSize) {
+        this(writeBuffer, channel, maxFrameSize, null, null);
+    }
+
+    /**
+     * Creates a writer whose every flush is bounded by {@code writeTimeout}.
+     *
+     * @param writeTimeout how long one blocking write of the buffer may take before the transport
+     *     is closed; {@code null}, zero or negative for no bound, the {@code BoundedWrites} rule for
+     *     data writes (the TLS close_notify of {@code SslHandler} stays bounded even then)
+     * @param closeable what to close on that deadline, to wake the stalled write (the socket
+     *     channel for h2c, the {@code SslHandler} for TLS); {@code null} closes {@code channel}
+     */
+    public Http2FrameWriter(
+            ByteBuffer writeBuffer,
+            WritableByteChannel channel,
+            int maxFrameSize,
+            Duration writeTimeout,
+            Closeable closeable) {
+        this.writeBuffer = writeBuffer;
+        this.channel = channel;
+        this.maxFrameSize = maxFrameSize;
+        this.writeTimeout = writeTimeout;
+        this.closeable = closeable != null ? closeable : channel;
+    }
+
+    // -------------------------------------------------------------------------
+    // Public methods — all throw IOException
+    // -------------------------------------------------------------------------
+
+    public void writeFrame(int type, int flags, int streamId, byte[] payload, int off, int len) throws IOException {
+        writeLock.lock();
+        try {
+            writeFrameHeader(len, type, flags, streamId);
+            writeBytes(payload, off, len);
+            flush();
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    public void writeSettings(Http2Settings settings) throws IOException {
+        writeLock.lock();
+        try {
+            int payloadLen = settings.wireSize();
+            writeFrameHeader(payloadLen, Http2Frame.TYPE_SETTINGS, 0, 0);
+            ensureCapacity(payloadLen);
+            settings.writeTo(writeBuffer);
+            flush();
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    public void writeSettingsAck() throws IOException {
+        writeLock.lock();
+        try {
+            writeFrameHeader(0, Http2Frame.TYPE_SETTINGS, Http2Frame.FLAG_ACK, 0);
+            flush();
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    public void writePingAck(long opaqueData) throws IOException {
+        writeLock.lock();
+        try {
+            writeFrameHeader(8, Http2Frame.TYPE_PING, Http2Frame.FLAG_ACK, 0);
+            ensureCapacity(8);
+            writeBuffer.putLong(opaqueData);
+            flush();
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    public void writeGoaway(int lastStreamId, Http2ErrorCode error) throws IOException {
+        writeLock.lock();
+        try {
+            writeFrameHeader(8, Http2Frame.TYPE_GOAWAY, 0, 0);
+            ensureCapacity(8);
+            writeBuffer.putInt(lastStreamId & 0x7FFFFFFF);
+            writeBuffer.putInt(error.code());
+            flush();
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    public void writeRstStream(int streamId, Http2ErrorCode error) throws IOException {
+        writeLock.lock();
+        try {
+            writeFrameHeader(4, Http2Frame.TYPE_RST_STREAM, 0, streamId);
+            ensureCapacity(4);
+            writeBuffer.putInt(error.code());
+            flush();
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    public void writeWindowUpdate(int streamId, int increment) throws IOException {
+        writeLock.lock();
+        try {
+            writeFrameHeader(4, Http2Frame.TYPE_WINDOW_UPDATE, 0, streamId);
+            ensureCapacity(4);
+            writeBuffer.putInt(increment & 0x7FFFFFFF);
+            flush();
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    /**
+     * Produces an HPACK header block. Called by {@link #writeHeaderBlock} under the write lock.
+     */
+    @FunctionalInterface
+    public interface HeaderBlockEncoder {
+
+        /**
+         * Encodes the block, updating the encoder's dynamic table.
+         *
+         * @return the encoded block
+         * @throws IOException to send nothing, before the dynamic table is touched (for instance for a
+         *     stream the peer reset)
+         */
+        byte[] encode() throws IOException;
+    }
+
+    /**
+     * Encodes a header block and writes it as one HEADERS frame and as many CONTINUATION frames as
+     * {@code maxFrameSize} needs, both under the write lock (CHAPPE-034). The HPACK encoder inserts
+     * into its dynamic table as it encodes, so the blocks must reach the wire in the order they were
+     * encoded: encoding outside the lock let two streams write their blocks in the opposite order,
+     * and the peer's table then no longer matched the encoder's (RFC 7541 §2.2). Nothing else is
+     * written between the frames of the block (RFC 9113 §6.10).
+     * <p>
+     * A failure of {@code encoder} sends nothing. A write that fails once the block is encoded closes
+     * the transport: the peer's HPACK context is then undefined, so the connection cannot go on.
+     *
+     * @param streamId the stream the block belongs to
+     * @param encoder encodes the block; it runs under the write lock and must not block on I/O
+     * @param endStream whether the HEADERS frame carries END_STREAM
+     * @throws IOException if {@code encoder} fails, or the write fails (the transport is then closed)
+     */
+    public void writeHeaderBlock(int streamId, HeaderBlockEncoder encoder, boolean endStream) throws IOException {
+        writeLock.lock();
+        try {
+            byte[] encodedHeaders = encoder.encode();
+            // Any failure once the block is encoded closes the transport, an Error included: an
+            // exception keeps a failed close as suppressed, the finally block covers an Error.
+            boolean settled = false;
+            try {
+                writeHeaderFrames(streamId, encodedHeaders, endStream);
+                settled = true;
+            } catch (Exception e) {
+                settled = true;
+                closeTransport(e);
+                throw e;
+            } finally {
+                if (!settled) {
+                    closeTransport(null);
+                }
+            }
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    public void writeData(int streamId, byte[] data, int off, int len, boolean endStream) throws IOException {
+        writeLock.lock();
+        try {
+            int remaining = len;
+            int offset = off;
+
+            if (remaining == 0) {
+                int flags = endStream ? Http2Frame.FLAG_END_STREAM : 0;
+                writeFrameHeader(0, Http2Frame.TYPE_DATA, flags, streamId);
+            } else {
+                while (remaining > 0) {
+                    int chunkLen = Math.min(maxFrameSize, remaining);
+                    boolean isLast = (remaining <= maxFrameSize);
+                    int flags = (isLast && endStream) ? Http2Frame.FLAG_END_STREAM : 0;
+                    writeFrameHeader(chunkLen, Http2Frame.TYPE_DATA, flags, streamId);
+                    writeBytes(data, offset, chunkLen);
+                    offset += chunkLen;
+                    remaining -= chunkLen;
+                }
+            }
+
+            flush();
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Internal helpers
+    // -------------------------------------------------------------------------
+
+    /** Writes an encoded block as HEADERS and CONTINUATION frames, then flushes. Called under the lock. */
+    private void writeHeaderFrames(int streamId, byte[] encodedHeaders, boolean endStream) throws IOException {
+        int totalLen = encodedHeaders.length;
+        // The HEADERS frame, empty for an empty block, then CONTINUATION frames for the rest.
+        int firstLen = Math.min(maxFrameSize, totalLen);
+        int headersFlags = firstLen == totalLen ? Http2Frame.FLAG_END_HEADERS : 0;
+        if (endStream) headersFlags |= Http2Frame.FLAG_END_STREAM;
+        writeFrameHeader(firstLen, Http2Frame.TYPE_HEADERS, headersFlags, streamId);
+        writeBytes(encodedHeaders, 0, firstLen);
+
+        int offset = firstLen;
+        while (offset < totalLen) {
+            int chunkLen = Math.min(maxFrameSize, totalLen - offset);
+            int flags = offset + chunkLen == totalLen ? Http2Frame.FLAG_END_HEADERS : 0;
+            writeFrameHeader(chunkLen, Http2Frame.TYPE_CONTINUATION, flags, streamId);
+            writeBytes(encodedHeaders, offset, chunkLen);
+            offset += chunkLen;
+        }
+
+        flush();
+    }
+
+    /**
+     * Closes the transport after a failed header block write, keeping a failed close as suppressed
+     * by {@code failure}, or dropping it when {@code failure} is {@code null} (an Error in flight).
+     */
+    private void closeTransport(Exception failure) {
+        try {
+            closeable.close();
+        } catch (IOException e) {
+            if (failure != null) failure.addSuppressed(e);
+        }
+    }
+
+    private void writeFrameHeader(int payloadLen, int type, int flags, int streamId) throws IOException {
+        ensureCapacity(FRAME_HEADER_SIZE);
+        writeBuffer.put((byte) ((payloadLen >>> 16) & 0xFF));
+        writeBuffer.put((byte) ((payloadLen >>> 8) & 0xFF));
+        writeBuffer.put((byte) (payloadLen & 0xFF));
+        writeBuffer.put((byte) (type & 0xFF));
+        writeBuffer.put((byte) (flags & 0xFF));
+        writeBuffer.putInt(streamId & 0x7FFFFFFF);
+    }
+
+    private void writeBytes(byte[] src, int off, int len) throws IOException {
+        int remaining = len;
+        int offset = off;
+        while (remaining > 0) {
+            int space = writeBuffer.remaining();
+            if (space == 0) {
+                flushBuffer();
+                space = writeBuffer.remaining();
+            }
+            int toWrite = Math.min(space, remaining);
+            writeBuffer.put(src, offset, toWrite);
+            offset += toWrite;
+            remaining -= toWrite;
+        }
+    }
+
+    private void ensureCapacity(int needed) throws IOException {
+        if (writeBuffer.remaining() < needed) {
+            flushBuffer();
+        }
+    }
+
+    private void flush() throws IOException {
+        flushBuffer();
+    }
+
+    private void flushBuffer() throws IOException {
+        writeBuffer.flip();
+        while (writeBuffer.hasRemaining()) {
+            // A partial write is progress, not a stall: each call arms its own deadline.
+            BoundedWrites.writeWithTimeout(channel, closeable, writeBuffer, writeTimeout);
+        }
+        writeBuffer.clear();
+    }
+}
