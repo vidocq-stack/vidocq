@@ -1,5 +1,6 @@
-# SonarQube analysis of the monorepo: one project, key the-vidocq-project (Yann, 2026-11-19), main on every push,
-# pull requests on every update. Blocking: `sonar / sonar` is a required check of main.
+# SonarQube analysis of the monorepo: one project, key the-vidocq-project (Yann, 2026-11-19), main once a night
+# (02:00 UTC, the reference of new code for the pull requests of the next day), pull requests on every update.
+# Blocking: `sonar / sonar` is a required check of main.
 #
 # The whole reactor is built and analysed each time (gib.disable): an analysis of a partial reactor drops the
 # modules it did not build from a branch, and the scanner refuses a reactor without its aggregators
@@ -8,8 +9,8 @@
 # Prerequisites: org secret SONAR_TOKEN, org variable SONAR_HOST_URL, org secret VIDOCQ_BOT_TOKEN.
 name: sonar
 on:
-  push:
-    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'
   pull_request:
     branches: [main]
   workflow_dispatch:

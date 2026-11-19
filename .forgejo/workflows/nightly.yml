@@ -1,0 +1,86 @@
+name: Nightly build
+
+# The whole reactor built, tested and deployed as SNAPSHOTs once a night (01:00 UTC), whatever the pushes of the day
+# built incrementally (ci.yml), then the CRaC extension, which needs a CRaC JDK. The nightly TCK (tck-nightly.yml,
+# 03:00 UTC) and the SonarQube analysis of main (sonar.yml, 02:00 UTC) follow. No sources or javadoc jar: the
+# release builds them. A maintainer can run it by hand (workflow_dispatch), on main only.
+on:
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: publish-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: vidocq-runner
+    steps:
+      # Publishing credentials and the signing key: actions pinned to a commit (workspace CYBER_SECU.md, F-04).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, the commit Vidocq/ci pins
+
+      - name: Fetch Vidocq/ci action (Forgejo mirror, basic-auth)
+        shell: bash
+        env:
+          MIRROR_URL:  ${{ secrets.MIRROR_ASD_URL }}
+          MIRROR_USER: ${{ secrets.MIRROR_ASD_USER }}
+          MIRROR_PASS: ${{ secrets.MIRROR_ASD_PASSWORD }}
+        run: |
+          set -euo pipefail
+          enc_pass=$(python3 -c "import os,urllib.parse;print(urllib.parse.quote(os.environ['MIRROR_PASS'], safe=''))")
+          host="${MIRROR_URL#https://}"; host="${host#http://}"; host="${host%/}"
+          ci_sha=f79ddba722c722227e6d5b013d4b94a39c68009b
+          git clone --quiet --branch main \
+            "https://${MIRROR_USER}:${enc_pass}@${host}/Vidocq/ci.git" \
+            .ci-action
+          git -C .ci-action checkout --quiet --detach "$ci_sha"
+          test "$(git -C .ci-action rev-parse HEAD)" = "$ci_sha"
+
+      - uses: ./.ci-action/setup-maven
+
+      - name: Build, test & deploy the whole reactor
+        uses: ./.ci-action/deploy-maven
+        with:
+          maven-args: -B -ntp -U -Dgib.disable=true -Dmaven.source.skip=true -Dmaven.javadoc.skip=true
+          skip-tests: "false"
+          central-username: ${{ secrets.CENTRAL_USERNAME }}
+          central-password: ${{ secrets.CENTRAL_PASSWORD }}
+          snapshot-username: ${{ secrets.REPOSILITE_USERNAME }}
+          snapshot-password: ${{ secrets.REPOSILITE_PASSWORD }}
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      # vidocq-runtime-crac-extension requires jdk.crac: its own artifact, in the `crac` profile, built on Azul Zulu
+      # CRaC against the runtime the step above installed. Also built by the release.
+      - name: Install Azul Zulu CRaC
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./vidocq-runtime/install-zulu-crac.sh "$RUNNER_TEMP/zulu"
+          echo "CRAC_JAVA_HOME=$RUNNER_TEMP/zulu" >> "$GITHUB_ENV"
+
+      - name: Deploy the CRaC extension (built on a CRaC JDK)
+        uses: ./.ci-action/deploy-maven
+        env:
+          JAVA_HOME: ${{ env.CRAC_JAVA_HOME }}
+        with:
+          maven-args: -B -ntp -Dgib.disable=true -Dmaven.source.skip=true -Dmaven.javadoc.skip=true -Pcrac -pl vidocq-runtime/vidocq-runtime-extensions/vidocq-runtime-extensions-essentials/vidocq-runtime-crac-extension
+          skip-tests: "true"
+          central-username: ${{ secrets.CENTRAL_USERNAME }}
+          central-password: ${{ secrets.CENTRAL_PASSWORD }}
+          snapshot-username: ${{ secrets.REPOSILITE_USERNAME }}
+          snapshot-password: ${{ secrets.REPOSILITE_PASSWORD }}
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: ./.ci-action/notify-slack
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: failure
+          repo: ${{ github.repository }}
+          ref: ${{ github.ref_name }}
+          run-url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_number }}

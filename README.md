@@ -90,8 +90,9 @@ Prerequisites: JDK 25 (Temurin) and Maven 3.10.0, pinned in `.sdkmanrc` (`sdk en
 ```
 
 Builds are incremental: the [gitflow-incremental-builder](https://github.com/gitflow-incremental-builder/gitflow-incremental-builder)
-extension builds only the modules a branch changes and their dependents. `-Dgib.disable=true` builds everything;
-`main` always builds everything. Official TCK runners stay behind each component's `tck` profile.
+extension builds only the modules a branch changes and their dependents. `-Dgib.disable=true` builds everything.
+In CI, a pull request and a push to `main` build incrementally; the whole reactor is built, tested and published
+every night. Official TCK runners stay behind each component's `tck` profile.
 
 ## Documentation
 

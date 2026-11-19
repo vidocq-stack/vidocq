@@ -1,7 +1,11 @@
 name: CI
 
-# Post-merge flow of the monorepo (push on main): every module built and tested, then every published module
-# deployed as a SNAPSHOT (maven.vidocq.dev, then central-snapshots), incubator included (MONOREPO.md §4).
+# Post-merge flow of the monorepo (push on main): an incremental build. gitflow-incremental-builder builds the modules
+# the push changed, compared with the commit main was on before it, and every module depending on them, with their
+# tests, then deploys them as SNAPSHOTs. The modules it leaves out keep their SNAPSHOT of an earlier push.
+# The whole reactor is built, tested and deployed every night (nightly.yml), and on a push the incremental builder
+# cannot compare (a new branch, a forced push).
+# No sources or javadoc jar on a SNAPSHOT (Yann, 2026-11-19): the release builds them.
 on:
   push:
     branches: [main]
@@ -18,9 +22,29 @@ jobs:
       # This job holds the publishing credentials and the signing key: every action it runs is pinned
       # to a commit (workspace CYBER_SECU.md, F-04). Bump the SHAs on purpose, never to a branch.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, the commit Vidocq/ci pins
+        with:
+          fetch-depth: 0   # the incremental builder compares with the commit before the push
 
       - name: Check documented version numbers stay in sync
         run: ./vidocq-runtime/check-doc-versions.sh
+
+      - name: What to build
+        id: scope
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          # Detached at the pushed commit: gib.disableIfBranchMatches=main is for a developer's local main only.
+          git checkout -q --detach
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ] \
+              && git merge-base --is-ancestor "$BEFORE" HEAD; then
+            git update-ref refs/remotes/origin/gib-base "$BEFORE"
+            echo "args=-Dgib.referenceBranch=refs/remotes/origin/gib-base -Dgib.compareToMergeBase=false -Dgib.uncommitted=false -Dgib.untracked=false" >> "$GITHUB_OUTPUT"
+            echo "Incremental: changes since ${BEFORE:0:10}"
+          else
+            echo "args=-Dgib.disable=true" >> "$GITHUB_OUTPUT"
+            echo "Full build: no earlier commit of main to compare with"
+          fi
 
       - name: Fetch Vidocq/ci action (Forgejo mirror, basic-auth)
         shell: bash
@@ -41,36 +65,13 @@ jobs:
 
       - uses: ./.ci-action/setup-maven
 
-      # One pass: the deploy builds and tests the whole reactor. deployAtEnd (vidocq-parent, the runtime's BOM and
-      # parent) holds every upload until every module built and passed its tests. gib.disable: main builds
-      # everything, whatever the checkout's branch looks like to the incremental builder.
-      - name: Build, test & deploy
+      # deployAtEnd (vidocq-parent, the runtime's BOM and parent) holds every upload until every module of the
+      # reactor built and passed its tests.
+      - name: Build, test & deploy what the push changed
         uses: ./.ci-action/deploy-maven
         with:
-          maven-args: -B -ntp -U -Dgib.disable=true
+          maven-args: -B -ntp -U -Dmaven.source.skip=true -Dmaven.javadoc.skip=true ${{ steps.scope.outputs.args }}
           skip-tests: "false"
-          central-username: ${{ secrets.CENTRAL_USERNAME }}
-          central-password: ${{ secrets.CENTRAL_PASSWORD }}
-          snapshot-username: ${{ secrets.REPOSILITE_USERNAME }}
-          snapshot-password: ${{ secrets.REPOSILITE_PASSWORD }}
-          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
-
-      # vidocq-runtime-crac-extension requires jdk.crac: built and deployed alone on Azul Zulu CRaC.
-      - name: Install Azul Zulu CRaC
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./vidocq-runtime/install-zulu-crac.sh "$RUNNER_TEMP/zulu"
-          echo "CRAC_JAVA_HOME=$RUNNER_TEMP/zulu" >> "$GITHUB_ENV"
-
-      - name: Deploy the CRaC extension (built on a CRaC JDK)
-        uses: ./.ci-action/deploy-maven
-        env:
-          JAVA_HOME: ${{ env.CRAC_JAVA_HOME }}
-        with:
-          maven-args: -B -ntp -Dgib.disable=true -Pcrac -pl vidocq-runtime/vidocq-runtime-extensions/vidocq-runtime-extensions-essentials/vidocq-runtime-crac-extension
-          skip-tests: "true"
           central-username: ${{ secrets.CENTRAL_USERNAME }}
           central-password: ${{ secrets.CENTRAL_PASSWORD }}
           snapshot-username: ${{ secrets.REPOSILITE_USERNAME }}
