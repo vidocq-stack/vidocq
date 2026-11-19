@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Module-path regression vehicle for Vauban itself.
+
+    Every historical Java Modules bug (VAU-INT-001..005, VAU-PRX-003) was caught by DOWNSTREAM
+    TCKs (mansart, heisenberg, dirac, cervantes) because the vauban test suite runs on
+    the class path, where opens/exports are not enforced. This module closes that blind
+    spot: a named module with NO `opens`, whose beans exercise the exact bug surface,
+    tested by surefire ON THE MODULE PATH (a main module-info makes surefire use it).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.vauban</groupId>
+        <artifactId>vauban-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vauban-module-it</artifactId>
+    <name>Vauban :: Java module-path IT</name>
+    <description>Module-path regression vehicle: build-time intercepted/proxied beans with zero
+        `opens`, covering the historical Java Modules bug surface (VAU-INT-001..005, VAU-PRX-003).</description>
+
+    <properties>
+        <!-- Test vehicle: never released. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+        <!-- SonarQube: test vehicle, its main code only exists to be exercised by its tests (Vidocq/vidocq#284). -->
+        <sonar.skip>true</sonar.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+        </dependency>
+        <!-- StartProbe defines an application layer, as a Vidocq application does (vauban#347). -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader</artifactId>
+        </dependency>
+        <!-- The session context: SessionMoveModulePathTest moves a session to another container (foy#114). -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-webcontexts</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>jakarta.enterprise.cdi-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                The Vauban APT generates, at COMPILE time: the $$Intercepted subclass (as source —
+                with overloads, primitive arrays, checked throws), the _ClientProxy (the beans are
+                normal-scoped), and the in-module _VaubanComponents provider declared in
+                module-info. The container then instantiates and field-injects everything through
+                that provider — zero `opens` in this module.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>io.vidocq.vauban</groupId>
+                            <artifactId>vauban-processor</artifactId>
+                            <version>${project.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+                <executions>
+                    <!-- No annotation processing on the test sources (the test is not a bean). -->
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <proc>none</proc>
+                            <!-- Test-only, as the Surefire argLine below: ModuleLookupModulePathTest
+                                 uses ModuleLookups, and SessionMoveModulePathTest listens to the container's
+                                 run-time generation report through java.util.logging. -->
+                            <compilerArgs combine.children="append">
+                                <arg>--add-exports</arg>
+                                <arg>io.vidocq.vauban.core/io.vidocq.vauban.core.access=io.vidocq.vauban.moduleit</arg>
+                                <arg>--add-reads</arg>
+                                <arg>io.vidocq.vauban.moduleit=java.logging</arg>
+                            </compilerArgs>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+                Every test of this module runs with reflection on annotations FORBIDDEN: a module
+                compiled with the Vauban APT ships what its own annotation types declare, so the
+                container must never read one of them back (vauban#70). Any fallback — reading an
+                instance's members, reading a declaration, building an instance — throws here
+                instead of passing unnoticed.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- Test-only: ModuleLookupModulePathTest calls ModuleLookups, whose package the
+                         container exports to the trusted extension modules alone; SessionMoveModulePathTest
+                         reads the container's run-time generation report through java.util.logging. -->
+                    <!-- @{argLine} keeps the JaCoCo agent of the quality profile (vidocq-parent). -->
+                    <argLine>@{argLine} --add-exports io.vidocq.vauban.core/io.vidocq.vauban.core.access=io.vidocq.vauban.moduleit --add-reads io.vidocq.vauban.moduleit=java.logging</argLine>
+                    <systemPropertyVariables>
+                        <vauban.annotations.reflection>forbid</vauban.annotations.reflection>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

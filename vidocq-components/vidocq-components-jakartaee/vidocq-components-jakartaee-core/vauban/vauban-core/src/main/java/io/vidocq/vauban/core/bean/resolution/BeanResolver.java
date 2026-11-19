@@ -1,0 +1,207 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.bean.resolution;
+
+import io.vidocq.vauban.core.bean.model.BeanDescriptor;
+import io.vidocq.vauban.core.bean.model.InjectionPointInfo;
+import io.vidocq.vauban.core.bean.model.QualifierInstance;
+import io.vidocq.vauban.core.types.AssignabilityRules;
+import io.vidocq.vauban.indexer.model.DotName;
+import io.vidocq.vauban.indexer.model.TypeInfo;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+
+/**
+ * The main bean resolution engine.
+ * <p>
+ * Resolves beans matching a required type and qualifiers following CDI 4.1 Section 2.5.
+ */
+public final class BeanResolver {
+
+    private final List<BeanDescriptor> beans;
+    private final List<io.vidocq.vauban.core.bean.model.InterceptorDescriptor> interceptors;
+    private final AssignabilityRules assignability;
+    private final io.vidocq.vauban.core.interceptor.InterceptorManager interceptorManager;
+    private final QualifierMatcher qualifierMatcher;
+
+    public BeanResolver(List<BeanDescriptor> beans, AssignabilityRules assignability) {
+        this(beans, List.of(), assignability);
+    }
+
+    public BeanResolver(List<BeanDescriptor> beans,
+                        List<io.vidocq.vauban.core.bean.model.InterceptorDescriptor> interceptors,
+                        AssignabilityRules assignability) {
+        this(beans, interceptors, assignability, QualifierMatcher.standalone());
+    }
+
+    /**
+     * A resolver matching qualifiers with {@code qualifierMatcher}: a container passes its own, which
+     * knows its index, the class loaders its classes come from and the members its extensions made
+     * non-binding.
+     */
+    public BeanResolver(List<BeanDescriptor> beans,
+                        List<io.vidocq.vauban.core.bean.model.InterceptorDescriptor> interceptors,
+                        AssignabilityRules assignability,
+                        QualifierMatcher qualifierMatcher) {
+        this.qualifierMatcher = Objects.requireNonNull(qualifierMatcher);
+        this.interceptors = List.copyOf(interceptors);
+        this.assignability = Objects.requireNonNull(assignability);
+        this.interceptorManager = new io.vidocq.vauban.core.interceptor.InterceptorManager(interceptors);
+        // CDI spec: interceptors are not eligible for injection as regular beans
+        var interceptorClasses = new HashSet<DotName>();
+        for (var interceptor : interceptors) {
+            interceptorClasses.add(interceptor.interceptorClass());
+        }
+        var injectable = new ArrayList<BeanDescriptor>();
+        for (var b : beans) {
+            if (!interceptorClasses.contains(b.beanClass())) {
+                injectable.add(b);
+            }
+        }
+        this.beans = List.copyOf(injectable);
+    }
+
+    public List<io.vidocq.vauban.core.bean.model.InterceptorDescriptor> getInterceptors() {
+        return interceptors;
+    }
+
+    /**
+     * Resolves interceptors for a set of bindings.
+     * CDI 4.1 Section 9.5.2.
+     */
+    public List<io.vidocq.vauban.core.bean.model.InterceptorDescriptor> resolveInterceptors(
+            List<java.lang.annotation.Annotation> beanAnnotations) {
+        return interceptorManager.resolveInterceptors(beanAnnotations);
+    }
+
+    /**
+     * Resolves beans matching a required type and qualifiers.
+     * CDI 4.1 Section 2.5.
+     */
+    public List<BeanDescriptor> resolve(TypeInfo requiredType, Set<QualifierInstance> qualifiers) {
+        var matching = new ArrayList<BeanDescriptor>();
+
+        for (var bean : beans) {
+            if (matchesType(bean, requiredType) && qualifierMatcher.matches(bean.qualifiers(), qualifiers)) {
+                matching.add(bean);
+            }
+        }
+
+        // If alternatives are present, filter by highest priority
+        return applyAlternativeSelection(matching);
+    }
+
+    /**
+     * Resolves a single bean. Returns empty if unsatisfied or ambiguous.
+     */
+    public Optional<BeanDescriptor> resolveUnique(TypeInfo requiredType, Set<QualifierInstance> qualifiers) {
+        var resolved = resolve(requiredType, qualifiers);
+        if (resolved.size() == 1) return Optional.of(resolved.getFirst());
+        return Optional.empty();
+    }
+
+    /**
+     * Resolves for an injection point, returning a detailed result.
+     */
+    public ResolutionResult resolveInjectionPoint(InjectionPointInfo ip) {
+        var resolved = resolve(ip.requiredType(), ip.qualifiers());
+        if (resolved.isEmpty()) {
+            return new ResolutionResult(ip, List.of(), ResolutionResult.Status.UNSATISFIED);
+        }
+        if (resolved.size() > 1) {
+            return new ResolutionResult(ip, resolved, ResolutionResult.Status.AMBIGUOUS);
+        }
+        return new ResolutionResult(ip, resolved, ResolutionResult.Status.RESOLVED);
+    }
+
+    private boolean matchesType(BeanDescriptor bean, TypeInfo requiredType) {
+        for (var beanType : bean.types()) {
+            if (assignability.beanTypeMatches(beanType, requiredType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * CDI alternative selection:
+     * If any beans are alternatives with {@code @Priority}, only the highest priority alternative(s) are selected.
+     * Non-alternative beans are included unless an alternative overrides them.
+     */
+    private List<BeanDescriptor> applyAlternativeSelection(List<BeanDescriptor> candidates) {
+        if (candidates.size() <= 1) return candidates;
+
+        // Separate alternatives and non-alternatives
+        var alternatives = new ArrayList<BeanDescriptor>();
+        var nonAlternatives = new ArrayList<BeanDescriptor>();
+        for (var b : candidates) {
+            if (!b.isAlternative()) {
+                nonAlternatives.add(b);
+            } else if (b.priorityDeclared()) {
+                alternatives.add(b);
+            }
+        }
+
+        if (alternatives.isEmpty()) {
+            return List.copyOf(nonAlternatives);
+        }
+
+        // Find max priority among alternatives
+        int maxPriority = alternatives.getFirst().priority();
+        for (var b : alternatives) {
+            maxPriority = Math.max(maxPriority, b.priority());
+        }
+
+        // CDI 4.1 Section 5.2.2:
+        // "An alternative with higher priority prevails over an alternative with lower priority,
+        // and over a bean which is not an alternative."
+        var selected = new ArrayList<BeanDescriptor>();
+        for (var b : alternatives) {
+            if (b.priority() == maxPriority) {
+                selected.add(b);
+            }
+        }
+        return List.copyOf(selected);
+    }
+
+    /**
+     * Result of resolving an injection point.
+     */
+    public record ResolutionResult(
+            InjectionPointInfo injectionPoint,
+            List<BeanDescriptor> beans,
+            Status status
+    ) {
+        public enum Status { RESOLVED, UNSATISFIED, AMBIGUOUS }
+
+        public boolean isResolved() {
+            return status == Status.RESOLVED;
+        }
+
+        public BeanDescriptor bean() {
+            return beans.getFirst();
+        }
+    }
+}

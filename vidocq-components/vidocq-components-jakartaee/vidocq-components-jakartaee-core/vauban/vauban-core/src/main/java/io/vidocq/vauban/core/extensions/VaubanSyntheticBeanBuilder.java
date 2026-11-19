@@ -1,0 +1,217 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.extensions;
+
+import jakarta.enterprise.inject.build.compatible.spi.InvokerInfo;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanBuilder;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanDisposer;
+import jakarta.enterprise.lang.model.AnnotationInfo;
+import jakarta.enterprise.lang.model.declarations.ClassInfo;
+import jakarta.enterprise.lang.model.types.Type;
+
+import java.lang.annotation.Annotation;
+import java.util.*;
+
+/**
+ * Collects the configuration for a synthetic bean during @Synthesis phase.
+ */
+public final class VaubanSyntheticBeanBuilder<T> implements SyntheticBeanBuilder<T> {
+
+    private final Class<T> beanClass;
+    private final Set<java.lang.reflect.Type> types = new LinkedHashSet<>();
+    private final Set<io.vidocq.vauban.indexer.model.TypeInfo> indexTypes = new LinkedHashSet<>();
+    private final Set<Annotation> qualifiers = new LinkedHashSet<>();
+    private Class<? extends Annotation> scopeAnnotation;
+    private String name;
+    private boolean alternative;
+    private int priority;
+    /** Whether {@link #priority(int)} was called: {@code priority(0)} selects an alternative (BUG-20261113-14). */
+    private boolean priorityDeclared;
+    private final Map<String, Object> params = new LinkedHashMap<>();
+    private Class<? extends SyntheticBeanCreator<T>> creatorClass;
+    private Class<? extends SyntheticBeanDisposer<T>> disposerClass;
+
+    /** The extension whose {@code @Synthesis} registered this component; {@code null} when none ran, as for metadata. */
+    private Class<?> sourceExtension;
+
+    public VaubanSyntheticBeanBuilder(Class<T> beanClass) {
+        this.beanClass = beanClass;
+        this.types.add(beanClass);
+        this.types.add(Object.class);
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> type(Class<?> type) {
+        types.add(type);
+        return this;
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> type(ClassInfo type) {
+        // Best effort: store class name, resolve later
+        try {
+            types.add(Class.forName(type.name(), false, beanClass.getClassLoader()));
+        } catch (ClassNotFoundException _) {
+            // Best effort: a type the bean class's loader cannot see is left out.
+        }
+        return this;
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> type(Type type) {
+        // Convert the CDI lang-model Type into Vauban's index TypeInfo so the resulting
+        // synthetic bean exposes the correct (parameterized) bean type set during
+        // resolution. Without this, types like Optional<String> / List<T> were silently
+        // dropped (no-op stub) and the synthetic bean only exposed Object — which
+        // caused unsatisfied-dependency on every parameterized injection point.
+        // Cf. VAU-BCE-001.
+        if (type != null) {
+            indexTypes.add(LangModelTypeMapper.toIndexType(type));
+        }
+        return this;
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> qualifier(Class<? extends Annotation> qualifierAnnotation) {
+        qualifiers.add(SyntheticQualifiers.marker(qualifierAnnotation));
+        return this;
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> qualifier(AnnotationInfo qualifierAnnotation) {
+        // With its member values: a synthetic bean qualified @Channel("alpha") answers that lookup and
+        // no other (BUG-20260914-15).
+        var instance = SyntheticQualifiers.instanceOf(qualifierAnnotation);
+        if (instance != null) {
+            qualifiers.add(instance);
+        }
+        return this;
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> qualifier(Annotation qualifierAnnotation) {
+        qualifiers.add(qualifierAnnotation);
+        return this;
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> scope(Class<? extends Annotation> scopeAnnotation) {
+        this.scopeAnnotation = scopeAnnotation;
+        return this;
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> alternative(boolean isAlternative) {
+        this.alternative = isAlternative;
+        return this;
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> priority(int priority) {
+        this.priority = priority;
+        this.priorityDeclared = true;
+        return this;
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> name(String name) {
+        this.name = name;
+        return this;
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> stereotype(Class<? extends Annotation> stereotypeAnnotation) {
+        return this;
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> stereotype(ClassInfo stereotypeAnnotation) {
+        return this;
+    }
+
+    // --- withParam overloads ---
+
+    @Override public SyntheticBeanBuilder<T> withParam(String key, boolean value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, boolean[] value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, int value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, int[] value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, long value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, long[] value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, double value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, double[] value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, String value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, String[] value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, Enum<?> value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, Enum<?>[] value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, Class<?> value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, ClassInfo value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, Class<?>[] value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, ClassInfo[] value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, AnnotationInfo value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, Annotation value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, AnnotationInfo[] value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, Annotation[] value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, InvokerInfo value) { params.put(key, value); return this; }
+    @Override public SyntheticBeanBuilder<T> withParam(String key, InvokerInfo[] value) { params.put(key, value); return this; }
+
+    @Override
+    public SyntheticBeanBuilder<T> createWith(Class<? extends SyntheticBeanCreator<T>> creatorClass) {
+        this.creatorClass = creatorClass;
+        return this;
+    }
+
+    @Override
+    public SyntheticBeanBuilder<T> disposeWith(Class<? extends SyntheticBeanDisposer<T>> disposerClass) {
+        this.disposerClass = disposerClass;
+        return this;
+    }
+
+    // --- Accessors for BceProcessor ---
+
+    public Class<T> getBeanClass() { return beanClass; }
+    public Set<java.lang.reflect.Type> getTypes() { return types; }
+
+    /** Bean types added via {@link #type(Type)} — already converted to Vauban's TypeInfo. */
+    public Set<io.vidocq.vauban.indexer.model.TypeInfo> getIndexTypes() { return indexTypes; }
+
+    /**
+     * Adds a bean type in its index form, as the synthetic metadata records a type only the language model can
+     * name: a parameterized type, an array of one.
+     */
+    public VaubanSyntheticBeanBuilder<T> indexType(io.vidocq.vauban.indexer.model.TypeInfo type) {
+        indexTypes.add(type);
+        return this;
+    }
+    public Set<Annotation> getQualifiers() { return qualifiers; }
+    public Class<? extends Annotation> getScopeAnnotation() { return scopeAnnotation; }
+    public String getName() { return name; }
+    public boolean isAlternative() { return alternative; }
+    public int getPriority() { return priority; }
+    public boolean isPriorityDeclared() { return priorityDeclared; }
+    public Map<String, Object> getParams() { return params; }
+
+    /** The extension whose {@code @Synthesis} registered this component, or {@code null}. */
+    public Class<?> getSourceExtension() { return sourceExtension; }
+
+    void setSourceExtension(Class<?> sourceExtension) { this.sourceExtension = sourceExtension; }
+    public Class<? extends SyntheticBeanCreator<T>> getCreatorClass() { return creatorClass; }
+    public Class<? extends SyntheticBeanDisposer<T>> getDisposerClass() { return disposerClass; }
+}

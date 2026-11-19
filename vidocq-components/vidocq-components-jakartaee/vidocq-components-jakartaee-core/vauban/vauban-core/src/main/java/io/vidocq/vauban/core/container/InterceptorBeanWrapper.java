@@ -1,0 +1,1559 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.container;
+
+import io.vidocq.vauban.core.BeanFactory;
+import io.vidocq.vauban.core.bean.model.BeanDescriptor;
+import io.vidocq.vauban.core.context.CreationalContextImpl;
+import io.vidocq.vauban.core.interceptor.InterceptorManager;
+import io.vidocq.vauban.core.bean.model.InterceptorDescriptor;
+import io.vidocq.vauban.core.interceptor.VaubanInvocationContext;
+import io.vidocq.vauban.indexer.model.DotName;
+import jakarta.enterprise.context.spi.Contextual;
+import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.CreationException;
+import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.inject.spi.DeploymentException;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.BiFunction;
+
+final class InterceptorBeanWrapper {
+
+    private static final System.Logger LOG = System.getLogger(InterceptorBeanWrapper.class.getName());
+
+    private static final ScopedValue<Boolean> IS_CREATING_INTERCEPTOR = ScopedValue.newInstance();
+
+    /** What {@link #interceptorInstanceAsBean} answers when the interceptor is no bean it can resolve. */
+    private static final Object NO_BEAN = new Object();
+
+    private static final String CANNOT_DEFINE_SUBCLASS = "Could not define interceptor subclass";
+
+    private final VaubanContainer container;
+    private final VaubanLookup vaubanLookup;
+    private final InterceptorManager interceptorManager;
+    private final ClassLoader classLoader;
+    private final BiFunction<String, byte[], Class<?>> classDefiner;
+    /** The classes this container generates at run time, announced loudly (vauban#227). */
+    private final RuntimeGeneration runtimeGeneration = new RuntimeGeneration();
+    private final java.util.Map<io.vidocq.vauban.core.bean.model.BeanId, Object> proxyCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Each intercepted bean, by id: whether its {@code $$Intercepted} subclass was pre-generated (Vauban APT or Maven
+     * plugin) rather than generated and defined at boot. Read by {@link CodegenCoverage}; nothing dispatches on it.
+     */
+    private final java.util.Map<io.vidocq.vauban.core.bean.model.BeanId, Boolean> interceptedSubclasses =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * The {@code $$Intercepted} subclasses Vauban generated and defined at boot, in this JVM, whichever container did
+     * it. A class stays defined in its loader after its container closes, so a later boot sharing the loader finds it:
+     * this set tells such a class apart from one built ahead of time. Weak, so it never holds a loader alive.
+     */
+    private static final java.util.Set<Class<?>> DEFINED_AT_RUNTIME =
+            java.util.Collections.synchronizedSet(java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>()));
+
+    /** Whether the bean {@code id}'s intercepted subclass was pre-generated; {@code null} if it is not intercepted. */
+    Boolean interceptedSubclassPreGenerated(io.vidocq.vauban.core.bean.model.BeanId id) {
+        return interceptedSubclasses.get(id);
+    }
+
+    InterceptorBeanWrapper(VaubanContainer container, VaubanLookup vaubanLookup,
+                           InterceptorManager interceptorManager, ClassLoader classLoader,
+                           BiFunction<String, byte[], Class<?>> classDefiner) {
+        this.container = container;
+        this.vaubanLookup = vaubanLookup;
+        this.interceptorManager = interceptorManager;
+        this.classLoader = classLoader;
+        this.classDefiner = classDefiner;
+    }
+
+    Object getOrCreateInterceptorInstance(InterceptorDescriptor descriptor, CreationalContext<?> ctx) {
+        String className = descriptor.interceptorClass().value();
+
+        if (ctx instanceof CreationalContextImpl<?> vCtx) {
+            var known = knownInterceptorInstance(vCtx, className);
+            if (known != null) {
+                return known;
+            }
+        }
+
+        // Injected into the instance, an Interceptor is its own metadata, an @Intercepted Bean the intercepted bean's
+        // (BUG-20261117-47)
+        return BeanMetadata.creatingInterceptor(new VaubanInterceptor<>(descriptor,
+                interceptorManager::getOrCreateInstance, container.classLoader()), ctx,
+                () -> createdInterceptorInstance(descriptor, ctx));
+    }
+
+    /** An instance of the interceptor {@code descriptor} describes, which {@code ctx} does not hold yet. */
+    private Object createdInterceptorInstance(InterceptorDescriptor descriptor, CreationalContext<?> ctx) {
+        String className = descriptor.interceptorClass().value();
+        var asBean = interceptorInstanceAsBean(className, ctx);
+        if (asBean != NO_BEAN) {
+            return asBean;
+        }
+
+        if (Boolean.TRUE.equals(IS_CREATING_INTERCEPTOR.orElse(false))) {
+            try {
+                return createNestedInterceptor(className, ctx);
+            } catch (Exception e) {
+                throw new CreationException(e);
+            }
+        }
+        try {
+            return ScopedValue.where(IS_CREATING_INTERCEPTOR, true).call(() -> createInterceptor(className, ctx));
+        } catch (Exception e) {
+            LOG.log(System.Logger.Level.ERROR,
+                    "Failed to create interceptor " + descriptor.interceptorClass(), e);
+            if (e instanceof java.lang.reflect.InvocationTargetException ite) {
+                LOG.log(System.Logger.Level.ERROR,
+                        "Caused by: " + ite.getTargetException(), ite.getTargetException());
+            }
+            throw new CreationException("Failed to create interceptor: " + descriptor.interceptorClass(), e);
+        }
+    }
+
+    /**
+     * The instance of interceptor {@code className} this creational context already holds: cached, still under
+     * construction, or a dependent instance. {@code null} when it holds none.
+     */
+    private static Object knownInterceptorInstance(CreationalContextImpl<?> vCtx, String className) {
+        Object cached = vCtx.getInterceptorInstance(className);
+        if (cached != null) {
+            return cached;
+        }
+        for (Object inst : vCtx.getIncompleteInstances()) {
+            if (isInstanceOf(inst, className)) {
+                vCtx.addInterceptorInstance(className, inst);
+                return inst;
+            }
+        }
+        for (var dep : vCtx.getDependentInstances()) {
+            if (isInstanceOf(dep.instance(), className)) {
+                vCtx.addInterceptorInstance(className, dep.instance());
+                return dep.instance();
+            }
+        }
+        return null;
+    }
+
+    /** Whether {@code instance} is of class {@code className} or of a subclass Vauban generated for it. */
+    private static boolean isInstanceOf(Object instance, String className) {
+        var name = instance.getClass().getName();
+        return name.equals(className) || name.startsWith(className + "$$");
+    }
+
+    /**
+     * The reference to interceptor {@code className} resolved as a bean, which may be {@code null}, or
+     * {@link #NO_BEAN} when no bean of that class resolves: the caller then creates the instance itself.
+     */
+    private Object interceptorInstanceAsBean(String className, CreationalContext<?> ctx) {
+        try {
+            var bm = container.getBeanManager();
+            var clazz = container.loadClass(className);
+            var interceptorBeans = bm.getBeans(clazz);
+            if (interceptorBeans.isEmpty()) {
+                return NO_BEAN;
+            }
+            var bean = bm.resolve(interceptorBeans);
+            Object inst = bm.getReference(bean, clazz, ctx);
+            if (inst != null && ctx instanceof CreationalContextImpl<?> vCtx) {
+                vCtx.addInterceptorInstance(className, inst);
+            }
+            return inst;
+        } catch (Exception _) {
+            // fallback to manual creation
+            return NO_BEAN;
+        }
+    }
+
+    /**
+     * The creational context an intercepted factory creates a bean with: the caller's, or one of the bean's own when
+     * the caller passes none (VAU-INT-008). Its interceptor instances are dependent objects of the bean instance
+     * (CDI 4.1 §6.4.1), one per interceptor class: without a context, the dependent context answers no reference to
+     * them, and the chains of a same bean instance would not share them.
+     */
+    private static CreationalContext<Object> contextOfItsOwnIfNone(CreationalContext<Object> ctx) {
+        return ctx != null ? ctx : new CreationalContextImpl<>();
+    }
+
+    /** An interceptor created while another one is being created: its fields injected and {@code @PostConstruct} called here. */
+    private Object createNestedInterceptor(String className, CreationalContext<?> ctx) throws ReflectiveOperationException {
+        var constructor = findConstructor(container.loadClass(className));
+        var instance = instantiatePreferProvider(constructor, interceptorConstructorArgs(constructor, ctx));
+        container.beanInjector().injectFieldsByReflection(instance, null, ctx);
+        var pc = postConstructMethod(instance.getClass());
+        if (pc != null) {
+            vaubanLookup.invokeMethod(instance, pc);
+        }
+        if (ctx instanceof CreationalContextImpl<?> vCtx) {
+            vCtx.addInterceptorInstance(className, instance);
+            vCtx.pushInterceptor(instance);
+        }
+        return instance;
+    }
+
+    /** An interceptor created, injected and initialized as the container does for a bean. */
+    @SuppressWarnings("unchecked")
+    private Object createInterceptor(String className, CreationalContext<?> ctx) throws ReflectiveOperationException {
+        var constructor = findConstructor(container.loadClass(className));
+        var instance = instantiatePreferProvider(constructor, interceptorConstructorArgs(constructor, ctx));
+        container.injectFields(instance, null, ctx);
+        container.callPostConstruct(instance, null, ctx);
+
+        if (ctx instanceof CreationalContextImpl<?> vCtx) {
+            vCtx.addInterceptorInstance(className, instance);
+            vCtx.pushInterceptor(instance);
+        } else if (ctx != null) {
+            ((CreationalContext<Object>) ctx).push(instance);
+        }
+        return instance;
+    }
+
+    /** The arguments of an interceptor's constructor, each resolved by its qualifiers when a bean has them. */
+    private Object[] interceptorConstructorArgs(Constructor<?> constructor, CreationalContext<?> ctx) {
+        var paramTypes = constructor.getParameterTypes();
+        var genericParamTypes = constructor.getGenericParameterTypes();
+        var params = constructor.getParameters();
+        var args = new Object[paramTypes.length];
+        for (int i = 0; i < paramTypes.length; i++) {
+            args[i] = interceptorConstructorArg(paramTypes[i], genericParamTypes[i], params[i], i, ctx);
+        }
+        return args;
+    }
+
+    private Object interceptorConstructorArg(Class<?> paramType, java.lang.reflect.Type genericParamType,
+                                             java.lang.reflect.Parameter param, int position,
+                                             CreationalContext<?> ctx) {
+        var paramQuals = QualifierHelper.extractParamQualifiers(param);
+        if (paramType == jakarta.enterprise.event.Event.class || paramType == jakarta.enterprise.inject.Instance.class
+                || paramType == jakarta.inject.Provider.class) {
+            // Built from the parameter, with its qualifiers, as a bean's constructor parameter is: getReference knows
+            // only @Default (BUG-20261116-07)
+            return container.resolveParameter(paramType, genericParamType, ctx, paramQuals,
+                    param.getDeclaringExecutable(), null, param, position);
+        }
+        if (paramQuals.length > 0) {
+            var bm = container.getBeanManager();
+            var beans = bm.getBeans(paramType, paramQuals);
+            if (!beans.isEmpty()) {
+                var resolved = bm.resolve(beans);
+                return bm.getReference(resolved, paramType, ctx);
+            }
+        }
+        return container.resolveParameter(paramType, genericParamType, ctx);
+    }
+
+    /** The first method {@code type} declares with {@code @PostConstruct}, or {@code null}. */
+    private static Method postConstructMethod(Class<?> type) {
+        for (var m : type.getDeclaredMethods()) {
+            if (m.isAnnotationPresent(jakarta.annotation.PostConstruct.class)) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    private Constructor<?> findConstructor(Class<?> clazz) throws NoSuchMethodException {
+        // The (ProxyLink) client-proxy entry constructor is never an instantiation
+        // candidate (Vidocq/vauban#24) — real instances must run a business constructor.
+        var candidates = new ArrayList<Constructor<?>>();
+        for (var c : clazz.getDeclaredConstructors()) {
+            if (!io.vidocq.vauban.core.proxy.ClientProxyShape.isProxyLinkConstructor(c)) {
+                candidates.add(c);
+            }
+        }
+        for (var c : candidates) {
+            if (c.isAnnotationPresent(jakarta.inject.Inject.class)) {
+                return c;
+            }
+        }
+        try {
+            return clazz.getDeclaredConstructor();
+        } catch (NoSuchMethodException e) {
+            if (candidates.size() == 1) {
+                return candidates.getFirst();
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * The client proxy of {@code bean}, looked up as {@code requested}: refused when that type is a class a proxy
+     * cannot stand for, one with a final method, neither private nor static, of its own or of a superclass (CDI 4.1
+     * §3.10, BUG-20261118-19), or a type its client proxy is no instance of (BUG-20261118-20). The type decides, not
+     * the bean class: a bean whose class inherits a final method is looked up as an interface it implements.
+     */
+    <T> T getOrCreateProxy(ManagedBean<T> bean, java.lang.reflect.Type requested) {
+        var raw = requested instanceof java.lang.reflect.ParameterizedType parameterized
+                ? parameterized.getRawType() : requested;
+        if (!(raw instanceof Class<?> type)) {
+            return getOrCreateProxy(bean);
+        }
+        var unproxyable = type.isInterface() ? java.util.Optional.<String>empty() : UNPROXYABLE.get(type);
+        if (unproxyable.isPresent()) {
+            throw new jakarta.enterprise.inject.UnproxyableResolutionException("Normal scoped bean "
+                    + bean.getBeanClass().getName() + " is looked up as " + type.getName() + ", which "
+                    + unproxyable.get());
+        }
+        T proxy = getOrCreateProxy(bean);
+        if (!type.isInstance(proxy)) {
+            // The proxy of a bean whose class is final or has a final method extends the nearest class above it that
+            // a proxy can extend, and implements the interfaces a proxy in its package can name (BUG-20261118-20): a
+            // class in between, or an interface it cannot name, is not one it stands for.
+            throw new jakarta.enterprise.inject.UnproxyableResolutionException("Normal scoped bean "
+                    + bean.getBeanClass().getName() + " is looked up as " + type.getName()
+                    + ", which its client proxy " + proxy.getClass().getName() + " is no instance of");
+        }
+        return proxy;
+    }
+
+    /**
+     * Why a class is no type a client proxy can stand for, as the end of a sentence: it is final (BUG-20261118-21), or
+     * it or a superclass has a final method, neither private nor static. Computed once per requested class by
+     * {@link #getOrCreateProxy(ManagedBean, java.lang.reflect.Type)}.
+     */
+    private static final ClassValue<java.util.Optional<String>> UNPROXYABLE = new ClassValue<>() {
+        @Override
+        protected java.util.Optional<String> computeValue(Class<?> type) {
+            if (java.lang.reflect.Modifier.isFinal(type.getModifiers())) {
+                return java.util.Optional.of("is final");
+            }
+            var finalMethod = firstFinalMethod(type);
+            return finalMethod == null ? java.util.Optional.empty()
+                    : java.util.Optional.of("has final method " + finalMethod.getName());
+        }
+    };
+
+    @SuppressWarnings("unchecked")
+    <T> T getOrCreateProxy(ManagedBean<T> bean) {
+        return (T) proxyCache.computeIfAbsent(bean.descriptor().id(), id -> createProxy(bean));
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> Object createProxy(ManagedBean<T> bean) {
+        var beanClass = resolveProxyTargetClass(bean);
+
+        // VAU-PROXY-INTERFACE: when the proxy target is an interface (e.g. a @RequestScoped
+        // producer-method bean whose produced type is an interface like JsonWebToken),
+        // RuntimeClientProxyGenerator cannot subclass an interface. Use java.lang.reflect.Proxy
+        // instead — the proxy lazily resolves the contextual instance per-call.
+        if (beanClass.isInterface()) {
+            return interfaceProxy(bean, beanClass);
+        }
+
+        checkNormalScopedProxyable(beanClass);
+
+        try {
+            return subclassProxy(bean, beanClass);
+        } catch (Exception e) {
+            // VAU-INJ-001: never fall back to eager ctx.get() for normal-scoped beans.
+            // The context may be inactive at proxy-creation time; doing ctx.get() here
+            // would throw ContextNotActiveException and leave the injected field null.
+            // For pseudo-scoped beans (Dependent, Singleton) the eager path is safe.
+            if (bean.descriptor().scope().isNormal()) {
+                // A DeploymentException already names the bean, its type and the remedy (BUG-20261114-02).
+                throw e instanceof DeploymentException named ? named : new DeploymentException(
+                        "Failed to create client proxy for normal-scoped bean "
+                                + bean.getBeanClass().getName(), e);
+            }
+            var scopeClass = bean.getScope();
+            var ctx = container.getFirstContext(scopeClass);
+            if (ctx == null) ctx = container.dependentContext();
+            return ctx.get((Contextual<Object>) (Contextual<?>) bean,
+                    new CreationalContextImpl<>());
+        }
+    }
+
+    /**
+     * What a client proxy of {@code proxiedType} delegates to: the contextual instance of the bean, looked up again on
+     * every call, in the context of its scope. It writes a reference to its bean, so the proxy moves with a session
+     * (foy#114).
+     */
+    private ContextualInstance contextualInstance(ManagedBean<?> bean, Class<?> proxiedType) {
+        return new ContextualInstance(container, bean, proxiedType);
+    }
+
+    private <T> Object interfaceProxy(ManagedBean<T> bean, Class<?> beanClass) {
+        var delegate = contextualInstance(bean, beanClass);
+        // Issue #42: prefer the build-time static interface proxy (a generated class
+        // `implements <Iface>`, registered by the APT under the produced-type key). No
+        // runtime java.lang.reflect.Proxy, no reflection. Falls through to reflect.Proxy on
+        // the class path or when no provider owns the interface (non-APT producers).
+        String ifaceProxyKey =
+                io.vidocq.vauban.core.proxy.RuntimeClientProxyGenerator.proxyClassName(beanClass);
+        Object providedIface = container.componentProviders().createClientProxy(ifaceProxyKey, delegate);
+        if (providedIface != null) {
+            return providedIface;
+        }
+
+        Object frozen = frozenProxy(beanClass, delegate);
+        if (frozen != null) {
+            return frozen;
+        }
+
+        // Fallback: collect all interface types from the bean to implement via reflect.Proxy
+        runtimeGeneration.generated(interfaceProxyKind(bean), beanClass.getName());
+        java.util.Set<Class<?>> ifaceSet = new java.util.LinkedHashSet<>();
+        for (var t : bean.getTypes()) {
+            if (rawClassOf(t) instanceof Class<?> c && c.isInterface()) {
+                ifaceSet.add(c);
+            }
+        }
+        ifaceSet.add(beanClass);
+        Class<?>[] ifaces = ifaceSet.toArray(new Class<?>[0]);
+        return java.lang.reflect.Proxy.newProxyInstance(
+                beanClass.getClassLoader(),
+                ifaces,
+                new ReflectiveProxyHandler(delegate, beanClass.getName()));
+    }
+
+    /**
+     * The handler of the {@code java.lang.reflect.Proxy} fallback: each call reaches the contextual instance through
+     * reflection. A session value that holds such a proxy cannot move to another container (foy#114): a
+     * {@code reflect.Proxy} class is not read back by name, so this handler refuses to be written, and its message
+     * names the cure, a build-time proxy listed in {@code @ClientProxies}.
+     */
+    static final class ReflectiveProxyHandler implements java.lang.reflect.InvocationHandler, java.io.Serializable {
+
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
+
+        private final transient java.util.function.Supplier<Object> delegate;
+        private final transient String interfaceName;
+
+        ReflectiveProxyHandler(java.util.function.Supplier<Object> delegate, String interfaceName) {
+            this.delegate = delegate;
+            this.interfaceName = interfaceName;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            Object target = delegate.get();
+            try {
+                return method.invoke(target, args);
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                // The caller gets what the contextual instance threw, not the reflective wrapper
+                // that java.lang.reflect.Proxy turns into an UndeclaredThrowableException
+                // (BUG-20261113-02).
+                throw e.getCause();
+            }
+        }
+
+        @java.io.Serial
+        private Object writeReplace() throws java.io.ObjectStreamException {
+            throw new java.io.NotSerializableException(interfaceName
+                    + " is proxied by the java.lang.reflect.Proxy fallback; list it in @ClientProxies");
+        }
+
+        /** Never written, so never read: a stream that holds one was laid out by hand. */
+        @java.io.Serial
+        private void readObject(java.io.ObjectInputStream in) throws java.io.InvalidObjectException {
+            throw new java.io.InvalidObjectException("the handler of the java.lang.reflect.Proxy fallback is never"
+                    + " written, so it is never read");
+        }
+    }
+
+    /** A normal-scoped bean's class must be proxyable: not only a private no-arg constructor. */
+    private static void checkNormalScopedProxyable(Class<?> beanClass) {
+        // A final class or a final method is the requested type's to judge (getOrCreateProxy(bean, type),
+        // BUG-20261118-19, BUG-20261118-21): such a bean is still proxied as an interface it implements.
+        // CDI 4.1: no-arg constructor is NOT required — proxy calls super with default values.
+        // However, a bean with ONLY a private no-arg constructor is still unproxyable.
+        boolean hasPrivateNoArgCtor = false;
+        boolean hasNonPrivateNoArgCtor = false;
+        for (var ctor : beanClass.getDeclaredConstructors()) {
+            if (ctor.getParameterCount() == 0) {
+                boolean isPrivate = java.lang.reflect.Modifier.isPrivate(ctor.getModifiers());
+                hasPrivateNoArgCtor |= isPrivate;
+                hasNonPrivateNoArgCtor |= !isPrivate;
+            }
+        }
+        if (hasPrivateNoArgCtor && !hasNonPrivateNoArgCtor) {
+            throw new jakarta.enterprise.inject.UnproxyableResolutionException(
+                    "Normal scoped bean " + beanClass.getName()
+                            + " has only a private no-arg constructor");
+        }
+    }
+
+    /**
+     * The first final method, neither private nor static, that {@code beanClass} declares or inherits, or
+     * {@code null}: the walk of every proxyability check (BUG-20261118-19).
+     */
+    private static Method firstFinalMethod(Class<?> beanClass) {
+        return io.vidocq.vauban.core.bean.validation.DeploymentValidator.firstOverridableFinalMethod(beanClass);
+    }
+
+    private <T> Object subclassProxy(ManagedBean<T> bean, Class<?> beanClass) throws ReflectiveOperationException {
+        var delegate = contextualInstance(bean, beanClass);
+
+        // 1. In-module proxy creation via the component provider (zero-opens AND zero-export):
+        //    the APT-generated provider does `new <Bean>_ClientProxy(delegate)` in-package, so the
+        //    container never reflects into the bean's package. Falls through to
+        //    reflective generation when no provider owns this proxy (class path, runtime-only proxy,
+        //    producer-bean proxy).
+        String proxyClassName =
+                io.vidocq.vauban.core.proxy.RuntimeClientProxyGenerator.proxyClassName(beanClass);
+        Object provided = container.componentProviders().createClientProxy(proxyClassName, delegate);
+        if (provided != null) {
+            return provided;
+        }
+        // The proxy the freeze generated next to a component provider for a class of another archive
+        // (BUG-20261119-70).
+        Object frozen = frozenProxy(beanClass, delegate);
+        if (frozen != null) {
+            return frozen;
+        }
+
+        // 2. Fallback: the proxy the build left next to the bean (Maven plugin), else one generated
+        //    now, where runtimeProxySite says; then reflective instantiation through its only
+        //    constructor, (Supplier), which wires the delegate once and for all.
+        var site = runtimeProxySite(bean, beanClass);
+        boolean preGenerated = isLoadable(site.host(), site.className());
+        var generated = site.producerPackage()
+                ? io.vidocq.vauban.core.proxy.RuntimeClientProxyGenerator.generateProducerProxyAt(beanClass,
+                        site.className())
+                : io.vidocq.vauban.core.proxy.RuntimeClientProxyGenerator.generate(beanClass);
+        var proxyClass = defineProxyClass(site.host(), generated.className(), generated.bytecode());
+        if (!preGenerated) {
+            runtimeGeneration.generated(classProxyKind(bean), generated.className());
+        }
+
+        return proxyClass.getDeclaredConstructor(java.util.function.Supplier.class).newInstance(delegate);
+    }
+
+    /**
+     * Where the run-time fallback defines a client proxy of {@code target}: {@code host} lends its class loader and
+     * package, {@code className} names the proxy, and {@code producerPackage} says whether it is a producer's proxy
+     * placed in the producer's package, which forwards through public members only.
+     */
+    private record ProxySite(Class<?> host, String className, boolean producerPackage) {}
+
+    /**
+     * Where the run-time fallback defines the client proxy of {@code bean}, whose proxied class is {@code target}:
+     * next to {@code target}, as {@code <target>_ClientProxy}, when the build left it there or Vauban can define a
+     * class in that package. A produced type of a package Vauban cannot define into — the boot class loader's, as
+     * for {@code java.time.Clock}, or a module's package not opened to it — gets its proxy where the build would
+     * have put it: in the producer's package, through the producer's lookup (BUG-20261114-02).
+     *
+     * @throws DeploymentException when neither place can hold a proxy of {@code target}
+     */
+    private ProxySite runtimeProxySite(ManagedBean<?> bean, Class<?> target) {
+        String key = io.vidocq.vauban.core.proxy.RuntimeClientProxyGenerator.proxyClassName(target);
+        if (!isProducer(bean) || definableNextTo(target, key)) {
+            return new ProxySite(target, key, false);
+        }
+        var verdict = io.vidocq.vauban.core.proxy.ProducerProxyEligibility.of(target);
+        if (jdkWithPackagePrivateMethods(target, verdict)) {
+            // As Weld does: the proxy forwards the public methods; the JDK's own calls to the package-private ones
+            // run on the proxy, which no subclass of another package can override (BUG-20261118-24).
+            LOG.log(System.Logger.Level.WARNING, "The client proxy of {0}, produced by {1} with the normal scope @{2},"
+                    + " lives in the producer''s package: Vauban cannot define a class in {3}. It forwards the public"
+                    + " methods; a call {0} makes to one of its package-private methods runs on the proxy, not on the"
+                    + " contextual instance. Produce an interface type to avoid it.", target.getName(),
+                    bean.getBeanClass().getName(), bean.getScope().getSimpleName(), target.getPackageName());
+        } else if (!verdict.eligible()) {
+            throw new DeploymentException(noClientProxy(bean, target, verdict));
+        }
+        var producer = bean.getBeanClass();
+        return new ProxySite(producer, io.vidocq.vauban.core.proxy.ClientProxyShape.producerProxyName(
+                producer.getPackageName(), target.getName()), true);
+    }
+
+    /** Whether the proxy {@code key} of {@code target} is already there, or Vauban can define it in its package. */
+    private boolean definableNextTo(Class<?> target, String key) {
+        if (target.getClassLoader() == null) {
+            // No lookup defines a class in a package of the boot class loader for the container.
+            return false;
+        }
+        if (isLoadable(target, key)) {
+            return true;
+        }
+        try {
+            vaubanLookup.lookupFor(target);
+            return true;
+        } catch (ContainerOperationException _) {
+            return false;
+        }
+    }
+
+    /**
+     * Whether {@code target} is a class of the JDK that a proxy of another package refuses for its package-private
+     * methods alone: Vauban cannot place one in its package, and Weld proxies it all the same (BUG-20261118-24).
+     */
+    private static boolean jdkWithPackagePrivateMethods(Class<?> target,
+            io.vidocq.vauban.core.proxy.ProducerProxyEligibility.Reason verdict) {
+        return target.getClassLoader() == null
+                && verdict == io.vidocq.vauban.core.proxy.ProducerProxyEligibility.Reason.PACKAGE_PRIVATE_VIRTUALS;
+    }
+
+    /** Why no client proxy of the produced type {@code target} can be generated, and what to do instead. */
+    private static String noClientProxy(ManagedBean<?> bean, Class<?> target,
+                                        io.vidocq.vauban.core.proxy.ProducerProxyEligibility.Reason verdict) {
+        boolean jdk = target.getClassLoader() == null;
+        return "No client proxy can be generated for " + target.getName() + ", produced by "
+                + bean.getBeanClass().getName() + " with the normal scope @" + bean.getScope().getSimpleName()
+                + ": Vauban cannot define a class in package " + target.getPackageName()
+                + (jdk ? " (a package of the JDK)" : " (not opened to io.vidocq.vauban.core)")
+                + ", and a proxy in the producer's package needs a fully public type (" + verdict + ")."
+                + " Declare the producer @Singleton or @Dependent, which need no client proxy, or produce an"
+                + " interface type" + (jdk ? "." : ", or open " + target.getPackageName()
+                + " to io.vidocq.vauban.core.");
+    }
+
+    /** Whether {@code bean} is a producer method or field: its proxied class is the type it produces. */
+    private static boolean isProducer(ManagedBean<?> bean) {
+        return bean.descriptor().kind() == BeanDescriptor.BeanKind.PRODUCER_METHOD
+                || bean.descriptor().kind() == BeanDescriptor.BeanKind.PRODUCER_FIELD;
+    }
+
+    /**
+     * The class the freeze generated next to a component provider for {@code beanClass}, an interface or a class of
+     * another archive, or {@code null} (vauban#342, BUG-20261119-70).
+     */
+    private Class<?> frozenProxyClass(Class<?> beanClass) {
+        String name = container.frozenProxy(beanClass);
+        if (name == null) {
+            return null;
+        }
+        // The proxy extends or implements beanClass: its module reads beanClass's, which it may not require.
+        int dot = name.lastIndexOf('.');
+        if (dot > 0) {
+            io.vidocq.vauban.core.access.ModuleLookups.addReads(container.classLoader(), name.substring(0, dot),
+                    beanClass.getModule());
+        }
+        try {
+            var proxyClass = io.vidocq.vauban.core.loading.DeploymentClasses.load(name, container.classLoader());
+            return beanClass.isAssignableFrom(proxyClass) ? proxyClass : null;
+        } catch (ClassNotFoundException | LinkageError _) {
+            return null;
+        }
+    }
+
+    /**
+     * An instance of the proxy the freeze generated for {@code beanClass}, or {@code null} when it
+     * generated none or the class cannot be reached: through the lookup the component provider of its package
+     * grants, which needs no {@code opens}, else as a public class.
+     */
+    @SuppressWarnings("java:S1181") // a constructor handle throws Throwable; an Error is rethrown as it is
+    private Object frozenProxy(Class<?> beanClass, java.util.function.Supplier<?> delegate) {
+        Class<?> proxyClass = frozenProxyClass(beanClass);
+        if (proxyClass == null) {
+            return null;
+        }
+        container.manage(proxyClass);
+        var lookup = io.vidocq.vauban.core.access.ModuleLookups.lookupFor(proxyClass)
+                .orElse(java.lang.invoke.MethodHandles.publicLookup());
+        try {
+            return lookup.findConstructor(proxyClass, java.lang.invoke.MethodType.methodType(void.class,
+                    java.util.function.Supplier.class)).invoke(delegate);
+        } catch (Error e) {
+            throw e;
+        } catch (Throwable _) {
+            return null;
+        }
+    }
+
+    /** Whether {@code className} loads, uninitialized, from {@code beanClass}'s loader: a class the build generated. */
+    private static boolean isLoadable(Class<?> beanClass, String className) {
+        try {
+            io.vidocq.vauban.core.loading.DeploymentClasses.load(className, beanClass.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException | LinkageError _) {
+            return false;
+        }
+    }
+
+    /**
+     * Ends the boot's report of the classes generated at run time (vauban#227). A client proxy is created on first
+     * use, so the boot adds the normal-scoped beans whose proxy no provider declares and no build output holds: they
+     * are announced with the intercepted subclasses the boot generated, not later one by one. Nothing is predicted
+     * while a provider predating {@code coverage()} is present, since it may serve any proxy.
+     */
+    void bootCompleted(java.util.Collection<ManagedBean<?>> beans) {
+        var providers = container.componentProviders();
+        var coverages = new ArrayList<io.vidocq.vauban.api.GeneratedCoverage>();
+        if (providers != null) {
+            for (var provider : providers.providers()) {
+                coverages.add(provider.coverage());
+            }
+        }
+        if (!coverages.contains(null)) {
+            for (var bean : beans) {
+                try {
+                    predictProxy(bean, coverages);
+                } catch (RuntimeException | LinkageError e) {
+                    // A prediction only: the proxy, if it is generated, is still announced when it is.
+                    LOG.log(System.Logger.Level.DEBUG, () -> "Could not predict the client proxy of "
+                            + bean.getBeanClass().getName() + ": " + e);
+                }
+            }
+        }
+        runtimeGeneration.bootCompleted();
+    }
+
+    /** Records the proxy of {@code bean} as generated at run time when nothing the build produced supplies it. */
+    private void predictProxy(ManagedBean<?> bean, List<io.vidocq.vauban.api.GeneratedCoverage> coverages) {
+        var scope = bean.descriptor().scope();
+        if (scope == null || !scope.isNormal()) {
+            return;
+        }
+        Class<?> target = resolveProxyTargetClass(bean);
+        String key = io.vidocq.vauban.core.proxy.RuntimeClientProxyGenerator.proxyClassName(target);
+        for (var coverage : coverages) {
+            if (coverage.clientProxies().contains(key)) {
+                return;
+            }
+        }
+        if (frozenProxyClass(target) != null) {
+            return;
+        }
+        if (target.isInterface()) {
+            runtimeGeneration.generated(interfaceProxyKind(bean), target.getName());
+            return;
+        }
+        // The class the fallback will define, where it will define it; none when it cannot.
+        var site = runtimeProxySite(bean, target);
+        if (!isLoadable(site.host(), site.className())) {
+            runtimeGeneration.generated(classProxyKind(bean), site.className());
+        }
+    }
+
+    /**
+     * The run-time class proxy of {@code bean}: a synthetic bean's apart, as no processor sees one and adding
+     * {@code vauban-processor} to the module of its class, often a jar of another project, changes nothing: the
+     * build that freezes the extensions generates it (vauban#342).
+     */
+    private static RuntimeGeneration.Kind classProxyKind(ManagedBean<?> bean) {
+        return bean.descriptor().kind() == io.vidocq.vauban.core.bean.model.BeanDescriptor.BeanKind.SYNTHETIC
+                ? RuntimeGeneration.Kind.SYNTHETIC_CLIENT_PROXY
+                : RuntimeGeneration.Kind.CLIENT_PROXY;
+    }
+
+    /**
+     * The run-time interface proxy of {@code bean}: a synthetic bean's apart, as no processor sees one, and the
+     * extension that registers it lists the interface in {@code @ClientProxies} instead (BUG-20261113-19).
+     */
+    private static RuntimeGeneration.Kind interfaceProxyKind(ManagedBean<?> bean) {
+        return bean.descriptor().kind() == io.vidocq.vauban.core.bean.model.BeanDescriptor.BeanKind.SYNTHETIC
+                ? RuntimeGeneration.Kind.SYNTHETIC_INTERFACE_PROXY
+                : RuntimeGeneration.Kind.INTERFACE_PROXY;
+    }
+
+    /** The classes this container generated at run time, or will. */
+    RuntimeGeneration runtimeGeneration() {
+        return runtimeGeneration;
+    }
+
+    /** Loads {@code className} through {@code host}'s class loader, or defines it in {@code host}'s package. */
+    private Class<?> defineProxyClass(Class<?> host, String className, byte[] bytecode) {
+        try {
+            return loadOrDefineClassRobustly(host, className, bytecode);
+        } catch (Exception e) {
+            throw new ContainerOperationException("Failed to define proxy class " + className + " next to " + host, e);
+        }
+    }
+
+    /**
+     * The class a producer's client proxy is made of: its first bean type that is a class, else its first interface,
+     * read raw, so that a parameterized type counts as its class ({@code ArrayList<String>} as {@code ArrayList},
+     * {@code Supplier<String>} as {@code Supplier}); {@code Object} aside. A managed bean's is its bean class. A
+     * parameterized type was skipped: the proxy was one of a class above it, {@code RandomAccess}, or of the class that
+     * declares the producer, which the injection point could not take (BUG-20261117-18).
+     */
+    static Class<?> resolveProxyTargetClass(ManagedBean<?> bean) {
+        if (isProducer(bean)) {
+            // First pass: prefer a concrete (non-interface) type
+            for (var type : bean.getTypes()) {
+                if (rawClassOf(type) instanceof Class<?> c && !c.isInterface()) {
+                    return c;
+                }
+            }
+            // VAU-PROXY-INTERFACE: no concrete type found — the produced type is an interface
+            // (e.g. JsonWebToken). Return the interface so getOrCreateProxy() can detect it
+            // and create a java.lang.reflect.Proxy instead of a subclass proxy.
+            for (var type : bean.getTypes()) {
+                if (rawClassOf(type) instanceof Class<?> c) {
+                    return c;
+                }
+            }
+        }
+        return bean.getBeanClass();
+    }
+
+    /** The class {@code type} names, raw for a parameterized type; {@code null} for {@code Object} and any other. */
+    private static Class<?> rawClassOf(java.lang.reflect.Type type) {
+        Class<?> named = switch (type) {
+            case Class<?> c -> c;
+            case java.lang.reflect.ParameterizedType p when p.getRawType() instanceof Class<?> raw -> raw;
+            default -> null;
+        };
+        return named == Object.class ? null : named;
+    }
+
+    /** Whether {@code annotation} is an interceptor binding, declared as one or made one by an extension. */
+    private static boolean isInterceptorBinding(Annotation annotation) {
+        return ClassMetadataCache.isInterceptorBinding(annotation.annotationType());
+    }
+
+    boolean hasMethodOrClassInterceptors(ManagedBean<?> mb) {
+        var classBindings = mb.descriptor().interceptorBindings();
+        if (classBindings != null && !classBindings.isEmpty()
+                && !interceptorManager.resolveInterceptorDescriptors(classBindings).isEmpty()) {
+            return true;
+        }
+        try {
+            var beanClass = container.loadClass(mb.descriptor().beanClass().value());
+            for (var ann : ClassMetadataCache.methodAnnotationsOf(beanClass)) {
+                if (isInterceptorBinding(ann)) {
+                    return true;
+                }
+            }
+        } catch (ClassNotFoundException _) {
+            // A class that does not load has no method to intercept.
+        }
+        return false;
+    }
+
+    void eagerCreateInterceptors(Object instance, BeanDescriptor descriptor, CreationalContext<?> parentCtx) {
+        if (interceptorManager == null || !interceptorManager.hasInterceptors()) return;
+        if (ClassMetadataCache.isInterceptorClass(instance.getClass())) return;
+
+        var allBindings = new java.util.LinkedHashSet<DotName>();
+        var beanBindings = (descriptor != null) ? descriptor.interceptorBindings() : container.beanLifecycle.findInterceptorBindings(instance);
+        if (beanBindings == null || beanBindings.isEmpty()) {
+            beanBindings = container.beanLifecycle.findInterceptorBindings(instance);
+        }
+        if (beanBindings != null) {
+            allBindings.addAll(beanBindings);
+        }
+        var beanClass = instance.getClass();
+        if (beanClass.getName().contains("$$Intercepted") || beanClass.getName().contains("$$Proxy")) {
+            beanClass = beanClass.getSuperclass();
+        }
+        addMethodBindings(beanClass, allBindings);
+        if (allBindings.isEmpty()) return;
+        interceptorManager.setClassLoader(instance.getClass().getClassLoader());
+        var matchingDescriptors = interceptorManager.resolveInterceptorDescriptors(allBindings);
+        for (var desc : matchingDescriptors) {
+            interceptorManager.getOrCreateInstance(desc, parentCtx);
+        }
+    }
+
+    /** Adds the interceptor bindings the methods {@code beanClass} declares carry. */
+    private static void addMethodBindings(Class<?> beanClass, Set<DotName> bindings) {
+        for (var ann : ClassMetadataCache.methodAnnotationsOf(beanClass)) {
+            if (isInterceptorBinding(ann)) {
+                bindings.add(DotName.of(ann.annotationType().getName()));
+            }
+        }
+    }
+
+    /**
+     * Calls the post-construction wiring ({@code $$init}) of a {@code $$Intercepted} instance.
+     *
+     * <p>Through a method handle found with the bean module's own lookup, when the generated
+     * {@code _VaubanComponents} of the bean's package grants one ({@code ModuleLookups}): same
+     * module, so the package needs neither {@code exports} nor {@code opens} to
+     * {@code io.vidocq.vauban.core} (BUG-20261010-02). Reflection otherwise, as before, which needs
+     * the package exported. A failure of {@code $$init} itself is wrapped in an
+     * {@link java.lang.reflect.InvocationTargetException} on both paths.</p>
+     */
+    private void initIntercepted(Class<?> interceptedClass, Object instance, InterceptorManager manager,
+                                  Set<?> bindings, Set<?> constructorBindings,
+                                  CreationalContext<?> creationalContext) throws ReflectiveOperationException {
+        var init = initHandles.get(interceptedClass);
+        if (init == null) {
+            init = findInitHandle(interceptedClass);
+            if (init != null) {
+                initHandles.put(interceptedClass, init);
+            }
+        }
+        if (init != null) {
+            try {
+                init.invoke(instance, manager, bindings, constructorBindings, creationalContext);
+            } catch (Throwable t) {
+                throw new java.lang.reflect.InvocationTargetException(t);
+            }
+            return;
+        }
+        interceptedClass.getMethod(io.vidocq.vauban.core.interceptor.InterceptedShape.INIT_METHOD,
+                        INIT_TYPE.parameterArray())
+                .invoke(instance, manager, bindings, constructorBindings, creationalContext);
+    }
+
+    /**
+     * The {@code $$init} handle of {@code interceptedClass} found with the bean module's own lookup, or {@code null}
+     * when the generated {@code _VaubanComponents} grants none. Found once per class: the lookup and the handle depend
+     * on the class alone, and a missing one is searched again, as the reflective call below it needs no handle.
+     */
+    private static java.lang.invoke.MethodHandle findInitHandle(Class<?> interceptedClass) {
+        var moduleLookup = io.vidocq.vauban.core.access.ModuleLookups.lookupFor(interceptedClass.getSuperclass());
+        if (moduleLookup.isPresent()) {
+            try {
+                return moduleLookup.get().findVirtual(interceptedClass,
+                        io.vidocq.vauban.core.interceptor.InterceptedShape.INIT_METHOD, INIT_TYPE);
+            } catch (NoSuchMethodException | IllegalAccessException _) {
+                // Fall back to reflection.
+            }
+        }
+        return null;
+    }
+
+    /** The {@code $$init} handles found so far, per intercepted class; they live and die with the container. */
+    private final Map<Class<?>, java.lang.invoke.MethodHandle> initHandles =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** {@code void $$init(InterceptorManager, Set, Set, CreationalContext)}. */
+    private static final java.lang.invoke.MethodType INIT_TYPE = java.lang.invoke.MethodType.methodType(
+            void.class, InterceptorManager.class, Set.class, Set.class, CreationalContext.class);
+
+    /**
+     * Instantiates a managed class — an intercepted {@code $$Intercepted} subclass OR an
+     * {@code @Interceptor} bean — preferring zero reflection. Order:
+     * <ol>
+     *   <li><b>in-module provider</b> — when the Vauban APT emitted a {@code _VaubanComponents} for the
+     *       class's module, its co-located provider runs {@code new <class>(args…)} directly
+     *       (no reflection, no opens). This covers both pre-generated {@code $$Intercepted} subclasses
+     *       and, since VAU-INT-004, the interceptor classes themselves;</li>
+     *   <li><b>public Lookup</b> — a public constructor in an exported package, constructible via
+     *       {@code publicLookup} with no {@code privateLookupIn} (hence no opens) — covers the
+     *       runtime/plugin-generated case where no provider owns the name;</li>
+     *   <li><b>private Lookup</b> — last resort for the class path (unrestricted) or a class in a
+     *       non-exported package (which keeps its qualified {@code opens}).</li>
+     * </ol>
+     */
+    private Object instantiatePreferProvider(Constructor<?> ctor, Object[] args) {
+        var providers = container.componentProviders();
+        if (providers != null) {
+            var inModule = providers.create(ctor.getDeclaringClass().getName(), args);
+            if (inModule != null) return inModule;
+        }
+        var viaPublic = vaubanLookup.newInstancePublic(ctor, args);
+        if (viaPublic != null) return viaPublic;
+        return vaubanLookup.newInstance(ctor, args);
+    }
+
+    Class<?> loadOrDefineClassRobustly(Class<?> targetClass, String className, byte[] bytecode)
+            throws IllegalAccessException {
+        // The boot class loader is null, and no build puts a class next to a class of the JDK (BUG-20261114-02).
+        var loader = targetClass.getClassLoader();
+        if (loader != null) {
+            try {
+                return loader.loadClass(className);
+            } catch (ClassNotFoundException _) {
+                // Not generated at build: defined below.
+            }
+        }
+        // Use the container's VaubanLookup which has the user-provided root Lookup
+        // (no sun.misc.Unsafe needed — addReads + privateLookupIn handles Java Modules)
+        var lookup = vaubanLookup.lookupFor(targetClass);
+        return lookup.defineClass(bytecode);
+    }
+
+    /**
+     * Replaces the bean of every intercepted managed bean by one whose factory creates its {@code $$Intercepted}
+     * subclass. A bean whose wrapping fails for another reason than a deployment or a definition problem runs
+     * without its interceptors, and the failure is logged.
+     */
+    void wrapInterceptedBeans(List<BeanDescriptor> descriptors) {
+        for (var descriptor : descriptors) {
+            wrapIfIntercepted(descriptor);
+        }
+    }
+
+    /** Wraps the bean of {@code descriptor} when it is an interception candidate that something may intercept. */
+    private void wrapIfIntercepted(BeanDescriptor descriptor) {
+        var beanClass = interceptionCandidate(descriptor);
+        if (beanClass == null) return;
+        var bindings = declaredBindings(descriptor, beanClass);
+        if (bindings.isEmpty() && !interceptorManager.hasInterceptors() && !hasTargetAroundInvoke(beanClass)) {
+            return;
+        }
+        try {
+            wrapInterceptedBean(descriptor, beanClass, bindings);
+        } catch (Exception e) {
+            rethrowDeploymentProblem(e);
+            LOG.log(System.Logger.Level.ERROR, "Could not wrap the intercepted bean "
+                    + descriptor.beanClass().value() + "; it runs without its interceptors", e);
+        }
+    }
+
+    /**
+     * The class of a managed bean the container holds, unless it is an interceptor itself; {@code null} when the
+     * bean cannot be intercepted, or its class does not load.
+     */
+    private Class<?> interceptionCandidate(BeanDescriptor descriptor) {
+        Class<?> beanClass;
+        try {
+            beanClass = container.loadClass(descriptor.beanClass().value());
+        } catch (ClassNotFoundException _) {
+            return null;
+        }
+        if (descriptor.kind() != BeanDescriptor.BeanKind.MANAGED
+                || beanClass.isAnnotationPresent(jakarta.interceptor.Interceptor.class)
+                || container.beans.get(descriptor.id()) == null) {
+            return null;
+        }
+        return beanClass;
+    }
+
+    /** The bindings the descriptor records, or, when it records none, the binding annotations of the bean class. */
+    private static Set<DotName> declaredBindings(BeanDescriptor descriptor, Class<?> beanClass) {
+        Set<DotName> bindings = new java.util.LinkedHashSet<>(descriptor.interceptorBindings());
+        if (bindings.isEmpty()) {
+            for (var ann : beanClass.getAnnotations()) {
+                if (isInterceptorBinding(ann)) {
+                    bindings.add(DotName.of(ann.annotationType().getName()));
+                }
+            }
+        }
+        return bindings;
+    }
+
+    /** Whether {@code beanClass} or one of its superclasses declares an {@code @AroundInvoke} method. */
+    private static boolean hasTargetAroundInvoke(Class<?> beanClass) {
+        for (var cur = beanClass; cur != null && cur != Object.class; cur = cur.getSuperclass()) {
+            for (var m : cur.getDeclaredMethods()) {
+                if (m.isAnnotationPresent(jakarta.interceptor.AroundInvoke.class)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static void rethrowDeploymentProblem(Exception e) {
+        if (e instanceof DeploymentException de) throw de;
+        if (e instanceof DefinitionException de) throw de;
+    }
+
+    private void wrapInterceptedBean(BeanDescriptor descriptor, Class<?> beanClass, Set<DotName> bindings) {
+        interceptorManager.setClassLoader(beanClass.getClassLoader());
+
+        var classBindings = interceptorManager.findBindingsOnClass(beanClass, interceptorManager::isInterceptorBinding);
+
+        classBindings.addAll(bindings);
+
+        registerEnhancedBindings(descriptor, beanClass);
+
+        // Why the bean is intercepted, kept for the proxyability errors below: a bean bound
+        // only through a method it inherits carries no binding in its own source. The walk is
+        // the one vauban:generate pre-generates the subclass on (InterceptionTargets).
+        var cause = interceptionCause(beanClass, classBindings);
+        if (cause == null) return;
+
+        // The bean is actually intercepted (class/method/constructor binding or a target
+        // @AroundInvoke). Only NOW do the proxyability constraints apply: a non-intercepted
+        // bean may legally be final, carry final methods, or expose only a private no-arg
+        // constructor. Enforcing them earlier wrongly rejected beans that merely coexist with
+        // interceptors elsewhere in the deployment — e.g. a generated, pseudo-scoped final
+        // @Named DataSource holder. The proxyability constraints bind to intercepted beans only.
+        // An unproxyable intercepted bean is a deployment problem (CDI 4.1 §3.10, §8.3).
+        checkInterceptedProxyable(beanClass, interceptedBecause(cause, beanClass, classBindings));
+
+        try {
+            installInterceptedBean(descriptor, beanClass, classBindings);
+        } catch (Exception e) {
+            rethrowDeploymentProblem(e);
+            installFallbackInterceptedBean(descriptor, beanClass, bindings);
+        } catch (LinkageError le2) {
+            throw new DefinitionException(
+                    "Cannot create interceptor subclass: " + le2.getMessage(), le2);
+        }
+    }
+
+    /** Registers the binding annotations an {@code @Enhancement} added, those the bean class does not carry. */
+    private void registerEnhancedBindings(BeanDescriptor descriptor, Class<?> beanClass) {
+        if (descriptor.interceptorBindingAnnotations().isEmpty()) return;
+        var classAnnotationTypes = new java.util.HashSet<String>();
+        for (var ann : beanClass.getAnnotations()) {
+            classAnnotationTypes.add(ann.annotationType().getName());
+        }
+        var enhancedOnly = new ArrayList<Annotation>();
+        for (var ann : descriptor.interceptorBindingAnnotations()) {
+            if (!classAnnotationTypes.contains(ann.annotationType().getName())) {
+                enhancedOnly.add(ann);
+            }
+        }
+        if (!enhancedOnly.isEmpty()) {
+            interceptorManager.registerEnhancedBindings(
+                    descriptor.beanClass().value(), enhancedOnly);
+        }
+    }
+
+    private io.vidocq.vauban.core.interceptor.InterceptionTargets.Cause interceptionCause(
+            Class<?> targetClass, Set<DotName> bindingsOfClass) {
+        return io.vidocq.vauban.core.interceptor.InterceptionTargets.causeOf(targetClass,
+                new io.vidocq.vauban.core.interceptor.InterceptionTargets.Bindings() {
+                    @Override
+                    public boolean onClass() {
+                        return !interceptorManager.resolveInterceptorDescriptors(bindingsOfClass).isEmpty();
+                    }
+
+                    @Override
+                    public boolean onMethod(Method method) {
+                        return !interceptorManager.resolveInterceptorDescriptorsForMethod(
+                                bindingsOfClass, targetClass, method).isEmpty();
+                    }
+
+                    @Override
+                    public boolean onConstructor(Constructor<?> constructor) {
+                        return !interceptorManager.resolveInterceptorDescriptorsAroundConstruct(
+                                bindingsOfClass, constructor, targetClass, java.util.Collections.emptyList())
+                                .isEmpty();
+                    }
+                });
+    }
+
+    /** The bindings as annotations, comma-separated. */
+    private static String bindingNames(Set<DotName> bindings) {
+        var names = new java.util.StringJoiner(", ");
+        for (var name : bindings) {
+            names.add("@" + name.value());
+        }
+        return names.toString();
+    }
+
+    private String interceptedBecause(io.vidocq.vauban.core.interceptor.InterceptionTargets.Cause cause,
+                                      Class<?> beanClass, Set<DotName> classBindings) {
+        return switch (cause) {
+            case io.vidocq.vauban.core.interceptor.InterceptionTargets.ClassLevel _ ->
+                    "its class-level interceptor bindings " + bindingNames(classBindings);
+            case io.vidocq.vauban.core.interceptor.InterceptionTargets.BoundMethod(var m) ->
+                    interceptorManager.describeMethodBindings(beanClass, m);
+            case io.vidocq.vauban.core.interceptor.InterceptionTargets.BoundConstructor(var ctor) ->
+                    "the interceptor binding of its constructor " + ctor;
+            case io.vidocq.vauban.core.interceptor.InterceptionTargets.TargetAroundInvoke(var m) ->
+                    "its @AroundInvoke method " + m.getDeclaringClass().getName() + "." + m.getName();
+        };
+    }
+
+    private static void checkInterceptedProxyable(Class<?> beanClass, String interceptedBecause) {
+        var unproxyable = " An intercepted bean must be proxyable (CDI 4.1 §3.10); "
+                + beanClass.getName() + " is intercepted because of " + interceptedBecause + ".";
+        if (java.lang.reflect.Modifier.isFinal(beanClass.getModifiers())) {
+            throw new DeploymentException(
+                    "Intercepted bean " + beanClass.getName() + " must not be final." + unproxyable);
+        }
+        var finalMethod = firstFinalMethod(beanClass);
+        if (finalMethod != null) {
+            throw new DeploymentException(
+                    "Intercepted bean " + beanClass.getName() + " has final method " + finalMethod.getName()
+                            + "." + unproxyable);
+        }
+
+        // CDI 4.1: no-arg constructor is NOT required for intercepted beans.
+        // However, a bean with ONLY a private no-arg constructor is still unproxyable.
+        for (var ctor : beanClass.getDeclaredConstructors()) {
+            if (ctor.getParameterCount() == 0
+                    && java.lang.reflect.Modifier.isPrivate(ctor.getModifiers())) {
+                throw new DeploymentException(
+                        "Intercepted bean " + beanClass.getName()
+                                + " has only private no-arg constructor (unproxyable)." + unproxyable);
+            }
+        }
+    }
+
+    private void installInterceptedBean(BeanDescriptor descriptor, Class<?> beanClass, Set<DotName> classBindings) {
+        Class<?> interceptedClass;
+        boolean preGenerated;
+        var interceptedName = beanClass.getName() + io.vidocq.vauban.core.interceptor.InterceptedShape.SUBCLASS_SUFFIX;
+        try {
+            // Prefer a PRE-GENERATED subclass (Vauban APT or Maven plugin). On the strict
+            // module path, defining the class at runtime would need deep access into the
+            // bean's module (an `opens … to io.vidocq.vauban.core`); an already-compiled
+            // sibling on the bean's own loader avoids that entirely.
+            interceptedClass = Class.forName(interceptedName, false, beanClass.getClassLoader());
+            // Found is not built ahead: an earlier boot sharing this loader may have defined it.
+            preGenerated = !DEFINED_AT_RUNTIME.contains(interceptedClass);
+        } catch (ClassNotFoundException _) {
+            preGenerated = false;
+            interceptedClass = defineInterceptedSubclass(beanClass);
+        }
+        if (!preGenerated) {
+            runtimeGeneration.generated(RuntimeGeneration.Kind.INTERCEPTED_SUBCLASS, interceptedClass.getName());
+        }
+        installWrappedBean(descriptor, new InterceptedFactory(descriptor, beanClass, interceptedClass, classBindings),
+                preGenerated);
+    }
+
+    /** Generates the {@code $$Intercepted} subclass of {@code beanClass} and defines it at boot. */
+    private Class<?> defineInterceptedSubclass(Class<?> beanClass) {
+        var generated = io.vidocq.vauban.core.interceptor.InterceptorSubclassGenerator
+                .generate(beanClass);
+        Class<?> interceptedClass;
+        if (classDefiner != null) {
+            interceptedClass = classDefiner.apply(generated.className(), generated.bytecode());
+        } else {
+            try {
+                interceptedClass = loadOrDefineClassRobustly(beanClass, generated.className(), generated.bytecode());
+            } catch (Exception e) {
+                throw new DeploymentException(CANNOT_DEFINE_SUBCLASS, e);
+            }
+        }
+        DEFINED_AT_RUNTIME.add(interceptedClass);
+        return interceptedClass;
+    }
+
+    /**
+     * The wrapping of last resort, when the regular one failed: a subclass generated at boot, created through its
+     * no-arg constructor.
+     */
+    private void installFallbackInterceptedBean(BeanDescriptor descriptor, Class<?> beanClass, Set<DotName> bindings) {
+        var generated2 = io.vidocq.vauban.core.interceptor.InterceptorSubclassGenerator
+                .generate(beanClass);
+
+        Class<?> interceptedClass2;
+        try {
+            if (classDefiner != null) {
+                interceptedClass2 = classDefiner.apply(generated2.className(), generated2.bytecode());
+            } else {
+                interceptedClass2 = loadOrDefineClassRobustly(beanClass, generated2.className(), generated2.bytecode());
+            }
+        } catch (Exception ex2) {
+            LOG.log(System.Logger.Level.ERROR,
+                    "Fallback interception also failed for " + descriptor.beanClass().value(), ex2);
+            throw new DeploymentException(CANNOT_DEFINE_SUBCLASS, ex2);
+        }
+        DEFINED_AT_RUNTIME.add(interceptedClass2);
+        runtimeGeneration.generated(RuntimeGeneration.Kind.INTERCEPTED_SUBCLASS, interceptedClass2.getName());
+        installWrappedBean(descriptor, new FallbackInterceptedFactory(descriptor, beanClass, interceptedClass2, bindings),
+                false);
+    }
+
+    /** Puts a bean created by {@code factory} in place of the bean of {@code descriptor}, keeping its injector and destroyer. */
+    private void installWrappedBean(BeanDescriptor descriptor, BeanFactory<?> factory, boolean preGenerated) {
+        var interceptedBean = new ManagedBean<>(descriptor, factory, classLoader, vaubanLookup,
+                container.qualifierMatcher().types());
+        var originalBean = container.beans.get(descriptor.id());
+        if (originalBean != null) {
+            interceptedBean.setInjector(originalBean.getInjector());
+            interceptedBean.setDestroyer(originalBean.getDestroyer());
+        }
+        interceptedBean.setInterceptorManager(this.interceptorManager);
+        interceptedSubclasses.put(descriptor.id(), preGenerated);
+        container.beans.put(descriptor.id(), interceptedBean);
+    }
+
+    /** Proceeds with an {@code @AroundConstruct} chain; a checked exception becomes a {@link CreationException}. */
+    private static void proceedConstruction(VaubanInvocationContext invocation) {
+        try {
+            invocation.proceed();
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new CreationException(e);
+        }
+    }
+
+    /**
+     * Creates an intercepted bean: resolves the bean's constructor arguments, runs its {@code @AroundConstruct}
+     * chain if any, then instantiates its {@code $$Intercepted} subclass and wires it.
+     */
+    private final class InterceptedFactory implements BeanFactory<Object> {
+
+        private final BeanDescriptor descriptor;
+        private final Class<?> beanClass;
+        private final Class<?> interceptedClass;
+        private final Set<DotName> bindings;
+
+        InterceptedFactory(BeanDescriptor descriptor, Class<?> beanClass, Class<?> interceptedClass,
+                           Set<DotName> bindings) {
+            this.descriptor = descriptor;
+            this.beanClass = beanClass;
+            this.interceptedClass = interceptedClass;
+            this.bindings = bindings;
+        }
+
+        /**
+         * The qualifiers of parameter {@code i} of the bean's constructor: those the bean's
+         * descriptor records, as the non-intercepted path takes them, read back from the
+         * parameter only when nothing describes it — reading it back is what a module
+         * compiled with the processor forbids (vauban#70, BUG-20261007-03).
+         */
+        private Annotation[] constructorParameterQualifiers(
+                Constructor<?> ctor, java.lang.reflect.Parameter[] params, int i) {
+            var described = container.describedParameterQualifiers(descriptor, ctor, i);
+            return described != null ? described : QualifierHelper.extractParamQualifiers(params[i]);
+        }
+
+        @Override
+        public Object create() {
+            return create((CreationalContext<Object>) null);
+        }
+
+        @Override
+        public Object create(CreationalContext<Object> ctx) {
+            return create(null, ctx);
+        }
+
+        @Override
+        public Object create(VaubanInvocationContext constructCtx, CreationalContext<Object> callerCtx) {
+            var creationalCtx = contextOfItsOwnIfNone(callerCtx);
+            try {
+                Object[] finalArgs = constructCtx != null ? constructCtx.getParameters() : null;
+                var targetCtor = targetConstructor(finalArgs);
+                var bindingAnnotations = bindingAnnotations(targetCtor);
+
+                var constructChain = interceptorManager.resolveAroundConstructChain(bindings, targetCtor, beanClass, creationalCtx);
+
+                if (!constructChain.isEmpty() && constructCtx == null) {
+                    return createThroughAroundConstruct(targetCtor, constructChain, bindingAnnotations, creationalCtx);
+                }
+
+                if (finalArgs == null) {
+                    finalArgs = constructorArgs(targetCtor, creationalCtx);
+                }
+
+                var subclassCtor = constructorWithArity(interceptedClass, finalArgs.length);
+                if (subclassCtor == null) subclassCtor = ClassMetadataCache.constructorsOf(interceptedClass).get(0);
+
+                var instance = instantiatePreferProvider(subclassCtor, finalArgs);
+
+                initIntercepted(interceptedClass, instance, interceptorManager, bindings, descriptor.constructorBindings(), creationalCtx);
+                return instance;
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new CreationException(e);
+            }
+        }
+
+        @Override
+        public Object create(VaubanInvocationContext constructCtx) {
+            return create(constructCtx, null);
+        }
+
+        /** The first constructor of {@code type} with {@code parameterCount} parameters, or {@code null}. */
+        private static Constructor<?> constructorWithArity(Class<?> type, int parameterCount) {
+            for (var c : ClassMetadataCache.constructorsOf(type)) {
+                if (c.getParameterCount() == parameterCount) {
+                    return c;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * The bean constructor to call: the one taking as many arguments as the {@code @AroundConstruct} chain
+         * passes, else the {@code @Inject} one, else the one with as many parameters as the descriptor records
+         * constructor injection points, else the first.
+         */
+        private Constructor<?> targetConstructor(Object[] args) {
+            return targetConstructors.computeIfAbsent(args != null ? args.length : NO_ARGUMENTS, this::findTargetConstructor);
+        }
+
+        /** The constructors found so far, per number of arguments the {@code @AroundConstruct} chain passes. */
+        private final Map<Integer, Constructor<?>> targetConstructors = new java.util.concurrent.ConcurrentHashMap<>();
+
+        /** Stands for a creation that passes no arguments of its own, which no argument count can. */
+        private static final int NO_ARGUMENTS = -1;
+
+        private Constructor<?> findTargetConstructor(int argumentCount) {
+            if (argumentCount != NO_ARGUMENTS) {
+                var byArity = constructorWithArity(beanClass, argumentCount);
+                if (byArity != null) return byArity;
+            }
+            int ctorParamCount = 0;
+            for (var ip : descriptor.injectionPoints()) {
+                if (ip.kind()
+                        == io.vidocq.vauban.core.bean.model.InjectionPointInfo.InjectionKind.CONSTRUCTOR_PARAMETER) {
+                    ctorParamCount++;
+                }
+            }
+            for (var c : ClassMetadataCache.constructorsOf(beanClass)) {
+                if (c.isAnnotationPresent(jakarta.inject.Inject.class)) {
+                    return c;
+                }
+            }
+            var byPoints = constructorWithArity(beanClass, ctorParamCount);
+            return byPoints != null ? byPoints : ClassMetadataCache.constructorsOf(beanClass).get(0);
+        }
+
+        /**
+         * The interceptor bindings of the bean class and of {@code targetCtor}, one per type, the constructor's
+         * winning, with the bindings they carry transitively.
+         */
+        private Set<Annotation> bindingAnnotations(Constructor<?> targetCtor) {
+            var bindingAnnotationsByType = new java.util.LinkedHashMap<Class<?>, Annotation>();
+            for (var ann : ClassMetadataCache.annotationsOf(beanClass)) {
+                if (isInterceptorBinding(ann)) {
+                    bindingAnnotationsByType.put(ann.annotationType(), ann);
+                }
+            }
+            for (var ann : ClassMetadataCache.annotationsOf(targetCtor)) {
+                if (isInterceptorBinding(ann)) {
+                    bindingAnnotationsByType.put(ann.annotationType(), ann);
+                }
+            }
+
+            var bindingAnnotations = new java.util.LinkedHashSet<>(bindingAnnotationsByType.values());
+            var fullBindings = new java.util.LinkedHashSet<DotName>();
+            for (var ann : bindingAnnotations) {
+                fullBindings.add(DotName.of(ann.annotationType().getName()));
+            }
+            BeanLifecycle.collectTransitiveBindings(bindingAnnotations, fullBindings);
+            return bindingAnnotations;
+        }
+
+        /** The arguments of {@code ctor}, each resolved with the qualifiers of its parameter. */
+        private Object[] constructorArgs(Constructor<?> ctor, CreationalContext<Object> creationalCtx) {
+            var pTypes = ctor.getParameterTypes();
+            var gpTypes = ctor.getGenericParameterTypes();
+            var cParams = ctor.getParameters();
+            var args = new Object[pTypes.length];
+            for (int i = 0; i < pTypes.length; i++) {
+                var pQuals = constructorParameterQualifiers(ctor, cParams, i);
+                args[i] = container.resolveParameter(pTypes[i], gpTypes[i], creationalCtx, pQuals, ctor);
+            }
+            return args;
+        }
+
+        /** Runs the {@code @AroundConstruct} chain, whose end creates the instance through this factory. */
+        private Object createThroughAroundConstruct(Constructor<?> targetCtor,
+                                                    List<VaubanInvocationContext.InterceptorInvocation> constructChain,
+                                                    Set<Annotation> bindingAnnotations,
+                                                    CreationalContext<Object> creationalCtx) {
+            final Object[] box = new Object[1];
+            var args = constructorArgs(targetCtor, creationalCtx);
+            var ctx2 = new VaubanInvocationContext(
+                    null, null, targetCtor, args, constructChain,
+                    (target, params) -> {
+                        var result = new Object[1];
+                        InterceptorManager.$$runIntercepted(java.util.Collections.emptyList(), bindings, creationalCtx, () -> {
+                            var instance = create(VaubanInvocationContext.dummy(params), creationalCtx);
+                            box[0] = instance;
+                            result[0] = instance;
+                        });
+                        return result[0];
+                    });
+            ctx2.setInterceptorBindings(bindingAnnotations);
+            proceedConstruction(ctx2);
+            return box[0];
+        }
+    }
+
+    /**
+     * The factory of the fallback wrapping: creates the {@code $$Intercepted} subclass through its no-arg
+     * constructor, after the {@code @AroundConstruct} chain when there is one.
+     */
+    private final class FallbackInterceptedFactory implements BeanFactory<Object> {
+
+        private final BeanDescriptor descriptor;
+        private final Class<?> beanClass;
+        private final Class<?> interceptedClass;
+        private final Set<DotName> bindings;
+
+        FallbackInterceptedFactory(BeanDescriptor descriptor, Class<?> beanClass, Class<?> interceptedClass,
+                                   Set<DotName> bindings) {
+            this.descriptor = descriptor;
+            this.beanClass = beanClass;
+            this.interceptedClass = interceptedClass;
+            this.bindings = bindings;
+        }
+
+        @Override
+        public Object create() {
+            return create((CreationalContext<Object>) null);
+        }
+
+        @Override
+        public Object create(CreationalContext<Object> ctx) {
+            return create(null, ctx);
+        }
+
+        /**
+         * Without {@code constructCtx}, runs the {@code @AroundConstruct} chain when there is one, whose end calls
+         * back here with its context; with it, or without a chain, instantiates and wires the subclass.
+         */
+        @Override
+        public Object create(VaubanInvocationContext constructCtx, CreationalContext<Object> callerCtx) {
+            var ctx = contextOfItsOwnIfNone(callerCtx);
+            try {
+                var ctor = interceptedClass.getDeclaredConstructor();
+                if (constructCtx == null) {
+                    var constructChain = interceptorManager.resolveChainForConstructor(bindings,
+                            descriptor.constructorBindings(), ctor, ctx);
+                    if (!constructChain.isEmpty()) {
+                        return createThroughAroundConstruct(constructChain, ctx);
+                    }
+                }
+                var inst = instantiatePreferProvider(ctor, new Object[0]);
+                initIntercepted(interceptedClass, inst, interceptorManager, bindings, descriptor.constructorBindings(), ctx);
+                return inst;
+            } catch (Exception ex) {
+                var cause = ex instanceof java.lang.reflect.InvocationTargetException ite ? ite.getCause() : ex;
+                if (cause instanceof RuntimeException re) throw re;
+                throw new CreationException(cause);
+            }
+        }
+
+        @Override
+        public Object create(VaubanInvocationContext constructCtx) {
+            return create(constructCtx, null);
+        }
+
+        /**
+         * Runs the {@code @AroundConstruct} chain, whose end creates and wires the instance through
+         * {@link #create(VaubanInvocationContext, CreationalContext)} with the chain's context.
+         */
+        private Object createThroughAroundConstruct(List<VaubanInvocationContext.InterceptorInvocation> constructChain,
+                                                    CreationalContext<Object> ctx) {
+            final Object[] box2 = new Object[1];
+            var ctors = beanClass.getDeclaredConstructors();
+            var originalCtor2 = ctors[0];
+            for (var c : ctors) {
+                if (!java.lang.reflect.Modifier.isPrivate(c.getModifiers())) {
+                    originalCtor2 = c;
+                    break;
+                }
+            }
+            var invocationCtx = new VaubanInvocationContext(
+                    null, null, originalCtor2, new Object[originalCtor2.getParameterCount()], constructChain,
+                    (target, params) -> {
+                        var result2 = new Object[1];
+                        InterceptorManager.$$runIntercepted(java.util.Collections.emptyList(), bindings, ctx, () -> {
+                            var instance = create(VaubanInvocationContext.dummy(params), ctx);
+                            box2[0] = instance;
+                            result2[0] = instance;
+                        });
+                        return result2[0];
+                    });
+            proceedConstruction(invocationCtx);
+            var inst = box2[0];
+            if (inst == null) {
+                throw new CreationException(
+                        "Interceptor chain for @AroundConstruct failed to create an instance for " + interceptedClass.getName());
+            }
+            return inst;
+        }
+    }
+
+    void clearProxyCache() {
+        proxyCache.clear();
+    }
+}

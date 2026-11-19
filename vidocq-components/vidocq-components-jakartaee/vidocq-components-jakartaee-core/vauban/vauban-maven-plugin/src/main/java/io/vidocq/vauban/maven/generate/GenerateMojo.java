@@ -1,0 +1,173 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.maven.generate;
+
+import org.apache.maven.plugin.AbstractMojo;
+import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugins.annotations.LifecyclePhase;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
+import org.apache.maven.project.MavenProject;
+
+import java.io.File;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Maven goal that scans dependency JARs and project classes for CDI beans,
+ * then writes a {@code META-INF/vauban-beans.list} file for runtime discovery.
+ *
+ * <p>Usage in pom.xml:
+ * <pre>{@code
+ * <plugin>
+ *   <groupId>io.vidocq.vauban</groupId>
+ *   <artifactId>vauban-maven-plugin</artifactId>
+ *   <executions>
+ *     <execution>
+ *       <goals><goal>generate</goal></goals>
+ *     </execution>
+ *   </executions>
+ * </plugin>
+ * }</pre>
+ *
+ * <p>With {@code freezeExtensions}, the goal then freezes the build compatible extensions of the application
+ * (VAU-PERF-005): it runs them on the path the application starts with and writes what they did in the output
+ * directory, so that the container start loads it instead of running them. See {@link ExtensionFreezer}.
+ */
+@Mojo(name = "generate",
+      defaultPhase = LifecyclePhase.PROCESS_CLASSES,
+      requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME,
+      threadSafe = true)
+public class GenerateMojo extends AbstractMojo {
+
+    @Parameter(defaultValue = "${project}", readonly = true, required = true)
+    private MavenProject project;
+
+    @Parameter(defaultValue = "${project.build.outputDirectory}", required = true)
+    private File outputDirectory;
+
+    /**
+     * Whether to freeze the build compatible extensions of the application, so that the container start does not
+     * run them again. Off by default: an extension that checks the environment the application starts in must have
+     * moved that check out of its phases, or ask {@code ExtensionPhase.isBuildTime()}, before its result is frozen.
+     */
+    @Parameter(property = "vauban.freezeExtensions", defaultValue = "false")
+    private boolean freezeExtensions;
+
+    /** Class names of build compatible extensions the container start runs again even when they are frozen. */
+    @Parameter(property = "vauban.startExtensions")
+    private List<String> startExtensions;
+
+    @Override
+    public void execute() throws MojoExecutionException {
+        var log = getLog();
+        log.info("Vauban: scanning dependencies for CDI beans...");
+
+        try {
+            var dependencyJars = collectDependencyJars();
+            var projectClasses = outputDirectory.toPath();
+            var classLoader = buildClassLoader(dependencyJars, projectClasses);
+
+            var config = new VaubanGenerator.Config(
+                    dependencyJars,
+                    projectClasses,
+                    projectClasses, // write generated files alongside compiled classes
+                    classLoader
+            );
+
+            var result = VaubanGenerator.generate(config);
+
+            // Log warnings
+            for (var warning : result.warnings()) {
+                log.warn(warning);
+            }
+
+            // Log results
+            if (result.discoveredBeanClasses().isEmpty()) {
+                log.info("Vauban: no CDI beans discovered");
+            } else {
+                log.info("Vauban: discovered " + result.discoveredBeanClasses().size() + " CDI beans, "
+                        + "generated " + result.generatedProxies().size() + " proxies, "
+                        + result.generatedInterceptors().size() + " interceptor subclasses, "
+                        + "wove the ProxyLink entry constructor into "
+                        + result.wovenBeanClasses().size() + " beans");
+                for (var beanClass : result.discoveredBeanClasses()) {
+                    log.debug("  " + beanClass);
+                }
+            }
+
+            freezeExtensions(projectClasses);
+
+        } catch (Exception e) {
+            throw new MojoExecutionException("Vauban generation failed", e);
+        }
+    }
+
+    /**
+     * Freezes the extensions on the runtime class path of the project, or removes the record of an earlier build
+     * when the parameter is off.
+     */
+    private void freezeExtensions(Path projectClasses)
+            throws org.apache.maven.artifact.DependencyResolutionRequiredException {
+        if (!freezeExtensions) {
+            io.vidocq.vauban.core.extensions.FrozenExtensions.delete(projectClasses);
+            return;
+        }
+        var deploymentPath = new ArrayList<Path>();
+        for (String element : project.getRuntimeClasspathElements()) {
+            deploymentPath.add(Path.of(element));
+        }
+        var outcome = ExtensionFreezer.freeze(deploymentPath, getClass().getClassLoader(), projectClasses,
+                startExtensions == null ? List.of() : startExtensions);
+        for (String line : ExtensionFreezer.report(outcome)) {
+            if (outcome.frozen() || outcome.nothingToFreeze()) {
+                getLog().info(line);
+            } else {
+                getLog().warn(line);
+            }
+        }
+    }
+
+    private List<Path> collectDependencyJars() {
+        var jars = new ArrayList<Path>();
+        for (var artifact : project.getArtifacts()) {
+            var file = artifact.getFile();
+            if (file != null && (file.getName().endsWith(".jar") || file.isDirectory())) {
+                jars.add(file.toPath());
+            }
+        }
+        return jars;
+    }
+
+    private java.net.URLClassLoader buildClassLoader(List<Path> jars, Path projectClasses)
+            throws java.net.MalformedURLException {
+        var urls = new ArrayList<java.net.URL>();
+        urls.add(projectClasses.toUri().toURL());
+        for (var jar : jars) {
+            urls.add(jar.toUri().toURL());
+        }
+        return new java.net.URLClassLoader(
+                urls.toArray(java.net.URL[]::new),
+                getClass().getClassLoader()
+        );
+    }
+}

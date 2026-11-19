@@ -1,0 +1,1182 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.container;
+
+import io.vidocq.vauban.core.BeanFactory;
+import io.vidocq.vauban.core.bean.model.BeanDescriptor;
+import io.vidocq.vauban.core.bean.model.ScopeInfo;
+import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.InjectionPoint;
+import jakarta.enterprise.inject.spi.PassivationCapable;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Type;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.BiConsumer;
+
+/**
+ * CDI Bean implementation backed by a BeanDescriptor and a BeanFactory.
+ *
+ * <p>Passivation capable: its id is its {@code BeanId}. For a managed bean and a producer it is built from class
+ * and member names, so two containers built from the same classes give the bean the same id, and a
+ * {@code @SessionScoped} instance written by one container is found again by the other under that id (Vidocq dev
+ * swap, foy#114; internals.adoc, "Session entries across a container swap"). Two exceptions: a synthetic bean's id
+ * ends with its registration slot, which shifts when beans are added before it, and overloaded producer methods
+ * share one id.</p>
+ */
+public final class ManagedBean<T> implements Bean<T>, PassivationCapable {
+
+    private static final String INTERCEPTED_SUFFIX = "$$Intercepted";
+
+    private final BeanDescriptor descriptor;
+    private final BeanFactory<T> factory;
+    private final Class<T> beanClass;
+    // Resolved once: every client-proxy call asks for it (BUG-20261028-01)
+    private final Class<? extends Annotation> scope;
+    private final ClassLoader classLoader;
+    private final VaubanLookup vaubanLookup;
+    private BiConsumer<Object, CreationalContext<?>> injector;
+    private BiConsumer<Object, CreationalContext<?>> destroyer;
+    private io.vidocq.vauban.core.interceptor.InterceptorManager interceptorManager;
+    // Lazily computed immutable set, safe under volatile: computed once, read-only after
+    @SuppressWarnings("java:S3077")
+    private volatile Set<Type> cachedTypes;
+    @SuppressWarnings("java:S3077")
+    private volatile Set<Annotation> qualifierInstances;
+    @SuppressWarnings("java:S3077")
+    private volatile Set<io.vidocq.vauban.core.annotation.AnnotationKey> qualifierKeys;
+    private final io.vidocq.vauban.core.annotation.AnnotationTypes annotationTypes;
+
+    public ManagedBean(BeanDescriptor descriptor, BeanFactory<T> factory, ClassLoader classLoader, VaubanLookup vaubanLookup) {
+        this(descriptor, factory, classLoader, vaubanLookup, null);
+    }
+
+    /**
+     * @param annotationTypes the container's annotation metadata, so {@link #getQualifiers()} hands out
+     *                        the literal the qualifier's own module generated; {@code null} outside a
+     *                        container, where the fallback instance is built instead
+     */
+    public ManagedBean(BeanDescriptor descriptor, BeanFactory<T> factory, ClassLoader classLoader,
+            VaubanLookup vaubanLookup, io.vidocq.vauban.core.annotation.AnnotationTypes annotationTypes) {
+        this.descriptor = Objects.requireNonNull(descriptor);
+        this.factory = Objects.requireNonNull(factory);
+        this.classLoader = Objects.requireNonNull(classLoader);
+        this.vaubanLookup = vaubanLookup;
+        this.annotationTypes = annotationTypes;
+        try {
+            this.beanClass = (Class<T>) Class.forName(descriptor.beanClass().value(), true, classLoader);
+        } catch (ClassNotFoundException e) {
+            throw new IllegalArgumentException("Bean class not found: " + descriptor.beanClass(), e);
+        }
+        this.scope = scopeAnnotationClass(descriptor.scope(), classLoader);
+    }
+
+    public BiConsumer<Object, CreationalContext<?>> getInjector() {
+        return injector;
+    }
+
+    public BiConsumer<Object, CreationalContext<?>> getDestroyer() {
+        return destroyer;
+    }
+
+    public void setInjector(BiConsumer<Object, CreationalContext<?>> injector) {
+        this.injector = injector;
+    }
+
+    public void setDestroyer(BiConsumer<Object, CreationalContext<?>> destroyer) {
+        this.destroyer = destroyer;
+    }
+
+    public void setInterceptorManager(io.vidocq.vauban.core.interceptor.InterceptorManager interceptorManager) {
+        this.interceptorManager = interceptorManager;
+    }
+
+    public BeanFactory<T> factory() {
+        return factory;
+    }
+
+    @Override
+    public T create(CreationalContext<T> callerContext) {
+        var creationalContext = interceptorManager == null ? callerContext
+                : io.vidocq.vauban.core.context.CreationalContextImpl.forInterceptedInstanceOf(this);
+        T instance = factory.create(creationalContext);
+        
+        // CDI spec: producer returning null for non-Dependent scope -> IllegalProductException
+        if (instance == null && descriptor.kind() != BeanDescriptor.BeanKind.MANAGED
+                && !descriptor.scope().equals(io.vidocq.vauban.core.bean.model.ScopeInfo.DEPENDENT)) {
+            throw new jakarta.enterprise.inject.IllegalProductException(
+                    "Producer " + descriptor.id() + " returned null for non-@Dependent bean");
+        }
+        if (instance != null && injector != null) {
+            injector.accept(instance, creationalContext);
+        }
+        if (instance != null && creationalContext != callerContext
+                && callerContext instanceof io.vidocq.vauban.core.context.CreationalContextImpl<T> caller) {
+            // Its interceptor instances are destroyed with it, or when the caller's context is released
+            caller.adopt(instance, (io.vidocq.vauban.core.context.CreationalContextImpl<T>) creationalContext);
+        }
+        return instance;
+    }
+
+    /**
+     * The creational context an intercepted bean instance is destroyed with: the one it was created with, which the
+     * caller's context keeps (BUG-20261118-36); else the caller's, or one of the bean's own when the caller passes none
+     * (VAU-LIFE-002, VAU-LIFE-003), as its intercepted factory does (VAU-INT-008). An intercepted instance is created
+     * with a context of its own (see {@link #create}): its factory and its {@code @PostConstruct} step share it, so one
+     * interceptor instance per interceptor class, a dependent object of that one bean instance (CDI 4.1 §6.4.1),
+     * serves its construction, its lifecycle callbacks and its methods. At destruction, its {@code @PreDestroy}
+     * interceptors are resolved from it, then released with it. Only an intercepted bean gets an interceptor manager.
+     */
+    private CreationalContext<T> destructionContext(T instance, CreationalContext<T> callerContext) {
+        if (interceptorManager == null) {
+            return callerContext;
+        }
+        if (callerContext instanceof io.vidocq.vauban.core.context.CreationalContextImpl<T> caller) {
+            var own = caller.release(instance);
+            if (own != null) {
+                return own;
+            }
+        }
+        return callerContext != null ? callerContext : new io.vidocq.vauban.core.context.CreationalContextImpl<>();
+    }
+
+    @Override
+    public void destroy(T instance, CreationalContext<T> callerContext) {
+        if (instance == null) return;
+        var creationalContext = destructionContext(instance, callerContext);
+
+        if (destroyer != null) {
+            try {
+                destroyer.accept(instance, creationalContext);
+            } catch (Exception _) {
+                // CDI spec: exceptions in disposer methods are suppressed
+            }
+        }
+        if (descriptor.kind() == BeanDescriptor.BeanKind.MANAGED) {
+            callPreDestroy(instance, creationalContext);
+        }
+        if (creationalContext != callerContext
+                && creationalContext instanceof io.vidocq.vauban.core.context.CreationalContextImpl<?> own) {
+            // Its own context: its interceptor instances and its dependents (BUG-20261118-36)
+            own.release();
+        }
+        if ((callerContext != null ? callerContext : creationalContext)
+                instanceof io.vidocq.vauban.core.context.CreationalContextImpl<?> cc) {
+            // Remove ourselves from the dependent list before releasing to avoid recursive destroy
+            for (var dependents = cc.getDependentInstances().iterator(); dependents.hasNext();) {
+                if (dependents.next().instance() == instance) {
+                    dependents.remove();
+                }
+            }
+            cc.release();
+        }
+    }
+
+    private void callPreDestroy(Object instance, CreationalContext<?> ctx) {
+        if (instance == null) return;
+        // Find all @PreDestroy methods in the bean hierarchy (respecting override rules)
+        var preDestroyMethods = collectLifecycleMethodsInHierarchy(instance.getClass(), jakarta.annotation.PreDestroy.class);
+
+        // Check for lifecycle interceptors
+        if (callInterceptedPreDestroy(instance, ctx, preDestroyMethods)) {
+            return;
+        }
+
+        // No interceptors — call directly
+        for (var pdMethod : preDestroyMethods) {
+            try {
+                vaubanLookup.invokeMethod(instance, pdMethod);
+            } catch (Exception _) {
+                // CDI spec says exceptions in @PreDestroy are caught, not propagated
+            }
+        }
+    }
+
+    /**
+     * Runs the {@code @PreDestroy} methods through the lifecycle interceptor chain bound to the bean.
+     *
+     * @return {@code true} when a non-empty chain ran them, {@code false} when the caller must call them
+     */
+    private boolean callInterceptedPreDestroy(Object instance, CreationalContext<?> ctx,
+            java.util.List<java.lang.reflect.Method> preDestroyMethods) {
+        if (interceptorManager == null || !interceptorManager.hasInterceptors()) {
+            return false;
+        }
+        java.util.Set<io.vidocq.vauban.indexer.model.DotName> bindings = (descriptor != null) ? descriptor.interceptorBindings() : findInterceptorBindings(instance);
+        // Fallback: check via reflection if descriptor bindings are empty
+        if (bindings == null || bindings.isEmpty()) {
+            bindings = findInterceptorBindings(instance);
+        }
+        if (bindings.isEmpty()) {
+            return false;
+        }
+        interceptorManager.setClassLoader(instance.getClass().getClassLoader());
+        var bindingAnnotations = (descriptor != null && !descriptor.interceptorBindingAnnotations().isEmpty())
+                ? new java.util.ArrayList<java.lang.annotation.Annotation>(descriptor.interceptorBindingAnnotations())
+                : new java.util.ArrayList<java.lang.annotation.Annotation>(collectBindingAnnotations(instance));
+        var chain = interceptorManager.resolveLifecycleChain(
+                bindings, jakarta.annotation.PreDestroy.class, bindingAnnotations, ctx);
+        if (chain.isEmpty()) {
+            return false;
+        }
+        var invocationCtx = new io.vidocq.vauban.core.interceptor.VaubanInvocationContext(
+                instance, null, new Object[0], chain,
+                (target, params) -> {
+                    for (var m : preDestroyMethods) {
+                        vaubanLookup.invokeMethod(target, m);
+                    }
+                    return null;
+                });
+        invocationCtx.setInterceptorBindings(new java.util.LinkedHashSet<>(bindingAnnotations));
+        try {
+            invocationCtx.proceed();
+        } catch (Exception _) {
+            // CDI spec: suppress PreDestroy exceptions
+        }
+        return true;
+    }
+
+    private static java.util.List<java.lang.reflect.Method> collectLifecycleMethodsInHierarchy(
+            Class<?> clazz, Class<? extends java.lang.annotation.Annotation> annotation) {
+        return BeanLifecycle.collectLifecycleMethodsInHierarchy(clazz, annotation);
+    }
+
+    private Set<java.lang.annotation.Annotation> collectBindingAnnotations(Object instance) {
+        var clazz = instance.getClass();
+        if (clazz.getName().contains(INTERCEPTED_SUFFIX) || clazz.getName().contains("$$Proxy")) {
+            clazz = clazz.getSuperclass();
+        }
+        var annotations = new java.util.LinkedHashSet<java.lang.annotation.Annotation>();
+        for (var ann : ClassMetadataCache.annotationsOf(clazz)) {
+            var t = ann.annotationType();
+            if (ClassMetadataCache.isInterceptorBinding(t)) {
+                annotations.add(ann);
+            }
+        }
+        // Collect transitive binding annotations from meta-annotations
+        var toAdd = new java.util.LinkedHashSet<java.lang.annotation.Annotation>();
+        for (var ann : annotations) {
+            collectTransitiveBindingAnnotations(ann.annotationType(), toAdd, annotations);
+        }
+        annotations.addAll(toAdd);
+        return annotations;
+    }
+
+    private static void collectTransitiveBindingAnnotations(
+            Class<? extends java.lang.annotation.Annotation> annType,
+            Set<java.lang.annotation.Annotation> toAdd,
+            Set<java.lang.annotation.Annotation> existing) {
+        for (var meta : ClassMetadataCache.annotationsOf(annType)) {
+            var mt = meta.annotationType();
+            boolean isBinding = ClassMetadataCache.isInterceptorBinding(mt);
+            if (isBinding && !existing.contains(meta) && !toAdd.contains(meta)) {
+                toAdd.add(meta);
+                collectTransitiveBindingAnnotations(mt, toAdd, existing);
+            }
+        }
+    }
+
+    private Set<io.vidocq.vauban.indexer.model.DotName> findInterceptorBindings(Object instance) {
+        var bindings = new java.util.LinkedHashSet<io.vidocq.vauban.indexer.model.DotName>();
+        var clazz = instance.getClass();
+        if (clazz.getName().contains(INTERCEPTED_SUFFIX)) clazz = clazz.getSuperclass();
+        for (var ann : ClassMetadataCache.annotationsOf(clazz)) {
+            var t = ann.annotationType();
+            if (ClassMetadataCache.isInterceptorBinding(t)) {
+                bindings.add(io.vidocq.vauban.indexer.model.DotName.of(t.getName()));
+                // Collect transitive bindings from meta-annotations
+                collectTransitiveInterceptorBindings(t, bindings);
+            }
+        }
+        return bindings;
+    }
+
+    private static void collectTransitiveInterceptorBindings(Class<? extends java.lang.annotation.Annotation> annType,
+            Set<io.vidocq.vauban.indexer.model.DotName> bindings) {
+        for (var meta : ClassMetadataCache.annotationsOf(annType)) {
+            var mt = meta.annotationType();
+            if (ClassMetadataCache.isInterceptorBinding(mt)) {
+                var name = io.vidocq.vauban.indexer.model.DotName.of(mt.getName());
+                if (bindings.add(name)) {
+                    collectTransitiveInterceptorBindings(mt, bindings);
+                }
+            }
+        }
+    }
+
+    @Override
+    public Class<?> getBeanClass() {
+        return beanClass;
+    }
+
+    @Override
+    public Set<Type> getTypes() {
+        var cached = cachedTypes;
+        if (cached != null) return cached;
+
+        Set<Type> types;
+        // For producer beans, derive types from the produced type, not the declaring class
+        if (descriptor.kind() == BeanDescriptor.BeanKind.PRODUCER_METHOD
+                || descriptor.kind() == BeanDescriptor.BeanKind.PRODUCER_FIELD) {
+            types = getProducerTypes();
+        } else if (descriptor.kind() == BeanDescriptor.BeanKind.SYNTHETIC) {
+            // Synthetic beans use the types from the descriptor directly
+            types = getProducerTypes();
+        } else {
+            types = new LinkedHashSet<>();
+            collectTypes(beanClass, types);
+            types.add(Object.class);
+            // Check if @Typed restricts the bean types
+            if (hasTypedRestriction()) {
+                types = filterByTyped(types);
+            }
+            // CDI 4.1 Section 2.2.1: filter illegal bean types, keeping the bean's own type variables
+            var ownTypeVars = new LinkedHashSet<java.lang.reflect.TypeVariable<?>>();
+            java.util.Collections.addAll(ownTypeVars, beanClass.getTypeParameters());
+            types = filterIllegalBeanTypes(types, ownTypeVars);
+        }
+        cachedTypes = types;
+        return types;
+    }
+
+    /**
+     * Check if the bean has @Typed restriction.
+     */
+    private boolean hasTypedRestriction() {
+        return beanClass.isAnnotationPresent(jakarta.enterprise.inject.Typed.class);
+    }
+
+    /**
+     * Filter unrestricted type set by @Typed annotation.
+     * CDI 4.1 Section 2.2.2: @Typed restricts bean types to only the specified types + Object.
+     * For generic types, we keep the parameterized version from the hierarchy.
+     */
+    private Set<Type> filterByTyped(Set<Type> unrestrictedTypes) {
+        var typed = beanClass.getAnnotation(jakarta.enterprise.inject.Typed.class);
+        var allowedRawTypes = new java.util.HashSet<Class<?>>(java.util.Arrays.asList(typed.value()));
+        var result = new LinkedHashSet<Type>();
+        for (var t : unrestrictedTypes) {
+            if (t == Object.class) {
+                result.add(t);
+                continue;
+            }
+            Class<?> raw = rawTypeOf(t);
+            if (raw != null && allowedRawTypes.contains(raw)) {
+                result.add(t);
+            }
+        }
+        return result;
+    }
+
+    private static Class<?> rawTypeOf(Type type) {
+        return switch (type) {
+            case Class<?> c -> c;
+            case java.lang.reflect.ParameterizedType pt -> (Class<?>) pt.getRawType();
+            case null, default -> null;
+        };
+    }
+
+    /**
+     * CDI 4.1 Section 2.2.1: the legal bean types among {@code types}. A type variable and a wildcard are none. A
+     * parameterized type with a type variable {@code allowedTypeVars} does not hold, at any depth, gives its raw class:
+     * only a supertype named raw leaves one there, and Java erases the types above a raw type (JLS 4.8). The allowed
+     * type variables are the bean class's own, or those of the type a producer produces. Such a type was dropped, and
+     * its raw class with it: a bean of {@code LegacyNames extends ArrayList} was no {@code List} (BUG-20261117-14). A
+     * parameterized type with a wildcard among its type arguments is no bean type, nor is its raw class: the CDI TCK's
+     * {@code BeanTypesWithIllegalTypeTest} wants none.
+     */
+    private static Set<Type> filterIllegalBeanTypes(Set<Type> types,
+            Set<java.lang.reflect.TypeVariable<?>> allowedTypeVars) {
+        var result = new LinkedHashSet<Type>();
+        for (var t : types) {
+            switch (t) {
+                case Class<?> c -> result.add(c);
+                case java.lang.reflect.ParameterizedType pt
+                        when hasTypeVariableNotIn(pt, allowedTypeVars) -> result.add(pt.getRawType());
+                case java.lang.reflect.ParameterizedType pt when !hasWildcard(pt) -> result.add(t);
+                case java.lang.reflect.GenericArrayType gat
+                        when !containsUnresolvedTypeVariable(gat) -> result.add(t);
+                case null, default -> { /* Skip TypeVariable, WildcardType, a type with a wildcard */ }
+            }
+        }
+        return result;
+    }
+
+    /** Whether {@code type} has a type variable {@code allowed} does not hold, itself or at any depth inside it. */
+    private static boolean hasTypeVariableNotIn(Type type, Set<java.lang.reflect.TypeVariable<?>> allowed) {
+        return switch (type) {
+            case java.lang.reflect.TypeVariable<?> variable -> !allowed.contains(variable);
+            case java.lang.reflect.ParameterizedType parameterized ->
+                    anyHasTypeVariableNotIn(parameterized.getActualTypeArguments(), allowed);
+            case java.lang.reflect.WildcardType wildcard -> anyHasTypeVariableNotIn(wildcard.getUpperBounds(), allowed)
+                    || anyHasTypeVariableNotIn(wildcard.getLowerBounds(), allowed);
+            case java.lang.reflect.GenericArrayType array ->
+                    hasTypeVariableNotIn(array.getGenericComponentType(), allowed);
+            case null, default -> false;
+        };
+    }
+
+    private static boolean anyHasTypeVariableNotIn(Type[] types, Set<java.lang.reflect.TypeVariable<?>> allowed) {
+        for (var type : types) {
+            if (hasTypeVariableNotIn(type, allowed)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether a type argument of {@code type} is a wildcard, or a parameterized type that has one, at any depth. */
+    private static boolean hasWildcard(java.lang.reflect.ParameterizedType type) {
+        for (var argument : type.getActualTypeArguments()) {
+            if (argument instanceof java.lang.reflect.WildcardType
+                    || argument instanceof java.lang.reflect.ParameterizedType nested && hasWildcard(nested)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The type variables {@code type} has, itself or among its type arguments, at any depth. */
+    private static Set<java.lang.reflect.TypeVariable<?>> typeVariablesOf(Type type) {
+        var variables = new LinkedHashSet<java.lang.reflect.TypeVariable<?>>();
+        addTypeVariables(type, variables);
+        return variables;
+    }
+
+    private static void addTypeVariables(Type type, Set<java.lang.reflect.TypeVariable<?>> variables) {
+        switch (type) {
+            case java.lang.reflect.TypeVariable<?> variable -> variables.add(variable);
+            case java.lang.reflect.ParameterizedType parameterized -> {
+                for (var argument : parameterized.getActualTypeArguments()) {
+                    addTypeVariables(argument, variables);
+                }
+                // F of <F> Outer<F>.Inner<Integer> is the producer's too (BUG-20261117-21)
+                addTypeVariables(parameterized.getOwnerType(), variables);
+            }
+            case java.lang.reflect.GenericArrayType array -> addTypeVariables(array.getGenericComponentType(),
+                    variables);
+            case null, default -> { /* No type variable: a produced type has no wildcard (CDI 4.1, 3.2) */ }
+        }
+    }
+
+    private Set<Type> getProducerTypes() {
+        Type producerGenericType = resolveProducerGenericType();
+        if (producerGenericType != null) {
+            return typesOfProducedType(producerGenericType);
+        }
+        return typesFromDescriptor();
+    }
+
+    /** The bean types of a producer whose produced type reflection resolved. */
+    private Set<Type> typesOfProducedType(Type producerGenericType) {
+        // CDI spec: array types have only {ArrayType, Object} as bean types
+        if ((producerGenericType instanceof Class<?> c && c.isArray())
+                || producerGenericType instanceof java.lang.reflect.GenericArrayType) {
+            var arrayTypes = new LinkedHashSet<Type>();
+            arrayTypes.add(producerGenericType);
+            arrayTypes.add(Object.class);
+            return arrayTypes;
+        }
+        // Build full type hierarchy from the produced type using reflection
+        var allTypes = new LinkedHashSet<Type>();
+        allTypes.addAll(io.vidocq.vauban.core.types.TypeHierarchyResolver.resolveAllSupertypes(producerGenericType));
+        allTypes.add(Object.class);
+
+        var typedClasses = producerTypedClasses();
+        if (typedClasses.isPresent()) {
+            var filtered = new LinkedHashSet<Type>();
+            for (var t : allTypes) {
+                Class<?> raw = rawTypeOf(t);
+                if (t == Object.class || (raw != null && typedClasses.get().contains(raw))) {
+                    filtered.add(t);
+                }
+            }
+            return filtered;
+        }
+
+        // The type variables of the produced type are a producer's: a method's, or its declaring class's
+        return filterIllegalBeanTypes(allTypes, typeVariablesOf(producerGenericType));
+    }
+
+    /** Fallback: the descriptor's types, resolved to Java types. */
+    private Set<Type> typesFromDescriptor() {
+        var types = new LinkedHashSet<Type>();
+        for (var typeInfo : descriptor.types()) {
+            switch (typeInfo) {
+                case io.vidocq.vauban.indexer.model.TypeInfo.ClassType(var name) -> {
+                    var type = loadClassOrNull(name.value());
+                    if (type != null) types.add(type);
+                }
+                case io.vidocq.vauban.indexer.model.TypeInfo.ParameterizedType parameterized -> {
+                    var type = parameterizedTypeOrNull(parameterized);
+                    if (type != null) types.add(type);
+                }
+                case io.vidocq.vauban.indexer.model.TypeInfo.ArrayType at -> {
+                    var arrayClass = resolveArrayClass(at, classLoader);
+                    if (arrayClass != null) types.add(arrayClass);
+                }
+                case io.vidocq.vauban.indexer.model.TypeInfo.PrimitiveType(var kind) -> types.add(primitiveClass(kind));
+                default -> { /* intentionally empty */ }
+            }
+        }
+        types.add(Object.class);
+        // The conversion gives a type variable and a wildcard as Object: no type is illegal, nor made raw
+        return filterIllegalBeanTypes(types, Set.of());
+    }
+
+    /** The class {@code name} names, initialized; {@code null} when it cannot be found. */
+    private Class<?> loadClassOrNull(String name) {
+        try {
+            return Class.forName(name, true, classLoader);
+        } catch (ClassNotFoundException _) {
+            return null;
+        }
+    }
+
+    /**
+     * The parameterized type of raw class {@code rawName} and these type arguments, rebuilt recursively so nested
+     * parameterized type arguments (e.g. {@code ClaimValue<Set<String>>}) are preserved; {@code null} when a class
+     * cannot be found.
+     */
+    private Type parameterizedTypeOrNull(io.vidocq.vauban.indexer.model.TypeInfo.ParameterizedType type) {
+        try {
+            return reflectParameterized(type, classLoader);
+        } catch (ClassNotFoundException _) {
+            return null;
+        }
+    }
+
+    private Type resolveProducerGenericType() {
+        try {
+            String idValue = descriptor.id().value();
+            if (descriptor.kind() == BeanDescriptor.BeanKind.PRODUCER_METHOD) {
+                return producerMethodType(idValue);
+            } else if (descriptor.kind() == BeanDescriptor.BeanKind.PRODUCER_FIELD) {
+                return producerFieldType(idValue);
+            }
+        } catch (Exception _) { /* skip - fallback to descriptor */ }
+        return null;
+    }
+
+    /** The return type of the producer method {@code idValue} names, declared or inherited; {@code null} if none. */
+    private Type producerMethodType(String idValue) throws ClassNotFoundException {
+        int hashIdx = idValue.indexOf('#');
+        if (hashIdx < 0) return null;
+        String declaringClassName = idValue.substring(0, hashIdx);
+        String methodName = idValue.substring(hashIdx + 1);
+        Class<?> declaringClass = Class.forName(declaringClassName, true, classLoader);
+        var method = producerMethodNamed(declaringClass.getDeclaredMethods(), methodName);
+        if (method == null) {
+            // Also check inherited methods
+            method = producerMethodNamed(declaringClass.getMethods(), methodName);
+        }
+        return method == null ? null : resolveTypeVariables(method.getGenericReturnType(), declaringClass);
+    }
+
+    /** The type of the producer field {@code idValue} names, declared or inherited; {@code null} if none. */
+    private Type producerFieldType(String idValue) throws ClassNotFoundException {
+        int dotIdx = idValue.lastIndexOf('.');
+        if (dotIdx < 0) return null;
+        String declaringClassName = idValue.substring(0, dotIdx);
+        String fieldName = idValue.substring(dotIdx + 1);
+        Class<?> declaringClass = Class.forName(declaringClassName, true, classLoader);
+        var field = findField(declaringClass, fieldName);
+        return field == null ? null : resolveTypeVariables(field.getGenericType(), declaringClass);
+    }
+
+    /** The first of {@code methods} named {@code name} that is a producer method, or {@code null}. */
+    private static java.lang.reflect.Method producerMethodNamed(java.lang.reflect.Method[] methods, String name) {
+        for (var m : methods) {
+            if (VaubanContainer.isProducerMethod(m, name)
+                    && m.isAnnotationPresent(jakarta.enterprise.inject.Produces.class)) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    private static java.lang.reflect.Field findField(Class<?> clazz, String name) {
+        while (clazz != null && clazz != Object.class) {
+            try {
+                return clazz.getDeclaredField(name);
+            } catch (NoSuchFieldException _) {
+                clazz = clazz.getSuperclass();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolve TypeVariables in a type using the class hierarchy of the declaring class.
+     * E.g., if declaringClass is FooProducer extends GenericProducer&lt;Spider&gt;,
+     * and type is List&lt;T&gt; where T is GenericProducer's type param,
+     * this resolves it to List&lt;Spider&gt;.
+     */
+    private static Type resolveTypeVariables(Type type, Class<?> declaringClass) {
+        if (!containsUnresolvedTypeVariable(type)) return type;
+        // Build a mapping from TypeVariable -> actual type by walking the class hierarchy
+        var mapping = buildFullTypeMapping(declaringClass);
+        if (mapping.isEmpty()) return type;
+        return substituteTypeVariables(type, mapping);
+    }
+
+    private static Map<java.lang.reflect.TypeVariable<?>, Type> buildFullTypeMapping(Class<?> clazz) {
+        var mapping = new java.util.HashMap<java.lang.reflect.TypeVariable<?>, Type>();
+        var current = clazz;
+        while (current != null && current != Object.class) {
+            var genericSuper = current.getGenericSuperclass();
+            if (genericSuper instanceof java.lang.reflect.ParameterizedType pt) {
+                var rawSuper = (Class<?>) pt.getRawType();
+                var typeParams = rawSuper.getTypeParameters();
+                var typeArgs = pt.getActualTypeArguments();
+                for (int i = 0; i < Math.min(typeParams.length, typeArgs.length); i++) {
+                    // Resolve any already-mapped type variables in the arguments
+                    var resolved = substituteTypeVariables(typeArgs[i], mapping);
+                    mapping.put(typeParams[i], resolved);
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return mapping;
+    }
+
+    private static Type substituteTypeVariables(Type type, Map<java.lang.reflect.TypeVariable<?>, Type> mapping) {
+        return switch (type) {
+            case java.lang.reflect.TypeVariable<?> tv -> {
+                var resolved = mapping.get(tv);
+                yield resolved != null ? resolved : type;
+            }
+            case java.lang.reflect.ParameterizedType pt -> {
+                var args = pt.getActualTypeArguments();
+                var newArgs = new Type[args.length];
+                boolean changed = false;
+                for (int i = 0; i < args.length; i++) {
+                    newArgs[i] = substituteTypeVariables(args[i], mapping);
+                    if (newArgs[i] != args[i]) changed = true;
+                }
+                var owner = pt.getOwnerType() instanceof java.lang.reflect.ParameterizedType generic
+                        ? substituteTypeVariables(generic, mapping) : pt.getOwnerType();
+                yield changed || owner != pt.getOwnerType()
+                        ? new ResolvedParameterizedType((Class<?>) pt.getRawType(), newArgs, owner)
+                        : type;
+            }
+            case java.lang.reflect.GenericArrayType gat -> {
+                var newComponent = substituteTypeVariables(gat.getGenericComponentType(), mapping);
+                yield newComponent == gat.getGenericComponentType()
+                        ? type
+                        : new ResolvedGenericArrayType(newComponent);
+            }
+            case null, default -> type;
+        };
+    }
+
+    /**
+     * The classes the {@code @Typed} of the producer member declares, when it has one; empty when it has none or
+     * cannot be read.
+     */
+    private java.util.Optional<Set<Class<?>>> producerTypedClasses() {
+        try {
+            var member = declaredProducerMember();
+            var typed = member == null ? null : member.getAnnotation(jakarta.enterprise.inject.Typed.class);
+            if (typed != null) {
+                return java.util.Optional.of(Set.of(typed.value()));
+            }
+        } catch (Exception _) { /* skip */ }
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * The producer method or field the producer's id names, among the members its class declares; {@code null} for
+     * another kind of bean, or when no producer method of that name is declared.
+     */
+    private java.lang.reflect.AnnotatedElement declaredProducerMember()
+            throws ClassNotFoundException, NoSuchFieldException {
+        String idValue = descriptor.id().value();
+        if (descriptor.kind() == BeanDescriptor.BeanKind.PRODUCER_METHOD) {
+            int hashIdx = idValue.indexOf('#');
+            if (hashIdx < 0) return null;
+            String declaringClassName = idValue.substring(0, hashIdx);
+            String methodName = idValue.substring(hashIdx + 1);
+            Class<?> declaringClass = Class.forName(declaringClassName, true, classLoader);
+            return producerMethodNamed(declaringClass.getDeclaredMethods(), methodName);
+        } else if (descriptor.kind() == BeanDescriptor.BeanKind.PRODUCER_FIELD) {
+            int dotIdx = idValue.lastIndexOf('.');
+            if (dotIdx < 0) return null;
+            String declaringClassName = idValue.substring(0, dotIdx);
+            String fieldName = idValue.substring(dotIdx + 1);
+            Class<?> declaringClass = Class.forName(declaringClassName, true, classLoader);
+            return declaringClass.getDeclaredField(fieldName);
+        }
+        return null;
+    }
+
+    private static Class<?> resolveArrayClass(io.vidocq.vauban.indexer.model.TypeInfo.ArrayType at, ClassLoader cl) {
+        String desc = arrayDescriptor(at);
+        if (desc == null) {
+            return null;
+        }
+        try {
+            return Class.forName(desc, true, cl);
+        } catch (ClassNotFoundException _) {
+            return null;
+        }
+    }
+
+    /** The JVM descriptor of the array type {@code at}, or {@code null} for a component it cannot name. */
+    private static String arrayDescriptor(io.vidocq.vauban.indexer.model.TypeInfo.ArrayType at) {
+        return switch (at.componentType()) {
+            // The discovery index models primitive injection-point components as
+            // ClassType("boolean") — map those names to descriptor chars too,
+            // "[Lboolean;" is not loadable. Cf. VAU-BCE-004.
+            case io.vidocq.vauban.indexer.model.TypeInfo.ClassType(var name) ->
+                    "[".repeat(at.dimensions()) + switch (name.value()) {
+                        case "boolean" -> "Z";
+                        case "byte" -> "B";
+                        case "char" -> "C";
+                        case "short" -> "S";
+                        case "int" -> "I";
+                        case "long" -> "J";
+                        case "float" -> "F";
+                        case "double" -> "D";
+                        default -> "L" + name.value() + ";";
+                    };
+            case io.vidocq.vauban.indexer.model.TypeInfo.PrimitiveType(var kind) ->
+                    "[".repeat(at.dimensions()) + switch (kind) {
+                        case BOOLEAN -> "Z";
+                        case BYTE -> "B";
+                        case CHAR -> "C";
+                        case SHORT -> "S";
+                        case INT -> "I";
+                        case LONG -> "J";
+                        case FLOAT -> "F";
+                        case DOUBLE -> "D";
+                    };
+            // A parameterized component (Class<?>[] from the lang-model side)
+            // erases to its raw array class for the runtime bean-type set.
+            case io.vidocq.vauban.indexer.model.TypeInfo.ParameterizedType(var rawType, _, _) ->
+                    "[".repeat(at.dimensions()) + "L" + rawType.value() + ";";
+            default -> null;
+        };
+    }
+
+    /**
+     * {@code type} as reflection gives it, equal to the JDK's own: its owner the parameterized type that encloses it, or
+     * else its declaring class, {@code Map} for {@code Map.Entry<K, V>}; it was {@code null} (BUG-20261118-46).
+     */
+    private static Type reflectParameterized(io.vidocq.vauban.indexer.model.TypeInfo.ParameterizedType type,
+            ClassLoader classLoader) throws ClassNotFoundException {
+        var rawClass = io.vidocq.vauban.core.loading.DeploymentClasses.load(type.rawType().value(), classLoader);
+        var owner = type.owner() instanceof io.vidocq.vauban.indexer.model.TypeInfo.ParameterizedType parameterized
+                ? reflectParameterized(parameterized, classLoader) : rawClass.getDeclaringClass();
+        return new ResolvedParameterizedType(rawClass, resolveTypeArguments(type.typeArguments(), classLoader), owner);
+    }
+
+    /**
+     * Recursively converts a list of {@code TypeInfo} type arguments to {@code java.lang.reflect.Type[]}.
+     * Handles nested parameterized types (e.g. {@code Set<String>} inside {@code ClaimValue<Set<String>>}).
+     */
+    private static java.lang.reflect.Type[] resolveTypeArguments(
+            java.util.List<io.vidocq.vauban.indexer.model.TypeInfo> argInfos,
+            ClassLoader classLoader) throws ClassNotFoundException {
+        var args = new java.lang.reflect.Type[argInfos.size()];
+        for (int i = 0; i < args.length; i++) {
+            args[i] = resolveTypeArgument(argInfos.get(i), classLoader);
+        }
+        return args;
+    }
+
+    private static java.lang.reflect.Type resolveTypeArgument(
+            io.vidocq.vauban.indexer.model.TypeInfo argInfo,
+            ClassLoader classLoader) throws ClassNotFoundException {
+        return switch (argInfo) {
+            case io.vidocq.vauban.indexer.model.TypeInfo.ClassType(var name) ->
+                    Class.forName(name.value(), true, classLoader);
+            case io.vidocq.vauban.indexer.model.TypeInfo.ParameterizedType parameterized ->
+                    reflectParameterized(parameterized, classLoader);
+            case io.vidocq.vauban.indexer.model.TypeInfo.ArrayType at -> {
+                var arrayClass = resolveArrayClass(at, classLoader);
+                yield arrayClass != null ? arrayClass : Object.class;
+            }
+            case io.vidocq.vauban.indexer.model.TypeInfo.PrimitiveType(var kind) ->
+                    primitiveClass(kind);
+            default -> Object.class;
+        };
+    }
+
+    private static Class<?> primitiveClass(io.vidocq.vauban.indexer.model.TypeInfo.PrimitiveType.Kind kind) {
+        return switch (kind) {
+            case BOOLEAN -> boolean.class;
+            case BYTE -> byte.class;
+            case CHAR -> char.class;
+            case SHORT -> short.class;
+            case INT -> int.class;
+            case LONG -> long.class;
+            case FLOAT -> float.class;
+            case DOUBLE -> double.class;
+        };
+    }
+
+    private static boolean containsUnresolvedTypeVariable(Type type) {
+        return switch (type) {
+            case java.lang.reflect.TypeVariable<?> _ -> true;
+            case java.lang.reflect.ParameterizedType pt -> {
+                for (var arg : pt.getActualTypeArguments()) {
+                    if (containsUnresolvedTypeVariable(arg)) yield true;
+                }
+                yield false;
+            }
+            case java.lang.reflect.GenericArrayType gat ->
+                    containsUnresolvedTypeVariable(gat.getGenericComponentType());
+            case null, default -> false;
+        };
+    }
+
+    /**
+     * {@code clazz}, with its own type variables when it is generic, and the classes and interfaces above it, their type
+     * variables resolved as the Java compiler resolves them: inside a wildcard, an array and the type that encloses an
+     * inner class too, as the processor reads them from the compilation (BUG-20261117-14).
+     */
+    private static void collectTypes(Class<?> clazz, Set<Type> types) {
+        if (clazz == null || clazz == Object.class) return;
+        // CDI spec: for generic bean class, add parameterized type with own type variables
+        var typeParams = clazz.getTypeParameters();
+        if (typeParams.length > 0) {
+            types.add(new ResolvedParameterizedType(clazz, typeParams, clazz.getEnclosingClass()));
+        } else {
+            types.add(clazz);
+        }
+        for (var supertype : io.vidocq.vauban.core.types.TypeHierarchyResolver.resolveAllSupertypes(clazz)) {
+            if (supertype != clazz) {
+                types.add(supertype);
+            }
+        }
+    }
+
+    @Override
+    public Set<Annotation> getQualifiers() {
+        // Built once: a descriptor never changes, and a lookup used to rebuild every bean's qualifiers
+        // on every call.
+        var instances = qualifierInstances;
+        if (instances == null) {
+            instances = Set.copyOf(QualifierUtils.toAnnotations(
+                    descriptor.qualifiers(), descriptor.name(), classLoader, annotationTypes));
+            qualifierInstances = instances;
+        }
+        return instances;
+    }
+
+    /**
+     * The keys of this bean's qualifiers, computed once: what resolution compares. A {@code @Named}
+     * bean that writes no name takes the bean's, as its qualifier instance does.
+     */
+    Set<io.vidocq.vauban.core.annotation.AnnotationKey> qualifierKeys(
+            io.vidocq.vauban.core.bean.resolution.QualifierMatcher matcher) {
+        var keys = qualifierKeys;
+        if (keys == null) {
+            var computed = new java.util.HashSet<io.vidocq.vauban.core.annotation.AnnotationKey>();
+            for (var qualifier : descriptor.qualifiers()) {
+                computed.add(matcher.key(QualifierUtils.withBeanName(qualifier, descriptor.name())));
+            }
+            keys = Set.copyOf(computed);
+            qualifierKeys = keys;
+        }
+        return keys;
+    }
+
+    @Override
+    public Class<? extends Annotation> getScope() {
+        return scope;
+    }
+
+    @Override
+    public String getName() {
+        return descriptor.name();
+    }
+
+    @Override
+    public Set<Class<? extends Annotation>> getStereotypes() {
+        var result = new LinkedHashSet<Class<? extends Annotation>>();
+        for (var ann : beanClass.getAnnotations()) {
+            if (ann.annotationType().isAnnotationPresent(
+                    jakarta.enterprise.inject.Stereotype.class)) {
+                result.add(ann.annotationType());
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public boolean isAlternative() {
+        return descriptor.isAlternative();
+    }
+
+    /**
+     * The bean's injection points, with the qualifiers its descriptor records for each (vauban#70):
+     * a field, a constructor parameter or an initializer parameter the descriptor does not describe
+     * falls back on reading the member.
+     */
+    @Override
+    public Set<InjectionPoint> getInjectionPoints() {
+        var points = descriptor == null ? null : descriptor.injectionPoints();
+        var result = new LinkedHashSet<InjectionPoint>();
+        try {
+            var typeMapping = buildTypeVariableMapping(beanClass);
+
+            for (var member : BeanInjector.injectionOrder(beanClass, descriptor)) {
+                if (member instanceof java.lang.reflect.Field field) {
+                    var described = QualifierHelper.fieldQualifiers(points, field, annotationTypes);
+                    result.add(new VaubanInjectionPoint(
+                            resolveType(ClassMetadataCache.genericTypeOf(field), typeMapping),
+                            described != null ? Set.of(described)
+                                    : VaubanInjectionPoint.extractQualifiersStatic(field),
+                            this, field));
+                } else {
+                    addParameterInjectionPoints((java.lang.reflect.Method) member, points, typeMapping, result);
+                }
+            }
+            // The bean constructor: the one @Inject marks, or the one an @Enhancement made @Inject (vauban#187)
+            for (var ctor : beanClass.getDeclaredConstructors()) {
+                if (ctor.isAnnotationPresent(jakarta.inject.Inject.class)
+                        || QualifierHelper.describesConstructor(points, ctor)) {
+                    addParameterInjectionPoints(ctor, points, typeMapping, result);
+                }
+            }
+        } catch (RuntimeException e) {
+            // Reporting that a bean has no injection points, or half of them, is a wrong answer —
+            // and the caller has no way to tell it from the truth (BUG-20260914-17).
+            throw e;
+        } catch (Exception e) {
+            throw new jakarta.enterprise.inject.spi.DefinitionException(
+                    "Could not describe the injection points of " + beanClass.getName(), e);
+        }
+        return result;
+    }
+
+    /** Adds an injection point for each parameter of the initializer method or constructor {@code executable}. */
+    private void addParameterInjectionPoints(java.lang.reflect.Executable executable,
+            java.util.List<io.vidocq.vauban.core.bean.model.InjectionPointInfo> points,
+            Map<java.lang.reflect.TypeVariable<?>, Type> typeMapping, Set<InjectionPoint> result) {
+        var paramTypes = executable.getGenericParameterTypes();
+        var params = executable.getParameters();
+        for (int i = 0; i < params.length; i++) {
+            var described = QualifierHelper.parameterQualifiers(points, executable, i, annotationTypes);
+            var qualifiers = described != null
+                    ? Set.of(described) : extractParamQualifiers(params[i]);
+            result.add(new VaubanInjectionPoint(params[i], i, executable,
+                    resolveType(paramTypes[i], typeMapping), qualifiers, this));
+        }
+    }
+
+    /**
+     * How the type variables of {@code beanClass}'s superclasses resolve: read once per class, then reused at every
+     * creation of a bean (VAU-PERF-003). Unmodifiable.
+     */
+    public static Map<java.lang.reflect.TypeVariable<?>, Type> buildTypeVariableMapping(Class<?> beanClass) {
+        return TYPE_VARIABLE_MAPPINGS.get(beanClass);
+    }
+
+    private static final ClassValue<Map<java.lang.reflect.TypeVariable<?>, Type>> TYPE_VARIABLE_MAPPINGS =
+            new ClassValue<>() {
+                @Override
+                protected Map<java.lang.reflect.TypeVariable<?>, Type> computeValue(Class<?> type) {
+                    return Map.copyOf(computeTypeVariableMapping(type));
+                }
+            };
+
+    private static Map<java.lang.reflect.TypeVariable<?>, Type> computeTypeVariableMapping(Class<?> beanClass) {
+        var mapping = new java.util.HashMap<java.lang.reflect.TypeVariable<?>, Type>();
+        Class<?> cls = beanClass;
+        while (cls != null && cls != Object.class) {
+            Type genericSuper = cls.getGenericSuperclass();
+            if (genericSuper instanceof java.lang.reflect.ParameterizedType pt) {
+                var rawSuper = (Class<?>) pt.getRawType();
+                var typeParams = rawSuper.getTypeParameters();
+                var actualArgs = pt.getActualTypeArguments();
+                for (int i = 0; i < typeParams.length; i++) {
+                    var resolved = resolveType(actualArgs[i], mapping);
+                    mapping.put(typeParams[i], resolved);
+                }
+            }
+            cls = cls.getSuperclass();
+        }
+        return mapping;
+    }
+
+    public static Type resolveType(Type type, Map<java.lang.reflect.TypeVariable<?>, Type> mapping) {
+        return switch (type) {
+            case java.lang.reflect.TypeVariable<?> tv -> {
+                var resolved = mapping.get(tv);
+                yield resolved != null ? resolved : type;
+            }
+            case java.lang.reflect.ParameterizedType pt -> {
+                var args = pt.getActualTypeArguments();
+                var resolvedArgs = new Type[args.length];
+                boolean changed = false;
+                for (int i = 0; i < args.length; i++) {
+                    resolvedArgs[i] = resolveType(args[i], mapping);
+                    if (resolvedArgs[i] != args[i]) changed = true;
+                }
+                // Outer<X>.Inner<String>: the owner's type variables too (BUG-20261118-54)
+                var owner = pt.getOwnerType() instanceof java.lang.reflect.ParameterizedType generic
+                        ? resolveType(generic, mapping) : pt.getOwnerType();
+                yield changed || owner != pt.getOwnerType()
+                        ? new ResolvedParameterizedType((Class<?>) pt.getRawType(), resolvedArgs, owner)
+                        : type;
+            }
+            case java.lang.reflect.GenericArrayType gat -> {
+                var resolvedComponent = resolveType(gat.getGenericComponentType(), mapping);
+                if (resolvedComponent instanceof Class<?> cc) {
+                    yield java.lang.reflect.Array.newInstance(cc, 0).getClass();
+                }
+                yield resolvedComponent != gat.getGenericComponentType()
+                        ? new ResolvedGenericArrayType(resolvedComponent)
+                        : type;
+            }
+            case null, default -> type;
+        };
+    }
+
+    private record ResolvedParameterizedType(Class<?> rawType, Type[] typeArguments, Type ownerType)
+            implements java.lang.reflect.ParameterizedType {
+        @Override public Type[] getActualTypeArguments() { return typeArguments.clone(); }
+        @Override public Type getRawType() { return rawType; }
+        @Override public Type getOwnerType() { return ownerType; }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof java.lang.reflect.ParameterizedType other
+                    && rawType.equals(other.getRawType())
+                    && java.util.Arrays.equals(typeArguments, other.getActualTypeArguments())
+                    && Objects.equals(ownerType, other.getOwnerType());
+        }
+
+        @Override
+        public int hashCode() {
+            // Must match sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl so that
+            // equal types coming from JDK reflection and from Vauban hash to the same bucket
+            return java.util.Arrays.hashCode(typeArguments)
+                    ^ Objects.hashCode(ownerType)
+                    ^ Objects.hashCode(rawType);
+        }
+
+        @Override
+        public String toString() {
+            // As the JDK writes a member type of a generic owner: p.Outer<X>$Inner<String>
+            var sb = new StringBuilder(ownerType instanceof java.lang.reflect.ParameterizedType generic
+                    ? generic.getTypeName() + "$" + rawType.getSimpleName() : rawType.getName());
+            if (typeArguments.length > 0) {
+                sb.append('<');
+                for (int i = 0; i < typeArguments.length; i++) {
+                    if (i > 0) sb.append(", ");
+                    sb.append(typeArguments[i].getTypeName());
+                }
+                sb.append('>');
+            }
+            return sb.toString();
+        }
+    }
+
+    private record ResolvedGenericArrayType(Type componentType)
+            implements java.lang.reflect.GenericArrayType {
+        @Override public Type getGenericComponentType() { return componentType; }
+
+        // The record-generated equals/hashCode would only match other ResolvedGenericArrayType
+        // instances; align with GenericArrayTypeImpl so JDK-built equal types interoperate
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof java.lang.reflect.GenericArrayType other
+                    && componentType.equals(other.getGenericComponentType());
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(componentType);
+        }
+
+        @Override
+        public String toString() {
+            return componentType.getTypeName() + "[]";
+        }
+    }
+
+    private static Set<java.lang.annotation.Annotation> extractParamQualifiers(java.lang.reflect.Parameter param) {
+        io.vidocq.vauban.core.annotation.AnnotationReflection.checkParameter(param);
+        var qualifiers = new java.util.LinkedHashSet<java.lang.annotation.Annotation>();
+        boolean hasAnyAnnotation = false;
+        for (var ann : param.getAnnotations()) {
+            if (ann.annotationType().isAnnotationPresent(jakarta.inject.Qualifier.class)
+                    || ann.annotationType() == jakarta.enterprise.inject.Default.class
+                    || ann.annotationType() == jakarta.enterprise.inject.Any.class
+                    || ann.annotationType() == jakarta.inject.Named.class) {
+                qualifiers.add(ann);
+                hasAnyAnnotation = true;
+            }
+        }
+        if (!hasAnyAnnotation) {
+            qualifiers.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
+        }
+        // Always add @Any (CDI 4.1 Section 2.3.1)
+        boolean hasAny = false;
+        for (var q : qualifiers) {
+            if (q.annotationType() == jakarta.enterprise.inject.Any.class) {
+                hasAny = true;
+                break;
+            }
+        }
+        if (!hasAny) {
+            qualifiers.add(jakarta.enterprise.inject.Any.Literal.INSTANCE);
+        }
+        return qualifiers;
+    }
+
+    public BeanDescriptor descriptor() {
+        return descriptor;
+    }
+
+    /** The {@code BeanId}: the class name, {@code Class#method} for a producer method, {@code Class.field} for a field. */
+    @Override
+    public String getId() {
+        return descriptor.id().value();
+    }
+
+    /** The scope annotation type as the bean's own loader sees it: a custom scope may live in its layer only. */
+    private static Class<? extends Annotation> scopeAnnotationClass(ScopeInfo scope, ClassLoader classLoader) {
+        var name = scope.annotationName().value();
+        try {
+            @SuppressWarnings("unchecked")
+            var clazz = (Class<? extends Annotation>) Class.forName(name, false, classLoader);
+            return clazz;
+        } catch (ClassNotFoundException _) {
+            // A loader that does not delegate to the CDI API's still lets the built-in scopes through.
+            try {
+                @SuppressWarnings("unchecked")
+                var clazz = (Class<? extends Annotation>) Class.forName(name);
+                return clazz;
+            } catch (ClassNotFoundException _) {
+                return jakarta.enterprise.context.Dependent.class;
+            }
+        }
+    }
+
+}

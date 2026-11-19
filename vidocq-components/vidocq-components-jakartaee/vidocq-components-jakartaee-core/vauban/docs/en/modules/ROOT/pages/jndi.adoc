@@ -1,0 +1,275 @@
+= The JNDI `java:` namespace
+:description: vauban-naming answers the JNDI java: names, such as java:comp/env/jdbc/orders, from the running CDI container: the names you declare, the four namespaces, links, the text form of a bean, what is checked at startup.
+
+[.lead]
+Code written for an application server looks its resources up by name:
+`new InitialContext().lookup("java:comp/env/jdbc/orders")`. Outside a server nothing answers that name.
+`vauban-naming` answers it from the running CDI container, with the bean you bound the name to. The application
+code stays as it is, and so do libraries that look resources up by name, such as Mansart Data's
+`@Repository(dataStore = "java:comp/env/jdbc/orders")` or the `sql:` tags of the Standard Tag Library.
+
+Vauban declares no name by itself: whoever assembles the application decides which names exist and what each
+one is bound to, in code or from a configuration source of its own. The module depends on the CDI API, the
+JDK's `java.naming` module and `vauban-api` only.
+
+== Getting started
+
+[source,xml,subs="attributes+"]
+----
+<dependency>
+    <groupId>io.vidocq.vauban</groupId>
+    <artifactId>vauban-naming</artifactId>
+    <version>{project-version}</version>
+</dependency>
+----
+
+[source,java]
+----
+module com.acme.orders {
+    requires io.vidocq.vauban.naming;   // also reads java.naming and jakarta.cdi
+}
+----
+
+Declare the names with a bean implementing `JndiBindings`:
+
+[source,java]
+----
+@ApplicationScoped
+class OrdersNames implements JndiBindings {
+
+    @Override
+    public void bind(Binder binder) {
+        binder.bind("java:comp/env/jdbc/orders", JndiTarget.bean(DataSource.class, NamedLiteral.of("orders")))
+              .bind("java:app/env/jdbc/orders", JndiTarget.link("java:comp/env/jdbc/orders"));
+    }
+}
+----
+
+Then make Vauban's factory the default of the JVM, once, before the application creates its first
+`InitialContext`:
+
+[source,java]
+----
+JavaNaming.installAsDefault(Thread.currentThread().getContextClassLoader());
+
+DataSource orders = (DataSource) new InitialContext().lookup("java:comp/env/jdbc/orders");
+// the @Named("orders") DataSource bean of the running container
+----
+
+The module's naming service ships in the jar's build-time index (`META-INF/vauban-beans.list`). A container that
+reads the indexes picks it up: Vidocq does, and so does `VaubanContainer.builder().scanClasspath()`.
+
+TIP: Under Vidocq, add the runtime's naming extension instead: it installs the factory at startup, clears it at
+shutdown, and declares names from the runtime's configuration
+(xref:vidocq::modules/vidocq-runtime-extensions.adoc#naming[Vidocq extensions]).
+
+== Names and namespaces
+
+A name lives in one of the four namespaces of the Jakarta EE Platform. They are distinct: a name exists only in
+the namespace it is declared in, and a lookup in one never falls back on another.
+
+[cols="1,3",options="header"]
+|===
+| Namespace | Shared by
+
+| `java:comp`
+| the component
+| `java:module`
+| the components of a module
+| `java:app`
+| the modules of an application
+| `java:global`
+| every application of the JVM
+|===
+
+Vauban runs one application made of one module and one component, so today the difference shows only in which
+names you declare: `java:comp/env/jdbc/orders` does not answer `java:app/env/jdbc/orders`. Declare both, or link
+one to the other.
+
+A name is a context, in which relative names resolve, when it is:
+
+* one of the four namespaces, or one of `java:comp/env`, `java:module/env`, `java:app/env`, always;
+* the parent of a declared name: declaring `java:comp/env/jdbc/orders` makes `java:comp/env/jdbc` a context;
+* a context a `JndiNameProvider` declares (<<providers>>).
+
+A trailing `/` names the same context: `java:comp/env/` is `java:comp/env`.
+
+[source,java]
+----
+var environment = (Context) new InitialContext().lookup("java:comp/env");
+DataSource orders = (DataSource) environment.lookup("jdbc/orders");
+----
+
+== Declaring names
+
+`Binder.bind(name, target)` binds an absolute name to one of two targets:
+
+`JndiTarget.bean(type, qualifiers...)`::
+A bean of the running container, resolved at each lookup as `select(type, qualifiers)` would. No qualifier means
+`@Default`.
+`JndiTarget.link(name)`::
+Another name, looked up in its turn: an alias. Links may follow one another.
+
+Every `JndiBindings` bean is asked once per container, at the first lookup or when the container starts, whichever
+comes first, so a lookup made while the application starts, such as a Mansart Data repository resolving its data
+store, finds the names. A `@Dependent` `JndiBindings` bean is destroyed once it has bound its names.
+
+[#text]
+=== A bean written as text
+
+`JndiTarget.bean(String declaration, ClassLoader loader)` reads a bean as a configuration file writes it: the type,
+then its qualifiers.
+
+[source]
+----
+com.acme.Orders
+javax.sql.DataSource @Named("orders")
+com.acme.Payment @com.acme.Primary
+com.acme.Orders @com.acme.Region("eu") @com.acme.Tier(level = 2)
+----
+
+* `@Named`, `@Default` and `@Any` take their short name; every other qualifier its fully qualified name, since a
+  configuration file has no `import`. A nested class is written as in source, `com.acme.Outer.Inner`.
+* A member is a Java source literal. A single unnamed value is the member `value`.
++
+[cols="1,2",options="header"]
+|===
+| Member type | Literal
+| `String` | `"eu"`, with the escapes of Java: `"say \"hi\""`
+| `int`, `long`, `short`, `byte` | `2`, `-1`, `3_000_000_000L`, `0x1F`, `0b101`, `010` (octal), as Java reads them
+| `double`, `float` | `0.5`, `1e3`, `1.5f`; an integer literal is widened, as in Java
+| `boolean` | `true`, `false`
+| `char` | `'c'`, `'\n'`
+| an enum | `com.acme.Zone.EU`, or `EU`
+| `Class` | `com.acme.Foo.class`
+|===
+* Arrays and nested annotations are not supported.
+
+A declaration that cannot be read throws `IllegalArgumentException` naming it and the reason: an unknown class, an
+annotation that does not exist, an unknown member, a literal of the wrong type, a member without default left out.
+
+Qualifiers other than the three short names are built by `vauban-core`, through the `AnnotationInstanceFactory`
+service of `vauban-api`: they equal the instance the JDK builds from the same annotation.
+
+== What is checked at startup
+
+When the container starts, the naming service checks every declared name, as the container checks an injection
+point. The start fails, naming each wrong name and the `JndiBindings` class that declared it, when:
+
+* a name is declared twice, by one bean or by two;
+* a declared name is also a context: one of the four namespaces or their environments, or the parent of another
+  declared name (`java:comp/env/jdbc` next to `java:comp/env/jdbc/orders`). A lookup would return the context and
+  never the bean;
+* no bean, or several beans, match a bean target;
+* the bean of a bean target is `@Dependent`: a JNDI caller never releases what it looks up, so the lookup would
+  create an instance that nobody destroys. Give the bean a scope, such as `@ApplicationScoped` or `@Singleton`;
+* a qualifier of a bean target is not a qualifier;
+* a link names a name that is not declared, or links loop.
+
+== How a lookup is resolved
+
+*A context holds no container.* Each operation asks `CDI.current()` for the `NamingService` bean of the container
+running at that moment. A context the application kept answers from the new container after a restart, such as a hot
+reload, with the names that container declares. With no container running, a lookup throws
+`NoInitialContextException`, and the next lookup after the container starts succeeds: a failure is never cached.
+
+*Lazy.* A lookup resolves the bean when it is made and returns the instance that the bean's scope gives: the same
+instance for an `@ApplicationScoped` or `@Singleton` bean, as injection would.
+
+*Read-only.* `bind`, `rebind`, `unbind`, `rename`, `createSubcontext` and `destroySubcontext` throw
+`OperationNotSupportedException`. So do `list` and `listBindings`: the names are resolved one by one, never
+enumerated.
+
+[cols="2,3",options="header"]
+|===
+| Exception | When
+
+| `NoInitialContextException`
+| no CDI container is running, or the running one has no `NamingService` bean (or several)
+
+| `NameNotFoundException`
+| nothing declares the name and no provider answers it, or the name is outside the four namespaces
+
+| `NamingException`
+| two providers answer the same name, or a lookup made before the startup check meets a wrong declaration
+
+| `OperationNotSupportedException`
+| a write, `list` or `listBindings`
+|===
+
+[#providers]
+== Names not known in advance
+
+A library that discovers its resources while running, such as a messaging library and its queues, cannot declare
+them at startup. A bean implementing `JndiNameProvider` answers names at each lookup instead. It receives the
+absolute name and returns the object bound to it, or an empty `Optional` when the name is not its own; it may also
+say which names are contexts of its own:
+
+[source,java]
+----
+@ApplicationScoped
+public class QueueNames implements JndiNameProvider {
+
+    @Inject
+    Queues queues;
+
+    @Override
+    public Optional<Object> lookup(JndiName name) {
+        String jms = "java:comp/env/jms/";
+        return name.toString().startsWith(jms)
+                ? queues.find(name.toString().substring(jms.length())).map(Object.class::cast)
+                : Optional.empty();
+    }
+
+    @Override
+    public boolean isContext(JndiName name) {
+        return name.toString().equals("java:comp/env/jms");
+    }
+}
+----
+
+The providers are asked only for a name no `JndiBindings` bean declares. When two of them answer the same name,
+the lookup throws `NamingException` and names both: the name is ambiguous. A `@Dependent` provider is destroyed once
+it has answered.
+
+To change the whole resolution, declare an `@Alternative @Priority` bean of type `NamingService`. It decides which
+names are contexts (`isContext`) and what each absolute name is bound to (`lookup`).
+
+== Installation and the JDK's own naming
+
+`JavaNaming.installAsDefault(loader)` sets the `java.naming.factory.initial` system property to
+`CdiInitialContextFactory`, and only when the application has not chosen a factory itself:
+
+* not in that system property;
+* not in a `jndi.properties` file of the given class loader, nor in `<java.home>/conf/jndi.properties`. The JDK
+  reads the system property before those files, so setting it would override the application's choice.
+
+It returns `true` when it set the property, `false` when it kept the application's choice.
+`JavaNaming.uninstall()` clears the property if it still names Vauban's factory, and leaves any other value.
+
+The JDK keeps its own routing:
+
+* `ldap://`, `rmi://` and `dns://` names still go to the JDK's providers;
+* `new InitialContext(env)` with `Context.INITIAL_CONTEXT_FACTORY` in `env` gets that factory;
+* only a `java:` name, which has no URL context factory, reaches Vauban's context.
+
+Vauban does not use `NamingManager.setInitialContextFactoryBuilder`. With a builder installed, every
+`InitialContext` of the JVM goes to it, LDAP URLs and explicit factories included, and a builder can be set
+only once per JVM. The factory is found through `ServiceLoader`
+(`provides javax.naming.spi.InitialContextFactory` on the module path, `META-INF/services` on the class path),
+with no reflection.
+
+NOTE: The first snapshots of `vauban-naming` answered `java:comp/env/jdbc/<name>` with the `@Named("<name>")`
+`DataSource` bean by themselves, made `java:module/env` and `java:app/env` aliases of `java:comp/env`, and handed
+a `JndiNameProvider` the name relative to `java:comp/env`. Declare the names you need with a `JndiBindings` bean,
+and take a `JndiName` in your providers.
+
+== Not covered yet
+
+* literal values bound to a name (`env-entry`, such as a timeout);
+* `@Resource` injection, and `resource-ref` in a deployment descriptor;
+* `@DataSourceDefinition`;
+* listing a context.
+
+On an application server, leave `vauban-naming` out and do not call `JavaNaming`: the server has its own
+`java:` namespace.

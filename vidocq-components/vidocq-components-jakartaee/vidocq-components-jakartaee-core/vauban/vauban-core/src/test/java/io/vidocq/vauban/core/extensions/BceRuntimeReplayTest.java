@@ -1,0 +1,622 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.extensions;
+
+import io.vidocq.vauban.core.container.VaubanContainer;
+import io.vidocq.vauban.core.extensions.testfixtures.PathLike;
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
+import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
+import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
+import jakarta.enterprise.inject.spi.Bean;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.lang.classfile.Annotation;
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.attribute.RuntimeVisibleAnnotationsAttribute;
+import java.lang.constant.ClassDesc;
+import java.lang.constant.ConstantDescs;
+import java.lang.constant.MethodTypeDesc;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * RED tests for bug #7 — runtime part (BCE replay).
+ *
+ * <h2>Tested contract</h2>
+ * <ol>
+ *   <li>At startup, {@code VaubanContainerBuilder} must read
+ *       {@code META-INF/vauban-bce-runtime.list} across the whole classpath.</li>
+ *   <li>For each {@code (bceFQN, classFQN)} pair: resolve the BCE via
+ *       ServiceLoader and replay its {@code @Enhancement} phase only on
+ *       the targeted class.</li>
+ *   <li>The index is rebuilt with the added annotations ->
+ *       {@code BeanManager.getBeans(TestResource.class)} sees the class
+ *       with its enriched scope.</li>
+ *   <li>The short-circuit {@code allSourcesProcessed -> bceClasses = List.of()}
+ *       must be replaced by a targeted read of the runtime-list.</li>
+ * </ol>
+ *
+ * <h2>Classpath setup</h2>
+ * The classes {@code TestResourceA} / {@code TestResourceB} are synthesized
+ * via the <b>JDK 25 Class-File API</b> ({@code java.lang.classfile.*}) with
+ * the {@code @PathLike} annotation as their only content. This reproduces the
+ * bug #7 scenario: a pre-processed JAR where the APT inscribed the BCE in the
+ * runtime-list but did NOT rewrite the bytecode (an APT/JSR-269 conformant pattern).
+ *
+ * Advantage over {@code javax.tools.JavaCompiler}: no need for
+ * {@code requires java.compiler} in the production module, consistent
+ * with the rest of Vauban which generates all its bytecode via the Class-File API.
+ *
+ * Then everything is packed into a JAR:
+ * <ul>
+ *   <li>{@code TestResource.class}</li>
+ *   <li>{@code META-INF/vauban-beans.list}</li>
+ *   <li>{@code META-INF/vauban-bce-processed} (marker)</li>
+ *   <li>{@code META-INF/vauban-bce-runtime.list}
+ *       (the new pivot file of bug #7)</li>
+ *   <li>{@code META-INF/services/...BuildCompatibleExtension} listing the BCE</li>
+ * </ul>
+ */
+@DisplayName("BCE runtime replay - reading vauban-bce-runtime.list")
+class BceRuntimeReplayTest {
+
+    private static final String RUNTIME_LIST_PATH = "META-INF/vauban-bce-runtime.list";
+    private static final String BEANS_LIST_PATH   = "META-INF/vauban-beans.list";
+    private static final String BCE_MARKER_PATH   = "META-INF/vauban-bce-processed";
+    private static final String BCE_SERVICE_PATH  =
+            "META-INF/services/jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension";
+
+    private static final ClassDesc CD_PathLike = ClassDesc.of(PathLike.class.getName());
+    private static final MethodTypeDesc MTD_void = MethodTypeDesc.of(ConstantDescs.CD_void);
+
+    @TempDir
+    Path tempDir;
+
+    // ---- Annotation trigger ----
+    // See {@link io.vidocq.vauban.core.extensions.testfixtures.PathLike}.
+    // Extracted to top-level to get a stable ClassDesc
+    // (a descriptor without '$') and to be resolvable from any ClassLoader.
+
+    // ---- Test BCE: adds @RequestScoped to @PathLike classes ----
+
+    public static class TestScopeBce implements BuildCompatibleExtension {
+        @Enhancement(types = Object.class, withAnnotations = PathLike.class)
+        public void addScope(ClassConfig clazz) {
+            clazz.addAnnotation(RequestScoped.class);
+        }
+    }
+
+    // ======================================================================
+    // Test 2 - Runtime replays the BCE from the list and applies the scope
+    // ======================================================================
+
+    @Nested
+    @DisplayName("Test 2 - BCE replay → RequestScoped scope applied")
+    class ReplayFromRuntimeList {
+
+        @Test
+        @DisplayName("BeanManager.getBeans(TestResource.class) returns a bean with scope @RequestScoped")
+        void shouldReplayBceAndApplyRequestScopedAtRuntime() throws Exception {
+            // Pre-processed JAR: TestResource with @PathLike ALONE in the bytecode
+            var jar = buildPreProcessedJar(
+                    tempDir.resolve("resource.jar"),
+                    "app.TestResource",
+                    /*beansList*/       List.of("app.TestResource"),
+                    /*runtimeList*/     List.of(
+                            TestScopeBce.class.getName() + ";app.TestResource"),
+                    /*includeBceClass*/ true,
+                    /*includeService*/  true);
+
+            try (var cl = new URLClassLoader(
+                    new URL[]{jar.toUri().toURL()},
+                    getClass().getClassLoader())) {
+                var testResourceClass = Class.forName("app.TestResource", true, cl);
+                assertFalse(isAnnotationOnBytecode(testResourceClass, RequestScoped.class),
+                        "Precondition: @RequestScoped MUST NOT be in the raw bytecode "
+                                + "(APT must NOT rewrite the .class, in accordance with the solution)");
+
+                try (var container = VaubanContainer.builder()
+                        .classLoader(cl)
+                        .scanClasspath()
+                        .build()) {
+
+                    var bm = container.getBeanManager();
+                    var beans = bm.getBeans(testResourceClass);
+
+                    assertFalse(beans.isEmpty(),
+                            "BeanManager should expose the pre-processed TestResource as a bean"
+                                    + " after replaying BCE from vauban-bce-runtime.list");
+
+                    Bean<?> bean = beans.iterator().next();
+                    assertEquals(RequestScoped.class, bean.getScope(),
+                            "BCE must be replayed at runtime and @RequestScoped must be applied");
+                }
+            }
+        }
+    }
+
+    // ======================================================================
+    // Test 3 - exact symptom of bug #7: getBeans(Object.class, @Any)
+    // ======================================================================
+
+    @Nested
+    @DisplayName("Test 3 - exact symptom of bug #7")
+    class AnyQueryVisibility {
+
+        @Test
+        @DisplayName("getBeans(Object.class, Any.Literal) contains TestResource after replay")
+        void shouldExposeReplayedBeanToAnyQuery() throws Exception {
+            var jar = buildPreProcessedJar(
+                    tempDir.resolve("resource.jar"),
+                    "app.TestResource",
+                    List.of("app.TestResource"),
+                    List.of(TestScopeBce.class.getName() + ";app.TestResource"),
+                    true, true);
+
+            try (var cl = new URLClassLoader(
+                    new URL[]{jar.toUri().toURL()},
+                    getClass().getClassLoader())) {
+                var testResourceClass = Class.forName("app.TestResource", true, cl);
+
+                try (var container = VaubanContainer.builder()
+                        .classLoader(cl)
+                        .scanClasspath()
+                        .build()) {
+
+                    var bm = container.getBeanManager();
+                    var allBeans = bm.getBeans(Object.class, Any.Literal.INSTANCE);
+
+                    boolean found = allBeans.stream()
+                            .anyMatch(b -> b.getBeanClass().equals(testResourceClass));
+
+                    assertTrue(found,
+                            "getBeans(Object.class, @Any) must contain the replayed TestResource bean. "
+                                    + "This is the exact symptom of bug #7. "
+                                    + "Actual bean classes: "
+                                    + allBeans.stream().map(Bean::getBeanClass).toList());
+                }
+            }
+        }
+    }
+
+    // ======================================================================
+    // Test 4 - Mixed classpath: pre-processed JAR + raw JAR
+    // ======================================================================
+
+    @Nested
+    @DisplayName("Test 4 - mixed classpath")
+    class MixedClasspath {
+
+        @Test
+        @DisplayName("pre-processed JAR (replay) + raw JAR (full BCE fallback) → two visible beans")
+        void shouldHandleBothPreProcessedAndRawJars() throws Exception {
+            // JAR A: pre-processed, TestResourceA targeted by the runtime-list
+            var jarA = buildPreProcessedJar(
+                    tempDir.resolve("resA.jar"),
+                    "app.TestResourceA",
+                    List.of("app.TestResourceA"),
+                    List.of(TestScopeBce.class.getName() + ";app.TestResourceA"),
+                    /*includeBceClass*/ true,
+                    /*includeService*/  true);
+
+            // JAR B: NOT pre-processed, no marker, no beans.list, no runtime-list
+            var jarB = buildRawJar(
+                    tempDir.resolve("resB.jar"),
+                    "app.TestResourceB");
+
+            try (var cl = new URLClassLoader(
+                    new URL[]{jarA.toUri().toURL(), jarB.toUri().toURL()},
+                    getClass().getClassLoader())) {
+
+                var classA = Class.forName("app.TestResourceA", true, cl);
+                var classB = Class.forName("app.TestResourceB", true, cl);
+
+                try (var container = VaubanContainer.builder()
+                        .classLoader(cl)
+                        .scanClasspath()
+                        // JAR B is raw: the consumer must add it explicitly
+                        // (no beans.list). The normal pattern for a legacy JAR.
+                        .addBeanClass(classB)
+                        .build()) {
+
+                    var bm = container.getBeanManager();
+                    var allBeans = bm.getBeans(Object.class, Any.Literal.INSTANCE);
+
+                    boolean foundA = allBeans.stream()
+                            .anyMatch(b -> b.getBeanClass().equals(classA));
+                    boolean foundB = allBeans.stream()
+                            .anyMatch(b -> b.getBeanClass().equals(classB));
+
+                    assertTrue(foundA,
+                            "TestResourceA (pre-processed) should be visible after replay from runtime-list");
+                    assertTrue(foundB,
+                            "TestResourceB (raw JAR) should be visible after full BCE fallback");
+
+                    // Both beans MUST have scope @RequestScoped
+                    var beanA = allBeans.stream()
+                            .filter(b -> b.getBeanClass().equals(classA)).findFirst().orElseThrow();
+                    var beanB = allBeans.stream()
+                            .filter(b -> b.getBeanClass().equals(classB)).findFirst().orElseThrow();
+
+                    assertEquals(RequestScoped.class, beanA.getScope(),
+                            "TestResourceA should have @RequestScoped from BCE replay");
+                    assertEquals(RequestScoped.class, beanB.getScope(),
+                            "TestResourceB should have @RequestScoped from full BCE fallback");
+                }
+            }
+        }
+    }
+
+    /** Throws in {@code @Enhancement} for a class whose name ends with {@code B}, and adds the scope otherwise. */
+    public static class ThrowingOnBBce implements BuildCompatibleExtension {
+
+        static final String CAUSE = "no rule for this resource";
+
+        @Enhancement(types = Object.class, withAnnotations = PathLike.class)
+        public void addScope(ClassConfig clazz) {
+            if (clazz.info().name().endsWith("B")) {
+                throw new IllegalStateException(CAUSE);
+            }
+            clazz.addAnnotation(RequestScoped.class);
+        }
+    }
+
+    /** Declares an {@code @Enhancement} parameter of a type the phase does not support, and records each call. */
+    public static class InvalidParameterBce implements BuildCompatibleExtension {
+
+        static final List<String> CALLED = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Enhancement(types = Object.class, withAnnotations = PathLike.class)
+        public void addScope(ClassConfig clazz, jakarta.enterprise.inject.build.compatible.spi.BeanInfo bean) {
+            CALLED.add("addScope " + clazz + bean);
+        }
+    }
+
+    // ======================================================================
+    // BUG-20261118-05 - an exception of @Enhancement fails the start
+    // ======================================================================
+
+    @Nested
+    @DisplayName("BUG-20261118-05 - an exception of @Enhancement fails the start on every path, a definition error")
+    class EnhancementFailures {
+
+        @Test
+        @DisplayName("replayed for a pre-processed jar")
+        void anExceptionOfAReplayedEnhancementFailsTheStart() throws Exception {
+            var jar = buildPreProcessedJar(tempDir.resolve("resource.jar"), "app.TestResourceB",
+                    List.of("app.TestResourceB"), List.of(ThrowingOnBBce.class.getName() + ";app.TestResourceB"),
+                    ThrowingOnBBce.class, ThrowingOnBBce.class);
+
+            assertStartFails("replayEnhancementForTargets", jar);
+        }
+
+        /**
+         * An {@code @Enhancement} parameter of an unsupported type is a deployment problem before the call, on the
+         * replay as in the full cycle (BUG-20261118-22, BUG-20261118-58).
+         */
+        @Test
+        @DisplayName("an unsupported parameter, replayed for a pre-processed jar")
+        void anUnsupportedParameterOfAReplayedEnhancementIsADeploymentProblem() throws Exception {
+            var jar = buildPreProcessedJar(tempDir.resolve("resource.jar"), "app.TestResourceB",
+                    List.of("app.TestResourceB"), List.of(InvalidParameterBce.class.getName() + ";app.TestResourceB"),
+                    InvalidParameterBce.class, InvalidParameterBce.class);
+
+            assertInvalidParameter("replayEnhancementForTargets", jar);
+        }
+
+        /** As above, over an unprocessed archive, the extension reached through the replay list alone. */
+        @Test
+        @DisplayName("an unsupported parameter, run over an unprocessed archive")
+        void anUnsupportedParameterOfAnEnhancementOfAnUnprocessedArchiveIsADeploymentProblem() throws Exception {
+            var jarA = buildPreProcessedJar(tempDir.resolve("resA.jar"), "app.TestResourceA",
+                    List.of("app.TestResourceA"), List.of(InvalidParameterBce.class.getName() + ";app.TestResourceA"),
+                    InvalidParameterBce.class, null);
+            var jarB = buildRawJar(tempDir.resolve("resB.jar"), "app.TestResourceB");
+
+            assertInvalidParameter("processEnhancementOnly", jarA, jarB);
+        }
+
+        private void assertInvalidParameter(String path, Path... jars) throws Exception {
+            InvalidParameterBce.CALLED.clear();
+            var expected = "@Enhancement method " + InvalidParameterBce.class.getName()
+                    + ".addScope has invalid parameter type: jakarta.enterprise.inject.build.compatible.spi.BeanInfo";
+
+            var thrown = startFails(jakarta.enterprise.inject.spi.DeploymentException.class, path, jars);
+
+            List<String> called = InvalidParameterBce.CALLED;
+            assertAll(() -> assertTrue(thrown.getMessage().contains(expected), thrown.getMessage()),
+                    () -> assertEquals(List.of(), called, "the method is not called"));
+        }
+
+        /**
+         * The extension reaches the start through the replay list of a pre-processed jar alone, with no service file:
+         * the full extension cycle does not run it, and only the enhancement of the unprocessed archive meets
+         * {@code TestResourceB}.
+         */
+        @Test
+        @DisplayName("run over an unprocessed archive")
+        void anExceptionOfAnEnhancementOfAnUnprocessedArchiveFailsTheStart() throws Exception {
+            var jarA = buildPreProcessedJar(tempDir.resolve("resA.jar"), "app.TestResourceA",
+                    List.of("app.TestResourceA"), List.of(ThrowingOnBBce.class.getName() + ";app.TestResourceA"),
+                    ThrowingOnBBce.class, null);
+            var jarB = buildRawJar(tempDir.resolve("resB.jar"), "app.TestResourceB");
+
+            assertStartFails("processEnhancementOnly", jarA, jarB);
+        }
+
+        /** The start over {@code jars} fails with the extension's exception, thrown by the {@code path} it names. */
+        private void assertStartFails(String path, Path... jars) throws Exception {
+            var thrown = startFails(jakarta.enterprise.inject.spi.DefinitionException.class, path, jars);
+
+            assertAll(() -> assertTrue(thrown.getMessage().contains(ThrowingOnBBce.CAUSE), thrown.getMessage()),
+                    () -> assertEquals(ThrowingOnBBce.CAUSE, thrown.getCause().getMessage()));
+        }
+
+        /**
+         * The {@code type} the start over {@code jars} throws, once checked that it came out of {@code BceProcessor}
+         * through {@code path}.
+         */
+        private RuntimeException startFails(Class<? extends RuntimeException> type, String path, Path... jars)
+                throws Exception {
+            var urls = new URL[jars.length];
+            for (int i = 0; i < jars.length; i++) {
+                urls[i] = jars[i].toUri().toURL();
+            }
+            try (var cl = new URLClassLoader(urls, getClass().getClassLoader())) {
+                var builder = VaubanContainer.builder().classLoader(cl).scanClasspath()
+                        .addBeanClass(Class.forName("app.TestResourceB", true, cl));
+
+                var thrown = assertThrows(type, builder::build);
+
+                var thrownBy = java.util.Arrays.stream(thrown.getStackTrace())
+                        .filter(frame -> frame.getClassName().equals(BceProcessor.class.getName()))
+                        .map(StackTraceElement::getMethodName)
+                        .toList();
+                assertEquals(path, thrownBy.getLast(), () -> "the path that threw: " + thrown);
+                return thrown;
+            }
+        }
+    }
+
+    // ======================================================================
+    // Test 7 - frozen enhancement patch applied WITHOUT the BCE (no opens)
+    // ======================================================================
+
+    @Nested
+    @DisplayName("Test 7 - patch applied with no BCE / no replay on the classpath")
+    class PatchWithoutBce {
+
+        private static final String PATCH_PATH = "META-INF/vauban-enhancements.properties";
+
+        @Test
+        @DisplayName("@RequestScoped from vauban-enhancements.properties — BCE absent, no reflection")
+        void shouldApplyScopeFromPatchWithoutBce() throws Exception {
+            // Pre-processed JAR carrying ONLY the frozen patch: no BCE class, no
+            // ServiceLoader file, no runtime-list. Proves the runtime applies the scope
+            // without ever instantiating the BCE — i.e. without needing `opens to vauban.core`.
+            var jar = buildPatchedJar(
+                    tempDir.resolve("patched.jar"),
+                    "app.PatchedResource",
+                    List.of("app.PatchedResource"),
+                    List.of("app.PatchedResource=jakarta.enterprise.context.RequestScoped"));
+
+            try (var cl = new URLClassLoader(
+                    new URL[]{jar.toUri().toURL()}, getClass().getClassLoader())) {
+                var clazz = Class.forName("app.PatchedResource", true, cl);
+                assertFalse(isAnnotationOnBytecode(clazz, RequestScoped.class),
+                        "Precondition: @RequestScoped must NOT be in the raw bytecode");
+
+                try (var container = VaubanContainer.builder()
+                        .classLoader(cl)
+                        .scanClasspath()
+                        .build()) {
+
+                    var bm = container.getBeanManager();
+                    var beans = bm.getBeans(clazz);
+
+                    assertFalse(beans.isEmpty(),
+                            "Patched resource must be a bean: scope comes from the frozen patch");
+                    assertEquals(RequestScoped.class, beans.iterator().next().getScope(),
+                            "@RequestScoped must be applied from vauban-enhancements.properties "
+                                    + "WITHOUT the BCE being present or instantiated");
+                }
+            }
+        }
+
+        private Path buildPatchedJar(Path target, String classFqn,
+                                     List<String> beansList, List<String> patchLines) throws Exception {
+            Files.createDirectories(target.getParent());
+            try (var fos = Files.newOutputStream(target);
+                 var jar = new JarOutputStream(fos)) {
+                writeJarEntry(jar, classFqn.replace('.', '/') + ".class",
+                        synthesizeTestResource(classFqn));
+                writeJarEntry(jar, BEANS_LIST_PATH,
+                        ("# beans\n" + String.join("\n", beansList) + "\n").getBytes(StandardCharsets.UTF_8));
+                writeJarEntry(jar, BCE_MARKER_PATH,
+                        "# bce processed\n".getBytes(StandardCharsets.UTF_8));
+                writeJarEntry(jar, PATCH_PATH,
+                        ("# Vauban enhancement patch (test)\n" + String.join("\n", patchLines) + "\n")
+                                .getBytes(StandardCharsets.UTF_8));
+                // Deliberately NO BCE class, NO ServiceLoader file, NO runtime-list.
+            }
+            return target;
+        }
+    }
+
+    // ======================================================================
+    // Helpers
+    // ======================================================================
+
+    /**
+     * Check whether a runtime-visible annotation is present on a class's
+     * <b>raw bytecode</b>. Used to assert that the APT does NOT rewrite
+     * the source .class file (conforming to JSR-269 conventions).
+     */
+    private static boolean isAnnotationOnBytecode(Class<?> clazz, Class<? extends java.lang.annotation.Annotation> ann) {
+        return clazz.isAnnotationPresent(ann);
+    }
+
+    /**
+     * Synthesize a minimal class bytecode via <b>Class-File API JDK 25</b>
+     * ({@code java.lang.classfile.*}).
+     *
+     * <p>The generated class :
+     * <ul>
+     *   <li>extends {@code java.lang.Object}</li>
+     *   <li>carries ONLY the {@code @PathLike} runtime-visible annotation
+     *       (no CDI scope, no other marker) — reproduces exactly the
+     *       bug #7 scenario where the BCE-injected annotations are NOT
+     *       baked into the .class file</li>
+     *   <li>has a trivial public default constructor (required for CDI
+     *       bean instantiation)</li>
+     * </ul>
+     *
+     * <p>Implementation note: we do NOT invoke {@code javac} programmatically
+     * because that would require {@code requires java.compiler} in the
+     * {@code io.vidocq.vauban.core} module — polluting the production
+     * module-info just for tests. Class-File API lives in {@code java.base}.
+     */
+    private byte[] synthesizeTestResource(String fqn) {
+        ClassDesc targetCD = ClassDesc.of(fqn);
+
+        return ClassFile.of().build(targetCD, clb -> {
+            clb.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER);
+            clb.withSuperclass(ConstantDescs.CD_Object);
+
+            // @PathLike marker (runtime-visible)
+            clb.with(RuntimeVisibleAnnotationsAttribute.of(
+                    Annotation.of(CD_PathLike)));
+
+            // a public no-argument constructor that only calls super
+            clb.withMethodBody(
+                    ConstantDescs.INIT_NAME,
+                    MTD_void,
+                    ClassFile.ACC_PUBLIC,
+                    cob -> cob
+                            .aload(0)
+                            .invokespecial(ConstantDescs.CD_Object, ConstantDescs.INIT_NAME, MTD_void)
+                            .return_());
+        });
+    }
+
+    /**
+     * Build a pre-processed JAR containing:
+     * <ul>
+     *   <li>{@code <fqn>.class} (synthesized with ONLY @PathLike)</li>
+     *   <li>{@code META-INF/vauban-beans.list}</li>
+     *   <li>{@code META-INF/vauban-bce-processed} (marker)</li>
+     *   <li>{@code META-INF/vauban-bce-runtime.list}</li>
+     *   <li>optionally the BCE class + ServiceLoader file</li>
+     * </ul>
+     */
+    private Path buildPreProcessedJar(Path target,
+                                      String classFqn,
+                                      List<String> beansList,
+                                      List<String> runtimeList,
+                                      boolean includeBceClass,
+                                      boolean includeService) throws Exception {
+        return buildPreProcessedJar(target, classFqn, beansList, runtimeList,
+                includeBceClass ? TestScopeBce.class : null, includeService ? TestScopeBce.class : null);
+    }
+
+    /** {@link #buildPreProcessedJar(Path, String, List, List, boolean, boolean)} with the extension {@code bce}. */
+    private Path buildPreProcessedJar(Path target, String classFqn, List<String> beansList, List<String> runtimeList,
+                                      Class<?> bceClass, Class<?> service) throws Exception {
+        Files.createDirectories(target.getParent());
+        try (var fos = Files.newOutputStream(target);
+             var jar = new JarOutputStream(fos)) {
+
+            // Class (synthesized via Class-File API)
+            var classBytes = synthesizeTestResource(classFqn);
+            writeJarEntry(jar, classFqn.replace('.', '/') + ".class", classBytes);
+
+            // beans.list
+            var beansContent = "# Vauban beans list (test)\n" + String.join("\n", beansList) + "\n";
+            writeJarEntry(jar, BEANS_LIST_PATH, beansContent.getBytes(StandardCharsets.UTF_8));
+
+            // bce-processed marker
+            writeJarEntry(jar, BCE_MARKER_PATH,
+                    "# bce processed\n".getBytes(StandardCharsets.UTF_8));
+
+            // runtime-list (pivot du bug #7)
+            var runtimeContent = "# Vauban BCE runtime replay list\n"
+                    + String.join("\n", runtimeList) + "\n";
+            writeJarEntry(jar, RUNTIME_LIST_PATH, runtimeContent.getBytes(StandardCharsets.UTF_8));
+
+            if (bceClass != null) {
+                // Include the BCE class bytecode (loaded from current CL)
+                var bceBytes = loadClassBytes(bceClass);
+                writeJarEntry(jar, bceClass.getName().replace('.', '/') + ".class",
+                        bceBytes);
+            }
+
+            if (service != null) {
+                writeJarEntry(jar, BCE_SERVICE_PATH,
+                        (service.getName() + "\n").getBytes(StandardCharsets.UTF_8));
+            }
+        }
+        return target;
+    }
+
+    /**
+     * Build a "raw" JAR (no markers, no beans.list, no runtime-list) — just the class.
+     */
+    private Path buildRawJar(Path target, String classFqn) throws Exception {
+        Files.createDirectories(target.getParent());
+        try (var fos = Files.newOutputStream(target);
+             var jar = new JarOutputStream(fos)) {
+            var classBytes = synthesizeTestResource(classFqn);
+            writeJarEntry(jar, classFqn.replace('.', '/') + ".class", classBytes);
+        }
+        return target;
+    }
+
+    private static void writeJarEntry(JarOutputStream jar, String name, byte[] content) throws IOException {
+        var entry = new JarEntry(name);
+        jar.putNextEntry(entry);
+        jar.write(content);
+        jar.closeEntry();
+    }
+
+    private static byte[] loadClassBytes(Class<?> clazz) throws IOException {
+        var resource = clazz.getName().replace('.', '/') + ".class";
+        try (var is = clazz.getClassLoader().getResourceAsStream(resource)) {
+            if (is == null) throw new IOException("Cannot find bytecode for " + clazz);
+            var baos = new ByteArrayOutputStream();
+            is.transferTo(baos);
+            return baos.toByteArray();
+        }
+    }
+}

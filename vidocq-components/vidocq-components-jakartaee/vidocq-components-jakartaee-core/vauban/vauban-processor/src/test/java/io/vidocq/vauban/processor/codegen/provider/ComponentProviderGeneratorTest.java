@@ -1,0 +1,269 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.processor.codegen.provider;
+
+import io.vidocq.vauban.indexer.codegen.Component;
+import io.vidocq.vauban.indexer.codegen.FieldInject;
+import io.vidocq.vauban.indexer.codegen.MethodInvoke;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@DisplayName("ComponentProviderGenerator")
+class ComponentProviderGeneratorTest {
+
+    @Test
+    @DisplayName("emits a switch-on-name that instantiates each component in-module")
+    void generatesSwitchSource() {
+        var gen = ComponentProviderGenerator.generate("app", List.of("app.Foo", "app.web.Bar"));
+
+        assertEquals("app._VaubanComponents", gen.className());
+        var s = gen.source();
+        assertTrue(s.contains("package app;"), s);
+        assertTrue(s.contains("public final class _VaubanComponents "
+                + "implements io.vidocq.vauban.api.VaubanComponentProvider"), s);
+        assertTrue(s.contains("case \"app.Foo\" -> new app.Foo();"), s);
+        assertTrue(s.contains("case \"app.web.Bar\" -> new app.web.Bar();"), s);
+        assertTrue(s.contains("default -> null;"), s);
+    }
+
+    @Test
+    @DisplayName("emits a second switch casting resolved args for injected-constructor components")
+    void generatesArgAwareSwitch() {
+        var gen = ComponentProviderGenerator.generateFrom("app", List.of(
+                new Component("app.Foo", List.of()),
+                new Component("app.Service",
+                        List.of("app.Repo", "app.Clock"))));
+
+        var s = gen.source();
+        assertTrue(s.contains("case \"app.Foo\" -> new app.Foo();"), s);
+        assertTrue(s.contains("public Object create(String className, Object[] args)"), s);
+        assertTrue(s.contains("if (args == null || args.length == 0) return create(className);"), s);
+        assertTrue(s.contains(
+                "case \"app.Service\" -> new app.Service((app.Repo) args[0], (app.Clock) args[1]);"), s);
+    }
+
+    @Test
+    @DisplayName("no injected-constructor component omits the args overload")
+    void noArgsOverloadWhenAllNoArg() {
+        var gen = ComponentProviderGenerator.generateFrom("app",
+                List.of(new Component("app.Foo", List.of())));
+
+        assertFalse(gen.source().contains("Object[] args"), gen.source());
+    }
+
+    @Test
+    @DisplayName("default package omits the package declaration")
+    void defaultPackageOmitsPackageDecl() {
+        var gen = ComponentProviderGenerator.generate("", List.of("Foo"));
+
+        assertEquals("_VaubanComponents", gen.className());
+        assertFalse(gen.source().contains("package "), gen.source());
+        assertTrue(gen.source().contains("case \"Foo\" -> new Foo();"), gen.source());
+    }
+
+    @Test
+    @DisplayName("emits injectField switch for non-private @Inject fields grouped by class")
+    void generatesInjectFieldSwitch() {
+        var fieldInjects = List.of(
+                new FieldInject("app.Service", "repo", "app.Repo"),
+                new FieldInject("app.Service", "clock", "app.Clock"),
+                new FieldInject("app.Foo", "dep", "app.Dep"));
+
+        var gen = ComponentProviderGenerator.generateFrom("app",
+                List.of(new Component("app.Service", List.of()),
+                        new Component("app.Foo", List.of())),
+                fieldInjects);
+
+        var s = gen.source();
+        assertTrue(s.contains("public boolean injectField(Object bean, String className, String fieldName, Object value)"), s);
+        // outer switch cases
+        assertTrue(s.contains("case \"app.Service\""), s);
+        assertTrue(s.contains("case \"app.Foo\""), s);
+        // inner field assignments
+        assertTrue(s.contains("case \"repo\" -> { b.repo = (app.Repo) value; return true; }"), s);
+        assertTrue(s.contains("case \"clock\" -> { b.clock = (app.Clock) value; return true; }"), s);
+        assertTrue(s.contains("case \"dep\" -> { b.dep = (app.Dep) value; return true; }"), s);
+        // fallback returns
+        assertTrue(s.contains("default -> { return false; }"), s);
+    }
+
+    @Test
+    @DisplayName("no injectField method emitted when fieldInjects is empty")
+    void noInjectFieldWhenEmpty() {
+        var gen = ComponentProviderGenerator.generateFrom("app",
+                List.of(new Component("app.Foo", List.of())),
+                List.of());
+
+        assertFalse(gen.source().contains("injectField"), gen.source());
+    }
+
+    @Test
+    @DisplayName("keys invoke by the binary name of a nested class and calls it by its source name")
+    void invokeCallsANestedClassByItsSourceName() {
+        var methodInvokes = List.of(
+                new MethodInvoke("app.Outer$Inner", "seen", List.of("java.lang.String"),
+                        false, true, null, "app.Outer.Inner"),
+                new MethodInvoke("app.Outer$Inner", "answer", List.of(),
+                        true, false, "java.lang.Integer", "app.Outer.Inner"));
+
+        var s = ComponentProviderGenerator.generateFrom("app", List.of(), List.of(), methodInvokes).source();
+
+        assertTrue(s.contains("case \"app.Outer$Inner\" -> {"), s);
+        assertTrue(s.contains("((app.Outer.Inner) target).seen((java.lang.String) args[0]);"), s);
+        assertTrue(s.contains("return app.Outer.Inner.answer();"), s);
+        assertFalse(s.contains("(app.Outer$Inner)"), s);
+    }
+
+    @Test
+    @DisplayName("emits invoke switch for void, non-void, and static methods")
+    void generatesInvokeSwitch() {
+        var methodInvokes = List.of(
+                // void instance method with one parameter
+                new MethodInvoke(
+                        "app.Service", "record",
+                        List.of("java.lang.String"),
+                        false, true, null),
+                // non-void instance method, no parameters
+                new MethodInvoke(
+                        "app.Service", "make",
+                        List.of(),
+                        false, false, "app.Product"),
+                // static producer method, no parameters
+                new MethodInvoke(
+                        "app.Service", "staticProduce",
+                        List.of(),
+                        true, false, "app.Product"));
+
+        var gen = ComponentProviderGenerator.generateFrom("app",
+                List.of(new Component("app.Service", List.of())),
+                List.of(),
+                methodInvokes);
+
+        var s = gen.source();
+        assertTrue(s.contains("public Object invoke(Object target, String className, String methodId, Object[] args)"), s);
+        // outer switch on className
+        assertTrue(s.contains("case \"app.Service\""), s);
+        // void method: call then return null
+        assertTrue(s.contains("case \"record(java.lang.String)\""), s);
+        assertTrue(s.contains("((app.Service) target).record((java.lang.String) args[0]);"), s);
+        assertTrue(s.contains("return null;"), s);
+        // non-void instance method
+        assertTrue(s.contains("case \"make()\""), s);
+        assertTrue(s.contains("return ((app.Service) target).make();"), s);
+        // static method — no target cast
+        assertTrue(s.contains("case \"staticProduce()\""), s);
+        assertTrue(s.contains("return app.Service.staticProduce();"), s);
+        // sentinel for unmatched method and unmatched class
+        assertTrue(s.contains("return io.vidocq.vauban.api.VaubanComponentProvider.NOT_INVOKED;"), s);
+    }
+
+    @Test
+    @DisplayName("no invoke method emitted when methodInvokes is empty")
+    void noInvokeMethodWhenEmpty() {
+        var gen = ComponentProviderGenerator.generateFrom("app",
+                List.of(new Component("app.Foo", List.of())),
+                List.of(),
+                List.of());
+
+        // The grantModuleLookup body names java.lang.invoke, so look for the method itself.
+        assertFalse(gen.source().contains("public Object invoke("), gen.source());
+    }
+
+    @Test
+    @DisplayName("grantModuleLookup() hands the provider's own lookup to the container's grant")
+    void grantsItsOwnLookup() {
+        var gen = ComponentProviderGenerator.generateFrom("app",
+                List.of(new Component("app.Foo", List.of())),
+                List.of(),
+                List.of());
+
+        var s = gen.source();
+        assertTrue(s.contains("public void grantModuleLookup(io.vidocq.vauban.api.ModuleLookupGrant grant) {"), s);
+        assertTrue(s.contains("grant.accept(java.lang.invoke.MethodHandles.lookup());"), s);
+    }
+
+    @Test
+    @DisplayName("coverage() declares the keys of every switch, as APT")
+    void declaresItsCoverage() {
+        var gen = ComponentProviderGenerator.generateFrom("app",
+                List.of(new Component("app.Foo", List.of())),
+                List.of(new FieldInject("app.Foo", "repo", "app.Repo")),
+                List.of(new MethodInvoke("app.Foo", "init", List.of(), false, true, "void")),
+                List.of("app.Foo_ClientProxy"),
+                List.of(new ComponentProviderGenerator.ProducerProxy(
+                        "java.util.ArrayList_ClientProxy", "app.ArrayList_ClientProxy")));
+        var s = gen.source();
+
+        assertTrue(s.contains("public io.vidocq.vauban.api.GeneratedCoverage coverage() {"), s);
+        assertTrue(s.contains("io.vidocq.vauban.api.GeneratedCoverage.Generator.APT"), s);
+        assertTrue(s.contains("new String[] {\"app.Foo\"}"), s);
+        assertTrue(s.contains("new String[] {\"app.Foo#repo\"}"), s);
+        assertTrue(s.contains("new String[] {\"app.Foo#init()\"}"), s);
+        assertTrue(s.contains("new String[] {\"app.Foo_ClientProxy\", \"java.util.ArrayList_ClientProxy\"}"), s);
+    }
+
+    @Test
+    @DisplayName("a class emitted as bytecode is instantiated through a constructor handle looked up once (BUG-20261004-09)")
+    void bytecodeClassesThroughTheLookup() {
+        var components = List.of(
+                new Component("app.Foo", List.of()),
+                new Component("app.Foo$$Intercepted", List.of()),
+                new Component("app.Svc$$Intercepted", List.of("app.Repo", "int")));
+        var proxies = List.of("app.Foo_ClientProxy", "app.Bar_ClientProxy");
+        var producerProxies = List.of(new ComponentProviderGenerator.ProducerProxy(
+                "lib.Thing_ClientProxy", "app.Thing$$1f_ClientProxy"));
+        var plain = ComponentProviderGenerator.generateFrom("app", components, List.of(), List.of(), proxies,
+                producerProxies, new AnnotationArtefacts.Rendered("", ""));
+        assertEquals(plain.source(), ComponentProviderGenerator.generateFrom("app", ComponentProviderGenerator.SIMPLE_NAME,
+                new ComponentProviderGenerator.Contents(components, List.of(), List.of(), proxies, producerProxies,
+                        new AnnotationArtefacts.Rendered("", ""), java.util.Set.of())).source(),
+                "no bytecode class: the provider is unchanged");
+        assertFalse(plain.source().contains("$$Ctor"), plain.source());
+
+        var s = ComponentProviderGenerator.generateFrom("app", ComponentProviderGenerator.SIMPLE_NAME,
+                new ComponentProviderGenerator.Contents(components, List.of(), List.of(), proxies, producerProxies,
+                        new AnnotationArtefacts.Rendered("", ""), java.util.Set.of("app.Foo$$Intercepted", "app.Svc$$Intercepted", "app.Bar_ClientProxy",
+                        "app.Thing$$1f_ClientProxy"))).source();
+        assertTrue(s.contains("case \"app.Foo\" -> new app.Foo();"), s);
+        assertTrue(s.contains("case \"app.Foo$$Intercepted\" -> (Object) $$Ctor0.H.invokeExact();"), s);
+        assertTrue(s.contains("case \"app.Svc$$Intercepted\" -> (Object) $$Ctor1.H.invokeExact(args[0], args[1]);"), s);
+        assertTrue(s.contains("return new app.Foo_ClientProxy((java.util.function.Supplier) delegate);"), s);
+        assertTrue(s.contains("return (Object) $$Ctor2.H.invokeExact((Object) delegate);"), s);
+        assertTrue(s.contains("case \"lib.Thing_ClientProxy\" -> {\n                return (Object) $$Ctor3.H.invokeExact((Object) delegate);"), s);
+        // One holder per constructor: each handle is looked up once, on first use (vauban#227).
+        assertTrue(s.contains("private static final class $$Ctor0 {\n"
+                + "        static final java.lang.invoke.MethodHandle H = $$constructor(\"app.Foo$$Intercepted\");"), s);
+        assertTrue(s.contains("H = $$constructor(\"app.Svc$$Intercepted\", app.Repo.class, int.class);"), s);
+        assertTrue(s.contains("H = $$constructor(\"app.Bar_ClientProxy\", java.util.function.Supplier.class);"), s);
+        assertTrue(s.contains("H = $$constructor(\"app.Thing$$1f_ClientProxy\", java.util.function.Supplier.class);"), s);
+        assertFalse(s.contains("$$Ctor4"), s);
+        assertTrue(s.contains(
+                "private static java.lang.invoke.MethodHandle $$constructor(String className, Class<?>... parameterTypes) {"), s);
+        assertTrue(s.contains(".asType(java.lang.invoke.MethodType.genericMethodType(parameterTypes.length));"), s);
+        assertFalse(s.contains("$$construct("), s);
+        assertFalse(s.contains("invokeWithArguments"), s);
+    }
+}

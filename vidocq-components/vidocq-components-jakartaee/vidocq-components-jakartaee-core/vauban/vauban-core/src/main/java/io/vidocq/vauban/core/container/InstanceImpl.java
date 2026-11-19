@@ -1,0 +1,572 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.container;
+
+import jakarta.enterprise.inject.Instance;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.util.TypeLiteral;
+
+import java.io.InvalidObjectException;
+import java.io.NotSerializableException;
+import java.io.ObjectInputStream;
+import java.io.ObjectStreamException;
+import java.io.Serial;
+import java.io.Serializable;
+import java.lang.annotation.Annotation;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.IdentityHashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
+
+import io.vidocq.vauban.core.context.CreationalContextImpl;
+
+/**
+ * Implementation of {@link Instance} for programmatic bean lookup.
+ * Delegates resolution to the {@link VaubanContainer} and its {@link VaubanBeanManager}.
+ *
+ * <p>Serializable, but never written itself: its container belongs to the one that built it. One the container
+ * injected into a bean ({@link #injected}) writes an {@link InjectionPointReference} instead, which reads back as the
+ * importing container's {@code Instance} at the same injection point, so a session bean holding it moves to another
+ * container (foy#114). One obtained by {@code select(...)} or by a programmatic lookup cannot be written.</p>
+ */
+public final class InstanceImpl<T> implements Instance<T>, Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
+    private final transient VaubanContainer container;
+    private final transient Class<T> type;
+    /** Full resolution type (may be a ParameterizedType) — used in getBeans() to match synthetic beans exactly. */
+    private final transient java.lang.reflect.Type resolveType;
+    private final transient Annotation[] qualifiers;
+    private final transient jakarta.enterprise.inject.spi.InjectionPoint injectionPoint;
+    private final transient CreationalContextImpl<?> parentCreationalContext;
+    private final transient Map<Object, jakarta.enterprise.context.spi.CreationalContext<?>> dependentInstances =
+            new IdentityHashMap<>();
+    /** The container injected it at {@link #injectionPoint}: it moves by that injection point. */
+    private final transient boolean injected;
+    // The qualifiers of this Instance, reduced to their keys once: select converts, get and its
+    // friends match. Lazily computed, read-only after.
+    @SuppressWarnings("java:S3077")
+    private transient volatile Set<io.vidocq.vauban.core.annotation.AnnotationKey> keys;
+
+    /**
+     * The {@code Instance} the container injects at {@code injectionPoint}: the one that moves with the bean that
+     * holds it, written as a reference to that injection point.
+     */
+    static <T> InstanceImpl<T> injected(VaubanContainer container, Class<T> type, java.lang.reflect.Type resolveType,
+                                        Annotation[] qualifiers,
+                                        jakarta.enterprise.inject.spi.InjectionPoint injectionPoint) {
+        return new InstanceImpl<>(container, type, resolveType, qualifiers, injectionPoint, null, true);
+    }
+
+    /** This lookup, as the one the container injects at its injection point: see {@link #injected}. */
+    InstanceImpl<T> asInjected() {
+        return new InstanceImpl<>(container, type, resolveType, qualifiers, injectionPoint, parentCreationalContext,
+                true);
+    }
+
+    /**
+     * The reference to the injection point written in place of this {@code Instance}. One the container did not
+     * inject throws, with a message that names the cause: the web container leaves its session behind.
+     */
+    @Serial
+    private Object writeReplace() throws ObjectStreamException {
+        if (!injected) {
+            throw new NotSerializableException("an Instance or a Provider obtained by select(...), by a programmatic"
+                    + " lookup or as a parameter of an observer method cannot move to another container: only one the"
+                    + " container injected into a bean moves, by its injection point");
+        }
+        return InjectionPointReference.to(injectionPoint);
+    }
+
+    /**
+     * Refuses a stream that carries an {@code Instance} itself rather than its form: none is ever written, and its
+     * fields would read back {@code null}.
+     */
+    @Serial
+    private void readObject(ObjectInputStream in) throws InvalidObjectException {
+        throw new InvalidObjectException("an Instance is read through its serial form only");
+    }
+
+    /** This lookup's qualifiers as matching keys, converted on first use and kept. */
+    private Set<io.vidocq.vauban.core.annotation.AnnotationKey> keys() {
+        var converted = keys;
+        if (converted == null) {
+            converted = container.qualifierMatcher().types().keys(qualifiers);
+            keys = converted;
+        }
+        return converted;
+    }
+
+    public void releaseAllDependents() {
+        for (var entry : new IdentityHashMap<>(dependentInstances).entrySet()) {
+            entry.getValue().release();
+        }
+        dependentInstances.clear();
+    }
+
+    public InstanceImpl(VaubanContainer container, Class<T> type) {
+        this(container, type, type, new Annotation[0], null, null);
+    }
+
+    public InstanceImpl(VaubanContainer container, Class<T> type, jakarta.enterprise.inject.spi.InjectionPoint injectionPoint) {
+        this(container, type, type, new Annotation[0], injectionPoint, null);
+    }
+
+    public InstanceImpl(VaubanContainer container, Class<T> type, Annotation[] qualifiers, jakarta.enterprise.inject.spi.InjectionPoint injectionPoint) {
+        this(container, type, type, qualifiers, injectionPoint, null);
+    }
+
+    public InstanceImpl(VaubanContainer container, Class<T> type, Annotation[] qualifiers,
+                        jakarta.enterprise.inject.spi.InjectionPoint injectionPoint,
+                        CreationalContextImpl<?> parentCreationalContext) {
+        this(container, type, type, qualifiers, injectionPoint, parentCreationalContext);
+    }
+
+    /**
+     * Full constructor with explicit lookup type. Use when the injection point's generic type is a
+     * {@link java.lang.reflect.ParameterizedType} (e.g. {@code Optional<String>}) — in that case
+     * {@code lookupType} carries the full type for {@code getBeans()} while {@code type} holds the
+     * raw class used for generic bounds.
+     */
+    public InstanceImpl(VaubanContainer container, Class<T> type, java.lang.reflect.Type resolveType,
+                        Annotation[] qualifiers,
+                        jakarta.enterprise.inject.spi.InjectionPoint injectionPoint,
+                        CreationalContextImpl<?> parentCreationalContext) {
+        this(container, type, resolveType, qualifiers, injectionPoint, parentCreationalContext, false);
+    }
+
+    private InstanceImpl(VaubanContainer container, Class<T> type, java.lang.reflect.Type resolveType,
+                         Annotation[] qualifiers,
+                         jakarta.enterprise.inject.spi.InjectionPoint injectionPoint,
+                         CreationalContextImpl<?> parentCreationalContext, boolean injected) {
+        this.container = container;
+        this.type = type;
+        this.resolveType = resolveType != null ? resolveType : type;
+        this.injectionPoint = injectionPoint;
+        this.parentCreationalContext = parentCreationalContext;
+        this.injected = injected;
+        // If qualifiers are empty, default to @Any and @Default
+        if (qualifiers == null || qualifiers.length == 0) {
+            this.qualifiers = new Annotation[] {
+                jakarta.enterprise.inject.Any.Literal.INSTANCE,
+                jakarta.enterprise.inject.Default.Literal.INSTANCE
+            };
+        } else {
+            // Ensure @Any is present (CDI 4.1 Section 2.3.1)
+            var set = new java.util.LinkedHashSet<Annotation>(java.util.Arrays.asList(qualifiers));
+            set.add(jakarta.enterprise.inject.Any.Literal.INSTANCE);
+            // DO NOT add @Default when explicit qualifiers are present.
+            // @Any alone means "wildcard matching" — adding @Default would restrict resolution.
+            this.qualifiers = set.toArray(new Annotation[0]);
+        }
+    }
+
+    @Override
+    public T get() {
+        var bm = container.getBeanManager();
+        var beans = bm.getBeans(resolveType, keys());
+        if (beans.isEmpty()) {
+            throw new jakarta.enterprise.inject.UnsatisfiedResolutionException(
+                    "No bean found for type: " + resolveType.getTypeName() + " with qualifiers: " + Arrays.toString(qualifiers));
+        }
+        @SuppressWarnings("unchecked")
+        var bean = (Bean<T>) bm.resolve(beans);
+
+        ScopedValue.CallableOp<T, RuntimeException> action = () -> {
+            var ctx = bm.createCreationalContext(bean);
+            @SuppressWarnings("unchecked")
+            var ref = (T) referenceOf(container, bean, resolveType, qualifiers, ctx);
+            if (ref != null && bean.getScope() == jakarta.enterprise.context.Dependent.class) {
+                dependentInstances.put(ref, ctx);
+                if (parentCreationalContext != null) {
+                    parentCreationalContext.addDependentInstance(bean, ref, ctx);
+                }
+            }
+            return ref;
+        };
+        if (injectionPoint != null) {
+            return ScopedValue.where(VaubanContainer.CURRENT_INJECTION_POINT, injectionPoint).call(action);
+        }
+        // Keep an enclosing injection point visible: a synthetic bean creator's
+        // internal lookup (e.g. lookup.select(InjectionPoint.class)) must see
+        // the injection point of the bean being created, not a new one.
+        if (VaubanContainer.getCurrentInjectionPoint() != null) {
+            return action.call();
+        }
+        // Programmatic lookup (CDI.current().select / Instance without an
+        // underlying injection point): expose a synthetic InjectionPoint that
+        // carries the selected type and qualifiers, as other containers do.
+        // Synthetic bean creators rely on it — MP Config's @ConfigProperties
+        // creator reads the target bean class and prefix from there.
+        //
+        // Two CDI 4.1 constraints bound this, both exercised by the CDI TCK
+        // SyntheticBeanInjectionPointTest:
+        //   1. The built-in InjectionPoint bean is meaningful only while a
+        //      @Dependent bean is being created; for a normal-scoped bean's
+        //      creation function (or a destruction function) it must stay null.
+        //      So never expose a synthetic injection point when resolving a
+        //      non-@Dependent bean.
+        //   2. Looking up InjectionPoint itself must reflect the real current
+        //      injection point (here: none), never a synthesized self-reference.
+        if (bean.getScope() == jakarta.enterprise.context.Dependent.class
+                && resolveType != jakarta.enterprise.inject.spi.InjectionPoint.class) {
+            var syntheticQualifiers = new java.util.LinkedHashSet<Annotation>(Arrays.asList(qualifiers));
+            var syntheticIp = new VaubanInjectionPoint(resolveType, syntheticQualifiers, null, null);
+            return ScopedValue.where(VaubanContainer.CURRENT_INJECTION_POINT, syntheticIp).call(action);
+        }
+        return action.call();
+    }
+
+    /**
+     * The reference to {@code bean} for {@code requested}: what {@code getReference} gives, except for the built-in
+     * {@code Event}, {@code Instance} or {@code Provider} bean, which gives one with the qualifiers of the
+     * {@code Instance} it was looked up through, where {@code getReference} knows only {@code @Default}.
+     */
+    private static Object referenceOf(VaubanContainer container, Bean<?> bean, java.lang.reflect.Type requested,
+            Annotation[] qualifiers, jakarta.enterprise.context.spi.CreationalContext<?> ctx) {
+        if (bean instanceof BuiltInBean<?> && VaubanBeanManager.isBuiltInPerInjectionPoint(requested)) {
+            return container.lookedUpBuiltIn(requested, qualifiers);
+        }
+        return container.getBeanManager().getReference(bean, requested, ctx);
+    }
+
+    @Override
+    public Instance<T> select(Annotation... newQualifiers) {
+        validateQualifiers(newQualifiers);
+        // The child keeps the whole type, parameterized or not (BUG-20261116-09)
+        return new InstanceImpl<>(container, type, resolveType, combineQualifiers(this.qualifiers, newQualifiers),
+                injectionPoint, parentCreationalContext);
+    }
+
+    @Override
+    public <U extends T> Instance<U> select(Class<U> subtype, Annotation... newQualifiers) {
+        validateQualifiers(newQualifiers);
+        var combinedQuals = combineQualifiers(this.qualifiers, newQualifiers);
+        var updatedIp = updateInjectionPointType(subtype, combinedQuals);
+        return new InstanceImpl<>(container, subtype, combinedQuals, updatedIp, parentCreationalContext);
+    }
+
+    @Override
+    public <U extends T> Instance<U> select(TypeLiteral<U> subtype, Annotation... newQualifiers) {
+        validateQualifiers(newQualifiers);
+        // The raw class for generic bounds, the whole type, parameterized or not, for resolution (BUG-20261116-09)
+        var combinedQuals = combineQualifiers(this.qualifiers, newQualifiers);
+        var updatedIp = updateInjectionPointType(subtype.getType(), combinedQuals);
+        return new InstanceImpl<>(container, subtype.getRawType(), subtype.getType(), combinedQuals, updatedIp,
+                parentCreationalContext);
+    }
+
+    private jakarta.enterprise.inject.spi.InjectionPoint updateInjectionPointType(
+            java.lang.reflect.Type newType, Annotation[] newQualifiers) {
+        if (injectionPoint == null) return null;
+        var qualSet = new java.util.LinkedHashSet<Annotation>(Arrays.asList(newQualifiers));
+        if (qualSet.isEmpty()) qualSet.add(jakarta.enterprise.inject.Default.Literal.INSTANCE);
+        return new VaubanInjectionPoint(newType, qualSet, injectionPoint.getBean(), injectionPoint.getMember());
+    }
+
+    private static Annotation[] combineQualifiers(Annotation[] existing, Annotation[] additional) {
+        if (additional == null || additional.length == 0) return existing;
+        if (existing == null || existing.length == 0) {
+            var set = new java.util.LinkedHashSet<Annotation>(java.util.Arrays.asList(additional));
+            set.add(jakarta.enterprise.inject.Any.Literal.INSTANCE);
+            return set.toArray(new Annotation[0]);
+        }
+
+        var result = new java.util.LinkedHashSet<Annotation>(java.util.Arrays.asList(existing));
+        for (var q : additional) {
+            // Remove @Default if we're adding a non-@Any qualifier
+            if (q.annotationType() != jakarta.enterprise.inject.Any.class
+                    && q.annotationType() != jakarta.enterprise.inject.Default.class) {
+                result.removeIf(ann -> ann.annotationType() == jakarta.enterprise.inject.Default.class);
+            }
+            // Remove existing same-type qualifier to avoid duplicates
+            result.removeIf(ann -> ann.annotationType() == q.annotationType());
+            result.add(q);
+        }
+        result.add(jakarta.enterprise.inject.Any.Literal.INSTANCE);
+        return result.toArray(new Annotation[0]);
+    }
+
+    private static void validateQualifiers(Annotation... qualifiers) {
+        if (qualifiers == null) return;
+        var seen = new java.util.HashSet<Class<?>>();
+        for (var q : qualifiers) {
+            if (!q.annotationType().isAnnotationPresent(jakarta.inject.Qualifier.class)
+                    && q.annotationType() != jakarta.enterprise.inject.Default.class
+                    && q.annotationType() != jakarta.enterprise.inject.Any.class
+                    && q.annotationType() != jakarta.inject.Named.class
+                    && !VaubanBeanManager.isCustomQualifier(q.annotationType())) {
+                throw new IllegalArgumentException(
+                        q.annotationType().getName() + " is not a qualifier");
+            }
+            if (!seen.add(q.annotationType())
+                    && !q.annotationType().isAnnotationPresent(java.lang.annotation.Repeatable.class)) {
+                throw new IllegalArgumentException(
+                        "Duplicate qualifier: " + q.annotationType().getName());
+            }
+        }
+    }
+
+    @Override
+    public Stream<T> stream() {
+        return StreamSupport.stream(spliterator(), false);
+    }
+
+    @Override
+    public boolean isUnsatisfied() {
+        return resolveCount() == 0;
+    }
+
+    @Override
+    public boolean isAmbiguous() {
+        var beans = getEffectiveBeans();
+        if (beans.size() <= 1) return false;
+        try {
+            container.getBeanManager().resolve(beans);
+            return false;
+        } catch (jakarta.enterprise.inject.AmbiguousResolutionException _) {
+            return true;
+        }
+    }
+
+    @Override
+    public boolean isResolvable() {
+        var beans = container.getBeanManager().getBeans(resolveType, keys());
+        if (beans.isEmpty()) return false;
+        if (beans.size() == 1) return true;
+        try {
+            container.getBeanManager().resolve(beans);
+            return true;
+        } catch (jakarta.enterprise.inject.AmbiguousResolutionException _) {
+            return false;
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public void destroy(T instance) {
+        if (instance == null) throw new NullPointerException("Instance to destroy must not be null");
+        var bm = container.getBeanManager();
+        // If the tracked context has this instance, use it directly (most reliable)
+        var trackedCtx = dependentInstances.remove(instance);
+        if (trackedCtx != null) {
+            trackedCtx.release();
+            return;
+        }
+        // Use the runtime type for resolution if our type is too broad (e.g. Object)
+        var lookupType = (type == Object.class) ? instance.getClass() : type;
+        var beans = bm.getBeans(lookupType, keys());
+        if (beans.isEmpty()) return;
+        var bean = (Bean<T>) bm.resolve(beans);
+        var scope = bean.getScope();
+        if (scope == jakarta.enterprise.context.Dependent.class) {
+            bean.destroy(instance, bm.createCreationalContext(bean));
+        } else {
+            try {
+                var ctx = bm.getContext(scope);
+                if (ctx instanceof jakarta.enterprise.context.spi.AlterableContext ac) {
+                    ac.destroy(bean);
+                }
+            } catch (Exception _) {
+                // Best effort -- context may not be active
+            }
+        }
+    }
+
+    @Override
+    public Handle<T> getHandle() {
+        var bm = container.getBeanManager();
+        var beans = bm.getBeans(resolveType, keys());
+        if (beans.isEmpty()) {
+            throw new jakarta.enterprise.inject.UnsatisfiedResolutionException(
+                    "No bean found for type: " + resolveType.getTypeName());
+        }
+        @SuppressWarnings("unchecked")
+        var bean = (Bean<T>) bm.resolve(beans);
+        return new HandleImpl<>(bean, type, qualifiers, container, injectionPoint);
+    }
+
+    @Override
+    public Iterable<? extends Handle<T>> handles() {
+        var beans = getEffectiveBeans();
+        var result = new ArrayList<Handle<T>>();
+        for (var b : beans) {
+            @SuppressWarnings("unchecked")
+            var bean = (Bean<T>) b;
+            result.add(new HandleImpl<>(bean, type, qualifiers, container, injectionPoint));
+        }
+        return result;
+    }
+
+    @Override
+    public Stream<? extends Handle<T>> handlesStream() {
+        var handles = handles();
+        return StreamSupport.stream(handles.spliterator(), false);
+    }
+
+    @Override
+    public Iterator<T> iterator() {
+        var bm = container.getBeanManager();
+        var beans = getEffectiveBeans();
+        var instances = new ArrayList<T>();
+        
+        Runnable populateInstances = () -> {
+            for (var b : beans) {
+                @SuppressWarnings("unchecked")
+                var bean = (Bean<T>) b;
+                var ctx = bm.createCreationalContext(bean);
+
+                @SuppressWarnings("unchecked")
+                var ref = (T) referenceOf(container, bean, type, qualifiers, ctx);
+
+                // Link the dependent bean to parent context if needed
+                if (bean.getScope() == jakarta.enterprise.context.Dependent.class && parentCreationalContext != null) {
+                    parentCreationalContext.addDependentInstance(bean, ref, ctx);
+                }
+
+                // Track dependent instances locally so Instance.destroy() works
+                if (bean.getScope() == jakarta.enterprise.context.Dependent.class
+                        && ctx instanceof io.vidocq.vauban.core.context.CreationalContextImpl<?> cci) {
+                    dependentInstances.put(ref, cci);
+                }
+                instances.add(ref);
+            }
+        };
+        if (injectionPoint != null) {
+            ScopedValue.where(VaubanContainer.CURRENT_INJECTION_POINT, injectionPoint).run(populateInstances);
+        } else {
+            populateInstances.run();
+        }
+        return instances.iterator();
+    }
+
+    private int resolveCount() {
+        return getEffectiveBeans().size();
+    }
+
+    /**
+     * CDI spec: when alternatives with @Priority are present, non-alternative beans are excluded.
+     * Only the highest-priority alternative(s) are returned.
+     */
+    private Set<Bean<?>> getEffectiveBeans() {
+        var beans = container.getBeanManager().getBeans(resolveType, keys());
+        if (beans.size() <= 1) return beans;
+        // Check if any enabled alternatives are present
+        var alternatives = beans.stream()
+                .filter(Bean::isAlternative)
+                .toList();
+        if (alternatives.isEmpty()) return beans;
+        // Only keep the highest-priority alternative(s)
+        int maxPriority = alternatives.stream()
+                .mapToInt(b -> b instanceof ManagedBean<?> mb ? mb.descriptor().priority() : 0)
+                .max().orElse(0);
+        return alternatives.stream()
+                .filter(b -> {
+                    int p = b instanceof ManagedBean<?> mb ? mb.descriptor().priority() : 0;
+                    return p == maxPriority;
+                })
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+    }
+
+    /**
+     * Implementation of {@link Handle} wrapping a bean instance and its metadata.
+     */
+    private static final class HandleImpl<T> implements Handle<T> {
+        private final Bean<T> bean;
+        private final Class<T> type;
+        private final Annotation[] qualifiers;
+        private final VaubanContainer container;
+        private final jakarta.enterprise.inject.spi.InjectionPoint injectionPoint;
+        private T instance;
+        private jakarta.enterprise.context.spi.CreationalContext<T> creationalContext;
+        private boolean destroyed;
+
+        HandleImpl(Bean<T> bean, Class<T> type, Annotation[] qualifiers, VaubanContainer container,
+                jakarta.enterprise.inject.spi.InjectionPoint injectionPoint) {
+            this.bean = bean;
+            this.type = type;
+            this.qualifiers = qualifiers;
+            this.container = container;
+            this.injectionPoint = injectionPoint;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public T get() {
+            if (destroyed) {
+                throw new IllegalStateException("Handle has been destroyed");
+            }
+            if (instance == null) {
+                Runnable resolve = () -> {
+                    var bm = container.getBeanManager();
+                    creationalContext = bm.createCreationalContext(bean);
+                    instance = (T) referenceOf(container, bean, type, qualifiers, creationalContext);
+                };
+                if (injectionPoint != null) {
+                    ScopedValue.where(VaubanContainer.CURRENT_INJECTION_POINT, injectionPoint).run(resolve);
+                } else {
+                    resolve.run();
+                }
+            }
+            return instance;
+        }
+
+        @Override
+        public Bean<T> getBean() {
+            return bean;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void destroy() {
+            if (destroyed) return;
+            destroyed = true;
+            if (instance == null) return;
+            var scope = bean.getScope();
+            if (scope == jakarta.enterprise.context.Dependent.class) {
+                if (creationalContext != null) {
+                    creationalContext.release();
+                }
+            } else {
+                try {
+                    var bm = container.getBeanManager();
+                    var ctx = bm.getContext(scope);
+                    if (ctx instanceof jakarta.enterprise.context.spi.AlterableContext ac) {
+                        ac.destroy(bean);
+                    }
+                } catch (Exception _) {
+                    // Best effort
+                }
+            }
+            instance = null;
+        }
+
+        @Override
+        public void close() {
+            destroy();
+        }
+    }
+}

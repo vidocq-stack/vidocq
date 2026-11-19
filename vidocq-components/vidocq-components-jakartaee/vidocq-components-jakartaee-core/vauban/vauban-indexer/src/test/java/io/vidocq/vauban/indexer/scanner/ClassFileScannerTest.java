@@ -1,0 +1,827 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.indexer.scanner;
+
+import io.vidocq.vauban.indexer.model.*;
+import io.vidocq.vauban.indexer.model.ClassInfo.ClassKind;
+import io.vidocq.vauban.indexer.model.TypeInfo.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@DisplayName("ClassFileScanner")
+class ClassFileScannerTest {
+
+    // --- Test classes ---
+
+    static class SimpleClass {
+        private String name;
+        public int value;
+
+        public String getName() { return name; }
+        public void setValue(int value) { this.value = value; }
+    }
+
+    @CustomAnnotation("marked")
+    static class AnnotatedClass {
+        @CustomAnnotation("marked")
+        public void deprecatedMethod() { /* no behaviour needed */ }
+    }
+
+    interface SimpleInterface {
+        void doSomething();
+        default String defaultMethod() { return "default"; }
+    }
+
+    static class ImplementingClass extends SimpleClass implements SimpleInterface {
+        @Override public void doSomething() { /* no behaviour needed */ }
+    }
+
+    enum SimpleEnum { A, B, C }
+
+    record SimpleRecord(String name, int value) {}
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface CustomAnnotation {
+        String value();
+        int count() default 0;
+    }
+
+    @CustomAnnotation(value = "test", count = 42)
+    static class CustomAnnotatedClass {}
+
+    enum DefaultedLevel { LOW, HIGH }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface DefaultedInner {
+        String value() default "inner";
+    }
+
+    /** One defaulted member per value kind, and one member without a default. */
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface WithDefaults {
+        String text() default "t";
+        int number() default 7;
+        DefaultedLevel level() default DefaultedLevel.HIGH;
+        Class<?> type() default String.class;
+        String[] tags() default {"a", "b"};
+        DefaultedInner inner() default @DefaultedInner("n");
+        String required();
+    }
+
+    abstract static class AbstractClass {
+        public abstract void abstractMethod();
+        public final void finalMethod() {}
+    }
+
+    @SuppressWarnings("java:S2326") // the declared type parameters are what the tests read
+    static class Generic<T, N extends Number & Comparable<N>, W extends Map<? extends CharSequence, ? super Integer>,
+            E extends Map.Entry<int[][], List<?>>, C extends CharSequence, U extends T> {
+    }
+
+    @SuppressWarnings("java:S2326") // the declared type parameters are what the tests read
+    static class Outer<O> {
+        class Inner<P extends O> {
+        }
+
+        class Plain {
+        }
+    }
+
+    /** Produces an inner class of a generic class, as {@code Outer<Number>.Inner<Integer>}. */
+    static class InnerFactory {
+        Outer<Number>.Inner<Integer> inner() {
+            return null;
+        }
+
+        Outer<Number>.Plain plain() {
+            return null;
+        }
+    }
+
+    // --- Utility ---
+
+    private static byte[] bytesOf(Class<?> clazz) throws IOException {
+        String resource = clazz.getName().replace('.', '/') + ".class";
+        try (var is = clazz.getClassLoader().getResourceAsStream(resource)) {
+            assertNotNull(is, "Could not find class resource: " + resource);
+            return is.readAllBytes();
+        }
+    }
+
+    private static ClassInfo scan(Class<?> clazz) throws IOException {
+        return ClassFileScanner.scan(bytesOf(clazz));
+    }
+
+    // --- Tests ---
+
+    @Nested
+    @DisplayName("annotation member defaults (vauban#70)")
+    class AnnotationMemberDefaults {
+
+        private MethodInfo member(String name) throws IOException {
+            return scan(WithDefaults.class).methods().stream()
+                    .filter(method -> method.name().equals(name))
+                    .findFirst()
+                    .orElseThrow();
+        }
+
+        @Test
+        @DisplayName("records the default of each member kind")
+        void recordsTheDefaults() throws IOException {
+            assertEquals(new AnnotationValue.StringVal("t"), member("text").defaultValue());
+            assertEquals(new AnnotationValue.IntVal(7), member("number").defaultValue());
+            assertEquals(new AnnotationValue.EnumVal(DotName.of(DefaultedLevel.class.getName()), "HIGH"),
+                    member("level").defaultValue());
+            assertEquals(new AnnotationValue.ClassVal(DotName.of("java.lang.String")), member("type").defaultValue());
+            assertEquals(new AnnotationValue.ArrayVal(List.of(
+                            new AnnotationValue.StringVal("a"), new AnnotationValue.StringVal("b"))),
+                    member("tags").defaultValue());
+            assertEquals(new AnnotationValue.AnnotationVal(new AnnotationInfo(DotName.of(DefaultedInner.class.getName()),
+                            Map.of("value", new AnnotationValue.StringVal("n")))),
+                    member("inner").defaultValue());
+        }
+
+        @Test
+        @DisplayName("leaves a member without a default at null")
+        void memberWithoutDefault() throws IOException {
+            assertNull(member("required").defaultValue());
+        }
+
+        @Test
+        @DisplayName("gives no default to the methods of an ordinary class")
+        void ordinaryMethods() throws IOException {
+            assertTrue(scan(SimpleClass.class).methods().stream().allMatch(method -> method.defaultValue() == null));
+        }
+    }
+
+    @Nested
+    @DisplayName("scan of a simple class")
+    class ScanSimpleClass {
+
+        @Test
+        @DisplayName("extracts the fully qualified class name")
+        void shouldExtractClassName() throws IOException {
+            var info = scan(SimpleClass.class);
+            assertEquals(DotName.of(SimpleClass.class.getName()), info.name());
+        }
+
+        @Test
+        @DisplayName("extracts the simple name of a nested class, without its enclosing class")
+        void shouldExtractNestedSimpleName() throws IOException {
+            assertEquals("SimpleClass", scan(SimpleClass.class).simpleName());
+        }
+
+        @Test
+        @DisplayName("extracts the simple name of a top-level class")
+        void shouldExtractTopLevelSimpleName() throws IOException {
+            assertEquals("ClassFileScannerTest", scan(ClassFileScannerTest.class).simpleName());
+        }
+
+        @Test
+        @DisplayName("extracts the simple name of a local class, as Class#getSimpleName does")
+        void shouldExtractLocalSimpleName() throws IOException {
+            class Local {}
+            assertEquals(Local.class.getSimpleName(), scan(Local.class).simpleName());
+        }
+
+        @Test
+        @DisplayName("extracts the superclass (java.lang.Object)")
+        void shouldExtractSuperclass() throws IOException {
+            var info = scan(SimpleClass.class);
+            assertEquals(DotName.of("java.lang.Object"), info.superName());
+        }
+
+        @Test
+        @DisplayName("extracts the fields")
+        void shouldExtractFields() throws IOException {
+            var info = scan(SimpleClass.class);
+            var fieldNames = info.fields().stream().map(FieldInfo::name).toList();
+            assertTrue(fieldNames.contains("name"), "should contain the 'name' field");
+            assertTrue(fieldNames.contains("value"), "should contain the 'value' field");
+        }
+
+        @Test
+        @DisplayName("extracts the field types")
+        void shouldExtractFieldTypes() throws IOException {
+            var info = scan(SimpleClass.class);
+            var nameField = info.fields().stream().filter(f -> f.name().equals("name")).findFirst().orElseThrow();
+            assertInstanceOf(ClassType.class, nameField.type());
+            assertEquals(DotName.of("java.lang.String"), ((ClassType) nameField.type()).name());
+
+            var valueField = info.fields().stream().filter(f -> f.name().equals("value")).findFirst().orElseThrow();
+            assertInstanceOf(PrimitiveType.class, valueField.type());
+            assertEquals(PrimitiveType.Kind.INT, ((PrimitiveType) valueField.type()).kind());
+        }
+
+        @Test
+        @DisplayName("extracts the methods")
+        void shouldExtractMethods() throws IOException {
+            var info = scan(SimpleClass.class);
+            var methodNames = info.methods().stream().map(MethodInfo::name).toList();
+            assertTrue(methodNames.contains("getName"));
+            assertTrue(methodNames.contains("setValue"));
+        }
+
+        @Test
+        @DisplayName("detects the field access flags")
+        void shouldDetectFieldAccessFlags() throws IOException {
+            var info = scan(SimpleClass.class);
+            var nameField = info.fields().stream().filter(f -> f.name().equals("name")).findFirst().orElseThrow();
+            assertTrue(nameField.isPrivate());
+            assertFalse(nameField.isPublic());
+
+            var valueField = info.fields().stream().filter(f -> f.name().equals("value")).findFirst().orElseThrow();
+            assertTrue(valueField.isPublic());
+        }
+
+        @Test
+        @DisplayName("detects the CLASS kind")
+        void shouldDetectClassKind() throws IOException {
+            var info = scan(SimpleClass.class);
+            assertEquals(ClassKind.CLASS, info.kind());
+            assertFalse(info.isInterface());
+            assertFalse(info.isEnum());
+            assertFalse(info.isRecord());
+        }
+
+        @Test
+        @DisplayName("detects the constructor")
+        void shouldDetectConstructor() throws IOException {
+            var info = scan(SimpleClass.class);
+            assertTrue(info.methods().stream().anyMatch(MethodInfo::isConstructor));
+        }
+    }
+
+    @Nested
+    @DisplayName("scan of an annotated class")
+    class ScanAnnotatedClass {
+
+        @Test
+        @DisplayName("extracts the class annotations")
+        void shouldExtractClassAnnotations() throws IOException {
+            var info = scan(AnnotatedClass.class);
+            assertTrue(info.hasAnnotation(DotName.of(CustomAnnotation.class.getName())));
+        }
+
+        @Test
+        @DisplayName("extracts the method annotations")
+        void shouldExtractMethodAnnotations() throws IOException {
+            var info = scan(AnnotatedClass.class);
+            var method = info.methods().stream()
+                    .filter(m -> m.name().equals("deprecatedMethod")).findFirst().orElseThrow();
+            assertTrue(method.annotations().stream()
+                    .anyMatch(a -> a.name().equals(DotName.of(CustomAnnotation.class.getName()))));
+        }
+
+        @Test
+        @DisplayName("extracts a custom annotation with its values")
+        void shouldExtractCustomAnnotationWithValues() throws IOException {
+            var info = scan(CustomAnnotatedClass.class);
+            var annotation = info.annotation(DotName.of(CustomAnnotation.class.getName()));
+            assertTrue(annotation.isPresent());
+
+            var ann = annotation.get();
+            assertEquals(new AnnotationValue.StringVal("test"), ann.member("value"));
+            assertEquals(new AnnotationValue.IntVal(42), ann.member("count"));
+        }
+    }
+
+    @Nested
+    @DisplayName("scan of an interface")
+    class ScanInterface {
+
+        @Test
+        @DisplayName("detects the INTERFACE kind")
+        void shouldDetectInterfaceKind() throws IOException {
+            var info = scan(SimpleInterface.class);
+            assertEquals(ClassKind.INTERFACE, info.kind());
+            assertTrue(info.isInterface());
+        }
+
+        @Test
+        @DisplayName("extracts the abstract methods")
+        void shouldExtractAbstractMethods() throws IOException {
+            var info = scan(SimpleInterface.class);
+            var doSomething = info.methods().stream()
+                    .filter(m -> m.name().equals("doSomething")).findFirst().orElseThrow();
+            assertTrue(doSomething.isAbstract());
+        }
+
+        @Test
+        @DisplayName("extracts the default methods")
+        void shouldExtractDefaultMethods() throws IOException {
+            var info = scan(SimpleInterface.class);
+            var defaultMethod = info.methods().stream()
+                    .filter(m -> m.name().equals("defaultMethod")).findFirst().orElseThrow();
+            assertFalse(defaultMethod.isAbstract());
+            assertFalse(defaultMethod.isStatic());
+        }
+    }
+
+    @Nested
+    @DisplayName("scan of a class implementing an interface")
+    class ScanImplementingClass {
+
+        @Test
+        @DisplayName("extracts the superclass")
+        void shouldExtractSuperclass() throws IOException {
+            var info = scan(ImplementingClass.class);
+            assertEquals(DotName.of(SimpleClass.class.getName()), info.superName());
+        }
+
+        @Test
+        @DisplayName("extracts the implemented interfaces")
+        void shouldExtractInterfaces() throws IOException {
+            var info = scan(ImplementingClass.class);
+            assertTrue(info.interfaces().contains(DotName.of(SimpleInterface.class.getName())));
+        }
+    }
+
+    @Nested
+    @DisplayName("scan of an enum")
+    class ScanEnum {
+
+        @Test
+        @DisplayName("detects the ENUM kind")
+        void shouldDetectEnumKind() throws IOException {
+            var info = scan(SimpleEnum.class);
+            assertEquals(ClassKind.ENUM, info.kind());
+            assertTrue(info.isEnum());
+        }
+    }
+
+    @Nested
+    @DisplayName("scan of a record")
+    class ScanRecord {
+
+        @Test
+        @DisplayName("detects the RECORD kind")
+        void shouldDetectRecordKind() throws IOException {
+            var info = scan(SimpleRecord.class);
+            assertEquals(ClassKind.RECORD, info.kind());
+            assertTrue(info.isRecord());
+        }
+
+        @Test
+        @DisplayName("extracts the record components as fields")
+        void shouldExtractRecordComponents() throws IOException {
+            var info = scan(SimpleRecord.class);
+            var fieldNames = info.fields().stream().map(FieldInfo::name).toList();
+            assertTrue(fieldNames.contains("name"));
+            assertTrue(fieldNames.contains("value"));
+        }
+    }
+
+    @Nested
+    @DisplayName("scan of an annotation")
+    class ScanAnnotation {
+
+        @Test
+        @DisplayName("detects the ANNOTATION kind")
+        void shouldDetectAnnotationKind() throws IOException {
+            var info = scan(CustomAnnotation.class);
+            assertEquals(ClassKind.ANNOTATION, info.kind());
+            assertTrue(info.isAnnotation());
+        }
+    }
+
+    @Nested
+    @DisplayName("scan of an abstract class")
+    class ScanAbstractClass {
+
+        @Test
+        @DisplayName("detects abstract and final methods")
+        void shouldDetectAbstractAndFinalMethods() throws IOException {
+            var info = scan(AbstractClass.class);
+            assertTrue(info.isAbstract());
+
+            var abstractMethod = info.methods().stream()
+                    .filter(m -> m.name().equals("abstractMethod")).findFirst().orElseThrow();
+            assertTrue(abstractMethod.isAbstract());
+
+            var finalMethod = info.methods().stream()
+                    .filter(m -> m.name().equals("finalMethod")).findFirst().orElseThrow();
+            assertFalse(finalMethod.isAbstract());
+        }
+    }
+
+    @Nested
+    @DisplayName("scan of return types and parameters")
+    class ScanMethodSignatures {
+
+        @Test
+        @DisplayName("extracts the void return type")
+        void shouldExtractVoidReturn() throws IOException {
+            var info = scan(SimpleClass.class);
+            var setter = info.methods().stream()
+                    .filter(m -> m.name().equals("setValue")).findFirst().orElseThrow();
+            assertInstanceOf(VoidType.class, setter.returnType());
+        }
+
+        @Test
+        @DisplayName("extracts the String return type")
+        void shouldExtractStringReturn() throws IOException {
+            var info = scan(SimpleClass.class);
+            var getter = info.methods().stream()
+                    .filter(m -> m.name().equals("getName")).findFirst().orElseThrow();
+            assertInstanceOf(ClassType.class, getter.returnType());
+            assertEquals(DotName.of("java.lang.String"), ((ClassType) getter.returnType()).name());
+        }
+
+        @Test
+        @DisplayName("extracts the method parameters")
+        void shouldExtractMethodParameters() throws IOException {
+            var info = scan(SimpleClass.class);
+            var setter = info.methods().stream()
+                    .filter(m -> m.name().equals("setValue")).findFirst().orElseThrow();
+            assertEquals(1, setter.parameters().size());
+            assertInstanceOf(PrimitiveType.class, setter.parameters().getFirst().type());
+        }
+    }
+
+    @Nested
+    @DisplayName("class type parameters (vauban#207)")
+    class TypeParameters {
+
+        private static final TypeInfo NUMBER = new ClassType(DotName.of("java.lang.Number"));
+
+        @Test
+        @DisplayName("records each type parameter with its bounds, without the implicit Object bound")
+        void recordsTypeParametersAndBounds() throws IOException {
+            var n = new TypeVariable("N", List.of(NUMBER,
+                    new ParameterizedType(DotName.of("java.lang.Comparable"), List.of(new TypeVariable("N", List.of())))));
+            var w = new TypeVariable("W", List.of(new ParameterizedType(DotName.of("java.util.Map"), List.of(
+                    new WildcardType(new ClassType(DotName.of("java.lang.CharSequence")), null),
+                    new WildcardType(null, new ClassType(DotName.of("java.lang.Integer")))))));
+            var e = new TypeVariable("E", List.of(new ParameterizedType(DotName.of("java.util.Map$Entry"), List.of(
+                    new ArrayType(new PrimitiveType(PrimitiveType.Kind.INT), 2),
+                    new ParameterizedType(DotName.of("java.util.List"), List.of(new WildcardType(null, null)))))));
+            var c = new TypeVariable("C", List.of(new ClassType(DotName.of("java.lang.CharSequence"))));
+            var u = new TypeVariable("U", List.of(new TypeVariable("T", List.of())));
+
+            assertEquals(List.of(new TypeVariable("T", List.of()), n, w, e, c, u),
+                    List.copyOf(scan(Generic.class).typeParameters()));
+        }
+
+        @Test
+        @DisplayName("records a bound naming a type parameter of the enclosing class without bounds")
+        void boundNamingAnEnclosingTypeParameter() throws IOException {
+            assertEquals(List.of(new TypeVariable("P", List.of(new TypeVariable("O", List.of())))),
+                    List.copyOf(scan(Outer.Inner.class).typeParameters()));
+        }
+
+        @Test
+        @DisplayName("records no type parameter for a class that declares none")
+        void nonGenericClass() throws IOException {
+            assertEquals(List.of(), List.copyOf(scan(SimpleClass.class).typeParameters()));
+        }
+
+        @Test
+        @DisplayName("records no type parameter, and does not fail, when the class signature does not parse")
+        void malformedSignature() {
+            byte[] bytes = java.lang.classfile.ClassFile.of().build(java.lang.constant.ClassDesc.of("app.Broken"),
+                    builder -> builder.with(java.lang.classfile.attribute.SignatureAttribute.of(
+                            builder.constantPool().utf8Entry("<T:"))));
+            var info = ClassFileScanner.scan(bytes);
+            assertEquals(DotName.of("app.Broken"), info.name());
+            assertEquals(List.of(), List.copyOf(info.typeParameters()));
+        }
+    }
+
+    // --- VAU-PERF-007: member types read from their Signature attribute ---
+
+    @SuppressWarnings("java:S1172") // the parameters are the shapes under test
+    static class GenericMembers<T extends Number> {
+        java.util.List<String> names;
+        T value;
+        java.util.Map<String, ? extends T>[] maps;
+        int count;
+        java.util.List<?> any;
+        java.util.List<? extends Object> anyObject;
+        String plain;
+
+        <U extends Comparable<U>> java.util.List<U> sorted(java.util.Set<? super T> in, int n) { return null; }
+
+        void plain(String s) { /* no behaviour needed */ }
+
+        class Inner {
+            Inner(java.util.List<String> names) { /* no behaviour needed */ }
+        }
+    }
+
+    @Nested
+    @DisplayName("generic member types (VAU-PERF-007)")
+    class GenericMemberTypes {
+
+        private static final DotName LIST = DotName.of("java.util.List");
+        private static final TypeInfo STRING = new ClassType(DotName.of("java.lang.String"));
+        private static final TypeInfo T = new TypeVariable("T", List.of(new ClassType(DotName.of("java.lang.Number"))));
+
+        private TypeInfo field(String name) throws IOException {
+            return scan(GenericMembers.class).fields().stream().filter(f -> f.name().equals(name)).findFirst()
+                    .orElseThrow().type();
+        }
+
+        private MethodInfo method(Class<?> owner, String name) throws IOException {
+            return scan(owner).methods().stream().filter(m -> m.name().equals(name)).findFirst().orElseThrow();
+        }
+
+        @Test
+        @DisplayName("fields keep their type arguments, type variables and wildcards")
+        void fieldTypes() throws IOException {
+            assertEquals(new ParameterizedType(LIST, List.of(STRING)), field("names"));
+            assertEquals(T, field("value"));
+            assertEquals(new ArrayType(new ParameterizedType(DotName.of("java.util.Map"),
+                    List.of(STRING, new WildcardType(T, null))), 1), field("maps"));
+            assertEquals(new PrimitiveType(PrimitiveType.Kind.INT), field("count"));
+            assertEquals(new ParameterizedType(LIST, List.of(new WildcardType(null, null))), field("any"));
+            assertEquals(new ParameterizedType(LIST, List.of(new WildcardType(null, null))), field("anyObject"),
+                    "? extends Object is the unbounded wildcard, as reflection gives it");
+            assertEquals(STRING, field("plain"));
+        }
+
+        @Test
+        @DisplayName("methods keep generic parameter and return types, with their own type variables")
+        void methodTypes() throws IOException {
+            var sorted = method(GenericMembers.class, "sorted");
+            var u = new TypeVariable("U", List.of(new ParameterizedType(DotName.of("java.lang.Comparable"),
+                    List.of(new TypeVariable("U", List.of())))));
+            assertEquals(new ParameterizedType(LIST, List.of(u)), sorted.returnType());
+            assertEquals(new ParameterizedType(DotName.of("java.util.Set"), List.of(new WildcardType(null, T))),
+                    sorted.parameters().get(0).type());
+            assertEquals(new PrimitiveType(PrimitiveType.Kind.INT), sorted.parameters().get(1).type());
+            assertEquals(new VoidType(), method(GenericMembers.class, "plain").returnType());
+            assertEquals(List.of(u), sorted.typeParameters(), "VAU-PERF-008: the method's own type parameters");
+            assertEquals(List.of(), method(GenericMembers.class, "plain").typeParameters());
+            assertTrue(scan(GenericMembers.class).genericMembers());
+        }
+
+        @Test
+        @DisplayName("an inner class constructor's generic parameters line up after the outer instance")
+        void innerConstructor() throws IOException {
+            var ctor = method(GenericMembers.Inner.class, "<init>");
+            assertEquals(2, ctor.parameters().size());
+            assertEquals(new ClassType(DotName.of(GenericMembers.class.getName())), ctor.parameters().get(0).type());
+            assertEquals(new ParameterizedType(LIST, List.of(STRING)), ctor.parameters().get(1).type());
+        }
+    }
+
+    // --- BUG-20261117-22: the supertypes read from the class signature ---
+
+    @SuppressWarnings("java:S2326") // the declared type parameters are what the tests read
+    static class Base<B> {
+    }
+
+    static class Extending extends Base<List<String>> {
+    }
+
+    @SuppressWarnings("java:S2326") // the declared type parameters are what the tests read
+    interface Pair<K, V> {
+    }
+
+    interface Archive extends Pair<String, Long>, Comparable<List<String>> {
+    }
+
+    @SuppressWarnings("java:S2326") // the declared type parameters are what the tests read
+    abstract static class Ranked<R extends Number & Comparable<R>> implements Comparable<R> {
+    }
+
+    abstract static class Shapes implements Pair<Map<? extends Number, ? super Integer>, int[][]> {
+    }
+
+    @SuppressWarnings({"rawtypes", "java:S2057"}) // the raw superclass is what the test reads
+    static class Raw extends java.util.ArrayList {
+    }
+
+    @Nested
+    @DisplayName("generic supertypes (BUG-20261117-22)")
+    class GenericSupertypes {
+
+        private static final DotName PAIR = DotName.of(Pair.class.getName());
+        private static final TypeInfo LIST_OF_STRING = new ParameterizedType(DotName.of("java.util.List"),
+                List.of(new ClassType(DotName.of("java.lang.String"))));
+        private static final DotName RUNNABLE = DotName.of("java.lang.Runnable");
+
+        @Test
+        @DisplayName("a superclass keeps its type arguments")
+        void superclass() throws IOException {
+            var info = scan(Extending.class);
+            assertEquals(new ParameterizedType(DotName.of(Base.class.getName()), List.of(LIST_OF_STRING)),
+                    info.genericSuperclass());
+            assertEquals(DotName.of(Base.class.getName()), info.superName());
+        }
+
+        @Test
+        @DisplayName("interfaces keep their type arguments and their order")
+        void interfaces() throws IOException {
+            assertEquals(List.of(new ParameterizedType(PAIR, List.of(new ClassType(DotName.of("java.lang.String")),
+                            new ClassType(DotName.of("java.lang.Long")))),
+                    new ParameterizedType(DotName.of("java.lang.Comparable"), List.of(LIST_OF_STRING))),
+                    scan(Archive.class).genericInterfaces());
+        }
+
+        @Test
+        @DisplayName("a type variable of the class keeps the bounds it declares")
+        void typeVariable() throws IOException {
+            var r = new TypeVariable("R", List.of(new ClassType(DotName.of("java.lang.Number")),
+                    new ParameterizedType(DotName.of("java.lang.Comparable"), List.of(new TypeVariable("R",
+                            List.of())))));
+            assertEquals(List.of(new ParameterizedType(DotName.of("java.lang.Comparable"), List.of(r))),
+                    scan(Ranked.class).genericInterfaces());
+        }
+
+        @Test
+        @DisplayName("wildcard, nested and array type arguments")
+        void wildcardsAndArrays() throws IOException {
+            var map = new ParameterizedType(DotName.of("java.util.Map"), List.of(
+                    new WildcardType(new ClassType(DotName.of("java.lang.Number")), null),
+                    new WildcardType(null, new ClassType(DotName.of("java.lang.Integer")))));
+            assertEquals(List.of(new ParameterizedType(PAIR, List.of(map,
+                            new ArrayType(new PrimitiveType(PrimitiveType.Kind.INT), 2)))),
+                    scan(Shapes.class).genericInterfaces());
+        }
+
+        @Test
+        @DisplayName("a raw supertype, and a class without a signature, keep the raw names")
+        void rawSupertypes() throws IOException {
+            assertEquals(new ClassType(DotName.of("java.util.ArrayList")), scan(Raw.class).genericSuperclass());
+            assertEquals(new ClassType(DotName.of("java.lang.Object")), scan(SimpleClass.class).genericSuperclass());
+            assertEquals(List.of(new ClassType(DotName.of(SimpleInterface.class.getName()))),
+                    scan(ImplementingClass.class).genericInterfaces());
+        }
+
+        @Test
+        @DisplayName("a class signature that does not parse leaves the supertypes raw")
+        void malformedSignature() {
+            var info = ClassFileScanner.scan(withSignature("<T:"));
+            assertEquals(new ClassType(DotName.of("java.lang.Object")), info.genericSuperclass());
+            assertEquals(List.of(new ClassType(RUNNABLE)), info.genericInterfaces());
+        }
+
+        @Test
+        @DisplayName("a class signature that names other interfaces than the class file leaves them raw")
+        void signatureWithoutTheInterfaces() {
+            var info = ClassFileScanner.scan(withSignature("Ljava/lang/Object;"));
+            assertEquals(List.of(new ClassType(RUNNABLE)), info.genericInterfaces());
+        }
+
+        /**
+         * A class file without a superclass, as only {@code java.lang.Object}'s is, whose signature names one: the
+         * scan does not fail on a generic superclass without a superclass, and leaves the supertypes raw.
+         */
+        @Test
+        @DisplayName("a class file without a superclass has no generic superclass, whatever its signature says")
+        void noSuperclassWithASignature() {
+            var info = ClassFileScanner.scan(withSignature("java.lang.Object",
+                    "Ljava/lang/Object;Ljava/lang/Runnable;"));
+            assertAll(() -> assertNull(info.superName(), "guard: the class file names no superclass"),
+                    () -> assertNull(info.genericSuperclass()),
+                    () -> assertEquals(List.of(new ClassType(RUNNABLE)), info.genericInterfaces()));
+        }
+
+        /** {@code app.Broken implements Runnable}, whose class signature is {@code signature}. */
+        private static byte[] withSignature(String signature) {
+            return withSignature("app.Broken", signature);
+        }
+
+        /** {@code name implements Runnable}, whose class signature is {@code signature}. */
+        private static byte[] withSignature(String name, String signature) {
+            return java.lang.classfile.ClassFile.of().build(java.lang.constant.ClassDesc.of(name),
+                    builder -> builder.withInterfaceSymbols(java.lang.constant.ClassDesc.of(RUNNABLE.value()))
+                            .with(java.lang.classfile.attribute.SignatureAttribute.of(
+                                    builder.constantPool().utf8Entry(signature))));
+        }
+    }
+
+    /** A class whose methods throw a type variable of the class, one of their own, or classes only. */
+    static class Thrower<E extends Exception> {
+        <F extends RuntimeException> void generic() throws IOException, E, F {
+            // the scan reads the declaration only: the throws clause and the signature
+        }
+
+        void plain() throws IOException {
+            // the scan reads the declaration only: a throws clause without a signature
+        }
+
+        <T> void signed(T value) throws IOException {
+            // the scan reads the declaration only: a signature that names no thrown type
+        }
+    }
+
+    /** BUG-20261117-52: the thrown types as the method declares them, from its {@code Signature}. */
+    @Nested
+    @DisplayName("Thrown types")
+    class ThrownTypes {
+
+        private List<TypeInfo> thrownBy(String method) throws IOException {
+            return scan(Thrower.class).methods().stream().filter(m -> m.name().equals(method)).findFirst()
+                    .orElseThrow().exceptionTypes();
+        }
+
+        @Test
+        @DisplayName("a type variable of the class or of the method stays a type variable, with its bound")
+        void typeVariables() throws IOException {
+            assertEquals(List.of(new ClassType(DotName.of("java.io.IOException")),
+                            new TypeVariable("E", List.of(new ClassType(DotName.of("java.lang.Exception")))),
+                            new TypeVariable("F", List.of(new ClassType(DotName.of("java.lang.RuntimeException"))))),
+                    thrownBy("generic"));
+        }
+
+        @Test
+        @DisplayName("a method whose signature names no thrown type keeps those of its Exceptions attribute")
+        void classesOnly() {
+            var io = List.<TypeInfo>of(new ClassType(DotName.of("java.io.IOException")));
+            assertAll(() -> assertEquals(io, thrownBy("plain"), "a method without a signature"),
+                    () -> assertEquals(io, thrownBy("signed"), "a signature without a thrown type"));
+        }
+    }
+
+    /** BUG-20261117-21: a parameterized type keeps the parameterized type that encloses it, from its signature. */
+    @Nested
+    @DisplayName("Enclosing types")
+    class EnclosingTypes {
+
+        @Test
+        @DisplayName("an inner class of a generic class has the type that encloses it as its owner")
+        void anInnerClassHasItsOwner() throws IOException {
+            var returned = (ParameterizedType) scan(InnerFactory.class).methods().stream()
+                    .filter(m -> m.name().equals("inner")).findFirst().orElseThrow().returnType();
+            var outer = new ParameterizedType(DotName.of(Outer.class.getName()),
+                    List.of(new ClassType(DotName.of("java.lang.Number"))));
+            assertAll(() -> assertEquals(DotName.of(Outer.Inner.class.getName()), returned.rawType()),
+                    () -> assertEquals(List.of(new ClassType(DotName.of("java.lang.Integer"))),
+                            returned.typeArguments()),
+                    () -> assertEquals(outer, returned.owner()));
+        }
+
+        /**
+         * {@code Outer<Number>.Plain}, an inner class without type parameters of a generic class, is a parameterized
+         * type without arguments, its owner {@code Outer<Number>}, as reflection gives it; it was a class type, which
+         * has no owner (BUG-20261118-47).
+         */
+        @Test
+        @DisplayName("an inner class without type parameters of a generic class has its owner")
+        void aNonGenericInnerClassHasItsOwner() throws IOException {
+            var returned = scan(InnerFactory.class).methods().stream()
+                    .filter(m -> m.name().equals("plain")).findFirst().orElseThrow().returnType();
+            var outer = new ParameterizedType(DotName.of(Outer.class.getName()),
+                    List.of(new ClassType(DotName.of("java.lang.Number"))));
+            assertEquals(new ParameterizedType(DotName.of(Outer.Plain.class.getName()), List.of(), outer), returned);
+        }
+
+        @Test
+        @DisplayName("a parameterized type without arguments needs an owner")
+        void aParameterizedTypeWithoutArgumentsNeedsAnOwner() {
+            var plain = DotName.of(Outer.Plain.class.getName());
+            var noArguments = List.<TypeInfo>of();
+            var failure = assertThrows(IllegalArgumentException.class,
+                    () -> new ParameterizedType(plain, noArguments));
+            assertTrue(failure.getMessage().contains(plain.value()), failure.getMessage());
+        }
+
+        @Test
+        @DisplayName("the owner is part of the type, as reflection compares it")
+        void theOwnerIsPartOfTheType() {
+            var integer = List.<TypeInfo>of(new ClassType(DotName.of("java.lang.Integer")));
+            var outer = DotName.of(Outer.class.getName());
+            var inner = DotName.of(Outer.Inner.class.getName());
+            var ofNumber = new ParameterizedType(inner, integer,
+                    new ParameterizedType(outer, List.of(new ClassType(DotName.of("java.lang.Number")))));
+            var ofInteger = new ParameterizedType(inner, integer, new ParameterizedType(outer, integer));
+            var sameAsOfNumber = new ParameterizedType(inner, integer,
+                    new ParameterizedType(outer, List.of(new ClassType(DotName.of("java.lang.Number")))));
+            var alone = new ParameterizedType(inner, integer);
+            assertAll(() -> assertNotEquals(ofNumber, ofInteger), () -> assertNotEquals(alone, ofNumber),
+                    () -> assertEquals(sameAsOfNumber, ofNumber),
+                    () -> assertEquals(sameAsOfNumber.hashCode(), ofNumber.hashCode()),
+                    () -> assertTrue(ofNumber.toString().endsWith(", owner=" + ofNumber.owner() + "]")),
+                    () -> assertFalse(alone.toString().contains("owner")));
+        }
+    }
+}

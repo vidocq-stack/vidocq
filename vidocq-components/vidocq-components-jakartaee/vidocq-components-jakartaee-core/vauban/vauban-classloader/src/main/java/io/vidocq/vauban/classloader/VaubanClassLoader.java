@@ -1,0 +1,829 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.classloader;
+
+import io.vidocq.vauban.classloader.spi.ArchiveContext;
+import io.vidocq.vauban.classloader.spi.ArchiveReader;
+import io.vidocq.vauban.classloader.spi.ByteSourcePlugin;
+import io.vidocq.vauban.classloader.spi.ClassTransformerPlugin;
+import io.vidocq.vauban.classloader.spi.PluginContext;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLConnection;
+import java.net.URLStreamHandler;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.CodeSigner;
+import java.security.CodeSource;
+import java.security.ProtectionDomain;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.ServiceLoader;
+import java.util.Set;
+
+/**
+ * The universal Vauban class loader: the single control point for application class
+ * loading. Each archive is opened by the first {@link ByteSourcePlugin} that handles it
+ * (sjar decryption…), plain jars and exploded directories by built-in readers; every class
+ * then flows through the {@link ClassTransformerPlugin} chain (priority order) before
+ * {@code defineClass}. The decrypt → weave composition falls out of this chaining — an
+ * unwoven third-party sjar can be fixed nowhere else.
+ *
+ * <p>Scope: <strong>application archives only</strong> — the engine refuses to define
+ * platform or Vauban classes even if an archive bundles them ({@link #EXCLUDED_PREFIXES}),
+ * and standard parent-first delegation keeps everything not present in the managed
+ * archives with the parent loader.
+ *
+ * <p>Diagnostics: every transformation is logged; {@code -Dvauban.classloader.dump=<dir>}
+ * writes transformed bytes for inspection; a transformer failure fails the class load
+ * (nothing silent). Individual transformers can be disabled with
+ * {@code -Dvauban.classloader.transformers.disabled=<name,name>}.
+ */
+public class VaubanClassLoader extends ClassLoader implements AutoCloseable {
+
+    /** Comma-separated transformer names to disable. */
+    public static final String DISABLED_TRANSFORMERS_PROPERTY =
+            "vauban.classloader.transformers.disabled";
+    /** Directory where transformed class bytes are dumped (debugging). */
+    public static final String DUMP_PROPERTY = "vauban.classloader.dump";
+
+    private static final System.Logger LOG = System.getLogger(VaubanClassLoader.class.getName());
+    private static final String CLASS_SUFFIX = ".class";
+    /**
+     * Never defined by this loader even when an archive bundles them: the platform, and
+     * the container's own modules (precise prefixes — application code may legitimately
+     * live under {@code io.vidocq.vauban.example…}-style namespaces).
+     */
+    private static final List<String> EXCLUDED_PREFIXES = List.of(
+            "java.", "javax.", "jdk.", "sun.", "com.sun.",
+            "io.vidocq.vauban.api.", "io.vidocq.vauban.core.", "io.vidocq.vauban.indexer.",
+            "io.vidocq.vauban.weaver.", "io.vidocq.vauban.classloader.",
+            "io.vidocq.vauban.sjar.", "io.vidocq.vauban.processor.");
+
+    static {
+        registerAsParallelCapable();
+    }
+
+    private final List<Archive> archives;
+    /** internal class entry name (a/b/C.class) → owning archive. */
+    private final Map<String, Archive> classIndex;
+    /** Module name → the archive of that module, for a loader that defines the modules of a layer. */
+    private final Map<String, Archive> moduleArchives;
+    private final List<ClassTransformerPlugin> transformers;
+    /**
+     * Delegation order for classes present in the managed archives. {@code false}
+     * (default — the scanner/sjar path): standard parent-first, so clear types shared
+     * with the parent world (an sjar's API classes on the class path…) stay unique.
+     * {@code true} (the module-layer path): self-first, mandatory when the same module
+     * exists in a parent layer — parent-first would resolve every internal reference of
+     * a layer class against its un-woven boot-layer twin.
+     */
+    private final boolean selfFirst;
+
+    /** One managed archive: its reader, and the context handed to transformers. */
+    private final class Archive {
+        final Path path;
+        final ArchiveReader reader;
+        /** The module this archive holds in a layer; {@code null} on the class path of the unnamed module. */
+        final String moduleName;
+        final ArchiveContext context;
+        /**
+         * The domain of every class defined from this archive: its location as the code source, as a
+         * URLClassLoader or the module path gives it (vauban#153).
+         */
+        final ProtectionDomain domain;
+        /** The bean list once read: {@code null} until the first {@link #beansList()} call. */
+        private volatile BeansList cachedBeansList;
+
+        Archive(Path path, ArchiveReader reader, String moduleName) {
+            this.path = path;
+            this.reader = reader;
+            this.moduleName = moduleName;
+            this.domain = new ProtectionDomain(codeSource(path), null, VaubanClassLoader.this, null);
+            this.context = new ArchiveContext() {
+                @Override
+                public Path archivePath() {
+                    return path;
+                }
+
+                @Override
+                public ArchiveReader reader() {
+                    return reader;
+                }
+
+                @Override
+                public Optional<Set<String>> beansList() {
+                    return Archive.this.beansList();
+                }
+
+                @Override
+                public Set<String> placedProxyTypes() {
+                    return VaubanClassLoader.this.placedProxyTypes();
+                }
+
+                @Override
+                public byte[] classBytes(String binaryName) {
+                    return VaubanClassLoader.this.rawClassBytes(binaryName);
+                }
+            };
+        }
+
+        Optional<Set<String>> beansList() {
+            var cached = cachedBeansList;
+            if (cached == null) {
+                cached = new BeansList(readBeansList().orElse(null));
+                cachedBeansList = cached;
+            }
+            return Optional.ofNullable(cached.names());
+        }
+
+        private Optional<Set<String>> readBeansList() {
+            try {
+                var bytes = reader.readResource("META-INF/vauban-beans.list");
+                if (bytes.isEmpty()) {
+                    return Optional.empty();
+                }
+                var names = new LinkedHashSet<String>();
+                addListedNames(bytes.get(), names);
+                return Optional.of(Collections.unmodifiableSet(names));
+            } catch (IOException _) {
+                return Optional.empty();
+            }
+        }
+    }
+
+    /** The bean list of an archive, as read once: {@code names} is {@code null} when the archive ships none. */
+    private record BeansList(Set<String> names) {
+    }
+
+    /** Adds to {@code names} the names a list file holds: one per line, stripped, without blanks and comments. */
+    private static void addListedNames(byte[] bytes, Set<String> names) {
+        for (var it = new String(bytes, StandardCharsets.UTF_8).lines().iterator(); it.hasNext(); ) {
+            var line = it.next().strip();
+            if (!line.isEmpty() && !line.startsWith("#")) {
+                names.add(line);
+            }
+        }
+    }
+
+    /**
+     * Opens {@code archivePaths} (order = lookup order) with the discovered
+     * {@link ByteSourcePlugin}s (built-in jar/directory readers as fallback) and the
+     * discovered {@link ClassTransformerPlugin}s.
+     */
+    public static VaubanClassLoader of(List<Path> archivePaths, ClassLoader parent,
+            PluginContext pluginContext) throws IOException {
+        return new VaubanClassLoader("vauban-app", archivePaths, parent, pluginContext,
+                List.of(), false);
+    }
+
+    /**
+     * Variant with explicitly registered source plugins (e.g. from
+     * {@code VaubanContainerBuilder.addByteSourcePlugin}), tried before the
+     * ServiceLoader-discovered ones.
+     */
+    public static VaubanClassLoader of(List<Path> archivePaths, ClassLoader parent,
+            PluginContext pluginContext, List<ByteSourcePlugin> explicitSources) throws IOException {
+        return new VaubanClassLoader("vauban-app", archivePaths, parent, pluginContext,
+                explicitSources, false);
+    }
+
+    /**
+     * Self-first variant — reserved for module-layer definition ({@code VaubanLayerFactory}).
+     *
+     * @param moduleArchives each module of the layer, by name, and the archive it is read from, in lookup order: the
+     *                       module-aware lookups of a module search its own archive only
+     */
+    static VaubanClassLoader forLayer(Map<String, Path> moduleArchives, ClassLoader parent,
+            PluginContext pluginContext) throws IOException {
+        var moduleNames = new HashMap<Path, String>();
+        for (var archive : moduleArchives.entrySet()) {
+            moduleNames.put(archive.getValue(), archive.getKey());
+        }
+        return new VaubanClassLoader("vauban-app-layer", List.copyOf(new LinkedHashSet<>(moduleArchives.values())),
+                moduleNames, parent, pluginContext, List.of(), true);
+    }
+
+    /** A loader whose archives are all on the class path of its unnamed module. */
+    protected VaubanClassLoader(String name, List<Path> archivePaths, ClassLoader parent,
+            PluginContext pluginContext, List<ByteSourcePlugin> explicitSources,
+            boolean selfFirst) throws IOException {
+        this(name, archivePaths, Map.of(), parent, pluginContext, explicitSources, selfFirst);
+    }
+
+    /**
+     * @param moduleNames the module each archive holds, by archive; an archive it does not name is on the class path
+     *                    of the unnamed module
+     */
+    private VaubanClassLoader(String name, List<Path> archivePaths, Map<Path, String> moduleNames,
+            ClassLoader parent, PluginContext pluginContext, List<ByteSourcePlugin> explicitSources,
+            boolean selfFirst) throws IOException {
+        super(name, parent);
+        this.selfFirst = selfFirst;
+        var sources = new ArrayList<>(explicitSources);
+        sources.addAll(sourcePlugins());
+        this.archives = new ArrayList<>();
+        this.classIndex = new LinkedHashMap<>();
+        this.moduleArchives = new HashMap<>();
+        for (var path : archivePaths) {
+            var reader = openArchive(path, sources, pluginContext);
+            var archive = new Archive(path, reader, moduleNames.get(path));
+            archives.add(archive);
+            if (archive.moduleName != null) {
+                moduleArchives.put(archive.moduleName, archive);
+            }
+            for (var entry : reader.classEntries()) {
+                classIndex.putIfAbsent(entry, archive);
+            }
+        }
+        this.transformers = transformerPlugins();
+    }
+
+    private static ArchiveReader openArchive(Path path, List<ByteSourcePlugin> sources,
+            PluginContext pluginContext) throws IOException {
+        for (var plugin : sources) {
+            if (plugin.handles(path)) {
+                return plugin.open(path, pluginContext);
+            }
+        }
+        return BuiltInReaders.open(path);
+    }
+
+    /**
+     * The packages of the classes that a source plugin serves for {@code path}; empty when no plugin handles it, a
+     * plain jar or a directory, whose packages the module system finds by itself. An encrypted jar keeps its
+     * internal classes under opaque names: only its plugin knows their packages (BUG-20261115-01).
+     */
+    static Set<String> pluginPackages(Path path, PluginContext pluginContext) throws IOException {
+        for (var plugin : sourcePlugins()) {
+            if (plugin.handles(path)) {
+                var packages = new java.util.TreeSet<String>();
+                var reader = plugin.open(path, pluginContext);
+                try {
+                    for (var entry : reader.classEntries()) {
+                        int slash = entry.lastIndexOf('/');
+                        if (slash > 0) {
+                            packages.add(entry.substring(0, slash).replace('/', '.'));
+                        }
+                    }
+                } finally {
+                    closeQuietly(reader);
+                }
+                return packages;
+            }
+        }
+        return Set.of();
+    }
+
+    private static void closeQuietly(ArchiveReader reader) {
+        try {
+            reader.close();
+        } catch (Exception e) {
+            LOG.log(System.Logger.Level.DEBUG, () -> "Closing an archive reader failed: " + e);
+        }
+    }
+
+    private static List<ByteSourcePlugin> sourcePlugins() {
+        var plugins = new ArrayList<ByteSourcePlugin>();
+        for (var plugin : ServiceLoader.load(ByteSourcePlugin.class, VaubanClassLoader.class.getClassLoader())) {
+            plugins.add(plugin);
+        }
+        if (plugins.size() > 1) {
+            plugins.sort(Comparator.comparingInt(ByteSourcePlugin::priority));
+        }
+        return plugins;
+    }
+
+    private static List<ClassTransformerPlugin> transformerPlugins() {
+        var disabled = Set.of(System.getProperty(DISABLED_TRANSFORMERS_PROPERTY, "")
+                .split("\\s*,\\s*"));
+        var plugins = new ArrayList<ClassTransformerPlugin>();
+        for (var p : ServiceLoader.load(ClassTransformerPlugin.class, VaubanClassLoader.class.getClassLoader())) {
+            if (disabled.contains(p.name())) {
+                LOG.log(System.Logger.Level.INFO, "Transformer disabled by configuration: " + p.name());
+            } else {
+                plugins.add(p);
+            }
+        }
+        if (plugins.size() > 1) {
+            plugins.sort(Comparator.comparingInt(ClassTransformerPlugin::priority));
+        }
+        return plugins;
+    }
+
+    /** The archives this loader manages, in lookup order. */
+    public List<Path> archivePaths() {
+        return archives.stream().map(a -> a.path).toList();
+    }
+
+    /** {@code true} when {@code binaryName} lives in one of the managed archives. */
+    public boolean managesClass(String binaryName) {
+        return classIndex.containsKey(toEntry(binaryName));
+    }
+
+    // ------------------------------------------------------------ placed proxies (#42 Stage 4)
+
+    /**
+     * Build-time placement manifest, one produced-type binary name per line: the types whose
+     * client proxy must live in their own package (a non-public overridable member, or no
+     * accessible constructor). Written by the annotation processor into the bean archive.
+     */
+    public static final String PLACEMENT_MANIFEST = "META-INF/vauban/required-opens.list";
+    /** Resource prefix under which the annotation processor ships the placed proxy bytes. */
+    public static final String PLACED_PREFIX = "META-INF/vauban/placed/";
+    private static final String CLIENT_PROXY_SUFFIX = "_ClientProxy";
+    private volatile Set<String> placedTypes;
+
+    /**
+     * Whether {@code binaryName} is a client proxy this loader can <em>place</em>: it is not a
+     * class entry of any archive, it is named {@code <produced>_ClientProxy} for a produced type
+     * that this loader defines and that a placement manifest lists, and some archive ships its
+     * bytes under {@link #PLACED_PREFIX}. A placed class is defined into the produced type's own
+     * package by the loader that owns that package — which is why it needs no {@code opens}.
+     */
+    public boolean placesClass(String binaryName) {
+        var produced = producedTypeOf(binaryName);
+        return !produced.isEmpty() && !managesClass(binaryName) && !isExcluded(binaryName)
+                && placedProxyTypes().contains(produced)
+                && classIndex.containsKey(toEntry(produced))
+                && placedBytes(binaryName).isPresent();
+    }
+
+    /** The union of every placement manifest visible through the archives, read once. */
+    Set<String> placedProxyTypes() {
+        var types = placedTypes;
+        if (types == null) {
+            var names = new LinkedHashSet<String>();
+            for (var archive : archives) {
+                try {
+                    var bytes = archive.reader.readResource(PLACEMENT_MANIFEST);
+                    if (bytes.isPresent()) {
+                        addListedNames(bytes.get(), names);
+                    }
+                } catch (IOException _) {
+                    // an unreadable manifest places nothing from that archive
+                }
+            }
+            types = Collections.unmodifiableSet(names);
+            placedTypes = types;
+        }
+        return types;
+    }
+
+    private static String producedTypeOf(String proxyBinaryName) {
+        return proxyBinaryName.endsWith(CLIENT_PROXY_SUFFIX)
+                ? proxyBinaryName.substring(0, proxyBinaryName.length() - CLIENT_PROXY_SUFFIX.length())
+                : "";
+    }
+
+    /** The placed bytes of {@code proxyBinaryName} from whichever archive ships them, if any. */
+    private Optional<byte[]> placedBytes(String proxyBinaryName) {
+        var entry = PLACED_PREFIX + toEntry(proxyBinaryName);
+        for (var archive : archives) {
+            try {
+                var bytes = archive.reader.readResource(entry);
+                if (bytes.isPresent()) return bytes;
+            } catch (IOException _) {
+                // try the next archive
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Define a placed client proxy into the produced type's own package. The bytes go through
+     * the same transformer chain as any archive class, with the <em>produced type's</em> archive
+     * as context, so the cdi-proxifier can retarget the proxy onto the entry constructor it weaves
+     * into that type at its own definition.
+     */
+    private Class<?> placeClass(String name) throws ClassNotFoundException {
+        if (isExcluded(name)) {
+            throw new ClassNotFoundException(name);
+        }
+        var produced = producedTypeOf(name);
+        if (produced.isEmpty() || !placedProxyTypes().contains(produced)) {
+            throw new ClassNotFoundException(name);
+        }
+        var bytes = placedBytes(name).orElseThrow(() -> new ClassNotFoundException(name));
+        var owner = classIndex.get(toEntry(produced));
+        if (owner == null) {
+            throw new ClassNotFoundException("Cannot place " + name + ": " + produced
+                    + " is not defined by this loader");
+        }
+        bytes = applyTransformers(name, bytes, owner);
+        LOG.log(System.Logger.Level.DEBUG, () -> "Placed " + name + " into the package of "
+                + produced + " (" + owner.path.getFileName() + ")");
+        return defineClass(name, bytes, 0, bytes.length, owner.domain);
+    }
+
+    /** Binary names of every class the managed archives contain, in archive order. */
+    public List<String> managedClassNames() {
+        return classIndex.keySet().stream()
+                .map(entry -> entry.substring(0, entry.length() - CLASS_SUFFIX.length())
+                        .replace('/', '.'))
+                .toList();
+    }
+
+    /**
+     * <b>Self-first for managed archives</b>: a class present in this loader's archives
+     * is defined HERE even when a parent could also resolve it. Required by the
+     * trampoline launch, where the application is resolved both in the boot layer (the
+     * IDE put it on the module path) and in this loader's layer: parent-first delegation
+     * would resolve every internal reference of a layer class against its un-woven
+     * boot-layer twin — a different module of the same name, which this layer's modules
+     * do not even read. Anything outside the archives (and every excluded prefix) keeps
+     * the standard parent-first path.
+     */
+    @Override
+    protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        if (!selfFirst) {
+            return super.loadClass(name, resolve);   // standard parent-first
+        }
+        synchronized (getClassLoadingLock(name)) {
+            Class<?> loaded = findLoadedClass(name);
+            // Self-first for every name in a package this loader owns, not only for archive
+            // entries. A class defined at runtime in such a package (a placed proxy, the reflective
+            // fallback's <Type>_ClientProxy, a <Bean>$$Intercepted subclass) must extend THIS
+            // layer's types, so a same-named class in the parent is always the wrong one: in a
+            // layer, a package belongs to one module and so to one loader. A miss throws
+            // ClassNotFoundException, which is what sends the runtime fallback to define the class
+            // inside this loader's package rather than pick up the parent's.
+            if (loaded == null && !isExcluded(name) && ownsPackage(name)) {
+                loaded = findClass(name);
+            }
+            if (loaded == null) {
+                return super.loadClass(name, resolve);
+            }
+            if (resolve) {
+                resolveClass(loaded);
+            }
+            return loaded;
+        }
+    }
+
+    private static boolean isExcluded(String name) {
+        for (var prefix : EXCLUDED_PREFIXES) {
+            if (name.startsWith(prefix)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Whether this loader refuses to define the classes of package {@code pkg} (platform and
+     * container prefixes). A launcher keeps a module owning such a package in its parent layer:
+     * re-layered, it would be an empty shell whose classes come back from its parent twin. Public
+     * so that a build-time split applies the same rule (vauban#154).
+     */
+    public static boolean excludesPackage(String pkg) {
+        return isExcluded(pkg + ".");
+    }
+
+    private volatile Set<String> ownedPackages;
+
+    /** Whether the package of {@code binaryName} is one of the packages of this loader's archives. */
+    private boolean ownsPackage(String binaryName) {
+        var packages = ownedPackages;
+        if (packages == null) {
+            var set = new java.util.HashSet<String>();
+            for (var entry : classIndex.keySet()) {
+                var slash = entry.lastIndexOf('/');
+                set.add(slash < 0 ? "" : entry.substring(0, slash).replace('/', '.'));
+            }
+            packages = Set.copyOf(set);
+            ownedPackages = packages;
+        }
+        var dot = binaryName.lastIndexOf('.');
+        return packages.contains(dot < 0 ? "" : binaryName.substring(0, dot));
+    }
+
+    @Override
+    protected Class<?> findClass(String name) throws ClassNotFoundException {
+        var archive = classIndex.get(toEntry(name));
+        if (archive == null) {
+            // Not an archive class: perhaps a client proxy to be placed into a package we own.
+            return placeClass(name);
+        }
+        if (isExcluded(name)) {
+            throw new ClassNotFoundException(
+                    "Refusing to define excluded class " + name + " from " + archive.path);
+        }
+        byte[] bytes;
+        try {
+            bytes = transformedBytes(name, archive);
+        } catch (IOException e) {
+            throw new ClassNotFoundException(name, e);
+        }
+        return defineClass(name, bytes, 0, bytes.length, archive.domain);
+    }
+
+    /**
+     * The bytes {@link #findClass(String)} would define for {@code binaryName} now: read again from its archive and
+     * passed through the transformer chain, without defining anything. A development tool that redefines a class
+     * this loader defined (the class redefinition of {@code vidocq:dev}) needs these bytes, woven as the loaded class
+     * is, not the file as it is on disk.
+     *
+     * @return empty for a class outside the managed archives, or one this loader refuses to define
+     * @throws java.io.UncheckedIOException when the archive no longer holds the class or cannot be read
+     */
+    public Optional<byte[]> definitionBytes(String binaryName) {
+        var archive = classIndex.get(toEntry(binaryName));
+        if (archive == null || isExcluded(binaryName)) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(transformedBytes(binaryName, archive));
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException("Cannot read " + binaryName + " from " + archive.path, e);
+        }
+    }
+
+    private byte[] transformedBytes(String name, Archive archive) throws IOException {
+        return applyTransformers(name, archive.reader.readClass(toEntry(name)), archive);
+    }
+
+    /**
+     * Module-aware variant, which {@code Class.forName(Module, String)}, and so {@code ServiceLoader}, reaches for
+     * the classes of the modules a {@code ModuleLayer} defines to this loader ({@code VaubanLayerFactory}) — the
+     * inherited default returns {@code null}, which would make every layer class unloadable unless something had
+     * already triggered its definition through the plain name-based path. One loader serves the whole layer, but a
+     * module holds only its own classes: {@code null} unless the class comes from the archive of module
+     * {@code moduleName}, or from the class path when it is {@code null} (BUG-20261114-05).
+     */
+    @Override
+    protected Class<?> findClass(String moduleName, String name) {
+        var archive = definingArchive(name);
+        if (archive == null || !Objects.equals(archive.moduleName, moduleName)) {
+            return null;
+        }
+        try {
+            return findClass(name);
+        } catch (ClassNotFoundException _) {
+            return null;
+        }
+    }
+
+    /** The archive of the module {@code binaryName} belongs to: its own, or its produced type's for a placed proxy. */
+    private Archive definingArchive(String binaryName) {
+        var archive = classIndex.get(toEntry(binaryName));
+        if (archive != null) {
+            return archive;
+        }
+        var produced = producedTypeOf(binaryName);
+        return produced.isEmpty() ? null : classIndex.get(toEntry(produced));
+    }
+
+    /**
+     * Module-aware resource lookup, which {@code Module.getResourceAsStream}, and {@code Class.getResource} on a
+     * class of a named module, reach: the resource of the archive of module {@code moduleName}, or of the class path
+     * when it is {@code null}. Never another module's copy of a name outside any package, such as a
+     * {@code META-INF/} file (BUG-20261114-05); {@code null} when that module does not hold the resource, or when no
+     * module of that name is defined to this loader.
+     */
+    @Override
+    protected URL findResource(String moduleName, String name) {
+        if (moduleName != null) {
+            var archive = moduleArchives.get(moduleName);
+            return archive == null ? null : resourceUrl(archive, name);
+        }
+        return archives.stream()
+                .filter(archive -> archive.moduleName == null)
+                .map(archive -> resourceUrl(archive, name))
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /** The archive's location as a code source, without signers; {@code null} for a path no URL can name. */
+    private static CodeSource codeSource(Path path) {
+        try {
+            return new CodeSource(path.toUri().toURL(), (CodeSigner[]) null);
+        } catch (MalformedURLException | IllegalArgumentException _) {
+            return null;
+        }
+    }
+
+    /** Runs the transformer chain; also used by the layer loader (M2). */
+    protected final byte[] applyTransformers(String name, byte[] bytes, Object archiveHandle) {
+        var archive = (Archive) archiveHandle;
+        for (var transformer : transformers) {
+            if (!transformer.interested(name, archive.context)) continue;
+            byte[] transformed;
+            try {
+                transformed = transformer.transform(name, bytes, archive.context);
+            } catch (RuntimeException e) {
+                // Nothing silent: a broken transformer must not let a half-defined app run
+                throw new LinkageError("Transformer '" + transformer.name()
+                        + "' failed on " + name + " (" + archive.path + ")", e);
+            }
+            if (transformed != null) {
+                if (LOG.isLoggable(System.Logger.Level.DEBUG)) {
+                    LOG.log(System.Logger.Level.DEBUG, "Transformed " + name
+                            + " with '" + transformer.name() + "' (" + archive.path.getFileName() + ")");
+                }
+                dump(name, transformer.name(), transformed);
+                bytes = transformed;
+            }
+        }
+        return bytes;
+    }
+
+    Object archiveHandleOf(String binaryName) {
+        return classIndex.get(toEntry(binaryName));
+    }
+
+    /** Raw (source-resolved, untransformed) bytes of a managed class, or {@code null}. */
+    byte[] rawClassBytes(String binaryName) {
+        var archive = classIndex.get(toEntry(binaryName));
+        if (archive == null) return null;
+        try {
+            return archive.reader.readClass(toEntry(binaryName));
+        } catch (IOException _) {
+            return null;
+        }
+    }
+
+    private static void dump(String name, String transformer, byte[] bytes) {
+        var dir = System.getProperty(DUMP_PROPERTY);
+        if (dir == null) return;
+        try {
+            var file = Path.of(dir, transformer, name.replace('.', '/') + CLASS_SUFFIX);
+            Files.createDirectories(file.getParent());
+            Files.write(file, bytes);
+        } catch (IOException e) {
+            LOG.log(System.Logger.Level.WARNING, "Cannot dump " + name + ": " + e);
+        }
+    }
+
+    @Override
+    public InputStream getResourceAsStream(String name) {
+        for (var archive : archives) {
+            try {
+                var resource = archive.reader.readResource(name);
+                if (resource.isPresent()) {
+                    return new ByteArrayInputStream(resource.get());
+                }
+            } catch (IOException _) {
+                // try the next archive
+            }
+        }
+        return super.getResourceAsStream(name);
+    }
+
+    @Override
+    protected URL findResource(String name) {
+        for (var archive : archives) {
+            var url = resourceUrl(archive, name);
+            if (url != null) return url;
+        }
+        return null;
+    }
+
+    @Override
+    protected Enumeration<URL> findResources(String name) throws IOException {
+        var urls = new LinkedHashMap<String, URL>();
+        for (var archive : archives) {
+            var url = resourceUrl(archive, name);
+            if (url != null) urls.putIfAbsent(sameResource(url), url);
+        }
+        // getResources gives the parent's resources, then these: leave out what the parent already gives, as for
+        // the application module of a jlink image, in the boot layer and again in this one (BUG-20261113-17).
+        var parent = getParent();
+        if (parent != null && !urls.isEmpty()) {
+            for (var url : Collections.list(parent.getResources(name))) {
+                urls.remove(sameResource(url));
+            }
+        }
+        return Collections.enumeration(urls.values());
+    }
+
+    /**
+     * One key for the URLs of one resource. {@code file:///x} and {@code file:/x} name the same file: the first is
+     * how a module reader and this loader write it, the second how the class path does.
+     */
+    private static String sameResource(URL url) {
+        return url.toExternalForm().replace("file:///", "file:/");
+    }
+
+    /**
+     * The URL of a resource. A plain jar or a directory gives the {@code jar:} or {@code file:}
+     * URL the JDK's own loaders give, which a library can also list as a folder (vauban#177).
+     * An archive read by a {@link ByteSourcePlugin}, such as an sjar, has no standard
+     * representation: its URL is a {@code vauban:} URL whose connection serves the (decrypted)
+     * bytes from the archive reader.
+     */
+    private URL resourceUrl(Archive archive, String name) {
+        try {
+            if (archive.reader instanceof BuiltInReaders.StandardUrls standard) {
+                return standard.resourceUrl(name);
+            }
+            var resource = archive.reader.readResource(name);
+            if (resource.isEmpty()) return null;
+            var bytes = resource.get();
+            var handler = new URLStreamHandler() {
+                @Override
+                protected URLConnection openConnection(URL u) {
+                    return new URLConnection(u) {
+                        @Override
+                        public void connect() {
+                            connected = true;
+                        }
+
+                        @Override
+                        public InputStream getInputStream() {
+                            return new ByteArrayInputStream(bytes);
+                        }
+                    };
+                }
+            };
+            return URL.of(java.net.URI.create("vauban:" + archive.path.toUri() + "!/"
+                    + BuiltInReaders.encodePath(name)), handler);
+        } catch (IOException _) {
+            return null;
+        }
+    }
+
+    private static String toEntry(String binaryName) {
+        return binaryName.replace('.', '/') + CLASS_SUFFIX;
+    }
+
+    /**
+     * Lets go of the files this loader holds open, so that a process snapshot (a CRaC checkpoint, a CRIU dump) can
+     * be taken. The loader stays usable: a read while released opens the file again by itself, and
+     * {@link #reopenArchives()} does it at once. Idempotent.
+     *
+     * @throws IOException if a file cannot be released; the others still are, the first failure is thrown
+     */
+    public void releaseArchives() throws IOException {
+        IOException first = null;
+        for (var archive : archives) {
+            try {
+                archive.reader.release();
+            } catch (Exception e) {
+                if (first == null) first = new IOException("Failed releasing " + archive.path, e);
+            }
+        }
+        if (first != null) throw first;
+    }
+
+    /**
+     * Opens again the files {@link #releaseArchives()} let go of. Idempotent.
+     *
+     * @throws IOException if a file cannot be opened, or this loader is closed; the others still are, the first
+     *                     failure is thrown
+     */
+    public void reopenArchives() throws IOException {
+        IOException first = null;
+        for (var archive : archives) {
+            try {
+                archive.reader.reopen();
+            } catch (Exception e) {
+                if (first == null) first = new IOException("Failed reopening " + archive.path, e);
+            }
+        }
+        if (first != null) throw first;
+    }
+
+    @Override
+    public void close() throws IOException {
+        IOException first = null;
+        for (var archive : archives) {
+            try {
+                archive.reader.close();
+            } catch (Exception e) {
+                if (first == null) first = new IOException("Failed closing " + archive.path, e);
+            }
+        }
+        if (first != null) throw first;
+    }
+}

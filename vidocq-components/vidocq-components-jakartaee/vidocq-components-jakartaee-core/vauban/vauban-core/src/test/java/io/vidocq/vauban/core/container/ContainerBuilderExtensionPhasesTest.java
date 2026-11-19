@@ -1,0 +1,528 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.container;
+
+import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.context.spi.AlterableContext;
+import jakarta.enterprise.context.spi.Contextual;
+import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.build.compatible.spi.BeanInfo;
+import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
+import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
+import jakarta.enterprise.inject.build.compatible.spi.Discovery;
+import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
+import jakarta.enterprise.inject.build.compatible.spi.Messages;
+import jakarta.enterprise.inject.build.compatible.spi.MetaAnnotations;
+import jakarta.enterprise.inject.build.compatible.spi.Registration;
+import jakarta.enterprise.inject.build.compatible.spi.ScannedClasses;
+import jakarta.enterprise.inject.build.compatible.spi.Synthesis;
+import jakarta.enterprise.inject.build.compatible.spi.SyntheticComponents;
+import jakarta.enterprise.inject.build.compatible.spi.Validation;
+import jakarta.enterprise.inject.spi.DefinitionException;
+import jakarta.enterprise.inject.spi.DeploymentException;
+import jakarta.inject.Scope;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+
+import java.io.IOException;
+import java.lang.annotation.Annotation;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * How the container builder runs the phases of build compatible extensions and reads its build-time resources: the
+ * causes of failing extensions, classes an extension adds, a custom context without a public constructor, and
+ * class loaders whose resources cannot be listed or hold malformed lines.
+ */
+@DisplayName("VaubanContainerBuilder: extension phases and build-time resources")
+class ContainerBuilderExtensionPhasesTest {
+
+    private static final String RUNTIME_LIST = "META-INF/vauban-bce-runtime.list";
+
+    @Dependent
+    public static class Plain {
+        public String id() {
+            return "plain";
+        }
+    }
+
+    /** Fails while enhancing {@link Plain}. */
+    public static class FirstFailingExtension implements BuildCompatibleExtension {
+        @Enhancement(types = Plain.class)
+        public void enhance(ClassConfig plain) {
+            throw new IllegalStateException("first problem");
+        }
+    }
+
+    /** Fails while enhancing {@link Plain} too. */
+    public static class SecondFailingExtension implements BuildCompatibleExtension {
+        @Enhancement(types = Plain.class)
+        public void enhance(ClassConfig plain) {
+            throw new IllegalArgumentException("second problem");
+        }
+    }
+
+    /** Fails while registering {@link Plain}. */
+    public static class FailingRegistration implements BuildCompatibleExtension {
+        @Registration(types = Plain.class)
+        public void register(BeanInfo plain) {
+            throw new IllegalStateException("registration problem");
+        }
+    }
+
+    /** Fails in {@code @Synthesis}. */
+    public static class FailingSynthesis implements BuildCompatibleExtension {
+        @Synthesis
+        public void synthesize(SyntheticComponents components) {
+            throw new IllegalStateException("synthesis problem");
+        }
+    }
+
+    /** Fails in {@code @Validation}. */
+    public static class FailingValidation implements BuildCompatibleExtension {
+        @Validation
+        public void validate(Messages messages) {
+            throw new IllegalStateException("validation problem");
+        }
+    }
+
+    /** Reports an exception through {@code Messages} while registering {@link Plain}. */
+    public static class ReportingRegistration implements BuildCompatibleExtension {
+        @Registration(types = Plain.class)
+        public void register(BeanInfo plain, Messages messages) {
+            messages.error(new IllegalStateException("reported in registration"));
+        }
+    }
+
+    /** Reports two exceptions through {@code Messages} in {@code @Discovery}. */
+    public static class ReportingDiscovery implements BuildCompatibleExtension {
+        @Discovery
+        public void discover(Messages messages) {
+            messages.error(new IllegalStateException("first report"));
+            messages.error(new IllegalArgumentException("second report"));
+        }
+    }
+
+    /** Throws a {@code DeploymentException} while registering {@link Plain}, as an invoker factory does. */
+    public static class DeploymentProblemInRegistration implements BuildCompatibleExtension {
+        @Registration(types = Plain.class)
+        public void register(BeanInfo plain) {
+            throw new DeploymentException("not a valid invoker target");
+        }
+    }
+
+    /** Throws a {@code DeploymentException} from its constructor. */
+    public static class DeploymentProblemInConstructor implements BuildCompatibleExtension {
+        public DeploymentProblemInConstructor() {
+            throw new DeploymentException("not deployable");
+        }
+
+        @Validation
+        public void validate(Messages messages) {
+            messages.info("built");
+        }
+    }
+
+    /** Throws a {@code DeploymentException} in {@code @Discovery}. */
+    public static class DeploymentProblemInDiscovery implements BuildCompatibleExtension {
+        @Discovery
+        public void discover(ScannedClasses scanned) {
+            throw new DeploymentException("not deployable");
+        }
+    }
+
+    /** Only deployed because {@link AddingExtension} adds it. */
+    @Dependent
+    public static class Extra {
+        public String id() {
+            return "extra";
+        }
+    }
+
+    /** Adds a class that does not exist, one the deployment already has, and one it does not. */
+    public static class AddingExtension implements BuildCompatibleExtension {
+        @Discovery
+        public void discover(ScannedClasses scanned) {
+            scanned.add("io.vidocq.vauban.core.container.NoSuchScannedClass");
+            scanned.add(Plain.class.getName());
+            scanned.add(Extra.class.getName());
+        }
+    }
+
+    @Scope
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target({ElementType.TYPE, ElementType.METHOD, ElementType.FIELD})
+    public @interface Cached {
+    }
+
+    /** A context with no public constructor: the container creates it through its private lookup. */
+    public static class CachedContext implements AlterableContext {
+        private final Map<Contextual<?>, Object> instances = new ConcurrentHashMap<>();
+
+        CachedContext() {
+            // not public on purpose
+        }
+
+        @Override
+        public Class<? extends Annotation> getScope() {
+            return Cached.class;
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> T get(Contextual<T> contextual, CreationalContext<T> creationalContext) {
+            return (T) instances.computeIfAbsent(contextual, c -> contextual.create(creationalContext));
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> T get(Contextual<T> contextual) {
+            return (T) instances.get(contextual);
+        }
+
+        @Override
+        public boolean isActive() {
+            return true;
+        }
+
+        @Override
+        public void destroy(Contextual<?> contextual) {
+            instances.remove(contextual);
+        }
+    }
+
+    public static class CachedScopeExtension implements BuildCompatibleExtension {
+        @Discovery
+        public void discover(MetaAnnotations meta) {
+            meta.addContext(Cached.class, CachedContext.class);
+        }
+    }
+
+    @Cached
+    public static class CachedBean {
+        public String id() {
+            return "cached";
+        }
+    }
+
+    /** Defined again by {@link UnreadableClassLoader}, whose class files cannot be read back. */
+    public static class Isolated {
+    }
+
+    /** Defines {@link Isolated} itself; every resource it hands out fails on the first read. */
+    private static final class UnreadableClassLoader extends ClassLoader {
+        UnreadableClassLoader() {
+            super(ContainerBuilderExtensionPhasesTest.class.getClassLoader());
+        }
+
+        @Override
+        protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+            if (!name.equals(Isolated.class.getName())) {
+                return super.loadClass(name, resolve);
+            }
+            synchronized (getClassLoadingLock(name)) {
+                var loaded = findLoadedClass(name);
+                if (loaded != null) {
+                    return loaded;
+                }
+                try (var in = getParent().getResourceAsStream(name.replace('.', '/') + ".class")) {
+                    var bytes = in.readAllBytes();
+                    return defineClass(name, bytes, 0, bytes.length);
+                } catch (IOException e) {
+                    throw new ClassNotFoundException(name, e);
+                }
+            }
+        }
+
+        @Override
+        public java.io.InputStream getResourceAsStream(String name) {
+            return new java.io.InputStream() {
+                @Override
+                public int read() throws IOException {
+                    throw new IOException("cannot read " + name);
+                }
+            };
+        }
+    }
+
+    @Test
+    @DisplayName("a bean class whose class file cannot be read fails the scan")
+    void unreadableClassFile() throws ClassNotFoundException {
+        var isolated = Class.forName(Isolated.class.getName(), false, new UnreadableClassLoader());
+        var builder = VaubanContainer.builder().addBeanClass(isolated);
+
+        var thrown = assertThrows(java.io.UncheckedIOException.class, builder::build);
+
+        assertTrue(thrown.getMessage().startsWith("Failed to scan class"), thrown.getMessage());
+    }
+
+    @Test
+    @DisplayName("a bean class with no class file, such as a dynamic proxy, is not indexed and the deployment boots")
+    void classWithoutClassFile() {
+        var proxyClass = java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+                new Class<?>[]{Runnable.class}, (proxy, method, args) -> null).getClass();
+
+        try (var container = VaubanContainer.builder().addBeanClass(proxyClass).addBeanClass(Plain.class).build()) {
+            assertEquals("plain", container.select(Plain.class).id());
+        }
+    }
+
+    @Test
+    @DisplayName("extensions failing a phase: the first exception is the cause, the others are suppressed")
+    void extensionErrorCauses() {
+        var builder = VaubanContainer.builder()
+                .addBeanClass(Plain.class)
+                .addBeanClass(FirstFailingExtension.class)
+                .addBeanClass(SecondFailingExtension.class);
+
+        var thrown = assertThrows(DefinitionException.class, builder::build);
+
+        assertNotNull(thrown.getCause());
+        assertEquals(1, thrown.getSuppressed().length);
+        assertEquals(java.util.Set.of("first problem", "second problem"),
+                java.util.Set.of(thrown.getCause().getMessage(), thrown.getSuppressed()[0].getMessage()));
+    }
+
+    /**
+     * An exception of {@code @Enhancement}, {@code @Registration} or {@code @Synthesis} fails the start with a
+     * {@code DefinitionException}, the exception as its cause, as one of {@code @Discovery} does (BUG-20261118-57).
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(classes = {FirstFailingExtension.class, FailingRegistration.class, FailingSynthesis.class})
+    @DisplayName("an exception of @Enhancement, @Registration or @Synthesis is a definition error")
+    void anExceptionOfAPhaseIsADefinitionError(Class<?> extension) {
+        var builder = VaubanContainer.builder().addBeanClass(Plain.class).addBeanClass(extension);
+
+        var thrown = assertThrows(DefinitionException.class, builder::build);
+
+        assertInstanceOf(IllegalStateException.class, thrown.getCause());
+        assertTrue(thrown.getMessage().contains(thrown.getCause().getMessage()), thrown.getMessage());
+    }
+
+    /** An exception of {@code @Validation} stays a deployment problem, the exception as its cause (BUG-20261118-57). */
+    @Test
+    @DisplayName("an exception of @Validation is a deployment problem")
+    void anExceptionOfValidationIsADeploymentProblem() {
+        var builder = VaubanContainer.builder().addBeanClass(Plain.class).addBeanClass(FailingValidation.class);
+
+        var thrown = assertThrows(DeploymentException.class, builder::build);
+
+        assertEquals("validation problem", thrown.getCause().getMessage());
+    }
+
+    /**
+     * An exception an extension reports through {@code Messages.error(Exception)} is the cause of the
+     * {@code DeploymentException}, where only its message was kept (BUG-20261118-59).
+     */
+    @Test
+    @DisplayName("an exception reported through Messages is the cause of the deployment problem")
+    void anExceptionReportedThroughMessagesIsTheCause() {
+        var builder = VaubanContainer.builder().addBeanClass(Plain.class).addBeanClass(ReportingRegistration.class);
+
+        var thrown = assertThrows(DeploymentException.class, builder::build);
+
+        assertAll(() -> assertTrue(thrown.getMessage().contains("reported in registration"), thrown.getMessage()),
+                () -> assertInstanceOf(IllegalStateException.class, thrown.getCause()),
+                () -> assertEquals("reported in registration", thrown.getCause().getMessage()));
+    }
+
+    /**
+     * Several exceptions reported through {@code Messages}: the first is the cause, the others are suppressed, in
+     * {@code @Discovery} too (BUG-20261118-59).
+     */
+    @Test
+    @DisplayName("exceptions reported through Messages: the first is the cause, the others are suppressed")
+    void exceptionsReportedThroughMessagesAreTheCauseAndSuppressed() {
+        var builder = VaubanContainer.builder().addBeanClass(Plain.class).addBeanClass(ReportingDiscovery.class);
+
+        var thrown = assertThrows(DeploymentException.class, builder::build);
+
+        assertAll(() -> assertEquals("first report", thrown.getCause().getMessage()),
+                () -> assertEquals(1, thrown.getSuppressed().length),
+                () -> assertEquals("second report", thrown.getSuppressed()[0].getMessage()));
+    }
+
+    /**
+     * A {@code DeploymentException} a phase method throws, such as the one an invoker factory throws for a method it
+     * cannot invoke, stays a deployment problem: the CDI TCK's invalid invoker tests expect it (BUG-20261118-57).
+     */
+    @Test
+    @DisplayName("a DeploymentException thrown in @Registration stays a deployment problem")
+    void aDeploymentExceptionOfRegistrationStaysADeploymentProblem() {
+        var builder = VaubanContainer.builder().addBeanClass(Plain.class)
+                .addBeanClass(DeploymentProblemInRegistration.class);
+
+        var thrown = assertThrows(DeploymentException.class, builder::build);
+
+        assertTrue(thrown.getMessage().contains("not a valid invoker target"), thrown.getMessage());
+    }
+
+    /**
+     * A {@code DeploymentException} an extension's constructor or {@code @Discovery} method throws stays a deployment
+     * problem at start, the exception as its cause: one rule everywhere (BUG-20261118-57). The start builds the
+     * extension in {@code @Discovery}.
+     */
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(classes = {DeploymentProblemInConstructor.class, DeploymentProblemInDiscovery.class})
+    @DisplayName("a DeploymentException of a constructor or of @Discovery stays a deployment problem at start")
+    void aDeploymentExceptionOfDiscoveryStaysADeploymentProblem(Class<?> extension) {
+        var builder = VaubanContainer.builder().addBeanClass(Plain.class).addBeanClass(extension);
+
+        var thrown = assertThrows(DeploymentException.class, builder::build);
+
+        assertTrue(thrown.getMessage().contains("not deployable"), thrown.getMessage());
+        assertInstanceOf(DeploymentException.class, thrown.getCause());
+    }
+
+    @Test
+    @DisplayName("a class an extension adds is deployed, one that does not exist is skipped, one already deployed is kept")
+    void extensionAddedClasses() {
+        try (var container = VaubanContainer.builder()
+                .addBeanClass(Plain.class)
+                .addBeanClass(AddingExtension.class)
+                .build()) {
+
+            assertEquals("plain", container.select(Plain.class).id());
+            assertEquals("extra", container.select(Extra.class).id());
+        }
+    }
+
+    @Test
+    @DisplayName("a custom context without a public constructor is still installed")
+    void contextWithoutPublicConstructor() {
+        try (var container = VaubanContainer.builder()
+                .addBeanClass(CachedScopeExtension.class)
+                .addBeanClass(CachedBean.class)
+                .build()) {
+
+            var first = container.select(CachedBean.class);
+
+            assertEquals("cached", first.id());
+            assertSame(first, container.select(CachedBean.class), "the custom context holds a single instance");
+        }
+    }
+
+    /** A loader that cannot list the frozen enhancement patches, and serves the replay list from a file. */
+    private static final class ResourceLoader extends ClassLoader {
+        private final URL runtimeList;
+
+        ResourceLoader(URL runtimeList) {
+            super(ContainerBuilderExtensionPhasesTest.class.getClassLoader());
+            this.runtimeList = runtimeList;
+        }
+
+        @Override
+        public Enumeration<URL> getResources(String name) throws IOException {
+            if (runtimeList != null && name.equals(RUNTIME_LIST)) {
+                return Collections.enumeration(java.util.List.of(runtimeList));
+            }
+            if (name.equals(io.vidocq.vauban.core.extensions.EnhancementPatchSerializer.PATCH_PATH)) {
+                throw new IOException("resources of " + name + " cannot be listed");
+            }
+            return super.getResources(name);
+        }
+    }
+
+    @Test
+    @DisplayName("a class loader that cannot list the enhancement patches still boots the deployment")
+    void unlistableResources() {
+        try (var container = VaubanContainer.builder()
+                .classLoader(new ResourceLoader(null))
+                .addBeanClass(Plain.class)
+                .build()) {
+
+            assertNotNull(container.select(Plain.class));
+        }
+    }
+
+    @Test
+    @DisplayName("comments, blank, malformed and unloadable lines of the replay list are skipped")
+    void malformedReplayList(@TempDir Path dir) throws IOException {
+        var list = dir.resolve("vauban-bce-runtime.list");
+        Files.writeString(list, String.join("\n",
+                "# a comment",
+                "",
+                ";" + Plain.class.getName(),
+                FirstFailingExtension.class.getName() + ";",
+                "no separator at all",
+                "com.example.MissingExtension;com.example.MissingTarget"));
+
+        try (var container = VaubanContainer.builder()
+                .classLoader(new ResourceLoader(list.toUri().toURL()))
+                .addBeanClass(Plain.class)
+                .build()) {
+
+            assertTrue(container.isRunning());
+            assertEquals("plain", container.select(Plain.class).id());
+        }
+    }
+
+    @Test
+    @DisplayName("an application layer loader given as the class loader stays the composite's first loader")
+    void layerLoaderFirst() throws IOException {
+        var layer = io.vidocq.vauban.classloader.VaubanClassLoader.of(java.util.List.of(),
+                getClass().getClassLoader(), io.vidocq.vauban.classloader.spi.PluginContext.empty());
+
+        try (var container = VaubanContainer.builder().classLoader(layer).addBeanClass(Plain.class).build()) {
+            assertEquals("plain", container.select(Plain.class).id());
+        }
+    }
+
+    @Test
+    @DisplayName("a bean class of the application layer loader puts that loader first in the composite")
+    void layerLoaderMovedFirst(@TempDir Path dir) throws IOException, ClassNotFoundException {
+        var bytes = java.lang.classfile.ClassFile.of().build(java.lang.constant.ClassDesc.of("gen.LayerOnly"),
+                type -> type.withFlags(java.lang.classfile.ClassFile.ACC_PUBLIC)
+                        .withSuperclass(java.lang.constant.ConstantDescs.CD_Object));
+        Files.createDirectories(dir.resolve("gen"));
+        Files.write(dir.resolve("gen/LayerOnly.class"), bytes);
+        var layer = io.vidocq.vauban.classloader.VaubanClassLoader.of(java.util.List.of(dir),
+                getClass().getClassLoader(), io.vidocq.vauban.classloader.spi.PluginContext.empty());
+        var layerOnly = layer.loadClass("gen.LayerOnly");
+
+        try (var container = VaubanContainer.builder()
+                .addBeanClass(Plain.class)
+                .addBeanClass(layerOnly)
+                .build()) {
+            assertSame(layer, container.classLoader().getParent());
+            assertEquals("plain", container.select(Plain.class).id());
+        }
+    }
+}

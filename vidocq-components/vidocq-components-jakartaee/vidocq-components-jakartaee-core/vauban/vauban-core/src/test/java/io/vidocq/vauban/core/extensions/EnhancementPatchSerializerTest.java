@@ -1,0 +1,349 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.extensions;
+
+import io.vidocq.vauban.indexer.model.AnnotationInfo;
+import io.vidocq.vauban.indexer.model.AnnotationValue;
+import io.vidocq.vauban.indexer.model.DotName;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Round-trip tests for {@link EnhancementPatchSerializer}: a build-time @Enhancement
+ * result ({@code target -> [added annotation...]}) must survive write→read so the
+ * runtime can apply it without re-instantiating the BCE.
+ */
+@DisplayName("EnhancementPatchSerializer")
+class EnhancementPatchSerializerTest {
+
+    private static AnnotationInfo ann(String name) {
+        return new AnnotationInfo(DotName.of(name), Map.of());
+    }
+
+    @Nested
+    @DisplayName("round-trip")
+    class RoundTrip {
+
+        @Test
+        @DisplayName("single target with one added annotation (the @Path -> @RequestScoped case)")
+        void singleTargetSingleAnnotation() throws IOException {
+            var patch = Map.of(
+                    "com.example.HelloResource",
+                    List.of(ann("jakarta.enterprise.context.RequestScoped")));
+
+            assertEquals(patch, roundTrip(patch));
+        }
+
+        @Test
+        @DisplayName("multiple targets, multiple annotations each")
+        void multipleTargets() throws IOException {
+            var patch = Map.of(
+                    "com.example.HelloResource",
+                    List.of(ann("jakarta.enterprise.context.RequestScoped")),
+                    "com.example.Repo$Nested",
+                    List.of(ann("jakarta.enterprise.context.ApplicationScoped"),
+                            ann("jakarta.inject.Singleton")));
+
+            assertEquals(patch, roundTrip(patch));
+        }
+
+        @Test
+        @DisplayName("empty patch yields an empty map")
+        void emptyPatch() throws IOException {
+            assertEquals(Map.of(), roundTrip(Map.of()));
+        }
+
+        @Test
+        @DisplayName("annotation order per target is preserved")
+        void orderPreserved() throws IOException {
+            var patch = Map.of("com.example.A",
+                    List.of(ann("a.B"), ann("a.A"), ann("a.C"))); // deliberately non-sorted
+            assertEquals(List.of(ann("a.B"), ann("a.A"), ann("a.C")),
+                    roundTrip(patch).get("com.example.A"));
+        }
+
+        @Test
+        @DisplayName("member values survive (BUG-20261008-05)")
+        void membersSurvive() throws IOException {
+            var named = new AnnotationInfo(DotName.of("jakarta.inject.Named"),
+                    Map.of("value", new AnnotationValue.StringVal("a=b, c:d\n#é")));
+            var channel = new AnnotationInfo(DotName.of("com.example.Channel"), Map.of(
+                    "value", new AnnotationValue.StringVal("beta"),
+                    "weights", new AnnotationValue.ArrayVal(List.of(new AnnotationValue.IntVal(1)))));
+            var patch = Map.of("com.example.Bean", List.of(named, channel));
+            assertEquals(patch, roundTrip(patch));
+        }
+
+        @Test
+        void memberTargetsAndOverloadDescriptorsSurvive() throws IOException {
+            var named = new AnnotationInfo(DotName.of("jakarta.inject.Named"),
+                    Map.of("value", new AnnotationValue.StringVal("selected")));
+            var patch = Map.of(
+                    "com.example.Bean#field#dependency", List.of(named, ann("jakarta.inject.Inject")),
+                    "com.example.Bean#method#initialize(Ljava/lang/String;)V", List.of(ann("jakarta.inject.Inject")),
+                    "com.example.Bean#parameter#<init>([Ljava/lang/String;)V#0", List.of(named));
+            var read = roundTrip(patch);
+            assertEquals(patch, read);
+            read.keySet().forEach(target -> assertEquals(DotName.of("com.example.Bean"),
+                    EnhancementPatchSerializer.owner(DotName.of(target))));
+        }
+    }
+
+    @Test
+    @DisplayName("the form earlier versions wrote still reads, members empty")
+    void earlierFormReads() throws IOException {
+        var text = "# old\ncom.example.A=jakarta.enterprise.context.RequestScoped, jakarta.inject.Named\n";
+        var patch = EnhancementPatchSerializer.read(new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8)));
+        assertEquals(Map.of("com.example.A",
+                        List.of(ann("jakarta.enterprise.context.RequestScoped"), ann("jakarta.inject.Named"))),
+                patch);
+    }
+
+    /** A class whose members a patch may target. */
+    static class Enhanced {
+        String dependency;
+
+        Enhanced(String dependency) {
+            this.dependency = dependency;
+        }
+    }
+
+    /**
+     * A constructor's entry is keyed by {@code <init>}, as an earlier Vauban wrote it in the frozen record, though its
+     * {@code MethodInfo.name()} is now the name of its class (BUG-20261117-54): the record stays valid.
+     */
+    @Test
+    @DisplayName("a constructor parameter's entry keyed <init> still targets the constructor")
+    void aConstructorEntryKeyedInitStillTargetsTheConstructor() throws IOException {
+        var patch = Map.of(DotName.of(Enhanced.class.getName() + "#parameter#<init>(Ljava/lang/String;)V#0"),
+                List.of(ann("jakarta.inject.Named")));
+
+        var configs = EnhancementPatchSerializer.memberConfigurations(patch, indexOfEnhanced());
+
+        var constructor = configs.get(DotName.of(Enhanced.class.getName())).getFirst().getMethodConfigs().stream()
+                .filter(method -> method.info().isConstructor()).findFirst().orElseThrow();
+        assertEquals(List.of("jakarta.inject.Named"), constructor.getParameterConfigs().getFirst()
+                .getAddedAnnotations().stream().map(jakarta.enterprise.lang.model.AnnotationInfo::name).toList());
+    }
+
+    /** A class whose field {@link Hiding} hides. */
+    static class Hidden {
+        String dependency;
+    }
+
+    /** A class that declares a field of the name of one it inherits. */
+    static class Hiding extends Hidden {
+        String dependency;
+    }
+
+    /**
+     * A field a class inherits, configured through it, is keyed by the class that declares it, after its name: the
+     * class hides one of the same name, which keeps the key earlier versions wrote. Each reads back onto its own
+     * field (BUG-20261118-48). The key of the inherited one is of a kind of its own, {@code inheritedField}, which an
+     * earlier Vauban does not read: it fails the deployment, where a {@code field} key with the declaring class after
+     * it was read by its name alone, and the annotation went to the field of the subclass (BUG-20261118-52).
+     */
+    @Test
+    @DisplayName("an inherited member's entry names the class declaring it, beside a member of the same name")
+    void anInheritedMemberIsKeyedByTheClassDeclaringIt() throws IOException {
+        var index = indexOf(Hidden.class, Hiding.class);
+        var hiding = DotName.of(Hiding.class.getName());
+        var config = new VaubanClassConfig(new io.vidocq.vauban.core.langmodel.declarations.VaubanClassInfo(
+                index.getClassByName(hiding).orElseThrow(), new io.vidocq.vauban.core.langmodel.IndexLookup(index)));
+        for (var field : config.fields()) {
+            var declaring = field.info().declaringClass().name();
+            field.addAnnotation(jakarta.enterprise.inject.literal.NamedLiteral.of(declaring));
+        }
+
+        var additions = EnhancementPatchSerializer.additions(Map.of(hiding, List.of(config)));
+        var patch = new java.util.HashMap<DotName, List<AnnotationInfo>>();
+        additions.forEach((target, annotations) -> patch.put(DotName.of(target), annotations));
+        var read = EnhancementPatchSerializer.memberConfigurations(patch, index).get(hiding).getFirst();
+
+        assertEquals(java.util.Set.of(hiding.value() + "#field#dependency",
+                hiding.value() + "#inheritedField#dependency#" + Hidden.class.getName()), additions.keySet());
+        var named = new java.util.TreeMap<String, String>();
+        read.getFieldConfigs().forEach(field -> named.put(field.info().declaringClass().name(),
+                field.getAddedAnnotationInfos().getFirst().value().asString()));
+        assertEquals(Map.of(Hidden.class.getName(), Hidden.class.getName(), Hiding.class.getName(),
+                Hiding.class.getName()), named);
+    }
+
+    /**
+     * A member key of a kind this version does not read fails the read, naming the key, as an earlier Vauban fails on
+     * the {@code inheritedField}, {@code inheritedMethod} and {@code inheritedParameter} keys (BUG-20261118-52).
+     */
+    @Test
+    @DisplayName("a member key of a kind this version does not read fails the read")
+    void aMemberKeyOfAnUnknownKindFailsTheRead() throws IOException {
+        var index = indexOf(Hidden.class, Hiding.class);
+        var target = DotName.of(Hiding.class.getName() + "#laterField#dependency#" + Hidden.class.getName());
+        var patch = Map.of(target, List.of(ann("jakarta.inject.Inject")));
+        var thrown = assertThrows(IllegalStateException.class,
+                () -> EnhancementPatchSerializer.memberConfigurations(patch, index));
+        assertEquals("Unknown enhancement target: " + target, thrown.getMessage());
+    }
+
+    /** Each inherited member of a class, configured through it, has a key of an inherited kind (BUG-20261118-52). */
+    @Test
+    @DisplayName("an inherited field, method and parameter have keys of their own kinds, and read back")
+    void inheritedMembersHaveKeysOfTheirOwnKinds() throws IOException {
+        var index = indexOf(HiddenInjected.class, Sub.class);
+        var sub = DotName.of(Sub.class.getName());
+        var config = new VaubanClassConfig(new io.vidocq.vauban.core.langmodel.declarations.VaubanClassInfo(
+                index.getClassByName(sub).orElseThrow(), new io.vidocq.vauban.core.langmodel.IndexLookup(index)));
+        for (var method : config.methods()) {
+            if (method.info().name().equals("set")) {
+                method.addAnnotation(jakarta.enterprise.inject.literal.NamedLiteral.of("m"));
+                method.parameters().getFirst().addAnnotation(jakarta.enterprise.inject.literal.NamedLiteral.of("p"));
+            }
+        }
+
+        var additions = EnhancementPatchSerializer.additions(Map.of(sub, List.of(config)));
+        var declaring = HiddenInjected.class.getName();
+        assertEquals(java.util.Set.of(sub.value() + "#inheritedMethod#set(Ljava/lang/String;)V#" + declaring,
+                sub.value() + "#inheritedParameter#set(Ljava/lang/String;)V#0#" + declaring), additions.keySet());
+        var patch = new java.util.HashMap<DotName, List<AnnotationInfo>>();
+        additions.forEach((target, annotations) -> patch.put(DotName.of(target), annotations));
+        var read = EnhancementPatchSerializer.memberConfigurations(patch, index).get(sub).getFirst();
+        var set = read.getMethodConfigs().stream().filter(method -> method.info().name().equals("set")).findFirst()
+                .orElseThrow();
+        assertEquals("m", set.getAddedAnnotationInfos().getFirst().value().asString());
+        assertEquals("p", set.getParameterConfigs().getFirst().getAddedAnnotations().getFirst().value().asString());
+    }
+
+    /** A class that inherits the initializer {@code set} of {@link HiddenInjected}. */
+    static class Sub extends HiddenInjected {
+    }
+
+    /** A class whose injected field {@link HidingInjected} hides. */
+    static class HiddenInjected {
+        @jakarta.inject.Inject
+        String dependency;
+
+        @jakarta.inject.Inject
+        void set(String value) {
+            dependency = value;
+        }
+    }
+
+    /** A class that declares an injected field of the name of one it inherits. */
+    static class HidingInjected extends HiddenInjected {
+        @jakarta.inject.Inject
+        String dependency;
+    }
+
+    /**
+     * The index the phases after {@code @Enhancement} read (BUG-20261118-45) takes the removal an extension made on an
+     * inherited field, through a subclass, as that subclass's alone: the field it declares of the same name keeps its
+     * annotations. The removal was keyed by the field's name only, the key of the field the subclass declares
+     * (BUG-20261118-48).
+     */
+    @Test
+    @DisplayName("a removal on an inherited field leaves the subclass's field of the same name as it is")
+    void aRemovalOnAnInheritedFieldLeavesTheFieldOfTheSameNameAlone() throws IOException {
+        var index = indexOf(HiddenInjected.class, HidingInjected.class);
+        var hiding = DotName.of(HidingInjected.class.getName());
+        var config = new VaubanClassConfig(new io.vidocq.vauban.core.langmodel.declarations.VaubanClassInfo(
+                index.getClassByName(hiding).orElseThrow(), new io.vidocq.vauban.core.langmodel.IndexLookup(index)));
+        config.getFieldConfigs().stream()
+                .filter(field -> field.info().declaringClass().name().equals(HiddenInjected.class.getName()))
+                .findFirst().orElseThrow().removeAllAnnotations();
+
+        var edited = EnhancedClasses.of(index, Map.of(hiding, List.of(config)));
+
+        assertEquals(List.of(DotName.of("jakarta.inject.Inject")), edited.getClassByName(hiding).orElseThrow()
+                .fields().getFirst().annotations().stream().map(AnnotationInfo::name).toList());
+    }
+
+    private static io.vidocq.vauban.indexer.VaubanIndex indexOf(Class<?>... classes) throws IOException {
+        var builder = new io.vidocq.vauban.indexer.IndexBuilder();
+        for (var type : classes) {
+            try (var in = type.getResourceAsStream(type.getName().substring(type.getName().lastIndexOf('.') + 1)
+                    + ".class")) {
+                builder.add(io.vidocq.vauban.indexer.scanner.ClassFileScanner.scan(in.readAllBytes()));
+            }
+        }
+        return builder.build();
+    }
+
+    private static io.vidocq.vauban.indexer.VaubanIndex indexOfEnhanced() throws IOException {
+        try (var in = Enhanced.class.getResourceAsStream("EnhancementPatchSerializerTest$Enhanced.class")) {
+            return new io.vidocq.vauban.indexer.IndexBuilder()
+                    .add(io.vidocq.vauban.indexer.scanner.ClassFileScanner.scan(in.readAllBytes())).build();
+        }
+    }
+
+    @Test
+    @DisplayName("member additions of a class outside the deployment are left out (BUG-20261111-02)")
+    void memberAdditionsOfAClassOutsideTheIndexAreLeftOut() throws IOException {
+        var patch = Map.of(
+                DotName.of("com.example.NotDeployed#field#dependency"), List.of(ann("jakarta.inject.Inject")),
+                DotName.of(Enhanced.class.getName() + "#field#dependency"), List.of(ann("jakarta.inject.Inject")));
+
+        var configs = EnhancementPatchSerializer.memberConfigurations(patch, indexOfEnhanced());
+
+        assertEquals(java.util.Set.of(DotName.of(Enhanced.class.getName())), configs.keySet());
+    }
+
+    @Test
+    @DisplayName("a member the patch names and a deployed class no longer has still fails the boot")
+    void aMissingMemberOfADeployedClassStillFails() throws IOException {
+        var patch = Map.of(
+                DotName.of(Enhanced.class.getName() + "#field#renamed"), List.of(ann("jakarta.inject.Inject")));
+        var index = indexOfEnhanced();
+
+        var failure = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> EnhancementPatchSerializer.memberConfigurations(patch, index));
+        assertTrue(failure.getMessage().contains("Enhanced field is missing"), failure.getMessage());
+    }
+
+    @Test
+    @DisplayName("written form is UTF-8 text naming the target and the annotation")
+    void writtenFormIsText() throws IOException {
+        var baos = new ByteArrayOutputStream();
+        EnhancementPatchSerializer.write(
+                Map.of("com.example.HelloResource",
+                        List.of(ann("jakarta.enterprise.context.RequestScoped"))),
+                baos);
+        var text = baos.toString(StandardCharsets.UTF_8);
+        assertTrue(text.contains("com.example.HelloResource"), text);
+        assertTrue(text.contains("jakarta.enterprise.context.RequestScoped"), text);
+    }
+
+    private static Map<String, List<AnnotationInfo>> roundTrip(Map<String, List<AnnotationInfo>> patch)
+            throws IOException {
+        var baos = new ByteArrayOutputStream();
+        EnhancementPatchSerializer.write(patch, baos);
+        return EnhancementPatchSerializer.read(new ByteArrayInputStream(baos.toByteArray()));
+    }
+}

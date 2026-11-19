@@ -1,0 +1,436 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.interceptor;
+
+import jakarta.interceptor.InvocationContext;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Vauban implementation of {@link InvocationContext}.
+ * Chains interceptors and ultimately invokes the target method.
+ */
+@SuppressWarnings("java:S3776") // CDI container logic has inherent complexity
+public final class VaubanInvocationContext implements InvocationContext {
+
+    private static final String MSG_BUT_GOT = " but got ";
+
+    private Object target;
+    private final Method method;
+    private Object[] parameters;
+    private final List<InterceptorInvocation> chain;
+    // Created on first use: most interceptors never read it, and every call would pay for an empty map.
+    private Map<String, Object> contextData;
+    private final TargetInvoker targetInvoker;
+    private Set<java.lang.annotation.Annotation> interceptorBindings;
+    private Constructor<?> constructor;
+    // Note: the current position in the chain is NOT an instance field.
+    // It is carried by the {@code idx} parameter of {@link #proceedAt(int)} and
+    // propagated to the next interceptor via {@link ChainedContext}. This avoids any
+    // mutable shared state between threads - a typical @Asynchronous situation where
+    // a virtual thread executes {@code ctx.proceed()} after the initial thread
+    // has returned (and would have reset a shared counter to -1).
+
+    /**
+     * Functional interface for the final target invocation (to support super calls).
+     */
+    @FunctionalInterface
+    public interface TargetInvoker {
+        @SuppressWarnings("java:S112") // CDI spec: container exceptions propagate as RuntimeException
+        Object invoke(Object target, Object[] params) throws Exception;
+    }
+
+    public VaubanInvocationContext(Object target, Method method, Object[] parameters,
+                                   List<InterceptorInvocation> chain) {
+        this(target, method, null, parameters, chain, null);
+    }
+
+    public VaubanInvocationContext(Object target, Method method, Object[] parameters,
+                                   List<InterceptorInvocation> chain, TargetInvoker targetInvoker) {
+        this(target, method, null, parameters, chain, targetInvoker);
+    }
+
+    public VaubanInvocationContext(Object target, Method method, Constructor<?> constructor, Object[] parameters,
+                                   List<InterceptorInvocation> chain, TargetInvoker targetInvoker) {
+        this(parameters != null ? parameters.clone() : new Object[0], target, method, constructor, chain,
+                targetInvoker);
+    }
+
+    /** Keeps {@code parameters} as given. */
+    private VaubanInvocationContext(Object[] parameters, Object target, Method method, Constructor<?> constructor,
+                                    List<InterceptorInvocation> chain, TargetInvoker targetInvoker) {
+        this.target = target;
+        this.method = method;
+        this.constructor = constructor;
+        this.parameters = parameters;
+        this.chain = chain;
+        this.targetInvoker = targetInvoker;
+    }
+
+    /**
+     * A context over an array the caller built for this invocation alone and never touches again: kept, not copied.
+     * The context never writes into it either ({@link #setParameters} replaces it), so a shared empty array is fine.
+     */
+    static VaubanInvocationContext owning(Object target, Method method, Object[] parameters,
+                                          List<InterceptorInvocation> chain, TargetInvoker targetInvoker) {
+        return new VaubanInvocationContext(parameters, target, method, null, chain, targetInvoker);
+    }
+
+    @Override
+    public Object getTarget() {
+        return target;
+    }
+
+    @Override
+    public Object getTimer() {
+        return null;
+    }
+
+    @Override
+    public Method getMethod() {
+        // The generated subclass hands over its $$super$ bridge: answer the declaration it stands
+        // for, the one whose bindings the interceptor chain applied (BusinessMethods).
+        if (method != null && BusinessMethods.isBridge(method)) {
+            return BusinessMethods.originalOf(method);
+        }
+        return method;
+    }
+
+    @Override
+    public Constructor<?> getConstructor() {
+        return constructor;
+    }
+
+    /**
+     * Set the constructor for @AroundConstruct interception.
+     */
+    public void setConstructor(Constructor<?> constructor) {
+        this.constructor = constructor;
+    }
+
+    /**
+     * Set the interceptor bindings explicitly (for AroundConstruct/lifecycle where target is null).
+     */
+    public void setInterceptorBindings(Set<java.lang.annotation.Annotation> bindings) {
+        this.interceptorBindings = bindings;
+    }
+
+    @Override
+    public Object[] getParameters() {
+        return parameters.clone();
+    }
+
+    @Override
+    public void setParameters(Object[] params) {
+        if (method != null) {
+            // Validate parameter count
+            var originalMethod = getMethod();
+            if (originalMethod != null) {
+                var expectedTypes = originalMethod.getParameterTypes();
+                if (params.length != expectedTypes.length) {
+                    throw new IllegalArgumentException(
+                            "Wrong number of parameters: expected " + expectedTypes.length + MSG_BUT_GOT + params.length);
+                }
+                // Validate parameter types
+                for (int i = 0; i < params.length; i++) {
+                    if (params[i] == null) {
+                        if (expectedTypes[i].isPrimitive()) {
+                            throw new IllegalArgumentException("Cannot set null for primitive parameter " + i + " of type " + expectedTypes[i].getName());
+                        }
+                        continue;
+                    }
+                    if (!isAssignableTo(params[i].getClass(), expectedTypes[i])) {
+                        throw new IllegalArgumentException(
+                                "Parameter " + i + " type mismatch: expected " + expectedTypes[i].getName()
+                                        + MSG_BUT_GOT + params[i].getClass().getName());
+                    }
+                }
+            }
+        } else if (constructor != null) {
+            var expectedTypes = constructor.getParameterTypes();
+            if (params.length != expectedTypes.length) {
+                throw new IllegalArgumentException(
+                        "Wrong number of parameters: expected " + expectedTypes.length + MSG_BUT_GOT + params.length);
+            }
+            // Validate parameter types
+            for (int i = 0; i < params.length; i++) {
+                if (params[i] == null) {
+                    if (expectedTypes[i].isPrimitive()) {
+                        throw new IllegalArgumentException("Cannot set null for primitive parameter " + i + " of type " + expectedTypes[i].getName());
+                    }
+                    continue;
+                }
+                if (!isAssignableTo(params[i].getClass(), expectedTypes[i])) {
+                    throw new IllegalArgumentException(
+                            "Parameter " + i + " type mismatch: expected " + expectedTypes[i].getName()
+                                    + MSG_BUT_GOT + params[i].getClass().getName());
+                }
+            }
+        }
+        this.parameters = params.clone();
+    }
+
+    private static boolean isAssignableTo(Class<?> from, Class<?> to) {
+        if (to.isAssignableFrom(from)) return true;
+        // Handle primitive/wrapper conversion
+        if (to.isPrimitive()) {
+            String toName = to.getName();
+            if (toName.equals("int")) return from == Integer.class;
+            if (toName.equals("long")) return from == Long.class;
+            if (toName.equals("double")) return from == Double.class;
+            if (toName.equals("float")) return from == Float.class;
+            if (toName.equals("boolean")) return from == Boolean.class;
+            if (toName.equals("byte")) return from == Byte.class;
+            if (toName.equals("char")) return from == Character.class;
+            if (toName.equals("short")) return from == Short.class;
+            return false;
+        }
+        return false;
+    }
+
+    @Override
+    public Map<String, Object> getContextData() {
+        var data = contextData;
+        if (data == null) {
+            data = new HashMap<>();
+            contextData = data;
+        }
+        return data;
+    }
+
+    @Override
+    public Set<java.lang.annotation.Annotation> getInterceptorBindings() {
+        if (interceptorBindings != null) return interceptorBindings;
+        // Derive from target class annotations
+        if (target != null) {
+            var beanClass = target.getClass();
+            if (beanClass.getName().contains("$$Intercepted") || beanClass.getName().contains("$$Proxy")) {
+                beanClass = beanClass.getSuperclass();
+            }
+            var resolvedMethod = getMethod();
+            var mgr = InterceptorManager.currentInstance();
+            var declaring = beanClass;
+            var result = DERIVED_BINDINGS.get(beanClass).computeIfAbsent(
+                    new DerivedBindings(resolvedMethod, mgr,
+                            io.vidocq.vauban.core.container.VaubanBeanManager.customInterceptorBindingTypes()),
+                    key -> deriveBindings(declaring, key));
+            interceptorBindings = result;
+            return result;
+        }
+        return Set.of();
+    }
+
+    /**
+     * The bindings {@link #getInterceptorBindings()} derives, per class, method and container: worked out once, as
+     * they depend on declarations alone, instead of reading the annotations again on every intercepted call
+     * (VAU-PERF-004). The container is part of the key for the bindings an {@code @Enhancement} added.
+     */
+    private static final ClassValue<java.util.Map<DerivedBindings, Set<java.lang.annotation.Annotation>>>
+            DERIVED_BINDINGS = new ClassValue<>() {
+                @Override
+                protected java.util.Map<DerivedBindings, Set<java.lang.annotation.Annotation>> computeValue(
+                        Class<?> type) {
+                    return new java.util.concurrent.ConcurrentHashMap<>();
+                }
+            };
+
+    /** The custom binding types are part of the key: a BCE may declare one after a first derivation. */
+    private record DerivedBindings(Method method, InterceptorManager manager,
+            Set<Class<? extends java.lang.annotation.Annotation>> customBindingTypes) {}
+
+    private static Set<java.lang.annotation.Annotation> deriveBindings(Class<?> beanClass, DerivedBindings key) {
+        // Class-level bindings (indexed by annotation type for override logic)
+        var bindingsByType = new java.util.LinkedHashMap<Class<? extends java.lang.annotation.Annotation>,
+                java.lang.annotation.Annotation>();
+        for (var ann : beanClass.getAnnotations()) {
+            if (isInterceptorBinding(ann)) {
+                bindingsByType.put(ann.annotationType(), ann);
+            }
+        }
+        // Method-level bindings override class-level of the same type. They are read off the
+        // declaration getMethod() reports, the one InterceptorManager read them from to build
+        // the chain (BusinessMethods), inherited and interface default methods included.
+        if (key.method() != null) {
+            for (var ann : key.method().getAnnotations()) {
+                if (isInterceptorBinding(ann)) {
+                    bindingsByType.put(ann.annotationType(), ann);
+                }
+            }
+        }
+        // Include enhanced bindings added via BCE Enhancement
+        if (key.manager() != null) {
+            for (var ann : key.manager().getEnhancedBindings(beanClass.getName())) {
+                if (isInterceptorBinding(ann)) {
+                    bindingsByType.put(ann.annotationType(), ann);
+                }
+            }
+        }
+        // Transitively resolve meta-bindings
+        var result = new java.util.LinkedHashSet<java.lang.annotation.Annotation>(bindingsByType.values());
+        addTransitiveBindings(result);
+        return java.util.Collections.unmodifiableSet(result);
+    }
+
+    private static boolean isInterceptorBinding(java.lang.annotation.Annotation ann) {
+        var t = ann.annotationType();
+        return t.isAnnotationPresent(jakarta.interceptor.InterceptorBinding.class)
+                || io.vidocq.vauban.core.container.VaubanBeanManager.isCustomInterceptorBinding(t);
+    }
+
+    private static void addTransitiveBindings(Set<java.lang.annotation.Annotation> bindings) {
+        var toAdd = new java.util.LinkedHashSet<java.lang.annotation.Annotation>();
+        for (var ann : bindings) {
+            collectTransitive(ann.annotationType(), toAdd, bindings);
+        }
+        bindings.addAll(toAdd);
+    }
+
+    private static void collectTransitive(Class<? extends java.lang.annotation.Annotation> annType,
+            Set<java.lang.annotation.Annotation> toAdd, Set<java.lang.annotation.Annotation> existing) {
+        for (var meta : annType.getAnnotations()) {
+            if (isInterceptorBinding(meta) && !existing.contains(meta) && !toAdd.contains(meta)) {
+                toAdd.add(meta);
+                collectTransitive(meta.annotationType(), toAdd, existing);
+            }
+        }
+    }
+
+    @SuppressWarnings("java:S3011") // CDI spec requires reflective access
+    @Override
+    public Object proceed() throws Exception {
+        return proceedAt(0);
+    }
+
+    /**
+     * Advances through the interceptor chain starting at index {@code idx}. This
+     * method does not mutate any instance state: {@code idx} is carried exclusively by
+     * the call stack and propagated to the next interceptor via {@link ChainedContext}.
+     *
+     * <p>Consequence: the instance is safe with respect to cross-thread calls (vthreads
+     * for {@code @Asynchronous}). Multiple successive calls to {@code proceed()} from
+     * the same interceptor ({@code @Retry} semantics) are still supported because each
+     * call re-enters at current index + 1, determined by the context passed to that
+     * interceptor, and not by a shared field.</p>
+     */
+    @SuppressWarnings("java:S3011") // CDI spec requires reflective access
+    Object proceedAt(int idx) throws Exception {
+        try {
+            if (idx < chain.size()) {
+                var invocation = chain.get(idx);
+                var nextCtx = new ChainedContext(this, idx + 1);
+                if (constructor != null && invocation.target() == null) {
+                    if (target == null) {
+                        return invocation.method().invoke(null, nextCtx);
+                    } else {
+                        new InterceptorInvocation(target, invocation.method()).invoke(nextCtx);
+                        return null;
+                    }
+                }
+                return invocation.invoke(nextCtx);
+            } else {
+                if (targetInvoker != null) {
+                    var result = targetInvoker.invoke(target, parameters);
+                    if (constructor != null && result != null) {
+                        target = result;
+                    }
+                    return constructor != null ? null : result;
+                }
+                if (method != null) {
+                    makeAccessibleSafe(method);
+                    return method.invoke(target, parameters);
+                }
+                return null;
+            }
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            var cause = e.getCause();
+            if (cause instanceof Exception ex) throw ex;
+            if (cause instanceof Error err) throw err;
+            throw e;
+        }
+    }
+
+    /**
+     * Decorator view of the parent context that captures the chain position to visit on
+     * the next {@code proceed()}. All other methods delegate to the parent
+     * so that all interceptors share parameters / contextData /
+     * interceptor bindings.
+     */
+    private record ChainedContext(VaubanInvocationContext parent, int nextIdx) implements InvocationContext {
+        @Override public Object getTarget() { return parent.getTarget(); }
+        @Override public Object getTimer() { return parent.getTimer(); }
+        @Override public Method getMethod() { return parent.getMethod(); }
+        @Override public Constructor<?> getConstructor() { return parent.getConstructor(); }
+        @Override public Object[] getParameters() { return parent.getParameters(); }
+        @Override public void setParameters(Object[] params) { parent.setParameters(params); }
+        @Override public Map<String, Object> getContextData() { return parent.getContextData(); }
+        @Override public Set<java.lang.annotation.Annotation> getInterceptorBindings() {
+            return parent.getInterceptorBindings();
+        }
+        @Override public Object proceed() throws Exception { return parent.proceedAt(nextIdx); }
+    }
+
+    /**
+     * Represents one interceptor in the chain.
+     */
+    public record InterceptorInvocation(Object target, Method method) {
+        @SuppressWarnings({"java:S3011", "java:S112"}) // CDI spec requires reflective access; container exceptions propagate as RuntimeException
+        public Object invoke(InvocationContext ctx) throws Exception {
+            // Through the generated provider of the method's package when one owns it: no reflection, so a non-public
+            // interceptor method needs no opens (VAU-INT-011). What it throws then propagates as is.
+            var mgr = InterceptorManager.currentInstance();
+            if (mgr != null && mgr.getVaubanLookup() != null) {
+                var result = mgr.getVaubanLookup().invokeGenerated(target, method, ctx);
+                if (result != io.vidocq.vauban.api.VaubanComponentProvider.NOT_INVOKED) {
+                    return result;
+                }
+            }
+            try {
+                makeAccessibleSafe(method);
+                return method.invoke(target, ctx);
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                var cause = e.getCause();
+                if (cause instanceof Exception ex) throw ex;
+                if (cause instanceof Error err) throw err;
+                throw e;
+            }
+        }
+    }
+    private static void makeAccessibleSafe(java.lang.reflect.AccessibleObject member) {
+        var mgr = InterceptorManager.currentInstance();
+        if (mgr != null && mgr.getVaubanLookup() != null) {
+            mgr.getVaubanLookup().makeAccessible(member);
+        } else {
+            member.trySetAccessible();
+        }
+    }
+
+    public static VaubanInvocationContext dummy() {
+        return dummy(new Object[0]);
+    }
+
+    public static VaubanInvocationContext dummy(Object[] params) {
+        return new VaubanInvocationContext(null, null, null, params, java.util.Collections.emptyList(), null);
+    }
+}

@@ -1,0 +1,593 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.interceptor;
+
+import java.lang.classfile.ClassBuilder;
+import io.vidocq.vauban.core.codegen.GeneratedClassFile;
+
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.CodeBuilder;
+import java.lang.constant.ClassDesc;
+import java.lang.constant.ConstantDescs;
+import java.lang.constant.DirectMethodHandleDesc;
+import java.lang.constant.DynamicCallSiteDesc;
+import java.lang.constant.MethodHandleDesc;
+import java.lang.constant.MethodTypeDesc;
+
+/**
+ * Emits the bytecode for an intercepted bean subclass from a neutral {@link InterceptedShape}.
+ *
+ * <p>This class owns the entire {@link ClassFile} builder body — field names, method shapes,
+ * label order, slot arithmetic — so that both the runtime {@link InterceptorSubclassGenerator}
+ * (driven from {@link Class} objects) and the compile-time APT front-end (driven from
+ * {@code javax.lang.model.element.TypeElement}) produce byte-for-byte identical output.
+ *
+ * <p><strong>Field names generated:</strong>
+ * {@code $$manager}, {@code $$bindings}, {@code $$constructorBindings}, {@code $$context}, {@code $$chains}
+ * (each method's chain, kept per instance), and one {@code static final Method $$method$<index>} per
+ * interceptable method (its {@code $$super$} bridge, looked up once by the class initializer).
+ * <strong>Special methods generated:</strong> {@code <clinit>}, {@code $$init}, one private {@code $$super$name}
+ * bridge and one override per interceptable method.
+ */
+@SuppressWarnings("java:S3776") // CDI container logic has inherent complexity
+public final class InterceptedEmitter {
+
+    private static final ClassDesc CD_InterceptorManager =
+            ClassDesc.of("io.vidocq.vauban.core.interceptor.InterceptorManager");
+    private static final ClassDesc CD_Set = ClassDesc.of("java.util.Set");
+    private static final ClassDesc CD_Object = ConstantDescs.CD_Object;
+    private static final ClassDesc CD_Method = ClassDesc.of("java.lang.reflect.Method");
+    private static final ClassDesc CD_Class = ClassDesc.of("java.lang.Class");
+    private static final ClassDesc CD_String = ClassDesc.of("java.lang.String");
+    private static final ClassDesc CD_List = ClassDesc.of("java.util.List");
+    private static final ClassDesc CD_CreationalContext =
+            ClassDesc.of("jakarta.enterprise.context.spi.CreationalContext");
+    private static final ClassDesc CD_ClassLoader = ClassDesc.of("java.lang.ClassLoader");
+    private static final ClassDesc CD_MethodHandle = ClassDesc.of("java.lang.invoke.MethodHandle");
+    private static final ClassDesc CD_MethodHandles = ClassDesc.of("java.lang.invoke.MethodHandles");
+    private static final ClassDesc CD_MethodHandlesLookup = ClassDesc.of("java.lang.invoke.MethodHandles$Lookup");
+    private static final ClassDesc CD_TargetInvoker =
+            ClassDesc.of("io.vidocq.vauban.core.interceptor.VaubanInvocationContext$TargetInvoker");
+
+    // Naming authority is the shared IR (InterceptedShape) — aliased here for brevity
+    private static final String FIELD_MANAGER = InterceptedShape.FIELD_MANAGER;
+    private static final String FIELD_BINDINGS = InterceptedShape.FIELD_BINDINGS;
+    private static final String FIELD_CONSTRUCTOR_BINDINGS = InterceptedShape.FIELD_CONSTRUCTOR_BINDINGS;
+    private static final String FIELD_CONTEXT = InterceptedShape.FIELD_CONTEXT;
+    private static final String FIELD_CHAINS = InterceptedShape.FIELD_CHAINS;
+    private static final String METHOD_VALUEOF = "valueOf";
+
+    /** Erased signature of {@code TargetInvoker.invoke} and of every generated {@code $$ti$<name>}. */
+    private static final MethodTypeDesc MTD_TARGET_INVOKER =
+            MethodTypeDesc.of(CD_Object, CD_Object, CD_Object.arrayType());
+
+    /**
+     * Bootstrap handle for {@code LambdaMetafactory.metafactory} — turns a generated
+     * {@code $$ti$<name>} static method into a {@code TargetInvoker} instance at link time, so the
+     * interceptor chain invokes the original method through a plain (non-reflective) lambda call.
+     */
+    private static final DirectMethodHandleDesc BSM_LAMBDA_METAFACTORY = MethodHandleDesc.ofMethod(
+            DirectMethodHandleDesc.Kind.STATIC,
+            ClassDesc.of("java.lang.invoke.LambdaMetafactory"),
+            "metafactory",
+            MethodTypeDesc.of(
+                    ConstantDescs.CD_CallSite,
+                    ConstantDescs.CD_MethodHandles_Lookup,
+                    ConstantDescs.CD_String,
+                    ConstantDescs.CD_MethodType,
+                    ConstantDescs.CD_MethodType,
+                    ConstantDescs.CD_MethodHandle,
+                    ConstantDescs.CD_MethodType));
+
+    private InterceptedEmitter() {}
+
+    /**
+     * Emit the bytecode for {@code shape.beanBinaryName() + "$$Intercepted"}.
+     *
+     * @param shape the neutral description of the bean to intercept
+     * @return raw bytecode of the generated subclass
+     */
+    public static byte[] emit(InterceptedShape shape) {
+        String subclassName = shape.subclassName();
+        ClassDesc subclassCD = classDescOf(subclassName);
+        ClassDesc beanCD = classDescOf(shape.beanBinaryName());
+
+        return GeneratedClassFile.build(subclassCD, clb -> {
+            clb.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_SUPER);
+            clb.withSuperclass(beanCD);
+            // The interfaces whose shadowed default methods the bridges invoke explicitly: an
+            // invokespecial on an interface method must name a direct superinterface (JVMS 4.9.2).
+            var owners = shape.explicitDefaultOwners();
+            if (!owners.isEmpty()) {
+                clb.withInterfaceSymbols(owners.stream().map(TypeRef::classDesc).toList());
+            }
+
+            // Fields
+            clb.withField(FIELD_MANAGER, CD_InterceptorManager, ClassFile.ACC_PRIVATE);
+            clb.withField(FIELD_BINDINGS, CD_Set, ClassFile.ACC_PRIVATE);
+            clb.withField(FIELD_CONSTRUCTOR_BINDINGS, CD_Set, ClassFile.ACC_PRIVATE);
+            clb.withField(FIELD_CONTEXT, CD_CreationalContext, ClassFile.ACC_PRIVATE);
+            clb.withField(FIELD_CHAINS, CD_List.arrayType(), ClassFile.ACC_PRIVATE);
+            var methods = shape.methods();
+            for (int i = 0; i < methods.size(); i++) {
+                clb.withField(InterceptedShape.methodFieldName(i), CD_Method,
+                        ClassFile.ACC_PRIVATE | ClassFile.ACC_STATIC | ClassFile.ACC_FINAL);
+            }
+
+            // Class initializer: each method's $$super$ bridge, looked up once on the class itself
+            if (!methods.isEmpty()) {
+                clb.withMethodBody(ConstantDescs.CLASS_INIT_NAME, ConstantDescs.MTD_void, ClassFile.ACC_STATIC,
+                        cob -> {
+                            for (int i = 0; i < methods.size(); i++) {
+                                MethodShape method = methods.get(i);
+                                cob.ldc(subclassCD);
+                                cob.ldc(InterceptedShape.superBridgeName(method.name()));
+                                loadParameterClasses(cob, subclassCD, method);
+                                cob.invokevirtual(CD_Class, "getDeclaredMethod",
+                                        MethodTypeDesc.of(CD_Method, CD_String, CD_Class.arrayType()));
+                                cob.putstatic(subclassCD, InterceptedShape.methodFieldName(i), CD_Method);
+                            }
+                            cob.return_();
+                        });
+            }
+
+            // Constructors: for each non-private constructor in super class, generate one here
+            for (CtorShape ctor : shape.constructors()) {
+                var paramCDs = ctor.params().stream()
+                        .map(TypeRef::classDesc)
+                        .toArray(ClassDesc[]::new);
+                var mtd = MethodTypeDesc.of(ConstantDescs.CD_void, paramCDs);
+
+                clb.withMethodBody(
+                        ConstantDescs.INIT_NAME,
+                        mtd,
+                        ClassFile.ACC_PUBLIC,
+                        cob -> {
+                            cob.aload(0);
+                            int slot = 0;
+                            for (TypeRef p : ctor.params()) {
+                                slot = loadParamBySlot(cob, p, slot);
+                            }
+                            cob.invokespecial(beanCD, ConstantDescs.INIT_NAME, mtd);
+                            cob.return_();
+                        });
+            }
+
+            // Setter: public void $$init(InterceptorManager, Set<DotName>, Set<DotName>, CreationalContext)
+            clb.withMethodBody(
+                    InterceptedShape.INIT_METHOD,
+                    MethodTypeDesc.of(ConstantDescs.CD_void,
+                            CD_InterceptorManager, CD_Set, CD_Set, CD_CreationalContext),
+                    ClassFile.ACC_PUBLIC,
+                    cob -> {
+                        cob.aload(0);
+                        cob.aload(1);
+                        cob.putfield(subclassCD, FIELD_MANAGER, CD_InterceptorManager);
+                        cob.aload(0);
+                        cob.aload(2);
+                        cob.putfield(subclassCD, FIELD_BINDINGS, CD_Set);
+                        cob.aload(0);
+                        cob.aload(3);
+                        cob.putfield(subclassCD, FIELD_CONSTRUCTOR_BINDINGS, CD_Set);
+                        cob.aload(0);
+                        cob.aload(4);
+                        cob.putfield(subclassCD, FIELD_CONTEXT, CD_CreationalContext);
+                        cob.aload(0);
+                        cob.loadConstant(methods.size());
+                        cob.anewarray(CD_List);
+                        cob.putfield(subclassCD, FIELD_CHAINS, CD_List.arrayType());
+                        cob.return_();
+                    });
+
+            // Override each interceptable method + generate $$super$ bridge + $$ti$ glue. The $$ti$
+            // glue erases to (Object,Object[])Object, so two overloaded methods would collide on the
+            // bare $$ti$<name>; give each overload a unique name (the $$super$<name> bridges keep
+            // distinct descriptors and need no suffix).
+            var tiNames = shape.targetInvokerNames();
+            for (int i = 0; i < methods.size(); i++) {
+                MethodShape method = methods.get(i);
+                generateSuperBridge(clb, beanCD, method);
+                generateInterceptedMethod(clb, subclassCD, beanCD, method, i, tiNames.get(i));
+                generateTargetInvokerGlue(clb, subclassCD, method, tiNames.get(i));
+            }
+            for (var bridge : shape.bridges()) {
+                generateBridge(clb, beanCD, bridge);
+            }
+        });
+    }
+
+    /**
+     * A bridge as javac writes one ({@link InterceptedShape.Bridge}): loads its arguments, casts each to the
+     * intercepted method's parameter type, and calls that method virtually, which reaches this subclass's override.
+     */
+    private static void generateBridge(java.lang.classfile.ClassBuilder clb, ClassDesc beanCD,
+            InterceptedShape.Bridge bridge) {
+        ClassDesc returnCD = bridge.returnType().classDesc();
+        var methodType = MethodTypeDesc.of(returnCD,
+                bridge.params().stream().map(TypeRef::classDesc).toArray(ClassDesc[]::new));
+        var targetType = MethodTypeDesc.of(bridge.targetReturnType().classDesc(),
+                bridge.targetParams().stream().map(TypeRef::classDesc).toArray(ClassDesc[]::new));
+        clb.withMethodBody(bridge.name(), methodType,
+                ClassFile.ACC_PUBLIC | ClassFile.ACC_SYNTHETIC | ClassFile.ACC_BRIDGE,
+                cob -> {
+                    cob.aload(0);
+                    int s = 1;
+                    for (int i = 0; i < bridge.params().size(); i++) {
+                        ClassDesc param = bridge.params().get(i).classDesc();
+                        s = loadParam(cob, param, s);
+                        ClassDesc target = bridge.targetParams().get(i).classDesc();
+                        if (!target.equals(param)) {
+                            cob.checkcast(target);
+                        }
+                    }
+                    cob.invokevirtual(beanCD, bridge.name(), targetType);
+                    emitReturn(cob, returnCD);
+                });
+    }
+
+    /**
+     * Generate {@code $$super$methodName} — calls {@code super.methodName()} directly,
+     * used by the interceptor chain to invoke the original method without infinite recursion.
+     */
+    private static void generateSuperBridge(java.lang.classfile.ClassBuilder clb,
+            ClassDesc beanCD, MethodShape method) {
+        ClassDesc returnCD = method.returnType().classDesc();
+        var paramCDs = method.params().stream()
+                .map(TypeRef::classDesc)
+                .toArray(ClassDesc[]::new);
+        var methodType = MethodTypeDesc.of(returnCD, paramCDs);
+
+        clb.withMethodBody(
+                InterceptedShape.superBridgeName(method.name()),
+                methodType,
+                ClassFile.ACC_PRIVATE,
+                cob -> {
+                    cob.aload(0);
+                    int s = 1;
+                    for (TypeRef p : method.params()) {
+                        s = loadParam(cob, p.classDesc(), s);
+                    }
+                    invokeOriginal(cob, beanCD, method, methodType);
+                    emitReturn(cob, returnCD);
+                });
+    }
+
+    /**
+     * {@code super.<name>(…)}, or, for a shadowed default method, {@code invokespecial} on the
+     * default of {@link MethodShape#defaultOwner()} — which the subclass lists as a direct
+     * superinterface — since the JVM resolves {@code super.<name>} to the shadowing declaration and
+     * refuses it (BUG-20261004-08).
+     */
+    private static void invokeOriginal(CodeBuilder cob, ClassDesc beanCD, MethodShape method,
+            MethodTypeDesc methodType) {
+        if (method.defaultOwner() != null) {
+            cob.invokespecial(method.defaultOwner().classDesc(), method.name(), methodType, true);
+        } else {
+            cob.invokespecial(beanCD, method.name(), methodType);
+        }
+    }
+
+    private static void generateInterceptedMethod(
+            java.lang.classfile.ClassBuilder clb,
+            ClassDesc subclassCD, ClassDesc beanCD, MethodShape method, int index, String tiName) {
+
+        ClassDesc returnCD = method.returnType().classDesc();
+        var paramCDs = method.params().stream()
+                .map(TypeRef::classDesc)
+                .toArray(ClassDesc[]::new);
+        var methodType = MethodTypeDesc.of(returnCD, paramCDs);
+
+        clb.withMethodBody(
+                method.name(),
+                methodType,
+                ClassFile.ACC_PUBLIC,
+                cob -> {
+                    // If manager is null (pre-init), call super directly
+                    cob.aload(0);
+                    cob.getfield(subclassCD, FIELD_MANAGER, CD_InterceptorManager);
+                    var intercepted = cob.newLabel();
+                    cob.ifnonnull(intercepted);
+
+                    // Super call (manager not yet set)
+                    cob.aload(0);
+                    int s = 1;
+                    for (TypeRef p : method.params()) {
+                        s = loadParam(cob, p.classDesc(), s);
+                    }
+                    invokeOriginal(cob, beanCD, method, methodType);
+                    emitReturn(cob, returnCD);
+
+                    // Intercepted path: one call into the container,
+                    // $$manager.intercept($$chains, index, $$bindings, method, this, $$context, args, targetInvoker),
+                    // which keeps the chain per instance, calls the target directly when it is empty, and
+                    // otherwise runs it in an invocation context that owns the argument array built here.
+                    cob.labelBinding(intercepted);
+                    cob.aload(0);
+                    cob.getfield(subclassCD, FIELD_MANAGER, CD_InterceptorManager);
+                    cob.aload(0);
+                    cob.getfield(subclassCD, FIELD_CHAINS, CD_List.arrayType());
+                    cob.loadConstant(index);
+                    cob.aload(0);
+                    cob.getfield(subclassCD, FIELD_BINDINGS, CD_Set);
+                    // The $$super$ bridge Method, looked up once by the class initializer
+                    cob.getstatic(subclassCD, InterceptedShape.methodFieldName(index), CD_Method);
+                    cob.aload(0);     // this, for target class @AroundInvoke
+                    cob.aload(0);
+                    cob.getfield(subclassCD, FIELD_CONTEXT, CD_CreationalContext);
+
+                    // Object[] args: the shared empty array for a method without parameters
+                    if (paramCDs.length == 0) {
+                        cob.getstatic(CD_InterceptorManager, "NO_ARGUMENTS", CD_Object.arrayType());
+                    } else {
+                        cob.loadConstant(paramCDs.length);
+                        cob.anewarray(CD_Object);
+                        int slot = 1;
+                        for (int i = 0; i < paramCDs.length; i++) {
+                            cob.dup();
+                            cob.loadConstant(i);
+                            slot = boxAndLoad(cob, method.params().get(i), slot);
+                            cob.aastore();
+                        }
+                    }
+
+                    // targetInvoker: an in-module lambda (no captures) calling $$ti$<name> →
+                    // $$super$<name> → super.<name>(…). So the chain end invokes the original method
+                    // with no reflection (the $$super$ Method above is still used only for binding
+                    // resolution / ctx.getMethod()). LambdaMetafactory spins the lambda in the bean's
+                    // own module — AOT-friendly, and needs no opens.
+                    cob.invokedynamic(DynamicCallSiteDesc.of(
+                            BSM_LAMBDA_METAFACTORY,
+                            "invoke",
+                            MethodTypeDesc.of(CD_TargetInvoker),
+                            MTD_TARGET_INVOKER,
+                            MethodHandleDesc.ofMethod(
+                                    DirectMethodHandleDesc.Kind.STATIC,
+                                    subclassCD, tiName, MTD_TARGET_INVOKER),
+                            MTD_TARGET_INVOKER));
+                    cob.invokevirtual(CD_InterceptorManager, "intercept",
+                            MethodTypeDesc.of(CD_Object, CD_List.arrayType(), ConstantDescs.CD_int, CD_Set,
+                                    CD_Method, CD_Object, CD_CreationalContext, CD_Object.arrayType(),
+                                    CD_TargetInvoker));
+
+                    // Return
+                    TypeRef ret = method.returnType();
+                    if (ret.isVoid()) {
+                        cob.pop();
+                        cob.return_();
+                    } else if (ret.isPrimitive()) {
+                        unboxReturn(cob, ret);
+                    } else {
+                        cob.checkcast(returnCD);
+                        cob.areturn();
+                    }
+                });
+    }
+
+    /**
+     * Stack: → a {@code Class[]} of {@code method}'s parameter classes, for {@code getDeclaredMethod}.
+     * A class constant ({@code ldc}) per reference parameter; for a method whose descriptor names a
+     * class the subclass may not access, {@code Class.forName(name, false, loader)} with the
+     * subclass's loader instead, which resolves no class constant and checks no access
+     * (BUG-20261004-09).
+     */
+    private static void loadParameterClasses(CodeBuilder cob, ClassDesc subclassCD, MethodShape method) {
+        var params = method.params();
+        cob.loadConstant(params.size());
+        cob.anewarray(CD_Class);
+        for (int i = 0; i < params.size(); i++) {
+            cob.dup();
+            cob.loadConstant(i);
+            TypeRef p = params.get(i);
+            if (p.isPrimitive()) {
+                cob.getstatic(p.wrapperClassDesc(), "TYPE", CD_Class);
+            } else if (method.namesInaccessibleTypes()) {
+                cob.ldc(classNameOf(p.classDesc()));
+                cob.iconst_0();
+                cob.ldc(subclassCD);
+                cob.invokevirtual(CD_Class, "getClassLoader", MethodTypeDesc.of(CD_ClassLoader));
+                cob.invokestatic(CD_Class, "forName",
+                        MethodTypeDesc.of(CD_Class, CD_String, ConstantDescs.CD_boolean, CD_ClassLoader));
+            } else {
+                cob.ldc(p.classDesc());
+            }
+            cob.aastore();
+        }
+    }
+
+    /** {@link Class#getName()} of a reference type: {@code q.Hidden}, {@code [Lq.Hidden;}, {@code [I}. */
+    private static String classNameOf(ClassDesc type) {
+        var descriptor = type.descriptorString();
+        var name = type.isArray() ? descriptor : descriptor.substring(1, descriptor.length() - 1);
+        return name.replace('/', '.');
+    }
+
+    /**
+     * Generate the {@code private static Object $$ti$<name>(Object target, Object[] params)} glue
+     * that the {@link DynamicCallSiteDesc} above lifts into a {@code TargetInvoker}. It casts the
+     * target to the subclass, unboxes each argument from {@code params}, calls the public
+     * {@code $$super$<name>} bridge, and boxes the result (or returns {@code null} for {@code void}).
+     */
+    private static void generateTargetInvokerGlue(ClassBuilder clb, ClassDesc subclassCD,
+            MethodShape method, String tiName) {
+        ClassDesc returnCD = method.returnType().classDesc();
+        var paramCDs = method.params().stream()
+                .map(TypeRef::classDesc)
+                .toArray(ClassDesc[]::new);
+        var superType = MethodTypeDesc.of(returnCD, paramCDs);
+
+        clb.withMethodBody(
+                tiName,
+                MTD_TARGET_INVOKER,
+                ClassFile.ACC_PRIVATE | ClassFile.ACC_STATIC | ClassFile.ACC_SYNTHETIC,
+                cob -> {
+                    if (method.namesInaccessibleTypes()) {
+                        invokeBridgeThroughAHandle(cob, subclassCD, method);
+                        return;
+                    }
+                    cob.aload(0);              // target
+                    cob.checkcast(subclassCD); // -> <bean>$$Intercepted
+                    var params = method.params();
+                    for (int i = 0; i < params.size(); i++) {
+                        cob.aload(1);          // Object[] params
+                        cob.loadConstant(i);
+                        cob.aaload();
+                        castOrUnboxParam(cob, params.get(i));
+                    }
+                    cob.invokevirtual(subclassCD, InterceptedShape.superBridgeName(method.name()), superType);
+                    boxResultAndReturn(cob, method.returnType());
+                });
+    }
+
+    /**
+     * The glue of a method whose descriptor names a class the subclass may not access: casting an
+     * argument to it ({@code checkcast}) would throw {@code IllegalAccessError}, and the verifier
+     * requires that cast before the bridge call. So the bridge is called through a method handle,
+     * whose {@code invokeWithArguments} casts reflectively, checking no access (BUG-20261004-09):
+     * {@code MethodHandles.lookup().unreflect(<subclass>.class.getDeclaredMethod("$$super$<name>",
+     * <classes by name>)).bindTo(target).invokeWithArguments(params)}. The handle is looked up on
+     * every call: such a method is rare, and this keeps the class free of state.
+     */
+    private static void invokeBridgeThroughAHandle(CodeBuilder cob, ClassDesc subclassCD, MethodShape method) {
+        cob.invokestatic(CD_MethodHandles, "lookup", MethodTypeDesc.of(CD_MethodHandlesLookup));
+        cob.ldc(subclassCD);
+        cob.ldc(InterceptedShape.superBridgeName(method.name()));
+        loadParameterClasses(cob, subclassCD, method);
+        cob.invokevirtual(CD_Class, "getDeclaredMethod",
+                MethodTypeDesc.of(CD_Method, CD_String, CD_Class.arrayType()));
+        cob.invokevirtual(CD_MethodHandlesLookup, "unreflect", MethodTypeDesc.of(CD_MethodHandle, CD_Method));
+        cob.aload(0);
+        cob.invokevirtual(CD_MethodHandle, "bindTo", MethodTypeDesc.of(CD_MethodHandle, CD_Object));
+        cob.aload(1);
+        cob.invokevirtual(CD_MethodHandle, "invokeWithArguments",
+                MethodTypeDesc.of(CD_Object, CD_Object.arrayType()));
+        cob.areturn();
+    }
+
+    /** Stack: an {@code Object} (a {@code params[i]} element) → the typed/unboxed argument. */
+    private static void castOrUnboxParam(CodeBuilder cob, TypeRef p) {
+        if (!p.isPrimitive()) {
+            if (!p.classDesc().equals(CD_Object)) {
+                cob.checkcast(p.classDesc());
+            }
+            return;
+        }
+        ClassDesc wrapperCD = p.wrapperClassDesc();
+        cob.checkcast(wrapperCD);
+        cob.invokevirtual(wrapperCD, p.unboxAccessorName(), MethodTypeDesc.of(p.classDesc()));
+    }
+
+    /** Stack: the {@code $$super$} return value → boxed {@code Object} ({@code null} for void), then areturn. */
+    private static void boxResultAndReturn(CodeBuilder cob, TypeRef ret) {
+        if (ret.isVoid()) {
+            cob.aconst_null();
+        } else if (ret.isPrimitive()) {
+            ClassDesc wrapperCD = ret.wrapperClassDesc();
+            cob.invokestatic(wrapperCD, METHOD_VALUEOF,
+                    MethodTypeDesc.of(wrapperCD, ret.classDesc()));
+        }
+        cob.areturn();
+    }
+
+    private static int boxAndLoad(CodeBuilder cob, TypeRef type, int slot) {
+        if (!type.isPrimitive()) {
+            cob.aload(slot);
+            return slot + (type.isCategory2() ? 2 : 1);
+        }
+        ClassDesc wrapperCD = type.wrapperClassDesc();
+        ClassDesc primCD = type.classDesc();
+        return switch (type.primitiveKind()) {
+            case BOOLEAN, BYTE, CHAR, SHORT, INT -> {
+                cob.iload(slot);
+                cob.invokestatic(wrapperCD, METHOD_VALUEOF, MethodTypeDesc.of(wrapperCD, primCD));
+                yield slot + 1;
+            }
+            case LONG -> {
+                cob.lload(slot);
+                cob.invokestatic(wrapperCD, METHOD_VALUEOF, MethodTypeDesc.of(wrapperCD, primCD));
+                yield slot + 2;
+            }
+            case FLOAT -> {
+                cob.fload(slot);
+                cob.invokestatic(wrapperCD, METHOD_VALUEOF, MethodTypeDesc.of(wrapperCD, primCD));
+                yield slot + 1;
+            }
+            case DOUBLE -> {
+                cob.dload(slot);
+                cob.invokestatic(wrapperCD, METHOD_VALUEOF, MethodTypeDesc.of(wrapperCD, primCD));
+                yield slot + 2;
+            }
+            default -> { cob.aload(slot); yield slot + 1; }
+        };
+    }
+
+    private static void unboxReturn(CodeBuilder cob, TypeRef type) {
+        ClassDesc wrapperCD = type.wrapperClassDesc();
+        cob.checkcast(wrapperCD);
+        cob.invokevirtual(wrapperCD, type.unboxAccessorName(), MethodTypeDesc.of(type.classDesc()));
+        emitReturn(cob, type.classDesc());
+    }
+
+    /**
+     * Load a parameter from a local slot given its {@link ClassDesc}; returns next slot.
+     * Mirrors the original descriptor-string-based dispatch in {@code InterceptorSubclassGenerator}.
+     */
+    private static int loadParam(CodeBuilder cob, ClassDesc paramCD, int slot) {
+        String desc = paramCD.descriptorString();
+        return switch (desc.charAt(0)) {
+            case 'Z', 'B', 'C', 'S', 'I' -> { cob.iload(slot); yield slot + 1; }
+            case 'J' -> { cob.lload(slot); yield slot + 2; }
+            case 'F' -> { cob.fload(slot); yield slot + 1; }
+            case 'D' -> { cob.dload(slot); yield slot + 2; }
+            default -> { cob.aload(slot); yield slot + 1; }
+        };
+    }
+
+    /**
+     * Load a constructor parameter, accounting for the fact that slot 0 is {@code this}
+     * — so we start the caller at slot 0 and add 1 for {@code this} internally.
+     */
+    private static int loadParamBySlot(CodeBuilder cob, TypeRef p, int paramIndex) {
+        // cob.parameterSlot(i) gives 0-based param slot (no this)
+        // We use parameterSlot to stay consistent with the original constructor gen
+        cob.loadLocal(java.lang.classfile.TypeKind.from(p.classDesc()), cob.parameterSlot(paramIndex));
+        return paramIndex + 1;
+    }
+
+    private static void emitReturn(CodeBuilder cob, ClassDesc returnCD) {
+        String desc = returnCD.descriptorString();
+        switch (desc.charAt(0)) {
+            case 'V' -> cob.return_();
+            case 'Z', 'B', 'C', 'S', 'I' -> cob.ireturn();
+            case 'J' -> cob.lreturn();
+            case 'F' -> cob.freturn();
+            case 'D' -> cob.dreturn();
+            default -> cob.areturn();
+        }
+    }
+
+    /** Binary-name → ClassDesc (handles no-package, and the last-dot split for packages). */
+    static ClassDesc classDescOf(String binaryName) {
+        int lastDot = binaryName.lastIndexOf('.');
+        if (lastDot >= 0) {
+            return ClassDesc.of(binaryName.substring(0, lastDot), binaryName.substring(lastDot + 1));
+        }
+        return ClassDesc.of(binaryName);
+    }
+}

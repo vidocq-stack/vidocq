@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+         >
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq</groupId>
+        <artifactId>vidocq-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <groupId>io.vidocq.vauban</groupId>
+    <artifactId>vauban-parent</artifactId>
+    <version>0.4.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>Vauban</name>
+    <description>CDI 4.1 container, Java Modules native</description>
+    <url>https://codefloe.com/Vidocq/vauban</url>
+
+    <developers>
+        <developer>
+            <name>Yann Blazart</name>
+            <email>yann.blazart@gmail.com</email>
+        </developer>
+        <developer>
+            <name>Antoine Sabot-Durand</name>
+            <email>antoine@sabot-durand.net</email>
+        </developer>
+    </developers>
+
+    <!--
+        Disjunctive triple license: a recipient may use this software under
+        ANY ONE of the three licences below, at their option. EPL-2.0 is the
+        anchor (see the LICENSE file); per EPL-2.0 section 1, GPL-2.0-or-later
+        is offered as a Secondary License.
+        SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+    -->
+    <licenses>
+        <license>
+            <name>EPL-2.0</name>
+            <url>https://www.eclipse.org/legal/epl-2.0/</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>EUPL-1.2</name>
+            <url>https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12</url>
+            <distribution>repo</distribution>
+        </license>
+        <license>
+            <name>GPL-2.0-or-later</name>
+            <url>https://www.gnu.org/licenses/old-licenses/gpl-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <scm>
+        <connection>scm:git:https://codefloe.com/Vidocq/vauban.git</connection>
+        <developerConnection>scm:git:ssh://git@codefloe.com/Vidocq/vauban.git</developerConnection>
+        <url>https://codefloe.com/Vidocq/vauban</url>
+    </scm>
+
+    <modules>
+        <module>vauban-api</module>
+        <module>vauban-classloader-spi</module>
+        <module>vauban-weaver</module>
+        <module>vauban-classloader</module>
+        <module>vauban-core</module>
+        <module>vauban-webcontexts</module>
+        <module>vauban-indexer</module>
+        <module>vauban-processor</module>
+        <!-- After vauban-processor: its annotation processor runs on this module, and processor paths are no reactor edge. -->
+        <module>vauban-naming</module>
+        <module>vauban-sjar</module>
+        <module>vauban-junit</module>
+        <module>vauban-maven-plugin</module>
+        <module>vauban-tck-runner</module>
+        <module>vauban-atinject-tck-runner</module>
+        <module>vauban-module-it</module>
+        <module>vauban-producer-module-it</module>
+        <module>vauban-bench</module>
+        <module>vauban-architecture-tests</module>
+        <module>vauban-examples</module>
+    </modules>
+
+    <properties>
+        <jakarta.cdi.version>4.1.0</jakarta.cdi.version>
+        <!-- Build tooling for vauban-bench only: never a dependency of a published artefact. -->
+        <jmh.version>1.37</jmh.version>
+
+        <!-- Quality -->
+        <sonar.projectKey>vidocq-vauban</sonar.projectKey>
+        <sonar.java.source>25</sonar.java.source>
+        <!--
+            SonarQube (Vidocq/vidocq#284): every module reads the aggregated JaCoCo report of
+            vauban-coverage (quality profile), so the tests of vauban-module-it,
+            vauban-producer-it-bean-b and vauban-tck-runner count for the code they exercise in
+            the other modules.
+        -->
+        <sonar.coverage.jacoco.xmlReportPaths>${maven.multiModuleProjectDirectory}/vauban-coverage/target/site/jacoco-aggregate/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <!-- Same patterns as vidocq-parent: generated sources are not ours to fix. -->
+        <sonar.exclusions>**/generated-sources/**,**/generated/**</sonar.exclusions>
+        <!-- The examples stay analysed (people copy them), out of the coverage, and may print
+             to the console (java:S106). -->
+        <sonar.coverage.exclusions>**/vauban-examples/**</sonar.coverage.exclusions>
+        <sonar.issue.ignore.multicriteria>examples</sonar.issue.ignore.multicriteria>
+        <sonar.issue.ignore.multicriteria.examples.ruleKey>java:S106</sonar.issue.ignore.multicriteria.examples.ruleKey>
+        <sonar.issue.ignore.multicriteria.examples.resourceKey>**/vauban-examples/**/src/main/java/**</sonar.issue.ignore.multicriteria.examples.resourceKey>
+
+        <!--
+            The TCK this repository's pull requests are gated on (vauban#85). Read by the shared
+            pr-validate workflow, which runs `mvn -pl <module> -Ptck test` for each and skips the
+            step entirely when this property is absent. Both suites are a certification claim, and
+            both fail the build on a red run — neither carries surefire's testFailureIgnore.
+        -->
+        <ci.tck.modules>vauban-tck-runner,vauban-atinject-tck-runner</ci.tck.modules>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Jakarta CDI API -->
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                <version>${jakarta.cdi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>jakarta.enterprise</groupId>
+                <artifactId>jakarta.enterprise.lang-model</artifactId>
+                <version>${jakarta.cdi.version}</version>
+            </dependency>
+
+            <!-- Inter-project dependencies -->
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-indexer</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-processor</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-junit</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-classloader-spi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-sjar</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-weaver</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-classloader</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- JMH (vauban-bench only) -->
+            <dependency>
+                <groupId>org.openjdk.jmh</groupId>
+                <artifactId>jmh-core</artifactId>
+                <version>${jmh.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.openjdk.jmh</groupId>
+                <artifactId>jmh-generator-annprocess</artifactId>
+                <version>${jmh.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-shade-plugin</artifactId>
+                    <version>3.6.2</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.sonarsource.scanner.maven</groupId>
+                    <artifactId>sonar-maven-plugin</artifactId>
+                    <version>5.1.0.4751</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <profiles>
+        <!--
+            Quality profile (with the one of vidocq-parent, which runs the JaCoCo agent): adds
+            the aggregated coverage report that SonarQube reads (Vidocq/vidocq#284).
+        -->
+        <profile>
+            <id>quality</id>
+            <modules>
+                <module>vauban-coverage</module>
+            </modules>
+        </profile>
+    </profiles>
+</project>

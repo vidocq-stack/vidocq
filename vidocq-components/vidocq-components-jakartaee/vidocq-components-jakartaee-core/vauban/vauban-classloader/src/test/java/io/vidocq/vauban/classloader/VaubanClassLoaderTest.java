@@ -1,0 +1,398 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.classloader;
+
+import io.vidocq.vauban.classloader.spi.PluginContext;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.IOException;
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.CodeBuilder;
+import java.lang.classfile.attribute.RuntimeVisibleAnnotationsAttribute;
+import java.lang.constant.ClassDesc;
+import java.lang.constant.ConstantDescs;
+import java.lang.constant.MethodTypeDesc;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * The engine over an exploded directory archive: source resolution, cdi-proxifier
+ * transformation at definition, idempotence on woven input, exclusions, resources, and
+ * the transformer disable property.
+ */
+@DisplayName("VaubanClassLoader — engine semantics")
+class VaubanClassLoaderTest {
+
+    private static final String APPLICATION_SCOPED_DESC = "Ljakarta/enterprise/context/ApplicationScoped;";
+
+    @AfterEach
+    void clearProperties() {
+        System.clearProperty(VaubanClassLoader.DISABLED_TRANSFORMERS_PROPERTY);
+    }
+
+    @Test
+    @DisplayName("an unwoven normal-scoped bean gains the marker at definition; its proxy is retargeted")
+    void weavesBeanAndProxyAtDefinition(@TempDir Path dir) throws Exception {
+        var app = appArchive(dir, "com.example.lapp.Service", true);
+        try (var loader = VaubanClassLoader.of(List.of(app), getClass().getClassLoader(),
+                PluginContext.empty())) {
+            var bean = Class.forName("com.example.lapp.Service", true, loader);
+            assertSame(loader, bean.getClassLoader());
+            assertNotNull(bean.getDeclaredConstructor(
+                    Class.forName("io.vidocq.vauban.api.ProxyLink")));
+
+            var proxy = Class.forName("com.example.lapp.Service_ClientProxy", true, loader);
+            // Instantiating the proxy chains the woven (ProxyLink) marker — the business
+            // constructor (which throws) must never run
+            var instance = proxy.getDeclaredConstructor().newInstance();
+            assertNotNull(instance);
+        }
+    }
+
+    @Test
+    @DisplayName("BUG-20261114-01: a no-arg class replaced under the proxy of a woven build gains the marker")
+    void weavesNoArgClassReplacedUnderItsWovenProxy(@TempDir Path dir) throws Exception {
+        var beanName = "com.example.lapp.BookResource";
+        var root = dir.resolve("app");
+        var beanFile = root.resolve("com/example/lapp/BookResource.class");
+        Files.createDirectories(beanFile.getParent());
+        // javac -proc:none over the bean: no marker, the implicit public no-arg constructor
+        Files.write(beanFile, normalScopedNoArgClass(beanName));
+        // the proxy a woven build shipped next to it chains to <init>(ProxyLink)
+        Files.write(root.resolve("com/example/lapp/BookResource_ClientProxy.class"),
+                io.vidocq.vauban.weaver.ProxyLinkWeaver.retargetProxyConstructor(
+                        proxyChainingNoArgCtor(beanName + "_ClientProxy", beanName)));
+        Files.createDirectories(root.resolve("META-INF"));
+        Files.writeString(root.resolve("META-INF/vauban-beans.list"), beanName + "\n");
+
+        try (var loader = VaubanClassLoader.of(List.of(root), getClass().getClassLoader(),
+                PluginContext.empty())) {
+            var proxy = Class.forName(beanName + "_ClientProxy", true, loader);
+            assertDoesNotThrow(() -> proxy.getDeclaredConstructor().newInstance(),
+                    "the first client proxy must not throw NoSuchMethodError");
+            assertNotNull(Class.forName(beanName, false, loader).getDeclaredConstructor(
+                    Class.forName("io.vidocq.vauban.api.ProxyLink")));
+        }
+    }
+
+    @Test
+    @DisplayName("a no-arg class whose proxy chains its no-arg constructor is left as built")
+    void leavesNoArgClassWithNoArgProxyUnwoven(@TempDir Path dir) throws Exception {
+        var beanName = "com.example.lapp.Plain";
+        var root = dir.resolve("app");
+        var beanFile = root.resolve("com/example/lapp/Plain.class");
+        Files.createDirectories(beanFile.getParent());
+        Files.write(beanFile, normalScopedNoArgClass(beanName));
+        Files.write(root.resolve("com/example/lapp/Plain_ClientProxy.class"),
+                proxyChainingNoArgCtor(beanName + "_ClientProxy", beanName));
+        Files.createDirectories(root.resolve("META-INF"));
+        Files.writeString(root.resolve("META-INF/vauban-beans.list"), beanName + "\n");
+
+        try (var loader = VaubanClassLoader.of(List.of(root), getClass().getClassLoader(),
+                PluginContext.empty())) {
+            var proxy = Class.forName(beanName + "_ClientProxy", true, loader);
+            assertNotNull(proxy.getDeclaredConstructor().newInstance());
+            var bean = Class.forName(beanName, false, loader);
+            assertThrows(NoSuchMethodException.class, () -> bean.getDeclaredConstructor(
+                    Class.forName("io.vidocq.vauban.api.ProxyLink")));
+        }
+    }
+
+    @Test
+    @DisplayName("a build-woven archive passes through unchanged (idempotence)")
+    void wovenArchiveIsUntouched(@TempDir Path dir) throws Exception {
+        var app = appArchive(dir, "com.example.lapp.Service", true);
+        // Pre-weave on disk, as a javac-plugin build would have
+        var beanFile = app.resolve("com/example/lapp/Service.class");
+        Files.write(beanFile, io.vidocq.vauban.weaver.ProxyLinkWeaver.addMarkerConstructor(
+                Files.readAllBytes(beanFile),
+                io.vidocq.vauban.weaver.ProxyLinkWeaver.SuperChain.NO_ARG));
+        var wovenOnDisk = Files.readAllBytes(beanFile);
+
+        try (var loader = VaubanClassLoader.of(List.of(app), getClass().getClassLoader(),
+                PluginContext.empty())) {
+            var bean = Class.forName("com.example.lapp.Service", true, loader);
+            assertNotNull(bean.getDeclaredConstructor(
+                    Class.forName("io.vidocq.vauban.api.ProxyLink")));
+            // and the transformer reported "unchanged" — raw bytes still equal disk bytes
+            assertArrayEquals(wovenOnDisk, loader.rawClassBytes("com.example.lapp.Service"));
+        }
+    }
+
+    @Test
+    @DisplayName("the disable property turns the cdi-proxifier off")
+    void disableProperty(@TempDir Path dir) throws Exception {
+        System.setProperty(VaubanClassLoader.DISABLED_TRANSFORMERS_PROPERTY,
+                CdiProxifierTransformer.NAME);
+        var app = appArchive(dir, "com.example.lapp.Service", true);
+        try (var loader = VaubanClassLoader.of(List.of(app), getClass().getClassLoader(),
+                PluginContext.empty())) {
+            var bean = Class.forName("com.example.lapp.Service", true, loader);
+            assertThrows(NoSuchMethodException.class, () -> bean.getDeclaredConstructor(
+                    Class.forName("io.vidocq.vauban.api.ProxyLink")));
+        }
+    }
+
+    @Test
+    @DisplayName("classes outside the archives delegate to the parent; excluded prefixes are never defined")
+    void delegationAndExclusions(@TempDir Path dir) throws Exception {
+        var app = appArchive(dir, "com.example.lapp.Service", true);
+        // Smuggle a class with an excluded (container) prefix into the archive
+        var smuggled = app.resolve("io/vidocq/vauban/core/fake/Smuggled.class");
+        Files.createDirectories(smuggled.getParent());
+        Files.write(smuggled, simpleClass("io.vidocq.vauban.core.fake.Smuggled"));
+
+        try (var loader = VaubanClassLoader.of(List.of(app), getClass().getClassLoader(),
+                PluginContext.empty())) {
+            // parent delegation: a JDK class loads fine and is not ours
+            assertSame(String.class, Class.forName("java.lang.String", true, loader));
+            // the smuggled excluded class is refused
+            assertThrows(ClassNotFoundException.class,
+                    () -> Class.forName("io.vidocq.vauban.core.fake.Smuggled", true, loader));
+        }
+    }
+
+    @Test
+    @DisplayName("resources are served from the archives (stream, URL, enumeration)")
+    void resources(@TempDir Path dir) throws Exception {
+        var app = appArchive(dir, "com.example.lapp.Service", true);
+        try (var loader = VaubanClassLoader.of(List.of(app), getClass().getClassLoader(),
+                PluginContext.empty())) {
+            try (var in = loader.getResourceAsStream("META-INF/vauban-beans.list")) {
+                assertNotNull(in);
+                assertTrue(new String(in.readAllBytes(), StandardCharsets.UTF_8)
+                        .contains("com.example.lapp.Service"));
+            }
+            var url = loader.getResource("META-INF/vauban-beans.list");
+            assertNotNull(url);
+            try (var in = url.openStream()) {
+                assertTrue(new String(in.readAllBytes(), StandardCharsets.UTF_8)
+                        .contains("com.example.lapp.Service"));
+            }
+            assertTrue(loader.getResources("META-INF/vauban-beans.list").hasMoreElements());
+        }
+    }
+
+    /**
+     * Vidocq/vauban#153: as a URLClassLoader or the module path does, every class carries the location
+     * of its archive. Code that finds where a class comes from, such as Foy's {@code @HandlesTypes}
+     * scan of an initializer's jar, read {@code null} before.
+     */
+    @Test
+    @DisplayName("a class reports its archive as its code source")
+    void classesReportTheirArchiveAsCodeSource(@TempDir Path dir) throws Exception {
+        var app = appArchive(dir, "com.example.lapp.Service", true);
+        try (var loader = VaubanClassLoader.of(List.of(app), getClass().getClassLoader(),
+                PluginContext.empty())) {
+            var domain = Class.forName("com.example.lapp.Service", true, loader).getProtectionDomain();
+
+            assertNotNull(domain.getCodeSource(), "no code source");
+            assertEquals(app.toUri().toURL(), domain.getCodeSource().getLocation());
+            assertSame(loader, domain.getClassLoader());
+        }
+    }
+
+    /**
+     * A tool that redefines a class this loader defined (the class redefinition of {@code vidocq:dev}) needs the bytes
+     * the loader would define, woven, not the file as it is on disk.
+     */
+    @Test
+    @DisplayName("definitionBytes: the bytes findClass would define, through the transformer chain")
+    void definitionBytesAreTheTransformedBytes(@TempDir Path dir) throws Exception {
+        var app = appArchive(dir, "com.example.lapp.Service", true);
+        try (var loader = VaubanClassLoader.of(List.of(app), getClass().getClassLoader(),
+                PluginContext.empty())) {
+            var bytes = loader.definitionBytes("com.example.lapp.Service").orElseThrow();
+
+            assertTrue(hasConstructor(bytes, "(Lio/vidocq/vauban/api/ProxyLink;)V"),
+                    "the cdi-proxifier did not weave the (ProxyLink) constructor into the bytes");
+        }
+    }
+
+    @Test
+    @DisplayName("definitionBytes: a class file changed on disk gives its new bytes")
+    void definitionBytesReadTheArchiveAgain(@TempDir Path dir) throws Exception {
+        var root = dir.resolve("app");
+        var file = root.resolve("com/example/lapp/Greeter.class");
+        Files.createDirectories(file.getParent());
+        Files.write(file, simpleClass("com.example.lapp.Greeter"));
+        try (var loader = VaubanClassLoader.of(List.of(root), getClass().getClassLoader(),
+                PluginContext.empty())) {
+            Files.write(file, withMethod(simpleClass("com.example.lapp.Greeter"), "greet"));
+
+            var bytes = loader.definitionBytes("com.example.lapp.Greeter").orElseThrow();
+
+            assertTrue(ClassFile.of().parse(bytes).methods().stream()
+                    .anyMatch(m -> m.methodName().equalsString("greet")), "the bytes are not the new file's");
+        }
+    }
+
+    @Test
+    @DisplayName("definitionBytes: empty for a class outside the archives or one the loader refuses to define")
+    void definitionBytesOfAClassTheLoaderWouldNotDefineAreEmpty(@TempDir Path dir) throws Exception {
+        var root = dir.resolve("app");
+        var planted = root.resolve("io/vidocq/vauban/classloader/Planted.class");
+        Files.createDirectories(planted.getParent());
+        Files.write(planted, simpleClass("io.vidocq.vauban.classloader.Planted"));
+        try (var loader = VaubanClassLoader.of(List.of(root), getClass().getClassLoader(),
+                PluginContext.empty())) {
+            assertTrue(loader.definitionBytes("java.lang.String").isEmpty());
+            assertTrue(loader.definitionBytes("io.vidocq.vauban.classloader.Planted").isEmpty());
+        }
+    }
+
+    @Test
+    @DisplayName("definitionBytes: a class file deleted from its archive fails, naming the class")
+    void definitionBytesOfADeletedClassFail(@TempDir Path dir) throws Exception {
+        var root = dir.resolve("app");
+        var file = root.resolve("com/example/lapp/Gone.class");
+        Files.createDirectories(file.getParent());
+        Files.write(file, simpleClass("com.example.lapp.Gone"));
+        try (var loader = VaubanClassLoader.of(List.of(root), getClass().getClassLoader(),
+                PluginContext.empty())) {
+            Files.delete(file);
+
+            var failure = assertThrows(java.io.UncheckedIOException.class,
+                    () -> loader.definitionBytes("com.example.lapp.Gone"));
+            assertTrue(failure.getMessage().contains("com.example.lapp.Gone"), failure.getMessage());
+        }
+    }
+
+    // ---------------------------------------------------------------- fixtures
+
+    private static boolean hasConstructor(byte[] bytes, String descriptor) {
+        return ClassFile.of().parse(bytes).methods().stream()
+                .anyMatch(m -> m.methodName().equalsString(ConstantDescs.INIT_NAME)
+                        && m.methodType().equalsString(descriptor));
+    }
+
+    /** {@code bytes} with one more {@code public void <name>() {}}. */
+    private static byte[] withMethod(byte[] bytes, String name) {
+        return ClassFile.of().transformClass(ClassFile.of().parse(bytes),
+                java.lang.classfile.ClassTransform.endHandler(clb -> clb.withMethodBody(name,
+                        MethodTypeDesc.of(ConstantDescs.CD_void), ClassFile.ACC_PUBLIC, CodeBuilder::return_)));
+    }
+
+    /**
+     * Exploded archive: {@code @ApplicationScoped Service} with ONLY a throwing business
+     * constructor, its business-chaining {@code Service_ClientProxy}, and a
+     * {@code vauban-beans.list} declaring the bean.
+     */
+    static Path appArchive(Path dir, String beanName, boolean withBeansList) throws IOException {
+        var root = dir.resolve("app");
+        var beanFile = root.resolve(beanName.replace('.', '/') + ".class");
+        Files.createDirectories(beanFile.getParent());
+        Files.write(beanFile, beanWithThrowingBusinessCtor(beanName));
+        var proxyFile = root.resolve(beanName.replace('.', '/') + "_ClientProxy.class");
+        Files.write(proxyFile, proxyChainingBusinessCtor(beanName + "_ClientProxy", beanName));
+        if (withBeansList) {
+            var list = root.resolve("META-INF/vauban-beans.list");
+            Files.createDirectories(list.getParent());
+            Files.writeString(list, beanName + "\n");
+        }
+        return root;
+    }
+
+    /**
+     * {@code @ApplicationScoped public class <name> { public <name>(String v) { throw …; } }}
+     * — running the business constructor with a null arg is guaranteed to blow up.
+     */
+    static byte[] beanWithThrowingBusinessCtor(String binaryName) {
+        var desc = ClassDesc.of(binaryName);
+        return ClassFile.of().build(desc, clb -> {
+            clb.withSuperclass(ConstantDescs.CD_Object);
+            clb.with(RuntimeVisibleAnnotationsAttribute.of(
+                    java.lang.classfile.Annotation.of(
+                            ClassDesc.ofDescriptor(APPLICATION_SCOPED_DESC))));
+            clb.withMethodBody(ConstantDescs.INIT_NAME,
+                    MethodTypeDesc.of(ConstantDescs.CD_void, ClassDesc.of("java.lang.String")),
+                    ClassFile.ACC_PUBLIC, cob -> {
+                        cob.aload(0);
+                        cob.invokespecial(ConstantDescs.CD_Object, ConstantDescs.INIT_NAME,
+                                MethodTypeDesc.of(ConstantDescs.CD_void));
+                        var ise = ClassDesc.of("java.lang.IllegalStateException");
+                        cob.new_(ise);
+                        cob.dup();
+                        cob.invokespecial(ise, ConstantDescs.INIT_NAME,
+                                MethodTypeDesc.of(ConstantDescs.CD_void));
+                        cob.athrow();
+                    });
+        });
+    }
+
+    /** {@code public class <proxy> extends <bean> { public <proxy>() { super((String) null); } }} */
+    static byte[] proxyChainingBusinessCtor(String proxyName, String beanName) {
+        var proxyDesc = ClassDesc.of(proxyName);
+        var beanDesc = ClassDesc.of(beanName);
+        return ClassFile.of().build(proxyDesc, clb -> clb
+                .withSuperclass(beanDesc)
+                .withMethodBody(ConstantDescs.INIT_NAME, MethodTypeDesc.of(ConstantDescs.CD_void),
+                        ClassFile.ACC_PUBLIC, cob -> {
+                            cob.aload(0);
+                            cob.aconst_null();
+                            cob.invokespecial(beanDesc, ConstantDescs.INIT_NAME,
+                                    MethodTypeDesc.of(ConstantDescs.CD_void,
+                                            ClassDesc.of("java.lang.String")));
+                            cob.return_();
+                        }));
+    }
+
+    /** {@code @ApplicationScoped public class <name> { public <name>() {} }} */
+    static byte[] normalScopedNoArgClass(String binaryName) {
+        return ClassFile.of().transformClass(ClassFile.of().parse(simpleClass(binaryName)),
+                java.lang.classfile.ClassTransform.endHandler(clb -> clb.with(
+                        RuntimeVisibleAnnotationsAttribute.of(java.lang.classfile.Annotation.of(
+                                ClassDesc.ofDescriptor(APPLICATION_SCOPED_DESC))))));
+    }
+
+    /** {@code public class <proxy> extends <bean> { public <proxy>() { super(); } }} */
+    static byte[] proxyChainingNoArgCtor(String proxyName, String beanName) {
+        var beanDesc = ClassDesc.of(beanName);
+        return ClassFile.of().build(ClassDesc.of(proxyName), clb -> clb
+                .withSuperclass(beanDesc)
+                .withMethodBody(ConstantDescs.INIT_NAME, MethodTypeDesc.of(ConstantDescs.CD_void),
+                        ClassFile.ACC_PUBLIC, cob -> cob
+                                .aload(0)
+                                .invokespecial(beanDesc, ConstantDescs.INIT_NAME,
+                                        MethodTypeDesc.of(ConstantDescs.CD_void))
+                                .return_()));
+    }
+
+    /** {@code public class <name> { public <name>() {} }} */
+    static byte[] simpleClass(String binaryName) {
+        var desc = ClassDesc.of(binaryName);
+        return ClassFile.of().build(desc, clb -> clb
+                .withSuperclass(ConstantDescs.CD_Object)
+                .withMethodBody(ConstantDescs.INIT_NAME, MethodTypeDesc.of(ConstantDescs.CD_void),
+                        ClassFile.ACC_PUBLIC, cob -> {
+                            cob.aload(0);
+                            cob.invokespecial(ConstantDescs.CD_Object, ConstantDescs.INIT_NAME,
+                                    MethodTypeDesc.of(ConstantDescs.CD_void));
+                            cob.return_();
+                        }));
+    }
+}

@@ -1,0 +1,1614 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.processor.apt;
+
+import io.vidocq.vauban.core.extensions.SyntheticMetadataSerializer;
+import io.vidocq.vauban.processor.VaubanProcessor;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.inject.build.compatible.spi.*;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import javax.tools.*;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Integration tests for running Build Compatible Extensions (BCE)
+ * at compile time via the VaubanProcessor (APT).
+ *
+ * <h2>Context</h2>
+ * CDI 4.1 BCEs are designed to run at compile time. The VaubanProcessor
+ * discovers them via ServiceLoader (or injection for tests), runs the 5 phases
+ * (Discovery → Enhancement → Registration → Synthesis → Validation), and persists the
+ * results so the runtime does not have to re-execute them.
+ *
+ * <h2>Why these tests are necessary</h2>
+ * The CDI TCK tests BCEs at runtime only. Compile-time execution
+ * is a Vauban-specific feature that no external test covers.
+ * Without these tests, we cannot guarantee that Enhancements applied at compile time
+ * end up in the generated code, nor that the BCE marker prevents re-execution at runtime.
+ */
+@DisplayName("BCE at compile time - VaubanProcessor integration")
+class BceCompileTimeTest {
+
+    @TempDir
+    Path tempDir;
+
+    // ---- Test BCE: adds @RequestScoped to classes annotated with @jakarta.inject.Named ----
+
+    /**
+     * Test BCE that adds @RequestScoped to any class annotated with @Named.
+     * Uses @Named (jakarta.inject) because this annotation is on the classpath
+     * shared between the test and the in-process compilation.
+     * Simulates the RestScopeExtension pattern that adds @RequestScoped to @Path.
+     */
+    public static class TestEnhancementBce implements BuildCompatibleExtension {
+        @Enhancement(types = Object.class, withAnnotations = jakarta.inject.Named.class)
+        public void addScope(ClassConfig clazz) {
+            clazz.addAnnotation(RequestScoped.class);
+        }
+    }
+
+    /**
+     * Test BCE that adds a class via @Discovery.
+     */
+    public static class TestDiscoveryBce implements BuildCompatibleExtension {
+        @Discovery
+        public void discover(ScannedClasses classes) {
+            // Discovery phase executed — we just verify it doesn't crash
+        }
+    }
+
+    /**
+     * Test BCE with @Synthesis that creates a synthetic bean.
+     */
+    public static class TestSynthesisBce implements BuildCompatibleExtension {
+        @Synthesis
+        public void createSyntheticBean(SyntheticComponents components) {
+            components.addBean(String.class)
+                    .createWith(TestStringCreator.class)
+                    .scope(ApplicationScoped.class)
+                    .withParam("value", "synthetic-hello");
+        }
+    }
+
+    /** Test BCE that records, phase by phase, whether it was told it runs at build time. */
+    public static class PhaseRecordingBce implements BuildCompatibleExtension {
+        static final Map<String, Boolean> SEEN = new java.util.concurrent.ConcurrentHashMap<>();
+
+        @Discovery
+        public void discovery() {
+            SEEN.put("discovery", io.vidocq.vauban.api.ExtensionPhase.isBuildTime());
+        }
+
+        @Registration(types = Object.class)
+        public void registration(BeanInfo bean) {
+            SEEN.put("registration", io.vidocq.vauban.api.ExtensionPhase.isBuildTime());
+        }
+
+        @Synthesis
+        public void synthesis() {
+            SEEN.put("synthesis", io.vidocq.vauban.api.ExtensionPhase.isBuildTime());
+        }
+
+        @Validation
+        public void validation() {
+            SEEN.put("validation", io.vidocq.vauban.api.ExtensionPhase.isBuildTime());
+        }
+    }
+
+    /** SyntheticBeanCreator for test — creates a String bean. */
+    public static class TestStringCreator
+            implements jakarta.enterprise.inject.build.compatible.spi.SyntheticBeanCreator<String> {
+        @Override
+        public String create(jakarta.enterprise.inject.Instance<Object> lookup,
+                             jakarta.enterprise.inject.build.compatible.spi.Parameters params) {
+            return params.get("value", String.class);
+        }
+    }
+
+    /** Test BCE that adds observers of a parameterized, a wildcard-parameterized and an array type. */
+    public static class GenericObserversBce implements BuildCompatibleExtension {
+        @Synthesis
+        public void addObservers(SyntheticComponents components, Types types) {
+            components.addObserver(types.parameterized(List.class, String.class))
+                    .observeWith(ShapeObserver.class).withParam(SHAPE, "List<String>");
+            components.addObserver(types.parameterized(List.class, types.wildcardWithUpperBound(types.of(Number.class))))
+                    .observeWith(ShapeObserver.class).withParam(SHAPE, "List<? extends Number>");
+            components.addObserver(types.ofArray(types.of(String.class), 1))
+                    .observeWith(ShapeObserver.class).withParam(SHAPE, "String[]");
+        }
+    }
+
+    /** Records the {@code shape} param it was given, and the event. */
+    public static class ShapeObserver implements SyntheticObserver<Object> {
+        static final List<String> OBSERVED = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Override
+        public void observe(jakarta.enterprise.inject.spi.EventContext<Object> event, Parameters params) {
+            var payload = event.getEvent();
+            OBSERVED.add(params.get(SHAPE, String.class) + " got "
+                    + (payload instanceof Object[] array ? Arrays.toString(array) : payload));
+        }
+    }
+
+    private static final String SHAPE = "shape";
+
+    // ---- Helper: compile with the processor and an injected BCE ----
+
+    private CompilationResult compileWithBce(List<Class<?>> bceClasses, String... sources) throws IOException {
+        return compileWithBce(bceClasses, List.of(), sources);
+    }
+
+    private CompilationResult compileWithBce(List<Class<?>> bceClasses, List<Path> extraClasspath,
+                                             String... sources) throws IOException {
+        return compile(processor -> processor.overrideBceClasses(bceClasses), extraClasspath, sources);
+    }
+
+    private CompilationResult compile(java.util.function.Consumer<VaubanProcessor> setup, List<Path> extraClasspath,
+                                      String... sources) throws IOException {
+        var compiler = ToolProvider.getSystemJavaCompiler();
+        var diagnostics = new DiagnosticCollector<JavaFileObject>();
+
+        var sourceDir = tempDir.resolve("src");
+        Files.createDirectories(sourceDir);
+
+        var sourceFiles = new ArrayList<JavaFileObject>();
+        for (var source : sources) {
+            var className = extractClassName(source);
+            var packageName = extractPackageName(source);
+            var dir = sourceDir;
+            if (packageName != null) {
+                dir = sourceDir.resolve(packageName.replace('.', '/'));
+                Files.createDirectories(dir);
+            }
+            var file = dir.resolve(className + ".java");
+            Files.writeString(file, source);
+            sourceFiles.add(new SimpleJavaFileObject(file.toUri(), JavaFileObject.Kind.SOURCE) {
+                @Override
+                public CharSequence getCharContent(boolean ignoreEncodingErrors) throws IOException {
+                    return Files.readString(file);
+                }
+            });
+        }
+
+        var outputDir = tempDir.resolve("classes");
+        Files.createDirectories(outputDir);
+
+        var classpathBuilder = new StringBuilder(resolveCompilationClasspath());
+        for (var entry : extraClasspath) {
+            classpathBuilder.insert(0, entry + File.pathSeparator);
+        }
+        var classpath = classpathBuilder.toString();
+
+        var options = List.of(
+                "-d", outputDir.toString(),
+                "--release", "25",
+                "-classpath", classpath,
+                "-proc:full"
+        );
+
+        try (var fileManager = compiler.getStandardFileManager(diagnostics, null, null)) {
+            var processor = new VaubanProcessor();
+            setup.accept(processor);
+
+            var task = compiler.getTask(null, fileManager, diagnostics, options, null, sourceFiles);
+            task.setProcessors(List.of(processor));
+
+            var success = task.call();
+
+            var messages = new ArrayList<String>();
+            for (var d : diagnostics.getDiagnostics()) {
+                messages.add(d.getKind() + ": " + d.getMessage(null));
+            }
+
+            return new CompilationResult(success, outputDir, messages);
+        }
+    }
+
+    record CompilationResult(boolean success, Path outputDir, List<String> messages) {
+        boolean hasFile(String relativePath) {
+            return Files.exists(outputDir.resolve(relativePath));
+        }
+
+        String readFile(String relativePath) throws IOException {
+            return Files.readString(outputDir.resolve(relativePath), StandardCharsets.UTF_8);
+        }
+
+        List<String> readBeansList() throws IOException {
+            var path = outputDir.resolve("META-INF/vauban-beans.list");
+            if (!Files.exists(path)) return List.of();
+            return Files.readAllLines(path, StandardCharsets.UTF_8).stream()
+                    .map(String::strip)
+                    .filter(l -> !l.isEmpty() && !l.startsWith("#"))
+                    .toList();
+        }
+    }
+
+    // ---- Tests ----
+
+    @Test
+    @DisplayName("client proxy for a bean method returning a NESTED type loads (binary name, not canonical)")
+    void clientProxyHandlesNestedReturnType() throws Exception {
+        // Regression: the APT path built the return-type ClassDesc from getQualifiedName() (canonical,
+        // dot-separated) instead of getBinaryName() ('$'-separated). For a nested return type the
+        // generated proxy emitted an invalid descriptor (Outer/Nested), so resolving the proxy's
+        // methods threw NoClassDefFoundError at runtime. Surfaced by Arago (AttendeeTokens.verify ->
+        // AragoJwt.Claims). See vauban BUG.md.
+        String source = """
+                package t;
+                import jakarta.enterprise.context.ApplicationScoped;
+                @ApplicationScoped
+                public class NestedReturnSvc {
+                    public record Box(String value) {}
+                    public Box make() { return new Box("x"); }
+                }
+                """;
+        var result = compileWithBce(List.of(), source);
+        assertTrue(result.success(), () -> "compilation failed: " + result.messages());
+        assertTrue(result.hasFile("t/NestedReturnSvc_ClientProxy.class"),
+                "client proxy should be generated (@ApplicationScoped is normal-scoped)");
+
+        // Load the generated proxy and resolve its methods — this is what threw NoClassDefFoundError
+        // (t/NestedReturnSvc/Box) before the fix.
+        try (var cl = new java.net.URLClassLoader(
+                new java.net.URL[]{result.outputDir().toUri().toURL()},
+                getClass().getClassLoader())) {
+            Class<?> proxy = cl.loadClass("t.NestedReturnSvc_ClientProxy");
+            var makeReturn = proxy.getDeclaredMethod("make").getReturnType();
+            assertEquals("t.NestedReturnSvc$Box", makeReturn.getName(),
+                    "the proxy's make() must return the nested Box (binary name with '$')");
+        }
+    }
+
+    @Test
+    @DisplayName("@Enhancement BCE modifies an existing bean — the BCE runs at compile time")
+    void shouldExecuteEnhancementOnExistingBean() throws IOException {
+        // The bean already has @Dependent (pseudo-scope). The BCE adds @RequestScoped (normal-scope).
+        // @Named is the trigger of the test BCE.
+        var result = compileWithBce(
+                List.of(TestEnhancementBce.class),
+                """
+                import jakarta.enterprise.context.Dependent;
+                import jakarta.inject.Named;
+
+                @Dependent
+                @Named
+                public class EnhancedService {
+                    public String hello() { return "hello"; }
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+
+        var beansList = result.readBeansList();
+        assertTrue(beansList.contains("EnhancedService"),
+                "Enhanced bean should appear in vauban-beans.list");
+
+        assertTrue(result.hasFile(SyntheticMetadataSerializer.BCE_PROCESSED_MARKER),
+                "BCE processed marker should be written");
+    }
+
+    // ---- an interceptor binding an @Enhancement adds (BUG-20261113-13) ----
+
+    /** An interceptor binding no source carries: only {@link BindingBce} puts it on a class or a method. */
+    @jakarta.interceptor.InterceptorBinding
+    @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+    @java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE, java.lang.annotation.ElementType.METHOD})
+    public @interface Bound {
+    }
+
+    /**
+     * Binds every {@code traced} method of a {@code @Named} class, as Humboldt binds a {@code @WithSpan} method, and
+     * the class {@code BoundClass} as a whole.
+     */
+    public static class BindingBce implements BuildCompatibleExtension {
+        @Enhancement(types = Object.class, withAnnotations = jakarta.inject.Named.class)
+        public void bind(ClassConfig clazz) {
+            if (clazz.info().simpleName().equals("BoundClass")) {
+                clazz.addAnnotation(Bound.class);
+            }
+            clazz.methods().stream().filter(method -> method.info().name().equals("traced"))
+                    .forEach(method -> method.addAnnotation(Bound.class));
+        }
+    }
+
+    @Test
+    @DisplayName("an interceptor binding an @Enhancement adds gets its $$Intercepted subclass at build (BUG-20261113-13)")
+    void anInterceptorBindingAnExtensionAddsGetsItsSubclassAtBuild() throws IOException {
+        var result = compileWithBce(List.of(BindingBce.class),
+                """
+                package t;
+                @jakarta.enterprise.context.ApplicationScoped
+                @jakarta.inject.Named
+                public class BoundMethod {
+                    public String traced() { return "traced"; }
+                }
+                """,
+                """
+                package t;
+                @jakarta.enterprise.context.ApplicationScoped
+                @jakarta.inject.Named
+                public class BoundClass {
+                    public String hello() { return "hello"; }
+                }
+                """,
+                """
+                package t;
+                @jakarta.enterprise.context.ApplicationScoped
+                @jakarta.inject.Named
+                public class Unbound {
+                    public String hello() { return "hello"; }
+                }
+                """);
+
+        assertTrue(result.success(), () -> "compilation failed: " + result.messages());
+        assertTrue(result.hasFile("t/BoundMethod$$Intercepted.class"),
+                () -> "a binding added to a method: " + result.messages());
+        assertTrue(result.hasFile("t/BoundClass$$Intercepted.class"),
+                () -> "a binding added to the class: " + result.messages());
+        assertFalse(result.hasFile("t/Unbound$$Intercepted.class"), "no binding, no subclass");
+    }
+
+    @Test
+    @DisplayName("a broken extension service entry is skipped with a warning and the other extensions still run (vauban#199)")
+    void aBrokenExtensionServiceEntryIsSkippedWithAWarningAndTheOthersStillRun() throws IOException {
+        // The working extension is compiled into a directory of its own: ServiceLoader ignores a class-path
+        // provider whose class sits in a named module, as the test classes do.
+        var extensions = tempDir.resolve("extensions");
+        Files.createDirectories(extensions.resolve("ext"));
+        var extension = extensions.resolve("ext/ScopingExtension.java");
+        Files.writeString(extension, """
+                package ext;
+
+                import jakarta.enterprise.context.RequestScoped;
+                import jakarta.enterprise.inject.build.compatible.spi.BuildCompatibleExtension;
+                import jakarta.enterprise.inject.build.compatible.spi.ClassConfig;
+                import jakarta.enterprise.inject.build.compatible.spi.Enhancement;
+
+                public class ScopingExtension implements BuildCompatibleExtension {
+                    @Enhancement(types = Object.class, withAnnotations = jakarta.inject.Named.class)
+                    public void addScope(ClassConfig clazz) {
+                        clazz.addAnnotation(RequestScoped.class);
+                    }
+                }
+                """);
+        var compiled = ToolProvider.getSystemJavaCompiler().run(null, null, null,
+                "-proc:none", "--release", "25", "-classpath", resolveCompilationClasspath(),
+                "-d", extensions.toString(), extension.toString());
+        assertEquals(0, compiled, "Precondition: the extension compiles");
+        var serviceFile = "META-INF/services/" + BuildCompatibleExtension.class.getName();
+        Files.createDirectories(extensions.resolve("META-INF/services"));
+        Files.writeString(extensions.resolve(serviceFile), "com.missing.AbsentExtension\next.ScopingExtension\n");
+
+        CompilationResult result;
+        try (var loader = new java.net.URLClassLoader(new java.net.URL[] {extensions.toUri().toURL()},
+                getClass().getClassLoader())) {
+            result = compile(processor -> processor.overrideBceClassLoader(loader), List.of(), """
+                    import jakarta.inject.Named;
+
+                    @Named
+                    public class EnhancedService {
+                        public String hello() { return "hello"; }
+                    }
+                    """);
+        }
+
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+        assertTrue(result.messages().stream().anyMatch(message -> message.startsWith("WARNING")
+                        && message.contains(serviceFile) && message.contains("com.missing.AbsentExtension")),
+                "a warning names the service file and the broken provider: " + result.messages());
+        assertTrue(result.hasFile("EnhancedService_ClientProxy.class"),
+                "the working extension still ran and made the bean @RequestScoped: " + result.messages());
+    }
+
+    @Test
+    @DisplayName("BCE writes the META-INF/vauban-bce-processed marker")
+    void shouldWriteBceProcessedMarker() throws IOException {
+        var result = compileWithBce(
+                List.of(TestDiscoveryBce.class),
+                """
+                import jakarta.enterprise.context.ApplicationScoped;
+
+                @ApplicationScoped
+                public class SimpleBean {
+                    public String hello() { return "hello"; }
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation should succeed");
+        assertTrue(result.hasFile(SyntheticMetadataSerializer.BCE_PROCESSED_MARKER),
+                "BCE processed marker should be written when BCEs are executed");
+    }
+
+    @Test
+    @DisplayName("synthetic observers of generic and array types the processor recorded receive their events at boot (VAU-OBS-005)")
+    void recordedGenericSyntheticObserversReceiveTheirEvents() throws IOException {
+        ShapeObserver.OBSERVED.clear();
+        var result = compileWithBce(
+                List.of(GenericObserversBce.class),
+                """
+                import jakarta.enterprise.context.ApplicationScoped;
+
+                @ApplicationScoped
+                public class SimpleBean {
+                }
+                """
+        );
+        assertTrue(result.success(), () -> "compilation failed: " + result.messages());
+
+        try (var loader = new java.net.URLClassLoader(
+                new java.net.URL[] {result.outputDir().toUri().toURL()}, getClass().getClassLoader());
+             var container = io.vidocq.vauban.core.container.VaubanContainer.builder()
+                     .classLoader(loader).scanClasspath().build()) {
+            var event = container.getBeanManager().getEvent();
+            event.select(new jakarta.enterprise.util.TypeLiteral<List<String>>() { }).fire(List.of("a"));
+            event.select(new jakarta.enterprise.util.TypeLiteral<List<Integer>>() { }).fire(List.of(1));
+            event.select(String[].class).fire(new String[] {"b"});
+        }
+
+        assertEquals(List.of("List<String> got [a]", "List<? extends Number> got [1]", "String[] got [b]"),
+                List.copyOf(ShapeObserver.OBSERVED));
+        var metadata = result.readFile(SyntheticMetadataSerializer.METADATA_PATH);
+        assertTrue(metadata.contains("=java.util.List<? extends java.lang.Number>"), metadata);
+    }
+
+    /**
+     * Test BCE that observes a class the compilation is still producing, alone and as a type argument: its
+     * {@code ClassInfo} comes from {@code @Registration}, as an extension gets it.
+     */
+    public static class SameBuildObserversBce implements BuildCompatibleExtension {
+        static final String PING = "Ping";
+        static jakarta.enterprise.lang.model.declarations.ClassInfo observed;
+
+        @Registration(types = Object.class)
+        public void registration(BeanInfo bean) {
+            if (bean.declaringClass().simpleName().equals(PING)) {
+                observed = bean.declaringClass();
+            }
+        }
+
+        @Synthesis
+        public void addObservers(SyntheticComponents components, Types types) {
+            components.addObserver(types.ofClass(observed))
+                    .observeWith(ShapeObserver.class).withParam(SHAPE, PING);
+            components.addObserver(types.parameterized(types.of(List.class).asClass(), types.ofClass(observed)))
+                    .observeWith(ShapeObserver.class).withParam(SHAPE, "List<Ping>");
+        }
+    }
+
+    @Test
+    @DisplayName("a synthetic observer of a class compiled in the same build is recorded and receives its events (VAU-APT-003)")
+    void syntheticObserverOfAClassOfTheSameBuild() throws Exception {
+        ShapeObserver.OBSERVED.clear();
+        SameBuildObserversBce.observed = null;
+        var result = compileWithBce(
+                List.of(SameBuildObserversBce.class),
+                """
+                import jakarta.enterprise.context.Dependent;
+
+                @Dependent
+                public class Ping {
+                    @Override
+                    public String toString() { return "ping"; }
+                }
+                """,
+                """
+                import jakarta.enterprise.context.Dependent;
+                import jakarta.enterprise.event.Event;
+                import jakarta.inject.Inject;
+                import java.util.List;
+
+                @Dependent
+                public class Pinger {
+                    @Inject
+                    Event<List<Ping>> pings;
+
+                    public void fire() { pings.fire(List.of(new Ping())); }
+                }
+                """
+        );
+        assertTrue(result.success(), () -> "compilation failed: " + result.messages());
+
+        try (var loader = new java.net.URLClassLoader(
+                new java.net.URL[] {result.outputDir().toUri().toURL()}, getClass().getClassLoader());
+             var container = io.vidocq.vauban.core.container.VaubanContainer.builder()
+                     .classLoader(loader).scanClasspath().build()) {
+            var ping = loader.loadClass(SameBuildObserversBce.PING).getDeclaredConstructor().newInstance();
+            container.getBeanManager().getEvent().fire(ping);
+            var pinger = loader.loadClass("Pinger");
+            pinger.getMethod("fire").invoke(container.select(pinger));
+        }
+
+        assertEquals(List.of("Ping got ping", "List<Ping> got [ping]"), List.copyOf(ShapeObserver.OBSERVED));
+        var metadata = result.readFile(SyntheticMetadataSerializer.METADATA_PATH);
+        assertTrue(metadata.contains("=java.util.List<Ping>"), metadata);
+    }
+
+    @Test
+    @DisplayName("without a BCE, no vauban-bce-processed marker")
+    void shouldNotWriteMarkerWhenNoBce() throws IOException {
+        var result = compileWithBce(
+                List.of(), // no BCE
+                """
+                import jakarta.enterprise.context.ApplicationScoped;
+
+                @ApplicationScoped
+                public class SimpleBean {
+                    public String hello() { return "hello"; }
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation should succeed");
+        assertFalse(result.hasFile(SyntheticMetadataSerializer.BCE_PROCESSED_MARKER),
+                "No marker when no BCE executed");
+    }
+
+    @Test
+    @DisplayName("@Enhancement does not modify a class that already has a scope")
+    void shouldNotOverrideExistingScope() throws IOException {
+        var result = compileWithBce(
+                List.of(TestEnhancementBce.class),
+                """
+                import jakarta.enterprise.context.ApplicationScoped;
+                import jakarta.inject.Named;
+
+                @ApplicationScoped
+                @Named
+                public class AlreadyScopedBean {
+                    public String hello() { return "hello"; }
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+
+        var beansList = result.readBeansList();
+        assertTrue(beansList.contains("AlreadyScopedBean"),
+                "Already-scoped bean should still be in beans list");
+    }
+
+    @Test
+    @DisplayName("@Discovery phase runs without error")
+    void shouldExecuteDiscoveryPhaseWithoutError() throws IOException {
+        var result = compileWithBce(
+                List.of(TestDiscoveryBce.class),
+                """
+                import jakarta.enterprise.context.Dependent;
+
+                @Dependent
+                public class MyHelper {
+                    public int compute() { return 42; }
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation with @Discovery BCE should succeed");
+        assertTrue(result.readBeansList().contains("MyHelper"),
+                "Bean should still be discovered normally");
+    }
+
+    @Test
+    @DisplayName("BCE @Enhancement promotes a class without a CDI scope — only @Named, no scope")
+    void shouldPromoteNonBeanClassViaBceEnhancement() throws IOException {
+        // HelloResource only has @Named (no CDI scope).
+        // The TestEnhancementBce BCE adds @RequestScoped via @Enhancement(withAnnotations=Named).
+        // The APT must scan @Named (extracted from the BCE withAnnotations),
+        // index HelloResource, and the BCE must promote it to a bean.
+        var result = compileWithBce(
+                List.of(TestEnhancementBce.class),
+                """
+                import jakarta.inject.Named;
+
+                @Named
+                public class HelloResource {
+                    public String hello() { return "hello"; }
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+
+        // The BCE added @RequestScoped → HelloResource is a normal-scoped bean
+        var beansList = result.readBeansList();
+        assertTrue(beansList.contains("HelloResource"),
+                "Non-CDI class promoted by BCE should appear in vauban-beans.list. Beans: " + beansList);
+
+        assertTrue(result.hasFile("HelloResource_ClientProxy.class"),
+                "Client proxy should be generated (RequestScoped is normal-scoped)");
+    }
+
+    /** Names the classes annotated {@code @Named}, at build time, with a value of its own. */
+    public static class RenamingBce implements BuildCompatibleExtension {
+        @Enhancement(types = Object.class, withAnnotations = jakarta.inject.Named.class)
+        public void rename(ClassConfig clazz) {
+            clazz.addAnnotation(jakarta.enterprise.inject.literal.NamedLiteral.of("renamed"));
+        }
+    }
+
+    @Test
+    @DisplayName("the frozen @Enhancement patch keeps the members of an added annotation (BUG-20261008-05)")
+    void frozenPatchKeepsMembers() throws IOException {
+        var result = compileWithBce(
+                List.of(RenamingBce.class),
+                """
+                import jakarta.enterprise.context.ApplicationScoped;
+                import jakarta.inject.Named;
+
+                @ApplicationScoped
+                @Named
+                public class Renamed {
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+        Map<String, List<io.vidocq.vauban.indexer.model.AnnotationInfo>> patch;
+        try (var in = Files.newInputStream(result.outputDir().resolve(
+                io.vidocq.vauban.core.extensions.EnhancementPatchSerializer.PATCH_PATH))) {
+            patch = io.vidocq.vauban.core.extensions.EnhancementPatchSerializer.read(in);
+        }
+        var named = patch.get("Renamed").stream()
+                .filter(a -> a.name().value().equals("jakarta.inject.Named")).findFirst().orElseThrow();
+        assertEquals(new io.vidocq.vauban.indexer.model.AnnotationValue.StringVal("renamed"), named.member("value"));
+    }
+
+    public static class MemberEnhancementBce implements BuildCompatibleExtension {
+        static int enhancements;
+
+        @Enhancement(types = Object.class, withAnnotations = jakarta.inject.Named.class)
+        public void enhance(ClassConfig config) {
+            if (!config.info().name().equals("app.FrozenTarget")) return;
+            enhancements++;
+            if (!config.info().hasAnnotation(jakarta.enterprise.context.Dependent.class)) {
+                config.addAnnotation(jakarta.enterprise.context.Dependent.class);
+            }
+            var qualifier = jakarta.enterprise.inject.literal.NamedLiteral.of("selected");
+            config.fields().stream().filter(field -> field.info().name().equals("field"))
+                    .forEach(field -> {
+                        field.addAnnotation(jakarta.inject.Inject.class);
+                        field.addAnnotation(qualifier);
+                    });
+            config.methods().stream().filter(method -> method.info().name().equals("initialize"))
+                    .forEach(method -> method.addAnnotation(jakarta.inject.Inject.class));
+            config.constructors().forEach(constructor ->
+                    constructor.parameters().getFirst().addAnnotation(qualifier));
+        }
+    }
+
+    @Test
+    void frozenPatchAppliesAddedFieldInitializerAndParameterQualifierAtBoot() throws Exception {
+        assertFrozenMemberInjection(true);
+    }
+
+    @Test
+    void memberOnlyFrozenPatchDoesNotReplayTheExtension() throws Exception {
+        assertFrozenMemberInjection(false);
+    }
+
+    private void assertFrozenMemberInjection(boolean promoted) throws Exception {
+        var result = compileWithBce(List.of(MemberEnhancementBce.class), """
+                package app;
+                @jakarta.enterprise.context.Dependent
+                @jakarta.inject.Named("selected")
+                public class FrozenDependency {}
+                """, """
+                package app;
+                @jakarta.inject.Named("target")
+                %s
+                public class FrozenTarget {
+                    public FrozenDependency field;
+                    public FrozenDependency initialized;
+                    public FrozenDependency constructed;
+                    @jakarta.inject.Inject
+                    public FrozenTarget(FrozenDependency dependency) { constructed = dependency; }
+                    private void initialize(@jakarta.inject.Named("selected") FrozenDependency dependency) {
+                        initialized = dependency;
+                    }
+                }
+                """.formatted(promoted ? "" : "@jakarta.enterprise.context.Dependent"));
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+        assertTrue(result.hasFile(io.vidocq.vauban.core.extensions.EnhancementPatchSerializer.PATCH_PATH));
+        MemberEnhancementBce.enhancements = 0;
+        try (var loader = new java.net.URLClassLoader(
+                new java.net.URL[] {result.outputDir().toUri().toURL()}, getClass().getClassLoader())) {
+            var targetClass = loader.loadClass("app.FrozenTarget");
+            var dependencyClass = loader.loadClass("app.FrozenDependency");
+            try (var container = io.vidocq.vauban.core.container.VaubanContainer.builder()
+                    .classLoader(loader).scanClasspath()
+                    .addBeanClass(targetClass).addBeanClass(dependencyClass).build()) {
+                assertEquals(0, MemberEnhancementBce.enhancements,
+                        "boot must apply the frozen patch, not replay the build-time extension");
+                var target = container.select(targetClass);
+                assertNotNull(targetClass.getField("field").get(target));
+                assertNotNull(targetClass.getField("initialized").get(target));
+                assertNotNull(targetClass.getField("constructed").get(target));
+                var bean = container.getBeanManager().getBeans(targetClass,
+                        jakarta.enterprise.inject.literal.NamedLiteral.of("target")).iterator().next();
+                assertEquals(3, bean.getInjectionPoints().size());
+                assertTrue(bean.getInjectionPoints().stream().allMatch(point ->
+                        point.getQualifiers().stream().anyMatch(annotation ->
+                                annotation instanceof jakarta.inject.Named named && named.value().equals("selected"))));
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("an application stereotype with a scope is bean-defining and gives its scope (BUG-20261008-04)")
+    void applicationStereotypeIsBeanDefining() throws IOException {
+        var result = compileWithBce(
+                List.of(),
+                """
+                package app;
+
+                import jakarta.enterprise.context.ApplicationScoped;
+                import jakarta.enterprise.inject.Stereotype;
+                import java.lang.annotation.*;
+
+                @Stereotype
+                @ApplicationScoped
+                @Retention(RetentionPolicy.RUNTIME)
+                @Target(ElementType.TYPE)
+                public @interface Managed {
+                }
+                """,
+                """
+                package app;
+
+                @Managed
+                public class OnlyStereotyped {
+                    public String hello() { return "hello"; }
+                }
+                """,
+                """
+                package app;
+
+                import jakarta.enterprise.inject.Produces;
+
+                @Managed
+                public class WithProducer {
+                    public String hello() { return "hello"; }
+
+                    @Produces
+                    Integer answer() { return 42; }
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+        var beans = result.readBeansList();
+        assertTrue(beans.contains("app.OnlyStereotyped"), "a class whose only annotation is the stereotype: " + beans);
+        assertTrue(beans.contains("app.WithProducer"), "a class indexed through its producer: " + beans);
+        // Normal-scoped beans get a client proxy; a @Dependent one gets none.
+        assertTrue(result.hasFile("app/OnlyStereotyped_ClientProxy.class"), "OnlyStereotyped is @ApplicationScoped");
+        assertTrue(result.hasFile("app/WithProducer_ClientProxy.class"), "WithProducer is @ApplicationScoped");
+    }
+
+    @Test
+    @DisplayName("an application stereotype from a library on the class path is bean-defining too (BUG-20261008-04)")
+    void libraryStereotypeIsBeanDefining() throws IOException {
+        var library = tempDir.resolve("library");
+        Files.createDirectories(library.resolve("lib"));
+        var stereotype = library.resolve("lib/Managed.java");
+        Files.writeString(stereotype, """
+                package lib;
+
+                import jakarta.enterprise.context.ApplicationScoped;
+                import jakarta.enterprise.inject.Stereotype;
+                import java.lang.annotation.*;
+
+                @Stereotype
+                @ApplicationScoped
+                @Retention(RetentionPolicy.RUNTIME)
+                @Target(ElementType.TYPE)
+                public @interface Managed {
+                }
+                """);
+        var compiled = ToolProvider.getSystemJavaCompiler().run(null, null, null,
+                "-proc:none", "--release", "25", "-classpath", resolveCompilationClasspath(),
+                "-d", library.toString(), stereotype.toString());
+        assertEquals(0, compiled, "Precondition: the library compiles");
+
+        var result = compileWithBce(
+                List.of(),
+                List.of(library),
+                """
+                package app;
+
+                @lib.Managed
+                public class OnlyStereotyped {
+                    public String hello() { return "hello"; }
+                }
+                """,
+                """
+                package app;
+
+                import jakarta.enterprise.inject.Produces;
+
+                @lib.Managed
+                public class WithProducer {
+                    public String hello() { return "hello"; }
+
+                    @Produces
+                    Integer answer() { return 42; }
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+        var beans = result.readBeansList();
+        assertTrue(beans.contains("app.OnlyStereotyped"), "a class whose only annotation is the stereotype: " + beans);
+        assertTrue(beans.contains("app.WithProducer"), "a class indexed through its producer: " + beans);
+        assertTrue(result.hasFile("app/OnlyStereotyped_ClientProxy.class"), "OnlyStereotyped is @ApplicationScoped");
+        assertTrue(result.hasFile("app/WithProducer_ClientProxy.class"), "WithProducer is @ApplicationScoped");
+    }
+
+    @Test
+    @DisplayName("the synthetic metadata file has no date: two compilations of the same sources write the same bytes")
+    void syntheticMetadataIsTheSameAtEveryCompilation() throws IOException {
+        var source = """
+                import jakarta.enterprise.context.ApplicationScoped;
+
+                @ApplicationScoped
+                public class RealBean {
+                    public String hello() { return "hello"; }
+                }
+                """;
+        var first = compileWithBce(List.of(TestSynthesisBce.class), source);
+        assertTrue(first.success(), "Compilation should succeed. Messages: " + first.messages());
+        var firstBytes = Files.readAllBytes(first.outputDir().resolve(SyntheticMetadataSerializer.METADATA_PATH));
+        try (var walk = Files.walk(tempDir)) {
+            for (var path : walk.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                if (!path.equals(tempDir)) {
+                    Files.delete(path);
+                }
+            }
+        }
+
+        var second = compileWithBce(List.of(TestSynthesisBce.class), source);
+        assertTrue(second.success(), "Compilation should succeed. Messages: " + second.messages());
+        var secondBytes = Files.readAllBytes(second.outputDir().resolve(SyntheticMetadataSerializer.METADATA_PATH));
+
+        var text = new String(firstBytes, StandardCharsets.UTF_8);
+        assertEquals(text, new String(secondBytes, StandardCharsets.UTF_8));
+        var dated = text.lines().filter(line -> line.matches("#\\p{Alpha}{3} \\p{Alpha}{3} \\d{2} .*\\d{4}")).toList();
+        assertEquals(List.of(), dated, "no Properties.store date line");
+    }
+
+    @Test
+    @DisplayName("@Synthesis BCE serializes the synthetic beans into the metadata file")
+    void shouldSerializeSyntheticBeanMetadata() throws IOException {
+        var result = compileWithBce(
+                List.of(TestSynthesisBce.class),
+                """
+                import jakarta.enterprise.context.ApplicationScoped;
+
+                @ApplicationScoped
+                public class RealBean {
+                    public String hello() { return "hello"; }
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+
+        // The synthetic metadata file must be written
+        assertTrue(result.hasFile(SyntheticMetadataSerializer.METADATA_PATH),
+                "Synthetic metadata file should be written when @Synthesis creates beans");
+
+        // Read and verify the content
+        var metadataContent = result.readFile(SyntheticMetadataSerializer.METADATA_PATH);
+        assertTrue(metadataContent.contains("bean.count=1"),
+                "Should contain exactly 1 synthetic bean");
+        assertTrue(metadataContent.contains(TestStringCreator.class.getName()),
+                "Should reference the creator class");
+    }
+
+    @Test
+    @DisplayName("a synthetic bean travels in its metadata, never in the bean list (ravel#21)")
+    void syntheticBeanClassStaysOutOfTheBeanList() throws IOException {
+        // The container loads every class the list names as a managed bean: a synthetic bean typed
+        // java.lang.String made it scan a class of the bootstrap loader, and the boot failed.
+        var result = compileWithBce(
+                List.of(TestSynthesisBce.class),
+                """
+                import jakarta.enterprise.context.ApplicationScoped;
+
+                @ApplicationScoped
+                public class RealBean {
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+        assertEquals(List.of("RealBean"), result.readBeansList());
+    }
+
+    @Test
+    @DisplayName("every phase the processor runs tells the extension it runs at build time (ravel#21)")
+    void extensionKnowsItRunsAtBuildTime() throws IOException {
+        // An extension that checks a configuration value must leave it to the container start: at
+        // compile time it would read the build machine's environment, not the deployment's.
+        PhaseRecordingBce.SEEN.clear();
+
+        var result = compileWithBce(
+                List.of(PhaseRecordingBce.class),
+                """
+                import jakarta.enterprise.context.ApplicationScoped;
+
+                @ApplicationScoped
+                public class RealBean {
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+        assertEquals(PhaseRecordingBce.SEEN,
+                Map.of("discovery", true, "registration", true, "synthesis", true, "validation", true));
+    }
+
+    /**
+     * Test BCE that hands its synthetic bean a param of each kind a build-time extension needs:
+     * class arrays (Foy's servlet index), language-model classes and annotations, array params.
+     */
+    public static class ParamKindsBce implements BuildCompatibleExtension {
+        static jakarta.enterprise.lang.model.declarations.ClassInfo target;
+
+        @Registration(types = Object.class)
+        public void registration(BeanInfo bean) {
+            if (bean.declaringClass().simpleName().equals("ParamTarget")) {
+                target = bean.declaringClass();
+            }
+        }
+
+        @Synthesis
+        public void synthesis(SyntheticComponents components) {
+            components.addBean(String.class)
+                    .type(String.class)
+                    .createWith(TestStringCreator.class)
+                    .withParam("classes", new Class<?>[] {String.class, Integer.class})
+                    .withParam("classInfo", target)
+                    .withParam("classInfos", new jakarta.enterprise.lang.model.declarations.ClassInfo[] {target})
+                    .withParam("annotationInfo", target.annotation(jakarta.inject.Named.class))
+                    .withParam("annotation", jakarta.enterprise.inject.literal.NamedLiteral.of("literal"))
+                    .withParam("strings", new String[] {"a,b", "c"})
+                    .withParam("ints", new int[] {1, 2});
+        }
+    }
+
+    @Test
+    @DisplayName("every withParam value a build-time extension passes reaches the creator (BUG-20261008-02)")
+    void syntheticParamsOfEveryKindSurviveTheBuild() throws Exception {
+        ParamKindsBce.target = null;
+        var result = compileWithBce(
+                List.of(ParamKindsBce.class),
+                """
+                import jakarta.enterprise.context.ApplicationScoped;
+                import jakarta.inject.Named;
+
+                @ApplicationScoped
+                @Named("target")
+                public class ParamTarget {
+                }
+                """
+        );
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+
+        Map<String, String> written;
+        try (var in = Files.newInputStream(result.outputDir().resolve(SyntheticMetadataSerializer.METADATA_PATH))) {
+            written = SyntheticMetadataSerializer.readBeans(in).getFirst().params();
+        }
+        try (var loader = new java.net.URLClassLoader(new java.net.URL[] {result.outputDir().toUri().toURL()},
+                getClass().getClassLoader())) {
+            var decoded = new LinkedHashMap<String, Object>();
+            written.forEach((key, value) ->
+                    decoded.put(key, io.vidocq.vauban.core.extensions.SyntheticParamCodec.decode(value, loader)));
+            var params = new io.vidocq.vauban.core.extensions.VaubanParameters(decoded);
+            var targetClass = loader.loadClass("ParamTarget");
+
+            assertArrayEquals(new Class<?>[] {String.class, Integer.class}, params.get("classes", Class[].class));
+            assertEquals(targetClass, params.get("classInfo", Class.class));
+            assertArrayEquals(new Class<?>[] {targetClass}, params.get("classInfos", Class[].class));
+            assertEquals("target", params.get("annotationInfo", jakarta.inject.Named.class).value());
+            assertEquals("literal", params.get("annotation", jakarta.inject.Named.class).value());
+            assertArrayEquals(new String[] {"a,b", "c"}, params.get("strings", String[].class));
+            assertArrayEquals(new int[] {1, 2}, params.get("ints", int[].class));
+        }
+    }
+
+    /** Registers what it sees; listed before the extension that enhances, which must not matter. */
+    public static class RecordingRegistrationBce implements BuildCompatibleExtension {
+        static final List<String> SEEN = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Registration(types = Object.class)
+        public void registration(BeanInfo bean) {
+            // The built-in beans of the container are left out (BUG-20261117-06)
+            if (!bean.declaringClass().name().startsWith("jakarta.")) {
+                SEEN.add(bean.declaringClass().name() + "@" + bean.scope().name());
+            }
+        }
+    }
+
+    /** Makes the classes annotated {@code @Named} beans, as Foy does for {@code @WebServlet}. */
+    public static class DependentEnhancementBce implements BuildCompatibleExtension {
+        @Enhancement(types = Object.class, withAnnotations = jakarta.inject.Named.class)
+        public void addScope(ClassConfig clazz) {
+            clazz.addAnnotation(jakarta.enterprise.context.Dependent.class);
+        }
+    }
+
+    @Test
+    @DisplayName("@Registration of every extension sees the beans @Enhancement created (BUG-20261008-03)")
+    void registrationSeesTheBeansEnhancementCreated() throws IOException {
+        RecordingRegistrationBce.SEEN.clear();
+
+        var result = compileWithBce(
+                List.of(RecordingRegistrationBce.class, DependentEnhancementBce.class),
+                """
+                import jakarta.inject.Named;
+
+                @Named
+                public class Unscoped {
+                }
+                """
+        );
+
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+        assertTrue(result.readBeansList().contains("Unscoped"), "Precondition: Enhancement made it a bean");
+        assertEquals(RecordingRegistrationBce.SEEN, List.of("Unscoped@jakarta.enterprise.context.Dependent"));
+    }
+
+    /**
+     * Test BCE that registers two synthetic beans and an observer told apart by the member of their
+     * qualifier, as Noether's extension does with {@code @PersistenceBinding("unit:...")}.
+     */
+    public static class QualifiedSyntheticBce implements BuildCompatibleExtension {
+        @Synthesis
+        public void synthesis(SyntheticComponents components) {
+            for (var channel : List.of("alpha", "beta")) {
+                components.addBean(String.class)
+                        .type(String.class)
+                        .qualifier(AnnotationBuilder.of(io.vidocq.vauban.processor.apt.testfixtures.Channel.class)
+                                .member("value", channel).build())
+                        .createWith(TestStringCreator.class)
+                        .withParam("value", channel + "-bean");
+            }
+            components.addObserver(Object.class)
+                    .qualifier(AnnotationBuilder.of(io.vidocq.vauban.processor.apt.testfixtures.Channel.class)
+                            .member("value", "alpha").build())
+                    .observeWith(ShapeObserver.class).withParam(SHAPE, "@Channel(alpha)");
+        }
+    }
+
+    @Test
+    @DisplayName("a synthetic bean or observer registered at build time keeps the members of its qualifier (BUG-20261111-01)")
+    void buildTimeSyntheticQualifierKeepsItsMembers() throws Exception {
+        ShapeObserver.OBSERVED.clear();
+        var fixtures = Path.of(io.vidocq.vauban.processor.apt.testfixtures.Channel.class
+                .getProtectionDomain().getCodeSource().getLocation().toURI());
+        var result = compileWithBce(List.of(QualifiedSyntheticBce.class), List.of(fixtures), """
+                package app;
+
+                import io.vidocq.vauban.processor.apt.testfixtures.Channel;
+                import jakarta.enterprise.context.Dependent;
+                import jakarta.enterprise.event.Event;
+                import jakarta.inject.Inject;
+
+                @Dependent
+                public class Client {
+                    @Inject @Channel("alpha") public String alpha;
+                    @Inject @Channel("beta") public String beta;
+                    @Inject @Channel("alpha") Event<String> alphaEvents;
+                    @Inject @Channel("beta") Event<String> betaEvents;
+
+                    public void fire() {
+                        betaEvents.fire("to-beta");
+                        alphaEvents.fire("to-alpha");
+                    }
+                }
+                """);
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+
+        try (var loader = new java.net.URLClassLoader(
+                new java.net.URL[] {result.outputDir().toUri().toURL()}, getClass().getClassLoader());
+             var container = bootReadingTheFixtures(loader)) {
+            var clientClass = loader.loadClass("app.Client");
+            var client = container.select(clientClass);
+            assertEquals("alpha-bean", clientClass.getField("alpha").get(client));
+            assertEquals("beta-bean", clientClass.getField("beta").get(client));
+            clientClass.getMethod("fire").invoke(client);
+        }
+        assertEquals(List.of("@Channel(alpha) got to-alpha"), List.copyOf(ShapeObserver.OBSERVED),
+                "the observer qualified @Channel(\"alpha\") receives that event and no other");
+    }
+
+    /**
+     * Registers {@link io.vidocq.vauban.processor.apt.testfixtures.Registered} as a qualifier whose {@code value} is
+     * non-binding, adds the library classes {@code Gear} and {@code GearUser} to the deployment, and builds an invoker
+     * of each {@code useGear} method that looks its argument up.
+     */
+    public static class RegisteredQualifierLookupBce implements BuildCompatibleExtension {
+        static final List<String> BUILT = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Discovery
+        public void discover(MetaAnnotations meta, ScannedClasses classes) {
+            meta.addQualifier(io.vidocq.vauban.processor.apt.testfixtures.Registered.class).methods()
+                    .forEach(member -> member.addAnnotation(jakarta.enterprise.util.Nonbinding.class));
+            classes.add(io.vidocq.vauban.processor.apt.testfixtures.Gear.class.getName());
+            classes.add(io.vidocq.vauban.processor.apt.testfixtures.GearUser.class.getName());
+        }
+
+        @Registration(types = Object.class)
+        public void register(BeanInfo bean, InvokerFactory invokers) {
+            for (var method : bean.declaringClass().methods()) {
+                if (method.name().equals("useGear")) {
+                    invokers.createInvoker(bean, method).withArgumentLookup(0).build();
+                    BUILT.add(bean.declaringClass().simpleName() + "." + method.name());
+                }
+            }
+        }
+    }
+
+    /**
+     * The build checks an invoker's argument lookup with the qualifiers the extensions register, and the members they
+     * make non-binding, as the start does: {@code @Registered("lookup") Gear} is the bean of
+     * {@code @Registered("bean") Gear} (BUG-20261117-27). The beans are library classes: the build loads the class an
+     * invoker targets, and a class it compiles is not loadable yet (BUG-20261117-48).
+     */
+    @Test
+    @DisplayName("the build accepts an invoker lookup of a qualifier an extension registers (BUG-20261117-27)")
+    void anInvokerLookupOfARegisteredQualifierPassesTheBuild() throws Exception {
+        RegisteredQualifierLookupBce.BUILT.clear();
+        var fixtures = Path.of(io.vidocq.vauban.processor.apt.testfixtures.Registered.class
+                .getProtectionDomain().getCodeSource().getLocation().toURI());
+        var result = compileWithBce(List.of(RegisteredQualifierLookupBce.class), List.of(fixtures), """
+                package app;
+
+                import jakarta.enterprise.context.Dependent;
+
+                @Dependent
+                public class Application {
+                }
+                """);
+
+        assertTrue(result.success(), "the build refused the lookup: " + result.messages());
+        var built = List.copyOf(RegisteredQualifierLookupBce.BUILT);
+        assertEquals(List.of("GearUser.useGear"), built, "the invoker the build checked");
+    }
+
+    /**
+     * Builds an invoker of each {@code work} method, as CDI 4.1 lets an extension do for any managed bean, and hands
+     * the last one to a synthetic bean, as an extension passes an invoker to the code that calls it.
+     */
+    public static class SameBuildInvokerBce implements BuildCompatibleExtension {
+        static final List<String> BUILT = new java.util.concurrent.CopyOnWriteArrayList<>();
+        static jakarta.enterprise.inject.build.compatible.spi.InvokerInfo invoker;
+
+        @Registration(types = Object.class)
+        public void register(BeanInfo bean, InvokerFactory invokers) {
+            for (var method : bean.declaringClass().methods()) {
+                if (method.name().equals("work")) {
+                    invoker = invokers.createInvoker(bean, method).withInstanceLookup().build();
+                    BUILT.add(bean.declaringClass().simpleName() + "." + method.name());
+                }
+            }
+        }
+
+        @Synthesis
+        public void synthesis(SyntheticComponents components) {
+            components.addBean(String.class).type(String.class).createWith(TestStringCreator.class)
+                    .withParam("invoker", invoker);
+        }
+    }
+
+    /** Builds an invoker of the bean of {@code Worker} for the method {@code other} of its parameter's class. */
+    public static class ForeignMethodInvokerBce implements BuildCompatibleExtension {
+        @Registration(types = Object.class)
+        public void register(BeanInfo bean, InvokerFactory invokers) {
+            for (var method : bean.declaringClass().methods()) {
+                if (method.name().equals("work")) {
+                    var foreign = method.parameters().getFirst().type().asClass().declaration().methods().stream()
+                            .filter(candidate -> candidate.name().equals("other")).findFirst().orElseThrow();
+                    invokers.createInvoker(bean, foreign).build();
+                }
+            }
+        }
+    }
+
+    /** Builds an invoker of each {@code work} method that looks its first argument up. */
+    public static class SameBuildLookupBce implements BuildCompatibleExtension {
+        @Registration(types = Object.class)
+        public void register(BeanInfo bean, InvokerFactory invokers) {
+            for (var method : bean.declaringClass().methods()) {
+                if (method.name().equals("work")) {
+                    invokers.createInvoker(bean, method).withArgumentLookup(0).build();
+                }
+            }
+        }
+    }
+
+    /**
+     * An extension builds an invoker of a method of a bean the build compiles (CDI 4.1, "Building an invoker"). The
+     * build loads the bean class to find the method, which a class it compiles has no class file for yet, and fails
+     * the compilation: {@code Cannot load bean class: app.Worker} (BUG-20261117-48).
+     */
+    @Test
+    @DisplayName("an extension builds an invoker of a bean the build compiles (BUG-20261117-48)")
+    void anExtensionBuildsAnInvokerForABeanTheBuildCompiles() throws Exception {
+        SameBuildInvokerBce.BUILT.clear();
+        var result = compileWithBce(List.of(SameBuildInvokerBce.class), """
+                package app;
+
+                import jakarta.enterprise.context.Dependent;
+
+                @Dependent
+                public class Worker {
+                    public String work() {
+                        return "work";
+                    }
+                }
+                """);
+
+        assertTrue(result.success(), "the build refused the invoker: " + result.messages());
+        var built = List.copyOf(SameBuildInvokerBce.BUILT);
+        assertEquals(List.of("Worker.work"), built, "the invoker the extension built");
+
+        Map<String, String> written;
+        try (var in = Files.newInputStream(result.outputDir().resolve(SyntheticMetadataSerializer.METADATA_PATH))) {
+            written = SyntheticMetadataSerializer.readBeans(in).getFirst().params();
+        }
+        try (var loader = new java.net.URLClassLoader(new java.net.URL[] {result.outputDir().toUri().toURL()},
+                getClass().getClassLoader())) {
+            var read = io.vidocq.vauban.core.extensions.SyntheticParamCodec.decode(written.get("invoker"), loader);
+            var invoker = assertInstanceOf(io.vidocq.vauban.core.extensions.VaubanInvoker.class, read,
+                    "what the start reads");
+            assertEquals(new io.vidocq.vauban.core.extensions.InvokerTarget("app.Worker", "app.Worker", "work",
+                    List.of()), invoker.target(), "the invoked method");
+            assertTrue(invoker.instanceLookup(), "the instance lookup the extension asked for");
+        }
+    }
+
+    /**
+     * The invoker the build describes for a bean it compiles is generated at build, a class that calls the method
+     * directly: the start loads it, and resolves no {@link java.lang.reflect.Method}. The start resolved the method by
+     * name ({@code getDeclaredMethod}) and called it through {@code unreflect} (BUG-20261118-37).
+     */
+    @Test
+    @DisplayName("the invoker of a bean the build compiles is generated, and calls no Method (BUG-20261118-37)")
+    void theInvokerOfABeanTheBuildCompilesIsGeneratedAtBuild() throws Exception {
+        var result = compileWithBce(List.of(SameBuildInvokerBce.class), """
+                package app;
+
+                import jakarta.enterprise.context.Dependent;
+
+                @Dependent
+                public class Worker {
+                    public String work() {
+                        return "work";
+                    }
+                }
+                """);
+        assertTrue(result.success(), "the build refused the invoker: " + result.messages());
+
+        Map<String, String> written;
+        try (var in = Files.newInputStream(result.outputDir().resolve(SyntheticMetadataSerializer.METADATA_PATH))) {
+            written = SyntheticMetadataSerializer.readBeans(in).getFirst().params();
+        }
+        try (var classes = Files.list(result.outputDir().resolve("app"))) {
+            assertEquals(1, classes.filter(file -> file.getFileName().toString().startsWith("Worker$$VaubanInvoker"))
+                    .count(), "the invoker class the build generated");
+        }
+        try (var loader = new java.net.URLClassLoader(new java.net.URL[] {result.outputDir().toUri().toURL()},
+                getClass().getClassLoader())) {
+            var read = io.vidocq.vauban.core.extensions.SyntheticParamCodec.decode(written.get("invoker"), loader);
+            var invoker = assertInstanceOf(io.vidocq.vauban.core.extensions.VaubanInvoker.class, read);
+            assertNull(invoker.method(), "the start resolved the method reflectively");
+            assertTrue(invoker.generatedClass().getName().startsWith("app.Worker$$VaubanInvoker$"),
+                    () -> "the class the invoker calls through: " + invoker.generatedClass());
+        }
+    }
+
+    /**
+     * The build refuses an invoker of a bean for a method its class neither declares nor inherits, as the start does
+     * (CDI 4.1, "Building an invoker"; TCK {@code invokers.invalid.method.MethodFromDifferentClassInvokerTest}). It
+     * checked so a class it loads only, and accepted the invoker of a bean it compiles (BUG-20261117-48).
+     */
+    @Test
+    @DisplayName("the build refuses an invoker of a method another class declares (BUG-20261117-48)")
+    void theBuildRefusesAnInvokerOfAMethodAnotherClassDeclares() throws Exception {
+        var result = compileWithBce(List.of(ForeignMethodInvokerBce.class), """
+                package app;
+
+                public class Other {
+                    public String other() {
+                        return "other";
+                    }
+                }
+                """, """
+                package app;
+
+                import jakarta.enterprise.context.Dependent;
+
+                @Dependent
+                public class Worker {
+                    public String work(Other other) {
+                        return "work";
+                    }
+                }
+                """);
+
+        assertFalse(result.success(), "the build accepted the invoker");
+        assertTrue(result.messages().stream().anyMatch(message -> message.contains(
+                "Method other does not belong to bean class app.Worker")), () -> String.join("\n", result.messages()));
+    }
+
+    /**
+     * The build checks the argument lookups of an invoker of a bean it compiles, as of one it loads: no bean of
+     * {@code Tool}, the lookup is unsatisfied (CDI 4.1, "Configuring lookups"; BUG-20261117-48).
+     */
+    @Test
+    @DisplayName("the build checks the lookups of an invoker of a bean it compiles (BUG-20261117-48)")
+    void theBuildChecksTheLookupsOfAnInvokerOfABeanItCompiles() throws Exception {
+        var result = compileWithBce(List.of(SameBuildLookupBce.class), """
+                package app;
+
+                public interface Tool {
+                }
+                """, """
+                package app;
+
+                import jakarta.enterprise.context.Dependent;
+
+                @Dependent
+                public class Worker {
+                    public String work(Tool tool) {
+                        return "work";
+                    }
+                }
+                """);
+
+        assertFalse(result.success(), "the build accepted an unsatisfied lookup");
+        assertTrue(result.messages().stream().anyMatch(message -> message.contains(
+                "Invoker argument lookup unsatisfied: no bean found for parameter type app.Tool at position 0 "
+                        + "of method app.Worker.work")), () -> String.join("\n", result.messages()));
+    }
+
+    /**
+     * The build accepts the argument lookup of a built-in bean the call serves, the {@code BeanContainer}, as the
+     * start does: the check is the same (BUG-20261117-44).
+     */
+    @Test
+    @DisplayName("the build accepts the lookup of the BeanContainer (BUG-20261117-44)")
+    void theBuildAcceptsALookupOfTheBeanContainer() throws Exception {
+        var result = compileWithBce(List.of(SameBuildLookupBce.class), """
+                package app;
+
+                import jakarta.enterprise.context.Dependent;
+                import jakarta.enterprise.inject.spi.BeanContainer;
+
+                @Dependent
+                public class Worker {
+                    public boolean work(BeanContainer container) {
+                        return container != null;
+                    }
+                }
+                """);
+
+        assertTrue(result.success(), () -> String.join("\n", result.messages()));
+    }
+
+    /** Creates the counter {@link CounterBce} synthesizes. */
+    public static class CounterCreator implements SyntheticBeanCreator<java.util.concurrent.atomic.AtomicInteger> {
+        @Override
+        public java.util.concurrent.atomic.AtomicInteger create(jakarta.enterprise.inject.Instance<Object> lookup,
+                                                                Parameters params) {
+            return new java.util.concurrent.atomic.AtomicInteger(7);
+        }
+    }
+
+    /** Adds a synthetic bean of {@code AtomicInteger}: the processor runs it, and records the bean in the archive. */
+    public static class CounterBce implements BuildCompatibleExtension {
+        @Synthesis
+        public void synthesis(SyntheticComponents components) {
+            components.addBean(java.util.concurrent.atomic.AtomicInteger.class)
+                    .type(java.util.concurrent.atomic.AtomicInteger.class).createWith(CounterCreator.class);
+        }
+    }
+
+    /** A bean of an archive the processor did not process: its extensions run at start. */
+    @jakarta.enterprise.context.Dependent
+    public static class UnprocessedBean {
+    }
+
+    /** Runs at start: builds an invoker of {@code app.CounterUser.read} that looks its argument up. */
+    public static class StartLookupBce implements BuildCompatibleExtension {
+        static final List<String> BUILT = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        @Registration(types = Object.class)
+        public void register(BeanInfo bean, InvokerFactory invokers) {
+            if (bean.declaringClass().name().equals("app.CounterUser")) {
+                for (var method : bean.declaringClass().methods()) {
+                    if (method.name().equals("read")) {
+                        invokers.createInvoker(bean, method).withArgumentLookup(0).build();
+                        BUILT.add(method.name());
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * An extension that runs at start builds an invoker whose argument lookup only a synthetic bean of an extension
+     * the processor ran satisfies: the start checked the lookup among the beans discovered and the synthetic beans of
+     * the extensions it ran, before it registered those the archive records, and refused it as unsatisfied, though
+     * the call finds the bean (CDI 4.1, "Configuring lookups": every bean of the deployment; BUG-20261117-45). The
+     * deployment holds an archive the processor did not process too, whose extensions run at start.
+     */
+    @Test
+    @DisplayName("the start checks an invoker's lookup among the synthetic beans the archive records (BUG-20261117-45)")
+    void theStartChecksALookupAmongTheSyntheticBeansTheArchiveRecords() throws Exception {
+        StartLookupBce.BUILT.clear();
+        var result = compileWithBce(List.of(CounterBce.class), """
+                package app;
+
+                import jakarta.enterprise.context.Dependent;
+                import java.util.concurrent.atomic.AtomicInteger;
+
+                @Dependent
+                public class CounterUser {
+                    public int read(AtomicInteger counter) {
+                        return counter.get();
+                    }
+                }
+                """);
+        assertTrue(result.success(), () -> String.join("\n", result.messages()));
+        assertTrue(result.readFile(SyntheticMetadataSerializer.METADATA_PATH).contains("AtomicInteger"),
+                "the archive records the synthetic bean");
+
+        try (var loader = new java.net.URLClassLoader(new java.net.URL[] {result.outputDir().toUri().toURL()},
+                getClass().getClassLoader())) {
+            var builder = io.vidocq.vauban.core.container.VaubanContainer.builder().classLoader(loader)
+                    .scanClasspath().addBeanClass(UnprocessedBean.class).addBeanClass(StartLookupBce.class);
+            try (var container = assertDoesNotThrow(builder::build, "the start refused the lookup")) {
+                assertEquals(List.of("read"), List.copyOf(StartLookupBce.BUILT), "the invoker the start built");
+                assertEquals(7, container.select(java.util.concurrent.atomic.AtomicInteger.class).get(),
+                        "the synthetic bean the archive records");
+            }
+        }
+    }
+
+    /**
+     * Boots the archive {@code loader} holds. The compiled application is in the loader's unnamed module and
+     * names the fixture qualifier, which a library would export: the tests' module exports it to that module.
+     */
+    private static io.vidocq.vauban.core.container.VaubanContainer bootReadingTheFixtures(ClassLoader loader) {
+        var fixtures = io.vidocq.vauban.processor.apt.testfixtures.Channel.class;
+        if (fixtures.getModule().isNamed()) {
+            fixtures.getModule().addExports(fixtures.getPackageName(), loader.getUnnamedModule());
+        }
+        return io.vidocq.vauban.core.container.VaubanContainer.builder()
+                .classLoader(loader).scanClasspath().build();
+    }
+
+    @Test
+    @DisplayName("a deployment that leaves out a class the frozen patch enhances still boots (BUG-20261111-02)")
+    void frozenMemberPatchOfAClassOutsideTheDeploymentIsIgnored() throws Exception {
+        var result = compileWithBce(List.of(MemberEnhancementBce.class), """
+                package app;
+                @jakarta.enterprise.context.Dependent
+                @jakarta.inject.Named("selected")
+                public class FrozenDependency {}
+                """, """
+                package app;
+                @jakarta.inject.Named("target")
+                @jakarta.enterprise.context.Dependent
+                public class FrozenTarget {
+                    public FrozenDependency field;
+                    @jakarta.inject.Inject
+                    public FrozenTarget(FrozenDependency dependency) { }
+                    private void initialize(@jakarta.inject.Named("selected") FrozenDependency dependency) { }
+                }
+                """);
+        assertTrue(result.success(), "Compilation should succeed. Messages: " + result.messages());
+        try (var patch = Files.newInputStream(result.outputDir().resolve(
+                io.vidocq.vauban.core.extensions.EnhancementPatchSerializer.PATCH_PATH))) {
+            assertTrue(io.vidocq.vauban.core.extensions.EnhancementPatchSerializer.read(patch)
+                    .containsKey("app.FrozenTarget#field#field"), "Precondition: the patch enhances members of FrozenTarget");
+        }
+
+        try (var loader = new java.net.URLClassLoader(
+                new java.net.URL[] {result.outputDir().toUri().toURL()}, getClass().getClassLoader())) {
+            var dependencyClass = loader.loadClass("app.FrozenDependency");
+            // FrozenTarget is on the class path, with its patch, and not in this deployment.
+            try (var container = io.vidocq.vauban.core.container.VaubanContainer.builder()
+                    .classLoader(loader).addBeanClass(dependencyClass).build()) {
+                assertNotNull(container.select(dependencyClass));
+            }
+        }
+    }
+
+    // ---- Utility methods (same as VaubanProcessorTest) ----
+
+    private String extractClassName(String source) {
+        var pattern = java.util.regex.Pattern.compile("(?:class|interface|enum|record)\\s+(\\w+)");
+        var matcher = pattern.matcher(source);
+        if (matcher.find()) return matcher.group(1);
+        throw new IllegalArgumentException("Cannot extract class name from source");
+    }
+
+    private String extractPackageName(String source) {
+        var pattern = java.util.regex.Pattern.compile("package\\s+([\\w.]+)\\s*;");
+        var matcher = pattern.matcher(source);
+        if (matcher.find()) return matcher.group(1);
+        return null;
+    }
+
+    private static String resolveCompilationClasspath() {
+        var markerClasses = List.of(
+                ApplicationScoped.class,
+                jakarta.inject.Inject.class,
+                jakarta.interceptor.Interceptor.class
+        );
+
+        var paths = new LinkedHashSet<String>();
+
+        var cp = System.getProperty("java.class.path");
+        if (cp != null && !cp.isBlank()) {
+            for (var entry : cp.split(File.pathSeparator)) {
+                paths.add(entry);
+            }
+        }
+
+        for (var clazz : markerClasses) {
+            try {
+                var location = clazz.getProtectionDomain().getCodeSource().getLocation();
+                if (location != null) {
+                    paths.add(Path.of(location.toURI()).toString());
+                }
+            } catch (Exception _) {
+                // best effort: the class path entry is simply left out
+            }
+        }
+
+        ModuleLayer.boot().configuration().modules().forEach(resolvedModule ->
+                resolvedModule.reference().location().ifPresent(uri -> {
+                    try {
+                        if ("file".equals(uri.getScheme())) {
+                            paths.add(Path.of(uri).toString());
+                        }
+                    } catch (Exception _) {
+                        // best effort: the class path entry is simply left out
+                    }
+                }));
+
+        return String.join(File.pathSeparator, paths);
+    }
+}

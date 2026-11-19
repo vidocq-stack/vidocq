@@ -1,0 +1,232 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.weaver;
+
+import java.lang.classfile.ClassFile;
+import java.lang.classfile.ClassTransform;
+import java.lang.classfile.MethodModel;
+import java.lang.classfile.constantpool.MethodRefEntry;
+import java.lang.constant.ClassDesc;
+import java.lang.constant.ConstantDescs;
+import java.lang.constant.MethodTypeDesc;
+import java.lang.reflect.AccessFlag;
+
+/**
+ * Class-File transformations behind phase 2 of Vidocq/vauban#24: make a compiled
+ * normal-scoped bean proxyable <strong>without touching its source</strong>.
+ *
+ * <p>The JVM forces the client proxy's {@code <init>} to chain to a constructor of the bean
+ * (its direct superclass), so the side-effect-free entry point must exist in the bean class
+ * itself — and annotation processing cannot add it (JSR 269 only creates new files). The
+ * compiled classes are therefore rewritten after javac: by the auto-started javac plugin
+ * (Maven/Gradle/CLI builds), by the {@code vauban-maven-plugin} at {@code process-classes}
+ * (ecosystem jars), or at class load time by {@link WeavingAgent} when the build did not
+ * weave (IDE builds):
+ *
+ * <ul>
+ *   <li>{@link #addMarkerConstructor(byte[], SuperChain)} weaves a synthetic
+ *       {@code protected <init>(ProxyLink)} with an empty body into the bean;</li>
+ *   <li>{@link #retargetProxyConstructor(byte[])} rewrites the {@code <init>} of an
+ *       already-generated {@code <Bean>_ClientProxy} (APT-emitted before the marker existed)
+ *       to chain to that marker instead of a business constructor.</li>
+ * </ul>
+ *
+ * <p>At the bytecode level the woven constructor legitimately leaves blank {@code final}
+ * fields unassigned (definite assignment is a javac rule, not a verifier one), so no
+ * per-field default assignments are needed. Beans that declare a manual {@code (ProxyLink)}
+ * constructor (phase 1) are left untouched.
+ *
+ * <p>This module is dependency-free on purpose (it doubles as a self-contained agent jar),
+ * so the marker type is referenced by name only — kept in sync with
+ * {@code io.vidocq.vauban.api.ProxyLink.CLASS_NAME}.
+ */
+public final class ProxyLinkWeaver {
+
+    /** Binary name of the marker type — mirror of {@code io.vidocq.vauban.api.ProxyLink.CLASS_NAME}. */
+    public static final String PROXY_LINK_CLASS = "io.vidocq.vauban.api.ProxyLink";
+
+    private static final ClassDesc CD_PROXY_LINK = ClassDesc.of(PROXY_LINK_CLASS);
+    private static final MethodTypeDesc MTD_MARKER =
+            MethodTypeDesc.of(ConstantDescs.CD_void, CD_PROXY_LINK);
+    private static final String MARKER_DESCRIPTOR = MTD_MARKER.descriptorString();
+    private static final MethodTypeDesc MTD_VOID = MethodTypeDesc.of(ConstantDescs.CD_void);
+    /** The client proxy's name suffix — mirror of {@code ClientProxyShape.PROXY_SUFFIX}. */
+    private static final String PROXY_SUFFIX = "_ClientProxy";
+    /** The client proxy's delegate field — mirror of {@code ClientProxyShape.FIELD_DELEGATE}. */
+    private static final String FIELD_DELEGATE = "$$delegate";
+    private static final ClassDesc CD_SUPPLIER = ClassDesc.of("java.util.function.Supplier");
+    private static final MethodTypeDesc MTD_DELEGATE_CTOR =
+            MethodTypeDesc.of(ConstantDescs.CD_void, CD_SUPPLIER);
+
+    /** How the woven marker chains to the bean's superclass. */
+    public enum SuperChain {
+        /** {@code super()} — the superclass is {@code Object} or offers a no-arg constructor. */
+        NO_ARG,
+        /** {@code super((ProxyLink) null)} — the superclass carries a marker itself. */
+        MARKER
+    }
+
+    private ProxyLinkWeaver() {}
+
+    /** {@code true} when the class already declares a {@code (ProxyLink)} constructor. */
+    public static boolean hasMarkerConstructor(byte[] classBytes) {
+        for (var method : ClassFile.of().parse(classBytes).methods()) {
+            if (isMarkerCtor(method)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * {@code true} when {@code classBytes} refer to the {@code (ProxyLink)} constructor of {@code ownerBinaryName}, as
+     * a client proxy retargeted onto its bean's marker does. Reads the constant pool only.
+     */
+    public static boolean refersToMarkerConstructor(byte[] classBytes, String ownerBinaryName) {
+        var owner = ownerBinaryName.replace('.', '/');
+        for (var entry : ClassFile.of().parse(classBytes).constantPool()) {
+            if (entry instanceof MethodRefEntry ref
+                    && ref.name().equalsString(ConstantDescs.INIT_NAME)
+                    && ref.type().equalsString(MARKER_DESCRIPTOR)
+                    && ref.owner().asInternalName().equals(owner)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** {@code true} when the class declares a non-private no-arg constructor. */
+    public static boolean hasNonPrivateNoArgConstructor(byte[] classBytes) {
+        for (var method : ClassFile.of().parse(classBytes).methods()) {
+            if (method.methodName().equalsString(ConstantDescs.INIT_NAME)
+                    && method.methodTypeSymbol().parameterCount() == 0
+                    && !method.flags().has(AccessFlag.PRIVATE)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Weaves the synthetic {@code protected <init>(ProxyLink)} entry constructor into
+     * {@code beanClass}, chaining to the superclass per {@code chain}.
+     *
+     * @return the patched bytecode, or {@code null} when the class already declares the
+     *         marker (manual phase-1 constructor, or a previous weaving run)
+     */
+    public static byte[] addMarkerConstructor(byte[] beanClass, SuperChain chain) {
+        var cf = ClassFile.of();
+        var model = cf.parse(beanClass);
+        for (var method : model.methods()) {
+            if (isMarkerCtor(method)) return null;
+        }
+        var superDesc = model.superclass().orElseThrow().asSymbol();
+        return cf.transformClass(model, ClassTransform.ACCEPT_ALL.andThen(
+                ClassTransform.endHandler(clb ->
+                        clb.withMethodBody(ConstantDescs.INIT_NAME, MTD_MARKER,
+                                ClassFile.ACC_PROTECTED | ClassFile.ACC_SYNTHETIC, cob -> {
+                                    cob.aload(0);
+                                    if (chain == SuperChain.MARKER) cob.aconst_null();
+                                    cob.invokespecial(superDesc, ConstantDescs.INIT_NAME,
+                                            chain == SuperChain.MARKER ? MTD_MARKER : MTD_VOID);
+                                    cob.return_();
+                                }))));
+    }
+
+    /**
+     * Weaves the marker constructor as {@link #addMarkerConstructor} does, and keeps the {@code serialVersionUID} of
+     * the original class: the marker constructor is not private, so it changes the value the JVM computes for a class
+     * that declares none, and an object serialized by the same class outside Vauban would not read back
+     * (BUG-20261118-95). A class that declares none gets a {@code private static final long serialVersionUID} of the
+     * value its original bytes give, {@link #defaultSerialVersionUid}. That field changes nothing for a class that is
+     * not {@code Serializable}, so it is added whatever the supertypes, which the bytes of the class alone do not show.
+     *
+     * <p>Only for the bytes of a library, a jar or an sjar, which stay the same from one start to the next. A class
+     * served from a directory, the application's own under a dev swap, keeps the default value: a pinned value would
+     * change at each edit, and Foy and Vidocq read a declared value that changed as a class that cannot move.
+     *
+     * @return the patched bytecode, or {@code null} when the class already declares the marker
+     */
+    // S1168: null is the "left unchanged" answer of addMarkerConstructor and of a ClassFileTransformer.
+    @SuppressWarnings("java:S1168")
+    public static byte[] addMarkerConstructorKeepingSerialVersionUid(byte[] beanClass, SuperChain chain) {
+        byte[] woven = addMarkerConstructor(beanClass, chain);
+        if (woven == null) {
+            return null;
+        }
+        var model = ClassFile.of().parse(beanClass);
+        return SerialVersionUids.declares(model) ? woven
+                : SerialVersionUids.with(woven, SerialVersionUids.computed(model));
+    }
+
+    /**
+     * The {@code serialVersionUID} the JVM computes for the class of {@code classFile} when it declares none: the
+     * algorithm of the Java Object Serialization Specification, section 4.6, read from the class file.
+     */
+    public static long defaultSerialVersionUid(byte[] classFile) {
+        return SerialVersionUids.computed(ClassFile.of().parse(classFile));
+    }
+
+    /**
+     * Rewrites the {@code <init>} of a generated client proxy to
+     * {@code super((ProxyLink) null)}. The proxy's only constructor takes its delegate,
+     * {@code (Supplier d)}, and stores it in the final {@code $$delegate} after the super call
+     * (vauban#227): the rewritten body keeps that assignment. Idempotent: retargeting a proxy that
+     * already chains to the marker produces the same body. The bean class must carry the marker
+     * constructor (woven or manual) before the retargeted proxy is loaded. A proxy that does not extend its bean is
+     * left as it is: the proxy of a bean whose class has a final method extends a class above it, and chains to that
+     * class's constructor (BUG-20261118-20).
+     */
+    public static byte[] retargetProxyConstructor(byte[] proxyClass) {
+        var cf = ClassFile.of();
+        var model = cf.parse(proxyClass);
+        var thisDesc = model.thisClass().asSymbol();
+        var superEntry = model.superclass().orElseThrow();
+        var superDesc = superEntry.asSymbol();
+        if (!model.thisClass().asInternalName().equals(superEntry.asInternalName() + PROXY_SUFFIX)) {
+            return proxyClass;
+        }
+        boolean hasDelegateField = model.fields().stream()
+                .anyMatch(f -> f.fieldName().equalsString(FIELD_DELEGATE)
+                        && f.fieldTypeSymbol().equals(CD_SUPPLIER));
+        return cf.transformClass(model, (clb, ce) -> {
+            if (ce instanceof MethodModel mm && mm.methodName().equalsString(ConstantDescs.INIT_NAME)) {
+                boolean storesDelegate = hasDelegateField && mm.methodTypeSymbol().equals(MTD_DELEGATE_CTOR);
+                clb.withMethodBody(ConstantDescs.INIT_NAME, mm.methodTypeSymbol(), mm.flags().flagsMask(), cob -> {
+                    cob.aload(0);
+                    cob.aconst_null();
+                    cob.invokespecial(superDesc, ConstantDescs.INIT_NAME, MTD_MARKER);
+                    if (storesDelegate) {
+                        cob.aload(0);
+                        cob.aload(1);
+                        cob.putfield(thisDesc, FIELD_DELEGATE, CD_SUPPLIER);
+                    }
+                    cob.return_();
+                });
+            } else {
+                clb.with(ce);
+            }
+        });
+    }
+
+    private static boolean isMarkerCtor(MethodModel method) {
+        return method.methodName().equalsString(ConstantDescs.INIT_NAME)
+                && method.methodTypeSymbol().parameterCount() == 1
+                && method.methodTypeSymbol().parameterType(0).equals(CD_PROXY_LINK);
+    }
+}

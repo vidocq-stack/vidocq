@@ -1,0 +1,286 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.bean.discovery;
+
+import io.vidocq.vauban.core.bean.model.QualifierInstance;
+import io.vidocq.vauban.core.loading.DeploymentClasses;
+import io.vidocq.vauban.indexer.model.AnnotationInfo;
+import io.vidocq.vauban.indexer.model.ClassInfo;
+import io.vidocq.vauban.indexer.model.DotName;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Qualifier resolution, extracted from {@link BeanDiscovery} (which stays the facade and
+ * delegates): the {@code computeQualifiers*} family with their CDI-spec variations
+ * (bean vs injection-point vs observer defaulting), repeatable-qualifier unwrapping,
+ * {@code @Named} defaulting, {@code @Inherited} annotation lookup, and the
+ * is-a-qualifier detection (index-first / reflection-fallback).
+ */
+final class QualifierResolver {
+
+    private final BeanDiscovery host;
+
+    QualifierResolver(BeanDiscovery host) {
+        this.host = host;
+    }
+
+    Set<QualifierInstance> computeQualifiers(List<AnnotationInfo> annotations) {
+        var qualifiers = new LinkedHashSet<QualifierInstance>();
+        boolean hasExplicitQualifier = false;
+
+        for (var ann : annotations) {
+            if (isQualifierAnnotation(ann.name())) {
+                qualifiers.add(QualifierInstance.from(ann));
+                if (!ann.name().equals(QualifierInstance.NAMED_NAME)
+                        && !ann.name().equals(QualifierInstance.ANY_NAME)) {
+                    hasExplicitQualifier = true;
+                }
+            } else {
+                // Unwrap repeatable qualifier container annotations
+                var unwrapped = unwrapRepeatableQualifiers(ann);
+                if (!unwrapped.isEmpty()) {
+                    qualifiers.addAll(unwrapped);
+                    hasExplicitQualifier = true;
+                }
+            }
+        }
+
+        if (!hasExplicitQualifier) {
+            qualifiers.add(QualifierInstance.DEFAULT);
+        }
+        qualifiers.add(QualifierInstance.ANY);
+
+        return qualifiers;
+    }
+
+    /**
+     * Exactly what the annotations of an injection point say, with no completion — what injection
+     * would otherwise have to read off the field or the parameter (vauban#70).
+     */
+    Set<QualifierInstance> declaredInjectionPointQualifiers(List<AnnotationInfo> annotations) {
+        var qualifiers = new LinkedHashSet<QualifierInstance>();
+        for (var ann : annotations) {
+            if (isQualifierAnnotation(ann.name())) {
+                qualifiers.add(QualifierInstance.from(ann));
+            } else {
+                qualifiers.addAll(unwrapRepeatableQualifiers(ann));
+            }
+        }
+        if (qualifiers.isEmpty()) {
+            // CDI 4.1 §5.2.2: a point that declares nothing requires @Default — which IS what it
+            // declares, then; the completion below adds only @Any on top.
+            qualifiers.add(QualifierInstance.DEFAULT);
+        }
+        return qualifiers;
+    }
+
+    Set<QualifierInstance> computeInjectionPointQualifiers(List<AnnotationInfo> annotations) {
+        var qualifiers = new LinkedHashSet<QualifierInstance>();
+        boolean hasExplicitQualifier = false;
+
+        for (var ann : annotations) {
+            if (isQualifierAnnotation(ann.name())) {
+                qualifiers.add(QualifierInstance.from(ann));
+                // CDI 4.1 §5.2.2: an injection point that declares ANY qualifier — including @Named —
+                // is qualified, so @Default is NOT assumed for it. The "@Named (and @Any) do not count"
+                // rule is bean-side only (§2.5.2, see computeQualifiers above), which keeps a @Named bean
+                // injectable by @Default; but a @Named injection point must not silently also require
+                // @Default — that would make it unsatisfiable by a @Named bean that carries its own
+                // explicit (non-@Default) qualifier.
+                hasExplicitQualifier = true;
+            } else {
+                var unwrapped = unwrapRepeatableQualifiers(ann);
+                if (!unwrapped.isEmpty()) {
+                    qualifiers.addAll(unwrapped);
+                    hasExplicitQualifier = true;
+                }
+            }
+        }
+
+        if (!hasExplicitQualifier) {
+            qualifiers.add(QualifierInstance.DEFAULT);
+        }
+        qualifiers.add(QualifierInstance.ANY);
+
+        return qualifiers;
+    }
+
+    /**
+     * CDI spec: @Named without a value on an injection point defaults to the field name. {@code @Named("")} writes that
+     * default value out, as an extension does that rebuilds a {@code @Named} from the members the language model shows
+     * (BUG-20261118-27).
+     */
+    Set<QualifierInstance> resolveNamedDefault(Set<QualifierInstance> qualifiers, String defaultName) {
+        var result = new LinkedHashSet<QualifierInstance>();
+        for (var q : qualifiers) {
+            if (q.isNamedWithoutValue()) {
+                // @Named without value → default to field/parameter name
+                result.add(new QualifierInstance(QualifierInstance.NAMED_NAME,
+                        java.util.Map.of(BeanDiscovery.MEMBER_VALUE, new io.vidocq.vauban.indexer.model.AnnotationValue.StringVal(defaultName))));
+            } else {
+                result.add(q);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Computes qualifiers for observer methods — only explicit qualifiers,
+     * no automatic @Default/@Any (CDI spec: an observer with no qualifiers
+     * observes all events of that type regardless of qualifiers).
+     */
+    Set<QualifierInstance> computeObserverQualifiers(List<AnnotationInfo> annotations) {
+        var qualifiers = new LinkedHashSet<QualifierInstance>();
+        for (var ann : annotations) {
+            if (isQualifierAnnotation(ann.name())) {
+                qualifiers.add(QualifierInstance.from(ann));
+            } else {
+                qualifiers.addAll(unwrapRepeatableQualifiers(ann));
+            }
+        }
+        return qualifiers;
+    }
+
+    Set<QualifierInstance> computeQualifiersWithStereotypes(ClassInfo classInfo) {
+        var allAnnotations = new ArrayList<>(classInfo.annotations());
+
+        // Add inherited annotations from superclasses
+        for (var ann : getInheritedAnnotations(classInfo)) {
+            allAnnotations.add(toAnnotationInfo(ann));
+        }
+
+        // Add annotations from stereotypes (direct + inherited)
+        var allAnnotationNames = host.getAllAnnotationNames(classInfo);
+        for (var annName : allAnnotationNames) {
+            if (host.isStereotype(annName)) {
+                host.index.getClassByName(annName)
+                        .ifPresent(stereotype -> addStereotypeAnnotations(stereotype, allAnnotations));
+            }
+        }
+
+        return computeQualifiers(allAnnotations);
+    }
+
+    /** CDI spec: {@code @Named} from a stereotype gives a name but is NOT added as a qualifier. */
+    private static void addStereotypeAnnotations(ClassInfo stereotype, List<AnnotationInfo> allAnnotations) {
+        for (var sa : stereotype.annotations()) {
+            if (!sa.name().equals(BeanDiscovery.NAMED)) {
+                allAnnotations.add(sa);
+            }
+        }
+    }
+
+    /**
+     * Returns annotations inherited from superclasses (those NOT declared directly on classInfo).
+     * Uses Java reflection — Class.getAnnotations() handles @Inherited automatically per JLS. A class that cannot be
+     * loaded or linked here, such as a dependency's class under the annotation processor whose supertypes or annotations
+     * are not on the processor path, has none beyond what the index read (VAU-APT-008).
+     */
+    List<java.lang.annotation.Annotation> getInheritedAnnotations(ClassInfo classInfo) {
+        try {
+            var cls = loadWithFallback(classInfo.name().value());
+            var declared = cls.getDeclaredAnnotations();
+            var all = cls.getAnnotations();
+            var declaredNames = new HashSet<Class<?>>();
+            for (var d : declared) {
+                declaredNames.add(d.annotationType());
+            }
+            var inherited = new ArrayList<java.lang.annotation.Annotation>();
+            for (var a : all) {
+                if (!declaredNames.contains(a.annotationType())) {
+                    inherited.add(a);
+                }
+            }
+            return inherited;
+        } catch (ClassNotFoundException | LinkageError | TypeNotPresentException _) {
+            return List.of();
+        }
+    }
+
+    /**
+     * The class of the deployment the index names: through the thread context class loader first
+     * (the TCK sets it to its own loader), through this class's loader when that fails. Neither initialises the
+     * class: under the annotation processor its static initialiser would run inside javac, without the libraries it
+     * needs (VAU-APT-008).
+     */
+    static Class<?> loadWithFallback(String name) throws ClassNotFoundException {
+        var cl = Thread.currentThread().getContextClassLoader();
+        try {
+            return Class.forName(name, false, cl);
+        } catch (ClassNotFoundException _) {
+            return Class.forName(name, false, QualifierResolver.class.getClassLoader());
+        }
+    }
+
+    /**
+     * Converts an inherited annotation to an AnnotationInfo for indexer compatibility, every member
+     * kind kept (BUG-20260914-09 dropped all but String, boolean, int, Class and enum values).
+     */
+    private AnnotationInfo toAnnotationInfo(java.lang.annotation.Annotation ann) {
+        return io.vidocq.vauban.core.annotation.AnnotationValues.toAnnotationInfo(ann);
+    }
+
+    private List<QualifierInstance> unwrapRepeatableQualifiers(AnnotationInfo ann) {
+        var result = new java.util.ArrayList<QualifierInstance>();
+        // Check if this annotation's value() contains repeatable qualifier annotations
+        var valueMember = ann.member(BeanDiscovery.MEMBER_VALUE);
+        if (!(valueMember instanceof io.vidocq.vauban.indexer.model.AnnotationValue.ArrayVal(var values))) {
+            return result;
+        }
+        for (var item : values) {
+            if (item instanceof io.vidocq.vauban.indexer.model.AnnotationValue.AnnotationVal(var annotation)
+                    && isQualifierAnnotation(annotation.name())) {
+                result.add(QualifierInstance.from(annotation));
+            }
+        }
+        return result;
+    }
+
+    boolean isQualifierAnnotation(DotName name) {
+        // Built-in qualifiers
+        if (name.equals(QualifierInstance.DEFAULT_NAME)
+                || name.equals(QualifierInstance.ANY_NAME)
+                || name.equals(QualifierInstance.NAMED_NAME)) {
+            return true;
+        }
+
+        // Custom qualifiers registered via @Discovery / MetaAnnotations
+        if (host.customQualifiers.contains(name)) {
+            return true;
+        }
+
+        // Check the index for the annotation class having @Qualifier
+        var annClass = host.index.getClassByName(name);
+        if (annClass.isPresent()) {
+            return annClass.get().hasAnnotation(DotName.of("jakarta.inject.Qualifier"));
+        }
+        // Fallback: check via reflection with TCCL
+        try {
+            return DeploymentClasses.load(name.value()).isAnnotationPresent(jakarta.inject.Qualifier.class);
+        } catch (ClassNotFoundException _) {
+            return false;
+        }
+    }
+}

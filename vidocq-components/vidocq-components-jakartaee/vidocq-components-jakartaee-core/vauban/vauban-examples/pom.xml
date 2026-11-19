@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.vauban</groupId>
+        <artifactId>vauban-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vauban-examples</artifactId>
+    <packaging>pom</packaging>
+    <name>Vauban :: Examples</name>
+    <description>Example projects demonstrating Vauban CDI container usage</description>
+
+    <modules>
+        <module>example-lib</module>
+        <module>example-lib-securized</module>
+        <module>example-app</module>
+        <module>example-test</module>
+        <module>example-cdi1015-lib</module>
+        <module>example-cdi1015-app</module>
+        <module>example-legacy-lib</module>
+        <module>example-legacy-app</module>
+        <module>example-enhanced-app</module>
+    </modules>
+
+    <properties>
+        <!--
+            Demo modules: never released as dependencies. We disable every release-time
+            attachment (sources/javadoc/GPG) plus the deploy goal AND we override the
+            central-publishing-maven-plugin to skip publish — the latter is required
+            because central-publishing replaces maven-deploy-plugin via extensions=true
+            and ignores `maven.deploy.skip`.
+        -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

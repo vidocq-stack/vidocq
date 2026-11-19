@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.vauban</groupId>
+        <artifactId>vauban-examples</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>example-test</artifactId>
+    <name>Vauban :: Examples :: Integration Tests</name>
+    <description>End-to-end tests: launches example-app as a Java process with real JARs and verifies stdout</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <java.executable>${java.home}/bin/java</java.executable>
+                        <jar.example.app>${project.basedir}/../example-app/target/example-app-${project.version}.jar</jar.example.app>
+                        <jar.example.lib>${project.basedir}/../example-lib/target/example-lib-${project.version}.jar</jar.example.lib>
+                        <jar.example.securized>${project.basedir}/../example-lib-securized/target/example-lib-securized-${project.version}.jar</jar.example.securized>
+                        <jar.vauban.core>${project.basedir}/../../vauban-core/target/vauban-core-${project.version}.jar</jar.vauban.core>
+                        <jar.vauban.api>${project.basedir}/../../vauban-api/target/vauban-api-${project.version}.jar</jar.vauban.api>
+                        <jar.vauban.indexer>${project.basedir}/../../vauban-indexer/target/vauban-indexer-${project.version}.jar</jar.vauban.indexer>
+                        <jar.vauban.sjar>${project.basedir}/../../vauban-sjar/target/vauban-sjar-${project.version}.jar</jar.vauban.sjar>
+                        <jar.vauban.classloader.spi>${project.basedir}/../../vauban-classloader-spi/target/vauban-classloader-spi-${project.version}.jar</jar.vauban.classloader.spi>
+                        <jar.vauban.weaver>${project.basedir}/../../vauban-weaver/target/vauban-weaver-${project.version}.jar</jar.vauban.weaver>
+                        <jar.vauban.classloader>${project.basedir}/../../vauban-classloader/target/vauban-classloader-${project.version}.jar</jar.vauban.classloader>
+                        <dist.zip>${project.basedir}/../example-app/target/example-app-${project.version}-dist.zip</dist.zip>
+                        <jar.jakarta.cdi>${settings.localRepository}/jakarta/enterprise/jakarta.enterprise.cdi-api/4.1.0/jakarta.enterprise.cdi-api-4.1.0.jar</jar.jakarta.cdi>
+                        <jar.jakarta.annotation>${settings.localRepository}/jakarta/annotation/jakarta.annotation-api/3.0.0/jakarta.annotation-api-3.0.0.jar</jar.jakarta.annotation>
+                        <jar.jakarta.el>${settings.localRepository}/jakarta/el/jakarta.el-api/6.0.0/jakarta.el-api-6.0.0.jar</jar.jakarta.el>
+                        <jar.jakarta.interceptor>${settings.localRepository}/jakarta/interceptor/jakarta.interceptor-api/2.2.0/jakarta.interceptor-api-2.2.0.jar</jar.jakarta.interceptor>
+                        <jar.jakarta.inject>${settings.localRepository}/jakarta/inject/jakarta.inject-api/2.0.1/jakarta.inject-api-2.0.1.jar</jar.jakarta.inject>
+                        <jar.jakarta.lang.model>${settings.localRepository}/jakarta/enterprise/jakarta.enterprise.lang-model/4.1.0/jakarta.enterprise.lang-model-4.1.0.jar</jar.jakarta.lang.model>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

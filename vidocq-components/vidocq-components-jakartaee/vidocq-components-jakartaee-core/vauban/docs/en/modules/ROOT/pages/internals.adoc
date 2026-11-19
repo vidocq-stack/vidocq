@@ -1,0 +1,1309 @@
+= Internals
+:description: Class-File API code generation, APT pipeline, threading model, bootstrap sequence.
+
+[.lead]
+Vauban rests on a simple principle: anything that can be computed at compile time is. No hot reflection, no dynamic proxies, no external bytecode library. This page documents the implementation choices that uphold that discipline.
+
+[#generated-code]
+== Generated code and reflective fallback
+
+Every brick of the suite documents, in a section of this name, what it generates, who generates it and when, what
+looks it up at run time, and what runs instead when it is missing. For Vauban the generated code *is* the
+container's normal path: the reflective path below it exists for classes no build step saw, and is kept unchanged.
+
+[cols="2,2,3,3"]
+|===
+| Generated | By, and when | Used at run time by | Without it
+
+| `META-INF/vauban-beans.list`, the bean index of an archive
+| `vauban-processor` in javac; `vauban:generate` (`process-classes`) for what javac did not compile
+| The container at boot: it loads each listed class without initialising it, then reads its class file into the
+  index (class-file parsing, not reflection). Injection order, lifecycle callbacks, generic types and the bean
+  definition rules all come from that index.
+| An archive with a `beans.xml` and no list is scanned at boot, every class file of it
+  (`scanUnprocessedBeanArchives`).
+
+| <<components-provider,`_VaubanComponents`>>, one per package
+| `vauban-processor` (Java source); `vauban:generate` (Class-File API bytecode); `vidocq:generate` for a dependency
+  jar, moved into an enriched copy of the jar
+| `ComponentProviders`, through `ServiceLoader` on `io.vidocq.vauban.api.VaubanComponentProvider` (the module's
+  `provides`): it creates the package's beans, injects them, calls producers, observers, disposers, lifecycle and
+  interceptor methods, and describes the package's annotation types
+| The container instantiates, injects and invokes by reflection, which on the module path needs the package
+  opened to `io.vidocq.vauban.core`.
+
+| `MyBean_ClientProxy`, for normal-scoped beans
+| `vauban-processor` or `vauban:generate`; for a type in another owner's package, shipped as a resource under
+  `META-INF/vauban/placed/` with `META-INF/vauban/required-opens.list`. For an interface, a class that `implements`
+  it, from `vauban-processor` only: for a producer of that interface, and for each interface an extension lists in
+  `@ClientProxies` for its synthetic beans (<<proxy-strategies>>)
+| The container when it hands out a reference to the bean
+| Generated at boot or on first use with the Class-File API, or a `java.lang.reflect.Proxy` for an interface,
+  and announced (<<aot>>); the announcement names the interface of a synthetic bean apart, with the
+  `@ClientProxies` advice.
+
+| `MyBean$$Intercepted`, for beans with interceptor bindings
+| `vauban-processor` or `vauban:generate`
+| The container when it creates the bean (<<intercepted-methods>>)
+| Generated at boot with the Class-File API, and announced.
+
+| What Build Compatible Extensions produce: `vauban-synthetic-metadata.properties`, `vauban-enhancements.properties`,
+  `vauban-contexts.list`, `vauban-bce-runtime.list`, and the `vauban-bce-processed` marker
+| `vauban-processor`, which runs the extensions inside javac
+  (xref:concepts.adoc#_build_compatible_extensions[Build Compatible Extensions])
+| The container at boot: it applies the frozen enhancements and registers the synthetic beans, observers and
+  contexts instead of running the extensions again; `vauban-bce-runtime.list` names the (extension, class) pairs
+  whose `@Enhancement` it still replays when no frozen patch covers them
+| Unless every bean archive carries the marker, the extensions' whole lifecycle runs again at boot. A class
+  belongs to a marked archive by location, whatever loader defines it: the container compares the archive that holds
+  the marker with the code source of the class as paths, not as URLs, which the Vauban class loader and the JDK's
+  loaders spell differently (`jar:file:///app.jar!/…` against `file:/app.jar`, BUG-20261115-07).
+
+| What the extensions did on the whole deployment: `vauban-frozen-extensions.properties`,
+  `vauban-frozen-enhancements.properties`, `vauban-frozen-synthetic.properties`
+| `vauban:generate` with `freezeExtensions`, or the build of the runtime that embeds Vauban, once the classes are
+  compiled (xref:concepts.adoc#frozen-extensions[Extensions frozen at build])
+| The container at boot, when its deployment has the fingerprint the record names: it loads the record and runs
+  only the extensions that left work for the start
+| Any other deployment, or no record: the extensions run at boot, as above.
+|===
+
+`vauban-processor` also checks the bean definition rules on the compilation and reports a broken one as a compiler
+warning, not an error: an extension may still veto the class at boot, which the compiler cannot know.
+
+=== When the fallback runs
+
+* A class compiled without `vauban-processor` and never processed by `vauban:generate` or `vidocq:generate`: a jar
+  on the class path, an IDE run whose output the build never processed
+  (<<_7_an_ide_run_where_the_build_output_was_never_woven>>).
+* A type no generated provider covers: a producer only known at run time, a private interceptor method, an
+  interceptor compiled without the processor.
+* A live annotation the index does not describe (<<aot>>).
+
+These classes, generated or not, mean nothing to another CDI container: on Weld or Open Liberty they are ignored.
+
+What the container does read by reflection, it reads once: the annotations of a bean class, of its
+methods and constructors, the declared interceptor-binding and qualifier types, the constructors of a bean and of its
+`$$Intercepted` subclass, the generic type of an injected field, an interceptor's `@PostConstruct`, the producer method
+and the `$$init` handle of an intercepted subclass are kept per class (or per factory) after a first reading. A
+request-scoped resource created at every request, with its dependents and interceptors, therefore costs no reflective
+call in Vauban once it has been served. The interceptor binding types an extension declares are not kept: they are
+asked each time.
+
+=== Which path ran
+
+* A framed `WARNING`, _VAUBAN — RUNTIME CODE GENERATION FALLBACK_, at the end of the boot lists every class
+  generated at run time.
+* `VaubanContainer.codegenCoverage()` says, for each bean, observer and interceptor, which generator covers each
+  operation: `APT`, `CLASS_FILE`, `PARTIAL`, `REFLECTION`, `FACTORY`. The CDI panel of the Vidocq dev console
+  shows it.
+* A bean instantiated by reflection is logged once, at `DEBUG`, by `VaubanContainerBuilder`.
+* `-Dvauban.annotations.reflection=warn|forbid` logs or refuses each annotation read by reflection
+  (xref:reference.adoc#system-properties[Reference — system properties]).
+
+== Code generation via Class-File API and APT
+
+CDI 4.1 describes a richly reflective object model: `Bean<T>`, `BeanManager`, `InjectionPoint`, `AnnotatedType`. Vauban refuses to evaluate that model at runtime. It compiles it.
+
+Two tools generate, at two different moments:
+
+. **`vauban-processor`** — a `javax.annotation.processing.Processor`, running inside javac. It generates once the other processors are done, in the first annotation-processing round that brings no new bean and is not javac's last (xref:reference.adoc#generation-round[`-Avauban.generationRound`]), mostly as **Java source** so the generated provider can instantiate its siblings in-module, and through the **Class-File API** (https://openjdk.org/jeps/484[JEP 484]) where source is not possible. It writes the bean index `META-INF/vauban-beans.list` for the module it compiles. No ASM, no Byte Buddy, no Gizmo.
+. **`vauban-maven-plugin`** — the `generate` goal, bound to `process-classes`. It covers what never went through this compilation: dependency archives and modules built without the processor. It merges the bean index and emits the missing classes as bytecode, since it has no javac.
+
+Both also ship what an in-package proxy needs, and it is worth naming the two files plainly:
+
+* **the pre-generated proxy classes**, written as *resources* under `META-INF/vauban/placed/`. A
+  resource, not a class, so the build never writes into someone else's package. At runtime a Vauban
+  class loader defines them inside the produced type's own package.
+* **the list of produced types whose proxy must sit inside their own package**,
+  `META-INF/vauban/required-opens.list`, one binary name per line. The file is named after the
+  problem it records: with a Vauban class loader the list is the loader's authorisation to define
+  the shipped proxy in that package; without one, the container reads the same list to know which
+  packages it would otherwise have to open. The class loader unions the lists of every archive it
+  manages.
+
+The processor writes both for the module it compiles. Since it never sees an archive compiled
+elsewhere, `vauban:generate` writes them too, for the produced types only it can see, and merges
+into whatever the processor already wrote in the same output directory.
+
+`vauban-indexer` underneath both is a library, not a tool: the class-file scanner, the bean model and the shared component collector. It walks nothing on its own and writes no file.
+
+The processor generates the classes below. It writes no per-bean factory class: the container
+instantiates every bean through the `_VaubanComponents` provider of its package. The `MyBean_Factory`
+classes earlier versions wrote were never loaded, and are no longer generated (vauban#227).
+
+[cols="1,3"]
+|===
+| Generated artefact | Role
+
+| `MyBean_ClientProxy`
+| Subclass generated for normal scopes. Forwards every public method to the active context. Where the proxy is generated depends on who owns the proxied type — see <<proxy-strategies>>.
+
+| `MyBean$$Intercepted`
+| Subclass generated for beans with interceptor bindings — routes the intercepted methods through the interceptor chain (see <<intercepted-methods,which methods it covers>>).
+
+| [[components-provider]]`_VaubanComponents`
+| One per package. Implements `io.vidocq.vauban.api.VaubanComponentProvider`: instantiates the package's components in-module (`new X(…)`), injects fields — a private one through a `VarHandle` it finds once with its own lookup, which needs no `opens` since it shares the field's module — creates client proxies (those of the package's beans, of its producers of an interface, and of the interfaces a class of the package lists in `@ClientProxies`, for which the provider is written even when the package declares no bean) and invokes producers, observers, disposers and lifecycle callbacks — no reflection, no `opens`. It also calls the interceptor methods of the package: `@AroundInvoke`, `@AroundConstruct`, and an interceptor's `@PostConstruct`/`@PreDestroy` taking an `InvocationContext`, so a package-private one needs no `opens` either; a private one, or one of an interceptor compiled without the processor, is still called by reflection. Its `coverage()` declares all of these, keyed as the container asks for them; `VaubanContainer.codegenCoverage()` reads it to tell, per bean, observer and interceptor, which generator covers each operation and which falls back to reflection — what the Vidocq dev console shows. For a scanned dependency jar, `vidocq:generate` asks the generator for the same providers (`VaubanGenerator.Config#dependencyProviders`) and moves them into an enriched copy of that jar, whose descriptor declares them. It builds a bean through its `@Inject` constructor when it has one, and through a no-arg constructor only otherwise, the constructor the container picks (CDI 4.1 §3.1.1). It used to pick the no-arg one whenever it existed, so the container fell back to reflection, which a named module refuses without an `opens`.
+|===
+
+Every generated class file carries the *project's* Java release, never the release of the JDK that
+happens to run the build: the shared `GeneratedClassFile.build` pins them to Java 25, class file 69.
+A build on a newer JDK would otherwise write classes next to javac's own output that the baseline
+runtime refuses to load, with `UnsupportedClassVersionError` at deployment and `jlink` refusing the
+image. Weaving is the mirror rule: it patches a class someone else compiled, so it hands back that
+class's own version untouched.
+
+[#reproducible-output]
+The output is also reproducible: the same input gives the same files from one build
+to the next. The processor and `vauban:generate` write the entries of each `_VaubanComponents` in a
+stable order (beans by binary name, a bean's `$$Intercepted` right after it, then the client
+proxies, the producers' proxies, the annotation types and the service file's provider names, each
+sorted), and the generators that read a class by reflection, the run-time `$$Intercepted` and client
+proxy ones that `vauban:generate` also uses, list its methods in a stable order rather than in the
+order `Class#getDeclaredMethods` happens to return, which depends on what the JVM loaded before.
+
+[#checked-exceptions]
+A bean method may declare checked exceptions, as CDI allows for constructors,
+initializers, observers, producers and disposers. The generated source calls those methods
+directly, so it rethrows whatever they throw without declaring it: `_VaubanComponents`
+routes the call through a small generic `sneaky` helper, and the constructors of
+`MyBean_ClientProxy` and `MyBean$$Intercepted` declare `throws Throwable`. The exception reaches
+the container as thrown, unwrapped, which is what `VaubanComponentProvider#invoke` promises. The
+Class-File path needs nothing of the kind: bytecode has no checked exceptions (vauban#145).
+
+[#intercepted-methods]
+=== Which methods the intercepted subclass covers
+
+`MyBean$$Intercepted` overrides every business method of the bean: the ones it declares, the
+public, protected and package-private superclass methods it inherits, and the interface default
+methods no class of the bean overrides. The processor's subclass already covered the inherited
+protected and package-private methods; the subclass the container generates at run time and the
+one `vauban:generate` writes now cover them too, so a call the bean makes on itself to such a method
+is intercepted as well. A public method of a superclass that is not public reaches the run-time
+generators as the bridge javac copies into the public class; they intercept the method that bridge
+copies, as the processor does (BUG-20261118-16). `BridgeCalls`, part of the run-time generators' reflective
+front-end, tells which method a bridge calls from the class bytes of its class, read through the Class-File API
+from the class's own loader; a class defined in memory, without bytes there, is judged by the names its classes
+declare. [.tag-new]#NEW#
+
+Three kinds of method are not business methods and are never overridden, by any of the generators,
+which read one list: `@Inject` initializers, the bean class's own interceptor methods
+(`@AroundInvoke`, `@AroundConstruct`, `@AroundTimeout`), and its lifecycle callbacks
+(`@PostConstruct`, `@PreDestroy`, and the EJB `@PostActivate` and `@PrePassivate`). A lifecycle
+callback therefore reaches only the interceptors' own lifecycle methods, never an `@AroundInvoke`.
+
+A method-level interceptor binding is read from the declaration a call runs. The binding of an
+inherited method, on a default method as on a superclass method, stops applying once a class of the
+bean overrides that method. The class-level bindings of an interface never apply.
+`InvocationContext.getMethod()` reports that declaration, not the generated `$$super$` bridge, and
+`getInterceptorBindings()` includes its bindings. The client proxy of a normal-scoped bean forwards
+the same default methods to the contextual instance.
+
+Every client proxy the processor writes forwards these inherited methods, not only
+the source one. A bean with private constructors only gets a bytecode proxy built from its
+elements, which forwards the inherited and default methods as the source proxy does. A bean the
+compiler cannot resolve gets no build-time proxy: the processor warns, and the container generates
+it at run time, announced at boot. A top-level class whose own name contains `$` (`Dollar$Service`) is named
+by its canonical name, so its intercepted subclass, its producers' proxies and its annotation
+artefacts compile, and a normal-scoped producer of a nested class or interface gets a build-time
+proxy like any other.
+
+An intercepted bean with an `@Inject` constructor takes its parameters' qualifiers
+from the bean's descriptor, as a bean that is not intercepted does, so it is created under
+`-Dvauban.annotations.reflection=forbid`.
+
+An inherited member may have a signature, as a member of the bean, that names a type the generated
+class's package cannot name: a package-private type of another package, or a private nested type.
+Java source cannot override such a method; a class file can, by its descriptor.
+The processor therefore emits that intercepted subclass or client proxy — a
+producer's proxy included — as bytecode, with the same emitters the container and `vauban:generate`
+use, and only that class: everything else is still rendered as source. The module's source
+`_VaubanComponents` reaches these classes through its own `MethodHandles.lookup()`, so the module
+still needs no `opens`. Such a build used to fail. Two cases remain where a method is left out:
+
+* a default method shadowed by a superclass method the bean does not inherit, when no interface
+  carrying it can be named from the generated class's package: the processor's client proxy and
+  intercepted subclass leave it out, and the processor prints a `[Vauban]` warning that says what a
+  call does instead;
+* a method whose *return* type the intercepted subclass may not access: no class outside that
+  type's package can type the value the interceptor chain returns, so every generator leaves the
+  method out of the subclass, and the processor warns. A call runs it as on a plain instance of the
+  bean, not intercepted. The run-time subclass used to throw `IllegalAccessError` on every call
+  instead.
+
+[#proxy-strategies]
+== Client proxies — one strategy per case
+
+A normal-scoped bean is never handed out directly: the container returns a `_ClientProxy`
+subclass that forwards every business method to the contextual instance. *Where* that
+proxy is generated, and whether it costs an `opens`, depends entirely on **who owns the
+proxied type**. Vauban resolves this in the order below; the first strategy that applies
+wins.
+
+The proxy extends the bean class, unless that class is `final` (BUG-20261118-21) or has a `final` method, neither
+`private` nor `static`, of its own or of a superclass: no subclass can forward it. The proxy then extends the nearest
+class above that method that has none and that a proxy can extend, often `Object`, and implements the interfaces of
+the bean class a proxy in its package can name, forwarding each of their methods through its interface; such a bean
+is proxyable only as those interfaces or a class above the method (CDI 4.1 §3.10), and a lookup as any other type
+throws `UnproxyableResolutionException`. Weld picks the same superclass. Every path builds that shape from
+`ForwardedMethods.proxySuperclass`; the processor emits it as bytecode, still named `<Bean>_ClientProxy`
+(BUG-20261118-20). That name is what tells the bean class behind a proxy that may not extend it:
+`io.vidocq.vauban.api.ClientProxyClass.beanClassOf(Class)` reads it, for code that reads the bean class's annotations,
+a JAX-RS provider's say; code that casts the proxy to the class it names must check the proxy is an instance of it.
+[.tag-new]#NEW#
+
+[cols="1,2,2"]
+|===
+|Case |Strategy |Cost
+
+|**Managed bean** — a bean class you compile
+|The APT emits `<Bean>_ClientProxy` as Java **source in the bean's own package**, and the
+per-package `_VaubanComponents` provider instantiates it in-module (`new …(delegate)`: the proxy's only constructor takes the delegate and keeps it in a
+`private final` field, so nothing can rewire it). Same story for the `pass:[$$Intercepted]` subclass.
+|Zero `opens`, zero `exports`, zero runtime class definition.
+
+|**Producer of a fully-public class** — `@Produces` returning a public, non-final class
+from another module, even one that knows nothing about CDI, abstract or not
+|The APT emits the proxy at build time in the **producer's** package (never the produced
+type's — that would be a split package), registered under the produced-type key the
+runtime looks up before any fallback. Eligibility requires the produced type to be *fully
+public*: public non-final non-sealed class, only public overridable methods, an accessible
+(public/protected) constructor. The check walks the **whole superclass hierarchy** (up to, but
+excluding, `java.lang.Object`), because a method inherited from a superclass is neither declared
+by the produced type nor overridden by the proxy: judging only declared methods would hand out a
+proxy that silently runs the superclass body against its own empty state.
+
+[.tag-new]#NEW# An abstract class qualifies: CDI 4.1 §3.10 does not count it as unproxyable. The
+proxy overrides each abstract method, its own and those an interface leaves to it, and forwards it
+to the contextual instance; it never calls `super`. An abstract method is judged by its access like
+any other, so a protected one keeps the proxy in the type's own package (next row). When nothing
+ran at build, the run-time fallback defines the same proxy in the producer's package whenever it
+cannot define a class in the produced type's own: a class of the JDK (`java.time.Clock`, whose
+package belongs to the boot class loader), or a package not opened to the container
+(BUG-20261114-02).
+|Zero `opens`, zero runtime class definition (#42, Stage 1).
+
+|**Producer of an interface**
+|The APT emits a build-time static class `implements <Iface>` in the producer's package
+(`InterfaceProxySourceRenderer`), forwarding every method — abstract *and* `default` — to the
+contextual instance. No dynamic proxy, no reflection. On the class path (non-APT) a runtime
+`java.lang.reflect.Proxy` is the fallback.
+|Zero `opens`; zero reflection on the build-time path (a `reflect.Proxy` only as the class-path
+fallback).
+
+|**Synthetic bean of an interface** [.tag-new]#NEW#
+|No class for the APT to see: the extension's module lists the interface in `@ClientProxies`, and the
+APT emits the same static class `implements <Iface>` in the package of the annotated class, registered
+under the interface's key (xref:concepts.adoc#synthetic-interface-proxies[Client proxies of synthetic
+beans]). Unlisted, the container falls back to a `java.lang.reflect.Proxy` at boot, announced apart.
+|Zero `opens`; zero reflection once listed (BUG-20261113-19).
+
+|**Producer of a class whose proxy must live in its own package** — a package-private or
+protected overridable member (declared or inherited), or no accessible constructor — *when a
+Vauban loader defines the library*
+|The APT ships the **co-located** proxy as bytecode in the bean archive
+(`META-INF/vauban/placed/…_ClientProxy.class`) and lists the type in the placement manifest
+(`META-INF/vauban/required-opens.list`). When the library module is defined by a
+`VaubanClassLoader` — under the xref:se.adoc[Java SE launcher] or `Vidocq.run`, which re-layer every
+module they do not have to keep — that loader *defines the proxy into the library's package* on a
+`findClass` miss: a loader may define classes in a package it owns, and `opens` governs reflective
+access across modules, not this. The proxy forwards non-public members too, inherited ones
+included. The cdi-proxifier weaves the `(ProxyLink)` entry constructor into the produced type at
+definition — and into the superclasses it defines that lack a usable no-arg constructor — then
+retargets the placed proxy onto it, so the third-party constructors do not run for the proxy
+(vauban#24). When a superclass the loader does not define blocks that chain, a WARNING says so.
+|Zero `opens`, no agent, no rewritten jar; the library is used as shipped.
+
+|**Same shapes, when no Vauban loader defines the library** — a bare boot layer, or a module the
+launcher or `Vidocq.run` keeps
+|Nothing can be placed. `RuntimeClientProxyGenerator` defines the proxy at runtime *into the
+produced type's own package*, which requires that module to open the package to the container.
+The container refuses by default and names the remedies, the launcher first. Two levers keep
+this `--add-opens`-free (below).
+|An `opens` (applied by the container, opt-in) *or* a jar rewrite.
+
+|**Producer of a class that is unproxyable outright** — `final` or `sealed` class, a
+non-static `final` method that is not `private` (CDI 4.1 §3.10; an abstract class is not one of
+them)
+|No proxy can be built anywhere, co-located or not. A deployment error, as the
+specification requires; nothing is shipped.
+|Nothing helps — the type cannot be normal-scoped.
+|===
+
+The two levers that remove the hand-written `opens` when no Vauban loader defines the library
+(when one does, placement makes both unnecessary):
+
+* **The container opens the module itself** (#42, Stage 3b) — *opt-in, and on borrowed time*
+ . The annotation processor lists the produced types that fall to runtime
+  generation in `META-INF/vauban/required-opens.list`; at boot `OpensApplier` loads each and —
+  only when it is in a *named* module and not already open — calls
+  `Instrumentation.redefineModule` to open its package to `io.vidocq.vauban.core`, reusing the
+  load-time weaving agent (<<weaving-tiers>>). No `--add-opens`, no jar rewrite, and a strict
+  no-op when the list is absent (the class path, and the common module-path deployment).
++
+This lever is **off unless you set `-Dvauban.opens.auto=true`**. Opening another module's package
+behind the user's back is precisely what this project faults runtime CDI implementations for
+needing — the only difference would be *who* grants it; and silently acquiring a dependency on
+dynamic agent attachment is a defect that surfaces late, on a locked-down JVM in production. Left
+off, the container refuses and logs what is missing together with every way to avoid it. Treat it
+as a last resort: integrity by default is closing dynamic agent attachment, so prefer a
+fully-public produced type (nothing to open) or the build-time lever below.
+* **Rewriting a copy of the dependency jar** (#42, Stage 2, opt-in, *last resort*). Prefer the
+  shipped in-package proxy above: it needs no copy and leaves the artefact alone. Keep this goal for
+  the three cases placement cannot reach — the application never starts inside a Vauban layer, the
+  library exports nothing so the container cannot instantiate the placed proxy, or the target is a
+  GraalVM native image, where a class defined at runtime is not supported. The goal now says so
+  itself: it warns, per type, when the class loader could have shipped the same proxy. The
+  `vauban:enhance-dependencies` goal writes an enhanced copy of a third-party jar under
+  `target/vauban-enhanced-deps/` in which `<Type>_ClientProxy` is co-located in the type's
+  **own** package — so it *can* forward package-private and protected methods — and the
+  `module-info.class` is rewritten to `provides` the generated component provider, the versioned
+  descriptors of a multi-release jar (`META-INF/versions/<n>/module-info.class`) included. Placed
+  ahead of the original on the module path it resolves with zero `opens` and no agent — and it
+  survives integrity by default, since nothing is opened, attached or defined at runtime.
++
+Because the copy is a *modified redistribution of someone else's artefact*, it declares itself
+: the enhanced jar drops the inherited signature files (`META-INF/++*++.SF`,
+`.DSA`, `.RSA`, `.EC`) rather than carrying a signature over content that no longer matches, drops
+the manifest's per-entry digests, and records its origin in the manifest main attributes:
++
+[source,properties]
+----
+Vauban-Enhanced-From: org.example:libwidget:1.0
+Vauban-Enhanced-Digest: sha256:<digest of the exact source jar>
+Vauban-Enhanced-By: vauban-maven-plugin/<version>
+----
++
+Declare these copies to whatever SBOM, attestation or reproducible-build tooling your pipeline
+runs — they are not the artefact their coordinates name. That governance cost, not a technical
+limitation, is why the goal is opt-in.
+
+A producer whose class type is not build-time proxyable is surfaced at compile time by
+`-Avauban.producerProxy=error|warn|note` (default `note`), naming the reason and the ways
+to keep zero `opens`.
+
+[TIP]
+====
+When no Vauban loader defines the library, the reflex is `MethodHandles.privateLookupIn`. It does
+not help: it is not a way *around* `opens`, it is the API that *consumes* it — it throws
+`IllegalAccessException` unless the target's module already opens the package to the caller.
+`defineHiddenClass(…, NESTMATE)` needs the same full-power `Lookup`; a `Lookup` donated by the
+library means modifying the library; and defining the proxy under the same package name in
+*another* class loader yields a different runtime package — (loader, name) — so package-private
+access fails with `IllegalAccessError`. A `Lookup` with PACKAGE access is obtainable only from
+*inside* the target module, or through `opens`. The one other door is not a `Lookup` at all: the
+class loader that defines a module can define further classes into its packages. That is what
+placement does, and why it needs the library to be defined by a Vauban loader — the JDK's
+application class loader offers no such hook.
+====
+
+[NOTE]
+====
+The class-typed front-ends build the same neutral `ClientProxyShape`: the APT source renderer
+(`ClientProxySourceRenderer`) and the shared bytecode emitter (`ClientProxyEmitter`, driven
+by both the runtime `RuntimeClientProxyGenerator` and the `vauban-maven-plugin` for scanned
+jars — bytecode parity for the producer case, #42 Stage 1.6). The interface case has its own
+source renderer (`InterfaceProxySourceRenderer`, `implements` rather than `extends`). The
+APT-source-first rule keeps them aligned; residual drift is tracked in
+link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] (VAU-PRX-002).
+
+Both kinds of front-end choose the forwarded methods with one walk, `ForwardedMethods`: the processor over the
+language model, the bytecode front-ends over the loaded class. A class file holds the bridges javac adds, `Object get()`
+beside `String get()` in a `Supplier<String>`, a covariant override, the copy of a public method a public class
+inherits from a package-private one; the language model has none. The walk over a class file passes them by, and
+keys each method by its signature as a member of the proxied class, the type variables of its generic superclasses
+resolved, as the processor does: both forward the same methods, and `ProducerProxyEligibility` judges the same ones.
+A bridge used to stand in for its method, which the proxy then left to run on itself
+(BUG-20261117-49). [.tag-new]#NEW#
+====
+
+== Case by case: from your source to a running proxy
+
+The strategy table above says *what* is generated. This section walks the four situations you can
+actually be in, and shows what each one prints.
+
+=== 1. Your own code, compiled here
+
+The processor renders the factory, the client proxy, the intercepted subclass and the per-package
+provider as Java source in the same compilation, and the auto-started javac plugin weaves the
+side-effect-free entry constructor into the compiled beans once javac has written them.
+
+Nothing is logged. Silence is the success case: nothing reflects into your classes, no `opens`, no agent. What you can
+check is on disk, under `target/classes` and `target/generated-sources/annotations`.
+
+=== 2. A dependency the processor never saw
+
+Ecosystem jars and modules built without the Vauban processor carry no generated code. At
+`process-classes` the `vauban:generate` goal scans them, merges their beans into
+`META-INF/vauban-beans.list`, weaves the entry constructor into what javac wrote, and — for a
+produced type whose proxy cannot live in the producer's package — ships that proxy pre-generated and
+lists the type.
+
+The build says so, and deliberately stops short of promising it will work:
+
+[source,text]
+----
+[WARNING] Shipped an in-package client proxy for 1 produced type(s) that cannot be proxied from
+the producer's package: [com.acme.lib.FraudScreen]. The Vauban class loader defines them inside the
+produced type's own package, which requires the application to start through
+io.vidocq.vauban.classloader.Launch or Vidocq.run, and that package to be exported. Started without
+a Vauban layer, the container falls back to opening the package at runtime and says so at boot.
+----
+
+The annotation processor prints the same verdict for the module it compiles, naming the obstacle:
+
+[source,text]
+----
+[Vauban] Producer of io.vidocq.vauban.example.cdi1015.lib.FraudScreen needs its client proxy inside
+io.vidocq.vauban.example.cdi1015.lib (PACKAGE_PRIVATE_VIRTUALS). Its co-located proxy is shipped
+under META-INF/vauban/placed/ and the Vauban class loader defines it there when the application runs
+in a Vauban layer — zero opens, no agent: start through io.vidocq.vauban.classloader.Launch (or
+Vidocq.run). On a bare module path the runtime generates it reflectively, which needs `opens
+io.vidocq.vauban.example.cdi1015.lib to io.vidocq.vauban.core;`. […]
+----
+
+=== 3. A third-party module, running inside a Vauban layer
+
+Start through the launcher or `Vidocq.run` and the loader owns the library's module, so it defines
+the shipped proxy into the library's own package on the first lookup miss. One line tells you the
+layer exists, and which modules moved into it:
+
+[source,text]
+----
+INFO io.vidocq.vauban.classloader.Launch run
+Vauban layer ready: [io.vidocq.vauban.example.cdi1015.app, io.vidocq.vauban.example.cdi1015.lib]
+----
+
+The xref:se.adoc[runnable example] then prints where each proxy ended up. Two live in the
+application's own package, because their produced types are fully public; two live inside the
+library, placed by the loader:
+
+[source,text]
+----
+PaymentGateway proxy : …app.PaymentGateway$$8dad1edd_ClientProxy  (reflect.Proxy? false)
+AuditLog proxy       : …app.AuditLog$$386ae28_ClientProxy          (reflect.Proxy? false)
+FraudScreen proxy    : …lib.FraudScreen_ClientProxy     (module …cdi1015.lib, VaubanClassLoader)
+ReceiptPrinter proxy : …lib.ReceiptPrinter_ClientProxy  (module …cdi1015.lib, VaubanClassLoader)
+----
+
+=== 4. The same application, started without a layer
+
+The bytes are still in the jar, but no loader owns the library's package, so nothing can define them
+there. The container refuses to open the package behind your back and lists every way out:
+
+[source,text]
+----
+WARNING Vauban needs package io.vidocq.vauban.example.cdi1015.lib of module
+io.vidocq.vauban.example.cdi1015.lib opened to io.vidocq.vauban.core for a runtime producer proxy,
+and will not do it on its own. Pick one: start the application through
+io.vidocq.vauban.classloader.Launch (in a Vauban layer the loader defines the shipped proxy inside
+the package itself — zero opens, no agent); make the produced type fully public (the proxy is then
+built at compile time and nothing needs opening); run the vauban:enhance-dependencies goal (the
+proxy moves inside the dependency, still nothing to open); add the matching `opens … to
+io.vidocq.vauban.core;`; or, as a last resort, set -Dvauban.opens.auto=true to let the container
+open it at boot through an agent — which integrity by default is closing off.
+----
+
+Ignore the warning and the boot fails at the injection point, naming the produced type, its
+producer and the ways out. The container first tries the producer's package, where a fully public
+type would have its proxy; `FraudScreen` is not one (BUG-20261114-02):
+
+[source,text]
+----
+jakarta.enterprise.inject.spi.DeploymentException: No client proxy can be generated for
+io.vidocq.vauban.example.cdi1015.lib.FraudScreen, produced by
+io.vidocq.vauban.example.cdi1015.app.Integrations with the normal scope @ApplicationScoped: Vauban
+cannot define a class in package io.vidocq.vauban.example.cdi1015.lib (not opened to
+io.vidocq.vauban.core), and a proxy in the producer's package needs a fully public type
+(PACKAGE_PRIVATE_VIRTUALS). Declare the producer @Singleton or @Dependent, which need no client
+proxy, or produce an interface type, or open io.vidocq.vauban.example.cdi1015.lib to
+io.vidocq.vauban.core.
+----
+
+=== 5. Last resort: rewriting a copy of the dependency
+
+When no layer is possible — a native image, a library that exports nothing, a launch you do not
+control — `vauban:enhance-dependencies` writes an enhanced copy of the jar with the proxy inside the
+type's own package. It costs the jar's signature, so the goal tells you when it was not needed:
+
+[source,text]
+----
+[WARNING] enhance: com.acme.lib.FraudScreen only needs its client proxy inside its own package
+(PACKAGE_PRIVATE_VIRTUALS). The Vauban class loader ships and defines that proxy without touching
+the jar, while rewriting a copy here drops the jar's signature. Keep this goal for what placement
+cannot do: no Vauban layer at launch, a package the library does not export, or a GraalVM native
+image.
+----
+
+=== 6. When no proxy is possible at all
+
+Three shapes are unproxyable wherever the proxy sits, so nothing is shipped for them and the
+container refuses to start. The validation runs at build time through the annotation processor and
+again at boot, and both speak the same language.
+
+[source,text]
+----
+CDI deployment validation failed:
+  - Normal-scoped bean com.acme.Ledger cannot be a final class
+  - Normal-scoped bean com.acme.Report has final method render
+  - Normal-scoped bean com.acme.Session must have a non-private no-arg constructor, or declare a
+    non-private constructor taking io.vidocq.vauban.api.ProxyLink as its client-proxy entry point
+    (Vauban extension, Vidocq/vauban#24)
+----
+
+That block is a `jakarta.enterprise.inject.spi.DeploymentException`, thrown out of
+`SeContainerInitializer.initialize()` with no wrapping of its own: one line per problem, each
+prefixed with a dash. A `DefinitionException` carries the same shape under the header
+`CDI definition validation failed:`.
+
+Wiring problems are reported the same way, and are worth recognising because they look alike but
+have nothing to do with proxies:
+
+[source,text]
+----
+  - Unsatisfied dependency: field com.acme.Checkout#gateway of type com.acme.PaymentGateway with
+    qualifiers [@Default]
+  - Ambiguous dependency: field com.acme.Checkout#store of type com.acme.Store. Matching beans:
+    [com.acme.SqlStore, com.acme.MemoryStore]
+----
+
+If a bean slips past the build — a class you did not compile, a scope decided by an extension — the
+runtime refuses at the moment the proxy is requested, with
+`jakarta.enterprise.inject.UnproxyableResolutionException`:
+
+[source,text]
+----
+Normal scoped bean com.acme.Ledger is final
+Normal scoped bean com.acme.Report has final method render
+Normal scoped bean com.acme.Session has only a private no-arg constructor
+----
+
+[#unproxyable-intercepted]
+Interception adds its own checks, because an intercepted bean is also a subclass. A managed bean
+that is not normal-scoped and carries a class-level interceptor binding is checked with the rest of
+the deployment, in the block above:
+
+[source,text]
+----
+  - Intercepted bean com.acme.Audit cannot be final (interception requires subclassing)
+  - Intercepted bean com.acme.Audit has final method write (interception requires subclassing)
+----
+
+A bean intercepted any other way is checked when the container wraps it: through a
+method-level binding it declares or inherits, an interface default method included, a constructor
+binding, or an `@AroundInvoke` method of its own. The `DeploymentException` then says why the bean
+is intercepted, since its own source may carry no binding at all:
+
+[source,text]
+----
+jakarta.enterprise.inject.spi.DeploymentException: Intercepted bean com.acme.Audit must not be
+final. An intercepted bean must be proxyable (CDI 4.1 §3.10); com.acme.Audit is intercepted
+because of the method-level interceptor binding @com.acme.Logged of com.acme.Journaled.write(),
+an interface default method it inherits.
+----
+
+The same explanation follows `has final method <name>.` and `has only private no-arg constructor
+(unproxyable).` A final class used to fail there with a `DefinitionException`.
+
+None of these has a workaround in Vauban, and that is deliberate: CDI 4.1 §3.10 rules them out, so
+the answer is to change the type — drop `final`, add a non-private constructor — or to produce an
+interface instead, which is proxied without any of these constraints.
+
+=== 7. An IDE run, where the build output was never woven
+
+IntelliJ writes class files after javac has finished, which defeats the javac plugin. The container
+notices before loading a bean and tells you which tier took over. Inside a Vauban layer it simply
+weaves at definition. Outside one, it attaches the agent and says so:
+
+[source,text]
+----
+WARNING Build output is not woven for 3 normal-scoped bean(s) [com.acme.Checkout, com.acme.Ledger,
+com.acme.Audit] — attaching the Vauban load-time weaving agent (typical of IDE builds;
+Maven/Gradle/javac builds weave at compile time). Disable with -Dvauban.weaving.loadtime=disabled.
+Hint: a trampoline main that re-layers the application (Vidocq: @VidocqMain + Vidocq.run) avoids the
+agent entirely
+----
+
+[#recompiled-under-woven-proxy]
+[.tag-new]#NEW# The same holds for one class the IDE recompiled over a Maven build, `BookResource` with
+its implicit public constructor, say. Maven wove the marker into it and shipped
+`BookResource_ClientProxy`, which calls `BookResource(ProxyLink)`; plain `javac` writes the class back
+without that constructor. A no-arg constructor is not enough here: the container reads the shipped
+proxy, sees what it calls, and weaves the class like any other. The start used to see the no-arg
+constructor, weave nothing, and the first request threw `NoSuchMethodError` from
+`BookResource_ClientProxy.<init>` (BUG-20261114-01).
+
+When nothing can weave such a class — the agent cannot be attached, or
+`-Dvauban.weaving.loadtime=disabled` — the start fails, whether or not anything injects the bean,
+and the reason closes the message:
+
+[source,text]
+----
+Normal-scoped bean com.acme.BookResource lacks the io.vidocq.vauban.api.ProxyLink constructor its client
+proxy needs, and load-time weaving cannot add it (Vidocq/vauban#24): Load-time weaving is disabled
+(-Dvauban.weaving.loadtime=disabled). Either build with Maven/Gradle (build-time weaving), remove the
+property, or add the (ProxyLink) constructors manually.
+----
+
+== APT pipeline — sequence diagram
+
+[plantuml]
+....
+@startuml
+skinparam shadowing false
+participant "javac" as JC
+participant "vauban-indexer" as IDX
+participant "vauban-processor" as PROC
+participant "Class-File API" as CFA
+participant "filer" as F
+
+JC -> IDX : annotation discovery
+IDX -> IDX : scan module-path\n+ classpath
+IDX -> PROC : VaubanIndex\n(beans, scopes, qualifiers)
+PROC -> PROC : BeanDiscovery\n+ DeploymentValidator
+PROC -> PROC : BceProcessor\n(Build Compatible Extensions)
+PROC -> CFA : ClassBuilder\nper bean
+CFA -> F : write _ClientProxy.class
+CFA -> F : write $$Intercepted.class
+PROC -> F : write _VaubanComponents.java\n+ META-INF/vauban-beans.list
+F -> JC : generated-sources\n+ generated-classes
+@enduml
+....
+
+The whole index, the whole injection grid, every proxy is written before `javac` finishes its job.
+
+[#weaving-tiers]
+== Client-proxy weaving tiers
+
+A normal-scoped bean without a non-private no-arg constructor needs a side-effect-free
+client-proxy entry point: the synthetic `protected <init>(ProxyLink)` constructor
+(xref:usage.adoc[Usage — proxyable beans]). Annotation processing cannot add members to an
+existing class (JSR 269 only creates new files), so the marker is *woven into the compiled
+bytes* by the Class-File API transformations of the `vauban-weaver` module — one canonical
+implementation, applied at three possible moments:
+
+[cols="1,2,2"]
+|===
+|Tier |When |Covers
+
+|javac plugin
+|`COMPILATION finished` event, auto-started (`Plugin.autoStart()`) from the annotation
+processor jar; the processor publishes a weave plan, the plugin patches the class files
+javac just wrote
+|Maven, Gradle, plain `javac`, any javac-based build — no configuration
+
+|`vauban-maven-plugin`
+|`process-classes`
+|Belt-and-braces for Maven builds; ecosystem jars whose classes do not go through javac
+(enrichment, sjar packaging)
+
+|Load-time agent
+|Container boot — `LoadTimeWeaving` detects unwoven normal-scoped beans in the index
+*before any bean class is loaded* (resource bytes only), then dynamically attaches
+`vauban-weaver-agent.jar` (embedded in `vauban-core`) and hands it an explicit weaving
+plan; the `ClassFileTransformer` applies the same transformation at class definition
+|IDE builds — IntelliJ's build system (JPS) flushes hand-written classes to disk *after*
+javac finishes, so both build-time tiers see stale files
+|===
+
+Details worth knowing about the load-time tier:
+
+* **Why an agent and not reflection** — Vidocq application modules keep bean packages
+  fully encapsulated (zero `opens`, zero `exports`). Any reflective instantiation trick
+  (`ReflectionFactory`-style relaxed construction) is blocked by Java Modules; a
+  `ClassFileTransformer` works below access control and produces bytecode identical to a
+  woven build.
+* **Self-attach through a child process** — the JVM refuses `VirtualMachine.attach()` on
+  itself; `LoadTimeWeaving` spawns
+  `java -cp vauban-weaver.jar io.vidocq.vauban.weaver.AttachBack <pid> <jar> <plan>`,
+  which attaches back to the parent and loads the agent. The IDE debugger session is
+  unaffected. The JDK prints its standard dynamic-agent warning. The same agent (hence the
+  same `Instrumentation`) is reused by `OpensApplier` to open a third-party module's package
+  when a producer's type is not fully public (<<proxy-strategies>>).
+* **Plan-driven, no heuristics** — the agent only ever touches the classes named in the
+  plan computed from the container's own index: unwoven beans get the marker constructor,
+  their `_ClientProxy` companions are retargeted to it.
+* [[woven-serial-version-uid]][.tag-new]#NEW# **The `serialVersionUID` of a library class** — the marker
+  constructor is not private, so it changes the default `serialVersionUID` of a class that declares none (Java Object
+  Serialization Specification, section 4.6). A class woven at load time from a jar or an sjar gets a
+  `private static final long serialVersionUID` of the value its original bytes give, and an object it serialized
+  outside Vauban reads back. A class served from a directory and the build tiers get none: their bytes change at each
+  edit, and so would a declared value, which Foy and Vidocq's dev swap read as a class that cannot move
+  (BUG-20261118-95). Known limit: an application class woven by Vauban has another default value than the same class
+  built without it.
+* [.tag-new]#NEW# **What the shipped proxy expects** — a bean class needs the marker when it has
+  none and either has no non-private no-arg constructor, or its `<Bean>_ClientProxy` next to it
+  calls `<init>(ProxyLink)` all the same: a woven build wrote that proxy, and the class was
+  recompiled since without Vauban (<<recompiled-under-woven-proxy>>). The proxy's constant pool is
+  read only for a class that lacks the marker and has a no-arg constructor, so a woven build reads
+  nothing more. The agent tier and the class loader's transformer share this one rule
+  (`BeanWeavingAnalysis.needsMarker`).
+* **Ordering constraint** — adding a constructor is not a valid retransformation, so a
+  class loaded before the attach can no longer be woven. The hook therefore runs inside
+  `VaubanContainerBuilder.build()` right after the index is final and before bean
+  discovery, and the detection itself never loads classes.
+* **In a Vauban layer, no agent**— when the application's classes are defined
+  by a `VaubanClassLoader` (the xref:se.adoc[Java SE launcher], `Vidocq.run`, a dist), the
+  loader's cdi-proxifier transformer applies the same weaving *at class definition*;
+  `LoadTimeWeaving` detects the loader in the context class-loader chain and stands down. When
+  the loader also defines a library whose proxies it places, the transformer weaves the listed
+  produced types — which carry no scope annotation — and the superclasses they need, so a placed
+  client proxy does not chain a third-party constructor.
+* **Opt-out** — `-Dvauban.weaving.loadtime=disabled`: no agent is attached, and every bean
+  that needed one fails the start [.tag-new]#NEW#, named with the reason, as when the agent cannot
+  be attached; a bean nothing injects included, where its first client proxy used to fail at run
+  time. In a Vauban layer the class loader still weaves, so nothing fails there. Explicit
+  `-javaagent:vauban-weaver.jar=<plan>` is also supported (`Premain-Class`): with the opt-out,
+  the beans are that agent's, and the start does not fail on them.
+
+[#module-descriptor]
+== Giving a dependency a module descriptor
+
+A jar with no `module-info` is an *automatic* module: its name is guessed from its file
+name, it reads everything, and nothing can depend on it reliably. `jlink` refuses it
+outright. The fix is to give it a real descriptor — which used to mean delegating to
+ModiTect, a build-time dependency that generates `module-info.java` and runs a compiler
+over it.
+
+`ModuleDescriptorSynthesizer` (in `vauban-maven-plugin`) does the same work with the JDK
+alone. There is no generated source and no compiler invocation: the Class-File API writes
+the descriptor bytes directly, and `ModuleFinder` answers the only question that matters —
+which module owns a given package.
+
+[cols="1,3",options="header"]
+|===
+| Directive | How it is derived
+
+| `requires`
+| Every class of the jar is read and every type name in its constant pool collected —
+  descriptors, internal names, annotation types and generic signatures alike. Each
+  referenced package is attributed to the module that exports it (a JDK module, or a
+  module of the dependency closure; an automatic module owns everything it holds).
+  Packages nobody owns are reported, never guessed at.
+
+| `exports`
+| Every package the jar contains. A library that used to sit on the class path had
+  everything visible; narrowing that would break its users for no benefit.
+
+| `opens`
+| Nothing, for an `open module` — it opens everything already, and the JVM rejects a
+  descriptor that adds an `opens` on top of that. A closed module spells each package out.
+
+| `provides`
+| Promoted from `META-INF/services/*`, minus providers the jar does not itself contain:
+  a descriptor may only provide a class of its own module, and one that does not is
+  unreadable.
+
+| `uses`
+| Supplied by the caller. Which services a jar looks up cannot be derived from its bytes
+  without a call-graph analysis, and guessing wrong makes the module fail to resolve.
+|===
+
+The collection errs towards completeness: a spurious `requires` costs nothing, a missing
+one breaks the application at run time. What no static analysis can see — `Class.forName`
+on a computed name — is invisible to `jdeps` too.
+
+The patched jar is a copy, written under the original file name so downstream tooling can
+substitute it. Signature files are left behind on purpose: adding an entry invalidates
+them, and a jar whose signature no longer verifies fails to load at all.
+
+== Class loading
+
+Vauban owns application class loading, as a single engine with two plugin natures
+chained before `defineClass`:
+
+....
+             ┌─ sources ─────────────┐   ┌─ transformers ───────────┐
+archive ───▶ │ dir | jar | sjar | …  │ ─▶│ cdi-proxifier | (future) │ ─▶ defineClass
+             └───────────────────────┘   └──────────────────────────┘
+....
+
+* `vauban-classloader-spi` — the contracts: `ByteSourcePlugin` (*where the bytes of an
+  archive come from* — the encrypted-jar support in `vauban-sjar` is one plugin) and
+  `ClassTransformerPlugin` (*what happens to the bytes* before definition — experimental
+  SPI). Both are ServiceLoader-discovered and priority-ordered.
+* `vauban-classloader` — the engine: `VaubanClassLoader` resolves each archive through
+  the first source plugin that handles it (plain jars and exploded directories built in)
+  and pipes every class through the transformer chain. The shipped `cdi-proxifier`
+  transformer applies the vauban#24 weaving (`ProxyLinkWeaver`, same bytes as a build-time
+  weave — idempotent) at definition; an unwoven bean inside an *encrypted* archive can be
+  fixed nowhere else, the decrypt → weave composition falls out of the chaining for free.
+  The container's scanner defines sjar classes through this engine. Diagnostics:
+  transformations are logged, `-Dvauban.classloader.dump=<dir>` writes transformed bytes,
+  `-Dvauban.classloader.transformers.disabled=<names>` disables transformers by name, and
+  a transformer failure fails the class load — nothing silent. `definitionBytes(name)`
+  returns the bytes the engine would define for a class now, read again from its archive
+  and through the chain, without defining it: what a tool that redefines a loaded class
+  must hand to the JVM, woven as the loaded class is (`vidocq:dev` redefines a method
+  body in place this way).
+* `VaubanLayerFactory` — the module-path story: application archives stay *off* the JVM
+  module path and resolve into a child `ModuleLayer` whose single defining loader is the
+  engine. Exports and opens keep being enforced inside the child layer; `ServiceLoader`
+  provides/uses work across it. The Vidocq launcher activates this with
+  `-Dvidocq.app.path=<archives>` (`VidocqAppLayer`, installed before anything can touch
+  an application class), and every Vidocq launch vehicle uses it by default: packaged
+  distributions ship the application jar in `app/` (scripts boot the runtime,
+  `vidocq.package.layer=false` opts out), `vidocq dev` hands `target/classes` over the
+  same way (`vidocq.dev.layer=false` opts out), and in-process embedders (the CLI) get
+  the layer from `VidocqBootstrap.configure()`. An application `main` is run through the
+  layer via `-Dvidocq.app.main` — its package is exported to the runtime through the
+  layer `ModuleLayer.Controller`, the same technique the JDK launcher uses. The
+  load-time weaving agent then stands down — the loader does the weaving, without
+  `java.lang.instrument` and without the JDK's dynamic-agent warning. Implementation
+  note for custom layer loaders: the JVM loads layer-module classes through
+  `findClass(String moduleName, String name)`, whose inherited default returns `null` —
+  both name-based and module-based lookups are overridden.
+  [[module-scoped-lookups]][.tag-new]#NEW# The module-based lookups answer for the module
+  they name, as the JDK's own loaders do. `Module.getResourceAsStream`, and
+  `Class.getResource` on a class of a layer module, read that module's archive only: a name
+  outside any package (`META-INF/…`, a root file) gives each module its own copy, and
+  `null` to a module that lacks it. `Class.forName(Module, name)` finds only that module's
+  classes. The loader's own `getResource`, `getResources` and `getResourceAsStream` still
+  search every archive of the layer, and the layer loader's unnamed module holds none
+  (BUG-20261114-05). Known limitation: custom JUL
+  log handlers declared in `logging.properties` must live on the module path —
+  `LogManager` instantiates handlers through the system class loader and cannot see the
+  layer.
+* The container itself never reflects into application packages: generated
+  `_VaubanComponents` providers (`ServiceLoader`) instantiate beans and proxies
+  in-module, which is what keeps `opens`-free deployments possible.
+
+The layer is also what makes the dev-mode **in-JVM hot reload** possible (M3): after a
+successful recompile, `vidocq dev` signals the running JVM (reload file touch,
+`vidocq.dev.hotReload=false` restores the respawn cycle) — the runtime shuts the
+deployment down, discards the application layer and its loader, resolves a fresh layer
+over the recompiled classes and boots again. Same process, warm JIT, debugger and dev
+services untouched. Hosts embedding Cassini across such reloads must discard its static
+discovery caches (`io.vidocq.cassini.runtime.CassiniMaintenance.resetDiscoveryCaches()`,
+called by the Vidocq Cassini extension's `onStop`): they are keyed by application
+`Class` objects, which a new layer replaces wholesale.
+
+Design study and milestones: `tasks/vauban-classloader-universal.md` (M1 engine + sjar
+fold-in, M2 application layer, M2b launch vehicles and M3 in-JVM hot reload are
+implemented).
+
+== Runtime bootstrap sequence
+
+[mermaid]
+....
+sequenceDiagram
+  participant App
+  participant Vauban
+  participant Loader as ServiceLoader
+  participant BM as BeanManager
+  participant CTX as Contexts
+
+  App->>Vauban: VaubanContainer.builder().build()
+  Vauban->>Loader: load VaubanComponentProvider<*>\n(the generated _VaubanComponents)
+  Loader-->>Vauban: one provider per package
+  Vauban->>BM: instantiate VaubanBeanManager
+  Vauban->>CTX: ApplicationContext.activate()
+  Vauban->>BM: fire @Initialized(Application)
+  Vauban-->>App: VaubanContainer
+  App->>BM: select(HelloApp.class)
+  BM->>CTX: Context.get(bean)
+  CTX-->>App: instance (proxy if normal-scoped)
+....
+
+The `ApplicationContext` is built in memory, without opening any package.
+
+[#start-classes]
+=== Classes the start loads
+
+A lambda, a method reference and a `switch` on types are hidden classes the JVM spins the first time the line runs. Each one costs about twice the loading of a class from a jar, and no CDS archive holds it. Between the 2026-10-28 and 2026-11-18 snapshots, the start of a small REST application loaded some 290 more classes, more than half of them the container's lambdas, and started about 20 % slower (vauban#347, `BENCH.md`).
+
+So the code that every start runs (the index scan, the validation of the bean classes, discovery, the application layer, the first lookup of a bean through the `BeanManager`) is written with loops. The rest of the code keeps its streams where they read better. `StartLoadsFewClassesModulePathTest` (`vauban-module-it`) holds the line:
+
+* it starts an application layer and a container in a JVM of its own, on the module path;
+* it counts the hidden classes whose host is a class of Vauban against a budget, and its failure message names each host;
+* the budget covers what an API asks for: a `ScopedValue` call, a stored factory, a `computeIfAbsent` on a concurrent map, a sort comparator, and the `switch` on types.
+
+The start also leaves out work that nothing reads. The fingerprint of the deployment (see xref:concepts.adoc#writing-a-frozen-extension[extensions frozen at build]) is computed only when a record is read or written: a start without a record computes no checksum of its classes.
+
+[#boot-failures]
+=== Failures are reported, not swallowed
+
+* A class named in a `META-INF/vauban-beans.list` that fails to load is still skipped, but with a
+  warning that names it and the likely causes: a split package, or a missing module. It used to
+  vanish without a word, and the only trace was a downstream failure with no cause.
+* A failed field injection reaches the caller. A `RuntimeException` keeps its type, so a caller
+  catching `UnsatisfiedResolutionException` or `IllegalProductException` still sees it, and a
+  checked exception is wrapped in a `CreationException` that names the field. The container used to
+  log it, leave the field `null` and hand the bean out, and the failure came back later as a
+  `NullPointerException` in application code. `Bean#getInjectionPoints()` likewise throws rather
+  than reporting no injection points.
+* An exception a `@Discovery` method throws is a definition error, as CDI 4.1 treats one of a
+  `BeforeBeanDiscovery` observer, except a `DeploymentException`, which stays a deployment problem
+  (BUG-20261118-57): the build fails with a compilation error, and the start with a
+  `DefinitionException` whose cause is the exception, both naming the extension
+  (`@Discovery of com.acme.Ext failed: java.lang.IllegalStateException: ...`); the freeze records
+  nothing, and the start that follows fails in turn. The container used to ignore it, and the
+  deployment went on without what the method had not registered (BUG-20261118-04).
+* An exception an `@Enhancement` method throws fails the start on every path: in the full
+  extension cycle, in the enhancement of an archive the processor did not see, and in the replay of
+  `META-INF/vauban-bce-runtime.list` for a pre-processed jar. The enhancement under
+  `vauban:generate` fails the generation the same way. The last two used to drop it
+  (BUG-20261118-05).
+* An exception an `@Enhancement`, a `@Registration` or a `@Synthesis` method throws is a definition
+  error, as one of `@Discovery` is, and as CDI 4.1 treats one of a `ProcessAnnotatedType`, a
+  `ProcessBean` or an `AfterBeanDiscovery` observer: the build fails with a compilation error, and
+  the start, the start after a freeze and, for `@Enhancement`, `vauban:generate` with a
+  `DefinitionException` whose cause is the exception. A `DeploymentException` an extension throws,
+  from its constructor or any phase method, `@Discovery` included, stays a deployment problem: the
+  one `InvokerFactory.createInvoker` throws for a method it cannot invoke say, as CDI 4.1 makes an
+  invoker for an invalid target method a deployment problem and the CDI TCK expects. An exception of `@Validation`, as one of an
+  `AfterDeploymentValidation` observer, and an error reported through `Messages` are deployment
+  problems: a `DeploymentException`. The three phases failed with a `DeploymentException`, and only
+  `@Enhancement` carried the exception as its cause (BUG-20261118-57).
+* An exception an extension reports through `Messages.error(Exception)`, in any phase, is the cause of
+  the `DeploymentException`, the others it reported suppressed; the message alone was kept
+  (BUG-20261118-59).
+* The build compatible extension phase resolves a bean class across the whole deployment: the
+  classes the container holds, the loader set on the builder, then the build's context loader —
+  inside a Vauban layer, the layer's loader, which sees the application and the libraries it
+  re-layered. It used to take the loader of the first bean class, which reaches every archive only
+  when the deployment has one loader: under `vidocq:dev`, where the application's classes and its
+  libraries are defined by two loaders, CDI 4.1 invokers fell back to reflection for every
+  application bean. The run-time `@Enhancement` pass resolves classes the same way.
+* A stereotype that declares `@Named` with a value, such as `@Named("custom")`, is a definition
+  error whether or not a bean carries it (CDI 4.1, 2.8.1.3). The class-level validation of the index
+  now reports it for every stereotype the container indexes, one handed to `addBeanClasses` or added
+  by an extension through `ScannedClasses`, with a `DefinitionException`
+  (`Stereotype com.acme.Custom has @Named with non-empty value 'custom'`). That check skipped every
+  annotation type and never ran: the error came only from the reflective check of the bean classes,
+  through a bean that carried the stereotype, which still reports it for a stereotype the container
+  does not index.
+
+[#virtual-threads]
+== Threading model
+
+Vauban uses **virtual threads** (https://openjdk.org/jeps/444[JEP 444]) in two places:
+
+. **Async observers** — every `@ObservesAsync` is dispatched on an `Executors.newVirtualThreadPerTaskExecutor()` internal to the `EventDispatcher`. No platform-thread pool, no bounded queue.
+. **Request context** — when Vauban is embedded in Cassini or Foy, the `RequestContext` is carried by a `ScopedValue` (https://openjdk.org/jeps/487[JEP 487]) rather than a `ThreadLocal`. That lets structured virtual threads propagate the context without leaks. A `ThreadLocal` remains in three places, where a scoped value cannot do the job: the imperative activation of the `RequestContext` (`activate` / `deactivate`), and the session and web contexts of `vauban-webcontexts`, which a web container binds and unbinds from separate request-listener callbacks. The architecture tests allow these three classes and no other (xref:reference.adoc#architecture-rules[Reference, Architecture rules]).
+
+[NOTE]
+====
+The `ThreadLocal` → `ScopedValue` move is documented in the Vauban repo's `CLAUDE.md` as a guiding principle.
+====
+
+[#aot]
+== AOT compatibility
+
+What the container relies on at run time:
+
+* **Generated code** for everything that builds a bean — the per-package
+  `_VaubanComponents` provider, `_ClientProxy` and `$$Intercepted` subclasses — called directly. No
+  bytecode is generated at run time on this path.
+* **A fallback, announced.** A bean compiled without the annotation processor, and not processed by
+  the Maven plugin, still runs: the container generates its `$$Intercepted` subclass or its
+  `_ClientProxy` at boot or on first use, and proxies an interface with a `java.lang.reflect.Proxy`.
+  That path is the exception. It slows the boot, needs deep access to the bean's package on the module
+  path, and has no ahead-of-time equivalent, so the container says so: a framed `WARNING`,
+  _VAUBAN — RUNTIME CODE GENERATION FALLBACK_, at the end of the boot lists every class it generated
+  there or will generate, and a class generated later that the boot did not foresee gets its own
+  warning (https://codefloe.com/Vidocq/vauban/issues/227[vauban#227^]). The fix is to put
+  `vauban-processor` on the annotation processor path of the module that declares those beans. A
+  synthetic bean of an interface type has no class to compile: the warning lists its proxy apart, and
+  the fix is for its extension to list the interface in `@ClientProxies`
+  (xref:concepts.adoc#synthetic-interface-proxies[Client proxies of synthetic beans]).
+* **`MethodHandles`**, through `VaubanLookup`, for `@PostConstruct`, `@PreDestroy`, observer and
+  interceptor methods.
+* **`LambdaMetafactory`** to lift the generated interceptor glue into the invocation chain.
+
+What still reflects:
+
+* **Class loading by name.** The bean index is a list of names, and discovery turns each into a
+  `Class` with `Class.forName`. That needs no `opens` — a public class of an exported package loads
+  without one — but an ahead-of-time compiler cannot see a computed name.
+* **Annotations.** Matching no longer reflects: qualifiers and interceptor bindings are compared as
+  `AnnotationKey`s built from the index (member defaults applied, `@Nonbinding` left out — the
+  members a declaration marks and the ones an extension makes non-binding alike) — the outcome of
+  https://codefloe.com/Vidocq/vauban/issues/70[vauban#70^]. Injection does not read them either: the
+  qualifiers of a field or a parameter come from the descriptor the index built, not from the member
+  the container holds.
++
+A module compiled with the Vauban APT also *ships* what its own annotation types declare — their
+members, their declared types, their defaults, which are `@Nonbinding` — together with a reader and
+a **literal class** per type, in that type's own package. `Bean#getQualifiers()` then hands out the
+module's own literal, so even a package-private qualifier costs no reflection and needs no `opens`.
++
+A qualifier from a dependency built *without* the processor is covered by the module that uses it,
+which carries a literal for it in its own package — provided the type is **public**, since no other
+package can implement a package-private interface. That last case, a non-public qualifier in a module
+compiled without the processor, is the one where a `java.lang.reflect.Proxy` over index data remains
+the fallback.
++
+What is left reflects only where nothing describes the site. A disposer's non-`@Disposes`
+parameters are no longer among them: the descriptor now models them as injection points
+(xref:usage.adoc#producers-and-disposes[Producers and `@Disposes`]). What remains is the
+`AnnotatedType` a portable extension passes to
+`getInjectionTargetFactory`, which by construction comes from the caller; and a *live* annotation
+the index does not describe — an `@Inherited` one found on a superclass, a literal passed by a build
+compatible extension or a synthetic bean, the default of a member read from its declaration.
+The `Annotated` SPI facades are not in that list: the specification requires them to hand out the
+annotations themselves.
++
+`-Dvauban.annotations.reflection=allow|warn|forbid` (default `allow`) logs or refuses every one of
+those, so a deployment can prove it never needs them. `forbid` throws a type of its own that no
+`catch (Exception)` on the way out swallows. See xref:reference.adoc#system-properties[Reference —
+system properties].
+* **Fallbacks.** A type no generated provider covers — the class path, a producer only known at run
+  time — is instantiated reflectively, and the container says so at boot.
+
+A GraalVM native image therefore needs reflection metadata for the above today, and Vauban does not
+generate it. Placed in-package proxies are defined at run time and are not available in a native
+image at all: `vauban:enhance-dependencies` is the ahead-of-time path for those (see
+xref:se.adoc[Vauban in Java SE], _Limits_).
+
+Project Leyden CDS and `jlink` images are unaffected: every byte is produced at build time, and the
+Vauban layer reads modules straight from a runtime image.
+
+[[module-lookups]]
+== Module lookups for trusted extensions
+
+Some extensions must call a member the application never opened. MicroProfile Fault Tolerance is the first: `@Fallback(fallbackMethod = "recover")` may name a `private` method, and the implementation lives in another module. Without help it needs `opens <package> to <extension>`, which is exactly what Vauban removes everywhere else.
+
+`io.vidocq.vauban.core.access.ModuleLookups.lookupFor(Class<?>)` returns an `Optional<MethodHandles.Lookup>`: a full-privilege lookup on that one class, so the extension can `findSpecial` / `findVirtual` the member and nothing else needs to change.
+
+Where the lookup comes from::
+The generated `_VaubanComponents` of the class's own package. It is written by the processor, or by `vauban:generate` / `vauban:enhance-dependencies` into the completed dependency's package, so in both cases it belongs to the class's module. Its `grantModuleLookup(ModuleLookupGrant)` does `grant.accept(MethodHandles.lookup())`. The container keeps that lookup only if its lookup class is the provider itself and it has full privilege. It then hands out `privateLookupIn(managedClass, providerLookup)`, which is legal without any read edge or `opens` because both are in the same module. The application writes nothing and opens nothing: shipping the generated provider is the consent, as it already is for in-module instantiation and field injection.
+
+What is handed out::
+A lookup only for a class the running container, or the container being built, manages, whose package has a generated provider granting one. Nothing for any other class, and nothing once that container is closed. A deployment is registered once its providers are loaded, so build compatible extensions can already ask during `@Enhancement`.
+
+Who may ask::
+Only the modules named in `io.vidocq.vauban.core`'s qualified `exports io.vidocq.vauban.core.access to …`. Today that is `io.vidocq.heisenberg.cdi.vauban`. A new consumer is added there, by name, in review. A provider hands its lookup over only through a `ModuleLookupGrant`, and only the container can create one: the factory sits in `io.vidocq.vauban.api.access`, exported to `io.vidocq.vauban.core` alone. Code that reaches a provider through `ServiceLoader` cannot make it give its lookup away. On the class path every module is unnamed and nothing of this is enforced, but nothing is encapsulated there anyway.
+
+Providers generated before this method existed grant nothing; the extension keeps its own fallback (for Heisenberg, an `opens` to `io.vidocq.heisenberg.core`).
+
+The container uses the same lookup itself to wire an intercepted bean: once the generated provider has created the `$$Intercepted` subclass, its post-construction method `$$init` is called through a method handle found with that lookup, so the bean's package needs neither `exports` nor `opens` (BUG-20261010-02). Without a granting provider, the call falls back to reflection, which needs the package exported to `io.vidocq.vauban.core`.
+
+[#session-swap]
+== Session entries across a container swap [.tag-new]#NEW#
+
+When Vidocq swaps the application layer in dev mode, Foy moves the live HTTP sessions to the new layer
+(https://codefloe.com/Vidocq/foy/pulls/114[foy#114^]): it writes each session attribute to its own bytes with Java
+serialization, then reads it back through the new layer's class loader. The `@SessionScoped` instances of
+`vauban-webcontexts` are session attributes, so they move with it, from the container that wrote them to the one that
+reads them. This is passivation: no `@PostConstruct` runs on import, no `@PreDestroy` on export.
+
+The key::
+One attribute per bean, named `io.vidocq.vauban.webcontexts.session:` followed by the bean's passivation id. Every
+managed bean is `PassivationCapable`, producer and synthetic beans included (the built-in beans, such as `Event` or
+`BeanManager`, are not), and its id is its `BeanId`: the class name for a managed bean, `Class#method` for a producer
+method, `Class#method(T1,T2)` for one of overloaded producer methods, with its erased parameter types,
+`Class.field` for a producer field. These are built from names, so two containers built from the
+same classes give such a bean the same id, and the importing container finds the attribute under the key it computes
+itself. A synthetic bean is the exception: its id ends with its registration slot, which shifts when beans are added
+before it (see the limits below). A foreign `Contextual` that is not passivation capable keeps a key bound to its own
+identity, valid in one container only.
++
+Since the key is the same in every container, a session store must never be bound to two live containers at once: the
+second would take the first one's entries for its own. The key used to carry the identity of the `Bean` object, which
+kept two containers apart on one store; now the values go from one container to the next through their serial form
+only.
+
+The serial form::
+The attribute holds an `Entry`: the bean, the instance and its creational context. The bean and the creational context
+belong to the container that holds them, so the entry is never written itself: its `writeReplace` writes an
+`EntryForm`, the passivation id and the instance. The form's `readResolve` looks the id up in the importing container
+(`BeanManager.getPassivationCapableBean`), checks the instance against that bean's types, and returns an entry of the
+importing container with a new creational context. When it cannot, it throws `InvalidObjectException` with a message
+that names the cause, never returns `null`: a form with no id, a bean the importing container lacks (removed, renamed
+or vetoed), an instance of another class. Foy drops the session in every one of these cases, as it does for a value
+that reads back `null`.
++
+The check covers the classes among the bean types: the bean class of a managed bean, the class a producer returns,
+their superclasses and interfaces. A parameterized type is left out, since reading its raw type is reflection, and
+`Object` always matches. A producer whose return type is parameterized and changed between two swaps can therefore
+pass the check, and fail with a `ClassCastException` at its first use instead of dropping the session.
++
+An `Entry` is never read as itself either: its `readObject` throws `InvalidObjectException`, so a stream laid out by
+hand cannot produce an entry with no bean.
+
+The binding::
+`readResolve` has no argument to tell it which container imports. Foy binds it around its reads with
+`io.vidocq.vauban.api.Passivation.importInto(beanManager, importer)`, a `ScopedValue` that holds on the reading thread,
+for the duration of the call; `Passivation.importingBeanManager()` reads it. A read outside that binding throws
+`InvalidObjectException("no importing container bound")`. `vauban-webcontexts` reads `vauban-api` for that binding
+alone (xref:reference.adoc#architecture-rules[Reference, Architecture rules]).
+
+The skip::
+A `@SessionScoped` producer of the session itself, as Foy's `HttpSession` bean, returns the web container's own
+session object, which is neither the bean's state nor serializable. `SessionStore.isSession(instance)` recognises it
+when the context stores the instance, and that entry writes a `Skipped` form, which reads back as a sentinel entry. The
+context treats the sentinel as no instance: the first use in the importing container runs the producer again, which
+returns the imported session, and replaces the sentinel. Destroying a session destroys nothing for a sentinel.
+
+What cannot move::
+`writeReplace` throws `NotSerializableException` with a message that names the cause, and Foy leaves the session
+behind with one `WARNING`:
++
+* an instance that is not `Serializable`: `bean class X is not Serializable`. Vauban does not check this at
+  deployment;
+* an instance of a `Contextual` that is not passivation capable: `contextual has no passivation id`;
+* an instance of an intercepted bean, an `$$Intercepted` subclass whose interceptor fields belong to the writing
+  container: `intercepted instances cannot move yet`.
++
+A field of the instance that cannot be written stops the stream too, with an exception that names its class or the
+cause: an object of the application that is not `Serializable`, one of the built-in objects that cannot move
+(_Built-in beans_ below), or an injected `InjectionPoint`, which a `@Dependent` object the instance holds may keep:
+Vauban's `InjectionPoint` is not `Serializable`.
+
+Client proxies::
+A session bean usually holds client proxies: the `@ApplicationScoped` service it injects, a `@RequestScoped` bean.
+A proxy belongs to the container that built it, so it moves as a reference to its bean, and reads back as the
+importing container's proxy of that bean:
++
+* every generated client proxy is `Serializable`: the bytecode the emitter writes (at boot, by the Maven plugin, by
+  the processor's bytecode paths) and the source the processor renders, class-typed or interface-typed. It declares a
+  `serialVersionUID`, a `transient` delegate, and `private Object writeReplace() throws ObjectStreamException`,
+  which returns the delegate: the proxy itself never enters the stream;
+* the delegate is a `ContextualInstance` of `vauban-core`, which looks the contextual instance up on each call as
+  before. Its own `writeReplace` writes a `ClientProxyReference`: the bean's passivation id and the binary name of
+  the proxied type, the bean class of a subclass proxy or the interface of an interface proxy;
+* the reference's `readResolve` reads the importing container from the binding above, finds the bean by its id, checks
+  that the bean still has a normal scope there and that the proxied type is the bean class or one of the classes among
+  its bean types, and returns `BeanManager.getReference(bean, Object.class, …)`. For a normal-scoped bean that is the
+  importing container's own cached proxy, so the field holds the same proxy as every other injection point there, and
+  each call reaches the importing container's contextual instance: its `@ApplicationScoped` instance, the instance of
+  its active request. A stream that holds one proxy twice reads back one object.
++
+When it cannot, it throws `InvalidObjectException` with a message that names the cause, never returns `null`: no
+importing container bound, a reference with no id or no type, a bean the importing container lacks, a bean that now
+has a pseudo-scope such as `@Dependent`, a proxied type that is no longer the bean's, or a `RuntimeException` of
+`getReference`, which the exception carries as its cause. Foy drops the session. The type check catches a synthetic
+bean whose registration slot now names a bean of another type, not one of the same type: see _Limits_ below.
++
+A proxied type that declares its own no-arg `writeReplace()` or `readResolve()` does not get them forwarded, whatever
+they return: the proxy's own `Object writeReplace()` takes the place of the first, and a proxy is never read back.
+Serialization finds the hook through `Class.getDeclaredMethod`, which picks the most specific return type, so a
+forwarded `String writeReplace()` next to the proxy's own would hide it. When the proxied type exposes an
+`Object writeReplace()` to the proxy (public or protected, package-private in the proxy's package, or an interface
+method), the proxy's own overrides it, so it is public and declares no exception, in source and in bytecode alike.
+Java source cannot declare the proxy's own next to a static `writeReplace()` the proxy inherits, nor next to one that
+returns another type: the processor then emits that class proxy as bytecode, with a `NOTE` that says why, and warns
+that a `writeReplace()` returning another type is not forwarded. An interface whose `writeReplace()` returns another
+type has no bytecode fallback: the build fails with an error that names it. An interface proxy still forwards a
+`readResolve()` its interface declares, since an abstract one must be implemented.
++
+The `java.lang.reflect.Proxy` fallback of an interface does not move: its class is not read back by name. Its handler
+refuses to be written with `X is proxied by the java.lang.reflect.Proxy fallback; list it in @ClientProxies`, which
+Foy logs in its `WARNING`: listed, the interface gets a build-time proxy, which moves (see
+xref:concepts.adoc#synthetic-interface-proxies[Client proxies of synthetic beans]).
+
+Built-in beans::
+A session bean often injects the built-in `Event<T>`, `Instance<T>` or `BeanManager`, which CDI Full counts as
+passivation capable dependencies. Each belongs to the container that built it, so none enters the stream, and each
+reads back as the importing container's own:
++
+* the `BeanManager`: `VaubanBeanManager` is `Serializable` for one reason, serialization calls `writeReplace` on a
+  serializable class only. Its `writeReplace` writes a `BeanManagerReference`, a mark with no state, whose
+  `readResolve` returns the importing container's bean manager, from the binding above;
+* an `Event`, an `Instance` or a `Provider` the container injected writes an `InjectionPointReference`: the passivation
+  id of the bean it was injected into, the member (its declaring class, its name and, for a constructor or a method,
+  its erased parameter types, as in `com.acme.Cart#init(jakarta.enterprise.event.Event)`), the position of the
+  parameter (`-1` for a field), and the raw type of the field or parameter. No index into a list: a field added
+  before it changes nothing;
+* the reference's `readResolve` finds the bean by its id in the importing container, finds that injection point among
+  the bean's `getInjectionPoints()`, checks that it still takes the same built-in type, and returns what the importing
+  container injects there, built by the same code as at injection: an `Event` with the injection point's type and
+  qualifiers, which reaches the importing container's observers, or an `Instance` that resolves its beans at `get()`,
+  as before. The read creates no bean instance and runs no callback. `BeanManager.getInjectableReference` gives the
+  same object for that injection point, built by the same code.
++
+When it cannot, the reference throws `InvalidObjectException` with a message that names the cause, never returns
+`null`: no importing container bound, a reference with no id, no member or no type, a type that is no built-in `Event`,
+`Instance` or `Provider`, a bean the importing container lacks, an injection point it lacks (a field renamed or
+removed, a parameter moved), one that now takes another type, an importing bean manager that is not Vauban's, or a
+`RuntimeException` of the container, which the exception carries as its cause. Foy drops the session.
++
+Neither the selected type nor the qualifiers are written: the injection point gives them again, and a parameterized
+`java.lang.reflect.Type` is not `Serializable`. An `Event` or an `Instance` therefore moves only through the injection
+point the container injected it at, and these throw `NotSerializableException` on write, so Foy leaves the session
+behind with its `WARNING`:
++
+* one obtained by `select(...)`, from an injected one too: `an Event obtained by select(...) or by a programmatic lookup
+  cannot move to another container`, and `an Instance or a Provider obtained by select(...), by a programmatic lookup
+  or as a parameter of an observer method cannot move to another container`. Keep the injected one in the field and
+  select at each use;
+* one obtained by a programmatic lookup, which has no injection point: `CDI.current().select(...)`,
+  `BeanManager.getEvent()`, `BeanManager.createInstance()`, `BeanManager.getReference`, the `get()` of an
+  `Instance<Event<T>>`; the same messages;
+* an `Instance` or a `Provider` given to a parameter of an observer method, a programmatic lookup too: the same
+  message;
+* an `Event` given to a parameter of an observer method, which has no injection point either: `an Event given with no
+  injection point, as to an observer method, cannot move to another container`;
+* one injected outside a bean with a passivation id, such as a parameter of a producer method, which keeps no bean
+  in its injection point, or a non-contextual instance: `an Event, an Instance or a Provider injected outside a bean
+  with a passivation id cannot move to another container`.
+
+`@Dependent` objects::
+A `@Dependent` object the instance holds moves inside it, as part of its state. The writing container's creational
+context tracked it; the importing container gives the entry a new, empty one. Its `@PreDestroy` therefore does not run
+when the moved session ends. The same holds for the `@Dependent` instances a moved `Instance` gave at `get()` in the
+writing container: the importing one's `Instance` starts with none.
+
+Limits::
+What moves, moves as it was written, between two versions of the application:
++
+* **A synthetic bean.** A synthetic bean's id ends with its registration slot, which shifts when beans are
+  registered before it: its entry can be found under another synthetic bean of the same name, or under none. The same
+  holds for a client proxy of such a bean that a session bean holds: its reference reads back as the proxy of
+  whichever bean has its id now. The type check refuses a bean of another type, but two synthetic beans of the same
+  type, such as the `EntityManager` of two persistence units, pass it, and the field then reaches the other one.
+* **An overloaded producer method.** Overloaded producer methods have ids of their own, which carry their parameter
+  types (`Class#method(T1,T2)`). A producer method that gains an overload, or an overload whose parameters change, so
+  gets another id in the new version: its entry is not found, and Foy drops the session.
+* **A bean that gains an interceptor binding** in the new version moves as the plain instance it was: its interceptors
+  do not run on it until the session ends.
+* **A field added to the class** reads back with its default value, an `@Inject` field too, a built-in `Event` or
+  `Instance` included: the import runs no injection and no `@PostConstruct`. This needs a declared
+  `serialVersionUID`; without one, the changed class computes another, the read fails with `InvalidClassException`,
+  and Foy drops the session.
+* **An injected `Event` or `Instance` whose injection point changed** but kept its member and its built-in type, as
+  `Event<Order>` turned into `Event<Invoice>`, or a qualifier added, reads back as the new injection point gives it:
+  with the new type and qualifiers, as an injection would. The member is named by its declaring class, its name and
+  its parameter types, so these drop the session: a renamed field, a field moved to another class (pulled up into a
+  superclass, say), a parameter moved, a constructor or an initializer method whose parameter types changed.
+
+== Exported Java modules
+
+[cols="2,3"]
+|===
+| Module | Main exports
+
+| `io.vidocq.vauban.api`
+| `io.vidocq.vauban.api` (`Vauban` version marker, `ProxyLink`, `VaubanComponentProvider`)
+
+| `io.vidocq.vauban.core`
+| `io.vidocq.vauban.core.container`, `io.vidocq.vauban.core.bean.model`, `io.vidocq.vauban.core.context`, `io.vidocq.vauban.core.event`, `io.vidocq.vauban.core.interceptor`, `io.vidocq.vauban.core.extensions`; `io.vidocq.vauban.core.access` to the trusted extension modules only (xref:#module-lookups[module lookups])
+
+| `io.vidocq.vauban.indexer`
+| `io.vidocq.vauban.indexer`, `io.vidocq.vauban.indexer.codegen`, `io.vidocq.vauban.indexer.model`, `io.vidocq.vauban.indexer.scanner`
+
+| `io.vidocq.vauban.processor`
+| (internal, requires `java.compiler`)
+
+| `io.vidocq.vauban.classloader.spi`
+| `io.vidocq.vauban.classloader.spi` — `ByteSourcePlugin` SPI
+
+| `io.vidocq.vauban.classloader`
+| `io.vidocq.vauban.classloader` — universal loader engine (`VaubanClassLoader`, `VaubanLayerFactory`) and the Java SE launcher (`Launch`)
+
+| `io.vidocq.vauban.weaver`
+| `io.vidocq.vauban.weaver` — canonical vauban#24 weaving transforms, packaged as a load-time agent
+
+| `io.vidocq.vauban.sjar`
+| AES-256-GCM encrypted implementation of the SPI (optional)
+|===
+
+See xref:reference.adoc[the reference] for the exhaustive list.
+
+== Sources
+
+* link:{repo-vauban}/src/branch/main/vauban-core[vauban-core] — container runtime
+* link:{repo-vauban}/src/branch/main/vauban-processor[vauban-processor] — APT and Class-File API generators
+* link:{repo-vauban}/src/branch/main/vauban-indexer[vauban-indexer] — build-time scanner
+* link:{repo-vauban}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs (VAU-PRX-002, VAU-INJ-001)

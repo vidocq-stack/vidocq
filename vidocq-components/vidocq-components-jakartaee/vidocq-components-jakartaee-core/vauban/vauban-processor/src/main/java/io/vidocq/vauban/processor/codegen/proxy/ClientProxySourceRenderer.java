@@ -1,0 +1,276 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.processor.codegen.proxy;
+
+import io.vidocq.vauban.core.interceptor.TypeRef;
+import io.vidocq.vauban.core.proxy.ClientProxyShape;
+import io.vidocq.vauban.core.proxy.ClientProxyShape.ProxyMethodShape;
+
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
+import java.util.List;
+
+/**
+ * Renders the {@code <Bean>_ClientProxy} normal-scoped client proxy as readable Java
+ * <strong>source</strong> from the neutral {@link ClientProxyShape} — the source counterpart
+ * of the shared bytecode {@link io.vidocq.vauban.core.proxy.ClientProxyEmitter}.
+ *
+ * <p>Emitting source (instead of Filer bytecode) lets the sibling generated source
+ * {@code _VaubanComponents} reference {@code <Bean>_ClientProxy} by name and perform
+ * {@code new <Bean>_ClientProxy(delegate)} in-module — so the container creates the proxy without reflection
+ * and the bean package needs no {@code opens}/{@code exports}. This dissolves the same
+ * "generated source cannot see Filer-emitted bytecode" wall that moved {@code $$Intercepted} to
+ * source. The bytecode emitter is kept for the runtime classpath fallback and
+ * the Maven plugin (post-compile, external jars).
+ *
+ * <p>Only generated for top-level normal-scoped beans with an accessible no-arg constructor (the
+ * proxy constructor is {@code super()}); other beans keep the bytecode proxy + runtime fallback —
+ * see the caller in {@code VaubanProcessor}.
+ *
+ * <p>The override set is decided by {@link ClientProxyShapeFromElements}, the naming
+ * ({@code _ClientProxy}, {@code $$delegate}) by {@link ClientProxyShape} —
+ * this class only renders. Each override forwards the call to the contextual instance:
+ * {@code return $$delegate.get().method(args);}, the delegate being a {@code Supplier<? extends Bean>}.
+ */
+public final class ClientProxySourceRenderer {
+
+    /**
+     * Kept on the proxy class: a generic bean is extended raw, and its members are overridden with erased
+     * signatures, which javac reports as raw and unchecked.
+     */
+    static final String SUPPRESS_ERASED = "@SuppressWarnings({\"unchecked\", \"rawtypes\"})\n";
+
+    /** The interface every client proxy implements: it moves with a session, as its delegate (foy#114). */
+    static final String SERIALIZABLE = "java.io.Serializable";
+
+    /** The closing brace of a member's body, and the blank line after it. */
+    private static final String END_OF_MEMBER = "    }\n\n";
+
+    /** {@code java.util.function.Supplier<? extends T>}: the type of the delegate of a proxy of {@code type}. */
+    static String supplierOf(String type) {
+        return "java.util.function.Supplier<? extends " + type + ">";
+    }
+
+    /** The proxy's {@code serialVersionUID}, so that {@code -Xlint:serial} stays quiet in the application's build. */
+    static void renderSerialVersionUid(StringBuilder sb) {
+        sb.append("    @java.io.Serial\n")
+                .append("    private static final long serialVersionUID = 1L;\n\n");
+    }
+
+    /**
+     * The delegate field, {@code transient}: the proxy is never written itself, {@link #renderWriteReplace} writes the
+     * delegate in its place.
+     */
+    static void renderDelegateField(StringBuilder sb, String supplierType) {
+        sb.append("    private final transient ").append(supplierType).append(" ")
+                .append(ClientProxyShape.FIELD_DELEGATE).append(";\n\n");
+    }
+
+    /**
+     * {@code writeReplace()}, returning the delegate: a stream carries it in the proxy's place, and its serial form
+     * reads back as the importing container's proxy of the same bean (foy#114). Private, unless it overrides a
+     * {@code writeReplace()} the proxied type exposes: it is then public, which no inherited access exceeds, and
+     * declares no exception, which an override may not add (JLS 8.4.8.3).
+     */
+    static void renderWriteReplace(StringBuilder sb, boolean overrides) {
+        sb.append("    @java.io.Serial\n");
+        if (overrides) {
+            sb.append("    @Override\n")
+                    .append("    public java.lang.Object writeReplace() {\n");
+        } else {
+            sb.append("    private java.lang.Object writeReplace() throws java.io.ObjectStreamException {\n");
+        }
+        sb.append("        return this.").append(ClientProxyShape.FIELD_DELEGATE).append(";\n")
+                .append(END_OF_MEMBER);
+    }
+
+    private ClientProxySourceRenderer() {}
+
+    /** A generated source file: its fully-qualified class name and its textual content. */
+    public record Generated(String className, String source) {}
+
+    /** Render {@code <Bean>_ClientProxy} as Java source from the bean's {@link TypeElement}. */
+    public static Generated render(TypeElement bean, Elements elements, Types types) {
+        return render(ClientProxyShapeFromElements.from(bean, elements, types));
+    }
+
+    /** Render {@code shape.proxyClassName()} as Java source (proxy co-located with the bean). */
+    public static Generated render(ClientProxyShape shape) {
+        return renderAt(shape, shape.proxyClassName());
+    }
+
+    /**
+     * Render the proxy at an explicit {@code proxyBinaryName} while still {@code extends}-ing the
+     * shape's {@code beanBinaryName}. The co-located {@link #render(ClientProxyShape)} passes
+     * {@code shape.proxyClassName()} (same package as the bean); the producer-proxy path (issue
+     * #42) passes a name in the <em>producer's</em> package so the proxy of a fully-public class
+     * from a non-opened module lands in-module, extending the external produced type by its
+     * fully-qualified name. Cross-package correctness is guaranteed by the caller: only public
+     * overridable methods are forwarded (a cast to the external type cannot reach protected or
+     * package-private members from another package).
+     */
+    public static Generated renderAt(ClientProxyShape shape, String proxyBinaryName) {
+        // The canonical name of a nested bean is its binary name with each '$' turned into '.'.
+        return renderAt(shape, proxyBinaryName, shape.beanBinaryName().replace('$', '.'));
+    }
+
+    /**
+     * Render {@code shape.proxyClassName()} as Java source, naming the bean by
+     * {@code beanSourceName}, its canonical name: a top-level class whose own name contains
+     * {@code $} keeps it there (BUG-20261004-11).
+     */
+    public static Generated render(ClientProxyShape shape, String beanSourceName) {
+        return renderAt(shape, shape.proxyClassName(), beanSourceName);
+    }
+
+    /** {@link #renderAt(ClientProxyShape, String)}, naming the bean by its canonical {@code beanSourceName}. */
+    public static Generated renderAt(ClientProxyShape shape, String proxyBinaryName, String beanSourceName) {
+        String beanSource = beanSourceName;
+        String proxyBinary = proxyBinaryName;
+        int lastDot = proxyBinaryName.lastIndexOf('.');
+        String pkg = lastDot >= 0 ? proxyBinaryName.substring(0, lastDot) : "";
+        String proxySimple = lastDot >= 0 ? proxyBinaryName.substring(lastDot + 1) : proxyBinaryName;
+
+        var sb = new StringBuilder();
+        if (!pkg.isEmpty()) {
+            sb.append("package ").append(pkg).append(";\n\n");
+        }
+        sb.append("// Generated by Vauban APT — normal-scoped client proxy of ").append(beanSource)
+                .append(".\n");
+        sb.append("// Forwards every business method to the contextual instance. Do not edit.\n");
+        // @Vetoed: the proxy is instantiated explicitly, never discovered as a bean.
+        sb.append("@jakarta.enterprise.inject.Vetoed\n");
+        sb.append(SUPPRESS_ERASED);
+        sb.append("public final class ").append(proxySimple).append(" extends ").append(beanSource)
+                .append(" implements ").append(SERIALIZABLE).append(" {\n\n");
+
+        // Delegate supplier — final, set once by the constructor (same contract as the bytecode
+        // emitter): nothing can rewire the proxy afterwards (vauban#227).
+        renderSerialVersionUid(sb);
+        renderDelegateField(sb, supplierOf(beanSource));
+
+        // The only constructor, (Supplier d): calls the simplest non-private super constructor with
+        // default values (null / 0 / false) — the proxy never uses the super state, it forwards to
+        // the delegate — then stores d. Mirrors the runtime front-end's findSimplestConstructor + the
+        // emitter's pushDefault, so beans with only an injected (arg-bearing) constructor are still
+        // proxyable in-module. A super(...) call cannot sit in a try (vauban#145): the proxy
+        // constructor declares what the super constructor declares, and the generated provider's
+        // createClientProxy rethrows it as is.
+        sb.append("    public ").append(proxySimple).append("(").append(supplierOf(beanSource)).append(" d)");
+        appendThrowsClause(sb, shape.superCtorThrown());
+        sb.append(" {\n")
+                .append("        super(").append(superDefaultArgs(shape.superCtorParams())).append(");\n")
+                .append("        this.").append(ClientProxyShape.FIELD_DELEGATE).append(" = d;\n")
+                .append(END_OF_MEMBER);
+
+        renderWriteReplace(sb, shape.overridesWriteReplace());
+
+        // Forwarding overrides.
+        for (ProxyMethodShape m : shape.methods()) {
+            renderForward(sb, m);
+        }
+
+        sb.append("}\n");
+        return new Generated(proxyBinary, sb.toString());
+    }
+
+    /**
+     * Renders the {@code super(...)} argument list calling the chosen constructor with default
+     * values: an empty string for a no-arg ctor, else {@code (T0) null, 0, false, …} matching its
+     * (erased) parameter types. Each reference default is cast so the call resolves unambiguously.
+     */
+    private static String superDefaultArgs(List<TypeRef> params) {
+        var sb = new StringBuilder();
+        for (int i = 0; i < params.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(defaultValueExpr(params.get(i)));
+        }
+        return sb.toString();
+    }
+
+    /** Default-value expression for a super-ctor argument: typed primitive zero, or {@code (T) null}. */
+    private static String defaultValueExpr(TypeRef t) {
+        if (!t.isPrimitive()) {
+            return "(" + t.sourceName() + ") null";
+        }
+        return switch (t.primitiveKind()) {
+            case BOOLEAN -> "false";
+            case BYTE    -> "(byte) 0";
+            case SHORT   -> "(short) 0";
+            case INT     -> "0";
+            case LONG    -> "0L";
+            case CHAR    -> "(char) 0";
+            case FLOAT   -> "0.0f";
+            case DOUBLE  -> "0.0";
+            default      -> "0";
+        };
+    }
+
+    static void renderForward(StringBuilder sb, ProxyMethodShape m) {
+        boolean isVoid = m.returnType().isVoid();
+        List<TypeRef> params = m.params();
+
+        sb.append("    @Override\n");
+        sb.append("    public ").append(m.returnType().sourceName()).append(" ")
+                .append(m.name()).append("(");
+        for (int i = 0; i < params.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(params.get(i).sourceName()).append(" p").append(i);
+        }
+        sb.append(")");
+        appendThrowsClause(sb, m.thrownTypes());
+        sb.append(" {\n");
+        // The delegate is typed by the bean, so the call needs no cast — except a shadowed default
+        // method, which goes through its interface: a call typed by the bean class resolves to the
+        // shadowing private method and is refused (BUG-20261004-08). The interface may be generic,
+        // so its result is cast back to the type this override declares.
+        var owner = m.interfaceOwner();
+        sb.append("        ").append(isVoid ? "" : "return ");
+        if (owner != null) {
+            if (!isVoid) {
+                sb.append("(").append(m.returnType().sourceName()).append(") ");
+            }
+            sb.append("((").append(owner.sourceName()).append(") ")
+                    .append(ClientProxyShape.FIELD_DELEGATE).append(".get()).");
+        } else {
+            sb.append(ClientProxyShape.FIELD_DELEGATE).append(".get().");
+        }
+        sb.append(m.name()).append("(");
+        for (int i = 0; i < params.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append("p").append(i);
+        }
+        sb.append(");\n");
+        sb.append(END_OF_MEMBER);
+    }
+
+    /** Keeps the bean method's (erased) checked-exception contract so the forwarding call compiles. */
+    private static void appendThrowsClause(StringBuilder sb, List<TypeRef> thrown) {
+        if (thrown.isEmpty()) {
+            return;
+        }
+        sb.append(" throws ");
+        for (int i = 0; i < thrown.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(thrown.get(i).sourceName());
+        }
+    }
+}

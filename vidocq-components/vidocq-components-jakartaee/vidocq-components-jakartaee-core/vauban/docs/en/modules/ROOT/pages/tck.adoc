@@ -1,0 +1,199 @@
+= TCK: Jakarta CDI 4.1 Lite
+:description: Conformance status of the Vauban container against the official CDI 4.1 TCK.
+
+[.lead]
+This page consolidates the state of the official CDI 4.1 TCK runs against Vauban. The source of truth is the `vauban-tck-runner`, executed on every build: **774/774 CDI Lite tests pass (100%)**.
+
+== Summary
+
+[cols="2,1,1,3"]
+|===
+| Metric | Value | Detail | Notes
+
+| Profile under test
+| CDI Lite
+| Subset of the 4.1 TCK
+| The Full profile is not in scope.
+
+| Last run
+| 2026-11-18
+| Vauban `0.4.0-SNAPSHOT`
+| Profile `-Ptck` on `vauban-tck-runner` (CDI Lite 774/774) and `vauban-atinject-tck-runner` (AtInject 1/1).
+
+| Language model TCK
+| 63 run
+| 63 passed, 0 known gaps
+| xref:#language-model-tck[At start, in the processor and frozen], type annotation checks on.
+
+| CDI Lite tests (non-skipped)
+| 774
+|
+| Official CDI Lite subset.
+
+| Passed
+| 774
+| 100%
+| Full Lite profile.
+
+| Failed
+| 0
+|
+| —
+
+| Errors
+| 0
+|
+| No JVM crash, no uncaught `Throwable`.
+
+| Wall-clock time
+| ~5 s
+|
+| On the last-run host.
+|===
+
+== Historical progression
+
+[source]
+----
+Start     ~12%   ██████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+Session 1 38.2%  ████████████████░░░░░░░░░░░░░░░░░░░░░░░░  (+200)
+Session 2 52.5%  █████████████████████░░░░░░░░░░░░░░░░░░░  (+113)
+Current   100%   ████████████████████████████████████████  (774/774)
+----
+
+== Major features covered
+
+[cols="3,1"]
+|===
+| Feature | Status
+
+| Managed beans (`@ApplicationScoped`, `@RequestScoped`, `@Dependent`, `@Singleton`)
+| ✅
+
+| Injection (`@Inject` fields, constructors, methods)
+| ✅
+
+| Qualifiers (`@Named`, `@Default`, `@Any`, custom, `@Nonbinding`)
+| ✅
+
+| Producers (`@Produces` methods and fields)
+| ✅
+
+| Disposers (`@Disposes`)
+| ✅
+
+| Events (`Event<T>`, `@Observes`, `@ObservesAsync`)
+| ✅
+
+| Stereotypes (`@Stereotype`)
+| ✅
+
+| Alternatives (`@Alternative`, `@Priority`)
+| ✅
+
+| `Instance<T>` programmatic lookup
+| ✅
+
+| `InjectionPoint` metadata
+| ✅
+
+| `@Typed`, `@Vetoed`
+| ✅
+
+| Observer priority and `Reception.IF_EXISTS`
+| ✅
+
+| Interceptors (`@AroundInvoke`, `@AroundConstruct`)
+| ✅
+
+| Client proxies (normal scopes)
+| ✅
+
+| Build Compatible Extensions (BCE)
+| ✅
+
+| `@TransientReference`, `EventMetadata`
+| ✅
+|===
+
+== Tests intentionally skipped
+
+[cols="3,5"]
+|===
+| Category | Reason
+
+| Runtime portable extensions (`Extension`, `BeforeBeanDiscovery`, `AfterBeanDiscovery`)
+| Out of the Lite profile. Vauban implements only Build Compatible Extensions.
+
+| `@ConversationScoped`
+| Out of the Lite profile.
+
+| `PassivationCapable` / passivation
+| Out of the Lite profile: passivation is a CDI Full feature, and Vauban is not certified for it. Vauban does not validate passivating scopes at deployment. Every managed bean is `PassivationCapable`, though, producer and synthetic beans included (the built-in beans are not), and the `@SessionScoped` instances, their client proxies and the built-in `Event`, `Instance` and `BeanManager` they hold move to another container when written, for Foy's session move across a Vidocq dev swap (xref:internals.adoc#session-swap[Session entries across a container swap]). CDI Lite stays at 774/774.
+
+| EL wired into managed beans
+| Out of the Lite profile. `jakarta.el` is required only as a spec dependency, not activated on application beans.
+
+| `@Specializes`
+| Out of the Lite profile (deferred to a possible Full profile).
+|===
+
+== Tests skipped for environment reasons
+
+* Arquillian tests requiring a servlet container: out of scope for Vauban (covered by xref:foy::tck.adoc[Foy]).
+* Advanced EL tests: require an application-level EL evaluator, not wired in the Vauban runner.
+
+// TODO@user: extract the exact list of skipped tests from the Surefire report and tabulate them here.
+
+[#language-model-tck]
+== Language model TCK [.tag-new]#NEW#
+
+The core TCK never calls the language model TCK (`cdi-tck-lang-model`), which checks the `jakarta.enterprise.lang.model` API that build compatible extensions read. `LangModelTckTest`, in `vauban-tck-runner` under `-Ptck`, runs its `LangModelVerifier` from a build compatible extension, with the type annotation checks on, in the three places Vauban builds that model:
+
+* at start, when the extensions run as the container starts;
+* in the annotation processor, at compile;
+* in a deployment frozen at build, whose start then loads the record and runs no extension.
+
+Each place reports 21 tests: `verify` as the TCK runs it, then each of its 20 steps on its own, so that a failing step does not hide the next.
+All 63 pass.
+A step that fails for a known bug may be listed in `KnownLangModelGaps`, one line each, with the line of the TCK it fails at first: it is then reported as skipped, naming that bug.
+A listed step that passes, or fails at another line, fails the run until its line is updated or removed.
+None is listed: the last two, `BUG-20261117-42` (no inherited members) and `BUG-20261117-43` (synthetic members listed), are fixed.
+
+[source,bash]
+----
+./mvnw test -Ptck -pl vauban-tck-runner -Dtest=LangModelTckTest -Dsurefire.failIfNoSpecifiedTests=false
+----
+
+== Open bugs impacting coverage
+
+Tracked in link:{repo-vauban}/src/branch/main/BUG.md[BUG.md]:
+
+[cols="1,3,1"]
+|===
+| ID | Symptom | Status
+
+| `VAU-PRX-002`
+| Drift between `ClientProxyGenerator` (compile time) and `RuntimeClientProxyGenerator` (runtime)
+| Fixed
+
+| `VAU-INJ-001`
+| Field injection eagerly resolves normal-scoped beans (loses the client proxy)
+| Fixed (2026-05-07)
+|===
+
+== Reproduce locally
+
+[source,bash]
+----
+cd vauban
+sdk env
+mvn install -DskipTests -q && mvn test -pl vauban-tck-runner -Ptck
+----
+
+The runner uses Arquillian + TestNG. The Surefire report lands in `vauban-tck-runner/target/surefire-reports/`.
+
+[NOTE]
+====
+Per the workspace constraint, `vauban-tck-runner` is included in the Vauban reactor — unlike `cassini-tck` or `foy-tck`, which are detached because of ShrinkWrap Maven Resolver. The CDI TCK does not depend on ShrinkWrap Resolver in this configuration.
+====

@@ -1,0 +1,233 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.container;
+
+import io.vidocq.vauban.core.bean.model.BeanDescriptor;
+import io.vidocq.vauban.core.interceptor.InterceptorManager;
+import io.vidocq.vauban.indexer.model.DotName;
+import jakarta.enterprise.context.spi.CreationalContext;
+
+import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+final class BeanLifecycle {
+
+    private static final String INTERCEPTED_SUFFIX = "$$Intercepted";
+
+    private final InterceptorManager interceptorManager;
+    private final VaubanLookup vaubanLookup;
+
+    BeanLifecycle(InterceptorManager interceptorManager, VaubanLookup vaubanLookup) {
+        this.interceptorManager = interceptorManager;
+        this.vaubanLookup = vaubanLookup;
+    }
+
+    void callPostConstruct(Object instance, BeanDescriptor descriptor, CreationalContext<?> ctx) {
+        if (ClassMetadataCache.isInterceptorClass(instance.getClass())) {
+            callInterceptorPostConstruct(instance);
+            return;
+        }
+
+        var postConstructMethods = collectLifecycleMethodsInHierarchy(
+                instance.getClass(), jakarta.annotation.PostConstruct.class);
+
+        if (callInterceptedPostConstruct(instance, descriptor, ctx, postConstructMethods)) {
+            return;
+        }
+
+        for (var pcMethod : postConstructMethods) {
+            try {
+                vaubanLookup.invokeMethod(instance, pcMethod);
+            } catch (Exception e) {
+                throw new LifecycleCallbackException("@PostConstruct failed: " + pcMethod, e);
+            }
+        }
+    }
+
+    /**
+     * Calls the first no-argument {@code @PostConstruct} method declared by an interceptor instance, if any.
+     */
+    private void callInterceptorPostConstruct(Object instance) {
+        var found = ClassMetadataCache.interceptorPostConstruct(instance.getClass());
+        if (found.isEmpty()) {
+            return;
+        }
+        var pc = found.get();
+        try {
+            vaubanLookup.invokeMethod(instance, pc);
+        } catch (Exception e) {
+            throw new LifecycleCallbackException("@PostConstruct on interceptor instance failed: " + pc, e);
+        }
+    }
+
+    /**
+     * Runs the {@code @PostConstruct} methods through the lifecycle interceptor chain bound to the bean.
+     *
+     * @return {@code true} when a non-empty chain ran the callbacks, {@code false} when the caller must call them
+     */
+    private boolean callInterceptedPostConstruct(Object instance, BeanDescriptor descriptor,
+            CreationalContext<?> ctx, List<Method> postConstructMethods) {
+        if (!interceptorManager.hasInterceptors()) {
+            return false;
+        }
+        Set<DotName> beanBindings = (descriptor != null)
+                ? descriptor.interceptorBindings() : findInterceptorBindings(instance);
+        if (beanBindings == null || beanBindings.isEmpty()) {
+            beanBindings = findInterceptorBindings(instance);
+        }
+        if (beanBindings.isEmpty()) {
+            return false;
+        }
+        interceptorManager.setClassLoader(instance.getClass().getClassLoader());
+        var bindingAnns = (descriptor != null && !descriptor.interceptorBindingAnnotations().isEmpty())
+                ? new ArrayList<Annotation>(descriptor.interceptorBindingAnnotations())
+                : new ArrayList<Annotation>(collectBindingAnnotations(instance));
+        var lifecycleChain = interceptorManager.resolveLifecycleChain(
+                beanBindings, jakarta.annotation.PostConstruct.class, bindingAnns, ctx);
+        if (lifecycleChain.isEmpty()) {
+            return false;
+        }
+        var invocationCtx = new io.vidocq.vauban.core.interceptor.VaubanInvocationContext(
+                instance, null, new Object[0], lifecycleChain,
+                (target, params) -> {
+                    for (var m : postConstructMethods) {
+                        vaubanLookup.invokeMethod(target, m);
+                    }
+                    return null;
+                });
+        invocationCtx.setInterceptorBindings(new LinkedHashSet<>(bindingAnns));
+        try {
+            invocationCtx.proceed();
+        } catch (RuntimeException re) {
+            throw re;
+        } catch (Exception e) {
+            throw new LifecycleCallbackException("Lifecycle interceptor failed", e);
+        }
+        return true;
+    }
+
+    /**
+     * The {@code annotation} callbacks of {@code clazz}'s hierarchy, superclass first, respecting overrides: read once
+     * per class and kind, then reused at every creation and destruction of a bean (VAU-PERF-003). An intercepted
+     * subclass, a proxy or a client proxy stands for the class it extends.
+     */
+    static List<Method> collectLifecycleMethodsInHierarchy(
+            Class<?> clazz, Class<? extends Annotation> annotation) {
+        var name = clazz.getName();
+        var target = name.contains(INTERCEPTED_SUFFIX) || name.contains("$$Proxy") || name.contains("_ClientProxy")
+                ? clazz.getSuperclass() : clazz;
+        return LIFECYCLE_METHODS.get(target).computeIfAbsent(annotation, a -> {
+            var planned = IndexPlans.lifecycleCallbacks(target, a);
+            if (planned.isPresent()) {
+                return planned.get();
+            }
+            var result = new ArrayList<Method>();
+            collectLifecycleMethodsRecursive(target, a, result);
+            return List.copyOf(result);
+        });
+    }
+
+    private static final ClassValue<java.util.Map<Class<? extends Annotation>, List<Method>>> LIFECYCLE_METHODS =
+            new ClassValue<>() {
+                @Override
+                protected java.util.Map<Class<? extends Annotation>, List<Method>> computeValue(Class<?> type) {
+                    return new java.util.concurrent.ConcurrentHashMap<>();
+                }
+            };
+
+    private static void collectLifecycleMethodsRecursive(Class<?> clazz,
+            Class<? extends Annotation> annotation,
+            List<Method> result) {
+        if (clazz == null || clazz == Object.class) return;
+        collectLifecycleMethodsRecursive(clazz.getSuperclass(), annotation, result);
+        for (var method : clazz.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(annotation)) {
+                result.removeIf(m -> m.getName().equals(method.getName())
+                        && Arrays.equals(m.getParameterTypes(), method.getParameterTypes()));
+                result.add(method);
+            } else {
+                result.removeIf(m -> m.getName().equals(method.getName())
+                        && Arrays.equals(m.getParameterTypes(), method.getParameterTypes()));
+            }
+        }
+    }
+
+    static void collectTransitiveBindings(Set<Annotation> annotations, Set<DotName> dotNames) {
+        var toAdd = new LinkedHashSet<Annotation>();
+        for (var ann : annotations) {
+            collectTransitiveMeta(ann.annotationType(), toAdd, annotations, dotNames);
+        }
+        annotations.addAll(toAdd);
+    }
+
+    private static void collectTransitiveMeta(Class<? extends Annotation> annType,
+            Set<Annotation> toAdd,
+            Set<Annotation> existing, Set<DotName> dotNames) {
+        for (var meta : ClassMetadataCache.annotationsOf(annType)) {
+            if (ClassMetadataCache.isDeclaredInterceptorBinding(meta.annotationType())
+                    && !existing.contains(meta) && !toAdd.contains(meta)) {
+                toAdd.add(meta);
+                dotNames.add(DotName.of(meta.annotationType().getName()));
+                collectTransitiveMeta(meta.annotationType(), toAdd, existing, dotNames);
+            }
+        }
+    }
+
+    Set<DotName> findInterceptorBindings(Object instance) {
+        var bindings = new LinkedHashSet<DotName>();
+        var clazz = instance.getClass();
+        if (clazz.getName().contains(INTERCEPTED_SUFFIX)) {
+            clazz = clazz.getSuperclass();
+        }
+        var annotations = new LinkedHashSet<Annotation>();
+        for (var ann : ClassMetadataCache.annotationsOf(clazz)) {
+            var t = ann.annotationType();
+            if (ClassMetadataCache.isInterceptorBinding(t)) {
+                bindings.add(DotName.of(t.getName()));
+                annotations.add(ann);
+            }
+        }
+        collectTransitiveBindings(annotations, bindings);
+        return bindings;
+    }
+
+    Set<Annotation> collectBindingAnnotations(Object instance) {
+        var clazz = instance.getClass();
+        if (clazz.getName().contains(INTERCEPTED_SUFFIX) || clazz.getName().contains("$$Proxy")) {
+            clazz = clazz.getSuperclass();
+        }
+        var annotations = new LinkedHashSet<Annotation>();
+        var dotNames = new LinkedHashSet<DotName>();
+        for (var ann : ClassMetadataCache.annotationsOf(clazz)) {
+            var t = ann.annotationType();
+            if (ClassMetadataCache.isInterceptorBinding(t)) {
+                annotations.add(ann);
+                dotNames.add(DotName.of(t.getName()));
+            }
+        }
+        collectTransitiveBindings(annotations, dotNames);
+        return annotations;
+    }
+}

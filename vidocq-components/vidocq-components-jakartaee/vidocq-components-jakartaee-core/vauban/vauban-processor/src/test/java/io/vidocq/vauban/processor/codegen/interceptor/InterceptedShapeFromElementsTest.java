@@ -1,0 +1,801 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.processor.codegen.interceptor;
+
+import io.vidocq.vauban.core.interceptor.InterceptedShape;
+import io.vidocq.vauban.core.interceptor.InterceptorSubclassGenerator;
+import io.vidocq.vauban.core.interceptor.MethodShape;
+import io.vidocq.vauban.core.interceptor.TypeRef;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
+import javax.tools.DiagnosticCollector;
+import javax.tools.JavaFileObject;
+import javax.tools.SimpleJavaFileObject;
+import javax.tools.ToolProvider;
+import java.io.File;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Cross-check: verifies that {@link InterceptedShapeFromElements#from} yields the same
+ * set of interceptable method signatures as
+ * {@link InterceptorSubclassGenerator#fromClass(Class)} for a shared hierarchy fixture.
+ *
+ * <p>Uses an in-process javac compilation to obtain a live {@link TypeElement} and
+ * {@link Elements}/{@link Types} utility, mirroring the pattern used in
+ * {@code ComponentProviderCompileTimeTest}.
+ */
+@DisplayName("InterceptedShapeFromElements — cross-check against fromClass")
+class InterceptedShapeFromElementsTest {
+
+    // ---- Fixture hierarchy ----
+
+    /**
+     * Superclass with a public non-final method — must appear via {@code getAllMembers} inherited path.
+     */
+    public static class FixtureSuper {
+        public String inheritedMethod() { return "super"; }
+        public final String finalInherited() { return "final"; } // must be excluded
+    }
+
+    /**
+     * Bean that:
+     * - overrides {@code inheritedMethod()}
+     * - declares a void no-arg method
+     * - has a method with long+double (category-2) params
+     * - has an int-returning method
+     * - has a String[]-array-param method
+     * - has a method that should be excluded: @AroundInvoke
+     */
+    public static class FixtureBean extends FixtureSuper {
+
+        public void voidNoArg() { /* no behaviour needed */ }
+
+        public void primitiveParams(boolean b, byte by, char c, short s, int i, long l, float f, double d) { /* no behaviour needed */ }
+
+        public int intReturn(int x) { return x; }
+
+        @SuppressWarnings("java:S1172") // the parameter is the signature under test
+        public String arrayParam(String[] values) { return ""; }
+
+        @Override
+        public String inheritedMethod() { return "overridden"; }
+
+        @jakarta.interceptor.AroundInvoke
+        public Object aroundInvoke(jakarta.interceptor.InvocationContext ctx) throws Exception {
+            return ctx.proceed();
+        }
+
+        @jakarta.inject.Inject
+        public void injectInitializer(Object dep) { /* no behaviour needed */ }
+    }
+
+    // ---- Test ----
+
+    @Test
+    @DisplayName("fromElements and fromClass agree on the interceptable method set")
+    void methodSetsAgree() throws Exception {
+        assertSameMethodSet(FixtureBean.class);
+    }
+
+    /** Non-public methods of a same-package superclass, and of one in another package. */
+    public static class NonPublicBase extends io.vidocq.vauban.processor.fixture.colocated.ForeignInterceptedBase {
+        protected String inheritedProtected() { return "prot"; }
+        String inheritedPackagePrivate() { return "pp"; }
+        @SuppressWarnings("java:S1144") // never called: it proves a private method is not intercepted
+        private String inheritedPrivate() { return "private"; }
+        protected String overriddenProtected() { return "base"; }
+    }
+
+    /** Inherits every kind of non-public method; overrides one with a {@code final} declaration. */
+    public static class NonPublicBean extends NonPublicBase {
+        public String own() { return "own"; }
+        @Override
+        protected final String overriddenProtected() { return "bean"; }
+    }
+
+    @Test
+    @DisplayName("fromClass intercepts inherited non-public methods exactly as fromElements does (BUG-20261004-03)")
+    void inheritedNonPublicMethodsAgree() throws Exception {
+        Set<String> fromClass = assertSameMethodSet(NonPublicBean.class);
+        // Business methods are the non-private, non-static ones the bean inherits: a protected one
+        // wherever it is declared, a package-private one only from its own package (JLS 8.4.8) —
+        // a subclass in another package could not override it. A final override hides the rest.
+        assertEquals(Set.of("own()", "inheritedProtected()", "inheritedPackagePrivate()", "foreignProtected()"),
+                fromClass);
+    }
+
+    /** Not public: javac gives each public subclass a bridge {@code String hidden()} that calls this one. */
+    static class HiddenPublicBase {
+        public String hidden() { return "hidden"; }
+    }
+
+    /** Inherits {@code hidden()} through its own visibility bridge. */
+    public static class VisiblyInheriting extends HiddenPublicBase {
+        public String own() { return "own"; }
+    }
+
+    /** A public class between: the visibility bridge is its, and the bean inherits it. */
+    public static class VisibleMiddle extends HiddenPublicBase {
+    }
+
+    public static class InheritingThroughAMiddle extends VisibleMiddle {
+    }
+
+    @Test
+    @DisplayName("a bridge to a superclass method of another erasure gets a bridge of the subclass's own")
+    void aBridgeToASuperclassMethodGetsABridgeOfItsOwn() throws Exception {
+        // PlainLabelBase.label(String) implements GenericLabel<String>.label(T): javac's bridge label(Object) in the
+        // bean calls it by invokespecial, past the subclass's override, which needs a bridge that calls it virtually.
+        // (BUG-20261118-18)
+        var expected = Set.of("label[java.lang.Object]java.lang.String -> label[java.lang.String]");
+        assertEquals(expected, bridges(InterceptorSubclassGenerator.fromClass(LabelledBySuperclass.class)),
+                "fromClass");
+        assertEquals(expected, computeFromElements(LabelledBySuperclass.class,
+                InterceptedShapeFromElementsTest::bridges), "fromElements");
+        assertEquals(Set.of(), bridges(InterceptorSubclassGenerator.fromClass(OverridingRelabel.class)),
+                "an override bridge of the bean's own needs none");
+    }
+
+    private static Set<String> bridges(InterceptedShape shape) {
+        return shape.bridges().stream()
+                .map(b -> b.name() + b.params() + b.returnType() + " -> " + b.name() + b.targetParams())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /** Not public, with a method that takes a parameter. */
+    static class HiddenPutBase {
+        public String put(String value) { return value; }
+    }
+
+    /**
+     * Declares an overload of the name and arity of its visibility bridge {@code put(String)}: the class bytes, not the
+     * names, tell the bridge apart (BUG-20261118-16).
+     */
+    public static class OverloadingVisibly extends HiddenPutBase {
+        public String put(Integer value) { return "integer " + value; }
+    }
+
+    @Test
+    @DisplayName("a public method of a non-public superclass, behind a visibility bridge, is intercepted")
+    void aMethodBehindAVisibilityBridgeIsIntercepted() throws Exception {
+        assertEquals(Set.of("own()", "hidden()"), assertSameMethodSet(VisiblyInheriting.class));
+        assertEquals(Set.of("hidden()"), assertSameMethodSet(InheritingThroughAMiddle.class));
+        assertEquals(Set.of("put(java.lang.String)", "put(java.lang.Integer)"),
+                assertSameMethodSet(OverloadingVisibly.class));
+    }
+
+    /** A plain superclass whose method implements {@code GenericLabel<String>.label(T)} for its subclass. */
+    public static class PlainLabelBase {
+        public String label(String value) { return "plain " + value; }
+    }
+
+    public interface GenericLabel<T> {
+        default String label(T value) { return "label " + value; }
+    }
+
+    public static class LabelledBySuperclass extends PlainLabelBase implements GenericLabel<String> {
+    }
+
+    public static class GenericRelabelBase<T> {
+        public String relabel(T value) { return "base " + value; }
+    }
+
+    /** Overrides the generic {@link GenericRelabelBase#relabel} with the type it binds. */
+    public static class OverridingRelabel extends GenericRelabelBase<String> {
+        @Override
+        public String relabel(String value) { return "child " + value; }
+    }
+
+    @Test
+    @DisplayName("two declarations that are the same member of the bean give one method (BUG-20261004-06)")
+    void oneMethodPerMemberSignature() throws Exception {
+        // PlainLabelBase.label(String) implements GenericLabel.label(T) for LabelledBySuperclass:
+        // getAllMembers lists both, and keyed on the erased declarations they made two methods that
+        // the source renderer declared as the same label(String).
+        assertEquals(Set.of("label(java.lang.String)"), assertSameMethodSet(LabelledBySuperclass.class));
+        assertEquals(Set.of("relabel(java.lang.String)"), assertSameMethodSet(OverridingRelabel.class));
+    }
+
+    /** A default method with the descriptor of the public {@link PlainLabelBase#label(String)}. */
+    public interface PlainLabel {
+        default String label(String value) { return "plain-label " + value; }
+    }
+
+    public static class PlainLabelledBySuperclass extends PlainLabelBase implements PlainLabel {
+    }
+
+    @Test
+    @DisplayName("a public superclass method with a default method's descriptor is no shadow: one method")
+    void inheritedClassMethodIsNoShadow() throws Exception {
+        assertEquals(Set.of("label(java.lang.String)"), assertSameMethodSet(PlainLabelledBySuperclass.class));
+    }
+
+    /** A private method with the signature of {@link ShadowHider#hidden()}. */
+    public static class PrivateHiddenBase {
+        @SuppressWarnings("unused")
+        private String hidden() { return "private"; }
+    }
+
+    public interface ShadowHider {
+        default String hidden() { return "default"; }
+    }
+
+    public static class ShadowedBean extends PrivateHiddenBase implements ShadowHider {
+    }
+
+    /** Inherits a shadowed default whose only interface is package-private in another package. */
+    public static class CarriedBean extends io.vidocq.vauban.processor.fixture.colocated.DefaultCarrier {
+        public String own() { return "own"; }
+    }
+
+    @Test
+    @DisplayName("a shadowed default method is reached through its interface, or left out (BUG-20261004-08)")
+    void shadowedDefaultMethods() throws Exception {
+        // super.hidden() would resolve to the private PrivateHiddenBase.hidden(): both front-ends
+        // mark the method so that the bridge calls ShadowHider's default explicitly.
+        assertEquals(Set.of("hidden()@" + ShadowHider.class.getName()), assertSameMethodSet(ShadowedBean.class));
+        // No interface CarriedBean can name carries carried(): neither front-end intercepts it.
+        assertEquals(Set.of("own()"), assertSameMethodSet(CarriedBean.class));
+    }
+
+    // ---- The shapes found by the reviews, each pinned on both front-ends ----
+
+    public interface TagDefault {
+        default String tag(String value) { return "default " + value; }
+    }
+
+    /** Inherits a package-private {@code tag(String)} of another package, under a default of the same descriptor. */
+    public static class CrossPackageShadowedBean
+            extends io.vidocq.vauban.processor.fixture.colocated.ForeignPackagePrivateTagBase implements TagDefault {
+    }
+
+    @Test
+    @DisplayName("a package-private method of a superclass in another package is no member: the default is intercepted")
+    void crossPackagePackagePrivateIsNoMember() throws Exception {
+        // ForeignPackagePrivateTagBase.tag(String) is not inherited (JLS 8.4.8): the bean's member is
+        // the default, reached through TagDefault since a super.tag(…) resolves to the other one.
+        assertEquals(Set.of("tag(java.lang.String)@" + TagDefault.class.getName()),
+                assertSameMethodSet(CrossPackageShadowedBean.class));
+    }
+
+    /** A generic bean: its subclass extends it raw, where every inherited member is erased. */
+    public static class GenericNoShadow<X> implements GenericLabel<String> {
+    }
+
+    public static class GenericShadowed extends PrivateObjectLabel implements GenericLabel<String> {
+    }
+
+    /** A generic bean whose shadowed default comes from a generic interface. */
+    public static class GenericShadowedGeneric<X> extends PrivateObjectLabel implements GenericLabel<String> {
+    }
+
+    @Test
+    @DisplayName("a generic bean is extended raw: the source overrides the erased member (regression)")
+    void genericBeanIsExtendedRaw() throws Exception {
+        // label(String) is the member of GenericNoShadow<X>, but the subclass extends the raw
+        // GenericNoShadow, whose member is label(Object): the override label(String) "does not
+        // override or implement a method from a supertype". A non-generic bean keeps its bound
+        // member signature (GenericShadowed: label(String) overrides, with the erased bridge).
+        assertEquals(Set.of("label(java.lang.Object)"), assertSameMethodSet(GenericNoShadow.class));
+        assertEquals(Set.of("label(java.lang.Object)"), memberSignatures(GenericNoShadow.class));
+        var owner = "@" + GenericLabel.class.getName();
+        assertEquals(Set.of("label(java.lang.Object)" + owner), assertSameMethodSet(GenericShadowed.class));
+        assertEquals(Set.of("label(java.lang.String)"), memberSignatures(GenericShadowed.class));
+        assertEquals(Set.of("label(java.lang.Object)" + owner), assertSameMethodSet(GenericShadowedGeneric.class));
+        assertEquals(Set.of("label(java.lang.Object)"), memberSignatures(GenericShadowedGeneric.class));
+    }
+
+    /** Inherits a shadowed default whose member signature names a type this package cannot. */
+    public static class HiddenArgBean extends io.vidocq.vauban.processor.fixture.colocated.HiddenArgumentBase {
+        public String own() { return "own"; }
+    }
+
+    @Test
+    @DisplayName("a shadowed default whose type argument cannot be named is left out of the source, intercepted in bytecode")
+    void shadowedDefaultWithAnInaccessibleTypeArgument() throws Exception {
+        // The member is label(HiddenArgument), HiddenArgument being package-private in another
+        // package: the rendered subclass can neither declare that override nor list
+        // HiddenLabeled<HiddenArgument>, so it leaves the method out — not intercepted — rather
+        // than breaking the build. The run-time subclass overrides by descriptor, through the raw
+        // interface: the one documented divergence between the two front-ends.
+        var owner = io.vidocq.vauban.processor.fixture.colocated.HiddenLabeled.class.getName();
+        assertEquals(Set.of("own()", "label(java.lang.Object)@" + owner),
+                runtimeMethodSet(HiddenArgBean.class), "run-time shape");
+        assertEquals(Set.of("own()"), computeFromElements(HiddenArgBean.class, KEYS), "processor shape");
+    }
+
+    /** A private nested type of this package, bound under a private shadow (BUG-20261004-09, n11). */
+    public static class PrivateNestedShadowOuter {
+        private static class Secret {
+        }
+
+        public static class ShadowedSecretBase extends PrivateObjectLabel implements GenericLabel<Secret> {
+        }
+    }
+
+    /** Same package as {@link PrivateNestedShadowOuter}: inherits the shadowed member {@code label(Secret)}. */
+    public static class PrivateNestedShadowedBean extends PrivateNestedShadowOuter.ShadowedSecretBase {
+        public String own() { return "own"; }
+    }
+
+    @Test
+    @DisplayName("a shadowed default whose type argument is a private nested type of the same package is left out of the source")
+    void shadowedDefaultWithAPrivateNestedTypeArgument() throws Exception {
+        // The member is label(Secret), and the subclass would list GenericLabel<Secret>: Secret is
+        // private, so a generated top-level class of the same package cannot name it (JLS 6.6.1).
+        assertEquals(Set.of("own()", "label(java.lang.Object)@" + GenericLabel.class.getName()),
+                runtimeMethodSet(PrivateNestedShadowedBean.class), "run-time shape");
+        assertEquals(Set.of("own()"), computeFromElements(PrivateNestedShadowedBean.class, KEYS), "processor shape");
+        var report = onlyReport(PrivateNestedShadowedBean.class);
+        assertTrue(report.contains("label(") && report.contains("Secret") && report.contains("keep it"), report);
+    }
+
+    /**
+     * The only interface carrying a shadowed default is a private nested one of this package: the
+     * processor cannot name it (JLS 6.6.1), while a class file may list it (BUG-20261004-09, n14).
+     */
+    public static class PrivateCarrierOuter {
+        private interface Carrier {
+            default String carried() { return "default"; }
+        }
+
+        public static class CarrierShadow {
+            @SuppressWarnings("unused")
+            private String carried() { return "private"; }
+        }
+
+        public static class CarrierMid extends CarrierShadow implements Carrier {
+        }
+    }
+
+    public static class PrivateCarrierBean extends PrivateCarrierOuter.CarrierMid {
+        public String own() { return "own"; }
+    }
+
+    @Test
+    @DisplayName("the report of a default the source subclass leaves out compares it with the bytecode generators")
+    void omittedDefaultReportsCompareTheGenerators() throws Exception {
+        // No nameable interface. InterceptorSubclassGenerator decides by class-file access, a
+        // different rule: it leaves carried() out for CarriedBean (a package-private interface of
+        // another package) but lists the private nested interface of PrivateCarrierBean's package.
+        var noOwner = onlyReport(CarriedBean.class);
+        assertTrue(noOwner.contains("does not intercept") && noOwner.contains("carried()")
+                && noOwner.contains("depends on class-file access"), noOwner);
+        assertEquals(Set.of("own()"), runtimeMethodSet(CarriedBean.class), "run-time shape");
+        var privateCarrier = onlyReport(PrivateCarrierBean.class);
+        assertTrue(privateCarrier.contains("depends on class-file access"), privateCarrier);
+        assertEquals(Set.of("own()", "carried()@" + PrivateCarrierOuter.class.getName() + "$Carrier"),
+                runtimeMethodSet(PrivateCarrierBean.class), "run-time shape");
+        assertEquals(Set.of("own()"), computeFromElements(PrivateCarrierBean.class, KEYS), "processor shape");
+        // Unnameable in source only: the bytecode generators override by descriptor and keep it.
+        // The generated class is used on the class path and on the module path alike, so the
+        // difference is between generators, not between the two paths.
+        var unnameable = onlyReport(HiddenArgBean.class);
+        assertTrue(unnameable.contains("does not intercept") && unnameable.contains("keep it"), unnameable);
+        // Under the shadow, a subclass that does not override the default may not reach it at all
+        // (AbstractMethodError on HotSpot 25, BUG-20261004-08), even when a plain instance does.
+        for (var report : List.of(noOwner, privateCarrier, unnameable)) {
+            assertTrue(report.contains("is not intercepted and may fail") && report.contains("AbstractMethodError"),
+                    report);
+            assertFalse(report.contains("plain instance") || report.contains("leave it out too")
+                    || report.contains("module path"), report);
+        }
+    }
+
+    /** The one report {@link InterceptedShapeFromElements#from} gives for {@code fixture}. */
+    private String onlyReport(Class<?> fixture) throws Exception {
+        var omitted = new ArrayList<String>();
+        computeFromElements(fixture, KEYS, omitted::add);
+        assertEquals(1, omitted.size(), "one omitted method reported: " + omitted);
+        return omitted.getFirst();
+    }
+
+    /** A private {@code label(Object)}: the erased descriptor of {@link GenericLabel#label(Object)}. */
+    public static class PrivateObjectLabel {
+        @SuppressWarnings("unused")
+        private String label(Object value) { return "private " + value; }
+    }
+
+    /** A private shadow above a public member: the member wins, through {@code super}. */
+    public static class PrivateTopLabel {
+        @SuppressWarnings("unused")
+        private String label(String value) { return "private " + value; }
+    }
+
+    public static class PublicMidLabel extends PrivateTopLabel {
+        public String label(String value) { return "mid " + value; }
+    }
+
+    public static class MemberOverPrivate extends PublicMidLabel implements PlainLabel {
+    }
+
+    /** Two paths to {@code GenericLabel<String>}. */
+    public interface SubLabel extends GenericLabel<String> {
+    }
+
+    public static class TwoPaths extends PrivateObjectLabel implements SubLabel, GenericLabel<String> {
+    }
+
+    /** The parameterisation comes through a generic superclass. */
+    public static class MidLabel<T> extends PrivateObjectLabel implements GenericLabel<T> {
+    }
+
+    public static class ThroughMid extends MidLabel<Integer> {
+    }
+
+    public static class Holder {
+        public static class Item {
+        }
+    }
+
+    /** A wildcard and a nested type as the type argument. */
+    public static class NestedArg extends PrivateObjectLabel
+            implements GenericLabel<java.util.List<? extends Holder.Item>> {
+    }
+
+    @java.lang.annotation.Target(java.lang.annotation.ElementType.TYPE_USE)
+    @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+    public @interface NonEmpty {
+    }
+
+    /** A type-annotated type argument. */
+    public static class AnnotatedArg extends PrivateObjectLabel implements GenericLabel<@NonEmpty String> {
+    }
+
+    @Test
+    @DisplayName("the shadowed-default shapes found by the reviews: both front-ends agree")
+    void reviewedShadowedDefaultShapes() throws Exception {
+        assertEquals(Set.of("label(java.lang.String)"), assertSameMethodSet(MemberOverPrivate.class));
+        var throughGenericLabel = Set.of("label(java.lang.Object)@" + GenericLabel.class.getName());
+        for (var fixture : List.of(TwoPaths.class, ThroughMid.class, NestedArg.class, AnnotatedArg.class)) {
+            assertEquals(throughGenericLabel, assertSameMethodSet(fixture), fixture.getSimpleName());
+        }
+        // The member signatures the source declares: Integer through MidLabel<Integer>, the
+        // erasure of the wildcard for NestedArg.
+        assertEquals(Set.of("label(java.lang.Integer)"), memberSignatures(ThroughMid.class));
+        assertEquals(Set.of("label(java.util.List)"), memberSignatures(NestedArg.class));
+        assertEquals(Set.of("label(java.lang.String)"), memberSignatures(AnnotatedArg.class));
+    }
+
+    /** Inherits class methods naming the package-private {@code HiddenArgument} of another package. */
+    public static class HiddenTakerBean extends io.vidocq.vauban.processor.fixture.colocated.HiddenArgumentTaker {
+        public String own() { return "own"; }
+    }
+
+    /** Inherits the non-shadowed default {@code label(HiddenArgument)}, a member it cannot write (n3a). */
+    public static class HiddenDefaultBean extends io.vidocq.vauban.processor.fixture.colocated.HiddenDefaultBase {
+        public String own() { return "own"; }
+    }
+
+    /** A private nested type of this package in inherited signatures (BUG-20261004-09, n11c). */
+    public static class SecretOuter {
+        private static class Secret {
+        }
+
+        public static class SecretLabeledBase implements GenericLabel<Secret> {
+        }
+
+        public static class SecretTaker {
+            @SuppressWarnings("java:S1172") // the parameter is the signature under test
+            public String take(Secret secret) { return "took"; }
+        }
+    }
+
+    public static class SecretLabeledBean extends SecretOuter.SecretLabeledBase {
+    }
+
+    public static class SecretTakerBean extends SecretOuter.SecretTaker {
+    }
+
+    @Test
+    @DisplayName("members whose signature this package cannot write: same shape, the processor says source cannot render it")
+    void unnameableMemberSignatures() throws Exception {
+        // take(HiddenArgument) names, in its descriptor, a class the subclass may not resolve (JVMS
+        // 5.4.4): both front-ends flag it ("!"), so the emitter loads it by name. give() returns that
+        // class: no subclass of another package can type what the chain returns, so it is left out.
+        var hidden = "io.vidocq.vauban.processor.fixture.colocated.HiddenArgument";
+        assertEquals(Set.of("own()", "take(" + hidden + ")!"), assertSameMethodSet(HiddenTakerBean.class));
+        var omitted = new ArrayList<String>();
+        var unnameable = new ArrayList<String>();
+        computeFromElements(HiddenTakerBean.class, KEYS, omitted::add, unnameable::add);
+        assertEquals(1, omitted.size(), "give() reported: " + omitted);
+        assertTrue(omitted.getFirst().contains("give()") && omitted.getFirst().contains("not intercept"),
+                omitted.getFirst());
+        assertEquals(List.of("take(" + hidden.replace('$', '.') + ")"), unnameable);
+
+        // n3a, n11c: the descriptor erases to label(Object), which any class may resolve, but the
+        // member signature names a type the source cannot write.
+        assertEquals(Set.of("own()", "label(java.lang.Object)"), assertSameMethodSet(HiddenDefaultBean.class));
+        assertEquals(List.of("label(" + hidden + ")"), unnameableOf(HiddenDefaultBean.class));
+        assertEquals(Set.of("label(java.lang.Object)"), assertSameMethodSet(SecretLabeledBean.class));
+        var secret = SecretOuter.class.getCanonicalName() + ".Secret";
+        assertEquals(List.of("label(" + secret + ")"), unnameableOf(SecretLabeledBean.class));
+        // A private nested type of the subclass's own runtime package: accessible to a class file.
+        assertEquals(Set.of("take(" + SecretOuter.class.getName() + "$Secret)"), assertSameMethodSet(SecretTakerBean.class));
+        assertEquals(List.of("take(" + secret + ")"), unnameableOf(SecretTakerBean.class));
+        // Every other fixture renders as source, as before.
+        for (var fixture : List.of(FixtureBean.class, NonPublicBean.class, HiddenArgBean.class, ShadowedBean.class)) {
+            assertEquals(List.of(), unnameableOf(fixture), fixture.getSimpleName());
+        }
+    }
+
+    /** What {@link InterceptedShapeFromElements#from} reports as a member Java source cannot declare. */
+    private List<String> unnameableOf(Class<?> fixture) throws Exception {
+        var unnameable = new ArrayList<String>();
+        computeFromElements(fixture, KEYS, omitted -> {}, unnameable::add);
+        return unnameable;
+    }
+
+    /** The inheritance shapes the client proxy paths are checked on, reused for the intercepted subclass. */
+    static java.util.stream.Stream<Class<?>> proxyFixtures() throws ClassNotFoundException {
+        var proxyTest = "io.vidocq.vauban.processor.codegen.proxy.ClientProxyInheritanceCrossCheckTest$";
+        var fixtures = new ArrayList<Class<?>>();
+        for (var nested : List.of("CleanChild", "HiddenChild", "SamePackageHookChild", "ForeignChild",
+                "WidenedHookChild", "StringEchoChild", "FinalizingCloneable", "DefaultChild")) {
+            fixtures.add(Class.forName(proxyTest + nested));
+        }
+        fixtures.add(io.vidocq.vauban.processor.fixture.colocated.ReturningChild.class);
+        return fixtures.stream();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("proxyFixtures")
+    @DisplayName("fromElements and fromClass agree on the shapes the client proxy paths are checked on (vauban#227)")
+    void sameMethodSetOnTheProxyFixtures(Class<?> fixture) throws Exception {
+        assertSameMethodSet(fixture);
+    }
+
+    // ---- helpers ----
+
+    /** The run-time and the processor front-ends select the same methods of {@code fixture}. */
+    private Set<String> assertSameMethodSet(Class<?> fixture) throws Exception {
+        // Compute the expected set from the runtime Class path
+        Set<String> expectedKeys = runtimeMethodSet(fixture);
+
+        // Compute the actual set from the Elements path (in-process javac)
+        Set<String> actualKeys = computeFromElements(fixture, KEYS);
+
+        assertEquals(expectedKeys, actualKeys,
+                "fromElements and fromClass disagree on interceptable methods.\n" +
+                "fromClass only: " + difference(expectedKeys, actualKeys) + "\n" +
+                "fromElements only: " + difference(actualKeys, expectedKeys));
+        return expectedKeys;
+    }
+
+    /** The run-time front-end's keys, through the same duplicate detection as the processor's. */
+    private static Set<String> runtimeMethodSet(Class<?> fixture) {
+        return KEYS.apply(InterceptorSubclassGenerator.fromClass(fixture));
+    }
+
+    /** The member signatures the processor's source renderer declares the overrides with. */
+    private Set<String> memberSignatures(Class<?> fixture) throws Exception {
+        return computeFromElements(fixture, shape -> shape.methods().stream()
+                .map(InterceptedShapeFromElementsTest::memberSignature)
+                .collect(Collectors.toCollection(LinkedHashSet::new)));
+    }
+
+    /**
+     * The keys of a shape, with a key no front-end ever produces for a signature listed twice —
+     * a subclass would declare it twice — whatever its {@code @owner} suffix, and for two methods
+     * with the same member signature, which the source renderer would declare alike.
+     */
+    private static final java.util.function.Function<InterceptedShape, Set<String>> KEYS = shape -> {
+        Set<String> keys = new LinkedHashSet<>();
+        Set<String> signatures = new LinkedHashSet<>();
+        Set<String> memberSignatures = new LinkedHashSet<>();
+        for (MethodShape m : shape.methods()) {
+            var key = methodKey(m);
+            keys.add(key);
+            if (!signatures.add(key.replaceAll("@.*$", ""))) {
+                keys.add("DUPLICATE SIGNATURE " + key);
+            }
+            if (!memberSignatures.add(memberSignature(m))) {
+                keys.add("DUPLICATE MEMBER SIGNATURE " + memberSignature(m));
+            }
+        }
+        return keys;
+    };
+
+    /** {@code name(memberParams)}: the signature the source renderer declares the override with. */
+    static String memberSignature(MethodShape m) {
+        return m.name() + "(" + m.memberParams().stream().map(TypeRef::toString)
+                .collect(Collectors.joining(",")) + ")";
+    }
+
+    /**
+     * {@code name(params)}, then {@code @<interface>} when the bridge calls that interface's default
+     * explicitly, then {@code !} when its descriptor names a class the subclass may not resolve.
+     */
+    static String methodKey(MethodShape m) {
+        String params = m.params().stream()
+                .map(TypeRef::toString)
+                .collect(Collectors.joining(","));
+        return m.name() + "(" + params + ")" + (m.defaultOwner() != null ? "@" + m.defaultOwner() : "")
+                + (m.namesInaccessibleTypes() ? "!" : "");
+    }
+
+    private static <T> Set<T> difference(Set<T> a, Set<T> b) {
+        var diff = new LinkedHashSet<>(a);
+        diff.removeAll(b);
+        return diff;
+    }
+
+    /**
+     * Spins up an in-process javac compilation over the fixture source to obtain
+     * live {@link TypeElement} and {@link Elements}/{@link Types} utilities, then
+     * calls {@link InterceptedShapeFromElements#from}.
+     */
+    private Set<String> computeFromElements(Class<?> fixture,
+            java.util.function.Function<InterceptedShape, Set<String>> keys) throws Exception {
+        return computeFromElements(fixture, keys, omitted -> {});
+    }
+
+    /** The same, {@code omitted} receiving what the processor would report as left out. */
+    private Set<String> computeFromElements(Class<?> fixture,
+            java.util.function.Function<InterceptedShape, Set<String>> keys,
+            java.util.function.Consumer<String> omitted) throws Exception {
+        return computeFromElements(fixture, keys, omitted, unnameable -> {});
+    }
+
+    /** The same, {@code unnameable} receiving each member the source renderer cannot declare. */
+    private Set<String> computeFromElements(Class<?> fixture,
+            java.util.function.Function<InterceptedShape, Set<String>> keys,
+            java.util.function.Consumer<String> omitted,
+            java.util.function.Consumer<String> unnameable) throws Exception {
+        // We build the source for FixtureBean and FixtureSuper from their class names
+        // by referencing the already-compiled classes on the classpath.
+        // Rather than re-compiling the fixture source, we use a "no-op" annotation
+        // processor that captures the Elements/Types environment, then calls our method.
+
+        var captured = new AtomicReference<Set<String>>();
+
+        // Source to trigger processing: a stub that imports the fixture class
+        String source = "package crosscheck; @CrossCheckTrigger class Trigger {}";
+        String triggerSource = "package crosscheck; import java.lang.annotation.*; @Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE) @interface CrossCheckTrigger {}";
+
+        var compiler = ToolProvider.getSystemJavaCompiler();
+        var diagnostics = new DiagnosticCollector<JavaFileObject>();
+
+        var triggerFile = new SimpleJavaFileObject(
+                URI.create("file:///CrossCheckTrigger.java"), JavaFileObject.Kind.SOURCE) {
+            @Override public CharSequence getCharContent(boolean ignoreEncodingErrors) {
+                return triggerSource;
+            }
+        };
+        var sourceFile = new SimpleJavaFileObject(
+                URI.create("file:///Trigger.java"), JavaFileObject.Kind.SOURCE) {
+            @Override public CharSequence getCharContent(boolean ignoreEncodingErrors) {
+                return source;
+            }
+        };
+
+        var options = List.of(
+                "-proc:only",
+                "--release", "25",
+                "-classpath", buildClasspath());
+
+        try (var fm = compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8)) {
+            var task = compiler.getTask(null, fm, diagnostics, options, null,
+                    List.of(triggerFile, sourceFile));
+
+            task.setProcessors(List.of(new CaptureProcessor(fixture, keys, captured, omitted, unnameable)));
+            task.call();
+        }
+
+        Set<String> result = captured.get();
+        assertNotNull(result, "Processor did not capture the shape — compilation may have failed. " +
+                "Diagnostics: " + diagnostics.getDiagnostics().stream()
+                        .map(d -> d.getKind() + ": " + d.getMessage(null))
+                        .collect(Collectors.joining("; ")));
+        return result;
+    }
+
+    /**
+     * A minimal annotation processor that, when it sees {@code @CrossCheckTrigger},
+     * captures the Elements/Types environment and calls {@link InterceptedShapeFromElements#from}
+     * on the fixture.
+     */
+    private static class CaptureProcessor extends javax.annotation.processing.AbstractProcessor {
+
+        private final Class<?> fixture;
+        private final java.util.function.Function<InterceptedShape, Set<String>> keys;
+        private final AtomicReference<Set<String>> sink;
+        private final java.util.function.Consumer<String> omitted;
+        private final java.util.function.Consumer<String> unnameable;
+
+        CaptureProcessor(Class<?> fixture, java.util.function.Function<InterceptedShape, Set<String>> keys,
+                AtomicReference<Set<String>> sink, java.util.function.Consumer<String> omitted,
+                java.util.function.Consumer<String> unnameable) {
+            this.fixture = fixture;
+            this.keys = keys;
+            this.sink = sink;
+            this.omitted = omitted;
+            this.unnameable = unnameable;
+        }
+
+        @Override
+        public Set<String> getSupportedAnnotationTypes() {
+            return Set.of("crosscheck.CrossCheckTrigger");
+        }
+
+        @Override
+        public SourceVersion getSupportedSourceVersion() {
+            return SourceVersion.latestSupported();
+        }
+
+        @Override
+        public boolean process(Set<? extends javax.lang.model.element.TypeElement> annotations,
+                               javax.annotation.processing.RoundEnvironment roundEnv) {
+            if (roundEnv.processingOver()) return false;
+            Elements elements = processingEnv.getElementUtils();
+            Types types = processingEnv.getTypeUtils();
+
+            // getTypeElement takes the canonical qualified name (dots, no $) for nested types
+            String fixtureBinaryName = fixture.getName().replace('$', '.');
+            TypeElement beanElement = elements.getTypeElement(fixtureBinaryName);
+            if (beanElement == null) {
+                // Fixture not on the compilation classpath — skip
+                return false;
+            }
+
+            sink.set(keys.apply(InterceptedShapeFromElements.from(beanElement, elements, types, omitted, unnameable)));
+            return false;
+        }
+    }
+
+    private static String buildClasspath() {
+        var paths = new LinkedHashSet<String>();
+        var cp = System.getProperty("java.class.path");
+        if (cp != null && !cp.isBlank()) {
+            Collections.addAll(paths, cp.split(File.pathSeparator));
+        }
+        for (Class<?> clazz : List.of(FixtureBean.class, InterceptedShapeFromElements.class,
+                InterceptorSubclassGenerator.class,
+                jakarta.interceptor.AroundInvoke.class, jakarta.inject.Inject.class)) {
+            try {
+                var loc = clazz.getProtectionDomain().getCodeSource().getLocation();
+                if (loc != null) paths.add(new File(loc.toURI()).getPath());
+            } catch (Exception _) {
+                // best-effort
+            }
+        }
+        ModuleLayer.boot().configuration().modules().forEach(rm ->
+                rm.reference().location().ifPresent(uri -> {
+                    if ("file".equals(uri.getScheme())) {
+                        try { paths.add(new File(uri).getPath()); }
+                        catch (Exception _) {
+                            // best effort: the class path entry is simply left out
+                        }
+                    }
+                }));
+        return String.join(File.pathSeparator, paths);
+    }
+}

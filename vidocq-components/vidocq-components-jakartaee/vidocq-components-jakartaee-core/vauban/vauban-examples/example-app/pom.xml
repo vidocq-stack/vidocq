@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.vauban</groupId>
+        <artifactId>vauban-examples</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>example-app</artifactId>
+    <name>Vauban :: Examples :: Application</name>
+    <description>Multi-module CDI application — uses beans from plain and encrypted libraries</description>
+
+    <dependencies>
+        <!-- Plain CDI library -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>example-lib</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Encrypted CDI library — single JAR with clear exports + encrypted internals -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>example-lib-securized</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Vauban CDI container runtime -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+
+        <!-- Encrypted JAR support (auto-detects META-INF/vauban.encrypted) -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-sjar</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.vidocq.vauban</groupId>
+                <artifactId>vauban-maven-plugin</artifactId>
+                <version>${project.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate</id>
+                        <goals><goal>generate</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>dist</id>
+                        <goals><goal>dist</goal></goals>
+                        <configuration>
+                            <mainClass>io.vidocq.vauban.example.app.Main</mainClass>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>io.vidocq.vauban.example.app.Main</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

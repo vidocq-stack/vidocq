@@ -1,0 +1,340 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.vauban</groupId>
+        <artifactId>vauban-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vauban-tck-runner</artifactId>
+    <name>Vauban :: TCK Runner</name>
+    <description>CDI TCK 4.1 runner for Vauban</description>
+
+    <properties>
+        <cdi.tck.version>4.1.0</cdi.tck.version>
+        <arquillian.version>1.8.0.Final</arquillian.version>
+        <testng.version>7.9.0</testng.version>
+        <!-- TCK harness — not a public artifact, never published to Central. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+        <!-- SonarQube: TCK harness (porting package), not production code; its own tests count
+             through vauban-coverage (Vidocq/vidocq#284). -->
+        <sonar.skip>true</sonar.skip>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.jboss.arquillian</groupId>
+                <artifactId>arquillian-bom</artifactId>
+                <version>${arquillian.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Vauban -->
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-indexer</artifactId>
+        </dependency>
+
+        <!-- CDI TCK SPI -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>cdi-tck-api</artifactId>
+            <version>${cdi.tck.version}</version>
+        </dependency>
+
+        <!-- CDI TCK Core Tests -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>cdi-tck-core-impl</artifactId>
+            <version>${cdi.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- CDI TCK Lang Model Tests -->
+        <dependency>
+            <groupId>jakarta.enterprise</groupId>
+            <artifactId>cdi-tck-lang-model</artifactId>
+            <version>${cdi.tck.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Arquillian TestNG -->
+        <dependency>
+            <groupId>org.jboss.arquillian.testng</groupId>
+            <artifactId>arquillian-testng-container</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- TestNG -->
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${testng.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- JUnit Jupiter -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ShrinkWrap -->
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jboss.shrinkwrap</groupId>
+            <artifactId>shrinkwrap-impl-base</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <configuration>
+                    <skipPublishing>true</skipPublishing>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <useModulePath>false</useModulePath>
+                    <!-- Only run our own infrastructure tests by default -->
+                    <includes>
+                        <include>**/*Test.java</include>
+                    </includes>
+                    <!-- Exclude TCK tests (TestNG-based, from dependencies) -->
+                    <dependenciesToScan combine.self="override"/>
+                    <!-- The language model TCK runs under -Ptck only -->
+                    <excludes>
+                        <exclude>**/langmodel/**</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <!-- The language model TCK needs vauban-processor, a dependency of the tck profile alone -->
+                    <testExcludes>
+                        <testExclude>**/langmodel/**</testExclude>
+                    </testExcludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>tck</id>
+            <dependencies>
+                <!-- The language model TCK runs LangModelVerifier in the annotation processor too -->
+                <dependency>
+                    <groupId>io.vidocq.vauban</groupId>
+                    <artifactId>vauban-processor</artifactId>
+                    <scope>test</scope>
+                </dependency>
+                <!-- The launcher of the project's JUnit, for the JUnit Platform provider below -->
+                <dependency>
+                    <groupId>org.junit.platform</groupId>
+                    <artifactId>junit-platform-launcher</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-compiler-plugin</artifactId>
+                        <configuration>
+                            <testExcludes combine.self="override"/>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <dependencies>
+                            <!-- Force TestNG provider for TCK tests -->
+                            <dependency>
+                                <groupId>org.apache.maven.surefire</groupId>
+                                <artifactId>surefire-testng</artifactId>
+                                <version>3.5.5</version>
+                            </dependency>
+                            <!-- and the JUnit Platform for the language model TCK (LangModelTckTest) -->
+                            <dependency>
+                                <groupId>org.apache.maven.surefire</groupId>
+                                <artifactId>surefire-junit-platform</artifactId>
+                                <version>3.5.5</version>
+                            </dependency>
+                        </dependencies>
+                        <configuration>
+                            <skip>false</skip>
+                            <useModulePath>false</useModulePath>
+                            <enableAssertions>true</enableAssertions>
+                            <systemPropertyVariables>
+                                <org.jboss.cdi.tck.cdiCoreMode>true</org.jboss.cdi.tck.cdiCoreMode>
+                                <org.jboss.cdi.tck.spi.Beans>io.vidocq.vauban.tck.VaubanBeans</org.jboss.cdi.tck.spi.Beans>
+                                <org.jboss.cdi.tck.spi.Contexts>io.vidocq.vauban.tck.VaubanContexts</org.jboss.cdi.tck.spi.Contexts>
+                                <org.jboss.cdi.tck.spi.Contextuals>io.vidocq.vauban.tck.VaubanContextuals</org.jboss.cdi.tck.spi.Contextuals>
+                                <org.jboss.cdi.tck.spi.CreationalContexts>io.vidocq.vauban.tck.VaubanCreationalContexts</org.jboss.cdi.tck.spi.CreationalContexts>
+                                <org.jboss.cdi.tck.libraryDirectory>${project.build.directory}/dependency/lib</org.jboss.cdi.tck.libraryDirectory>
+                            </systemPropertyVariables>
+                            <excludedGroups>integration,javaee-full,se,cdi-full</excludedGroups>
+                            <!-- Override the default includes to pick up TCK test classes -->
+                            <includes combine.self="override">
+                                <include>**/*Test.java</include>
+                            </includes>
+                            <dependenciesToScan>
+                                <dependency>jakarta.enterprise:cdi-tck-core-impl</dependency>
+                            </dependenciesToScan>
+                            <excludes combine.self="override"/>
+                            <!-- Name each language model check by its display name in the reports -->
+                            <statelessTestsetReporter implementation=
+"org.apache.maven.plugin.surefire.extensions.junit5.JUnit5Xml30StatelessReporter">
+                                <usePhrasedTestCaseMethodName>true</usePhrasedTestCaseMethodName>
+                            </statelessTestsetReporter>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+            CDI TCK 4.1 signature test: asserts that jakarta.decorator, jakarta.enterprise.**
+            and jakarta.interceptor match the official signature file exactly. Vauban ships the
+            pristine jakarta.enterprise.cdi-api / jakarta.enterprise.lang-model jars (no
+            repackaging), so this checks the untouched official API rather than a Vauban-authored
+            implementation — same principle as the Champollion (JSON-P/JSON-B) and Annotations
+            signature tests. The signature file itself (cdi-api-jdk17.sig) ships inside the
+            official cdi-tck-core-impl artifact, so no separate EFTL download is required.
+        -->
+        <profile>
+            <id>cdi-sigtest</id>
+            <properties>
+                <cdi.sigtest.dir>${project.build.directory}/cdi-sigtest</cdi.sigtest.dir>
+            </properties>
+            <dependencies>
+                <dependency>
+                    <groupId>jakarta.annotation</groupId>
+                    <artifactId>jakarta.annotation-api</artifactId>
+                    <version>3.0.0</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.el</groupId>
+                    <artifactId>jakarta.el-api</artifactId>
+                    <version>6.0.0</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.interceptor</groupId>
+                    <artifactId>jakarta.interceptor-api</artifactId>
+                    <version>2.2.0</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.inject</groupId>
+                    <artifactId>jakarta.inject-api</artifactId>
+                    <version>2.0.1</version>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>jakarta.enterprise.cdi-api</artifactId>
+                    <scope>test</scope>
+                </dependency>
+                <dependency>
+                    <groupId>jakarta.enterprise</groupId>
+                    <artifactId>jakarta.enterprise.lang-model</artifactId>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <executions>
+                            <!-- Explode the pristine API jars so sigtest can walk their .class files. -->
+                            <execution>
+                                <id>unpack-cdi-api-jars</id>
+                                <phase>process-test-resources</phase>
+                                <goals>
+                                    <goal>unpack-dependencies</goal>
+                                </goals>
+                                <configuration>
+                                    <includeArtifactIds>
+                                        jakarta.annotation-api,jakarta.el-api,jakarta.interceptor-api,jakarta.inject-api,jakarta.enterprise.cdi-api,jakarta.enterprise.lang-model
+                                    </includeArtifactIds>
+                                    <outputDirectory>${cdi.sigtest.dir}/classes</outputDirectory>
+                                    <overWriteReleases>true</overWriteReleases>
+                                    <overWriteSnapshots>true</overWriteSnapshots>
+                                </configuration>
+                            </execution>
+                            <!-- Extract the official signature file bundled inside cdi-tck-core-impl. -->
+                            <execution>
+                                <id>unpack-cdi-sigfile</id>
+                                <phase>process-test-resources</phase>
+                                <goals>
+                                    <goal>unpack-dependencies</goal>
+                                </goals>
+                                <configuration>
+                                    <includeArtifactIds>cdi-tck-core-impl</includeArtifactIds>
+                                    <includes>cdi-api-jdk17.sig</includes>
+                                    <outputDirectory>${cdi.sigtest.dir}</outputDirectory>
+                                    <overWriteReleases>true</overWriteReleases>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>jakarta.tck</groupId>
+                        <artifactId>sigtest-maven-plugin</artifactId>
+                        <version>2.6</version>
+                        <executions>
+                            <execution>
+                                <id>cdi-sigtest-check</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                                <configuration>
+                                    <sigfile>${cdi.sigtest.dir}/cdi-api-jdk17.sig</sigfile>
+                                    <classes>${cdi.sigtest.dir}/classes</classes>
+                                    <packages>jakarta.decorator,jakarta.enterprise.**,jakarta.interceptor</packages>
+                                    <release>17</release>
+                                    <report>${project.build.directory}/cdi-sig-report.txt</report>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.vidocq.vauban</groupId>
+        <artifactId>vauban-parent</artifactId>
+        <version>0.4.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>vauban-core</artifactId>
+    <name>Vauban :: Core</name>
+    <description>CDI container runtime</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-indexer</artifactId>
+        </dependency>
+        <dependency>
+            <!-- Non-optional: module-info has a hard `requires io.vidocq.vauban.classloader.spi`,
+                 so it must propagate transitively, otherwise modular consumers fail at runtime
+                 with FindException/IllegalAccessError. -->
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader-spi</artifactId>
+        </dependency>
+        <dependency>
+            <!-- Canonical client-proxy weaving transforms (vauban#24), also consumed by
+                 LoadTimeWeaving; the same artifact is embedded below as the agent jar. -->
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-weaver</artifactId>
+        </dependency>
+        <dependency>
+            <!-- Universal loader engine: ContainerScanner defines sjar classes through it
+                 (source plugins chained with the cdi-proxifier transformer). -->
+            <groupId>io.vidocq.vauban</groupId>
+            <artifactId>vauban-classloader</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <!-- LoadTimeWeaving extracts this embedded copy to a temp file and
+                             dynamically attaches it when the build output was not woven
+                             (IDE builds) — see io.vidocq.vauban.core.weaving. -->
+                        <id>embed-weaver-agent</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>io.vidocq.vauban</groupId>
+                                    <artifactId>vauban-weaver</artifactId>
+                                    <version>${project.version}</version>
+                                    <destFileName>vauban-weaver-agent.jar</destFileName>
+                                </artifactItem>
+                            </artifactItems>
+                            <outputDirectory>${project.build.outputDirectory}/io/vidocq/vauban/core/weaving</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

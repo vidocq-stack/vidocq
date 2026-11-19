@@ -1,0 +1,126 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.event;
+
+import io.vidocq.vauban.core.container.VaubanContainer;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@DisplayName("CDI event system")
+class EventSystemTest {
+
+    // Event payload
+    public static class OrderCreated {
+        public final String orderId;
+
+        public OrderCreated(String orderId) {
+            this.orderId = orderId;
+        }
+    }
+
+    // Observer bean
+    @ApplicationScoped
+    public static class OrderListener {
+        private String lastOrderId;
+
+        public void onOrderCreated(@Observes OrderCreated event) {
+            lastOrderId = event.orderId;
+        }
+
+        public String getLastOrderId() { return lastOrderId; }
+    }
+
+    // Producer bean that fires events
+    @ApplicationScoped
+    public static class OrderService {
+        @Inject
+        Event<OrderCreated> orderEvents;
+
+        public void createOrder(String id) {
+            orderEvents.fire(new OrderCreated(id));
+        }
+    }
+
+    @ApplicationScoped
+    public static class AuditListener {
+        private boolean audited;
+
+        public void onOrder(@Observes OrderCreated event) {
+            audited = true;
+        }
+
+        public boolean isAudited() { return audited; }
+    }
+
+    @Test
+    @DisplayName("an event is received by the observer")
+    void shouldDeliverEventToObserver() {
+        try (var container = VaubanContainer.builder()
+                .addBeanClass(OrderService.class)
+                .addBeanClass(OrderListener.class)
+                .build()) {
+
+            var service = container.select(OrderService.class);
+            var listener = container.select(OrderListener.class);
+
+            service.createOrder("ORD-001");
+
+            assertEquals("ORD-001", listener.getLastOrderId());
+        }
+    }
+
+    @Test
+    @DisplayName("an event without an observer does not cause an error")
+    void shouldNotFailWithoutObserver() {
+        try (var container = VaubanContainer.builder()
+                .addBeanClass(OrderService.class)
+                .build()) {
+
+            var service = container.select(OrderService.class);
+            assertDoesNotThrow(() -> service.createOrder("ORD-002"));
+        }
+    }
+
+    @Test
+    @DisplayName("multiple observers receive the same event")
+    void shouldNotifyMultipleObservers() {
+        try (var container = VaubanContainer.builder()
+                .addBeanClass(OrderService.class)
+                .addBeanClass(OrderListener.class)
+                .addBeanClass(AuditListener.class)
+                .build()) {
+
+            var service = container.select(OrderService.class);
+            var orderListener = container.select(OrderListener.class);
+            var auditListener = container.select(AuditListener.class);
+
+            service.createOrder("ORD-003");
+
+            assertEquals("ORD-003", orderListener.getLastOrderId());
+            assertTrue(auditListener.isAudited());
+        }
+    }
+}

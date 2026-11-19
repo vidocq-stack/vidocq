@@ -1,0 +1,180 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.maven.module;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.jar.JarFile;
+
+public final class ModuleAnalyzer {
+
+    private ModuleAnalyzer() {}
+
+    /**
+     * Analyze a single JAR for Java Modules compatibility.
+     */
+    public static ModuleAnalysisResult analyze(Path jarPath) throws IOException {
+        var fileName = jarPath.getFileName().toString();
+        var issues = new ArrayList<String>();
+        var packages = new LinkedHashSet<String>();
+        String moduleName = null;
+        ModuleType type = ModuleType.UNNAMED;
+
+        try (var jar = new JarFile(jarPath.toFile())) {
+            // Collect all packages
+            boolean hasModuleInfo = collectPackages(jar, packages);
+
+            if (hasModuleInfo) {
+                // Explicit module - read module name from module-info.class using Class-File API
+                type = ModuleType.EXPLICIT;
+                moduleName = readModuleName(jar);
+            } else {
+                // Check MANIFEST.MF for Automatic-Module-Name
+                var autoName = automaticModuleName(jar);
+                if (autoName != null) {
+                    type = ModuleType.AUTOMATIC;
+                    moduleName = autoName;
+                }
+            }
+
+            if (type == ModuleType.UNNAMED) {
+                issues.add("No module-info.class and no Automatic-Module-Name in MANIFEST.MF");
+                // Derive automatic module name from JAR filename (as JDK would)
+                moduleName = deriveAutomaticModuleName(fileName);
+                issues.add("Derived module name from filename: " + moduleName);
+            }
+        }
+
+        return new ModuleAnalysisResult(jarPath, fileName, type, moduleName, packages, issues);
+    }
+
+    /**
+     * Adds to {@code packages} the package of every class of {@code jar}.
+     *
+     * @return whether the jar holds a {@code module-info.class}
+     */
+    private static boolean collectPackages(JarFile jar, Set<String> packages) {
+        var entries = jar.entries();
+        boolean hasModuleInfo = false;
+        while (entries.hasMoreElements()) {
+            var entry = entries.nextElement();
+            if (entry.getName().equals("module-info.class")) {
+                hasModuleInfo = true;
+            } else if (entry.getName().endsWith(".class") && !entry.isDirectory()) {
+                var pkg = packageOfClassEntry(entry.getName());
+                if (pkg != null) {
+                    packages.add(pkg);
+                }
+            }
+        }
+        return hasModuleInfo;
+    }
+
+    /** The package of a class entry such as {@code com/acme/Foo.class}, or {@code null} for the unnamed package. */
+    private static String packageOfClassEntry(String entryName) {
+        var pkg = entryName.replace('/', '.');
+        int lastDot = pkg.lastIndexOf('.');
+        if (lastDot > 0) {
+            pkg = pkg.substring(0, lastDot); // remove .class
+            lastDot = pkg.lastIndexOf('.');
+            if (lastDot > 0) {
+                return pkg.substring(0, lastDot); // remove ClassName
+            }
+        }
+        return null;
+    }
+
+    /** The {@code Automatic-Module-Name} of {@code jar}'s manifest, trimmed, or {@code null} when absent or blank. */
+    private static String automaticModuleName(JarFile jar) throws IOException {
+        var manifest = jar.getManifest();
+        if (manifest == null) {
+            return null;
+        }
+        var autoName = manifest.getMainAttributes().getValue("Automatic-Module-Name");
+        return autoName != null && !autoName.isBlank() ? autoName.trim() : null;
+    }
+
+    /**
+     * Read the module name from module-info.class using the Class-File API.
+     */
+    private static String readModuleName(JarFile jar) throws IOException {
+        var entry = jar.getEntry("module-info.class");
+        if (entry == null) return null;
+
+        try (var is = jar.getInputStream(entry)) {
+            var bytes = is.readAllBytes();
+            var classModel = java.lang.classfile.ClassFile.of().parse(bytes);
+            // The module name is in the Module attribute
+            for (var attr : classModel.attributes()) {
+                if (attr instanceof java.lang.classfile.attribute.ModuleAttribute ma) {
+                    return ma.moduleName().name().stringValue();
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Derive automatic module name from JAR filename, following JDK rules:
+     * - Remove .jar extension
+     * - Remove version suffix (digits, dots, dashes at end)
+     * - Replace non-alphanumeric chars with dots
+     * - Collapse consecutive dots
+     * - Remove leading/trailing dots
+     */
+    static String deriveAutomaticModuleName(String fileName) {
+        var name = fileName;
+        // Remove .jar
+        if (name.endsWith(".jar")) {
+            name = name.substring(0, name.length() - 4);
+        }
+        // Remove version suffix: -1.2.3, -1.0.0-SNAPSHOT etc.
+        name = name.replaceAll("-\\d+([.\\-].*)?$", "");
+        // Replace non-alphanumeric with dots
+        name = name.replaceAll("[^A-Za-z0-9]", ".");
+        // Collapse consecutive dots
+        name = name.replaceAll("\\.{2,}", ".");
+        // Remove the leading and the trailing dot (at most one each once collapsed)
+        if (name.startsWith(".")) {
+            name = name.substring(1);
+        }
+        if (name.endsWith(".")) {
+            name = name.substring(0, name.length() - 1);
+        }
+        return name;
+    }
+
+    /**
+     * Analyze multiple JARs and detect split packages.
+     */
+    public static List<SplitPackage> detectSplitPackages(List<ModuleAnalysisResult> results) {
+        var packageToJars = new LinkedHashMap<String, List<String>>();
+        for (var result : results) {
+            for (var pkg : result.packages()) {
+                packageToJars.computeIfAbsent(pkg, k -> new ArrayList<>()).add(result.fileName());
+            }
+        }
+        return packageToJars.entrySet().stream()
+            .filter(e -> e.getValue().size() > 1)
+            .map(e -> new SplitPackage(e.getKey(), List.copyOf(e.getValue())))
+            .toList();
+    }
+}

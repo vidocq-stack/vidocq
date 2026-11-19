@@ -1,0 +1,111 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.indexer.model;
+
+import java.util.List;
+
+/**
+ * A method of an indexed class.
+ *
+ * @param defaultValue   the default value an annotation type member declares, or {@code null} for a
+ *                       member without one and for every method that is not an annotation member
+ * @param typeParameters the type parameters the method declares ({@code <U>} in {@code <U> U get()}), as its
+ *                       {@code Signature} gives them; empty when the index did not read it (VAU-PERF-008)
+ * @param typeAnnotations the runtime-retained annotations on the types the method declares: its return type, receiver,
+ *                        parameters, {@code throws} clause and type parameters (BUG-20261117-60); {@code null} means
+ *                        none
+ */
+public record MethodInfo(
+        String name,
+        TypeInfo returnType,
+        List<ParameterInfo> parameters,
+        List<TypeInfo> exceptionTypes,
+        int accessFlags,
+        List<AnnotationInfo> annotations,
+        AnnotationValue defaultValue,
+        List<TypeInfo.TypeVariable> typeParameters,
+        List<TypeAnnotationInfo> typeAnnotations
+) {
+
+    public MethodInfo {
+        parameters = List.copyOf(parameters);
+        exceptionTypes = List.copyOf(exceptionTypes);
+        annotations = List.copyOf(annotations);
+        typeParameters = typeParameters == null ? List.of() : List.copyOf(typeParameters);
+        typeAnnotations = TypeAnnotationInfo.canonical(typeAnnotations);
+    }
+
+    /** A method whose types carry no annotation. */
+    public MethodInfo(String name, TypeInfo returnType, List<ParameterInfo> parameters,
+                      List<TypeInfo> exceptionTypes, int accessFlags, List<AnnotationInfo> annotations,
+                      AnnotationValue defaultValue, List<TypeInfo.TypeVariable> typeParameters) {
+        this(name, returnType, parameters, exceptionTypes, accessFlags, annotations, defaultValue, typeParameters,
+                null);
+    }
+
+    /** A method whose type parameters are not recorded. */
+    public MethodInfo(String name, TypeInfo returnType, List<ParameterInfo> parameters,
+                      List<TypeInfo> exceptionTypes, int accessFlags, List<AnnotationInfo> annotations,
+                      AnnotationValue defaultValue) {
+        this(name, returnType, parameters, exceptionTypes, accessFlags, annotations, defaultValue, null);
+    }
+
+    /** A method with no annotation member default. */
+    public MethodInfo(String name, TypeInfo returnType, List<ParameterInfo> parameters,
+                      List<TypeInfo> exceptionTypes, int accessFlags, List<AnnotationInfo> annotations) {
+        this(name, returnType, parameters, exceptionTypes, accessFlags, annotations, null);
+    }
+
+    public boolean isConstructor() {
+        return "<init>".equals(name);
+    }
+
+    public boolean isStaticInitializer() {
+        return "<clinit>".equals(name);
+    }
+
+    public boolean isStatic() {
+        return (accessFlags & 0x0008) != 0;
+    }
+
+    public boolean isAbstract() {
+        return (accessFlags & 0x0400) != 0;
+    }
+
+    public boolean isFinal() {
+        return (accessFlags & 0x0010) != 0;
+    }
+
+    public boolean isPublic() {
+        return (accessFlags & 0x0001) != 0;
+    }
+
+    public boolean isPrivate() {
+        return (accessFlags & 0x0002) != 0;
+    }
+
+    public boolean isProtected() {
+        return (accessFlags & 0x0004) != 0;
+    }
+
+    public boolean isSynthetic() {
+        return (accessFlags & 0x1000) != 0;
+    }
+}

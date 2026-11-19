@@ -1,0 +1,639 @@
+# BENCH.md — vauban
+
+Performance measurement history. Convention: see `../CLAUDE.md` (workspace root).
+
+Every published number (README, commit, post) must point to an entry here.
+
+---
+
+## BENCH-20261118-01 — Classes loaded by the start of the Cassini bench application, before and after loops on the start path (vauban#347)
+
+- **Date**: 2026-11-18
+- **Commit**: base `bd38e952` (origin/main), change `perf/start-loads-less` (this entry's commit). Reference: the
+  2026-10-28 snapshot the bench measured.
+- **JVM**: Temurin 25+36-LTS, `-XX:+UseG1GC -Xms1g -Xmx1g -Dfile.encoding=UTF-8` (the bench's flags), default CDS
+  archive
+- **Hardware**: Apple M5 Max / 18 cores (6 super, 12 performance) / 128 GB RAM
+- **OS**: macOS 27.2.1 (arm64); load average 12 to 13 during the timed campaign (other sessions' builds): the times
+  are indicative only, the class counts do not depend on it
+- **Application**: `bench-http-cdi-rest/apps/vidocq-cassini-snapshot` (two resources, six routes, two build compatible
+  extensions frozen at build), the distributions PERFS measured for 2026-10-28 and 2026-11-18. "main" is the
+  2026-11-18 distribution; "change" is the same distribution with the six Vauban jars (`vauban-api`,
+  `vauban-classloader-spi`, `vauban-classloader`, `vauban-weaver`, `vauban-indexer`, `vauban-core`) of this change.
+  The record of frozen extensions, written by the 2026-11-18 build, is still accepted with the change (the startup
+  report says `cdi extensions  2 extensions frozen at build`): the fingerprint is unchanged.
+- **Exact command**, one fresh JVM per start, the three distributions interleaved, 9 rounds; each start serves the six
+  endpoints once, `jcmd PerfCounter.print` gives `java.cls.loadedClasses` at idle (before traffic) and after traffic,
+  `-Xlog:class+load` attributes each class outside the CDS archive to its jar (a hidden class to its host's jar):
+  ```bash
+  java -XX:+UseG1GC -Xms1g -Xmx1g -Dfile.encoding=UTF-8 -Dvidocq.http.port=<free port> \
+      -Xlog:class+load=info:file=class-load.log:uptime,tags \
+      --module-path <dist>/lib:<dist>/app --add-modules ALL-MODULE-PATH \
+      --module dev.vidocq.bench.todo/dev.vidocq.bench.todo.VidocqCassiniApp
+  ```
+- **Results**, medians of 9 starts (min–max for the times):
+
+  | | 2026-10-28 | main | change |
+  |---|---|---|---|
+  | classes loaded, idle | 1497 | 1898 | 1628 |
+  | classes loaded, after traffic | 1929 | 2269 | 1992 |
+  | `vauban-core` classes / hidden classes | 92 / 120 | 145 / 224 | 146 / 58 |
+  | `vauban-indexer` classes / hidden classes | 33 / 10 | 44 / 51 | 42 / 4 |
+  | `vauban-classloader` classes / hidden classes | 15 / 37 | 17 / 42 | 17 / 1 |
+  | JDK classes outside CDS (`jrt`) | 578 | 702 | 693 |
+  | `Vidocq - Started in`, ms | 168.5 (122.5–253.3) | 224.9 (145.2–487.1) | 184.6 (144.9–267.1) |
+  | process running at `Started`, ms | 299 (214–415) | 362 (248–807) | 309 (245–414) |
+  | RSS idle / after traffic, MB | 112 / 140 | 149 / 153 | 115 / 133 |
+
+  An earlier campaign of 7 rounds the same afternoon (load average about 8.7, before the second pass of loops on the
+  frozen-record path): started in 169.6 / 207.2 / 173.3 ms, idle classes 1497 / 1898 / 1644.
+- **Probe**: `StartLoadsFewClassesModulePathTest` (`vauban-module-it`) counts the hidden classes of Vauban a start of
+  `StartProbe` loads (an application layer, a container, a lookup through the `BeanManager`): 323 on `bd38e952`
+  (291 lambdas, 32 `switch` on types), 58 with the change (28 lambdas, 30 `switch` on types; the 28th is the
+  `computeIfAbsent` the container keeps on its concurrent map of contexts).
+- **Last step of the change** (the built-in beans' factories and the `BeanManager`'s type matching, 10 lambdas on the
+  bench's lookup path), after the campaign above: same command, 3 starts, class counts only (load average 17 to 38,
+  no time quoted): 1620 classes at idle instead of 1628, 1984 after traffic instead of 1992, `vauban-core` 149 classes
+  and 48 hidden classes instead of 146 and 58. The record is still accepted (`cdi extensions  2 extensions frozen at
+  build`, with `-Dvidocq.startup.report=detailed`).
+- **Memory, the +21 MB of RSS the bench saw**: with `-Xmn600m` (no young collection before idle), 3 starts each, eden
+  used at idle is 39 / 51 / 43 MB and RSS 111 / 144 / 117 MB. With `-XX:NativeMemoryTracking=summary`, 2 starts each,
+  the committed native memory differs by the compiler's arena chunks (8 / 14 / 7 MB) and 1 MB of code cache and
+  metaspace; the heap committed is 1 GB in all three. So the growth is not index metadata kept in memory: it is heap
+  pages touched by more allocation during the start (in the bench's flags the 2026-11-18 start crosses its first
+  young collection before idle, the others do not) and the JIT's arenas, both driven by the classes the start spun.
+- **Reading**: the change gives back 270 of the 401 classes the start gained since 2026-10-28, the hidden classes of
+  `vauban-core`, `vauban-indexer` and `vauban-classloader` falling from 317 to 63, and with them the RSS. What
+  remains are the classes of the features added since (`vauban-core` +54, `vauban-indexer` +9) and JDK classes
+  (+115: the Class-File API the indexer now uses for signatures and type annotations, and Vidocq's SHA-256 of
+  `generate.stamp`, tracked on the Vidocq side). The start time follows the class count; with this load average
+  the medians are no better than ±20 ms.
+- **Delta vs previous run**: none, first class count of a start in this file.
+
+---
+
+## BENCH-20261113-01 — Start of a Vidocq application with its extensions run at start or frozen at build (VAU-PERF-005, vauban#288)
+
+- **Date**: 2026-11-13
+- **Commit**: 79f88d26 (`perf/frozen-extensions`) for the series "final"; the series "quiet" ran earlier the same day
+  on the same change before `build()` was split into helper methods (no behaviour changed). Vidocq
+  `perf/frozen-extensions` (`vidocq:generate` calls the freeze), Ravel `fix/config-start-check` and Cervantes
+  `fix/jwt-config-start-check` (their start checks are `Startup` observers, so no extension is left for the start),
+  the other bricks at their 0.4.0-SNAPSHOT of the day.
+- **JVM**: Temurin 25+36-LTS, default flags
+- **Hardware**: Apple M5 Max / 18 cores (6 performance, 12 efficiency) / 128 GB RAM
+- **OS**: macOS 27.2.1 (arm64)
+- **Application**: `vidocq create --name bceapp -x cassini-rest`, then `vidocq extension add ravel-config knock-health
+  dirac-metrics grimm-openapi cervantes-jwt cyrano-rest-client heisenberg-fault-tolerance humboldt-telemetry
+  mansart-transactions` (ten build compatible extensions, 52 bean classes), a resource with `@Counted` and a required
+  `@ConfigProperty`, a `@Retry` bean and an injected `@RegisterRestClient` interface. Packaged twice with
+  `./mvnw package`: as it is (the record is written: "froze 10 build compatible extension(s)") and with
+  `-Dvidocq.freezeExtensions=false` (no record: the ten extensions run at start).
+- **Exact command**, one fresh JVM per start, the time taken from the launch of the process to the line
+  `Vidocq - Started in`, 15 starts per series, the two distributions one after the other, three rounds:
+  ```bash
+  java -Dbce.required=ok --module-path <dist>/lib --add-modules ALL-MODULE-PATH -Dvidocq.app.layer=all \
+      -Dvidocq.app.path=<dist>/app -Dvidocq.http.port=18480 -Dotel.sdk.disabled=true \
+      --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq
+  ```
+- **Results**, wall time in ms, median (min–max) of 15 starts:
+
+  | Series | Round | Extensions run at start | Extensions frozen at build |
+  |---|---|---|---|
+  | quiet (load average 4.3) | 1 | 422 (415–448) | 391 (364–396) |
+  | quiet | 2 | 430 (403–522) | 400 (365–435) |
+  | quiet | 3 | 431 (406–477) | 389 (372–432) |
+  | final, 79f88d26 (load average 7.5, another session's virtual machine at 4 cores) | 1 | 547 (424–606) | 478 (421–562) |
+  | final | 2 | 500 (441–548) | 480 (389–537) |
+  | final | 3 | 561 (473–597) | 463 (390–545) |
+
+  The `build` phase of the startup report, one start each on 79f88d26: 227 ms with the extensions run at start,
+  172 ms frozen (`cdi extensions  10 extensions frozen at build`); an earlier pair read 192 ms and 148 ms.
+
+  Raw series "quiet":
+  ```
+  run at start  416 415 418 418 419 421 423 426 448 418 423 426 422 423 426
+  frozen        364 393 394 389 393 385 393 396 393 389 383 393 391 391 390
+  run at start  403 425 423 403 430 416 433 440 420 430 430 430 406 431 522
+  frozen        386 400 408 410 410 401 394 395 365 395 435 409 420 397 392
+  run at start  433 406 453 431 440 423 466 425 425 477 469 432 425 418 421
+  frozen        372 404 392 388 395 385 386 381 389 373 387 412 432 398 390
+  ```
+- **Before the change**, the same application with a `vauban-core` that timed the cycle (throwaway instrumentation,
+  never committed), one start: `@Discovery` 15 ms, `@Enhancement` 30 ms, `@Registration`, `@Synthesis` and
+  `@Validation` 17 ms, 62 ms in all for 10 extensions and 42 classes of unmarked archives. With the two extensions
+  that still asked `ExtensionPhase.isBuildTime()` then (Ravel, Cervantes) run at start and the eight others frozen:
+  median 400, 402 and 428 ms in the three rounds of the series "quiet".
+- **Reading**: frozen, the start is 30 to 40 ms shorter in the quiet series, about 8 % of 425 ms; the gain is
+  smaller than the 62 ms of the cycle because the start still loads the record and the classes the cycle would
+  have loaded. The series "final" has the same sign and too much noise to quote a figure from.
+- **Delta vs previous run**: none, first measurement of a start time in this file.
+
+---
+
+## BENCH-20261028-07 — Generated code hot paths after the build-path deduplication (vauban#227)
+
+- **Date**: 2026-10-28
+- **Commit**: f6c809c4 (`main`, after #237–#245: one rule per proxy decision for every build path, no `_Factory`
+  classes, `VaubanProcessor` split); A/B baseline ac5ca033 (`main` before the series, after BENCH-20261028-06)
+- **JVM**: Temurin 25+36-LTS, default flags
+- **Hardware**: Apple M5 Max / 18 cores (6 performance, 12 efficiency) / 128 GB RAM
+- **OS**: macOS 27.0.1 (arm64)
+- **Exact command**:
+  ```bash
+  ./mvnw -ntp clean install -DskipTests        # Maven 3.9.16
+  java -jar vauban-bench/target/benchmarks.jar 'GeneratedCodeBenchmark|QualifierResolutionBenchmark.interceptedCall' \
+      -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
+  # A/B, each jar built from its commit, run one after the other:
+  java -jar vauban-bench/target/benchmarks.jar \
+      'GeneratedCodeBenchmark.(interceptedCall|proxiedInterceptedCall|clientProxyCall)$' -f 5 -wi 5 -i 5 -w 2s -r 3s
+  ```
+- **Results** (f6c809c4):
+  ```
+  Benchmark                                                              Mode  Cnt     Score     Error   Units
+  GeneratedCodeBenchmark.bytecodeInterceptedCreation                     avgt   15  2542,018 ±  38,474   ns/op
+  GeneratedCodeBenchmark.bytecodeInterceptedCreation:gc.alloc.rate.norm  avgt   15  8386,702 ±  30,093    B/op
+  GeneratedCodeBenchmark.clientProxyCall                                 avgt   15     5,032 ±   0,024   ns/op
+  GeneratedCodeBenchmark.clientProxyCall:gc.alloc.rate.norm              avgt   15    ≈ 10⁻⁴              B/op
+  GeneratedCodeBenchmark.interceptedCall                                 avgt   15    12,089 ±   0,099   ns/op
+  GeneratedCodeBenchmark.interceptedCall:gc.alloc.rate.norm              avgt   15    96,000 ±   0,001    B/op
+  GeneratedCodeBenchmark.interceptedCreation                             avgt   15  2487,490 ±  23,793   ns/op
+  GeneratedCodeBenchmark.interceptedCreation:gc.alloc.rate.norm          avgt   15  7845,362 ±   8,346    B/op
+  GeneratedCodeBenchmark.plainCall                                       avgt   15     0,308 ±   0,018   ns/op
+  GeneratedCodeBenchmark.plainCall:gc.alloc.rate.norm                    avgt   15    ≈ 10⁻⁶              B/op
+  GeneratedCodeBenchmark.proxiedInterceptedCall                          avgt   15    14,213 ±   0,103   ns/op
+  GeneratedCodeBenchmark.proxiedInterceptedCall:gc.alloc.rate.norm       avgt   15    96,000 ±   0,001    B/op
+  QualifierResolutionBenchmark.interceptedCall                           avgt   15    14,083 ±   0,286   ns/op
+  QualifierResolutionBenchmark.interceptedCall:gc.alloc.rate.norm        avgt   15    96,000 ±   0,001    B/op
+  ```
+  A/B, 5 forks:
+  ```
+  Benchmark                                      ac5ca033 (before)   f6c809c4 (after)
+  GeneratedCodeBenchmark.clientProxyCall          5,225 ± 0,081       5,067 ± 0,045   ns/op
+  GeneratedCodeBenchmark.interceptedCall         12,109 ± 0,088      12,086 ± 0,101   ns/op
+  GeneratedCodeBenchmark.proxiedInterceptedCall  14,705 ± 0,449      14,212 ± 0,491   ns/op
+  ```
+- **Comparison with the previous runs** (BENCH-20261028-04 for the calls, BENCH-20261028-06 for the creations):
+
+  | Benchmark | before | after | time | allocation |
+  |---|---|---|---|---|
+  | `bytecodeInterceptedCreation` | 2715 ns, 8437 B/op | 2542 ns, 8387 B/op | −6 % | within error |
+  | `interceptedCreation` | 2610 ns, 7870 B/op | 2487 ns, 7845 B/op | −5 % | within error |
+  | `clientProxyCall` | 5.10 ns | 5.03 ns | within error | — |
+  | `proxiedInterceptedCall` | 15.38 ns, 96 B/op | 14.21 ns, 96 B/op | −8 % | unchanged |
+  | `QualifierResolutionBenchmark.interceptedCall` | 15.22 ns, 96 B/op | 14.08 ns, 96 B/op | −7 % | unchanged |
+  | `interceptedCall` | 11.56 ns, 96 B/op | 12.09 ns, 96 B/op | +5 % | unchanged |
+  | `plainCall` | 0.31 ns | 0.31 ns | within error | — |
+
+- **Notes**: no regression from the series. The A/B on `main` before and after it puts the three calls within
+  error of each other. The deduplication changes which methods a proxy forwards on a path that disagreed, not how a
+  forwarded call runs; the `_Factory` classes were never loaded. The `interceptedCall` gap with
+  BENCH-20261028-04 predates the series: that run measured the branch `perf/227-intercepted-call-allocations`
+  (031c93c0), and `main` was already at 12.1 ns at ac5ca033. The creation gains are not attributed: they sit
+  between two `main` states several merges apart.
+
+---
+
+## BENCH-20261028-06 — Classes emitted as bytecode instantiated through a cached constructor handle (vauban#227)
+
+- **Date**: 2026-10-28
+- **Commit**: branch `perf/227-construct-handle-cache` on a862f8f0: the provider calls one holder class `$$Ctor<n>`
+  per constructor, whose `MethodHandle` is looked up once, instead of `$$construct` (`Class.forName`,
+  `findConstructor`, `invokeWithArguments` on every call)
+- **JVM**: Temurin 25+36-LTS, default flags
+- **Hardware**: Apple M5 Max / 18 cores (6 performance, 12 efficiency) / 128 GB RAM
+- **OS**: macOS 27.0.1 (arm64)
+- **Exact command**:
+  ```bash
+  ./mvnw -ntp clean install -DskipTests        # Maven 3.9.16
+  java -jar vauban-bench/target/benchmarks.jar 'GeneratedCodeBenchmark.*Creation' \
+      -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
+  ```
+- **Results**:
+  ```
+  Benchmark                                                              Mode  Cnt     Score    Error   Units
+  GeneratedCodeBenchmark.bytecodeInterceptedCreation                     avgt   15  2715,231 ± 25,821   ns/op
+  GeneratedCodeBenchmark.bytecodeInterceptedCreation:gc.alloc.rate.norm  avgt   15  8436,706 ± 32,035    B/op
+  GeneratedCodeBenchmark.interceptedCreation                             avgt   15  2609,686 ± 30,743   ns/op
+  GeneratedCodeBenchmark.interceptedCreation:gc.alloc.rate.norm          avgt   15  7870,085 ± 55,124    B/op
+  ```
+- **Comparison with the previous run** (BENCH-20261028-05, same day, same machine, same command):
+
+  | Benchmark | before | after | time | allocation |
+  |---|---|---|---|---|
+  | `bytecodeInterceptedCreation` | 3624 ns, 9208 B/op | 2715 ns, 8437 B/op | −25 % | −8 % |
+  | `interceptedCreation` | 2648 ns, 7923 B/op | 2610 ns, 7870 B/op | within error | within error |
+
+- **Notes**: the extra cost of a class emitted as bytecode over one the provider creates with `new` falls from
+  about 980 ns to about 105 ns per creation. The rest is the `invokeExact` through a handle adapted to
+  `(Object…)Object`, against a direct `new`.
+
+---
+
+## BENCH-20261028-05 — Reference before the constructor handle cache (vauban#227)
+
+- **Date**: 2026-10-28
+- **Commit**: a862f8f0 (branch `perf/227-construct-handle-cache`: `main` 68ce1820 plus the
+  `bytecodeInterceptedCreation` benchmark, whose bean `AuditedHiddenTally` inherits a method its package cannot
+  name, so its intercepted subclass is emitted as bytecode, BUG-20261004-09)
+- **JVM / Hardware / OS**: as BENCH-20261028-06
+- **Exact command**: as BENCH-20261028-06
+- **Results**:
+  ```
+  Benchmark                                                              Mode  Cnt     Score    Error   Units
+  GeneratedCodeBenchmark.bytecodeInterceptedCreation                     avgt   15  3624,156 ± 97,056   ns/op
+  GeneratedCodeBenchmark.bytecodeInterceptedCreation:gc.alloc.rate.norm  avgt   15  9208,061 ± 144,565   B/op
+  GeneratedCodeBenchmark.interceptedCreation                             avgt   15  2647,992 ± 32,049   ns/op
+  GeneratedCodeBenchmark.interceptedCreation:gc.alloc.rate.norm          avgt   15  7922,697 ± 134,323   B/op
+  ```
+- **Comparison with the previous run**: first run of `bytecodeInterceptedCreation`. `interceptedCreation` 2446 ns
+  in BENCH-20261028-04, on another branch.
+
+---
+
+## BENCH-20261028-04 — Intercepted call handed to `InterceptorManager.intercept` (vauban#227)
+
+- **Date**: 2026-10-28
+- **Commit**: 031c93c0 (branch `perf/227-intercepted-call-allocations`): one `intercept` call per generated
+  override, target called directly when the chain is empty, invocation context that keeps the override's
+  argument array instead of copying it, shared `NO_ARGUMENTS`, context-data map created on first use
+- **JVM**: Temurin 25+36-LTS, default flags
+- **Hardware**: Apple M5 Max / 18 cores (6 performance, 12 efficiency) / 128 GB RAM
+- **OS**: macOS 27.0.1 (arm64)
+- **Exact command**:
+  ```bash
+  ./mvnw -ntp clean install -DskipTests        # Maven 3.9.16
+  java -jar vauban-bench/target/benchmarks.jar 'GeneratedCodeBenchmark|QualifierResolutionBenchmark.interceptedCall' \
+      -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
+  ```
+- **Results**:
+  ```
+  Benchmark                                                         Mode  Cnt     Score     Error   Units
+  GeneratedCodeBenchmark.clientProxyCall                            avgt   15     5,098 ±   0,052   ns/op
+  GeneratedCodeBenchmark.clientProxyCall:gc.alloc.rate.norm         avgt   15    ≈ 10⁻⁴              B/op
+  GeneratedCodeBenchmark.interceptedCall                            avgt   15    11,558 ±   0,110   ns/op
+  GeneratedCodeBenchmark.interceptedCall:gc.alloc.rate.norm         avgt   15    96,000 ±   0,001    B/op
+  GeneratedCodeBenchmark.interceptedCreation                        avgt   15  2445,835 ±  46,112   ns/op
+  GeneratedCodeBenchmark.interceptedCreation:gc.alloc.rate.norm     avgt   15  7032,040 ± 211,844    B/op
+  GeneratedCodeBenchmark.plainCall                                  avgt   15     0,306 ±   0,003   ns/op
+  GeneratedCodeBenchmark.plainCall:gc.alloc.rate.norm               avgt   15    ≈ 10⁻⁶              B/op
+  GeneratedCodeBenchmark.proxiedInterceptedCall                     avgt   15    15,377 ±   0,453   ns/op
+  GeneratedCodeBenchmark.proxiedInterceptedCall:gc.alloc.rate.norm  avgt   15    96,000 ±   0,001    B/op
+  QualifierResolutionBenchmark.interceptedCall                      avgt   15    15,216 ±   0,326   ns/op
+  QualifierResolutionBenchmark.interceptedCall:gc.alloc.rate.norm   avgt   15    96,000 ±   0,001    B/op
+  ```
+- **Comparison with the previous run** (BENCH-20261028-03, same day, same machine, same command):
+
+  | Benchmark | before | after | time | allocation |
+  |---|---|---|---|---|
+  | `interceptedCall` | 14.29 ns, 144 B/op | 11.56 ns, 96 B/op | −19 % | −33 % |
+  | `proxiedInterceptedCall` | 16.78 ns, 144 B/op | 15.38 ns, 96 B/op | −8 % | −33 % |
+  | `QualifierResolutionBenchmark.interceptedCall` | 15.92 ns, 144 B/op | 15.22 ns, 96 B/op | −4 % | −33 % |
+  | `interceptedCreation` | 2434 ns | 2446 ns | within error | within error |
+  | `clientProxyCall`, `plainCall` | 5.06 / 0.31 ns | 5.10 / 0.31 ns | within error | — |
+
+- **Notes**: the 48 B gone are the eager context-data `HashMap` and the copy of the argument array. What
+  remains (96 B/op with one interceptor) is the invocation context itself, the `ChainedContext` handed to the
+  interceptor, and the varargs array of `Method.invoke` that calls the `@AroundInvoke` method — the last one
+  goes with vauban#109 (interceptor methods called through generated code).
+
+## BENCH-20261028-03 — Reference before `InterceptorManager.intercept` (vauban#227)
+
+- **Date**: 2026-10-28
+- **Commit**: b3275e87 (`main`, after BENCH-20261028-02 and the VAU-INT-010 merge)
+- **JVM / Hardware / OS**: as BENCH-20261028-04
+- **Exact command**: as BENCH-20261028-04
+- **Results**:
+  ```
+  Benchmark                                                         Mode  Cnt     Score     Error   Units
+  GeneratedCodeBenchmark.clientProxyCall                            avgt   15     5,059 ±   0,023   ns/op
+  GeneratedCodeBenchmark.clientProxyCall:gc.alloc.rate.norm         avgt   15    ≈ 10⁻⁴              B/op
+  GeneratedCodeBenchmark.interceptedCall                            avgt   15    14,287 ±   0,065   ns/op
+  GeneratedCodeBenchmark.interceptedCall:gc.alloc.rate.norm         avgt   15   144,000 ±   0,001    B/op
+  GeneratedCodeBenchmark.interceptedCreation                        avgt   15  2433,543 ±  24,438   ns/op
+  GeneratedCodeBenchmark.interceptedCreation:gc.alloc.rate.norm     avgt   15  7125,373 ± 160,075    B/op
+  GeneratedCodeBenchmark.plainCall                                  avgt   15     0,305 ±   0,003   ns/op
+  GeneratedCodeBenchmark.plainCall:gc.alloc.rate.norm               avgt   15    ≈ 10⁻⁶              B/op
+  GeneratedCodeBenchmark.proxiedInterceptedCall                     avgt   15    16,783 ±   0,585   ns/op
+  GeneratedCodeBenchmark.proxiedInterceptedCall:gc.alloc.rate.norm  avgt   15   144,000 ±   0,001    B/op
+  QualifierResolutionBenchmark.interceptedCall                      avgt   15    15,922 ±   0,249   ns/op
+  QualifierResolutionBenchmark.interceptedCall:gc.alloc.rate.norm   avgt   15   144,000 ±   0,001    B/op
+  ```
+- **Comparison with the previous run** (BENCH-20261028-02): calls within error (`interceptedCall` 14.36 →
+  14.29 ns, 144 B/op unchanged); `interceptedCreation` 2560 → 2434 ns (−5 %), not attributed: `main` also
+  moved (VAU-INT-010).
+
+## BENCH-20261028-02 — Generated code hot paths after vauban#227 (scope, callbacks, chain per instance)
+
+- **Date**: 2026-10-28
+- **Commit**: 2e450a20 (branch `perf/227-generated-hot-path`): scope resolved once (BUG-20261028-01),
+  interceptor callbacks read once per class, bridge `Method` in a `static final` field and chain kept
+  per bean instance (`InterceptorManager.chainFor`), no per-call `shareInstances`
+- **JVM**: Temurin 25+36-LTS, default flags
+- **Hardware**: Apple M5 Max / 18 cores (6 performance, 12 efficiency) / 128 GB RAM
+- **OS**: macOS 27.0.1 (arm64)
+- **Exact command**: the same as BENCH-20261028-01, then the older suite
+  ```bash
+  ./mvnw -ntp clean install -DskipTests        # Maven 3.9.16
+  java -jar vauban-bench/target/benchmarks.jar GeneratedCodeBenchmark -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
+  java -jar vauban-bench/target/benchmarks.jar QualifierResolutionBenchmark -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
+  ```
+- **Results**:
+  ```
+  Benchmark                                                           Mode  Cnt      Score     Error   Units
+  GeneratedCodeBenchmark.clientProxyCall                              avgt   15      5,103 ±   0,019   ns/op
+  GeneratedCodeBenchmark.clientProxyCall:gc.alloc.rate.norm           avgt   15     ≈ 10⁻⁴              B/op
+  GeneratedCodeBenchmark.interceptedCall                              avgt   15     14,363 ±   0,068   ns/op
+  GeneratedCodeBenchmark.interceptedCall:gc.alloc.rate.norm           avgt   15    144,000 ±   0,001    B/op
+  GeneratedCodeBenchmark.interceptedCreation                          avgt   15   2560,144 ±  23,939   ns/op
+  GeneratedCodeBenchmark.interceptedCreation:gc.alloc.rate.norm       avgt   15   7368,416 ±  37,329    B/op
+  GeneratedCodeBenchmark.plainCall                                    avgt   15      0,334 ±   0,032   ns/op
+  GeneratedCodeBenchmark.plainCall:gc.alloc.rate.norm                 avgt   15     ≈ 10⁻⁶              B/op
+  GeneratedCodeBenchmark.proxiedInterceptedCall                       avgt   15     16,313 ±   0,561   ns/op
+  GeneratedCodeBenchmark.proxiedInterceptedCall:gc.alloc.rate.norm    avgt   15    144,000 ±   0,001    B/op
+  QualifierResolutionBenchmark.dependentCreation                      avgt   15  10449,082 ±  85,177   ns/op
+  QualifierResolutionBenchmark.dependentCreation:gc.alloc.rate.norm   avgt   15  36184,111 ± 127,061    B/op
+  QualifierResolutionBenchmark.interceptedCall                        avgt   15     16,483 ±   0,486   ns/op
+  QualifierResolutionBenchmark.interceptedCall:gc.alloc.rate.norm     avgt   15    144,000 ±   0,001    B/op
+  QualifierResolutionBenchmark.programmaticLookup                     avgt   15   1189,138 ±  17,363   ns/op
+  QualifierResolutionBenchmark.programmaticLookup:gc.alloc.rate.norm  avgt   15   7074,730 ±  30,118    B/op
+  QualifierResolutionBenchmark.qualifiedEvent                         avgt   15   3576,387 ±  78,184   ns/op
+  QualifierResolutionBenchmark.qualifiedEvent:gc.alloc.rate.norm      avgt   15   7861,363 ±  68,699    B/op
+  ```
+- **Comparison with the previous run** (BENCH-20261028-01, same day, same machine, `main` 0ea96dfe):
+
+  | Benchmark | before | after | time | allocation |
+  |---|---|---|---|---|
+  | `clientProxyCall` | 276.2 ns, 0 B | 5.10 ns, 0 B | **54× faster** | flat |
+  | `proxiedInterceptedCall` | 381.9 ns, 768 B | 16.3 ns, 144 B | **23.4× faster** | **−81 %** |
+  | `interceptedCall` | 84.4 ns, 768 B | 14.4 ns, 144 B | **5.9× faster** | **−81 %** |
+  | `interceptedCreation` | 3540 ns, 7630 B | 2560 ns, 7368 B | −28 % | −3.4 % |
+  | `plainCall` | 0.337 ns | 0.334 ns | flat | flat |
+
+- **`QualifierResolutionBenchmark`**: no run of it on 0ea96dfe, so only its `interceptedCall`, the
+  same path as `proxiedInterceptedCall` above, is attributed to this change: 360 ns, 768 B/op in
+  BENCH-20260914-04 → 16.5 ns, 144 B/op. Its other three figures also moved since BENCH-20260914-04
+  (`dependentCreation` −23 %, `programmaticLookup` −36 %, `qualifiedEvent` −21 %), but six weeks of
+  `main` lie between the two runs: those deltas are recorded, not claimed for vauban#227.
+- **Notes**:
+  - Load average 4.4 to 5.2 during the `GeneratedCodeBenchmark` run, 3.5 to 4.1 after it (other
+    sessions on the machine). The error bars stay under 3.5 % of each score.
+  - The client-proxy gain is BUG-20261028-01 alone (a `Class.forName` per call, about 95 % of the
+    samples). The interceptor gains come in two steps of one branch: reading the callbacks once took
+    `interceptedCall` from 84 to about 71 ns (1-fork check, not recorded as a figure); keeping the
+    chain per instance and the bridge `Method` static did the rest.
+  - 144 B/op left on an intercepted call: the `Object[]` of arguments, the boxed `Long`, and the
+    `VaubanInvocationContext` with its `ChainedContext`. An empty-chain fast path and a non-boxing
+    invocation are later steps of vauban#227.
+
+---
+
+## BENCH-20261028-01 — Generated code hot paths, reference before vauban#227
+
+- **Date**: 2026-10-28
+- **Commit**: 0ea96dfe (`main`) plus the new `GeneratedCodeBenchmark` and its beans (`Plain`,
+  `Counter`, `AuditedTally`), branch `perf/227-generated-hot-path`; no production code changed
+- **JVM**: Temurin 25+36-LTS, default flags
+- **Hardware**: Apple M5 Max / 18 cores (6 performance, 12 efficiency) / 128 GB RAM
+- **OS**: macOS 27.0.1 (arm64)
+- **Exact command**:
+  ```bash
+  ./mvnw -ntp clean install -DskipTests        # Maven 3.9.16
+  java -jar vauban-bench/target/benchmarks.jar GeneratedCodeBenchmark -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
+  ```
+- **Results**:
+  ```
+  Benchmark                                                         Mode  Cnt     Score     Error   Units
+  GeneratedCodeBenchmark.clientProxyCall                            avgt   15   276,248 ±   6,184   ns/op
+  GeneratedCodeBenchmark.clientProxyCall:gc.alloc.rate.norm         avgt   15     0,002 ±   0,004    B/op
+  GeneratedCodeBenchmark.interceptedCall                            avgt   15    84,402 ±   2,903   ns/op
+  GeneratedCodeBenchmark.interceptedCall:gc.alloc.rate.norm         avgt   15   768,001 ±   0,001    B/op
+  GeneratedCodeBenchmark.interceptedCreation                        avgt   15  3540,006 ±  61,678   ns/op
+  GeneratedCodeBenchmark.interceptedCreation:gc.alloc.rate.norm     avgt   15  7630,164 ± 223,345    B/op
+  GeneratedCodeBenchmark.plainCall                                  avgt   15     0,337 ±   0,040   ns/op
+  GeneratedCodeBenchmark.plainCall:gc.alloc.rate.norm               avgt   15    ≈ 10⁻⁶              B/op
+  GeneratedCodeBenchmark.proxiedInterceptedCall                     avgt   15   381,935 ±  11,139   ns/op
+  GeneratedCodeBenchmark.proxiedInterceptedCall:gc.alloc.rate.norm  avgt   15   768,003 ±   0,005    B/op
+  ```
+- **Comparison with the previous run**: first run of this benchmark (new class). The closest earlier
+  figure, `QualifierResolutionBenchmark.interceptedCall` (BENCH-20260914-04: 360 ns, 768 B/op), is
+  the same path as `proxiedInterceptedCall` here (an `@ApplicationScoped` bean with one interceptor):
+  382 ns, 768 B/op, consistent with it.
+- **Notes**:
+  - What each benchmark runs: `plainCall` a `@Dependent` bean with nothing generated around it (the
+    floor); `clientProxyCall` an `@ApplicationScoped` bean through its `_ClientProxy` only;
+    `interceptedCall` a `@Dependent` bean through its `$$Intercepted` subclass only;
+    `proxiedInterceptedCall` both; `interceptedCreation` creating and destroying an intercepted
+    `@Dependent` bean. `boot()` checks each path runs the generated class it names.
+  - **The client proxy, not the interceptor, is the larger cost**: 276 ns for a call that does
+    nothing, against 84 ns for an interceptor chain. A stack profile (`-prof stack`, 1 fork) puts
+    about 95 % of the runnable samples in `Class.forName`: the proxy's delegate calls
+    `ManagedBean.getScope()` on every call, and `getScope()` loads the scope annotation class by name
+    each time. 0 B/op: the `CreationalContextImpl` the delegate allocates per call is removed by
+    escape analysis.
+  - `interceptedCall` allocates 768 B per call: the `Object[]` of arguments, the boxed argument, the
+    chain list and its invocations, and the `VaubanInvocationContext`; the generated override also
+    runs `getDeclaredMethod` on every call (vauban#227, finding 1).
+  - Load was not recorded for this run; read differences under about 3 % as noise.
+
+---
+
+## BENCH-20260914-04 — Interceptor bindings on keys, chain worked out once (vauban#70, PR 5)
+
+- **Date**: 2026-09-14
+- **Commit**: bbb3c0b (branch `pr/ybl/70-interceptor-binding-keys`)
+- **JVM**: Temurin 25+36-LTS, default flags
+- **Hardware**: Apple M5 Max / 18 cores (6 performance, 12 efficiency) / 128 GB RAM
+- **OS**: macOS 26.6.2 (arm64)
+- **Exact command**: the same as BENCH-20260914-01
+  ```bash
+  mvn -ntp clean install        # Maven 3.9.16
+  java -jar vauban-bench/target/benchmarks.jar -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
+  ```
+- **Results**:
+  ```
+  Benchmark                                                           Mode  Cnt      Score     Error   Units
+  QualifierResolutionBenchmark.dependentCreation                      avgt   15  13626,882 ± 264,948   ns/op
+  QualifierResolutionBenchmark.dependentCreation:gc.alloc.rate.norm   avgt   15  34565,499 ±  87,081    B/op
+  QualifierResolutionBenchmark.interceptedCall                        avgt   15    360,237 ±  15,027   ns/op
+  QualifierResolutionBenchmark.interceptedCall:gc.alloc.rate.norm     avgt   15    768,003 ±   0,005    B/op
+  QualifierResolutionBenchmark.programmaticLookup                     avgt   15   1868,549 ±  30,491   ns/op
+  QualifierResolutionBenchmark.programmaticLookup:gc.alloc.rate.norm  avgt   15   6965,351 ±  16,693    B/op
+  QualifierResolutionBenchmark.qualifiedEvent                         avgt   15   4512,423 ± 115,323   ns/op
+  QualifierResolutionBenchmark.qualifiedEvent:gc.alloc.rate.norm      avgt   15   7792,042 ±  80,489    B/op
+  ```
+- **Comparison with the previous run** (BENCH-20260914-03, after PR 4d):
+
+  | Benchmark | after 4d | after 5 | time | allocation |
+  |---|---|---|---|---|
+  | `interceptedCall` | 691 ns, 3309 B | 360 ns, 768 B | **1.92× faster** | **−77 %** |
+  | `qualifiedEvent` | 4700 ns, 7776 B | 4512 ns, 7792 B | −4.0 % | flat |
+  | `dependentCreation` | 14015 ns, 34539 B | 13627 ns, 34565 B | −2.8 % | flat |
+  | `programmaticLookup` | 1897 ns, 7016 B | 1869 ns, 6965 B | −1.5 % | −0.7 % |
+
+- **Comparison with the baseline** (BENCH-20260914-01, before #70 — the whole campaign):
+
+  | Benchmark | before #70 | after 5 | time | allocation |
+  |---|---|---|---|---|
+  | `dependentCreation` | 41561 ns, 65245 B | 13627 ns, 34565 B | **3.05× faster** | **−47 %** |
+  | `programmaticLookup` | 6590 ns, 11691 B | 1869 ns, 6965 B | **3.53× faster** | **−40 %** |
+  | `interceptedCall` | 651 ns, 3251 B | 360 ns, 768 B | **1.81× faster** | **−76 %** |
+  | `qualifiedEvent` | 4673 ns, 6941 B | 4512 ns, 7792 B | −3.4 % | +12 % |
+
+- **Notes**:
+  - Load average about 2.6 at the end of the run, against about 3.5 for BENCH-20260914-03 and about
+    5 for -02, so this machine was the quietest of the three. The three small changes outside
+    `interceptedCall` are of the same order as that difference and as the error bars (0.8 % to
+    2.6 % of each score): read them as flat, not as gains.
+  - **`interceptedCall` is where this stage acts, and BENCH-20260914-03 predicted it would be.** The
+    generated subclass asks for its interceptor chain on every call, and the manager answered by
+    walking the class hierarchy, resolving the method reflectively and re-reading every binding
+    annotation each time. Which interceptors apply depends on declarations alone, so it is now worked
+    out once per (bean class, method). 768 B/op is what building the chain's invocations costs; the
+    2.5 KB above it was the answer being recomputed.
+  - Comparing binding members as `AnnotationKey`s rather than with `Method.invoke` is part of the
+    same commit and cannot be separated from the cache by this benchmark. The correctness it buys is
+    the point of it (BUG-20260914-08); the time it saves is inside the number above.
+  - `qualifiedEvent` remains what BENCH-20260914-03 described: allocation 12 % above the pre-#70
+    baseline, time flat. Nothing in #70 addresses it — what is left is the dispatch itself.
+  - Same benchmark as the three earlier runs, unchanged, so all four compare like with like.
+
+---
+
+## BENCH-20260914-03 — Qualifier resolution on generated metadata (vauban#70, PR 4b to 4d)
+
+- **Date**: 2026-09-14
+- **Commit**: 77c5ef3 (branch `pr/ybl/70-index-injection-points`, on top of PR 4c — vauban#83)
+- **JVM**: Temurin 25+36-LTS, default flags
+- **Hardware**: Apple M5 Max / 18 cores (6 performance, 12 efficiency) / 128 GB RAM
+- **OS**: macOS 26.6.2 (arm64)
+- **Exact command**: the same as BENCH-20260914-01
+  ```bash
+  mvn -ntp clean install        # Maven 3.9.16
+  java -jar vauban-bench/target/benchmarks.jar -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
+  ```
+- **Results**:
+  ```
+  Benchmark                                                           Mode  Cnt      Score     Error   Units
+  QualifierResolutionBenchmark.dependentCreation                      avgt   15  14014,765 ± 124,690   ns/op
+  QualifierResolutionBenchmark.dependentCreation:gc.alloc.rate.norm   avgt   15  34538,841 ±  58,460    B/op
+  QualifierResolutionBenchmark.interceptedCall                        avgt   15    690,906 ±  19,595   ns/op
+  QualifierResolutionBenchmark.interceptedCall:gc.alloc.rate.norm     avgt   15   3309,340 ±  98,137    B/op
+  QualifierResolutionBenchmark.programmaticLookup                     avgt   15   1897,103 ±  44,220   ns/op
+  QualifierResolutionBenchmark.programmaticLookup:gc.alloc.rate.norm  avgt   15   7016,018 ±  62,598    B/op
+  QualifierResolutionBenchmark.qualifiedEvent                         avgt   15   4699,739 ±  50,200   ns/op
+  QualifierResolutionBenchmark.qualifiedEvent:gc.alloc.rate.norm      avgt   15   7776,043 ±  40,245    B/op
+  ```
+- **Comparison with the previous run** (BENCH-20260914-02, matching on keys):
+
+  | Benchmark | after 3b | after 4d | time | allocation |
+  |---|---|---|---|---|
+  | `dependentCreation` | 17796 ns, 38504 B | 14015 ns, 34539 B | **1.27× faster** | **−10 %** |
+  | `programmaticLookup` | 2076 ns, 7960 B | 1897 ns, 7016 B | **−8.6 %** | **−12 %** |
+  | `qualifiedEvent` | 4686 ns, 8381 B | 4700 ns, 7776 B | flat (+0.3 %) | −7.2 % |
+  | `interceptedCall` | 708 ns, 3360 B | 691 ns, 3309 B | −2.4 % | −1.5 % |
+
+- **Comparison with the baseline** (BENCH-20260914-01, reflective matching — the whole of #70 so far):
+
+  | Benchmark | before #70 | after 4d | time | allocation |
+  |---|---|---|---|---|
+  | `dependentCreation` | 41561 ns, 65245 B | 14015 ns, 34539 B | **2.97× faster** | **−47 %** |
+  | `programmaticLookup` | 6590 ns, 11691 B | 1897 ns, 7016 B | **3.47× faster** | **−40 %** |
+  | `qualifiedEvent` | 4673 ns, 6941 B | 4700 ns, 7776 B | flat (+0.6 %) | **+12 %** |
+  | `interceptedCall` | 651 ns, 3251 B | 691 ns, 3309 B | +6.1 % | +1.8 % |
+
+- **Notes**:
+  - The machine was not idle again: load average about 5 when the run started and 3.5 when it ended,
+    the same conditions as BENCH-20260914-02, so the two compare like with like. The error bars are
+    0.9 % to 2.8 % of each score; `interceptedCall` and `qualifiedEvent` move less than that and are
+    not distinguishable from noise on time.
+  - `dependentCreation` and `programmaticLookup` gain again, and this time on both axes: what PR 3b
+    left was the qualifiers of an injection point being read off the field or the parameter on every
+    creation. PR 4d takes them from the descriptor instead, and PR 4b/4c let the module hand out its
+    own literal rather than a `reflect.Proxy` — one fewer object, and no proxy handler, per qualifier.
+  - **BENCH-20260914-02 predicted that PR 4's generated readers would remove the conversion cost of
+    `qualifiedEvent`. They did not.** Allocation fell 7.2 %, from 8381 to 7776 B/op, but the time did
+    not move and allocation is still 12 % above the pre-#70 baseline. Firing on a fresh `Event` per
+    iteration converts its qualifiers every time; the generated reader makes that conversion cheaper,
+    not free. An `Event` injected once and fired many times pays it once. Whatever is left is in the
+    dispatch itself, not in the annotations, and no stage of #70 addresses it.
+  - `interceptedCall` is within noise of both earlier runs. Interceptor binding comparison is
+    untouched so far — PR 5 moves it to keys, and that is where its number should change.
+  - Same benchmark as the two earlier runs, unchanged.
+
+---
+
+## BENCH-20260914-02 — Qualifier resolution on normalized keys (vauban#70, PR 3a and PR 3b)
+
+- **Date**: 2026-09-14
+- **Commit**: a0110d4 (branch `pr/ybl/70-runtime-keys`, on top of PR 3a — vauban#77)
+- **JVM**: Temurin 25+36-LTS, default flags
+- **Hardware**: Apple M5 Max / 18 cores (6 performance, 12 efficiency) / 128 GB RAM
+- **OS**: macOS 26.6.2 (arm64)
+- **Exact command**: the same as BENCH-20260914-01
+  ```bash
+  mvn -ntp clean install        # Maven 3.9.16
+  java -jar vauban-bench/target/benchmarks.jar -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
+  ```
+- **Results**:
+  ```
+  Benchmark                                                           Mode  Cnt      Score     Error   Units
+  QualifierResolutionBenchmark.dependentCreation                      avgt   15  17795,844 ± 512,285   ns/op
+  QualifierResolutionBenchmark.dependentCreation:gc.alloc.rate.norm   avgt   15  38504,230 ± 162,649    B/op
+  QualifierResolutionBenchmark.interceptedCall                        avgt   15    707,985 ±  50,964   ns/op
+  QualifierResolutionBenchmark.interceptedCall:gc.alloc.rate.norm     avgt   15   3360,006 ±  57,825    B/op
+  QualifierResolutionBenchmark.programmaticLookup                     avgt   15   2075,685 ±  52,292   ns/op
+  QualifierResolutionBenchmark.programmaticLookup:gc.alloc.rate.norm  avgt   15   7960,019 ± 100,157    B/op
+  QualifierResolutionBenchmark.qualifiedEvent                         avgt   15   4686,259 ±  92,252   ns/op
+  QualifierResolutionBenchmark.qualifiedEvent:gc.alloc.rate.norm      avgt   15   8381,377 ±  20,865    B/op
+  ```
+- **Comparison with the previous run** (BENCH-20260914-01, the reflective matching):
+
+  | Benchmark | before | after | time | allocation |
+  |---|---|---|---|---|
+  | `dependentCreation` | 41561 ns, 65245 B | 17796 ns, 38504 B | **2.3× faster** | **−41 %** |
+  | `programmaticLookup` | 6590 ns, 11691 B | 2076 ns, 7960 B | **3.2× faster** | **−32 %** |
+  | `qualifiedEvent` | 4673 ns, 6941 B | 4686 ns, 8381 B | flat (+0.3 %) | +21 % |
+  | `interceptedCall` | 651 ns, 3251 B | 708 ns, 3360 B | +8.8 % | +3.4 % |
+
+- **Notes**:
+  - The machine was not idle: its load average was about 5 when the run started, so a few percent either way is noise. The two large gains are far outside it; the two small changes are not distinguishable from it on time.
+  - `dependentCreation` and `programmaticLookup` are where matching dominated: resolution used to rebuild every candidate bean's qualifiers as proxies and compare them member by member with `Method.invoke`, on every lookup. A bean's key is now computed once, and the injection point's comes from the index.
+  - `qualifiedEvent` is `orders.select(literal).fire(event)`: a new `Event` per iteration, so its qualifiers are converted on every measurement — one reflective read of the literal, one key, one set — where the old path passed the annotations straight through and reflected per observer instead. An `Event` injected once and fired many times converts once. Flat in time, 1.4 KB more per operation; PR 4's generated readers remove that read.
+  - `interceptedCall` measures interceptor resolution, which neither PR touches — PR 5 moves it to keys. The 57 ns are within this run's noise; the 110 B/op are not explained and belong to that stage.
+  - Same benchmark as the baseline, unchanged, so the two runs compare like with like — including the enum member on a field it leaves out, although PR 3a fixed that path (BUG-20260914-02).
+
+---
+
+## BENCH-20260914-01 — Qualifier resolution before vauban#70 (reflective matching)
+
+- **Date**: 2026-09-14
+- **Commit**: ceac964 (`main`), measured from branch `pr/ybl/70-safety-net`, which adds only the benchmark and tests
+- **JVM**: Temurin 25+36-LTS, default flags
+- **Hardware**: Apple M5 Max / 18 cores (6 performance, 12 efficiency) / 128 GB RAM
+- **OS**: macOS 26.6.2 (arm64)
+- **Exact command**:
+  ```bash
+  mvn -ntp clean install        # Maven 3.9.16
+  java -jar vauban-bench/target/benchmarks.jar -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
+  ```
+- **Results**:
+  ```
+  Benchmark                                                           Mode  Cnt      Score     Error   Units
+  QualifierResolutionBenchmark.dependentCreation                      avgt   15  41561,524 ± 437,998   ns/op
+  QualifierResolutionBenchmark.dependentCreation:gc.alloc.rate.norm   avgt   15  65245,527 ± 116,849    B/op
+  QualifierResolutionBenchmark.interceptedCall                        avgt   15    650,594 ±  16,936   ns/op
+  QualifierResolutionBenchmark.interceptedCall:gc.alloc.rate.norm     avgt   15   3250,670 ± 111,120    B/op
+  QualifierResolutionBenchmark.programmaticLookup                     avgt   15   6590,274 ±  70,278   ns/op
+  QualifierResolutionBenchmark.programmaticLookup:gc.alloc.rate.norm  avgt   15  11690,697 ±  80,598    B/op
+  QualifierResolutionBenchmark.qualifiedEvent                         avgt   15   4672,965 ±  58,453   ns/op
+  QualifierResolutionBenchmark.qualifiedEvent:gc.alloc.rate.norm      avgt   15   6941,355 ±  86,235    B/op
+  ```
+- **Comparison with the previous run**: first run.
+- **Notes**:
+  - The benchmark beans are compiled with the Vauban annotation processor: instantiation, field assignment and client proxies go through the generated `_VaubanComponents`. Qualifier matching is the reflective path vauban#70 replaces.
+  - `dependentCreation` creates, then destroys, a `@Dependent` bean with three qualified fields and two qualified constructor parameters. `programmaticLookup` is `Instance.select(@Channel, @Region).get()`. `qualifiedEvent` fires an event with a member qualifier to three observers, two of which match. `interceptedCall` calls an `@ApplicationScoped` bean bound to its interceptor by a member binding.
+  - Only paths that resolve correctly today are measured: an enum member on a field is left out (BUG-20260914-02). `QualifierResolutionBenchmark#boot` checks every path before the first iteration and fails the trial otherwise.
+  - The literals are written by hand. `AnnotationLiteral` reflects in its own `equals` and `hashCode`, which would add the literal's cost to the container's.
+  - The 3.2 KB allocated per intercepted call is consistent with the generated subclass looking its method up and resolving the interceptor chain on every call (`InterceptedSourceRenderer`); not profiled further.
+  - Compile-time validation is disabled in `vauban-bench` (BUG-20260914-13).

@@ -1,0 +1,243 @@
+/*
+ * Copyright (c) 2026 Yann Blazart, Antoine Sabot-Durand and the Vidocq contributors
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * https://www.eclipse.org/legal/epl-2.0/
+ *
+ * This Source Code may also be made available under the following Secondary
+ * Licenses when the conditions for such availability set forth in the Eclipse
+ * Public License, v. 2.0 are satisfied: GNU General Public License, version 2
+ * or any later version, which is available at
+ * https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+ *
+ * It is also made available under the European Union Public Licence v. 1.2,
+ * which is available at
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR EUPL-1.2 OR GPL-2.0-or-later
+ */
+package io.vidocq.vauban.core.langmodel;
+
+import io.vidocq.vauban.core.langmodel.declarations.VaubanClassInfo;
+import io.vidocq.vauban.core.langmodel.types.TypeMapper;
+import io.vidocq.vauban.core.langmodel.types.VaubanClassType;
+import io.vidocq.vauban.core.langmodel.types.VaubanPrimitiveType;
+import io.vidocq.vauban.core.langmodel.types.VaubanVoidType;
+import io.vidocq.vauban.indexer.IndexBuilder;
+import io.vidocq.vauban.indexer.model.*;
+import io.vidocq.vauban.indexer.scanner.ClassFileScanner;
+import jakarta.enterprise.lang.model.types.PrimitiveType;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@SuppressWarnings("java:S2187") // Test scaffold — helpers and data classes for future tests
+@DisplayName("CDI Language Model bridge")
+class LangModelTest {
+
+    // Test data classes
+    @Retention(RetentionPolicy.RUNTIME)
+    @interface Marked {}
+
+    @Marked
+    static class AnnotatedService {
+        @SuppressWarnings("java:S1172") // the parameter is the signature under test
+        public String process(int id) { return ""; }
+    }
+
+    interface MyInterface {
+        void doWork();
+    }
+
+    static class MyImpl extends AnnotatedService implements MyInterface {
+        @Override public void doWork() { /* no behaviour needed */ }
+    }
+
+    static IndexLookup buildLookup(Class<?>... classes) throws IOException {
+        var builder = new IndexBuilder();
+        for (var clazz : classes) {
+            builder.add(scanClass(clazz));
+        }
+        return new IndexLookup(builder.build());
+    }
+
+    static ClassInfo scanClass(Class<?> clazz) throws IOException {
+        String resource = clazz.getName().replace('.', '/') + ".class";
+        try (var is = clazz.getClassLoader().getResourceAsStream(resource)) {
+            return ClassFileScanner.scan(is.readAllBytes());
+        }
+    }
+
+    @Nested
+    @DisplayName("TypeMapper")
+    class TypeMapperTest {
+
+        @Test
+        @DisplayName("maps VoidType")
+        void shouldMapVoidType() throws IOException {
+            var lookup = buildLookup();
+            var result = TypeMapper.map(new TypeInfo.VoidType(), lookup);
+            assertInstanceOf(VaubanVoidType.class, result);
+            assertTrue(result.isVoid());
+            assertEquals("void", ((jakarta.enterprise.lang.model.types.VoidType) result).name());
+        }
+
+        @Test
+        @DisplayName("maps PrimitiveType INT")
+        void shouldMapPrimitiveInt() throws IOException {
+            var lookup = buildLookup();
+            var result = TypeMapper.map(new TypeInfo.PrimitiveType(TypeInfo.PrimitiveType.Kind.INT), lookup);
+            assertInstanceOf(VaubanPrimitiveType.class, result);
+            assertTrue(result.isPrimitive());
+            assertEquals(PrimitiveType.PrimitiveKind.INT,
+                    ((jakarta.enterprise.lang.model.types.PrimitiveType) result).primitiveKind());
+        }
+
+        @Test
+        @DisplayName("maps ClassType")
+        void shouldMapClassType() throws IOException {
+            var lookup = buildLookup(AnnotatedService.class);
+            var result = TypeMapper.map(
+                    new TypeInfo.ClassType(DotName.of(AnnotatedService.class.getName())), lookup);
+            assertInstanceOf(VaubanClassType.class, result);
+            assertTrue(result.isClass());
+        }
+
+        @Test
+        @DisplayName("maps ArrayType")
+        void shouldMapArrayType() throws IOException {
+            var lookup = buildLookup();
+            var result = TypeMapper.map(
+                    new TypeInfo.ArrayType(new TypeInfo.PrimitiveType(TypeInfo.PrimitiveType.Kind.INT), 1), lookup);
+            assertTrue(result.isArray());
+            var arr = (jakarta.enterprise.lang.model.types.ArrayType) result;
+            assertTrue(arr.componentType().isPrimitive());
+        }
+    }
+
+    @Nested
+    @DisplayName("VaubanClassInfo")
+    class ClassInfoTest {
+
+        @Test
+        @DisplayName("exposes the class name")
+        void shouldExposeName() throws IOException {
+            var lookup = buildLookup(AnnotatedService.class);
+            var indexClass = scanClass(AnnotatedService.class);
+            var classInfo = new VaubanClassInfo(indexClass, lookup);
+            assertEquals(AnnotatedService.class.getName(), classInfo.name());
+        }
+
+        @Test
+        @DisplayName("exposes the simple name")
+        void shouldExposeSimpleName() throws IOException {
+            var lookup = buildLookup(AnnotatedService.class);
+            var indexClass = scanClass(AnnotatedService.class);
+            var classInfo = new VaubanClassInfo(indexClass, lookup);
+            // Inner classes have $ in their simple name from the bytecode
+            assertTrue(classInfo.simpleName().contains("AnnotatedService"));
+        }
+
+        @Test
+        @DisplayName("detects annotations")
+        void shouldDetectAnnotations() throws IOException {
+            var lookup = buildLookup(AnnotatedService.class);
+            var indexClass = scanClass(AnnotatedService.class);
+            var classInfo = new VaubanClassInfo(indexClass, lookup);
+            assertTrue(classInfo.hasAnnotation(Marked.class));
+            assertNotNull(classInfo.annotation(Marked.class));
+        }
+
+        @Test
+        @DisplayName("exposes methods")
+        void shouldExposeMethods() throws IOException {
+            var lookup = buildLookup(AnnotatedService.class);
+            var indexClass = scanClass(AnnotatedService.class);
+            var classInfo = new VaubanClassInfo(indexClass, lookup);
+            var methodNames = classInfo.methods().stream()
+                    .map(jakarta.enterprise.lang.model.declarations.MethodInfo::name).toList();
+            assertTrue(methodNames.contains("process"));
+        }
+
+        @Test
+        @DisplayName("exposes fields")
+        void shouldExposeFields() throws IOException {
+            var lookup = buildLookup(AnnotatedService.class);
+            var indexClass = scanClass(AnnotatedService.class);
+            var classInfo = new VaubanClassInfo(indexClass, lookup);
+            assertNotNull(classInfo.fields());
+        }
+
+        @Test
+        @DisplayName("exposes the superclass")
+        void shouldExposeSuperclass() throws IOException {
+            var lookup = buildLookup(MyImpl.class, AnnotatedService.class);
+            var indexClass = scanClass(MyImpl.class);
+            var classInfo = new VaubanClassInfo(indexClass, lookup);
+            assertNotNull(classInfo.superClass());
+            assertTrue(classInfo.superClass().isClass());
+        }
+
+        @Test
+        @DisplayName("exposes the super-interfaces")
+        void shouldExposeSuperInterfaces() throws IOException {
+            var lookup = buildLookup(MyImpl.class, MyInterface.class);
+            var indexClass = scanClass(MyImpl.class);
+            var classInfo = new VaubanClassInfo(indexClass, lookup);
+            assertEquals(1, classInfo.superInterfaces().size());
+        }
+
+        @Test
+        @DisplayName("detects isPlainClass")
+        void shouldDetectPlainClass() throws IOException {
+            var lookup = buildLookup(AnnotatedService.class);
+            var classInfo = new VaubanClassInfo(scanClass(AnnotatedService.class), lookup);
+            assertTrue(classInfo.isPlainClass());
+            assertFalse(classInfo.isInterface());
+            assertFalse(classInfo.isEnum());
+        }
+
+        @Test
+        @DisplayName("detects interface")
+        void shouldDetectInterface() throws IOException {
+            var lookup = buildLookup(MyInterface.class);
+            var classInfo = new VaubanClassInfo(scanClass(MyInterface.class), lookup);
+            assertTrue(classInfo.isInterface());
+            assertFalse(classInfo.isPlainClass());
+        }
+    }
+
+    @Nested
+    @DisplayName("VaubanAnnotationMember")
+    class AnnotationMemberTest {
+
+        @Test
+        @DisplayName("exposes annotation values")
+        void shouldExposeAnnotationValues() throws IOException {
+            var lookup = buildLookup();
+            var member = new VaubanAnnotationMember(
+                    new io.vidocq.vauban.indexer.model.AnnotationValue.StringVal("hello"), lookup);
+
+            assertEquals(jakarta.enterprise.lang.model.AnnotationMember.Kind.STRING, member.kind());
+            assertEquals("hello", member.asString());
+            assertTrue(member.isString());
+        }
+
+        @Test
+        @DisplayName("exposes int values")
+        void shouldExposeIntValues() throws IOException {
+            var lookup = buildLookup();
+            var member = new VaubanAnnotationMember(
+                    new io.vidocq.vauban.indexer.model.AnnotationValue.IntVal(42), lookup);
+            assertEquals(jakarta.enterprise.lang.model.AnnotationMember.Kind.INT, member.kind());
+            assertEquals(42, member.asInt());
+        }
+    }
+}

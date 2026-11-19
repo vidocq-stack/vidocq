@@ -1,0 +1,296 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hand-written plugin descriptor: maven-plugin-plugin does not support JDK 25 class files -->
+<plugin>
+    <name>Vauban Maven Plugin</name>
+    <description>Build-time CDI bean discovery and proxy generation</description>
+    <groupId>io.vidocq.vauban</groupId>
+    <artifactId>vauban-maven-plugin</artifactId>
+    <version>@project.version@</version>
+    <goalPrefix>vauban</goalPrefix>
+    <isolatedRealm>false</isolatedRealm>
+    <inheritedByDefault>true</inheritedByDefault>
+    <mojos>
+        <mojo>
+            <goal>generate</goal>
+            <description>Scan dependency JARs and project classes for CDI beans, write META-INF/vauban-beans.list</description>
+            <implementation>io.vidocq.vauban.maven.generate.GenerateMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <phase>process-classes</phase>
+            <requiresDependencyResolution>compile+runtime</requiresDependencyResolution>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter>
+                    <name>project</name>
+                    <type>org.apache.maven.project.MavenProject</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>The Maven project</description>
+                </parameter>
+                <parameter>
+                    <name>outputDirectory</name>
+                    <type>java.io.File</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Output directory for generated files (default: target/classes)</description>
+                </parameter>
+                <parameter>
+                    <name>freezeExtensions</name>
+                    <type>boolean</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Freeze the build compatible extensions of the application, so that the container start loads what they did instead of running them (default: false)</description>
+                </parameter>
+                <parameter>
+                    <name>startExtensions</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Class names of build compatible extensions the container start runs again even when they are frozen</description>
+                </parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject"
+                         default-value="${project}"/>
+                <outputDirectory implementation="java.io.File"
+                                 default-value="${project.build.outputDirectory}"/>
+                <freezeExtensions implementation="boolean" default-value="false">${vauban.freezeExtensions}</freezeExtensions>
+                <startExtensions implementation="java.util.List">${vauban.startExtensions}</startExtensions>
+            </configuration>
+            <requirements>
+                <requirement>
+                    <role>org.apache.maven.project.MavenProject</role>
+                    <field-name>project</field-name>
+                </requirement>
+            </requirements>
+        </mojo>
+        <mojo>
+            <goal>enhance-dependencies</goal>
+            <description>Enhance a copy of a third-party dependency jar so a produced type that is not fully public can be proxied at build time; rewrites the jar's module-info to provide the generated component provider (issue #42, opt-in).</description>
+            <implementation>io.vidocq.vauban.maven.enhance.EnhanceDependenciesMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <phase>package</phase>
+            <requiresDependencyResolution>compile+runtime</requiresDependencyResolution>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter>
+                    <name>project</name>
+                    <type>org.apache.maven.project.MavenProject</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>The Maven project</description>
+                </parameter>
+                <parameter>
+                    <name>outputDirectory</name>
+                    <type>java.io.File</type>
+                    <required>true</required>
+                    <editable>true</editable>
+                    <description>Directory for the enhanced dependency copies (default: target/vauban-enhanced-deps)</description>
+                </parameter>
+                <parameter>
+                    <name>enhancedTypes</name>
+                    <type>java.util.List</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Fully-qualified produced types to enhance (opt-in; empty means the goal is a no-op)</description>
+                </parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject"
+                         default-value="${project}"/>
+                <outputDirectory implementation="java.io.File"
+                                 default-value="${project.build.directory}/vauban-enhanced-deps"/>
+            </configuration>
+            <requirements>
+                <requirement>
+                    <role>org.apache.maven.project.MavenProject</role>
+                    <field-name>project</field-name>
+                </requirement>
+            </requirements>
+        </mojo>
+        <mojo>
+            <goal>encrypt</goal>
+            <description>Encrypt internal classes of a modular JAR in-place with AES-256-GCM. Exported/opened packages stay clear; all others are encrypted.</description>
+            <implementation>io.vidocq.vauban.maven.generate.EncryptMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <phase>package</phase>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter>
+                    <name>project</name>
+                    <type>org.apache.maven.project.MavenProject</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>The Maven project</description>
+                </parameter>
+                <parameter>
+                    <name>keyAlias</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Key alias stored in SJAR metadata</description>
+                </parameter>
+                <parameter>
+                    <name>sjarKey</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Hex-encoded AES-256 key (64 chars)</description>
+                </parameter>
+                <parameter>
+                    <name>skip</name>
+                    <type>boolean</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Skip SJAR encryption</description>
+                </parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject"
+                         default-value="${project}"/>
+                <keyAlias implementation="java.lang.String"
+                          default-value="default">${vauban.sjar.keyAlias}</keyAlias>
+                <sjarKey implementation="java.lang.String">${vauban.sjar.key}</sjarKey>
+                <skip implementation="boolean"
+                      default-value="false">${vauban.sjar.skip}</skip>
+            </configuration>
+            <requirements>
+                <requirement>
+                    <role>org.apache.maven.project.MavenProject</role>
+                    <field-name>project</field-name>
+                </requirement>
+            </requirements>
+        </mojo>
+        <mojo>
+            <goal>dist</goal>
+            <description>Package the application as a distribution ZIP with launch scripts and all dependency JARs</description>
+            <implementation>io.vidocq.vauban.maven.generate.DistMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <phase>package</phase>
+            <requiresDependencyResolution>compile+runtime</requiresDependencyResolution>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter>
+                    <name>project</name>
+                    <type>org.apache.maven.project.MavenProject</type>
+                    <required>true</required>
+                    <editable>false</editable>
+                    <description>The Maven project</description>
+                </parameter>
+                <parameter>
+                    <name>mainClass</name>
+                    <type>java.lang.String</type>
+                    <required>true</required>
+                    <editable>true</editable>
+                    <description>Fully qualified main class name</description>
+                </parameter>
+                <parameter>
+                    <name>distName</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Root directory name inside the ZIP</description>
+                </parameter>
+                <parameter>
+                    <name>scriptName</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Name of the launch scripts (default: run)</description>
+                </parameter>
+                <parameter>
+                    <name>jvmArgs</name>
+                    <type>java.lang.String</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Additional JVM arguments</description>
+                </parameter>
+                <parameter>
+                    <name>skip</name>
+                    <type>boolean</type>
+                    <required>false</required>
+                    <editable>true</editable>
+                    <description>Skip distribution packaging</description>
+                </parameter>
+                <parameter>
+                    <name>buildDirectory</name>
+                    <type>java.io.File</type>
+                    <required>false</required>
+                    <editable>false</editable>
+                    <description>Build directory</description>
+                </parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject"
+                         default-value="${project}"/>
+                <mainClass implementation="java.lang.String">${vauban.dist.mainClass}</mainClass>
+                <distName implementation="java.lang.String">${vauban.dist.name}</distName>
+                <scriptName implementation="java.lang.String"
+                            default-value="run">${vauban.dist.scriptName}</scriptName>
+                <jvmArgs implementation="java.lang.String"
+                         default-value="">${vauban.dist.jvmArgs}</jvmArgs>
+                <skip implementation="boolean"
+                      default-value="false">${vauban.dist.skip}</skip>
+                <buildDirectory implementation="java.io.File"
+                                default-value="${project.build.directory}"/>
+            </configuration>
+            <requirements>
+                <requirement>
+                    <role>org.apache.maven.project.MavenProject</role>
+                    <field-name>project</field-name>
+                </requirement>
+                <requirement>
+                    <role>org.apache.maven.project.MavenProjectHelper</role>
+                    <field-name>projectHelper</field-name>
+                </requirement>
+            </requirements>
+        </mojo>
+        <!-- vauban:modularize -->
+        <mojo>
+            <goal>modularize</goal>
+            <description>Patch the non-modular dependency jars of the runtime closure with a synthesized module-info (requires derived from the types each jar uses, exports of every package, META-INF/services promoted to provides, open module) into target/vauban-modularized/. The Vidocq runtime plugin (dev, jlink, package) prefers those copies. Fails on split packages. Nothing is redistributed.</description>
+            <requiresDependencyResolution>runtime</requiresDependencyResolution>
+            <requiresDirectInvocation>false</requiresDirectInvocation>
+            <requiresProject>true</requiresProject>
+            <requiresOnline>false</requiresOnline>
+            <aggregator>false</aggregator>
+            <phase>prepare-package</phase>
+            <implementation>io.vidocq.vauban.maven.modularize.ModularizeMojo</implementation>
+            <language>java</language>
+            <instantiationStrategy>per-lookup</instantiationStrategy>
+            <threadSafe>true</threadSafe>
+            <parameters>
+                <parameter><name>project</name><type>org.apache.maven.project.MavenProject</type><required>true</required><editable>false</editable><description>The Maven project</description></parameter>
+                <parameter><name>session</name><type>org.apache.maven.execution.MavenSession</type><required>true</required><editable>false</editable><description>The Maven session</description></parameter>
+                <parameter><name>buildDir</name><type>java.io.File</type><required>true</required><editable>false</editable><description>target/</description></parameter>
+                <parameter><name>skip</name><type>boolean</type><required>false</required><editable>true</editable><description>Skip the goal</description></parameter>
+                <parameter><name>mode</name><type>java.lang.String</type><required>false</required><editable>true</editable><description>derived (only file-name-derived automatic modules, default) or all-automatic (also jars with an Automatic-Module-Name; required for jlink)</description></parameter>
+                <parameter><name>includes</name><type>java.util.List</type><required>false</required><editable>true</editable><description>Restrict patching to these artifactIds</description></parameter>
+                <parameter><name>excludes</name><type>java.util.List</type><required>false</required><editable>true</editable><description>Never patch these artifactIds</description></parameter>
+                <parameter><name>moduleNames</name><type>java.util.Map</type><required>false</required><editable>true</editable><description>artifactId → module name overrides (default: the JDK-derived automatic name)</description></parameter>
+                <parameter><name>openModules</name><type>boolean</type><required>false</required><editable>true</editable><description>Generate `open module` descriptors (default true)</description></parameter>
+                <parameter><name>forceExplicit</name><type>boolean</type><required>false</required><editable>true</editable><description>Patch a jar even when its own ServiceLoader lookups cannot be declared legally (default false: such a jar is left automatic, no legal explicit descriptor exists for it)</description></parameter>
+                <parameter><name>allowedLicenses</name><type>java.util.List</type><required>false</required><editable>true</editable><description>Optional licence allow-list; when set, every patched artifact must declare one of them</description></parameter>
+            </parameters>
+            <configuration>
+                <project implementation="org.apache.maven.project.MavenProject" default-value="${project}"/>
+                <session implementation="org.apache.maven.execution.MavenSession" default-value="${session}"/>
+                <buildDir implementation="java.io.File" default-value="${project.build.directory}"/>
+                <skip implementation="boolean" default-value="false">${vauban.modularize.skip}</skip>
+                <mode implementation="java.lang.String" default-value="derived">${vauban.modularize.mode}</mode>
+                <openModules implementation="boolean" default-value="true">${vauban.modularize.open}</openModules>
+                <forceExplicit implementation="boolean" default-value="false">${vauban.modularize.forceExplicit}</forceExplicit>
+            </configuration>
+            <requirements>
+                <requirement>
+                    <role>org.apache.maven.project.ProjectBuilder</role>
+                    <field-name>projectBuilder</field-name>
+                </requirement>
+            </requirements>
+        </mojo>
+
+    </mojos>
+</plugin>
