@@ -125,7 +125,7 @@ No dynamic proxy generation, no `setAccessible(true)`, no hot reflection in the 
 
 == Sources
 
-* link:{repo-knock}/src/branch/main/knock-core[knock-core] — registry, aggregator, serialiser, facade.
-* link:{repo-knock}/src/branch/main/knock-cdi-vauban[knock-cdi-vauban] — CDI discovery.
-* link:{repo-knock}/src/branch/main/knock-jaxrs[knock-jaxrs] — REST endpoints.
-* link:{repo-knock}/src/branch/main/docs/adr/ADR-001-java-modules-workaround-microprofile-health.md[ADR-001] — Java Modules workaround.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/knock/v0.4.0-RC1/vidocq-components/vidocq-components-microprofile/knock/knock-core[knock-core] — registry, aggregator, serialiser, facade.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/knock/v0.4.0-RC1/vidocq-components/vidocq-components-microprofile/knock/knock-cdi-vauban[knock-cdi-vauban] — CDI discovery.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/knock/v0.4.0-RC1/vidocq-components/vidocq-components-microprofile/knock/knock-jaxrs[knock-jaxrs] — REST endpoints.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/knock/v0.4.0-RC1/vidocq-components/vidocq-components-microprofile/knock/docs/adr/ADR-001-java-modules-workaround-microprofile-health.md[ADR-001] — Java Modules workaround.

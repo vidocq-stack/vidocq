@@ -113,7 +113,7 @@ flowchart LR
 * **`ConcurrentHashMap.newKeySet inUse`** — set of borrowed connections, for metrics and leak detection.
 * **Housekeeper virtual thread** — periodic wake-up, evicts connections that are too old or idle, pre-warms up to `minIdle`.
 
-Details and numbers: see link:{repo-mansart}/src/branch/main/mansart-pool/BENCH.md[mansart-pool BENCH.md].
+Details and numbers: see link:https://codefloe.com/Vidocq/vidocq/src/tag/mansart/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-pool/BENCH.md[mansart-pool BENCH.md].
 
 == Threading — virtual threads
 
@@ -142,4 +142,4 @@ _Book.author.setter.invokeExact(row, refLoader.get(rs.getLong(2)));
 * **Multi-resource (M4)** — true 2PC: `prepare` then `commit` on each enlisted `XAResource`. Recovery log (M5) records `PREPARED` transactions that did not complete, for recovery on reboot.
 * **Suspend / resume** — `TransactionManager.suspend()` removes the context from the current thread and returns it; `resume(t)` reinstates it. Typical batch case: a worker job suspending the caller's TX to issue a clean INSERT/COMMIT.
 
-See link:{repo-mansart}/src/branch/main/mansart-transactions/PLAN.md[mansart-transactions PLAN.md] for the M1-M8 roadmap.
+See link:https://codefloe.com/Vidocq/vidocq/src/tag/mansart/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart/mansart-transactions/PLAN.md[mansart-transactions PLAN.md] for the M1-M8 roadmap.

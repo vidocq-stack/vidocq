@@ -682,6 +682,6 @@ the method with its own index of pages.
 
 == Bugs and benchmarks
 
-* link:{repo-foy}/src/branch/main/BUG.md[BUG.md] — reproducible bugs, hypotheses, status.
-* link:{repo-foy}/src/branch/main/TCK.md[TCK.md] — full TCK measurement report.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/foy/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy/BUG.md[BUG.md] — reproducible bugs, hypotheses, status.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/foy/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy/TCK.md[TCK.md] — full TCK measurement report.
 * Benchmarks: no numbers recorded yet — a `BENCH.md` will be created with the first measured run (workspace convention).

@@ -25,7 +25,7 @@ The Mansart persistence layer applies the same separation: the foundation of an 
 | {spec-data-1}[Jakarta Data 1.0] + Jakarta Transactions 2.0
 
 | Repository
-| {repo-mansart}[codefloe.com/Vidocq/mansart]
+| https://codefloe.com/Vidocq/vidocq/src/tag/mansart/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/mansart[codefloe.com/Vidocq/mansart]
 
 | Java
 | 25 (LTS)

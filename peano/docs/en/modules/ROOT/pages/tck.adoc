@@ -29,8 +29,8 @@ A successful build of that profile is not a TCK pass.
 
 == Tracking
 
-* Reproducible issues: link:{repo-peano}/src/branch/main/BUG.md[BUG.md]
-* Plan and open questions: `PLAN.md` in {repo-peano}[the repo]
+* Reproducible issues: link:https://codefloe.com/Vidocq/vidocq/src/tag/peano/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano/BUG.md[BUG.md]
+* Plan and open questions: `PLAN.md` in https://codefloe.com/Vidocq/vidocq/src/tag/peano/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano[the repo]
 
 == Recorded execution
 

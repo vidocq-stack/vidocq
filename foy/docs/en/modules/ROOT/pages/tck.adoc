@@ -2,7 +2,7 @@
 :description: Conformance status against the Jakarta Servlet 6.1 Technology Compatibility Kit.
 
 [.lead]
-This page consolidates the status of the official Jakarta Servlet 6.1 TCK runs against Foy. It is regenerated on every release. The day-to-day source of truth remains link:{repo-foy}/src/branch/main/TCK.md[`TCK.md`] at the repo root.
+This page consolidates the status of the official Jakarta Servlet 6.1 TCK runs against Foy. It is regenerated on every release. The day-to-day source of truth remains link:https://codefloe.com/Vidocq/vidocq/src/tag/foy/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy/TCK.md[`TCK.md`] at the repo root.
 
 == Summary
 
@@ -53,7 +53,7 @@ Per-family breakdown (passing / run):
 
 [NOTE]
 ====
-Exact figures live in `target/surefire-reports/` after an `--all` run and in link:{repo-foy}/src/branch/main/TCK.md[`TCK.md`] (per-family tallies, root causes §3, roadmap §4). For historical detail, browse `git log -- TCK.md` on the `main` branch.
+Exact figures live in `target/surefire-reports/` after an `--all` run and in link:https://codefloe.com/Vidocq/vidocq/src/tag/foy/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy/TCK.md[`TCK.md`] (per-family tallies, root causes §3, roadmap §4). For historical detail, browse `git log -- TCK.md` on the `main` branch.
 ====
 
 [#security-status]
@@ -132,7 +132,7 @@ Install the official Jakarta Servlet 6.1 TCK artefacts (non-public) into your lo
 * `jakarta.tck:servlet-tck-util:6.1.0`
 * `jakarta.tck:servlet-tck:6.1.0` (pom)
 
-Detailed procedure in link:{repo-foy}/src/branch/main/foy-tck/README.md[`foy-tck/README.md`].
+Detailed procedure in link:https://codefloe.com/Vidocq/vidocq/src/tag/foy/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/foy/foy-tck/README.md[`foy-tck/README.md`].
 
 === Run the TCK
 

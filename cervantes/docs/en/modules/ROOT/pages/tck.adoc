@@ -155,5 +155,5 @@ Any structural change to `cervantes-core`, `cervantes-cdi-vauban` or `cervantes-
 
 * xref:internals.adoc[Internals] — understand what the TCK validates.
 * xref:reference.adoc[Reference] — annotations and keys exercised by the tests.
-* link:{repo-cervantes}/src/branch/main/BUG.md[BUG.md] — tracked reproducible bugs.
-* link:{repo-cervantes}/src/branch/main/TCK.md[TCK.md] — score history.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/cervantes/v0.4.0-RC1/vidocq-components/vidocq-components-microprofile/cervantes/BUG.md[BUG.md] — tracked reproducible bugs.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/cervantes/v0.4.0-RC1/vidocq-components/vidocq-components-microprofile/cervantes/TCK.md[TCK.md] — score history.

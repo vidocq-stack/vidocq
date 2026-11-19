@@ -5,7 +5,7 @@
 Vauban does at build time what a runtime container does on every lookup, so the numbers that matter
 are the ones on the hot path: resolving a qualified injection point, a programmatic lookup, firing a
 qualified event, and an intercepted call. *Every run, with its raw output and its caveats*, is kept
-in link:{repo-vauban}/src/branch/main/BENCH.md[BENCH.md] — this page is the reading of it.
+in link:https://codefloe.com/Vidocq/vidocq/src/tag/vauban/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BENCH.md[BENCH.md] — this page is the reading of it.
 
 == TL;DR
 
@@ -112,7 +112,7 @@ mvn -ntp clean install
 java -jar vauban-bench/target/benchmarks.jar -f 3 -wi 5 -i 5 -w 2s -r 3s -prof gc
 ----
 
-Compare against the entries in link:{repo-vauban}/src/branch/main/BENCH.md[BENCH.md], which carry
+Compare against the entries in link:https://codefloe.com/Vidocq/vidocq/src/tag/vauban/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-core/vauban/BENCH.md[BENCH.md], which carry
 the raw JMH output, the commit each was measured at, and the machine's load at the time. The
 convention for this repository is that *no performance number is published anywhere without a
 corresponding entry there*.

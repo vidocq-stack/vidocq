@@ -4,7 +4,7 @@
 [.lead]
 Peano combines a lexer/parser, immutable AST, resolver-backed interpreter and API
 provider with build-time accessor and expression generation. The full design is
-`PLAN.md` in {repo-peano}[the repository].
+`PLAN.md` in https://codefloe.com/Vidocq/vidocq/src/tag/peano/v0.4.0-RC1/vidocq-components/vidocq-components-jakartaee/vidocq-components-jakartaee-webprofile/peano[the repository].
 
 == Modules
 
