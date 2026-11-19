@@ -63,21 +63,49 @@ public final class DiscoveredMetrics {
      * The union of {@code runs}, each metric once. DiracExtension may run at build time, from the codegen bundle,
      * and again when the container starts: each run registers its own synthetic bean, listing the classes it saw,
      * so both beans stay (BUG-20261030-27 of vidocq). A gauge is kept once per scope and {@link MetricID}: two runs
-     * resolve the same gauge into records whose method handles differ.
+     * resolve the same gauge into records whose method handles differ, and a subclass carries the gauges it inherits
+     * under the names of their declaring class (DRC-013). Which one is read is decided by {@link #readOn}.
      */
     static DiscoveredMetrics merge(Iterable<DiscoveredMetrics> runs) {
         var merged = new DiscoveredMetrics();
-        var gaugeIds = new java.util.HashSet<String>();
+        var gaugesById = new java.util.LinkedHashMap<String, DiracExtension.ResolvedGauge>();
+        var warned = new HashSet<String>();
         for (var run : runs) {
             for (var gauge : run.gauges) {
-                if (gaugeIds.add(gauge.scope() + '\u0000' + gauge.metricID())) {
-                    merged.gauges.add(gauge);
-                }
+                gaugesById.merge(gauge.scope() + '\u0000' + gauge.metricID(), gauge,
+                        (kept, other) -> readOn(kept, other, warned));
             }
             merged.timers.addAll(run.timers);
             merged.counters.addAll(run.counters);
         }
+        merged.gauges.addAll(gaugesById.values());
         return merged;
+    }
+
+    /**
+     * Of two gauges with one id, the one that is read. The same bean class (two runs of the extension): the first.
+     * A class and its subclass: the gauge of the class, which declares the method, rather than the copy its subclass
+     * inherits. Two unrelated classes, two beans that inherit the gauge from a class that is no bean, say: one gauge
+     * has one value, so it is read on the class whose name comes first, and a warning names both, once.
+     */
+    private static DiracExtension.ResolvedGauge readOn(DiracExtension.ResolvedGauge kept,
+                                                       DiracExtension.ResolvedGauge other, Set<String> warned) {
+        Class<?> keptClass = kept.beanClass();
+        Class<?> otherClass = other.beanClass();
+        if (keptClass.isAssignableFrom(otherClass)) {
+            return kept;
+        }
+        if (otherClass.isAssignableFrom(keptClass)) {
+            return other;
+        }
+        var read = keptClass.getName().compareTo(otherClass.getName()) <= 0 ? kept : other;
+        var notRead = read == kept ? other : kept;
+        if (warned.add(read.scope() + '\u0000' + read.metricID() + '\u0000' + notRead.beanClass().getName())) {
+            LOG.log(System.Logger.Level.WARNING, "The gauge {0} is carried by two unrelated beans, {1} and {2}: it"
+                            + " is read on {1} only. Give each bean a gauge name of its own.",
+                    read.metricID().getName(), read.beanClass().getName(), notRead.beanClass().getName());
+        }
+        return read;
     }
 
     /**
@@ -104,8 +132,7 @@ public final class DiscoveredMetrics {
             return;
         }
         CompanionRegistry.noteScanFallback();
-        scanGaugeMethods(beanClass);
-        scan(beanClass, unlinkable, new Kind(timers, TIMED), new Kind(counters, COUNTED));
+        scan(beanClass, unlinkable, new Gauges(gauges, beanClass), new Kind(timers, TIMED), new Kind(counters, COUNTED));
     }
 
     boolean isEmpty() {
@@ -170,15 +197,7 @@ public final class DiscoveredMetrics {
     }
 
     void scanGaugeMethods(Class<?> beanClass) {
-        Objects.requireNonNull(beanClass, BEAN_CLASS_REQUIRED);
-        if (beanClass.isAnnotationPresent(jakarta.interceptor.Interceptor.class)) return;
-        for (var method : beanClass.getDeclaredMethods()) {
-            var gauge = method.getAnnotation(Gauge.class);
-            if (gauge == null) {
-                continue;
-            }
-            gauges.add(DiracExtension.resolveGauge(beanClass, method, gauge));
-        }
+        scan(beanClass, System.Logger.Level.WARNING, new Gauges(gauges, beanClass));
     }
 
     void scanTimedMethods(Class<?> beanClass) {
@@ -189,15 +208,66 @@ public final class DiscoveredMetrics {
         scan(beanClass, System.Logger.Level.WARNING, new Kind(counters, COUNTED));
     }
 
-    private void scan(Class<?> beanClass, System.Logger.Level unlinkable, Kind... kinds) {
+    private void scan(Class<?> beanClass, System.Logger.Level unlinkable, Collector... kinds) {
         if (scanMethods(beanClass, unlinkable, kinds)) {
             unlinkableSuperclass = true;
         }
     }
 
+    /** What a scan collects: from the members a bean class declares, then from each method it inherits. */
+    private sealed interface Collector permits Kind, Gauges {
+
+        void declared(Class<?> beanClass);
+
+        /** {@code method}, declared by {@code declaring}, is inherited by the bean and overridden by none below. */
+        void inherited(Class<?> declaring, Method method);
+    }
+
     /** A kind of metric a method or a constructor carries: where it goes, and how its annotation is found. */
     private record Kind(Set<DiracExtension.PreRegisteredMetric> target,
-                        Function<AnnotatedElement, DiracExtension.MetricAnnotation> finder) {
+                        Function<AnnotatedElement, DiracExtension.MetricAnnotation> finder) implements Collector {
+
+        @Override
+        public void declared(Class<?> beanClass) {
+            scanDeclared(beanClass, target, finder);
+        }
+
+        @Override
+        public void inherited(Class<?> declaring, Method method) {
+            var metric = methodMetric(declaring, method, null, finder);
+            if (metric != null) {
+                target.add(metric);
+            }
+        }
+    }
+
+    /**
+     * The {@code @Gauge} methods of {@code beanClass}: those it declares, static or private ones included, and the
+     * non-static ones it inherits (DRC-013). Each is read on the bean, and named after the class that declares its
+     * method, as that class names it when the extension scans it on its own.
+     */
+    private record Gauges(Set<DiracExtension.ResolvedGauge> target, Class<?> beanClass) implements Collector {
+
+        @Override
+        public void declared(Class<?> scanned) {
+            for (var method : scanned.getDeclaredMethods()) {
+                add(method);
+            }
+        }
+
+        @Override
+        public void inherited(Class<?> declaring, Method method) {
+            if (!Modifier.isStatic(method.getModifiers()) && !method.isSynthetic() && !method.isBridge()) {
+                add(method);
+            }
+        }
+
+        private void add(Method method) {
+            var gauge = method.getAnnotation(Gauge.class);
+            if (gauge != null) {
+                target.add(DiracExtension.resolveGauge(beanClass, method, gauge));
+            }
+        }
     }
 
     /**
@@ -206,13 +276,13 @@ public final class DiscoveredMetrics {
      *
      * @return whether the walk met a superclass that cannot be linked
      */
-    private static boolean scanMethods(Class<?> beanClass, System.Logger.Level unlinkable, Kind... kinds) {
+    private static boolean scanMethods(Class<?> beanClass, System.Logger.Level unlinkable, Collector... kinds) {
         Objects.requireNonNull(beanClass, BEAN_CLASS_REQUIRED);
         if (beanClass.isAnnotationPresent(jakarta.interceptor.Interceptor.class)) {
             return false;
         }
         for (var kind : kinds) {
-            scanDeclared(beanClass, kind.target(), kind.finder());
+            kind.declared(beanClass);
         }
         return scanInheritedMethods(beanClass, unlinkable, kinds);
     }
@@ -246,7 +316,8 @@ public final class DiscoveredMetrics {
      *
      * @return whether the walk met a superclass that cannot be linked
      */
-    private static boolean scanInheritedMethods(Class<?> beanClass, System.Logger.Level unlinkable, Kind... kinds) {
+    private static boolean scanInheritedMethods(Class<?> beanClass, System.Logger.Level unlinkable,
+                                                Collector... kinds) {
         var declaredBelow = new HashSet<String>();
         for (var method : beanClass.getDeclaredMethods()) {
             declaredBelow.add(signature(method));
@@ -273,16 +344,13 @@ public final class DiscoveredMetrics {
     }
 
     private static void scanSuperclassMethods(Class<?> type, boolean samePackage, Set<String> declaredBelow,
-                                              Kind... kinds) {
+                                              Collector... kinds) {
         for (var method : type.getDeclaredMethods()) {
             // Overridden when a class further down declares the same signature, which then hides it further up.
             boolean overridden = !declaredBelow.add(signature(method));
             if (!overridden && isInheritable(method, samePackage)) {
                 for (var kind : kinds) {
-                    var metric = methodMetric(type, method, null, kind.finder());
-                    if (metric != null) {
-                        kind.target().add(metric);
-                    }
+                    kind.inherited(type, method);
                 }
             }
         }

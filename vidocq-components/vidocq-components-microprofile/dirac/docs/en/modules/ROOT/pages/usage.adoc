@@ -75,6 +75,8 @@ The gauge method must return a numeric type (`int`, `long`, `double`, `Number`).
 
 A gauge is read on the bean of its class, whatever its qualifiers. The bean of a normal scope (`@ApplicationScoped`, say) is read through its client proxy. A `@Dependent` bean is created once, at the first read of one of its gauges, and destroyed when the container stops: every read of its gauges reads that one instance.
 
+A bean inherits the gauges of its superclasses, from a dependency jar too, and each one keeps the name the class that declares the method gives it. A gauge id has one value: when two beans inherit one gauge from the same base, it is read on one of them only, and the start logs a warning. Give the gauge an absolute name per bean, in each bean, to expose both.
+
 == Programmatic metrics
 
 For cases that do not fit an annotation (counter incremented from a non-interceptable callback, batch-fed histogram, etc.):

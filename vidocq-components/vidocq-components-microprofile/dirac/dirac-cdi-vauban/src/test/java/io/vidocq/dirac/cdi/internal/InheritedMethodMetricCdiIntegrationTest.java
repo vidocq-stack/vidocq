@@ -84,7 +84,7 @@ class InheritedMethodMetricCdiIntegrationTest {
     public static class UnindexedGaugeService extends UnindexedGaugeBase {
     }
 
-    @Disabled("DRC-013")
+    /** DRC-013: a gauge is not intercepted, and its inherited method was left out of every scan. */
     @Test
     void aGaugeOnAMethodInheritedFromASuperclassOutOfTheDeploymentIsRegistered() {
         try (SeContainer container = start(UnindexedGaugeService.class)) {
@@ -93,6 +93,33 @@ class InheritedMethodMetricCdiIntegrationTest {
             var gauge = registry.getGauge(new MetricID("inherited.gauge"));
             assertNotNull(gauge, "the gauge inherited.gauge is registered");
             assertEquals(7L, gauge.getValue());
+        }
+    }
+
+    /** A bean whose subclass, a bean too, inherits its gauge: the value tells which of the two is read. */
+    @ApplicationScoped
+    public static class LevelBean {
+        @org.eclipse.microprofile.metrics.annotation.Gauge(name = "parent.level", absolute = true,
+                unit = MetricUnits.NONE)
+        public long level() {
+            return this instanceof LevelHeirBean ? 9L : 5L;
+        }
+    }
+
+    @ApplicationScoped
+    public static class LevelHeirBean extends LevelBean {
+    }
+
+    /**
+     * DRC-013: the gauge of a bean is read on that bean, not on the subclass that inherits it, as MicroProfile
+     * Metrics 5.1's {@code InheritedGaugeMethodBeanTest} expects of a parent bean and its child.
+     */
+    @Test
+    void aGaugeOfABeanThatASubclassInheritsIsReadOnTheBeanThatDeclaresIt() {
+        try (SeContainer container = start(LevelBean.class, LevelHeirBean.class)) {
+            var registry = container.select(MetricRegistryProducerBean.class).get().applicationRegistry();
+
+            assertEquals(5L, registry.getGauge(new MetricID("parent.level")).getValue());
         }
     }
 

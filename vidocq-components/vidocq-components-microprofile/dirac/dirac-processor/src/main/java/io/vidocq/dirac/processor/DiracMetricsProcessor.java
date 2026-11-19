@@ -165,7 +165,7 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
                 addConstructorSpec(counters, bean, Declared.counted(findCounted(ctor)), classCounted);
             }
         }
-        addInheritedMethodSpecs(type, timers, counters);
+        addInheritedMethodSpecs(type, timers, counters, gauges);
 
         if (timers.isEmpty() && counters.isEmpty() && gauges.isEmpty()) {
             return; // not a metric bean — nothing to generate, nothing to skip
@@ -179,10 +179,11 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
     /**
      * The metrics of the methods {@code type} inherits from its superclasses and does not override (neither private
      * nor static), named after the class that declares them: CDI 4.1, §4.2, passes their binding on, and the runtime
-     * scan reads them the same way (DRC-011). A superclass of another jar is read from its class file.
+     * scan reads them the same way (DRC-011). The gauges too, read on the bean (DRC-013). A superclass of another jar
+     * is read from its class file.
      */
-    private void addInheritedMethodSpecs(TypeElement type, List<Spec> timers, List<Spec> counters)
-            throws SkipGeneration {
+    private void addInheritedMethodSpecs(TypeElement type, List<Spec> timers, List<Spec> counters,
+                                         List<GaugeModel> gauges) throws SkipGeneration {
         var elements = processingEnv.getElementUtils();
         String beanPackage = elements.getPackageOf(type).getQualifiedName().toString();
         List<ExecutableElement> declaredBelow = new ArrayList<>(ElementFilter.methodsIn(type.getEnclosedElements()));
@@ -199,10 +200,29 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
                 if (isInherited(method, beanPackageSoFar, declaredBelow, type)) {
                     addMethodSpec(timers, declaring, method, Declared.timed(findTimed(method)), null);
                     addMethodSpec(counters, declaring, method, Declared.counted(findCounted(method)), null);
+                    addInheritedGauge(gauges, declaring, beanPackage, method);
                 }
             }
             declaredBelow.addAll(methods);
         }
+    }
+
+    /**
+     * The gauge of an inherited method, named after {@code declaring}. The companion lives in the bean's package and
+     * calls the method on the bean: a protected method of another package is out of its reach, so the bean is left to
+     * the runtime scan.
+     */
+    private void addInheritedGauge(List<GaugeModel> gauges, BeanNames declaring, String beanPackage,
+                                   ExecutableElement method) throws SkipGeneration {
+        Gauge gauge = method.getAnnotation(Gauge.class);
+        if (gauge == null) {
+            return;
+        }
+        if (method.getModifiers().contains(Modifier.PROTECTED) && !declaring.packageName().equals(beanPackage)) {
+            throw new SkipGeneration("@Gauge method " + method.getSimpleName() + " is protected in "
+                    + declaring.binaryName() + ", of another package — a source companion cannot call it");
+        }
+        gauges.add(gaugeModel(declaring.binaryName(), method, gauge));
     }
 
     /**

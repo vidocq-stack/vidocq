@@ -632,6 +632,98 @@ class DiracMetricsProcessorTest {
                 names(compilation.companionOf("app.Redeclarer").counters()));
     }
 
+    /**
+     * DRC-013: the companion lists the gauges of the methods the bean inherits and does not override, named after the
+     * class that declares them, as the runtime scan does, and reads them on the bean. A private, a static or an
+     * overridden method passes nothing on.
+     */
+    @Test
+    void companionListsTheGaugesOfInheritedMethodsNamedAfterTheirDeclaringClass() throws Exception {
+        var compilation = compile(
+                writeSource("g/Grand.java", """
+                        package g;
+                        import org.eclipse.microprofile.metrics.annotation.Gauge;
+
+                        public class Grand {
+                            @Gauge(unit = "none") public long fromGrand() { return 1; }
+                            @Gauge(name = "overridden", absolute = true, unit = "none") public long overridden() { return 2; }
+                            @Gauge(name = "static", absolute = true, unit = "none") public static long shared() { return 3; }
+                        }
+                        """),
+                writeSource("g/Parent.java", """
+                        package g;
+                        import org.eclipse.microprofile.metrics.annotation.Gauge;
+
+                        public class Parent extends Grand {
+                            @Gauge(name = "parent.level", absolute = true, unit = "none") protected long fromParent() { return 4; }
+                            @Override public long overridden() { return 5; }
+                        }
+                        """),
+                writeSource("g/Child.java", """
+                        package g;
+                        import org.eclipse.microprofile.metrics.annotation.Gauge;
+
+                        public class Child extends Parent {
+                            @Gauge(name = "child.level", absolute = true, unit = "none") public long own() { return 6; }
+                        }
+                        """));
+        MetricsCompanion companion = compilation.companionOf("g.Child");
+        Object child = compilation.loader().loadClass("g.Child").getDeclaredConstructor().newInstance();
+
+        var values = companion.gauges().stream().collect(java.util.stream.Collectors.toMap(
+                MetricsCompanion.GaugeSpec::name, gauge -> gauge.invoker().apply(child).longValue()));
+
+        assertEquals(java.util.Map.of("child.level", 6L, "parent.level", 4L, "g.Grand.fromGrand", 1L), values);
+    }
+
+    /**
+     * DRC-013: a gauge method inherited from a superclass of another package is called by the companion, which lives
+     * in the bean's package: a public one is listed, and a package-private one is not inherited (JLS 8.4.8). A
+     * protected one cannot be called from there: the bean gets no companion, and the runtime scan reads it.
+     */
+    @Test
+    void companionCallsTheGaugesInheritedFromAnotherPackageThatItCanCall() throws Exception {
+        var compilation = compile(
+                writeSource("gp/lib/Base.java", """
+                        package lib;
+                        import org.eclipse.microprofile.metrics.annotation.Gauge;
+
+                        public class Base {
+                            @Gauge(name = "base.public", absolute = true, unit = "none") public long open() { return 1; }
+                            @Gauge(name = "base.packagePrivate", absolute = true, unit = "none") long packagePrivate() { return 2; }
+                        }
+                        """),
+                writeSource("gp/lib/ProtectedBase.java", """
+                        package lib;
+                        import org.eclipse.microprofile.metrics.annotation.Gauge;
+
+                        public class ProtectedBase {
+                            @Gauge(name = "base.protected", absolute = true, unit = "none") protected long level() { return 3; }
+                        }
+                        """),
+                writeSource("gp/app/Heir.java", """
+                        package app;
+                        import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                        public class Heir extends lib.Base {
+                            @Counted(name = "heir.own", absolute = true) public void own() {}
+                        }
+                        """),
+                writeSource("gp/app/ProtectedHeir.java", """
+                        package app;
+                        import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                        public class ProtectedHeir extends lib.ProtectedBase {
+                            @Counted(name = "protected.heir.own", absolute = true) public void own() {}
+                        }
+                        """));
+
+        assertEquals(Set.of("base.public"), compilation.companionOf("app.Heir").gauges().stream()
+                .map(MetricsCompanion.GaugeSpec::name).collect(java.util.stream.Collectors.toSet()));
+        assertNull(compilation.loader().getResource("app/ProtectedHeir$$DiracMetrics.class"),
+                "no companion: it cannot call the protected gauge method of another package");
+    }
+
     private static Set<String> names(List<MetricsCompanion.MetricSpec> specs) {
         return specs.stream().map(MetricsCompanion.MetricSpec::name).collect(java.util.stream.Collectors.toSet());
     }

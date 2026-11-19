@@ -494,7 +494,7 @@ default methods it inherits and does not override.
 ## DRC-013 — A `@Gauge` on a method inherited from a superclass outside the index is never registered
 
 - **Opening date**: 2026-11-17
-- **Status**: OPEN
+- **Status**: FIXED on `fix/gauge-registration`
 
 ### Symptom
 
@@ -514,6 +514,33 @@ the DRC-011 fix does not touch them. A fix has a second point to settle: `DiracE
 gauge after `method.getDeclaringClass()`, so two beans that extend the same base of a jar would register the same gauge
 name twice, one per bean. That overlaps the gauge bean lookup that `fix/bean-class-lookup` changes in
 `GaugeRegistrationBean`.
+
+### Fix
+
+- The scan's walk of the superclasses, the one of DRC-011, collects the `@Gauge` methods the bean inherits and does
+  not override, neither private nor static, nor package-private from another package (JLS 8.4.8). The processor lists
+  them in the companion, and leaves a bean that inherits a `protected` gauge method of another package to the scan:
+  the companion, in the bean's package, cannot call it.
+- Each one keeps the name its declaring class gives it (`DiracExtension.resolveMetricName`, unchanged), and is read on
+  the bean: its record names the bean class.
+- The second point: when a bean and its subclass both carry one gauge, it is read on the class that declares the
+  method, not on the subclass, whichever was scanned first; MicroProfile Metrics 5.1's `InheritedGaugeMethodBeanTest`
+  expects that of a parent bean and its child. Two unrelated beans that carry one gauge id, two beans that extend the
+  same base of a jar say, give one gauge: one id has one value. It is read on the bean whose class name comes first,
+  and a `WARNING` names both, once per container. Two beans that each declared a gauge of one absolute name were kept
+  at random before; they follow the same rule.
+- The read itself goes through the bean lookup of DRC-016 and DRC-017: a superclass the extension scans on its own and
+  that has no bean of its own, an abstract base say, is read on the bean of that type, as before.
+
+Tests, red before the fix: `InheritedMethodMetricCdiIntegrationTest.aGaugeOnAMethodInheritedFromASuperclassOutOfTheDeploymentIsRegistered`
+(enabled), `DiracExtensionTest.scanFindsTheGaugesOfInheritedMethodsNamedAfterTheirDeclaringClass` and
+`aPackagePrivateGaugeOfASuperclassInAnotherPackageIsNotInherited`,
+`DiscoveredMetricsMergeTest.aGaugeIsReadOnTheBeanThatDeclaresItNotOnTheSubclassThatInheritsIt`,
+`aGaugeTwoUnrelatedBeansCarryIsReadOnTheFirstByClassNameAndWarned` and `aGaugeTwoUnrelatedBeansCarryIsWarnedOnceForTwoRuns`,
+`DiracMetricsProcessorTest.companionListsTheGaugesOfInheritedMethodsNamedAfterTheirDeclaringClass` and
+`companionCallsTheGaugesInheritedFromAnotherPackageThatItCanCall`. Also
+`InheritedMethodMetricCdiIntegrationTest.aGaugeOfABeanThatASubclassInheritsIsReadOnTheBeanThatDeclaresIt`, the
+parent and child case end to end. The official TCK: 127 tests, 0 failures.
 
 ---
 

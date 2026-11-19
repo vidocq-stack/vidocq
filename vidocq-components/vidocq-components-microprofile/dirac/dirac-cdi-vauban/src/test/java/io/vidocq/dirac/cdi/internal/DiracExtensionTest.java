@@ -114,6 +114,39 @@ class DiracExtensionTest {
     }
 
     /**
+     * DRC-013: a bean inherits the {@code @Gauge} methods of its superclasses that it does not override, the
+     * superclass in the deployment or not. Each gauge is named after the class that declares its method, as the
+     * superclass names it when it is scanned on its own, and is read on the bean. A private, a static or an
+     * overridden method passes no gauge on.
+     */
+    @Test
+    void scanFindsTheGaugesOfInheritedMethodsNamedAfterTheirDeclaringClass() {
+        var discovered = new DiscoveredMetrics();
+        discovered.scanGaugeMethods(GaugedChild.class);
+
+        assertEquals(java.util.Set.of(MetricRegistry.name(GaugedGrandparent.class, "fromGrandparent"),
+                        "gauged.parent", "gauged.child"),
+                gaugeNames(discovered));
+        for (var gauge : discovered.gauges()) {
+            assertEquals(GaugedChild.class, gauge.beanClass(), gauge.metricID() + " is read on the bean");
+        }
+    }
+
+    /** DRC-013: a package-private gauge method of a superclass in another package is not inherited (JLS 8.4.8). */
+    @Test
+    void aPackagePrivateGaugeOfASuperclassInAnotherPackageIsNotInherited() {
+        var discovered = new DiscoveredMetrics();
+        discovered.scanGaugeMethods(OtherPackageHeir.class);
+
+        assertEquals(java.util.Set.of("otherpackage.publicLevel"), gaugeNames(discovered));
+    }
+
+    private static java.util.Set<String> gaugeNames(DiscoveredMetrics discovered) {
+        return discovered.gauges().stream().map(g -> g.metricID().getName())
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    /**
      * DRC-011: a superclass whose method names a type absent at run time (an optional dependency, a
      * {@code requires static} module) cannot be read; the inherited walk stops there, and the bean keeps its own
      * metrics instead of being skipped whole.
@@ -176,40 +209,6 @@ class DiracExtensionTest {
         @Override
         public <T> T get(String key, Class<T> type, T defaultValue) {
             return get(key, type);
-        }
-    }
-
-    /** The records a logger receives while it is open, at every level. */
-    private static final class CapturedLog extends java.util.logging.Handler implements AutoCloseable {
-        private final java.util.logging.Logger logger;
-        private final java.util.logging.Level level;
-        private final List<java.util.logging.LogRecord> records = new java.util.concurrent.CopyOnWriteArrayList<>();
-
-        CapturedLog(Class<?> source) {
-            logger = java.util.logging.Logger.getLogger(source.getName());
-            level = logger.getLevel();
-            logger.setLevel(java.util.logging.Level.ALL);
-            logger.addHandler(this);
-        }
-
-        List<java.util.logging.LogRecord> warnings() {
-            return records.stream().filter(r -> r.getLevel() == java.util.logging.Level.WARNING).toList();
-        }
-
-        @Override
-        public void publish(java.util.logging.LogRecord logRecord) {
-            records.add(logRecord);
-        }
-
-        @Override
-        public void flush() {
-            // kept in memory
-        }
-
-        @Override
-        public void close() {
-            logger.removeHandler(this);
-            logger.setLevel(level);
         }
     }
 
@@ -390,6 +389,52 @@ class DiracExtensionTest {
     }
 
     static class OtherPackageHeir extends OtherPackageMeteredBase {
+    }
+
+    static class GaugedGrandparent {
+        @Gauge(unit = MetricUnits.NONE)
+        public long fromGrandparent() {
+            return 1;
+        }
+
+        @Gauge(name = "gauged.overridden", absolute = true, unit = MetricUnits.NONE)
+        public long overriddenBelow() {
+            return 2;
+        }
+
+        @Gauge(name = "gauged.static", absolute = true, unit = MetricUnits.NONE)
+        public static long shared() {
+            return 3;
+        }
+
+        @Gauge(name = "gauged.private", absolute = true, unit = MetricUnits.NONE)
+        private long hidden() {
+            return 4;
+        }
+
+        long readHidden() {
+            return hidden();
+        }
+    }
+
+    static class GaugedParent extends GaugedGrandparent {
+        @Override
+        public long overriddenBelow() {
+            // overrides the grandparent's gauge method without the annotation: no gauge
+            return 5;
+        }
+
+        @Gauge(name = "gauged.parent", absolute = true, unit = MetricUnits.NONE)
+        protected long fromParent() {
+            return 6;
+        }
+    }
+
+    static class GaugedChild extends GaugedParent {
+        @Gauge(name = "gauged.child", absolute = true, unit = MetricUnits.NONE)
+        public long own() {
+            return 7;
+        }
     }
 
     static class OtherPackageRedeclarer extends OtherPackageMeteredBase {

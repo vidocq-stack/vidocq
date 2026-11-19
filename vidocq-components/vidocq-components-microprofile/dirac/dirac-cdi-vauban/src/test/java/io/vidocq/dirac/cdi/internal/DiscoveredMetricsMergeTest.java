@@ -19,7 +19,10 @@
  */
 package io.vidocq.dirac.cdi.internal;
 
+import org.eclipse.microprofile.metrics.MetricRegistry;
+import org.eclipse.microprofile.metrics.MetricUnits;
 import org.eclipse.microprofile.metrics.annotation.Counted;
+import org.eclipse.microprofile.metrics.annotation.Gauge;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -41,6 +44,31 @@ class DiscoveredMetricsMergeTest {
         }
     }
 
+    /** A bean whose subclass inherits its gauge. */
+    static class LevelBean {
+        @Gauge(unit = MetricUnits.NONE)
+        public long level() {
+            return 1;
+        }
+    }
+
+    static class LevelHeir extends LevelBean {
+    }
+
+    /** Not a bean: two unrelated beans inherit its gauge. */
+    abstract static class SharedLevel {
+        @Gauge(name = "shared.level", absolute = true, unit = MetricUnits.NONE)
+        public long level() {
+            return 2;
+        }
+    }
+
+    static class FirstLevelHeir extends SharedLevel {
+    }
+
+    static class SecondLevelHeir extends SharedLevel {
+    }
+
     private static DiscoveredMetrics scanned(Class<?> beanClass) {
         var metrics = new DiscoveredMetrics();
         metrics.scanGaugeMethods(beanClass);
@@ -60,6 +88,60 @@ class DiscoveredMetricsMergeTest {
         assertEquals(single.gauges().size(), merged.gauges().size(), "each gauge once: " + merged.gauges());
         assertEquals(single.timers(), merged.timers());
         assertEquals(single.counters().size() + 1, merged.counters().size(), "each counter once, plus extra");
+    }
+
+    /**
+     * DRC-013: a bean's gauge, named after its class, is inherited by its subclass under that name. The gauge is read
+     * on the bean that declares it, whichever bean was scanned first, as MicroProfile Metrics 5.1's
+     * {@code InheritedGaugeMethodBeanTest} expects of a parent bean and its child.
+     */
+    @Test
+    void aGaugeIsReadOnTheBeanThatDeclaresItNotOnTheSubclassThatInheritsIt() {
+        var name = MetricRegistry.name(LevelBean.class, "level");
+        for (var order : List.of(List.of(LevelBean.class, LevelHeir.class), List.of(LevelHeir.class, LevelBean.class))) {
+            var runs = order.stream().map(DiscoveredMetricsMergeTest::scanned).toList();
+
+            var gauges = DiscoveredMetrics.merge(runs).gauges();
+
+            assertEquals(1, gauges.size(), "one gauge " + name + ": " + gauges);
+            assertEquals(LevelBean.class, gauges.iterator().next().beanClass(), "scanned in the order " + order);
+        }
+    }
+
+    /**
+     * DRC-013: two unrelated beans inherit one gauge from a class that is not a bean. One gauge has one value: it is
+     * read on the bean whose class name comes first, whatever the order of the scans, and a warning names both.
+     */
+    @Test
+    void aGaugeTwoUnrelatedBeansCarryIsReadOnTheFirstByClassNameAndWarned() {
+        for (var order : List.of(List.of(FirstLevelHeir.class, SecondLevelHeir.class),
+                List.of(SecondLevelHeir.class, FirstLevelHeir.class))) {
+            var runs = order.stream().map(DiscoveredMetricsMergeTest::scanned).toList();
+            try (var log = new CapturedLog(DiscoveredMetrics.class)) {
+
+                var gauges = DiscoveredMetrics.merge(runs).gauges();
+
+                assertEquals(1, gauges.size(), "one gauge shared.level: " + gauges);
+                assertEquals(FirstLevelHeir.class, gauges.iterator().next().beanClass(), "scanned in the order " + order);
+                var warnings = log.warnings();
+                assertEquals(1, warnings.size(), "one warning");
+                assertEquals(List.of("shared.level", FirstLevelHeir.class.getName(), SecondLevelHeir.class.getName()),
+                        List.of(warnings.getFirst().getParameters()).subList(0, 3));
+            }
+        }
+    }
+
+    /** DRC-013: the same two beans scanned by two runs of the extension give one warning. */
+    @Test
+    void aGaugeTwoUnrelatedBeansCarryIsWarnedOnceForTwoRuns() {
+        var runs = List.of(scanned(FirstLevelHeir.class), scanned(SecondLevelHeir.class),
+                scanned(SecondLevelHeir.class), scanned(FirstLevelHeir.class));
+        try (var log = new CapturedLog(DiscoveredMetrics.class)) {
+
+            DiscoveredMetrics.merge(runs);
+
+            assertEquals(1, log.warnings().size(), "one warning");
+        }
     }
 
     @Test

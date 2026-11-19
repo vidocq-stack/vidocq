@@ -19,7 +19,9 @@
  */
 package io.vidocq.dirac.cdi.internal.otherpackage;
 
+import org.eclipse.microprofile.metrics.MetricUnits;
 import org.eclipse.microprofile.metrics.annotation.Counted;
+import org.eclipse.microprofile.metrics.annotation.Gauge;
 
 /** A superclass in another package than the beans that extend it (DRC-011, JLS 8.4.8). */
 public class OtherPackageMeteredBase {
@@ -32,5 +34,15 @@ public class OtherPackageMeteredBase {
     @Counted(name = "otherpackage.packagePrivate", absolute = true)
     void packagePrivate() {
         // package access: not inherited by a subclass of another package
+    }
+
+    @Gauge(name = "otherpackage.publicLevel", absolute = true, unit = MetricUnits.NONE)
+    public long publicLevel() {
+        return 1;
+    }
+
+    @Gauge(name = "otherpackage.packagePrivateLevel", absolute = true, unit = MetricUnits.NONE)
+    long packagePrivateLevel() {
+        return 2;
     }
 }
