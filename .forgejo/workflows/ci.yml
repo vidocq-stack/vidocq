@@ -74,7 +74,7 @@ jobs:
       - name: Build, test & deploy what the push changed
         uses: ./.ci-action/deploy-maven
         with:
-          maven-args: -B -ntp -U -Dmaven.source.skip=true -Dmaven.javadoc.skip=true -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true ${{ steps.scope.outputs.args }}
+          maven-args: -B -ntp -U -Dmaven.source.skip=true -Dmaven.javadoc.skip=true -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true -P!dist ${{ steps.scope.outputs.args }}
           skip-tests: "false"
           snapshot-also-central: "false"
           central-username: ${{ secrets.CENTRAL_USERNAME }}

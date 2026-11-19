@@ -30,7 +30,7 @@ jobs:
           sonar-token: ${{ secrets.SONAR_TOKEN }}
           host-url: ${{ vars.SONAR_HOST_URL }}
           bot-token: ${{ secrets.VIDOCQ_BOT_TOKEN }}
-          maven-args: -B -ntp -Pquality -Dgib.disable=true -Dmaven.test.failure.ignore=true -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true install
+          maven-args: -B -ntp -Pquality -Dgib.disable=true -Dmaven.test.failure.ignore=true -Dvidocq.build-info.dirty=^none -Dvidocq.jlink.skip=true -P!dist install
           analysis-args: -B -ntp -Pquality -Dgib.disable=true
           blocking: 'true'
           targeted-tests: false
