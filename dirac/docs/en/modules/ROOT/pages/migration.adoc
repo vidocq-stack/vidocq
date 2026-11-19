@@ -3,7 +3,7 @@
 
 [CAUTION]
 ====
-Dirac is at `{project-version}`. The official MicroProfile Metrics 5.1.1 TCK passes **127/127 (100 %)** — see link:{repo-dirac}/src/branch/main/TCK.md[TCK.md]. The public SPI may still evolve before `1.0.0`. This page documents the mappings to prepare a progressive migration.
+Dirac is at `{project-version}`. The official MicroProfile Metrics 5.1.1 TCK passes **127/127 (100 %)** — see link:https://codefloe.com/Vidocq/vidocq/src/tag/dirac/v0.3.0/vidocq-components/vidocq-components-microprofile/dirac/TCK.md[TCK.md]. The public SPI may still evolve before `1.0.0`. This page documents the mappings to prepare a progressive migration.
 ====
 
 [.lead]
@@ -108,4 +108,4 @@ Dropwizard is the ancestor of much of the MP Metrics spec. Two-step migration: c
 
 * xref:concepts.adoc[Concepts] — MP Metrics 5.1.1 model.
 * xref:reference.adoc[Reference] — annotations and `mp.metrics.*` keys.
-* link:{repo-dirac}/src/branch/main/BUG.md[BUG.md] — known pitfalls.
+* link:https://codefloe.com/Vidocq/vidocq/src/tag/dirac/v0.3.0/vidocq-components/vidocq-components-microprofile/dirac/BUG.md[BUG.md] — known pitfalls.

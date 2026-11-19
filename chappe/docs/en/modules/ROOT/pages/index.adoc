@@ -24,7 +24,7 @@ The metaphor holds in two ways:
 [cols="1,3"]
 |===
 | Implemented specs | HTTP/1.1 (RFC 9110, RFC 9112), HTTP/2 (RFC 9113), WebSocket (RFC 6455), gRPC transport framing over HTTP/2, HTTP/3 (RFC 9114, planned)
-| Repo | {repo-chappe}
+| Repo | https://codefloe.com/Vidocq/vidocq/src/tag/chappe/v0.3.0/vidocq-components/vidocq-components-transport/chappe
 | Java | 25 (LTS)
 | Java modules | `io.vidocq.chappe.api`, `io.vidocq.chappe.http`, `io.vidocq.chappe.core`, `io.vidocq.chappe.cli`
 | Runtime dependencies | none (JDK only)
@@ -69,7 +69,7 @@ Chappe also runs **without any extension**: that is what its `chappe serve` CLI 
 
 == Performance
 
-Quick read (TL;DR, canonical table, JFR profile, native vs JVM): xref:performance.adoc[Performance page]. The full log of all runs (closed-loop in-process and open-loop wrk2), detailed methodology and history of optimizations live in link:{repo-chappe}/blob/main/BENCHMARKS.md[BENCHMARKS.md].
+Quick read (TL;DR, canonical table, JFR profile, native vs JVM): xref:performance.adoc[Performance page]. The full log of all runs (closed-loop in-process and open-loop wrk2), detailed methodology and history of optimizations live in link:https://codefloe.com/Vidocq/vidocq/src/tag/chappe/v0.3.0/vidocq-components/vidocq-components-transport/chappe/BENCHMARKS.md[BENCHMARKS.md].
 
 == Quick links
 

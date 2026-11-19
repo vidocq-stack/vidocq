@@ -40,7 +40,7 @@ Without TLS, Chappe supports HTTP/2 cleartext (h2c) with **prior knowledge** onl
 
 == HTTP/3 / QUIC
 
-HTTP/3 (RFC 9114) is **planned**. The QUIC transport is expected to come from the JDK (targeting JDK 26+) — no in-house QUIC engine ships today. See link:{repo-chappe}/blob/main/ROADMAP.md[ROADMAP.md] for the current status.
+HTTP/3 (RFC 9114) is **planned**. The QUIC transport is expected to come from the JDK (targeting JDK 26+) — no in-house QUIC engine ships today. See link:https://codefloe.com/Vidocq/vidocq/src/tag/chappe/v0.3.0/vidocq-components/vidocq-components-transport/chappe/ROADMAP.md[ROADMAP.md] for the current status.
 
 == Virtual hosts
 
