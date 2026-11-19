@@ -96,6 +96,32 @@ class DiracExtensionTest {
     }
 
     /**
+     * DRC-012: the containers intercept a default method a bean inherits from an interface through the annotation of
+     * the interface's method. The scan names the metric after the interface, as the interceptors do. An abstract, a
+     * static, or an overridden method passes nothing on: by the class, by its superclass, or by a more specific
+     * interface. The interface alone is no bean, and has no metric.
+     */
+    @Test
+    void scanFindsTheMetricsOfInheritedDefaultMethodsNamedAfterTheirInterface() {
+        var discovered = new DiscoveredMetrics();
+        discovered.scanTimedMethods(DefaultMeteredBean.class);
+        discovered.scanCountedMethods(DefaultMeteredBean.class);
+        discovered.scanGaugeMethods(DefaultMeteredBean.class);
+        var ofTheInterface = new DiscoveredMetrics();
+        ofTheInterface.scanTimedMethods(MeteredContract.class);
+        ofTheInterface.scanCountedMethods(MeteredContract.class);
+        ofTheInterface.scanGaugeMethods(MeteredContract.class);
+
+        assertEquals(java.util.Set.of(MetricRegistry.name(MeteredContract.class, "timedDefault")),
+                names(discovered.timers()));
+        assertEquals(java.util.Set.of(MetricRegistry.name(MeteredContract.class, "countedDefault"),
+                "sub.wins"), names(discovered.counters()));
+        assertEquals(java.util.Set.of("default.gauge"), gaugeNames(discovered));
+        assertEquals(DefaultMeteredBean.class, discovered.gauges().iterator().next().beanClass(), "read on the bean");
+        assertTrue(ofTheInterface.isEmpty(), "an interface is not a bean");
+    }
+
+    /**
      * DRC-011: a subclass inherits the binding of a non-static superclass method it does not override (CDI 4.1,
      * §4.2). The scan names the metric after the declaring class, as the interceptors do; an overridden or a private
      * method passes nothing on. An override through a type argument has another erasure, and still overrides.
@@ -378,6 +404,78 @@ class DiracExtensionTest {
         @Override
         public void overriddenThroughATypeArgument(String value) {
             // overrides the grandparent's method through its type argument, without the annotation
+        }
+    }
+
+    public interface MeteredContract {
+        @Timed
+        default void timedDefault() {
+            // timed through the bean
+        }
+
+        @Counted
+        default void countedDefault() {
+            // counted through the bean
+        }
+
+        @Counted(name = "abstract", absolute = true)
+        void abstractOne();
+
+        @Counted(name = "static", absolute = true)
+        static void staticOne() {
+            // not inherited
+        }
+
+        @Counted(name = "overridden.by.the.superclass", absolute = true)
+        default void overriddenByTheSuperclass() {
+            // overridden
+        }
+
+        @Counted(name = "overridden.by.the.bean", absolute = true)
+        default void overriddenByTheBean() {
+            // overridden
+        }
+
+        @Counted(name = "base.loses", absolute = true)
+        default void overriddenBySubInterface() {
+            // overridden by MeteredSubContract
+        }
+
+        @Gauge(name = "default.gauge", absolute = true, unit = MetricUnits.NONE)
+        default long level() {
+            return 3L;
+        }
+
+        @Gauge(name = "static.gauge", absolute = true, unit = MetricUnits.NONE)
+        static long sharedLevel() {
+            return 4L;
+        }
+    }
+
+    public interface MeteredSubContract extends MeteredContract {
+        @Override
+        @Counted(name = "sub.wins", absolute = true)
+        default void overriddenBySubInterface() {
+            // the most specific default method
+        }
+    }
+
+    public static class DefaultMeteredParent implements MeteredContract {
+        @Override
+        public void abstractOne() {
+            // implements the abstract method, without a binding
+        }
+
+        @Override
+        public void overriddenByTheSuperclass() {
+            // no binding
+        }
+    }
+
+    public static class DefaultMeteredBean extends DefaultMeteredParent implements MeteredContract, MeteredSubContract {
+        @Override
+        public void overriddenByTheBean() {
+            // no binding
         }
     }
 

@@ -29,6 +29,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -89,6 +90,26 @@ class WeldPortabilityTest {
     @Test
     void theGaugeOfABoundedGenericBeanIsRead() {
         assertEquals(3L, registry().getGauge(new MetricID("orders.level")).getValue().longValue());
+    }
+
+    /** DRC-012: Weld intercepts a default method through its interface's annotation; the counter is the bean's. */
+    @Test
+    void aDefaultMethodCountedThroughItsInterfaceIsCounted() {
+        var counter = registry().getCounter(new MetricID("orders.greeted"));
+        assertNotNull(counter, "registered for the bean that inherits the method: " + registry().getMetricIDs());
+        long before = counter.getCount();
+        assertEquals("hello", container.select(GreeterService.class).get().greet());
+        assertEquals(before + 1, counter.getCount());
+    }
+
+    /** DRC-014: a method counted through an application binding is named as the scan names it, here as on Vauban. */
+    @Test
+    void aMethodCountedThroughAnApplicationBindingIsCounted() {
+        var counter = registry().getCounter(new MetricID(MetricRegistry.name(AuditedService.class, "audited")));
+        assertNotNull(counter, "registered: " + registry().getMetricIDs());
+        long before = counter.getCount();
+        assertEquals("audited", container.select(AuditedService.class).get().audit());
+        assertEquals(before + 1, counter.getCount());
     }
 
     /** DRC-017: the bean of a gauge is found whatever its qualifiers, here as on Vauban. */

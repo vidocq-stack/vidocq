@@ -452,7 +452,7 @@ Vauban main, vauban#335 and BUG-31; `DiracExtensionTest.scanFindsTheMetricsOfInh
 ## DRC-012 — An interface in the deployment registers counters that never move
 
 - **Opening date**: 2026-11-17
-- **Status**: OPEN
+- **Status**: FIXED on `fix/interceptor-metrics`
 
 ### Symptom
 
@@ -482,12 +482,28 @@ counter, and the call counts.
 reads the interface's declared methods as it reads a bean class's. Nothing registers, for the bean, the metrics of the
 default methods it inherits from its interfaces.
 
-### Fix, to do
+### Fix
 
-The two sides together: if Dirac stops scanning interfaces alone, the calls to a default method counted through its
-interface start throwing when the interface is in the deployment too, since the containers keep intercepting them.
-Dirac skips interfaces in the extension, and the scan and the processor register, for the bean, the metrics of the
-default methods it inherits and does not override.
+- 2026-11-19: since DRC-019 (`namesAMetric` leaves out the methods an interface declares), the interface was no longer
+  scanned, so `anInterfaceOfTheDeploymentRegistersNoMetric` passed already. The other side got worse: a default method
+  counted through its interface threw when the interface was in the deployment too, on Vauban and on Weld
+  (`dirac-it-weld` discovers its test classes), and a `@Gauge` on a default method was not registered at all.
+- `DiscoveredMetrics.scanMethods` and `DiracExtension.namesAMetric` skip an interface: it is no bean.
+- The scan collects, for the bean, the metrics of the default methods it inherits and does not override, `@Gauge`
+  ones included, named after the interface that declares them, as the interceptors name them.
+  `Class.getMethods()` gives the most specific method of each signature: one that the class, a superclass or a more
+  specific interface overrides passes nothing on. `namesAMetric` counts a default method's annotation as the class's.
+- The processor lists them in the companion, with the same rule (`Elements.overrides` against the class chain and the
+  other interface methods).
+
+Tests, red before the fix: `InterfaceDefaultMethodMetricCdiIntegrationTest` (the interface in the deployment and
+outside it: `IllegalStateException: Counter metric was removed from registry`; a default method the bean overrides),
+`DiracExtensionTest.scanFindsTheMetricsOfInheritedDefaultMethodsNamedAfterTheirInterface`,
+`BootScanPrefilterTest.onlyTheClassesNamingAMetricAreScanned` (a bean whose only metric is on an inherited default
+method), `DiracMetricsProcessorTest.companionListsTheMetricsOfInheritedDefaultMethodsNamedAfterTheirInterface` and
+`WeldPortabilityTest.aDefaultMethodCountedThroughItsInterfaceIsCounted` (red against the jars of
+`fix/gauge-registration`). `InheritedMethodMetricCdiIntegrationTest.anInterfaceOfTheDeploymentRegistersNoMetric` is
+enabled, green since DRC-019.
 
 ---
 
@@ -547,7 +563,7 @@ parent and child case end to end. The official TCK: 127 tests, 0 failures.
 ## DRC-014 — A method counted through an application interceptor binding throws on every call
 
 - **Opening date**: 2026-11-17
-- **Status**: OPEN
+- **Status**: FIXED on `fix/interceptor-metrics`
 
 ### Symptom
 
@@ -574,3 +590,20 @@ MetricID{name='io.vidocq.dirac.cdi.internal.relative.ping', tags=[]}`, and the s
 between the declaring class and the bean class, with `method.isAnnotationPresent(Counted.class)`, which is false for
 an annotation an application binding carries; the scan finds it through `findCountedOnElement` and applies the
 method-level rule. `TimedInterceptor` (~328, ~340) has the same shape (not tested).
+
+### Fix
+
+- `CountedInterceptor` and `TimedInterceptor` find the annotation as the scan does, with
+  `DiracExtension.findCountedOnElement` and `findTimedOnElement` (their private copies are gone): on the method, the
+  constructor and the class, for the intercepted call and the pre-registration alike.
+- They name the metric with the scan's rule, `DiracExtension.resolveSimpleMetricName`: the annotation counts as the
+  method's own when an interceptor binding of the method carries it.
+- The same cause hid two more cases, now covered: a constructor counted through an application binding, and a class
+  counted through one, had their counter registered by the scan, and it never moved (the interceptor saw no
+  annotation).
+
+Tests, red before the fix: `InheritedMethodMetricCdiIntegrationTest.aMethodCountedThroughAnApplicationBindingIsNamedAsTheScanNamesIt`
+and `anInheritedMethodCountedThroughAnApplicationBindingIsNamedAsTheScanNamesIt` (enabled),
+`ApplicationBindingMetricCdiIntegrationTest` (the `@Timed` method and inherited method, the constructor, the class),
+`WeldPortabilityTest.aMethodCountedThroughAnApplicationBindingIsCounted` (red against the jars of
+`fix/gauge-registration`). The official TCK: 127 tests, 0 failures.

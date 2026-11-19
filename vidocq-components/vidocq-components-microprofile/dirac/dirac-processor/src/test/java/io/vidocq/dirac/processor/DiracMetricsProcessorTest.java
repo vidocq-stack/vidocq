@@ -724,6 +724,67 @@ class DiracMetricsProcessorTest {
                 "no companion: it cannot call the protected gauge method of another package");
     }
 
+    /**
+     * DRC-012: the companion lists the metrics of the default methods the bean inherits from its interfaces and does
+     * not override, named after the interface that declares them, as the runtime scan does: the containers intercept
+     * them through the interface's annotation. An abstract or a static method, and a default method that the class, its
+     * superclass or a more specific interface overrides, pass nothing on. A gauge is read on the bean.
+     */
+    @Test
+    void companionListsTheMetricsOfInheritedDefaultMethodsNamedAfterTheirInterface() throws Exception {
+        var compilation = compile(
+                writeSource("d/Contract.java", """
+                        package d;
+                        import org.eclipse.microprofile.metrics.annotation.Counted;
+                        import org.eclipse.microprofile.metrics.annotation.Gauge;
+                        import org.eclipse.microprofile.metrics.annotation.Timed;
+
+                        public interface Contract {
+                            @Timed default void timedDefault() {}
+                            @Counted default void countedDefault() {}
+                            @Counted(name = "abstract", absolute = true) void abstractOne();
+                            @Counted(name = "static", absolute = true) static void staticOne() {}
+                            @Counted(name = "overridden.by.the.superclass", absolute = true) default void bySuperclass() {}
+                            @Counted(name = "overridden.by.the.bean", absolute = true) default void byBean() {}
+                            @Counted(name = "base.loses", absolute = true) default void bySubInterface() {}
+                            @Gauge(name = "default.gauge", absolute = true, unit = "none") default long level() { return 3; }
+                        }
+                        """),
+                writeSource("d/SubContract.java", """
+                        package d;
+                        import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                        public interface SubContract extends Contract {
+                            @Override @Counted(name = "sub.wins", absolute = true) default void bySubInterface() {}
+                        }
+                        """),
+                writeSource("d/Parent.java", """
+                        package d;
+
+                        public class Parent implements Contract {
+                            @Override public void abstractOne() {}
+                            @Override public void bySuperclass() {}
+                        }
+                        """),
+                writeSource("d/Bean.java", """
+                        package d;
+                        import org.eclipse.microprofile.metrics.annotation.Counted;
+
+                        public class Bean extends Parent implements Contract, SubContract {
+                            @Counted(name = "own", absolute = true) public void own() {}
+                            @Override public void byBean() {}
+                        }
+                        """));
+        MetricsCompanion companion = compilation.companionOf("d.Bean");
+        Object bean = compilation.loader().loadClass("d.Bean").getDeclaredConstructor().newInstance();
+
+        assertEquals(Set.of("d.Contract.timedDefault"), names(companion.timers()));
+        assertEquals(Set.of("own", "d.Contract.countedDefault", "sub.wins"), names(companion.counters()));
+        assertEquals(java.util.Map.of("default.gauge", 3L), companion.gauges().stream().collect(
+                java.util.stream.Collectors.toMap(MetricsCompanion.GaugeSpec::name,
+                        gauge -> gauge.invoker().apply(bean).longValue())));
+    }
+
     private static Set<String> names(List<MetricsCompanion.MetricSpec> specs) {
         return specs.stream().map(MetricsCompanion.MetricSpec::name).collect(java.util.stream.Collectors.toSet());
     }

@@ -121,20 +121,31 @@ public class DiracExtension implements BuildCompatibleExtension {
      * Whether a class names a metric annotation, directly or on one of its annotations as the reflective scan reads
      * them: on its annotations, the {@code @Inherited} ones of its superclasses among them, on its constructors, or on
      * a method it declares or inherits from a superclass. The language model gives those (Vauban BUG-20261117-42):
-     * the superclasses are not walked again (DRC-019). A method an interface declares carries no metric of the class.
+     * the superclasses are not walked again (DRC-019). An abstract method an interface declares carries no metric of
+     * the class; a default method the class inherits does (DRC-012). An interface is no bean, and has none.
      * A superclass the container does not describe may carry one: the reflective scan decides. A class for which this
      * is false has no metric: it is neither loaded nor scanned. Package-private for the test.
      */
     static boolean namesAMetric(jakarta.enterprise.lang.model.declarations.ClassInfo classInfo) {
+        if (classInfo.isInterface()) {
+            // Not a bean (CDI 4.1, §3.1.1): the beans that inherit its default methods carry their metrics (DRC-012).
+            return false;
+        }
         if (carriesAMetric(classInfo.annotations()) || anyCarriesAMetric(classInfo.constructors())) {
             return true;
         }
         for (var method : classInfo.methods()) {
-            if (!method.declaringClass().isInterface() && carriesAMetric(method.annotations())) {
+            if ((!method.declaringClass().isInterface() || isDefault(method)) && carriesAMetric(method.annotations())) {
                 return true;
             }
         }
         return hasUnreadableAncestor(classInfo);
+    }
+
+    /** A method of an interface that a class inherits: neither abstract, nor static, nor private. */
+    private static boolean isDefault(jakarta.enterprise.lang.model.declarations.MethodInfo method) {
+        return !method.isAbstract() && !method.isStatic()
+                && !java.lang.reflect.Modifier.isPrivate(method.modifiers());
     }
 
     /** Whether a superclass of {@code classInfo}, or one above it, is one the container does not describe. */
@@ -274,7 +285,13 @@ public class DiracExtension implements BuildCompatibleExtension {
         return absolute ? simpleName : MetricRegistry.name(beanClass, simpleName);
     }
 
-    private static String resolveSimpleMetricName(Class<?> beanClass, Method method, String name, boolean absolute, boolean classLevel) {
+    /**
+     * The name of the metric of {@code method}, as the "Annotated Naming Convention" of MicroProfile Metrics 5.1 gives
+     * it: after {@code beanClass}, the class whose annotation applies at class level, or the one that declares the
+     * method. The scan and the interceptors name a metric with it, so that the interceptors update the metric the scan
+     * registered (DRC-014).
+     */
+    static String resolveSimpleMetricName(Class<?> beanClass, Method method, String name, boolean absolute, boolean classLevel) {
         var explicitName = name == null ? "" : name.trim();
         if (!explicitName.isEmpty()) {
             if (absolute) return explicitName;

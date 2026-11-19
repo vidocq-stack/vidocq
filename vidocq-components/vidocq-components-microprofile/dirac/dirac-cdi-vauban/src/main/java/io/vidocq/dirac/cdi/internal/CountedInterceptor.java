@@ -85,8 +85,8 @@ public class CountedInterceptor {
     private static ResolvedCounter constructorCounter(java.lang.reflect.Constructor<?> constructor) {
         Class<?> beanClass = constructor.getDeclaringClass();
         if (beanClass.getName().contains("$$")) beanClass = beanClass.getSuperclass();
-        var classCounted = beanClass.getAnnotation(Counted.class);
-        var constructorCounted = constructor.getAnnotation(Counted.class);
+        var classCounted = DiracExtension.findCountedOnElement(beanClass);
+        var constructorCounted = DiracExtension.findCountedOnElement(constructor);
         final Counted effective = constructorCounted != null ? constructorCounted : classCounted;
         if (effective == null || java.lang.reflect.Modifier.isPrivate(constructor.getModifiers())) {
             return null;
@@ -115,7 +115,7 @@ public class CountedInterceptor {
     private static final ClassValue<java.util.List<ResolvedCounter>> PRE_REGISTERED = new ClassValue<>() {
         @Override
         protected java.util.List<ResolvedCounter> computeValue(Class<?> beanClass) {
-            var classCounted = beanClass.getAnnotation(Counted.class);
+            var classCounted = DiracExtension.findCountedOnElement(beanClass);
             var out = new java.util.ArrayList<ResolvedCounter>();
             // Scan all methods including inherited ones (excluding Object methods)
             for (var method : getAllDeclaredMethods(beanClass)) {
@@ -134,7 +134,7 @@ public class CountedInterceptor {
                 || method.getName().contains("$$")) {
             return null;
         }
-        var methodCounted = method.getAnnotation(Counted.class);
+        var methodCounted = DiracExtension.findCountedOnElement(method);
         if (methodCounted != null) {
             return methodCounted;
         }
@@ -208,7 +208,7 @@ public class CountedInterceptor {
 
     private static FoundCounted findCounted(Method method, Class<?> beanClass) {
         Objects.requireNonNull(beanClass);
-        var onMethod = findCountedOnElement(method);
+        var onMethod = DiracExtension.findCountedOnElement(method);
         if (onMethod != null) {
             return new FoundCounted(method, onMethod);
         }
@@ -217,7 +217,7 @@ public class CountedInterceptor {
         while (current != null && current != Object.class) {
             try {
                 var declared = current.getDeclaredMethod(method.getName(), method.getParameterTypes());
-                var inherited = findCountedOnElement(declared);
+                var inherited = DiracExtension.findCountedOnElement(declared);
                 if (inherited != null) {
                     return new FoundCounted(declared, inherited);
                 }
@@ -227,22 +227,8 @@ public class CountedInterceptor {
             current = current.getSuperclass();
         }
 
-        var onClass = findCountedOnElement(beanClass);
+        var onClass = DiracExtension.findCountedOnElement(beanClass);
         return onClass == null ? null : new FoundCounted(method, onClass);
-    }
-
-    private static Counted findCountedOnElement(java.lang.reflect.AnnotatedElement element) {
-        var direct = element.getAnnotation(Counted.class);
-        if (direct != null) {
-            return direct;
-        }
-        for (var annotation : element.getAnnotations()) {
-            var meta = annotation.annotationType().getAnnotation(Counted.class);
-            if (meta != null) {
-                return meta;
-            }
-        }
-        return null;
     }
 
     private static Method normalizeInterceptedMethod(Class<?> beanClass, Method method) {
@@ -275,25 +261,14 @@ public class CountedInterceptor {
         return new ResolvedCounter(new MetricID(metricName, tags), metadata, normalizeScope(counted.scope()));
     }
 
+    /**
+     * The name the scan gives the metric of {@code method} (DRC-014): the annotation counts as the method's own when
+     * an interceptor binding of the method carries it, as {@code DiracExtension.findCountedOnElement} reads it.
+     */
     private static String resolveMetricName(Class<?> beanClass, Method method, Counted counted) {
-        var explicitName = counted.name().trim();
-        if (!explicitName.isEmpty()) {
-            if (counted.absolute()) return explicitName;
-            boolean classLevel = !method.isAnnotationPresent(Counted.class);
-            if (classLevel) {
-                var pkg = beanClass.getPackageName();
-                return pkg.isEmpty()
-                        ? explicitName + "." + method.getName()
-                        : pkg + "." + explicitName + "." + method.getName();
-            }
-            return MetricRegistry.name(method.getDeclaringClass(), explicitName);
-        }
-        if (counted.absolute()) {
-            return method.getName();
-        }
-        return method.isAnnotationPresent(Counted.class)
-                ? MetricRegistry.name(method.getDeclaringClass(), method.getName())
-                : MetricRegistry.name(beanClass, method.getName());
+        boolean classLevel = DiracExtension.findCountedOnElement(method) == null;
+        return DiracExtension.resolveSimpleMetricName(classLevel ? beanClass : method.getDeclaringClass(), method,
+                counted.name(), counted.absolute(), classLevel);
     }
 
     private static String normalizeScope(String scope) {

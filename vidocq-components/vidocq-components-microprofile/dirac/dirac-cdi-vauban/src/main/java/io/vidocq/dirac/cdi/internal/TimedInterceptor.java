@@ -91,8 +91,8 @@ public class TimedInterceptor {
     private static ResolvedTimer constructorTimer(java.lang.reflect.Constructor<?> constructor) {
         Class<?> beanClass = constructor.getDeclaringClass();
         if (beanClass.getName().contains("$$")) beanClass = beanClass.getSuperclass();
-        var classTimed = beanClass.getAnnotation(Timed.class);
-        var constructorTimed = constructor.getAnnotation(Timed.class);
+        var classTimed = DiracExtension.findTimedOnElement(beanClass);
+        var constructorTimed = DiracExtension.findTimedOnElement(constructor);
         final Timed effective = constructorTimed != null ? constructorTimed : classTimed;
         if (effective == null || java.lang.reflect.Modifier.isPrivate(constructor.getModifiers())) {
             return null;
@@ -120,7 +120,7 @@ public class TimedInterceptor {
     private static final ClassValue<java.util.List<ResolvedTimer>> PRE_REGISTERED = new ClassValue<>() {
         @Override
         protected java.util.List<ResolvedTimer> computeValue(Class<?> beanClass) {
-            var classTimed = beanClass.getAnnotation(Timed.class);
+            var classTimed = DiracExtension.findTimedOnElement(beanClass);
             var out = new java.util.ArrayList<ResolvedTimer>();
             // Scan all methods including inherited ones (excluding Object methods)
             for (var method : getAllDeclaredMethods(beanClass)) {
@@ -139,7 +139,7 @@ public class TimedInterceptor {
                 || method.getName().contains("$$")) {
             return null;
         }
-        var methodTimed = method.getAnnotation(Timed.class);
+        var methodTimed = DiracExtension.findTimedOnElement(method);
         if (methodTimed != null) {
             return methodTimed;
         }
@@ -254,7 +254,7 @@ public class TimedInterceptor {
 
     private static FoundTimed findTimed(Method method, Class<?> beanClass) {
         Objects.requireNonNull(beanClass);
-        var onMethod = findTimedOnElement(method);
+        var onMethod = DiracExtension.findTimedOnElement(method);
         if (onMethod != null) {
             return new FoundTimed(method, onMethod);
         }
@@ -263,7 +263,7 @@ public class TimedInterceptor {
         while (current != null && current != Object.class) {
             try {
                 var declared = current.getDeclaredMethod(method.getName(), method.getParameterTypes());
-                var inherited = findTimedOnElement(declared);
+                var inherited = DiracExtension.findTimedOnElement(declared);
                 if (inherited != null) {
                     return new FoundTimed(declared, inherited);
                 }
@@ -273,22 +273,8 @@ public class TimedInterceptor {
             current = current.getSuperclass();
         }
 
-        var onClass = findTimedOnElement(beanClass);
+        var onClass = DiracExtension.findTimedOnElement(beanClass);
         return onClass == null ? null : new FoundTimed(method, onClass);
-    }
-
-    private static Timed findTimedOnElement(java.lang.reflect.AnnotatedElement element) {
-        var direct = element.getAnnotation(Timed.class);
-        if (direct != null) {
-            return direct;
-        }
-        for (var annotation : element.getAnnotations()) {
-            var meta = annotation.annotationType().getAnnotation(Timed.class);
-            if (meta != null) {
-                return meta;
-            }
-        }
-        return null;
     }
 
     private static Method normalizeInterceptedMethod(Class<?> beanClass, Method method) {
@@ -321,25 +307,14 @@ public class TimedInterceptor {
         return new ResolvedTimer(new MetricID(metricName, tags), metadata, normalizeScope(timed.scope()));
     }
 
+    /**
+     * The name the scan gives the metric of {@code method} (DRC-014): the annotation counts as the method's own when
+     * an interceptor binding of the method carries it, as {@code DiracExtension.findTimedOnElement} reads it.
+     */
     private static String resolveMetricName(Class<?> beanClass, Method method, Timed timed) {
-        var explicitName = timed.name().trim();
-        if (!explicitName.isEmpty()) {
-            if (timed.absolute()) return explicitName;
-            boolean classLevel = !method.isAnnotationPresent(Timed.class);
-            if (classLevel) {
-                var pkg = beanClass.getPackageName();
-                return pkg.isEmpty()
-                        ? explicitName + "." + method.getName()
-                        : pkg + "." + explicitName + "." + method.getName();
-            }
-            return MetricRegistry.name(method.getDeclaringClass(), explicitName);
-        }
-        if (timed.absolute()) {
-            return method.getName();
-        }
-        return method.isAnnotationPresent(Timed.class)
-                ? MetricRegistry.name(method.getDeclaringClass(), method.getName())
-                : MetricRegistry.name(beanClass, method.getName());
+        boolean classLevel = DiracExtension.findTimedOnElement(method) == null;
+        return DiracExtension.resolveSimpleMetricName(classLevel ? beanClass : method.getDeclaringClass(), method,
+                timed.name(), timed.absolute(), classLevel);
     }
 
     private static String normalizeScope(String scope) {

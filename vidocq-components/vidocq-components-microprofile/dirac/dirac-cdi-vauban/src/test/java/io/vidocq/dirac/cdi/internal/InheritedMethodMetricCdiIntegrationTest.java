@@ -36,7 +36,6 @@ import org.eclipse.microprofile.metrics.MetricID;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.MetricUnits;
 import org.eclipse.microprofile.metrics.annotation.Counted;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -137,7 +136,6 @@ class InheritedMethodMetricCdiIntegrationTest {
         }
     }
 
-    @Disabled("DRC-012")
     @Test
     void anInterfaceOfTheDeploymentRegistersNoMetric() {
         try (SeContainer container = start(CountedContract.class, ContractService.class)) {
@@ -184,7 +182,6 @@ class InheritedMethodMetricCdiIntegrationTest {
     public static class DefaultService extends DefaultBase {
     }
 
-    @Disabled("DRC-014")
     @Test
     void aMethodCountedThroughAnApplicationBindingIsNamedAsTheScanNamesIt() {
         // MicroProfile Metrics 5.1, "Annotated Naming Convention": <class name>.<name> for a relative name.
@@ -198,7 +195,6 @@ class InheritedMethodMetricCdiIntegrationTest {
         }
     }
 
-    @Disabled("DRC-014")
     @Test
     void anInheritedMethodCountedThroughAnApplicationBindingIsNamedAsTheScanNamesIt() {
         // Named after the class that declares the method, as for a method that carries @Counted itself.

@@ -205,6 +205,65 @@ public final class DiracMetricsProcessor extends AbstractProcessor {
             }
             declaredBelow.addAll(methods);
         }
+        addDefaultMethodSpecs(type, beanPackage, declaredBelow, timers, counters, gauges);
+    }
+
+    /**
+     * The metrics of the default methods {@code type} inherits from its interfaces, named after the interface that
+     * declares them, as the runtime scan names them: the containers intercept them through the interface's annotation
+     * (DRC-012). A default method that a method of the class chain, {@code classMethods}, or of a more specific
+     * interface overrides passes nothing on.
+     */
+    private void addDefaultMethodSpecs(TypeElement type, String beanPackage, List<ExecutableElement> classMethods,
+                                       List<Spec> timers, List<Spec> counters, List<GaugeModel> gauges)
+            throws SkipGeneration {
+        var elements = processingEnv.getElementUtils();
+        var interfaceMethods = new ArrayList<ExecutableElement>();
+        for (TypeElement contract : interfacesOf(type)) {
+            interfaceMethods.addAll(ElementFilter.methodsIn(contract.getEnclosedElements()));
+        }
+        for (ExecutableElement method : interfaceMethods) {
+            if (method.getModifiers().contains(Modifier.DEFAULT)
+                    && !overriddenByAnother(method, classMethods, type)
+                    && !overriddenByAnother(method, interfaceMethods, type)) {
+                var contract = (TypeElement) method.getEnclosingElement();
+                var declaring = new BeanNames(contract.getQualifiedName().toString(),
+                        contract.getSimpleName().toString(),
+                        elements.getPackageOf(contract).getQualifiedName().toString());
+                addMethodSpec(timers, declaring, method, Declared.timed(findTimed(method)), null);
+                addMethodSpec(counters, declaring, method, Declared.counted(findCounted(method)), null);
+                addInheritedGauge(gauges, declaring, beanPackage, method);
+            }
+        }
+    }
+
+    private boolean overriddenByAnother(ExecutableElement method, List<ExecutableElement> candidates,
+                                        TypeElement type) {
+        var elements = processingEnv.getElementUtils();
+        for (ExecutableElement candidate : candidates) {
+            if (candidate != method && elements.overrides(candidate, method, type)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Every interface {@code type} implements, its superclasses' and its interfaces' own included, once each. */
+    private static List<TypeElement> interfacesOf(TypeElement type) {
+        var found = new java.util.LinkedHashMap<String, TypeElement>();
+        var pending = new java.util.ArrayDeque<TypeElement>();
+        for (TypeElement current = type; current != null; current = superclassOf(current)) {
+            pending.add(current);
+        }
+        while (!pending.isEmpty()) {
+            for (TypeMirror mirror : pending.poll().getInterfaces()) {
+                if (mirror instanceof DeclaredType declared && declared.asElement() instanceof TypeElement contract
+                        && found.putIfAbsent(contract.getQualifiedName().toString(), contract) == null) {
+                    pending.add(contract);
+                }
+            }
+        }
+        return List.copyOf(found.values());
     }
 
     /**

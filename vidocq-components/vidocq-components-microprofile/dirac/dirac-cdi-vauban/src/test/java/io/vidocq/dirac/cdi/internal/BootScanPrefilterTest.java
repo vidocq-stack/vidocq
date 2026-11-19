@@ -105,6 +105,18 @@ class BootScanPrefilterTest {
         }
     }
 
+    /** An interface whose default method names a metric, which a bean inherits (DRC-012). */
+    public interface DefaultCountedContract {
+        @Counted(name = "default.contract", absolute = true)
+        default void call() {
+            // counted through the bean
+        }
+    }
+
+    @ApplicationScoped
+    static class DefaultContractService implements DefaultCountedContract {
+    }
+
     /** A superclass whose method names a metric, inherited by the bean, not overridden. */
     static class MethodCountedBase {
         @Counted(name = "inherited.method", absolute = true)
@@ -139,7 +151,7 @@ class BootScanPrefilterTest {
                 .addBeanClasses(DiracExtension.class, Probe.class, MetricRegistryProducerBean.class,
                         GaugeRegistrationBean.class, PlainService.class, GaugedService.class, FlaggedService.class,
                         InheritingService.class, ConstructorCountedService.class, ContractService.class,
-                        MethodInheritingService.class)
+                        MethodInheritingService.class, DefaultCountedContract.class, DefaultContractService.class)
                 .initialize()) {
 
             assertEquals(Boolean.FALSE, Probe.DECISIONS.get(PlainService.class.getName()));
@@ -153,6 +165,10 @@ class BootScanPrefilterTest {
                     "a metric an interface method names is not the bean's: nothing to scan (DRC-019)");
             assertEquals(Boolean.TRUE, Probe.DECISIONS.get(MethodInheritingService.class.getName()),
                     "a metric on an inherited method");
+            assertEquals(Boolean.TRUE, Probe.DECISIONS.get(DefaultContractService.class.getName()),
+                    "a metric on an inherited default method (DRC-012)");
+            assertEquals(Boolean.FALSE, Probe.DECISIONS.get(DefaultCountedContract.class.getName()),
+                    "an interface is not a bean (DRC-012)");
             var registry = container.select(MetricRegistryProducerBean.class).get().applicationRegistry();
             assertNotNull(registry.getGauge(new MetricID("prefilter.gauge")));
             assertNotNull(registry.getCounter(new MetricID("flagged")));

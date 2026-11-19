@@ -278,7 +278,9 @@ public final class DiscoveredMetrics {
      */
     private static boolean scanMethods(Class<?> beanClass, System.Logger.Level unlinkable, Collector... kinds) {
         Objects.requireNonNull(beanClass, BEAN_CLASS_REQUIRED);
-        if (beanClass.isAnnotationPresent(jakarta.interceptor.Interceptor.class)) {
+        // An interface is not a bean (CDI 4.1, §3.1.1): the beans that inherit its default methods carry their
+        // metrics (DRC-012).
+        if (beanClass.isInterface() || beanClass.isAnnotationPresent(jakarta.interceptor.Interceptor.class)) {
             return false;
         }
         for (var kind : kinds) {
@@ -338,6 +340,36 @@ public final class DiscoveredMetrics {
                                 + " from {1} and above, if any, are not registered: {2}",
                         beanClass.getName(), type.getName(), unlinkableSuperclass.toString());
                 return true;
+            }
+        }
+        return scanDefaultMethods(beanClass, unlinkable, kinds);
+    }
+
+    /**
+     * Collects the metrics of the default methods {@code beanClass} inherits from its interfaces and does not
+     * override. Vauban and Weld intercept them through the annotation of the interface's method, though CDI 4.1,
+     * §4.2, speaks of superclasses only (DRC-012). Each one is named after the interface that declares it, as the
+     * interceptors name it. {@link Class#getMethods()} gives the most specific method of each signature, so a default
+     * method that a class or a more specific interface overrides is not among them.
+     *
+     * @return whether an interface of the bean cannot be linked
+     */
+    private static boolean scanDefaultMethods(Class<?> beanClass, System.Logger.Level unlinkable,
+                                              Collector... kinds) {
+        Method[] methods;
+        try {
+            methods = beanClass.getMethods();
+        } catch (LinkageError unlinkableInterface) {
+            LOG.log(unlinkable, "{0} implements an interface that cannot be linked: the metrics of the default"
+                            + " methods it inherits, if any, are not registered: {1}",
+                    beanClass.getName(), unlinkableInterface.toString());
+            return true;
+        }
+        for (var method : methods) {
+            if (method.isDefault()) {
+                for (var kind : kinds) {
+                    kind.inherited(method.getDeclaringClass(), method);
+                }
             }
         }
         return false;
