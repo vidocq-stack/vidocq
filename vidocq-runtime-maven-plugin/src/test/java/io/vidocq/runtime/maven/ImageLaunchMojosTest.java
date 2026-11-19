@@ -49,6 +49,10 @@ class ImageLaunchMojosTest {
 
     private static final String RUNTIME_MAIN = "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq";
     private static final String NO_LAYER = "-Dvidocq.app.layer.off=true";
+    /** The thread factory of the common pool every launch names (BUG-20261118-93). */
+    private static final String POOL = CommonPoolOption.OPTION;
+    /** The options of an image, in one {@code --add-options}: no layer, then the thread factory of the common pool. */
+    private static final String NO_LAYER_OPTIONS = NO_LAYER + " " + POOL;
 
     @TempDir
     Path dir;
@@ -102,10 +106,10 @@ class ImageLaunchMojosTest {
 
         ImageLaunch launch = mojo.bakedLaunch("acme.app,aura.theme,flow.push,io.vidocq.foy.core,java.base,java.sql");
 
-        assertEquals(List.of("--add-modules=acme.app,aura.theme,flow.push,io.vidocq.foy.core,java.sql", NO_LAYER,
+        assertEquals(List.of("--add-modules=acme.app,aura.theme,flow.push,io.vidocq.foy.core,java.sql", NO_LAYER, POOL,
                 "-Dvidocq.app.module=acme.app"), launch.vmOptions());
         assertTrue(log.lines.contains("Vidocq jlink — main: " + RUNTIME_MAIN
-                + " --add-modules=acme.app,aura.theme,flow.push,io.vidocq.foy.core,java.sql " + NO_LAYER
+                + " --add-modules=acme.app,aura.theme,flow.push,io.vidocq.foy.core,java.sql " + NO_LAYER_OPTIONS
                 + " -Dvidocq.app.module=acme.app"), log.lines.toString());
         assertEquals(List.of(), log.warnings);
     }
@@ -137,8 +141,8 @@ class ImageLaunchMojosTest {
             VidocqJlinkMojo mojo = jlink("acme.app", mainClass, new Infos());
             ImageLaunch launch = mojo.bakedLaunch("acme.app,flow.push,java.base");
             String options = mainClass == null
-                    ? "--add-options=--add-modules=acme.app,flow.push " + NO_LAYER + " -Dvidocq.app.module=acme.app"
-                    : "--add-options=--add-modules=flow.push " + NO_LAYER;
+                    ? "--add-options=--add-modules=acme.app,flow.push " + NO_LAYER_OPTIONS + " -Dvidocq.app.module=acme.app"
+                    : "--add-options=--add-modules=flow.push " + NO_LAYER_OPTIONS;
 
             List<String> jlink = mojo.jlinkArgs("acme.app,flow.push,java.base", launch);
             assertTrue(jlink.contains(options), "jlink: " + jlink);
@@ -222,7 +226,7 @@ class ImageLaunchMojosTest {
                 args.get(args.indexOf("--module-path") + 1));
         assertEquals("acme.app,java.base", args.get(args.indexOf("--add-modules") + 1));
         assertEquals("app=" + RUNTIME_MAIN, args.get(args.indexOf("--launcher") + 1));
-        assertTrue(args.contains("--add-options=" + NO_LAYER + " -Dvidocq.app.module=acme.app"), args.toString());
+        assertTrue(args.contains("--add-options=" + NO_LAYER_OPTIONS + " -Dvidocq.app.module=acme.app"), args.toString());
         assertEquals(dir.resolve("dist").toString(), args.get(args.indexOf("--output") + 1));
         assertTrue(args.contains("--strip-debug"), args.toString());
         assertTrue(args.contains("--compress=zip-6"), args.toString());
@@ -240,7 +244,7 @@ class ImageLaunchMojosTest {
                 || a.contains(dir.toString())), args.toString());
         assertEquals("acme.app,java.base", args.get(args.indexOf("--add-modules") + 1));
         assertEquals("app=" + RUNTIME_MAIN, args.get(args.indexOf("--launcher") + 1));
-        assertTrue(args.contains("--add-options=" + NO_LAYER + " -Dvidocq.app.module=acme.app"), args.toString());
+        assertTrue(args.contains("--add-options=" + NO_LAYER_OPTIONS + " -Dvidocq.app.module=acme.app"), args.toString());
         assertTrue(args.contains("--strip-debug") && args.contains("--compress=zip-6"), args.toString());
     }
 
@@ -267,7 +271,7 @@ class ImageLaunchMojosTest {
         List<String> args = mojo.jlinkArgs("acme.app", ImageLaunch.of("acme.app", "acme.app.App"));
 
         assertEquals("app=acme.app/acme.app.App", args.get(args.indexOf("--launcher") + 1));
-        assertTrue(args.contains("--add-options=" + NO_LAYER), args.toString());
+        assertTrue(args.contains("--add-options=" + NO_LAYER_OPTIONS), args.toString());
         assertTrue(args.stream().noneMatch(a -> a.startsWith("--compress") || a.equals("--strip-debug")),
                 args.toString());
     }
@@ -283,7 +287,7 @@ class ImageLaunchMojosTest {
         VidocqJlinkMojo mojo = jlink("acme.app", "acme.app.App", log);
         set(VidocqJlinkMojo.class, mojo, "jvmArgs", "  -Dvaadin.productionMode=true -Xmx256m ");
         ImageLaunch launch = ImageLaunch.of("acme.app", "acme.app.App", List.of("flow.push"));
-        String options = "--add-options=-Dvaadin.productionMode=true -Xmx256m --add-modules=flow.push " + NO_LAYER;
+        String options = "--add-options=-Dvaadin.productionMode=true -Xmx256m --add-modules=flow.push " + NO_LAYER_OPTIONS;
 
         assertTrue(mojo.jlinkArgs("acme.app,flow.push", launch).contains(options), log.lines.toString());
         assertTrue(mojo.portableJlinkArgs("acme.app,flow.push", launch).contains(options));
@@ -301,7 +305,7 @@ class ImageLaunchMojosTest {
 
             List<String> args = mojo.portableJlinkArgs("acme.app", ImageLaunch.of("acme.app", "acme.app.App"));
 
-            assertTrue(args.contains("--add-options=" + NO_LAYER), args.toString());
+            assertTrue(args.contains("--add-options=" + NO_LAYER_OPTIONS), args.toString());
             assertTrue(log.lines.stream().noneMatch(l -> l.contains("vidocq.jvmArgs")), log.lines.toString());
         }
     }
@@ -373,7 +377,7 @@ class ImageLaunchMojosTest {
 
         ImageLaunch launch = mojo.launchOf();
 
-        assertEquals(List.of("--add-modules=acme.app,flow.push,io.vidocq.foy.core", NO_LAYER,
+        assertEquals(List.of("--add-modules=acme.app,flow.push,io.vidocq.foy.core", NO_LAYER, POOL,
                 "-Dvidocq.app.module=acme.app"), launch.vmOptions());
         assertTrue(VidocqJpackageMojo.entryArgs(launch).containsAll(List.of("--java-options", NO_LAYER)),
                 VidocqJpackageMojo.entryArgs(launch).toString());

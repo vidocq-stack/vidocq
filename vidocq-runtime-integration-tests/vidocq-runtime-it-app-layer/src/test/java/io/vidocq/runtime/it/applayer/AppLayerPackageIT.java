@@ -45,6 +45,11 @@ class AppLayerPackageIT {
     static final String ONE_COPY = "TOOL-PROVIDERS 1";
     /** The anomaly of an application loaded twice, which only an IDE run of a trampoline may log. */
     static final String TWICE_WARNING = "[VIDOCQ-LAY-001]";
+    /**
+     * What the fixture's probe prints when a thread of the common pool has the application's loader as its context
+     * class loader, as Vidocq's common-pool thread factory gives it (BUG-20261118-93).
+     */
+    static final String POOL_SEES_THE_APPLICATION = "COMMON-POOL-LOADER application";
 
     @Test
     void allShipsTheLibraryInAppAndLaunchesItInTheApplicationLayer(@TempDir Path dir) throws Exception {
@@ -72,6 +77,7 @@ class AppLayerPackageIT {
         assertTrue(out.contains("3 modules, 2 libraries"), "the report counts the libraries in the layer:\n" + out);
         assertTrue(out.contains("SQL-OK"), "a JDK module only an app/ module requires is resolved (vidocq#254):\n" + out);
         assertTrue(out.contains(ONE_COPY), "one copy of the application module:\n" + out);
+        assertTrue(out.contains(POOL_SEES_THE_APPLICATION), "the common pool sees the application:\n" + out);
     }
 
     /**
@@ -104,6 +110,7 @@ class AppLayerPackageIT {
                 "the application alone in the layer, the libraries outside:\n" + out);
         assertTrue(out.contains("SQL-OK"), out);
         assertTrue(out.contains(ONE_COPY), "one copy of the application module:\n" + out);
+        assertTrue(out.contains(POOL_SEES_THE_APPLICATION), "the common pool sees the application:\n" + out);
         assertFalse(out.contains(TWICE_WARNING), out);
     }
 
@@ -130,6 +137,7 @@ class AppLayerPackageIT {
         assertTrue(out.contains("no application layer"), out);
         assertTrue(out.contains("SQL-OK"), out);
         assertTrue(out.contains(ONE_COPY), "one copy of the application module:\n" + out);
+        assertTrue(out.contains(POOL_SEES_THE_APPLICATION), "the common pool sees the application:\n" + out);
         assertFalse(out.contains(TWICE_WARNING), "no layer, so nothing twice:\n" + out);
     }
 

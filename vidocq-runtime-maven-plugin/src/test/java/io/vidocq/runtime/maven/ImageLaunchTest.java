@@ -33,6 +33,10 @@ class ImageLaunchTest {
 
     private static final String RUNTIME_MAIN = "io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq";
     private static final String NO_LAYER = "-Dvidocq.app.layer.off=true";
+    /** The thread factory of the common pool every launch names (BUG-20261118-93). */
+    private static final String POOL = CommonPoolOption.OPTION;
+    /** The options of an image, in one {@code --add-options}: no layer, then the thread factory of the common pool. */
+    private static final String NO_LAYER_OPTIONS = NO_LAYER + " " + POOL;
 
     @Test
     @DisplayName("an application main class is what the launcher runs, with no application layer")
@@ -40,7 +44,7 @@ class ImageLaunchTest {
         var launch = ImageLaunch.of("com.acme.shop", "com.acme.shop.App");
         // The image has one layer: the trampoline runs where the JVM resolved it, in one copy (BUG-20261114-11).
         assertEquals("com.acme.shop/com.acme.shop.App", launch.entryPoint());
-        assertEquals(List.of(NO_LAYER), launch.vmOptions());
+        assertEquals(List.of(NO_LAYER, POOL), launch.vmOptions());
     }
 
     @Test
@@ -53,7 +57,7 @@ class ImageLaunchTest {
     @Test
     @DisplayName("without a main class, the runtime's main starts and is told the application module")
     void withoutAMainClassTheRuntimeMainStarts() {
-        var expected = List.of(NO_LAYER, "-Dvidocq.app.module=com.acme.shop");
+        var expected = List.of(NO_LAYER, POOL, "-Dvidocq.app.module=com.acme.shop");
         for (String none : new String[] {null, "", "  ", "io.vidocq.runtime.core.Vidocq"}) {
             var launch = ImageLaunch.of("com.acme.shop", none);
             assertEquals(RUNTIME_MAIN, launch.entryPoint(), "main class " + none);
@@ -95,7 +99,7 @@ class ImageLaunchTest {
     void jlinkBakesTheOptionsIntoTheImage() {
         assertEquals(List.of("--launcher", "shop=com.acme.shop/com.acme.shop.App",
                         // One argument: jlink refuses a separate value that starts with "--".
-                        "--add-options=--add-modules=flow.push,io.vidocq.foy.core " + NO_LAYER),
+                        "--add-options=--add-modules=flow.push,io.vidocq.foy.core " + NO_LAYER_OPTIONS),
                 VidocqJlinkMojo.launcherArgs("shop", ImageLaunch.of("com.acme.shop", "com.acme.shop.App",
                         List.of("io.vidocq.foy.core", "flow.push")), null));
     }
@@ -105,6 +109,7 @@ class ImageLaunchTest {
     void jpackageLaunchesTheSameEntryPoint() {
         assertEquals(List.of("--module", RUNTIME_MAIN,
                         "--java-options", NO_LAYER,
+                        "--java-options", POOL,
                         "--java-options", "-Dvidocq.app.module=com.acme.shop"),
                 VidocqJpackageMojo.entryArgs(ImageLaunch.of("com.acme.shop", null)));
     }

@@ -47,7 +47,8 @@ import java.util.TreeSet;
  *
  * @param entryPoint the {@code <module>/<class>} the launcher runs
  * @param vmOptions  the JVM options the image needs: the modules to resolve at start, the switch that turns the
- *                   application layer off, and the application module when the runtime's main is launched
+ *                   application layer off, the thread factory of the common pool, and the application module when
+ *                   the runtime's main is launched
  */
 record ImageLaunch(String entryPoint, List<String> vmOptions) {
 
@@ -97,6 +98,9 @@ record ImageLaunch(String entryPoint, List<String> vmOptions) {
             options.add("--add-modules=" + String.join(",", rooted));
         }
         options.add("-D" + LayerSplit.OFF_PROPERTY + "=true");
+        // The image has no application layer: the factory gives the JVM's loader, as the JDK's does, and every
+        // launch of Vidocq has the same common pool (BUG-20261118-93).
+        options.add(CommonPoolOption.OPTION);
         if (application == null) {
             options.add("-D" + VidocqAppLayer.APP_MODULE_PROPERTY + "=" + module);
             return new ImageLaunch(RUNTIME_MODULE + "/" + ApplicationMainClass.RUNTIME_MAIN_CLASS, options);

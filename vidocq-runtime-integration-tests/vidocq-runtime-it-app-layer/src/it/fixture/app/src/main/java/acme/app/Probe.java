@@ -26,6 +26,7 @@ import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.event.Startup;
 
 import java.util.ServiceLoader;
+import java.util.concurrent.CompletableFuture;
 import java.util.spi.ToolProvider;
 
 /** A CDI observer, so that the dev reload, which boots without the application's main, runs the lookup too. */
@@ -48,6 +49,11 @@ public class Probe {
         // lists one in an application layer, nor in a jlink image, which has no directory entry (BUG-20261115-02).
         System.out.println("LIST-HOME " + ApplicationLayer.home()
                 .map(layer -> ApplicationLayer.list(layer, "META-INF/acme")).orElse(null));
+        // The context class loader of a thread of the common pool, which CompletableFuture.supplyAsync and the
+        // parallel streams use: the JDK gives it the JVM's loader, which misses an application layer
+        // (BUG-20261118-93).
+        ClassLoader pool = CompletableFuture.supplyAsync(() -> Thread.currentThread().getContextClassLoader()).join();
+        System.out.println("COMMON-POOL-LOADER " + (pool == Probe.class.getClassLoader() ? "application" : pool));
         Pages.startPoller();
     }
 }

@@ -116,6 +116,9 @@ public final class ChildJvm {
         List<String> command = new ArrayList<>();
         command.add(JAVA_BIN);
 
+        // The common pool's workers get the application's loader (BUG-20261118-93); a -D of the caller comes after,
+        // and wins.
+        command.add(io.vidocq.runtime.maven.CommonPoolOption.OPTION);
         // System properties — at minimum -Dvidocq.profile=dev (caller injects it).
         for (Map.Entry<String, String> e : systemProps.entrySet()) {
             command.add("-D" + e.getKey() + "=" + e.getValue());

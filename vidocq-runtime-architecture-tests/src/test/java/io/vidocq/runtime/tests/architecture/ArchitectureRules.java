@@ -29,6 +29,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.ForkJoinWorkerThread;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import io.vidocq.archrules.Jdk;
@@ -178,7 +179,7 @@ final class ArchitectureRules {
     static final ArchRule NO_REFLECTION = VidocqArchRules.noReflection(
             REFLECTIVE_FALLBACKS, "AGENTS.md and CLAUDE.md, compile-time over reflection");
 
-    /** The two platform threads of the runtime, with their reason; nothing else may start one. */
+    /** The platform threads of the runtime, with their reason; nothing else may start one. */
     static final Map<String, String> PLATFORM_THREADS = Map.of(
             "io.vidocq.runtime.core.VidocqBootstrap",
             "the JVM shutdown hook: Runtime.addShutdownHook takes a Thread that runs once, at exit, and does no I/O"
@@ -186,7 +187,11 @@ final class ArchitectureRules {
             "io.vidocq.runtime.extensions.essentials.devconsole.DevConsoleExtension",
             "the history ticker, a platform thread on purpose: it shows in Thread.getAllStackTraces(), which is how"
                     + " the dev-reload tests prove that a reload leaves exactly one ticker; one daemon thread per boot,"
-                    + " mostly asleep");
+                    + " mostly asleep",
+            "io.vidocq.runtime.core.commonpool.CommonPoolThreadFactory",
+            "the workers of the JVM's common pool, which the JDK makes of platform threads whatever the factory: the"
+                    + " factory only gives them the application's class loader, so that CompletableFuture.supplyAsync"
+                    + " and the parallel streams see the application in its layer (BUG-20261118-93)");
 
     private static final String PLATFORM_POOLS = "newFixedThreadPool|newCachedThreadPool|newSingleThreadExecutor"
             + "|newScheduledThreadPool|newSingleThreadScheduledExecutor|newWorkStealingPool"
@@ -194,12 +199,16 @@ final class ArchitectureRules {
 
     /**
      * Workspace AGENTS.md, "Virtual Threads everywhere for I/O": no platform-thread pool and no platform thread, but
-     * the two of {@link #PLATFORM_THREADS}. The same rule as {@code VidocqArchRules.noPlatformThreads(NONE, ...)},
-     * which has no exemption list, applied to the other classes.
+     * those of {@link #PLATFORM_THREADS}. The rule of {@code VidocqArchRules.noPlatformThreads(NONE, ...)}, which
+     * has no exemption list, applied to the other classes, and that also sees a worker of a fork-join pool.
      */
-    static final ArchRule NO_PLATFORM_THREADS = noClasses()
+    static final ArchRule NO_PLATFORM_THREADS = noPlatformThreads(PLATFORM_THREADS.keySet());
+
+    /** {@link #NO_PLATFORM_THREADS} with {@code exempted} as its exemptions: its self-test drops one at a time. */
+    static ArchRule noPlatformThreads(java.util.Set<String> exempted) {
+        return noClasses()
             .that(DescribedPredicate.describe(
-                    "are not a documented platform thread", type -> !PLATFORM_THREADS.containsKey(topLevel(type))))
+                    "are not a documented platform thread", type -> !exempted.contains(topLevel(type))))
             .should()
             .callMethodWhere(target(owner(type(Executors.class))).and(target(nameMatching(PLATFORM_POOLS))))
             .orShould()
@@ -207,11 +216,14 @@ final class ArchitectureRules {
             .orShould()
             .callConstructorWhere(target(owner(assignableTo(ForkJoinPool.class))))
             .orShould()
+            .callConstructorWhere(target(owner(assignableTo(ForkJoinWorkerThread.class))))
+            .orShould()
             .callMethod(Thread.class, "ofPlatform")
             .orShould()
             .callConstructorWhere(target(owner(type(Thread.class))))
             .because("every task runs on a virtual thread, no platform-thread pool (workspace AGENTS.md, Virtual"
                     + " Threads; the documented exceptions are in PLATFORM_THREADS)");
+    }
 
     /** The name of the top-level class of a class, nested ones included. */
     static String topLevel(JavaClass type) {

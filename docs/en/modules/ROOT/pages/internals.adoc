@@ -215,6 +215,28 @@ xref:modules/vidocq-runtime-maven-plugin.adoc#app-layer-property[`vidocq.app.lay
 | The startup report, which lists each pinned module with its reason.
 |===
 
+[#common-pool]
+==== The common pool sees the application
+
+Every launcher also sets a property of the JDK,
+`java.util.concurrent.ForkJoinPool.common.threadFactory=io.vidocq.runtime.core.commonpool.CommonPoolThreadFactory`:
+`vidocq:run`, `vidocq:dev`, the `vidocq:package` launchers (and the `jdk` Docker image, which runs them), and the
+options a jlink image bakes in (its launcher, `bin/java -m`, jpackage and the default Docker image). The JDK reads it
+once, when the common pool starts, and makes the pool's workers with that factory.
+
+The common pool runs `CompletableFuture.supplyAsync`, the parallel streams and every task with no executor of its own.
+The JDK gives its workers the JVM's system class loader as their context class loader, which misses an application
+that runs in an application layer: MicroProfile Config, `ServiceLoader` or a JDBC driver called from such a task
+did not find the application's configuration, services or resources (BUG-20261118-93). Vidocq's factory gives the
+workers the application's loader instead, and the dev reload moves the live workers to each new layer, so that none
+keeps a discarded one. Without a layer (a jlink image, `vidocq.package.layer=false`) it gives the system class loader,
+as the JDK does.
+
+A `java` command written by hand passes the same option. The runtime sets the property itself when it is absent, just
+before it installs the application layer; that is too late when something started the common pool earlier, a Java
+agent for instance, and the start then warns: `The common pool of the JVM started before the application layer, with
+the JDK's thread factory: …`. An application that names its own factory keeps it.
+
 `vidocq:dev` also passes `vidocq.app.layer`, the mode it settled on: its reload reads it to word the warning about a
 thread that keeps the previous layer. The other launchers split the application themselves and pass no mode
 (Vidocq/vidocq#663).
@@ -308,6 +330,9 @@ There is no bytecode-recording machinery in `vidocq-runtime-core`: nothing is "r
 * **HTTP I/O** — `Executors.newVirtualThreadPerTaskExecutor()` on the xref:chappe::index.adoc[Chappe] side. One connection = one virtual thread. No reactor, no callbacks.
 * **Persistence** — JDBC pool from xref:mansart::index.adoc[Mansart] with non-fair `Semaphore`. `ScopedValue<Connection>` propagates the current connection inside a transaction without `ThreadLocal`.
 * **Health checks** — executed on the virtual thread of the incoming `/health` request; no dedicated scheduler thread.
+
+* **Common pool** — the JVM's own `ForkJoinPool.commonPool()`, whose workers are platform threads whatever their
+  factory: Vidocq only gives them the application's class loader (<<common-pool>>).
 
 No platform thread pool is created by default. The rule is documented in the workspace root `CLAUDE.md`.
 

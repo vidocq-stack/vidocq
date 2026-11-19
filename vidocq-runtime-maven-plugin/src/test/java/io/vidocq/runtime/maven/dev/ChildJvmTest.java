@@ -90,6 +90,8 @@ class ChildJvmTest {
                 "app classes travel through vidocq.app.path: " + command);
         assertTrue(command.contains("-Dvidocq.app.main=com.example.app.Main"),
                 "the app main runs through the layer: " + command);
+        assertTrue(command.contains(io.vidocq.runtime.maven.CommonPoolOption.OPTION),
+                "the common pool's workers get the application's loader (BUG-20261118-93): " + command);
         assertEquals("io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq",
                 command.get(command.size() - 1),
                 "the root module is always the runtime in layer mode");

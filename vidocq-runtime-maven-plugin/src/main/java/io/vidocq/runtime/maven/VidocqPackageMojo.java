@@ -328,7 +328,8 @@ public class VidocqPackageMojo extends AbstractMojo {
      * in a dev reload and in the boot-layer detection of a trampoline, which no launcher reaches (Vidocq/vidocq#663).
      */
     private String appLayerOptions(String continuation) {
-        String options = "";
+        // The common pool's workers get the application's loader (BUG-20261118-93).
+        String options = "\n  " + CommonPoolOption.OPTION + " " + continuation;
         if (!layerMode) {
             options += "\n  -D" + LayerSplit.OFF_PROPERTY + "=true " + continuation;
         }

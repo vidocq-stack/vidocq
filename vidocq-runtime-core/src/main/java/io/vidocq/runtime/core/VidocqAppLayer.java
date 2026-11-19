@@ -19,6 +19,7 @@
  */
 package io.vidocq.runtime.core;
 
+import io.vidocq.runtime.core.commonpool.CommonPoolThreadFactory;
 import io.vidocq.vauban.classloader.VaubanLayerFactory;
 import io.vidocq.vauban.classloader.spi.PluginContext;
 
@@ -104,6 +105,16 @@ public final class VidocqAppLayer {
     private VidocqAppLayer() {}
 
     /**
+     * The warning of a launch whose common pool started before the application layer, with the JDK's thread
+     * factory: its workers miss the application's classes and resources.
+     */
+    static final String COMMON_POOL_WARNING = "The common pool of the JVM started before the application layer, with"
+            + " the JDK's thread factory: CompletableFuture.supplyAsync, the parallel streams and every task of that"
+            + " pool run with the JVM's class loader and miss the application's resources and services. Launch with -D"
+            + CommonPoolThreadFactory.PROPERTY + "=" + CommonPoolThreadFactory.class.getName() + ", as the Vidocq"
+            + " launchers do (BUG-20261118-93).";
+
+    /**
      * Tears the current application layer down so the next {@link #installIfConfigured()}
      * resolves a fresh one over the (recompiled) archives — the dev-mode hot reload.
      * The old layer's classes become collectable once the new container drops the last
@@ -117,6 +128,8 @@ public final class VidocqAppLayer {
         INSTALLED.set(null);
         INSTALLATION.set(null);
         Thread.currentThread().setContextClassLoader(PARENT_LOADER_BEFORE_INSTALL.get());
+        // The workers of the common pool outlive the layer: they leave it, and hold it no longer.
+        CommonPoolThreadFactory.useLoader(PARENT_LOADER_BEFORE_INSTALL.get());
         try {
             int drivers = LayerJdbcDrivers.deregister(layer);
             if (drivers > 0) {
@@ -335,6 +348,8 @@ public final class VidocqAppLayer {
 
     private static boolean installLayer(List<Path> paths, ModuleLayer parentLayer, String origin,
             Installation found) {
+        // Before anything starts the common pool: its workers then get the application's loader (BUG-20261118-93).
+        CommonPoolThreadFactory.prepare();
         try {
             var parentLoader = Thread.currentThread().getContextClassLoader();
             var appLayer = VaubanLayerFactory.createAppLayer(paths, parentLayer,
@@ -343,6 +358,10 @@ public final class VidocqAppLayer {
             Thread.currentThread().setContextClassLoader(appLayer.loader());
             INSTALLED.set(appLayer);
             INSTALLATION.set(found);
+            CommonPoolThreadFactory.useLoader(appLayer.loader());
+            if (!CommonPoolThreadFactory.installed()) {
+                LOG.log(System.Logger.Level.WARNING, COMMON_POOL_WARNING);
+            }
             LOG.log(System.Logger.Level.INFO, "Application layer ready: modules {0} ({1})",
                     appLayer.moduleNames(), origin);
             return true;

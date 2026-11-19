@@ -40,6 +40,9 @@ module io.vidocq.runtime.core {
 
     exports io.vidocq.runtime.core;
     exports io.vidocq.runtime.core.config;
+    // The thread factory of the common pool, which the JDK loads by name and creates by reflection
+    // (BUG-20261118-93): exported to java.base only, no API of the runtime.
+    exports io.vidocq.runtime.core.commonpool to java.base;
 
     uses io.vidocq.runtime.spi.VidocqExtension;
     uses io.vidocq.runtime.spi.config.ConfigSource;

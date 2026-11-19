@@ -44,6 +44,8 @@ class AppLayerRunIT {
             Fixture.awaitLog(mvn, log, "LOOKUP-FOUND");
             assertTrue(Fixture.read(log).contains("application layer: 2 libraries,"), Fixture.read(log));
             Fixture.awaitLog(mvn, log, "SQL-OK"); // acme.sql requires java.sql, which only it needs (vidocq#254)
+            Fixture.awaitLog(mvn, log, "COMMON-POOL-LOADER ");
+            assertTrue(Fixture.read(log).contains(AppLayerPackageIT.POOL_SEES_THE_APPLICATION), Fixture.read(log));
         } finally {
             Fixture.stop(mvn);
         }
@@ -59,6 +61,8 @@ class AppLayerRunIT {
         try {
             Fixture.awaitLog(mvn, log, "LOOKUP-MISSING");
             assertFalse(Fixture.read(log).contains("LOOKUP-FOUND"));
+            Fixture.awaitLog(mvn, log, "COMMON-POOL-LOADER ");
+            assertTrue(Fixture.read(log).contains(AppLayerPackageIT.POOL_SEES_THE_APPLICATION), Fixture.read(log));
         } finally {
             Fixture.stop(mvn);
         }

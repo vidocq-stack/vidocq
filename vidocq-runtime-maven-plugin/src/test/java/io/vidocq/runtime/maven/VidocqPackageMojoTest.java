@@ -401,6 +401,7 @@ class VidocqPackageMojoTest {
                 exec "$JAVA" $JAVA_OPTS \\
                   --module-path "$BASEDIR/lib" \\
                   --add-modules ALL-MODULE-PATH \\
+                  -Djava.util.concurrent.ForkJoinPool.common.threadFactory=io.vidocq.runtime.core.commonpool.CommonPoolThreadFactory \\
                   -Dvidocq.app.path="$BASEDIR/app" \\
                   -Dvidocq.app.main=io.repro.app.Main \\
                   --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq \\
@@ -412,6 +413,7 @@ class VidocqPackageMojoTest {
                 "%JAVA%" %JAVA_OPTS% ^
                   --module-path "%BASEDIR%\\lib" ^
                   --add-modules ALL-MODULE-PATH ^
+                  -Djava.util.concurrent.ForkJoinPool.common.threadFactory=io.vidocq.runtime.core.commonpool.CommonPoolThreadFactory ^
                   -Dvidocq.app.path="%BASEDIR%\\app" ^
                   -Dvidocq.app.main=io.repro.app.Main ^
                   --module io.vidocq.runtime.core/io.vidocq.runtime.core.Vidocq ^
@@ -434,6 +436,27 @@ class VidocqPackageMojoTest {
 
         assertTrue(Files.readString(binDir.resolve("app.sh")).contains("-Dvidocq.app.layer.off=true \\"));
         assertTrue(Files.readString(binDir.resolve("app.cmd")).contains("-Dvidocq.app.layer.off=true ^"));
+    }
+
+    /**
+     * Every launcher names Vidocq's thread factory of the common pool, layer or not: its workers get the application's
+     * loader (BUG-20261118-93).
+     */
+    @Test
+    void everyLauncherNamesTheThreadFactoryOfTheCommonPool(@TempDir Path binDir) throws Exception {
+        for (VidocqPackageMojo mojo : List.of(trampolineMojo("classes"), legacyMojo())) {
+            mojo.generateShScript(binDir);
+            mojo.generateCmdScript(binDir);
+            assertTrue(Files.readString(binDir.resolve("app.sh")).contains(CommonPoolOption.OPTION + " \\"));
+            assertTrue(Files.readString(binDir.resolve("app.cmd")).contains(CommonPoolOption.OPTION + " ^"));
+        }
+    }
+
+    private static VidocqPackageMojo legacyMojo() throws Exception {
+        VidocqPackageMojo mojo = mojoWith(null);
+        set(mojo, "mainClass", "io.repro.app.Main");
+        set(mojo, "mainModule", "io.repro.app");
+        return mojo;
     }
 
     /** The layer launchers leave the application layer on. */

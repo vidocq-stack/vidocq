@@ -41,7 +41,6 @@ import io.vidocq.runtime.core.archfixture.CoreUsingALibrary;
 import io.vidocq.runtime.extensions.archfixture.ExtensionReachingIntoCore;
 import io.vidocq.runtime.spi.archfixture.SpiReachingIntoCore;
 
-import io.vidocq.archrules.PlatformThreads;
 import io.vidocq.archrules.VidocqArchRules;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -144,7 +143,9 @@ class ArchitectureRulesSelfTest {
     void thePlatformThreadExemptionsAreNeeded() {
         // Without its entry, each documented platform thread must break the rule: otherwise the entry is stale.
         for (String allowed : ArchitectureRules.PLATFORM_THREADS.keySet()) {
-            var rule = VidocqArchRules.noPlatformThreads(PlatformThreads.NONE, "exemption check");
+            var others = new java.util.HashSet<>(ArchitectureRules.PLATFORM_THREADS.keySet());
+            others.remove(allowed);
+            var rule = ArchitectureRules.noPlatformThreads(others);
             var details = rule.evaluate(SHIPPED).getFailureReport().getDetails();
             assertTrue(
                     details.stream().anyMatch(detail -> detail.contains(allowed)),

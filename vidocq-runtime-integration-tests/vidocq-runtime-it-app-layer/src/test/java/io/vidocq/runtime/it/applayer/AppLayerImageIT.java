@@ -56,6 +56,7 @@ class AppLayerImageIT {
     /** The application and its two libraries are modules of the image, loaded by the JVM's application loader. */
     private static void assertLoadedOnceFromTheImage(String out) {
         assertTrue(out.contains(AppLayerPackageIT.ONE_COPY), "one copy of the application module:\n" + out);
+        assertTrue(out.contains(AppLayerPackageIT.POOL_SEES_THE_APPLICATION), out);
         assertTrue(out.contains("no application layer"), "the image has one layer:\n" + out);
         assertTrue(out.contains("LOOKUP-LOADER app"), "the library is loaded by the JVM's loader:\n" + out);
         // A library finds the application's resource, which no package holds, in the image (Foy#96).
